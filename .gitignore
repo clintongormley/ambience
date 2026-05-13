@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Test / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local files
+.worktrees/
+CLAUDE.local.md
+.claude/settings.local.json
+.ha-changes-state.json
+HA_CHANGES_REPORT.md
+docs/plans/

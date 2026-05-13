@@ -1,0 +1,13 @@
+{
+  "domain": "ambience",
+  "name": "Ambience",
+  "codeowners": ["@clintongormley"],
+  "config_flow": true,
+  "documentation": "https://github.com/clintongormley/ambience",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/clintongormley/ambience/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}

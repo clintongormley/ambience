@@ -12,6 +12,8 @@ class Matcher(Protocol):
     """A pluggable predicate evaluator."""
 
     name: str
+    description: str
+    predicate_help: str
 
     async def snapshot(self, hass: HomeAssistant) -> Any:
         """Capture all state needed to evaluate predicates."""

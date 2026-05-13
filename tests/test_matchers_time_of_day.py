@@ -294,3 +294,17 @@ def test_describe_returns_none_if_no_named_period_matches() -> None:
         dusk=datetime(2026, 5, 13, 5, 0, tzinfo=UTC),
     )
     assert matcher.describe(impossible) is None
+
+
+def test_matcher_exposes_description() -> None:
+    m = TimeOfDayMatcher()
+    assert m.description.strip() != ""
+    assert isinstance(m.description, str)
+
+
+def test_matcher_exposes_predicate_help() -> None:
+    m = TimeOfDayMatcher()
+    assert m.predicate_help.strip() != ""
+    assert isinstance(m.predicate_help, str)
+    # Help text should mention at least one of the predicate forms
+    assert any(token in m.predicate_help.lower() for token in ("range", "period", "sunset"))

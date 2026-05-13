@@ -56,6 +56,16 @@ class TimeOfDayMatcher:
     """time_of_day matcher: named periods, absolute and sun-relative ranges."""
 
     name = "time_of_day"
+    description = "Matches based on the current time of day relative to sun events."
+    predicate_help = (
+        "Predicate forms:\n"
+        "  - Named period: one of midnight, dawn, sunrise, morning, noon, afternoon,"
+        " sunset, evening, dusk, day, night\n"
+        "  - Absolute range: '16:00-18:30' (24h; wraps midnight if start > end)\n"
+        "  - Sun-relative range: 'sunset-30m to 22:00' or 'sunrise to sunset+1h'"
+        " (anchors: sunrise, sunset, noon, midnight, dawn, dusk)\n"
+        "  - List: ['evening', '16:00-18:30'] matches if any element matches"
+    )
 
     async def snapshot(self, hass: HomeAssistant) -> TimeOfDaySnapshot:
         state = hass.states.get("sun.sun")

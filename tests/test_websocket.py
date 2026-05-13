@@ -277,3 +277,26 @@ async def test_dry_run_no_match(hass: HomeAssistant, installed, hass_ws_client) 
     assert resp["success"] is True
     assert resp["result"]["matched_rule_index"] is None
     assert resp["result"]["actions"] == []
+
+
+async def test_unload_deregisters_ws_commands(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    hass_ws_client,
+) -> None:
+    """After unload, ambience/* WS commands should no longer be registered."""
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Confirm command works before unload.
+    resp = await _ws_send(hass_ws_client, type="ambience/areas/list")
+    assert resp["success"] is True
+
+    # Unload.
+    assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # After unload, calling the command should now fail (unknown command).
+    resp = await _ws_send(hass_ws_client, id=99, type="ambience/areas/list")
+    assert resp["success"] is False

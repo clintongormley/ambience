@@ -21,7 +21,7 @@ from .matchers.time_of_day import TimeOfDayMatcher
 from .registry import register_action, register_matcher
 from .service import async_apply_scene
 from .store import AmbienceStore
-from .websocket import async_register_commands
+from .websocket import async_register_commands, async_unregister_commands
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -68,5 +68,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_remove(DOMAIN, "apply_scene")
+    async_unregister_commands(hass)
     hass.data.pop(DOMAIN, None)
     return True

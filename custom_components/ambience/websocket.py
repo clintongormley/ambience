@@ -12,6 +12,17 @@ from homeassistant.exceptions import ServiceValidationError
 from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_STORE, DOMAIN
 from .service import async_resolve_only
 
+_WS_COMMANDS = (
+    "ambience/areas/list",
+    "ambience/area/get",
+    "ambience/area/save",
+    "ambience/area/delete",
+    "ambience/matchers/list",
+    "ambience/actions/list",
+    "ambience/validate",
+    "ambience/dry_run",
+)
+
 
 def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_areas_list)
@@ -200,3 +211,10 @@ async def _ws_dry_run(
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
     connection.send_result(msg["id"], result)
+
+
+def async_unregister_commands(hass: HomeAssistant) -> None:
+    """Remove Ambience WS commands from HA's websocket_api handler registry."""
+    handlers = hass.data.get(websocket_api.const.DOMAIN, {})
+    for cmd in _WS_COMMANDS:
+        handlers.pop(cmd, None)

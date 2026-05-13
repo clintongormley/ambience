@@ -165,3 +165,29 @@ async def test_area_save_rejects_duplicate_scene_names(
     )
     assert resp["success"] is False
     assert "duplicate" in resp["error"]["message"].lower()
+
+
+async def test_area_delete_removes_area(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id="lr",
+        config={"name": "X", "scenes": [], "matchers": [], "rules": []},
+    )
+    assert save["success"] is True
+
+    resp = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/area/delete",
+        area_id="lr",
+    )
+    assert resp["success"] is True
+
+    listing = await _ws_send(hass_ws_client, id=3, type="ambience/areas/list")
+    assert listing["result"] == []
+
+
+async def test_area_delete_unknown_is_ok(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/area/delete", area_id="nope")
+    assert resp["success"] is True

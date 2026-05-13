@@ -17,6 +17,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_actions_list)
     websocket_api.async_register_command(hass, _ws_area_get)
     websocket_api.async_register_command(hass, _ws_area_save)
+    websocket_api.async_register_command(hass, _ws_area_delete)
 
 
 def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
@@ -110,6 +111,24 @@ async def _ws_area_get(
         connection.send_error(msg["id"], "unknown_area", "area not found")
         return
     connection.send_result(msg["id"], area)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/area/delete",
+        vol.Required("area_id"): str,
+    }
+)
+@websocket_api.async_response
+async def _ws_area_delete(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_delete_area(msg["area_id"])
+    connection.send_result(msg["id"], {"ok": True})
 
 
 @websocket_api.require_admin

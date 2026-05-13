@@ -15,11 +15,14 @@ from .engine import resolve
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str) -> None:
-    """Apply a scene in an area according to configured rules."""
+async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> dict[str, Any]:
+    """Like apply_scene, but does not execute actions.
+
+    Returns: {matched_rule_index, rule_name, actions, snapshots_described}.
+    If no rule matched, matched_rule_index/rule_name are None and actions=[].
+    """
     store = hass.data[DOMAIN][DATA_STORE]
     matchers_registry: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
-    actions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_ACTIONS]
 
     area = store.get_area(area_id)
     if area is None:
@@ -27,11 +30,10 @@ async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str) -> No
     if scene not in area.get("scenes", []):
         raise ServiceValidationError(f"unknown_scene: {scene!r} not in area {area_id!r}")
 
-    active_matcher_names: list[str] = list(area.get("matchers", []))
-    active_matchers: dict[str, Any] = {
+    active_matcher_names = list(area.get("matchers", []))
+    active_matchers = {
         name: matchers_registry[name] for name in active_matcher_names if name in matchers_registry
     }
-
     snapshot_results = await asyncio.gather(
         *[m.snapshot(hass) for m in active_matchers.values()],
         return_exceptions=True,
@@ -44,37 +46,57 @@ async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str) -> No
         else:
             snapshots[name] = result
 
-    rules: list[dict[str, Any]] = area.get("rules", [])
+    described = {
+        name: active_matchers[name].describe(snap) if snap is not None else None
+        for name, snap in snapshots.items()
+    }
+
+    rules = area.get("rules", [])
     match = resolve(rules, scene, snapshots, active_matchers)
     if match is None:
-        described = {
-            name: active_matchers[name].describe(snap) if snap is not None else None
-            for name, snap in snapshots.items()
+        return {
+            "matched_rule_index": None,
+            "rule_name": None,
+            "actions": [],
+            "snapshots_described": described,
         }
+    idx, rule = match
+    return {
+        "matched_rule_index": idx,
+        "rule_name": rule.get("name"),
+        "actions": rule.get("actions", []),
+        "snapshots_described": described,
+    }
+
+
+async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str) -> None:
+    """Apply a scene in an area according to configured rules."""
+    actions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_ACTIONS]
+
+    plan = await async_resolve_only(hass, area_id, scene)
+    if plan["matched_rule_index"] is None:
         _LOGGER.info(
             "ambience: no rule matched for area=%s scene=%s snapshots=%s",
             area_id,
             scene,
-            described,
+            plan["snapshots_described"],
         )
         return
 
-    idx, rule = match
     coros = []
-    for action_spec in rule.get("actions", []):
+    for action_spec in plan["actions"]:
         action_name = action_spec.get("action")
         action = actions_registry.get(action_name)
         if action is None:
             _LOGGER.warning(
                 "ambience: unknown action %r in rule %d (area=%s); skipping",
                 action_name,
-                idx,
+                plan["matched_rule_index"],
                 area_id,
             )
             continue
         targets = action_spec.get("targets", {})
         coros.append(action.execute(hass, targets))
-
     results = await asyncio.gather(*coros, return_exceptions=True)
     for result in results:
         if isinstance(result, BaseException):

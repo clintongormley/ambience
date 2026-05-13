@@ -7,8 +7,10 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 
 from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_STORE, DOMAIN
+from .service import async_resolve_only
 
 
 def async_register_commands(hass: HomeAssistant) -> None:
@@ -19,6 +21,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_area_save)
     websocket_api.async_register_command(hass, _ws_area_delete)
     websocket_api.async_register_command(hass, _ws_validate)
+    websocket_api.async_register_command(hass, _ws_dry_run)
 
 
 def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
@@ -175,3 +178,25 @@ async def _ws_validate(
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
     connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/dry_run",
+        vol.Required("area_id"): str,
+        vol.Required("scene"): str,
+    }
+)
+@websocket_api.async_response
+async def _ws_dry_run(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    try:
+        result = await async_resolve_only(hass, msg["area_id"], msg["scene"])
+    except ServiceValidationError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    connection.send_result(msg["id"], result)

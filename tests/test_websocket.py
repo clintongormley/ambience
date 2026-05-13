@@ -216,3 +216,64 @@ async def test_validate_error(hass: HomeAssistant, installed, hass_ws_client) ->
     )
     assert resp["success"] is False
     assert "duplicate" in resp["error"]["message"].lower()
+
+
+async def test_dry_run_returns_matched_rule(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id="lr",
+        config={
+            "name": "LR",
+            "scenes": ["movie"],
+            "matchers": [],
+            "rules": [
+                {
+                    "name": "movie default",
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        {
+                            "action": "set_light",
+                            "targets": {"light.lamp": {"brightness": 30}},
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    assert save["success"] is True
+    resp = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/dry_run",
+        area_id="lr",
+        scene="movie",
+    )
+    assert resp["success"] is True
+    assert resp["result"]["matched_rule_index"] == 0
+    assert resp["result"]["rule_name"] == "movie default"
+    assert resp["result"]["actions"][0]["action"] == "set_light"
+
+
+async def test_dry_run_no_match(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id="lr",
+        config={
+            "name": "LR",
+            "scenes": ["movie"],
+            "matchers": [],
+            "rules": [],
+        },
+    )
+    resp = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/dry_run",
+        area_id="lr",
+        scene="movie",
+    )
+    assert resp["success"] is True
+    assert resp["result"]["matched_rule_index"] is None
+    assert resp["result"]["actions"] == []

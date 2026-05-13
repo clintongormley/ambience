@@ -30,8 +30,7 @@ class AmbienceStore:
         if raw is None:
             self._data = self._empty()
             return
-        areas = raw.get("areas")
-        if not isinstance(raw, dict) or "areas" not in raw or not isinstance(areas, dict):
+        if not isinstance(raw, dict) or "areas" not in raw or not isinstance(raw["areas"], dict):
             _LOGGER.warning("ambience storage payload is malformed; starting empty")
             self._data = self._empty()
             return

@@ -48,16 +48,24 @@ async def test_areas_list_returns_saved_areas(
 async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/matchers/list")
     assert resp["success"] is True
-    names = [m["name"] for m in resp["result"]]
-    assert "time_of_day" in names
+    by_name = {m["name"]: m for m in resp["result"]}
+    assert "time_of_day" in by_name
+    entry = by_name["time_of_day"]
+    assert entry["description"].strip() != ""
+    assert entry["predicate_help"].strip() != ""
 
 
 async def test_actions_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/actions/list")
     assert resp["success"] is True
-    items = {a["name"]: a for a in resp["result"]}
-    assert "set_light" in items
-    assert items["set_light"]["domains"] == ["light"]
+    by_name = {a["name"]: a for a in resp["result"]}
+    assert "set_light" in by_name
+    entry = by_name["set_light"]
+    assert entry["description"].strip() != ""
+    assert entry["domains"] == ["light"]
+    assert isinstance(entry["target_params"], list)
+    param_names = {p["name"] for p in entry["target_params"]}
+    assert {"brightness", "transition"} <= param_names
 
 
 async def test_area_get_unknown(hass: HomeAssistant, installed, hass_ws_client) -> None:

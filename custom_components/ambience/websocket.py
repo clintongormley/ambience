@@ -90,7 +90,14 @@ async def _ws_matchers_list(
     msg: dict[str, Any],
 ) -> None:
     matchers = hass.data[DOMAIN][DATA_MATCHERS]
-    result = [{"name": name} for name in matchers]
+    result = [
+        {
+            "name": m.name,
+            "description": m.description,
+            "predicate_help": m.predicate_help,
+        }
+        for m in matchers.values()
+    ]
     connection.send_result(msg["id"], result)
 
 
@@ -103,7 +110,15 @@ async def _ws_actions_list(
     msg: dict[str, Any],
 ) -> None:
     actions = hass.data[DOMAIN][DATA_ACTIONS]
-    result = [{"name": a.name, "domains": list(a.domains)} for a in actions.values()]
+    result = [
+        {
+            "name": a.name,
+            "description": a.description,
+            "domains": list(a.domains),
+            "target_params": a.target_params,
+        }
+        for a in actions.values()
+    ]
     connection.send_result(msg["id"], result)
 
 

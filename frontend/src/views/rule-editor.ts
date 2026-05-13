@@ -1,7 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import type { ActionSpec, MatcherInfo, Rule } from "../types.js";
+import type { ActionInfo, ActionSpec, MatcherInfo, ParamSpec, Rule } from "../types.js";
 
 @customElement("ambience-rule-editor")
 export class AmbienceRuleEditor extends LitElement {
@@ -79,6 +79,7 @@ export class AmbienceRuleEditor extends LitElement {
   @property({ attribute: false }) rule: Rule | null = null;
   @property({ attribute: false }) scenes: string[] = [];
   @property({ attribute: false }) activeMatchers: MatcherInfo[] = [];
+  @property({ attribute: false }) availableActions: ActionInfo[] = [];
 
   @state() private _draft: Rule | null = null;
 
@@ -117,6 +118,132 @@ export class AmbienceRuleEditor extends LitElement {
       ...this._draft,
       actions: [...this._draft.actions, spec],
     };
+  }
+
+  private _updateActionAt(idx: number, mutate: (a: ActionSpec) => ActionSpec) {
+    if (!this._draft) return;
+    const actions = this._draft.actions.map((a, i) => (i === idx ? mutate(a) : a));
+    this._draft = { ...this._draft, actions };
+  }
+
+  private _changeActionType(idx: number, name: string) {
+    this._updateActionAt(idx, () => ({ action: name, targets: {} }));
+  }
+
+  private _deleteAction(idx: number) {
+    if (!this._draft) return;
+    this._draft = {
+      ...this._draft,
+      actions: this._draft.actions.filter((_, i) => i !== idx),
+    };
+  }
+
+  private _addTarget(actionIdx: number) {
+    this._updateActionAt(actionIdx, (a) => {
+      const info = this.availableActions.find((x) => x.name === a.action);
+      const defaults: Record<string, unknown> = {};
+      info?.target_params.forEach((p) => {
+        if ("default" in p) defaults[p.name] = p.default;
+      });
+      return {
+        ...a,
+        targets: { ...a.targets, "": defaults },
+      };
+    });
+  }
+
+  private _updateTargetId(actionIdx: number, oldId: string, newId: string) {
+    this._updateActionAt(actionIdx, (a) => {
+      if (oldId === newId) return a;
+      const targets = { ...a.targets };
+      targets[newId] = targets[oldId];
+      delete targets[oldId];
+      return { ...a, targets };
+    });
+  }
+
+  private _updateTargetParam(
+    actionIdx: number,
+    entityId: string,
+    param: ParamSpec,
+    rawValue: string,
+  ) {
+    this._updateActionAt(actionIdx, (a) => {
+      const targets = { ...a.targets };
+      const cur = { ...(targets[entityId] ?? {}) };
+      let parsed: unknown = rawValue;
+      if (param.type === "int") parsed = rawValue === "" ? undefined : parseInt(rawValue, 10);
+      else if (param.type === "number") parsed = rawValue === "" ? undefined : parseFloat(rawValue);
+      else if (param.type === "boolean") parsed = rawValue === "true";
+      if (parsed === undefined) delete cur[param.name];
+      else cur[param.name] = parsed;
+      targets[entityId] = cur;
+      return { ...a, targets };
+    });
+  }
+
+  private _deleteTarget(actionIdx: number, entityId: string) {
+    this._updateActionAt(actionIdx, (a) => {
+      const targets = { ...a.targets };
+      delete targets[entityId];
+      return { ...a, targets };
+    });
+  }
+
+  private _renderTargets(actionIdx: number, action: ActionSpec) {
+    const info = this.availableActions.find((x) => x.name === action.action);
+    const params: ParamSpec[] = info?.target_params ?? [];
+    const entries = Object.entries(action.targets);
+    if (entries.length === 0) {
+      return html`<p style="color: var(--secondary-text-color, #888); margin: 0.5rem 0;">No targets yet.</p>`;
+    }
+    return html`
+      ${entries.map(
+        ([entityId, paramValues]) => html`
+          <div style="display: grid; grid-template-columns: 1fr ${"1fr ".repeat(params.length)}auto; gap: 0.5rem; margin: 0.5rem 0; align-items: end;">
+            <div>
+              <label>entity_id</label>
+              <input
+                type="text"
+                .value=${entityId}
+                placeholder="${info?.domains?.[0] ?? "domain"}.example"
+                @change=${(e: Event) =>
+                  this._updateTargetId(
+                    actionIdx,
+                    entityId,
+                    (e.target as HTMLInputElement).value,
+                  )}
+              />
+            </div>
+            ${params.map(
+              (p) => html`
+                <div>
+                  <label>${p.name}${p.required ? " *" : ""}</label>
+                  <input
+                    type=${p.type === "int" || p.type === "number" ? "number" : "text"}
+                    .value=${String((paramValues as Record<string, unknown>)[p.name] ?? "")}
+                    min=${p.min ?? ""}
+                    max=${p.max ?? ""}
+                    @input=${(e: InputEvent) =>
+                      this._updateTargetParam(
+                        actionIdx,
+                        entityId,
+                        p,
+                        (e.target as HTMLInputElement).value,
+                      )}
+                  />
+                </div>
+              `,
+            )}
+            <button
+              class="secondary"
+              @click=${() => this._deleteTarget(actionIdx, entityId)}
+              title="Remove target"
+            >×</button>
+          </div>
+        `,
+      )}
+    `;
   }
 
   private _save() {
@@ -185,16 +312,45 @@ export class AmbienceRuleEditor extends LitElement {
         )}
 
         <h3>Actions</h3>
-        ${this._draft.actions.length === 0
-          ? html`<p style="color: var(--secondary-text-color, #888)">No actions yet.</p>`
-          : this._draft.actions.map(
-              (a, i) => html`
-                <p>
-                  ${i + 1}. ${a.action} on
-                  ${Object.keys(a.targets).length} target(s)
-                </p>
-              `,
-            )}
+        ${this._draft.actions.map(
+          (action, actionIdx) => html`
+            <div style="border: 1px solid var(--divider-color, #e0e0e0); border-radius: 4px; padding: 0.75rem; margin-bottom: 0.5rem;">
+              <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <select
+                  @change=${(e: Event) =>
+                    this._changeActionType(
+                      actionIdx,
+                      (e.target as HTMLSelectElement).value,
+                    )}
+                >
+                  ${this.availableActions.map(
+                    (info) => html`
+                      <option
+                        value=${info.name}
+                        ?selected=${action.action === info.name}
+                      >
+                        ${info.name}
+                      </option>
+                    `,
+                  )}
+                </select>
+                <button
+                  class="secondary"
+                  style="margin-left: auto"
+                  @click=${() => this._deleteAction(actionIdx)}
+                >
+                  Remove action
+                </button>
+              </div>
+
+              ${this._renderTargets(actionIdx, action)}
+
+              <button class="secondary" @click=${() => this._addTarget(actionIdx)}>
+                + Add target
+              </button>
+            </div>
+          `,
+        )}
         <button class="secondary" @click=${this._addActionSlot}>+ Add action</button>
 
         <div class="actions-bar">

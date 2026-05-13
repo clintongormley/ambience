@@ -3,11 +3,12 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import {
   getArea,
+  listActions,
   listMatchers,
   saveArea,
   type HassConnection,
 } from "../api.js";
-import type { AreaConfig, MatcherInfo, Rule } from "../types.js";
+import type { ActionInfo, AreaConfig, MatcherInfo, Rule } from "../types.js";
 import "./rules-list.js";
 import "./rule-editor.js";
 
@@ -129,6 +130,7 @@ export class AmbienceAreaEditor extends LitElement {
   @state() private _error = "";
   @state() private _saved = false;
   @state() private _editingRuleIdx: number | null = null;
+  @state() private _availableActions: ActionInfo[] = [];
 
   override async connectedCallback() {
     super.connectedCallback();
@@ -137,12 +139,14 @@ export class AmbienceAreaEditor extends LitElement {
 
   private async _load() {
     try {
-      const [cfg, matchers] = await Promise.all([
+      const [cfg, matchers, actions] = await Promise.all([
         getArea(this.hass, this.areaId),
         listMatchers(this.hass),
+        listActions(this.hass),
       ]);
       this._config = cfg;
       this._matchers = matchers;
+      this._availableActions = actions;
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
@@ -236,6 +240,7 @@ export class AmbienceAreaEditor extends LitElement {
         .rule=${this._editingRule}
         .scenes=${this._config.scenes}
         .activeMatchers=${this._activeMatcherInfos}
+        .availableActions=${this._availableActions}
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}
       ></ambience-rule-editor>

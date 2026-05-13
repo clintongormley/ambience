@@ -9,6 +9,7 @@ import {
 } from "../api.js";
 import type { AreaConfig, MatcherInfo, Rule } from "../types.js";
 import "./rules-list.js";
+import "./rule-editor.js";
 
 type Tab = "scenes" | "matchers" | "rules";
 
@@ -127,6 +128,7 @@ export class AmbienceAreaEditor extends LitElement {
   @state() private _tab: Tab = "scenes";
   @state() private _error = "";
   @state() private _saved = false;
+  @state() private _editingRuleIdx: number | null = null;
 
   override async connectedCallback() {
     super.connectedCallback();
@@ -228,6 +230,15 @@ export class AmbienceAreaEditor extends LitElement {
         ${this._error ? html`<span class="error">${this._error}</span>` : ""}
         ${this._saved ? html`<span class="saved">Saved.</span>` : ""}
       </div>
+
+      <ambience-rule-editor
+        ?open=${this._editingRuleIdx !== null}
+        .rule=${this._editingRule}
+        .scenes=${this._config.scenes}
+        .activeMatchers=${this._activeMatcherInfos}
+        @save-rule=${this._saveRule}
+        @cancel-rule=${this._cancelRule}
+      ></ambience-rule-editor>
     `;
   }
 
@@ -315,7 +326,34 @@ export class AmbienceAreaEditor extends LitElement {
       ...this._config,
       rules: [...this._config.rules, blank],
     };
-    // Rule editor opens via Task 12; for now, the row appears with default values.
+    this._editingRuleIdx = this._config.rules.length - 1;
+  }
+
+  private _editRule(e: CustomEvent<{ index: number }>) {
+    this._editingRuleIdx = e.detail.index;
+  }
+
+  private _saveRule(e: CustomEvent<Rule>) {
+    if (!this._config || this._editingRuleIdx === null) return;
+    const rules = [...this._config.rules];
+    rules[this._editingRuleIdx] = e.detail;
+    this._config = { ...this._config, rules };
+    this._editingRuleIdx = null;
+  }
+
+  private _cancelRule() {
+    this._editingRuleIdx = null;
+  }
+
+  private get _editingRule(): Rule | null {
+    if (this._editingRuleIdx === null || !this._config) return null;
+    return this._config.rules[this._editingRuleIdx] ?? null;
+  }
+
+  private get _activeMatcherInfos(): MatcherInfo[] {
+    if (!this._config) return [];
+    const active = new Set(this._config.matchers);
+    return this._matchers.filter((m) => active.has(m.name));
   }
 
   private _deleteRule(e: CustomEvent<{ index: number }>) {
@@ -332,10 +370,5 @@ export class AmbienceAreaEditor extends LitElement {
     const rules = [...this._config.rules];
     [rules[index], rules[target]] = [rules[target], rules[index]];
     this._config = { ...this._config, rules };
-  }
-
-  private _editRule(_e: CustomEvent<{ index: number }>) {
-    // Filled in by Task 12 (rule editor modal).
-    // For now, no-op; user can edit via Save with the row's current shape.
   }
 }

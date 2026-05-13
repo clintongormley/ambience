@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -139,11 +139,28 @@ class TimeOfDayMatcher:
             delta = -delta
         return anchor_dt + delta
 
-    def describe(self, snapshot: TimeOfDaySnapshot) -> str | None:
-        return None
-
     def validate_predicate(self, predicate) -> None:  # noqa: ANN001
-        raise NotImplementedError
+        if predicate is None or not isinstance(predicate, (str, list)):
+            raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
+        items = predicate if isinstance(predicate, list) else [predicate]
+        synthetic = _synthetic_snapshot()
+        for item in items:
+            # _match_one raises ValueError for malformed items;
+            # iterating ensures every list element is checked
+            # (matches() short-circuits and would miss bad later items).
+            self._match_one(item, synthetic)
+
+    def describe(self, snapshot: TimeOfDaySnapshot) -> str | None:
+        # Return the first named period whose range contains 'now'.
+        # Order in _NAMED_PERIODS controls precedence — prefer specific (sunset)
+        # over broad (day) when both match.
+        for name in _NAMED_PERIODS:
+            try:
+                if self._match_one(name, snapshot):
+                    return name
+            except ValueError:
+                continue
+        return None
 
 
 def _in_range(now: datetime, start: datetime, end: datetime) -> bool:
@@ -151,3 +168,17 @@ def _in_range(now: datetime, start: datetime, end: datetime) -> bool:
         # wrap midnight
         return now >= start or now < end
     return start <= now < end
+
+
+def _synthetic_snapshot() -> TimeOfDaySnapshot:
+    """A throwaway snapshot used only for predicate validation."""
+    base = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    return TimeOfDaySnapshot(
+        now=base,
+        sunrise=base.replace(hour=6),
+        sunset=base.replace(hour=18),
+        noon=base.replace(hour=12),
+        midnight=base.replace(hour=0),
+        dawn=base.replace(hour=5, minute=30),
+        dusk=base.replace(hour=18, minute=30),
+    )

@@ -240,3 +240,57 @@ def test_predicate_list_with_mixed_kinds() -> None:
     now = datetime(2026, 5, 13, 17, 0, tzinfo=UTC)
     snap = _build_snapshot(now)
     assert matcher.matches(["evening", "16:00-18:30"], snap) is True
+
+
+@pytest.mark.parametrize(
+    "predicate",
+    [
+        "morning",
+        "16:00-18:30",
+        "sunset-30m to 22:00",
+        "sunrise to sunset",
+        ["evening", "16:00-18:30"],
+    ],
+)
+def test_validate_predicate_accepts_valid(predicate) -> None:
+    TimeOfDayMatcher().validate_predicate(predicate)  # should not raise
+
+
+@pytest.mark.parametrize(
+    "predicate",
+    [
+        "garbage",
+        "25:00-26:00",
+        "sunset to zenith",
+        ["evening", "garbage"],
+        42,
+        None,
+    ],
+)
+def test_validate_predicate_rejects_invalid(predicate) -> None:
+    with pytest.raises(ValueError):
+        TimeOfDayMatcher().validate_predicate(predicate)
+
+
+def test_describe_returns_named_period_when_matching() -> None:
+    matcher = TimeOfDayMatcher()
+    # 14:00 — should describe as "afternoon"
+    snap = _build_snapshot(datetime(2026, 5, 13, 14, 0, tzinfo=UTC))
+    assert matcher.describe(snap) == "afternoon"
+
+
+def test_describe_returns_none_if_no_named_period_matches() -> None:
+    matcher = TimeOfDayMatcher()
+    # Construct a pathological snapshot where no named period contains now.
+    # All anchors are jammed into the early morning (00:00-06:00);
+    # at now=12:00 every resolved period range falls entirely outside that time.
+    impossible = _build_snapshot(
+        now=datetime(2026, 5, 13, 12, 0, tzinfo=UTC),
+        sunrise=datetime(2026, 5, 13, 0, 0, tzinfo=UTC),
+        sunset=datetime(2026, 5, 13, 4, 0, tzinfo=UTC),
+        noon=datetime(2026, 5, 13, 2, 0, tzinfo=UTC),
+        midnight=datetime(2026, 5, 13, 0, 0, tzinfo=UTC),
+        dawn=datetime(2026, 5, 13, 6, 0, tzinfo=UTC),
+        dusk=datetime(2026, 5, 13, 5, 0, tzinfo=UTC),
+    )
+    assert matcher.describe(impossible) is None

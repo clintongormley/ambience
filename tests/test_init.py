@@ -83,3 +83,34 @@ async def test_unload_clears_data(
     await hass.async_block_till_done()
 
     assert not hass.services.has_service(DOMAIN, "apply_scene")
+
+
+async def test_panel_is_registered(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """The Ambience panel should appear under /ambience after setup."""
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    panels = hass.data.get("frontend_panels", {})
+    assert "ambience" in panels
+    panel = panels["ambience"]
+    assert panel.frontend_url_path == "ambience"
+    assert panel.config["_panel_custom"]["name"] == "ambience-panel"
+
+
+async def test_panel_is_removed_on_unload(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    panels = hass.data.get("frontend_panels", {})
+    assert "ambience" not in panels

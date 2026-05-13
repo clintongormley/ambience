@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import voluptuous as vol
+from homeassistant.components.frontend import (
+    async_register_built_in_panel,
+    async_remove_panel,
+)
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
@@ -26,6 +32,10 @@ from .websocket import async_register_commands, async_unregister_commands
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _LOGGER = logging.getLogger(__name__)
+
+_PANEL_URL = "ambience"
+_PANEL_STATIC_PATH = "/ambience-panel"
+_PANEL_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-panel.js"
 
 _APPLY_SCENE_SCHEMA = vol.Schema(
     {
@@ -63,10 +73,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_register_commands(hass)
 
+    # Serve the bundled JS from the integration's frontend/ directory.
+    bundle_dir = Path(__file__).parent / "frontend"
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(_PANEL_STATIC_PATH, str(bundle_dir), False)]
+    )
+
+    async_register_built_in_panel(
+        hass,
+        component_name="custom",
+        sidebar_title="Ambience",
+        sidebar_icon="mdi:lightbulb-multiple",
+        frontend_url_path=_PANEL_URL,
+        require_admin=True,
+        config={
+            "_panel_custom": {
+                "name": "ambience-panel",
+                "module_url": _PANEL_JS_URL,
+                "embed_iframe": False,
+                "trust_external": False,
+            }
+        },
+    )
+
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    async_remove_panel(hass, _PANEL_URL)
     hass.services.async_remove(DOMAIN, "apply_scene")
     async_unregister_commands(hass)
     hass.data.pop(DOMAIN, None)

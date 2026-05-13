@@ -171,3 +171,72 @@ def test_invalid_anchor_raises() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
     with pytest.raises(ValueError, match="invalid endpoint"):
         matcher.matches("zenith to sunset", snap)
+
+
+@pytest.mark.parametrize(
+    "period,now_hour,now_minute,expected",
+    [
+        # midnight: midnight-1h to midnight+1h ⇒ 23:00..01:00 wrap
+        ("midnight", 0, 30, True),
+        ("midnight", 23, 30, True),
+        ("midnight", 2, 0, False),
+        # dawn 5:30 ± 30m
+        ("dawn", 5, 30, True),
+        ("dawn", 5, 0, True),
+        ("dawn", 5, 59, True),
+        ("dawn", 6, 1, False),
+        # sunrise 6:00 ± 30m
+        ("sunrise", 6, 0, True),
+        ("sunrise", 5, 35, True),  # 5:30 +5
+        # morning: sunrise+30m to noon-1h ⇒ 6:30 .. 11:00
+        ("morning", 7, 0, True),
+        ("morning", 6, 0, False),
+        ("morning", 11, 30, False),
+        # noon ± 1h ⇒ 11:00..13:00
+        ("noon", 12, 0, True),
+        ("noon", 13, 30, False),
+        # afternoon: noon+1h to sunset-30m ⇒ 13:00..17:30
+        ("afternoon", 14, 0, True),
+        ("afternoon", 18, 0, False),
+        # sunset ± 30m ⇒ 17:30..18:30
+        ("sunset", 18, 0, True),
+        # evening: sunset..dusk ⇒ 18:00..18:30
+        ("evening", 18, 15, True),
+        ("evening", 19, 0, False),
+        # dusk ± 30m ⇒ 18:00..19:00
+        ("dusk", 18, 30, True),
+        # day: sunrise..sunset ⇒ 6:00..18:00
+        ("day", 12, 0, True),
+        ("day", 19, 0, False),
+        # night: dusk..dawn ⇒ 18:30..5:30 next day
+        ("night", 22, 0, True),
+        ("night", 4, 0, True),
+        ("night", 10, 0, False),
+    ],
+)
+def test_named_period_match(period: str, now_hour: int, now_minute: int, expected: bool) -> None:
+    matcher = TimeOfDayMatcher()
+    now = datetime(2026, 5, 13, now_hour, now_minute, tzinfo=UTC)
+    snap = _build_snapshot(now)
+    assert matcher.matches(period, snap) is expected, period
+
+
+def test_predicate_list_matches_any() -> None:
+    matcher = TimeOfDayMatcher()
+    now = datetime(2026, 5, 13, 14, 0, tzinfo=UTC)  # afternoon
+    snap = _build_snapshot(now)
+    assert matcher.matches(["evening", "afternoon"], snap) is True
+
+
+def test_predicate_list_matches_none() -> None:
+    matcher = TimeOfDayMatcher()
+    now = datetime(2026, 5, 13, 10, 0, tzinfo=UTC)  # morning
+    snap = _build_snapshot(now)
+    assert matcher.matches(["evening", "afternoon"], snap) is False
+
+
+def test_predicate_list_with_mixed_kinds() -> None:
+    matcher = TimeOfDayMatcher()
+    now = datetime(2026, 5, 13, 17, 0, tzinfo=UTC)
+    snap = _build_snapshot(now)
+    assert matcher.matches(["evening", "16:00-18:30"], snap) is True

@@ -191,3 +191,28 @@ async def test_area_delete_removes_area(hass: HomeAssistant, installed, hass_ws_
 async def test_area_delete_unknown_is_ok(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/area/delete", area_id="nope")
     assert resp["success"] is True
+
+
+async def test_validate_ok(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/validate",
+        config={"name": "X", "scenes": ["a"], "matchers": [], "rules": []},
+    )
+    assert resp["success"] is True
+    assert resp["result"] == {"ok": True}
+
+
+async def test_validate_error(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/validate",
+        config={
+            "name": "X",
+            "scenes": ["a", "a"],
+            "matchers": [],
+            "rules": [],
+        },
+    )
+    assert resp["success"] is False
+    assert "duplicate" in resp["error"]["message"].lower()

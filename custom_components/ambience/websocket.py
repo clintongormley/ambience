@@ -18,6 +18,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_area_get)
     websocket_api.async_register_command(hass, _ws_area_save)
     websocket_api.async_register_command(hass, _ws_area_delete)
+    websocket_api.async_register_command(hass, _ws_validate)
 
 
 def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
@@ -152,4 +153,25 @@ async def _ws_area_save(
         return
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_area(msg["area_id"], msg["config"])
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/validate",
+        vol.Required("config"): dict,
+    }
+)
+@websocket_api.async_response
+async def _ws_validate(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    try:
+        _validate_area_config(hass, area_id="_", config=msg["config"])
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
     connection.send_result(msg["id"], {"ok": True})

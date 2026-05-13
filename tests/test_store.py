@@ -62,3 +62,15 @@ async def test_corrupt_payload_starts_empty(
     await store.async_load()
     assert store.areas() == {}
     assert "ambience storage payload" in caplog.text.lower()
+
+
+async def test_persisted_data_survives_new_store_instance(hass: HomeAssistant) -> None:
+    """Save with one AmbienceStore, then load with a fresh one — data must survive."""
+    s1 = AmbienceStore(hass)
+    await s1.async_load()
+    config = {"name": "Hall", "scenes": ["welcome"], "matchers": [], "rules": []}
+    await s1.async_save_area("hall", config)
+
+    s2 = AmbienceStore(hass)
+    await s2.async_load()
+    assert s2.get_area("hall") == config

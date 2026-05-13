@@ -9,7 +9,12 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ambience.const import DOMAIN
+from custom_components.ambience.const import (
+    DATA_ACTIONS,
+    DATA_MATCHERS,
+    DATA_STORE,
+    DOMAIN,
+)
 
 MANIFEST_PATH = Path(__file__).parent.parent / "custom_components" / "ambience" / "manifest.json"
 
@@ -34,10 +39,47 @@ async def test_setup_and_unload_entry(
     await hass.async_block_till_done()
 
     assert mock_config_entry.state is ConfigEntryState.LOADED
-    assert mock_config_entry.entry_id in hass.data[DOMAIN]
 
     assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     assert mock_config_entry.state is ConfigEntryState.NOT_LOADED
-    assert mock_config_entry.entry_id not in hass.data[DOMAIN]
+
+
+async def test_setup_seeds_registries_and_store(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    data = hass.data[DOMAIN]
+    assert DATA_STORE in data
+    assert "time_of_day" in data[DATA_MATCHERS]
+    assert "set_light" in data[DATA_ACTIONS]
+
+
+async def test_setup_registers_apply_scene_service(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.services.has_service(DOMAIN, "apply_scene")
+
+
+async def test_unload_clears_data(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert not hass.services.has_service(DOMAIN, "apply_scene")

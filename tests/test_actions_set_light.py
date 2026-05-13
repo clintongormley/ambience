@@ -80,3 +80,32 @@ def test_validate_target_params_ok() -> None:
 def test_validate_target_params_rejects_bad(params: dict) -> None:
     with pytest.raises(ValueError):
         SetLightAction().validate_target_params("light.x", params)
+
+
+async def test_one_failing_target_does_not_block_others(
+    hass: HomeAssistant,
+) -> None:
+    """If hass.services.async_call raises for one entity, others still run."""
+    on_calls = async_mock_service(hass, "light", "turn_on")
+
+    action = SetLightAction()
+    real_apply = action._apply_one
+
+    async def flaky(h, entity_id, params):
+        if entity_id == "light.broken":
+            raise RuntimeError("boom")
+        return await real_apply(h, entity_id, params)
+
+    from unittest.mock import patch
+
+    with patch.object(action, "_apply_one", side_effect=flaky):
+        await action.execute(
+            hass,
+            {
+                "light.ok": {"brightness": 50},
+                "light.broken": {"brightness": 50},
+                "light.also_ok": {"brightness": 70},
+            },
+        )
+
+    assert {c.data["entity_id"] for c in on_calls} == {"light.ok", "light.also_ok"}

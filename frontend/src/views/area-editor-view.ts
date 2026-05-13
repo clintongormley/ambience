@@ -130,6 +130,7 @@ export class AmbienceAreaEditor extends LitElement {
   @state() private _error = "";
   @state() private _saved = false;
   @state() private _editingRuleIdx: number | null = null;
+  @state() private _isNewRule = false;
   @state() private _availableActions: ActionInfo[] = [];
 
   override async connectedCallback() {
@@ -332,10 +333,12 @@ export class AmbienceAreaEditor extends LitElement {
       rules: [...this._config.rules, blank],
     };
     this._editingRuleIdx = this._config.rules.length - 1;
+    this._isNewRule = true;
   }
 
   private _editRule(e: CustomEvent<{ index: number }>) {
     this._editingRuleIdx = e.detail.index;
+    this._isNewRule = false;
   }
 
   private _saveRule(e: CustomEvent<Rule>) {
@@ -344,10 +347,18 @@ export class AmbienceAreaEditor extends LitElement {
     rules[this._editingRuleIdx] = e.detail;
     this._config = { ...this._config, rules };
     this._editingRuleIdx = null;
+    this._isNewRule = false;
   }
 
   private _cancelRule() {
+    if (this._isNewRule && this._config && this._editingRuleIdx !== null) {
+      const rules = this._config.rules.filter(
+        (_, i) => i !== this._editingRuleIdx,
+      );
+      this._config = { ...this._config, rules };
+    }
     this._editingRuleIdx = null;
+    this._isNewRule = false;
   }
 
   private get _editingRule(): Rule | null {

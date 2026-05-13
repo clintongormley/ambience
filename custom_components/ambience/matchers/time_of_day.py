@@ -48,7 +48,10 @@ class TimeOfDayMatcher:
             raw = state.attributes.get(attr)
             if raw is None:
                 raise RuntimeError(f"sun.sun missing attribute {attr}")
-            anchors[anchor] = dt_util.parse_datetime(raw)  # type: ignore[assignment]
+            parsed = dt_util.parse_datetime(raw)
+            if parsed is None:
+                raise RuntimeError(f"sun.sun attribute {attr} unparseable: {raw!r}")
+            anchors[anchor] = parsed
 
         return TimeOfDaySnapshot(
             now=dt_util.utcnow(),

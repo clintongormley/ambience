@@ -68,3 +68,22 @@ async def test_snapshot_raises_when_sun_unavailable(hass: HomeAssistant) -> None
     matcher = TimeOfDayMatcher()
     with pytest.raises(RuntimeError, match="sun.sun"):
         await matcher.snapshot(hass)
+
+
+@pytest.mark.asyncio
+async def test_snapshot_raises_when_attribute_missing(hass: HomeAssistant) -> None:
+    """If sun.sun exists but is missing an expected attribute, raise RuntimeError."""
+    hass.states.async_set(
+        "sun.sun",
+        "above_horizon",
+        {
+            # next_rising omitted on purpose
+            "next_setting": "2026-05-13T18:00:00+00:00",
+            "next_dawn": "2026-05-13T05:30:00+00:00",
+            "next_dusk": "2026-05-13T18:30:00+00:00",
+            "next_noon": "2026-05-13T12:00:00+00:00",
+            "next_midnight": "2026-05-13T00:00:00+00:00",
+        },
+    )
+    with pytest.raises(RuntimeError, match="next_rising"):
+        await TimeOfDayMatcher().snapshot(hass)

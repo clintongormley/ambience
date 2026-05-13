@@ -87,3 +87,42 @@ async def test_snapshot_raises_when_attribute_missing(hass: HomeAssistant) -> No
     )
     with pytest.raises(RuntimeError, match="next_rising"):
         await TimeOfDayMatcher().snapshot(hass)
+
+
+def test_matches_absolute_range_inside() -> None:
+    matcher = TimeOfDayMatcher()
+    now = datetime(2026, 5, 13, 17, 0, tzinfo=UTC)
+    snap = _build_snapshot(now)
+    assert matcher.matches("16:00-18:30", snap) is True
+
+
+def test_matches_absolute_range_outside() -> None:
+    matcher = TimeOfDayMatcher()
+    now = datetime(2026, 5, 13, 15, 0, tzinfo=UTC)
+    snap = _build_snapshot(now)
+    assert matcher.matches("16:00-18:30", snap) is False
+
+
+def test_matches_absolute_range_wraps_midnight() -> None:
+    matcher = TimeOfDayMatcher()
+    # range 22:00 to 02:00 — current time 01:00 should match
+    now = datetime(2026, 5, 13, 1, 0, tzinfo=UTC)
+    snap = _build_snapshot(now)
+    assert matcher.matches("22:00-02:00", snap) is True
+    # 03:00 should not
+    snap2 = _build_snapshot(datetime(2026, 5, 13, 3, 0, tzinfo=UTC))
+    assert matcher.matches("22:00-02:00", snap2) is False
+
+
+def test_matches_absolute_range_allows_spaces_around_dash() -> None:
+    matcher = TimeOfDayMatcher()
+    now = datetime(2026, 5, 13, 17, 0, tzinfo=UTC)
+    snap = _build_snapshot(now)
+    assert matcher.matches("16:00 - 18:30", snap) is True
+
+
+def test_unknown_predicate_string_raises() -> None:
+    matcher = TimeOfDayMatcher()
+    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    with pytest.raises(ValueError, match="invalid time_of_day predicate"):
+        matcher.matches("garbage", snap)

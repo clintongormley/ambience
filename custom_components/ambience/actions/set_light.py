@@ -16,7 +16,26 @@ class SetLightAction:
     """Apply brightness and transition to one or more lights."""
 
     name = "set_light"
+    description = "Set a light's brightness and transition. Brightness 0 turns the light off."
     domains: tuple[str, ...] = ("light",)
+    target_params = [
+        {
+            "name": "brightness",
+            "type": "int",
+            "required": True,
+            "min": 0,
+            "max": 100,
+            "description": "Brightness percent (0 = off, 100 = full).",
+        },
+        {
+            "name": "transition",
+            "type": "number",
+            "required": False,
+            "default": 0,
+            "min": 0,
+            "description": "Transition duration in seconds.",
+        },
+    ]
 
     async def execute(
         self,

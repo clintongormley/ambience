@@ -2,9 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, NotRequired, Protocol, TypedDict, runtime_checkable
 
 from homeassistant.core import HomeAssistant
+
+
+class ParamSpec(TypedDict):
+    """UI metadata for one target parameter on an Action."""
+
+    name: str
+    type: str  # "int" | "number" | "string" | "boolean"
+    required: bool
+    default: NotRequired[Any]
+    min: NotRequired[float]
+    max: NotRequired[float]
+    description: NotRequired[str]
 
 
 @runtime_checkable
@@ -37,7 +49,9 @@ class Action(Protocol):
     """A pluggable scene-application operation."""
 
     name: str
+    description: str
     domains: tuple[str, ...]
+    target_params: list[ParamSpec]
 
     async def execute(
         self,

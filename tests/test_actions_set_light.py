@@ -109,3 +109,25 @@ async def test_one_failing_target_does_not_block_others(
         )
 
     assert {c.data["entity_id"] for c in on_calls} == {"light.ok", "light.also_ok"}
+
+
+def test_action_exposes_description() -> None:
+    a = SetLightAction()
+    assert isinstance(a.description, str)
+    assert a.description.strip() != ""
+
+
+def test_action_exposes_target_params_schema() -> None:
+    a = SetLightAction()
+    schema = a.target_params
+    assert isinstance(schema, list)
+    by_name = {p["name"]: p for p in schema}
+    assert "brightness" in by_name
+    assert by_name["brightness"]["type"] == "int"
+    assert by_name["brightness"]["min"] == 0
+    assert by_name["brightness"]["max"] == 100
+    assert by_name["brightness"]["required"] is True
+    assert "transition" in by_name
+    assert by_name["transition"]["type"] == "number"
+    assert by_name["transition"]["required"] is False
+    assert by_name["transition"]["default"] == 0

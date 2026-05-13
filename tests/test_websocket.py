@@ -58,3 +58,110 @@ async def test_actions_list(hass: HomeAssistant, installed, hass_ws_client) -> N
     items = {a["name"]: a for a in resp["result"]}
     assert "set_light" in items
     assert items["set_light"]["domains"] == ["light"]
+
+
+async def test_area_get_unknown(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/area/get", area_id="nope")
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "unknown_area"
+
+
+async def test_area_save_then_get(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    config = {
+        "name": "Living Room",
+        "scenes": ["movie", "reading"],
+        "matchers": ["time_of_day"],
+        "rules": [
+            {
+                "when": {"scene": "movie", "time_of_day": "evening"},
+                "actions": [
+                    {
+                        "action": "set_light",
+                        "targets": {"light.lamp": {"brightness": 30}},
+                    }
+                ],
+            }
+        ],
+    }
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id="lr",
+        config=config,
+    )
+    assert save["success"] is True
+
+    get = await _ws_send(hass_ws_client, id=2, type="ambience/area/get", area_id="lr")
+    assert get["success"] is True
+    assert get["result"] == config
+
+
+async def test_area_save_rejects_invalid_predicate(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    config = {
+        "name": "X",
+        "scenes": ["movie"],
+        "matchers": ["time_of_day"],
+        "rules": [
+            {
+                "when": {"scene": "movie", "time_of_day": "garbage_predicate"},
+                "actions": [],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id="lr",
+        config=config,
+    )
+    assert resp["success"] is False
+    assert "garbage_predicate" in resp["error"]["message"]
+
+
+async def test_area_save_rejects_invalid_action_params(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    config = {
+        "name": "X",
+        "scenes": ["movie"],
+        "matchers": [],
+        "rules": [
+            {
+                "when": {"scene": "movie"},
+                "actions": [
+                    {
+                        "action": "set_light",
+                        "targets": {"light.x": {"brightness": 200}},  # out of range
+                    }
+                ],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id="lr",
+        config=config,
+    )
+    assert resp["success"] is False
+    assert "brightness" in resp["error"]["message"]
+
+
+async def test_area_save_rejects_duplicate_scene_names(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id="lr",
+        config={
+            "name": "X",
+            "scenes": ["a", "a"],
+            "matchers": [],
+            "rules": [],
+        },
+    )
+    assert resp["success"] is False
+    assert "duplicate" in resp["error"]["message"].lower()

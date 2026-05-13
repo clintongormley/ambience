@@ -20,3 +20,7 @@ CLAUDE.local.md
 HA_CHANGES_REPORT.md
 docs/plans/
 docs/superpowers/
+
+# Frontend build
+node_modules/
+frontend/dist/

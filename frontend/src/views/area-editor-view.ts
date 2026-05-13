@@ -7,7 +7,8 @@ import {
   saveArea,
   type HassConnection,
 } from "../api.js";
-import type { AreaConfig, MatcherInfo } from "../types.js";
+import type { AreaConfig, MatcherInfo, Rule } from "../types.js";
+import "./rules-list.js";
 
 type Tab = "scenes" | "matchers" | "rules";
 
@@ -292,10 +293,49 @@ export class AmbienceAreaEditor extends LitElement {
 
   private _renderRules() {
     return html`
-      <p>
-        Rules editor is the next step (Task 12).
-        ${this._config!.rules.length} rule(s) currently configured.
-      </p>
+      <h3>Rules</h3>
+      <p>Rules are evaluated in order — the first match wins.</p>
+      <ambience-rules-list
+        .rules=${this._config!.rules}
+        @add-rule=${this._addRule}
+        @delete-rule=${this._deleteRule}
+        @move-rule=${this._moveRule}
+        @edit-rule=${this._editRule}
+      ></ambience-rules-list>
     `;
+  }
+
+  private _addRule() {
+    if (!this._config) return;
+    const blank: Rule = {
+      when: { scene: null },
+      actions: [],
+    };
+    this._config = {
+      ...this._config,
+      rules: [...this._config.rules, blank],
+    };
+    // Rule editor opens via Task 12; for now, the row appears with default values.
+  }
+
+  private _deleteRule(e: CustomEvent<{ index: number }>) {
+    if (!this._config) return;
+    const rules = this._config.rules.filter((_, i) => i !== e.detail.index);
+    this._config = { ...this._config, rules };
+  }
+
+  private _moveRule(e: CustomEvent<{ index: number; delta: number }>) {
+    if (!this._config) return;
+    const { index, delta } = e.detail;
+    const target = index + delta;
+    if (target < 0 || target >= this._config.rules.length) return;
+    const rules = [...this._config.rules];
+    [rules[index], rules[target]] = [rules[target], rules[index]];
+    this._config = { ...this._config, rules };
+  }
+
+  private _editRule(_e: CustomEvent<{ index: number }>) {
+    // Filled in by Task 12 (rule editor modal).
+    // For now, no-op; user can edit via Save with the row's current shape.
   }
 }

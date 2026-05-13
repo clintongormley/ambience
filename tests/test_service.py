@@ -247,3 +247,52 @@ async def test_action_failure_does_not_block_other_actions(
     await async_apply_scene(hass, "lr", "movie")
 
     assert recorded.executions == [{"light.a": {"brightness": 50}}]
+
+
+async def test_cancellation_treated_as_failure_isolation(
+    hass: HomeAssistant,
+) -> None:
+    """A CancelledError (BaseException, not Exception) must still be isolated."""
+
+    class CancelledMatcher:
+        name = "tod"
+
+        async def snapshot(self, hass):
+            import asyncio
+
+            raise asyncio.CancelledError()
+
+        def matches(self, predicate, snapshot):
+            return False
+
+        def describe(self, snapshot):
+            return None
+
+        def validate_predicate(self, predicate):
+            return
+
+    action = RecordingAction()
+    areas = {
+        "lr": {
+            "name": "LR",
+            "scenes": ["movie"],
+            "matchers": ["tod"],
+            "rules": [
+                {
+                    "when": {"scene": "movie"},
+                    "actions": [{"action": "record", "targets": {"light.a": {"brightness": 10}}}],
+                }
+            ],
+        }
+    }
+    _install(
+        hass,
+        areas=areas,
+        matchers={"tod": CancelledMatcher()},
+        actions={"record": action},
+    )
+
+    await async_apply_scene(hass, "lr", "movie")
+
+    # Wildcard rule should still match (cancelled snapshot becomes None).
+    assert action.executions == [{"light.a": {"brightness": 10}}]

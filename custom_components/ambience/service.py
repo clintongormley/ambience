@@ -38,7 +38,7 @@ async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str) -> No
     )
     snapshots: dict[str, Any] = {}
     for name, result in zip(active_matchers.keys(), snapshot_results, strict=True):
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             _LOGGER.warning("ambience: matcher %r snapshot failed: %s", name, result)
             snapshots[name] = None
         else:
@@ -77,5 +77,5 @@ async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str) -> No
 
     results = await asyncio.gather(*coros, return_exceptions=True)
     for result in results:
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             _LOGGER.warning("ambience: action raised: %s", result)

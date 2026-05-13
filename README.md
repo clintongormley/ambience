@@ -33,7 +33,7 @@ pytest
 
 ## Usage
 
-Ambience applies contextual scenes — activating a named scene picks the first matching rule from an ordered list (based on time of day, weather, etc.) and runs its actions. Configuration happens via the WebSocket API (a dedicated panel is the next deliverable).
+Configure Ambience via the **Ambience** panel (sidebar, admin-only). Add an area, define scene names, pick which matchers participate, then author rules. Activating a scene picks the first matching rule from an ordered list (based on time of day, weather, etc.) and runs its actions.
 
 ### Service: `ambience.apply_scene`
 
@@ -44,9 +44,22 @@ data:
   scene: movie_night
 ```
 
+### Building the panel
+
+The panel is a Lit + TypeScript app bundled to `custom_components/ambience/frontend/ambience-panel.js`. The bundle is checked in so HACS installs need no build step.
+
+To rebuild:
+
+```sh
+npm install
+npm run build
+```
+
+CI verifies that the committed bundle matches a fresh build — keep them in sync.
+
 ### WebSocket API
 
-All commands are admin-only. Use HA's developer tools or any WS client.
+All commands are admin-only.
 
 | Command | Payload | Returns |
 |---|---|---|
@@ -54,7 +67,7 @@ All commands are admin-only. Use HA's developer tools or any WS client.
 | `ambience/area/get` | `{area_id}` | full area config |
 | `ambience/area/save` | `{area_id, config}` | `{ok: true}` or error |
 | `ambience/area/delete` | `{area_id}` | `{ok: true}` |
-| `ambience/matchers/list` | – | registered matchers |
-| `ambience/actions/list` | – | registered actions |
+| `ambience/matchers/list` | – | matchers + descriptions + predicate help |
+| `ambience/actions/list` | – | actions + descriptions + target param schemas |
 | `ambience/validate` | `{config}` | `{ok: true}` or error |
 | `ambience/dry_run` | `{area_id, scene}` | resolved-rule preview |

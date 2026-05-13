@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 _ABS_RE = re.compile(r"^\s*(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\s*$")
 _HHMM_RE = re.compile(r"^\d{1,2}:\d{2}$")
+_ANCHOR_RE = re.compile(r"^(sunrise|sunset|noon|midnight|dawn|dusk)(?:([+-])(\d+)([mh]))?$")
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,13 @@ class TimeOfDayMatcher:
 
     def _match_one(self, text: str, snapshot: TimeOfDaySnapshot) -> bool:
         text = text.strip()
+        # " to " range — handles wall-clock and sun-relative endpoints
+        if " to " in text:
+            left, right = text.split(" to ", 1)
+            start = self._resolve_endpoint(left, snapshot)
+            end = self._resolve_endpoint(right, snapshot)
+            return _in_range(snapshot.now, start, end)
+        # absolute HH:MM-HH:MM range
         m = _ABS_RE.match(text)
         if m:
             start = self._resolve_endpoint(m.group(1), snapshot)
@@ -80,12 +88,26 @@ class TimeOfDayMatcher:
         raise ValueError(f"invalid time_of_day predicate: {text!r}")
 
     def _resolve_endpoint(self, expr: str, snapshot: TimeOfDaySnapshot) -> datetime:
-        expr = expr.strip()
+        # Strip internal whitespace so "sunset - 30m" == "sunset-30m"
+        expr = expr.strip().replace(" ", "")
         if _HHMM_RE.match(expr):
             hh, mm = map(int, expr.split(":"))
-            base = snapshot.now
-            return base.replace(hour=hh, minute=mm, second=0, microsecond=0)
-        raise ValueError(f"invalid endpoint: {expr!r}")
+            return snapshot.now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        m = _ANCHOR_RE.match(expr)
+        if not m:
+            raise ValueError(f"invalid endpoint: {expr!r}")
+        anchor = m.group(1)
+        offset_sign = m.group(2)
+        offset_value = m.group(3)
+        offset_unit = m.group(4)
+        anchor_dt: datetime = getattr(snapshot, anchor)
+        if offset_value is None:
+            return anchor_dt
+        amount = int(offset_value)
+        delta = timedelta(minutes=amount) if offset_unit == "m" else timedelta(hours=amount)
+        if offset_sign == "-":
+            delta = -delta
+        return anchor_dt + delta
 
     def describe(self, snapshot: TimeOfDaySnapshot) -> str | None:
         return None

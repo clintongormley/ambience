@@ -62,8 +62,10 @@ export class AmbienceMatcherInput extends LitElement {
         <ambience-scene-combobox
           .value=${(this.value as string | null) ?? null}
           .suggestions=${this.sceneSuggestions}
-          @value-changed=${(e: CustomEvent<{ value: string | null }>) =>
-            this._emit(e.detail.value)}
+          @value-changed=${(e: CustomEvent<{ value: string | null }>) => {
+            e.stopPropagation();
+            this._emit(e.detail.value);
+          }}
         ></ambience-scene-combobox>
       `;
     }

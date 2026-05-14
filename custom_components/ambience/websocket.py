@@ -12,6 +12,7 @@ from homeassistant.helpers import area_registry as ar
 
 from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_STORE, DOMAIN
 from .service import async_resolve_only
+from .sorting import sort_rules
 
 _WS_COMMANDS = (
     "ambience/areas/list",
@@ -37,11 +38,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
 def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise ValueError("config must be an object")
-    scenes = config.get("scenes", [])
-    if not isinstance(scenes, list):
-        raise ValueError("scenes must be a list")
-    if len(scenes) != len(set(scenes)):
-        raise ValueError("duplicate scene names")
     active_matcher_names: list[str] = list(config.get("matchers", []))
     matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
     actions_registry = hass.data[DOMAIN][DATA_ACTIONS]
@@ -51,7 +47,11 @@ def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, A
     for rule_idx, rule in enumerate(config.get("rules", [])):
         when = rule.get("when", {})
         for key, predicate in when.items():
-            if key == "scene" or predicate is None:
+            if predicate is None:
+                continue
+            if key == "scene":
+                # `scene` is an always-on matcher, never listed in `matchers`.
+                matchers_registry["scene"].validate_predicate(predicate)
                 continue
             if key not in active_matcher_names:
                 raise ValueError(f"rule {rule_idx}: predicate references unselected matcher {key}")
@@ -97,6 +97,8 @@ async def _ws_matchers_list(
             "name": m.name,
             "description": m.description,
             "predicate_help": m.predicate_help,
+            "toggleable": getattr(m, "toggleable", True),
+            "input": getattr(m, "input", "text"),
         }
         for m in matchers.values()
     ]
@@ -142,7 +144,7 @@ async def _ws_area_get(
         connection.send_error(msg["id"], "unknown_area", "area not found")
         return
     store = hass.data[DOMAIN][DATA_STORE]
-    area = store.get_area(area_id) or {"scenes": [], "matchers": [], "rules": []}
+    area = store.get_area(area_id) or {"matchers": [], "rules": [], "auto_sort": True}
     connection.send_result(msg["id"], area)
 
 
@@ -173,9 +175,16 @@ async def _ws_area_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
+    config = msg["config"]
+    if config.get("auto_sort", True):
+        matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
+        config = {
+            **config,
+            "rules": sort_rules(config.get("rules", []), matchers_registry),
+        }
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(msg["area_id"], msg["config"])
-    connection.send_result(msg["id"], {"ok": True})
+    await store.async_save_area(area_id, config)
+    connection.send_result(msg["id"], {"ok": True, "config": config})
 
 
 @websocket_api.require_admin

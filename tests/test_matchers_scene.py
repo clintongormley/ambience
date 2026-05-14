@@ -14,6 +14,7 @@ def test_attributes() -> None:
     assert m.predicate_help.strip() != ""
     assert m.toggleable is False
     assert m.input == "scene_combobox"
+    assert m.priority == 0
 
 
 def test_matches_is_equality() -> None:
@@ -26,8 +27,14 @@ def test_describe_returns_snapshot() -> None:
     assert SceneMatcher().describe("movie") == "movie"
 
 
-def test_specificity_is_constant() -> None:
-    assert SceneMatcher().specificity("movie") == 0.0
+def test_priority_is_zero() -> None:
+    assert SceneMatcher().priority == 0
+
+
+def test_order_key_is_lowercased_scene_name() -> None:
+    m = SceneMatcher()
+    assert m.order_key("Movie") == "movie"
+    assert m.order_key("reading") == "reading"
 
 
 def test_validate_predicate_accepts_nonempty_string() -> None:

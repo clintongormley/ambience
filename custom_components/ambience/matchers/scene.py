@@ -21,6 +21,7 @@ class SceneMatcher:
     predicate_help = "A scene name, e.g. 'movie_night'."
     toggleable = False
     input = "scene_combobox"
+    priority = 0
 
     async def snapshot(self, hass: HomeAssistant) -> Any:
         raise NotImplementedError("scene snapshot is injected by the service handler")
@@ -35,7 +36,7 @@ class SceneMatcher:
         if not isinstance(predicate, str) or not predicate.strip():
             raise ValueError(f"invalid scene predicate: {predicate!r}")
 
-    def specificity(self, predicate: Any) -> float:
-        # Constant: a constrained scene's effect on ordering is captured by
-        # scene-name grouping in sort_rules, not by a narrowness gradient.
-        return 0.0
+    def order_key(self, predicate: Any) -> str:
+        """Linearisation key — the lowercased scene name. This is what makes the
+        rule sort cluster rules by scene."""
+        return predicate.lower()

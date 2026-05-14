@@ -41,7 +41,7 @@ export async function saveArea(
   hass: HassConnection,
   areaId: string,
   config: AreaConfig,
-): Promise<{ ok: true }> {
+): Promise<{ ok: true; config: AreaConfig }> {
   return hass.callWS({
     type: "ambience/area/save",
     area_id: areaId,

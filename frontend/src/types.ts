@@ -5,10 +5,9 @@
 
 export type Rule = {
   name?: string;
-  when: {
-    scene?: string | null;
-    [matcher: string]: unknown;
-  };
+  // Uniform {matcher_name: predicate} map. `scene` is just another key.
+  // An absent key or `null` value is a wildcard for that matcher.
+  when: { [matcher: string]: unknown };
   actions: ActionSpec[];
 };
 
@@ -18,9 +17,12 @@ export type ActionSpec = {
 };
 
 export type AreaConfig = {
-  scenes: string[];
+  // Toggleable matcher names enabled for the area. `scene` is never listed.
   matchers: string[];
+  // Ordered list — array order is authoritative for the engine.
   rules: Rule[];
+  // When true the backend keeps `rules` sorted on every save.
+  auto_sort: boolean;
 };
 
 // `name` is resolved by the backend from HA's area registry, not stored.
@@ -33,6 +35,13 @@ export type MatcherInfo = {
   name: string;
   description: string;
   predicate_help: string;
+  // False for always-on matchers (`scene`); such matchers are hidden from
+  // the matchers modal but still rendered as a rule-editor row.
+  toggleable: boolean;
+  // Widget hint for the rule editor: "scene_combobox" | "text" | ...
+  input: string;
+  // Linearisation-slot order; lower sorts earlier. Default 1000, `scene` is 0.
+  priority: number;
 };
 
 export type ParamSpec = {

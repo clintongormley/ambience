@@ -104,7 +104,7 @@ export class AmbienceRulesList extends LitElement {
   }
 
   private _onDragOver(e: DragEvent, i: number) {
-    if (this._dragFrom === null) return;
+    if (this._dragFrom === null || i === this._dragFrom) return;
     e.preventDefault(); // allow drop
     this._dragOver = i;
   }

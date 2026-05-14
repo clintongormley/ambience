@@ -62,13 +62,15 @@ async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> 
     assert resp["success"] is True
     by_name = {m["name"]: m for m in resp["result"]}
 
-    # scene is always-on and not toggleable, with its own input widget
+    # scene is always-on, not toggleable, has its own input widget, priority 0
     assert by_name["scene"]["toggleable"] is False
     assert by_name["scene"]["input"] == "scene_combobox"
+    assert by_name["scene"]["priority"] == 0
 
     tod = by_name["time_of_day"]
     assert tod["toggleable"] is True
     assert tod["input"] == "text"
+    assert tod["priority"] == 100
     assert tod["description"].strip() != ""
     assert tod["predicate_help"].strip() != ""
 
@@ -287,7 +289,7 @@ async def test_dry_run_no_match(hass: HomeAssistant, installed, area_id, hass_ws
 async def test_area_save_sorts_rules_when_auto_sort_on(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
-    """With auto_sort on, the stored rules come back sorted by specificity."""
+    """With auto_sort on, the stored rules come back sorted (narrower predicate first)."""
     config = {
         "matchers": ["time_of_day"],
         "auto_sort": True,
@@ -359,7 +361,7 @@ async def test_unload_deregisters_ws_commands(
 async def test_area_save_sorts_by_default_when_auto_sort_absent(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
-    """A config submitted without `auto_sort` sorts by specificity (default on)."""
+    """A config submitted without `auto_sort` is sorted (default on)."""
     config = {
         "matchers": ["time_of_day"],
         "rules": [

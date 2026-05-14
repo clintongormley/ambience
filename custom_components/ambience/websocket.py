@@ -101,6 +101,7 @@ async def _ws_matchers_list(
             "predicate_help": m.predicate_help,
             "toggleable": getattr(m, "toggleable", True),
             "input": getattr(m, "input", "text"),
+            "priority": getattr(m, "priority", 1000),
         }
         for m in matchers.values()
     ]

@@ -12,7 +12,8 @@ from custom_components.ambience.const import (
     DATA_STORE,
     DOMAIN,
 )
-from custom_components.ambience.service import async_apply_scene
+from custom_components.ambience.matchers.scene import SceneMatcher
+from custom_components.ambience.service import async_apply_scene, async_resolve_only
 
 
 class FixedMatcher:
@@ -77,7 +78,7 @@ class FakeStore:
 def _install(hass: HomeAssistant, *, areas: dict, matchers: dict, actions: dict) -> None:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][DATA_STORE] = FakeStore(areas)
-    hass.data[DOMAIN][DATA_MATCHERS] = matchers
+    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher(), **matchers}
     hass.data[DOMAIN][DATA_ACTIONS] = actions
 
 
@@ -87,23 +88,11 @@ async def test_unknown_area_raises(hass: HomeAssistant) -> None:
         await async_apply_scene(hass, "missing", "movie")
 
 
-async def test_unknown_scene_raises(hass: HomeAssistant) -> None:
-    _install(
-        hass,
-        areas={"lr": {"scenes": ["movie"], "matchers": [], "rules": []}},
-        matchers={},
-        actions={},
-    )
-    with pytest.raises(ServiceValidationError, match="unknown_scene"):
-        await async_apply_scene(hass, "lr", "reading")
-
-
 async def test_happy_path_executes_matching_rule(hass: HomeAssistant) -> None:
     action = RecordingAction()
     matchers = {"tod": FixedMatcher("evening")}
     areas = {
         "lr": {
-            "scenes": ["movie"],
             "matchers": ["tod"],
             "rules": [
                 {
@@ -129,7 +118,6 @@ async def test_no_match_is_silent_noop(hass: HomeAssistant) -> None:
     matchers = {"tod": FixedMatcher("evening")}
     areas = {
         "lr": {
-            "scenes": ["movie"],
             "matchers": ["tod"],
             "rules": [
                 {"when": {"scene": "movie", "tod": "morning"}, "actions": []},
@@ -148,7 +136,6 @@ async def test_snapshot_failure_treats_matcher_as_unresolved(
     matchers = {"tod": FixedMatcher("evening"), "weather": FailingMatcher()}
     areas = {
         "lr": {
-            "scenes": ["movie"],
             "matchers": ["tod", "weather"],
             "rules": [
                 {
@@ -176,7 +163,6 @@ async def test_unknown_action_skipped_other_actions_run(
     matchers = {"tod": FixedMatcher("evening")}
     areas = {
         "lr": {
-            "scenes": ["movie"],
             "matchers": ["tod"],
             "rules": [
                 {
@@ -216,7 +202,6 @@ async def test_action_failure_does_not_block_other_actions(
     matchers = {"tod": FixedMatcher("evening")}
     areas = {
         "lr": {
-            "scenes": ["movie"],
             "matchers": ["tod"],
             "rules": [
                 {
@@ -269,7 +254,6 @@ async def test_cancellation_treated_as_failure_isolation(
     action = RecordingAction()
     areas = {
         "lr": {
-            "scenes": ["movie"],
             "matchers": ["tod"],
             "rules": [
                 {
@@ -290,3 +274,19 @@ async def test_cancellation_treated_as_failure_isolation(
 
     # Wildcard rule should still match (cancelled snapshot becomes None).
     assert action.executions == [{"light.a": {"brightness": 10}}]
+
+
+async def test_resolve_only_describes_activating_scene(hass: HomeAssistant) -> None:
+    """The activating scene is injected as the `scene` snapshot and described."""
+    areas = {
+        "lr": {
+            "matchers": [],
+            "rules": [{"when": {"scene": "movie"}, "actions": []}],
+        }
+    }
+    _install(hass, areas=areas, matchers={}, actions={})
+
+    result = await async_resolve_only(hass, "lr", "movie")
+
+    assert result["snapshots_described"]["scene"] == "movie"
+    assert result["matched_rule_index"] == 0

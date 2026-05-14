@@ -27,8 +27,6 @@ async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> d
     area = store.get_area(area_id)
     if area is None:
         raise ServiceValidationError(f"unknown_area: {area_id!r}")
-    if scene not in area.get("scenes", []):
-        raise ServiceValidationError(f"unknown_scene: {scene!r} not in area {area_id!r}")
 
     active_matcher_names = list(area.get("matchers", []))
     active_matchers = {
@@ -46,13 +44,23 @@ async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> d
         else:
             snapshots[name] = result
 
+    # `scene` is an always-on matcher; its snapshot is the activating scene,
+    # injected here rather than captured from hass.
+    # Copy so we can add `scene` without mutating active_matchers.
+    engine_matchers = dict(active_matchers)
+    scene_matcher = matchers_registry.get("scene")
+    if scene_matcher is not None:
+        engine_matchers["scene"] = scene_matcher
+    snapshots["scene"] = scene
+
     described = {
-        name: active_matchers[name].describe(snap) if snap is not None else None
+        name: engine_matchers[name].describe(snap) if snap is not None else None
         for name, snap in snapshots.items()
+        if name in engine_matchers
     }
 
     rules = area.get("rules", [])
-    match = resolve(rules, scene, snapshots, active_matchers)
+    match = resolve(rules, snapshots, engine_matchers)
     if match is None:
         return {
             "matched_rule_index": None,

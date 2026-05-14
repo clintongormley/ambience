@@ -18,7 +18,7 @@ class SceneMatcher:
 
     name = "scene"
     description = "Matches the scene that triggered apply_scene."
-    predicate_help = "A scene name, e.g. 'movie_night'. Leave blank to match any scene."
+    predicate_help = "A scene name, e.g. 'movie_night'."
     toggleable = False
     input = "scene_combobox"
 

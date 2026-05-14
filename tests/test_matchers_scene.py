@@ -38,3 +38,9 @@ def test_validate_predicate_accepts_nonempty_string() -> None:
 def test_validate_predicate_rejects_bad_values(bad: object) -> None:
     with pytest.raises(ValueError):
         SceneMatcher().validate_predicate(bad)
+
+
+async def test_snapshot_is_not_implemented() -> None:
+    """`scene`'s snapshot is injected by the service handler, never captured here."""
+    with pytest.raises(NotImplementedError):
+        await SceneMatcher().snapshot(None)

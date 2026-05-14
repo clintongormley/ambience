@@ -49,6 +49,7 @@ export class AmbienceMatchersModal extends LitElement {
       border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 4px;
       margin-bottom: 0.5rem;
+      cursor: pointer;
     }
     .matcher-row input[type="checkbox"] {
       width: auto;
@@ -136,7 +137,7 @@ export class AmbienceMatchersModal extends LitElement {
         </p>
         ${toggleable.map(
           (m) => html`
-            <div class="matcher-row">
+            <label class="matcher-row">
               <input
                 type="checkbox"
                 .checked=${this._draft.has(m.name)}
@@ -151,7 +152,7 @@ export class AmbienceMatchersModal extends LitElement {
                 <div>${m.description}</div>
                 <div class="matcher-help">${m.predicate_help}</div>
               </div>
-            </div>
+            </label>
           `,
         )}
         <div class="actions-bar">

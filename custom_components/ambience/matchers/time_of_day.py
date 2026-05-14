@@ -156,23 +156,6 @@ class TimeOfDayMatcher:
         snapshot = _synthetic_snapshot()
         return min(_minute_of_day(self._resolve_range(item, snapshot)[0]) for item in items)
 
-    def _span_minutes(self, text: str, snapshot: TimeOfDaySnapshot) -> float:
-        """Minutes covered by one predicate expression (wraps midnight)."""
-        start, end = self._resolve_range(text, snapshot)
-        delta = (end - start).total_seconds() / 60.0
-        return delta + 1440.0 if delta <= 0 else delta
-
-    def specificity(self, predicate) -> float:  # noqa: ANN001
-        """Total minutes covered by the predicate, normalised to 0..1 (÷1440).
-
-        Lower = narrower = more specific. A list sums its elements' spans
-        (covering more time => less specific).
-        """
-        items = predicate if isinstance(predicate, list) else [predicate]
-        snapshot = _synthetic_snapshot()
-        total = sum(self._span_minutes(item, snapshot) for item in items)
-        return min(total / 1440.0, 1.0)
-
     def _resolve_endpoint(self, expr: str, snapshot: TimeOfDaySnapshot) -> datetime:
         # Strip internal whitespace so "sunset - 30m" == "sunset-30m"
         expr = expr.strip().replace(" ", "")

@@ -316,32 +316,6 @@ def test_presentation_attributes() -> None:
     assert m.input == "text"
 
 
-def test_specificity_absolute_range_is_minutes_over_1440() -> None:
-    m = TimeOfDayMatcher()
-    assert m.specificity("10:00-14:00") == pytest.approx(240 / 1440)
-    assert m.specificity("12:00-13:00") == pytest.approx(60 / 1440)
-    # narrower predicate => smaller (more specific) score
-    assert m.specificity("12:00-13:00") < m.specificity("10:00-14:00")
-
-
-def test_specificity_wrap_midnight_range() -> None:
-    # 23:00-01:00 spans 120 minutes across midnight
-    assert TimeOfDayMatcher().specificity("23:00-01:00") == pytest.approx(120 / 1440)
-
-
-def test_specificity_list_sums_spans() -> None:
-    m = TimeOfDayMatcher()
-    combined = m.specificity(["10:00-14:00", "12:00-13:00"])
-    assert combined == pytest.approx(m.specificity("10:00-14:00") + m.specificity("12:00-13:00"))
-
-
-def test_specificity_named_period_is_between_0_and_1() -> None:
-    # _synthetic_snapshot() fixes sunset=18:00, dusk=18:30, so "evening"
-    # (sunset..dusk) is a deterministic 30-minute span.
-    score = TimeOfDayMatcher().specificity("evening")
-    assert score == pytest.approx(30 / 1440)
-
-
 def test_priority() -> None:
     assert TimeOfDayMatcher().priority == 100
 

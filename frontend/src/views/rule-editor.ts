@@ -1,7 +1,14 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import type { ActionInfo, ActionSpec, MatcherInfo, ParamSpec, Rule } from "../types.js";
+import type {
+  ActionInfo,
+  ActionSpec,
+  MatcherInfo,
+  ParamSpec,
+  Rule,
+} from "../types.js";
+import "./matcher-input.js";
 
 @customElement("ambience-rule-editor")
 export class AmbienceRuleEditor extends LitElement {
@@ -15,7 +22,9 @@ export class AmbienceRuleEditor extends LitElement {
       align-items: center;
       justify-content: center;
     }
-    :host([open]) { display: flex; }
+    :host([open]) {
+      display: flex;
+    }
     .modal {
       background: var(--card-background-color, #fff);
       color: inherit;
@@ -26,7 +35,9 @@ export class AmbienceRuleEditor extends LitElement {
       max-height: 90vh;
       overflow-y: auto;
     }
-    h2 { margin: 0 0 1rem 0; }
+    h2 {
+      margin: 0 0 1rem 0;
+    }
     h3 {
       margin: 1.5rem 0 0.5rem 0;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
@@ -37,7 +48,8 @@ export class AmbienceRuleEditor extends LitElement {
       font-weight: 600;
       margin: 0.5rem 0 0.25rem 0;
     }
-    input, select, textarea {
+    input,
+    select {
       width: 100%;
       box-sizing: border-box;
       padding: 0.5rem;
@@ -45,12 +57,6 @@ export class AmbienceRuleEditor extends LitElement {
       border-radius: 4px;
       background: var(--card-background-color, #fff);
       color: inherit;
-    }
-    .help {
-      font-size: 0.85em;
-      color: var(--secondary-text-color, #888);
-      white-space: pre-wrap;
-      margin-top: 0.25rem;
     }
     .actions-bar {
       display: flex;
@@ -77,8 +83,9 @@ export class AmbienceRuleEditor extends LitElement {
 
   @property({ type: Boolean, reflect: true }) open = false;
   @property({ attribute: false }) rule: Rule | null = null;
-  @property({ attribute: false }) scenes: string[] = [];
-  @property({ attribute: false }) activeMatchers: MatcherInfo[] = [];
+  /** Matcher rows to render, in display order (scene first). */
+  @property({ attribute: false }) matchers: MatcherInfo[] = [];
+  @property({ attribute: false }) sceneSuggestions: string[] = [];
   @property({ attribute: false }) availableActions: ActionInfo[] = [];
 
   @state() private _draft: Rule | null = null;
@@ -95,19 +102,11 @@ export class AmbienceRuleEditor extends LitElement {
     this._draft = { ...this._draft, name: v || undefined };
   }
 
-  private _setScene(v: string) {
+  private _setPredicate(matcher: string, value: unknown) {
     if (!this._draft) return;
     const when = { ...this._draft.when };
-    if (v === "") when.scene = null;
-    else when.scene = v;
-    this._draft = { ...this._draft, when };
-  }
-
-  private _setPredicate(matcher: string, v: string) {
-    if (!this._draft) return;
-    const when = { ...this._draft.when };
-    if (v.trim() === "") delete when[matcher];
-    else when[matcher] = v;
+    if (value == null) delete when[matcher];
+    else when[matcher] = value;
     this._draft = { ...this._draft, when };
   }
 
@@ -122,7 +121,9 @@ export class AmbienceRuleEditor extends LitElement {
 
   private _updateActionAt(idx: number, mutate: (a: ActionSpec) => ActionSpec) {
     if (!this._draft) return;
-    const actions = this._draft.actions.map((a, i) => (i === idx ? mutate(a) : a));
+    const actions = this._draft.actions.map((a, i) =>
+      i === idx ? mutate(a) : a,
+    );
     this._draft = { ...this._draft, actions };
   }
 
@@ -172,8 +173,10 @@ export class AmbienceRuleEditor extends LitElement {
       const targets = { ...a.targets };
       const cur = { ...(targets[entityId] ?? {}) };
       let parsed: unknown = rawValue;
-      if (param.type === "int") parsed = rawValue === "" ? undefined : parseInt(rawValue, 10);
-      else if (param.type === "number") parsed = rawValue === "" ? undefined : parseFloat(rawValue);
+      if (param.type === "int")
+        parsed = rawValue === "" ? undefined : parseInt(rawValue, 10);
+      else if (param.type === "number")
+        parsed = rawValue === "" ? undefined : parseFloat(rawValue);
       else if (param.type === "boolean") parsed = rawValue === "true";
       if (parsed === undefined) delete cur[param.name];
       else cur[param.name] = parsed;
@@ -195,12 +198,20 @@ export class AmbienceRuleEditor extends LitElement {
     const params: ParamSpec[] = info?.target_params ?? [];
     const entries = Object.entries(action.targets);
     if (entries.length === 0) {
-      return html`<p style="color: var(--secondary-text-color, #888); margin: 0.5rem 0;">No targets yet.</p>`;
+      return html`<p
+        style="color: var(--secondary-text-color, #888); margin: 0.5rem 0;"
+      >
+        No targets yet.
+      </p>`;
     }
     return html`
       ${entries.map(
         ([entityId, paramValues]) => html`
-          <div style="display: grid; grid-template-columns: 1fr ${"1fr ".repeat(params.length)}auto; gap: 0.5rem; margin: 0.5rem 0; align-items: end;">
+          <div
+            style="display: grid; grid-template-columns: 1fr ${"1fr ".repeat(
+              params.length,
+            )}auto; gap: 0.5rem; margin: 0.5rem 0; align-items: end;"
+          >
             <div>
               <label>entity_id</label>
               <input
@@ -220,8 +231,12 @@ export class AmbienceRuleEditor extends LitElement {
                 <div>
                   <label>${p.name}${p.required ? " *" : ""}</label>
                   <input
-                    type=${p.type === "int" || p.type === "number" ? "number" : "text"}
-                    .value=${String((paramValues as Record<string, unknown>)[p.name] ?? "")}
+                    type=${p.type === "int" || p.type === "number"
+                      ? "number"
+                      : "text"}
+                    .value=${String(
+                      (paramValues as Record<string, unknown>)[p.name] ?? "",
+                    )}
                     min=${p.min ?? ""}
                     max=${p.max ?? ""}
                     @input=${(e: InputEvent) =>
@@ -239,7 +254,9 @@ export class AmbienceRuleEditor extends LitElement {
               class="secondary"
               @click=${() => this._deleteTarget(actionIdx, entityId)}
               title="Remove target"
-            >×</button>
+            >
+              ×
+            </button>
           </div>
         `,
       )}
@@ -276,45 +293,30 @@ export class AmbienceRuleEditor extends LitElement {
         <input
           type="text"
           .value=${this._draft.name ?? ""}
-          @input=${(e: InputEvent) => this._setName((e.target as HTMLInputElement).value)}
+          @input=${(e: InputEvent) =>
+            this._setName((e.target as HTMLInputElement).value)}
         />
 
         <h3>When</h3>
-
-        <label>Scene</label>
-        <select
-          @change=${(e: Event) => this._setScene((e.target as HTMLSelectElement).value)}
-        >
-          <option value="" ?selected=${this._draft.when.scene == null}>
-            (any scene)
-          </option>
-          ${this.scenes.map(
-            (s) => html`
-              <option value=${s} ?selected=${this._draft!.when.scene === s}>
-                ${s}
-              </option>
-            `,
-          )}
-        </select>
-
-        ${this.activeMatchers.map(
+        ${this.matchers.map(
           (m) => html`
-            <label>${m.name}</label>
-            <input
-              type="text"
-              placeholder="(any)"
-              .value=${String(this._draft!.when[m.name] ?? "")}
-              @input=${(e: InputEvent) =>
-                this._setPredicate(m.name, (e.target as HTMLInputElement).value)}
-            />
-            <div class="help">${m.predicate_help}</div>
+            <label>${m.name === "scene" ? "Scene" : m.name}</label>
+            <ambience-matcher-input
+              .matcher=${m}
+              .value=${this._draft!.when[m.name] ?? null}
+              .sceneSuggestions=${this.sceneSuggestions}
+              @value-changed=${(e: CustomEvent<{ value: unknown }>) =>
+                this._setPredicate(m.name, e.detail.value)}
+            ></ambience-matcher-input>
           `,
         )}
 
         <h3>Actions</h3>
         ${this._draft.actions.map(
           (action, actionIdx) => html`
-            <div style="border: 1px solid var(--divider-color, #e0e0e0); border-radius: 4px; padding: 0.75rem; margin-bottom: 0.5rem;">
+            <div
+              style="border: 1px solid var(--divider-color, #e0e0e0); border-radius: 4px; padding: 0.75rem; margin-bottom: 0.5rem;"
+            >
               <div style="display: flex; gap: 0.5rem; align-items: center;">
                 <select
                   @change=${(e: Event) =>
@@ -345,13 +347,18 @@ export class AmbienceRuleEditor extends LitElement {
 
               ${this._renderTargets(actionIdx, action)}
 
-              <button class="secondary" @click=${() => this._addTarget(actionIdx)}>
+              <button
+                class="secondary"
+                @click=${() => this._addTarget(actionIdx)}
+              >
                 + Add target
               </button>
             </div>
           `,
         )}
-        <button class="secondary" @click=${this._addActionSlot}>+ Add action</button>
+        <button class="secondary" @click=${this._addActionSlot}>
+          + Add action
+        </button>
 
         <div class="actions-bar">
           <button class="secondary" @click=${this._cancel}>Cancel</button>

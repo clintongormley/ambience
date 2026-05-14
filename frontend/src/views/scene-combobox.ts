@@ -35,10 +35,10 @@ export class AmbienceSceneCombobox extends LitElement {
     .slice(2)}`;
 
   private _onInput(e: InputEvent) {
-    const raw = (e.target as HTMLInputElement).value.trim();
+    const raw = (e.target as HTMLInputElement).value;
     this.dispatchEvent(
       new CustomEvent("value-changed", {
-        detail: { value: raw === "" ? null : raw },
+        detail: { value: raw.trim() === "" ? null : raw },
         bubbles: true,
         composed: true,
       }),

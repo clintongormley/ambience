@@ -378,3 +378,11 @@ def test_validate_predicate_rejects_empty_list() -> None:
 def test_order_key_named_period() -> None:
     # synthetic snapshot: dusk = 18:30 -> "night" (dusk..dawn) starts at 1110
     assert TimeOfDayMatcher().order_key("night") == 1110.0
+
+
+def test_contains_full_day_predicate() -> None:
+    m = TimeOfDayMatcher()
+    # "00:00-00:00" (start == end) resolves to the whole day, so it contains
+    # any range; the reverse does not hold.
+    assert m.contains("00:00-00:00", "12:00-13:00") is True
+    assert m.contains("12:00-13:00", "00:00-00:00") is False

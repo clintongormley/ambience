@@ -83,7 +83,9 @@ def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
                 return False  # cannot establish a_pred is within b_pred
         return strict
 
-    # predecessors[i] = rules that must come before rule i
+    # predecessors[i] = rules that must come before rule i. This is O(n^2) in
+    # `precedes` calls (and the topological loop below is O(n^2) more) —
+    # intentional: rule counts per area are small, so clarity beats scaling.
     predecessors = [{j for j in range(count) if j != i and precedes(j, i)} for i in range(count)]
 
     # --- stable topological sort, smallest linearisation key first -------

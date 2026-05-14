@@ -21,7 +21,16 @@ class ParamSpec(TypedDict):
 
 @runtime_checkable
 class Matcher(Protocol):
-    """A pluggable predicate evaluator."""
+    """A pluggable predicate evaluator.
+
+    Optional (duck-typed, read via getattr with defaults — not part of the
+    Protocol so they stay optional for isinstance checks):
+      - ``specificity(predicate) -> float``: 0..1, lower = narrower/more
+        specific. Used to auto-sort rules. Default 0.5.
+      - ``toggleable: bool``: False for always-on matchers (``scene``).
+        Default True.
+      - ``input: str``: rule-editor widget hint. Default "text".
+    """
 
     name: str
     description: str

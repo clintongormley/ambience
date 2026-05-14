@@ -67,6 +67,9 @@ class TimeOfDayMatcher:
         "  - List: ['evening', '16:00-18:30'] matches if any element matches"
     )
 
+    toggleable = True
+    input = "text"
+
     async def snapshot(self, hass: HomeAssistant) -> TimeOfDaySnapshot:
         state = hass.states.get("sun.sun")
         if state is None:
@@ -97,26 +100,45 @@ class TimeOfDayMatcher:
             return self._match_one(predicate, snapshot)
         raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
 
-    def _match_one(self, text: str, snapshot: TimeOfDaySnapshot) -> bool:
+    def _resolve_range(self, text: str, snapshot: TimeOfDaySnapshot) -> tuple[datetime, datetime]:
+        """Parse one predicate expression to (start, end) datetimes."""
         if not isinstance(text, str):
             raise ValueError(f"invalid time_of_day predicate item: {text!r}")
         text = text.strip()
         if text in _NAMED_PERIODS:
             start_expr, end_expr = _NAMED_PERIODS[text]
-            start = self._resolve_endpoint(start_expr, snapshot)
-            end = self._resolve_endpoint(end_expr, snapshot)
-            return _in_range(snapshot.now, start, end)
-        if " to " in text:
-            left, right = text.split(" to ", 1)
-            start = self._resolve_endpoint(left, snapshot)
-            end = self._resolve_endpoint(right, snapshot)
-            return _in_range(snapshot.now, start, end)
-        m = _ABS_RE.match(text)
-        if m:
-            start = self._resolve_endpoint(m.group(1), snapshot)
-            end = self._resolve_endpoint(m.group(2), snapshot)
-            return _in_range(snapshot.now, start, end)
-        raise ValueError(f"invalid time_of_day predicate: {text!r}")
+        elif " to " in text:
+            start_expr, end_expr = text.split(" to ", 1)
+        else:
+            m = _ABS_RE.match(text)
+            if not m:
+                raise ValueError(f"invalid time_of_day predicate: {text!r}")
+            start_expr, end_expr = m.group(1), m.group(2)
+        return (
+            self._resolve_endpoint(start_expr, snapshot),
+            self._resolve_endpoint(end_expr, snapshot),
+        )
+
+    def _match_one(self, text: str, snapshot: TimeOfDaySnapshot) -> bool:
+        start, end = self._resolve_range(text, snapshot)
+        return _in_range(snapshot.now, start, end)
+
+    def _span_minutes(self, text: str, snapshot: TimeOfDaySnapshot) -> float:
+        """Minutes covered by one predicate expression (wraps midnight)."""
+        start, end = self._resolve_range(text, snapshot)
+        delta = (end - start).total_seconds() / 60.0
+        return delta + 1440.0 if delta <= 0 else delta
+
+    def specificity(self, predicate) -> float:  # noqa: ANN001
+        """Total minutes covered by the predicate, normalised to 0..1 (÷1440).
+
+        Lower = narrower = more specific. A list sums its elements' spans
+        (covering more time => less specific).
+        """
+        items = predicate if isinstance(predicate, list) else [predicate]
+        snapshot = _synthetic_snapshot()
+        total = sum(self._span_minutes(item, snapshot) for item in items)
+        return min(total / 1440.0, 1.0)
 
     def _resolve_endpoint(self, expr: str, snapshot: TimeOfDaySnapshot) -> datetime:
         # Strip internal whitespace so "sunset - 30m" == "sunset-30m"

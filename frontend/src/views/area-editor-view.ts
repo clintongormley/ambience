@@ -6,6 +6,7 @@ import {
   listActions,
   listMatchers,
   saveArea,
+  type AreaRegistryEvent,
   type HassConnection,
 } from "../api.js";
 import type { ActionInfo, AreaConfig, MatcherInfo, Rule } from "../types.js";
@@ -132,10 +133,38 @@ export class AmbienceAreaEditor extends LitElement {
   @state() private _editingRuleIdx: number | null = null;
   @state() private _isNewRule = false;
   @state() private _availableActions: ActionInfo[] = [];
+  private _unsub?: () => void;
 
   override async connectedCallback() {
     super.connectedCallback();
     await this._load();
+    await this._subscribe();
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback();
+    this._unsub?.();
+    this._unsub = undefined;
+  }
+
+  private async _subscribe() {
+    // If the HA area being edited is deleted, the backend drops its config —
+    // bail back to the areas list rather than editing a phantom area.
+    const unsub = await this.hass.connection.subscribeEvents<AreaRegistryEvent>(
+      (event) => {
+        if (
+          event.data.action === "remove" &&
+          event.data.area_id === this.areaId
+        ) {
+          this.dispatchEvent(
+            new CustomEvent("close-area", { bubbles: true, composed: true }),
+          );
+        }
+      },
+      "area_registry_updated",
+    );
+    if (this.isConnected) this._unsub = unsub;
+    else unsub();
   }
 
   private async _load() {
@@ -250,19 +279,6 @@ export class AmbienceAreaEditor extends LitElement {
 
   private _renderScenes() {
     return html`
-      <div class="field">
-        <label>Display name</label>
-        <input
-          type="text"
-          .value=${this._config!.name}
-          @input=${(e: InputEvent) => {
-            this._config = {
-              ...this._config!,
-              name: (e.target as HTMLInputElement).value,
-            };
-          }}
-        />
-      </div>
       <h3>Scenes</h3>
       ${this._config!.scenes.map(
         (scene, i) => html`

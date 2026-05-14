@@ -48,7 +48,6 @@ async def test_service_call_invokes_light_turn_on(
     await store.async_save_area(
         "lr",
         {
-            "name": "Living Room",
             "scenes": ["movie"],
             "matchers": [],  # no matchers ⇒ rule matches purely on scene
             "rules": [

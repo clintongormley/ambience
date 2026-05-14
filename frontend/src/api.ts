@@ -10,9 +10,20 @@ import type {
   MatcherInfo,
 } from "./types.js";
 
+// HA fires this on the event bus whenever an area is created/updated/removed.
+export type AreaRegistryEvent = {
+  data: { action: "create" | "update" | "remove"; area_id: string };
+};
+
 // HA panel components receive a `hass` object. We type only what we use.
 export type HassConnection = {
   callWS<T = unknown>(message: Record<string, unknown>): Promise<T>;
+  connection: {
+    subscribeEvents<T>(
+      callback: (event: T) => void,
+      eventType: string,
+    ): Promise<() => void>;
+  };
 };
 
 export async function listAreas(hass: HassConnection): Promise<AreaListItem[]> {
@@ -36,13 +47,6 @@ export async function saveArea(
     area_id: areaId,
     config,
   });
-}
-
-export async function deleteArea(
-  hass: HassConnection,
-  areaId: string,
-): Promise<{ ok: true }> {
-  return hass.callWS({ type: "ambience/area/delete", area_id: areaId });
 }
 
 export async function listMatchers(hass: HassConnection): Promise<MatcherInfo[]> {

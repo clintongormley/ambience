@@ -24,3 +24,4 @@ docs/superpowers/
 # Frontend build
 node_modules/
 frontend/dist/
+.superpowers/

@@ -70,6 +70,7 @@ export class AmbiencePanel extends LitElement {
       <ambience-area-editor
         .hass=${this.hass}
         .areaId=${this._route.areaId}
+        @close-area=${() => this._openAreas()}
       ></ambience-area-editor>
     `;
   }

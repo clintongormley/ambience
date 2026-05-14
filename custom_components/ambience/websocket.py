@@ -8,6 +8,7 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import area_registry as ar
 
 from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_STORE, DOMAIN
 from .service import async_resolve_only
@@ -16,7 +17,6 @@ _WS_COMMANDS = (
     "ambience/areas/list",
     "ambience/area/get",
     "ambience/area/save",
-    "ambience/area/delete",
     "ambience/matchers/list",
     "ambience/actions/list",
     "ambience/validate",
@@ -30,7 +30,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_actions_list)
     websocket_api.async_register_command(hass, _ws_area_get)
     websocket_api.async_register_command(hass, _ws_area_save)
-    websocket_api.async_register_command(hass, _ws_area_delete)
     websocket_api.async_register_command(hass, _ws_validate)
     websocket_api.async_register_command(hass, _ws_dry_run)
 
@@ -76,8 +75,11 @@ async def _ws_areas_list(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    result = [{"area_id": aid, "name": cfg.get("name", aid)} for aid, cfg in store.areas().items()]
+    area_reg = ar.async_get(hass)
+    result = [
+        {"area_id": entry.id, "name": entry.name}
+        for entry in sorted(area_reg.async_list_areas(), key=lambda a: a.name)
+    ]
     connection.send_result(msg["id"], result)
 
 
@@ -135,30 +137,13 @@ async def _ws_area_get(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    area = store.get_area(msg["area_id"])
-    if area is None:
+    area_id = msg["area_id"]
+    if ar.async_get(hass).async_get_area(area_id) is None:
         connection.send_error(msg["id"], "unknown_area", "area not found")
         return
-    connection.send_result(msg["id"], area)
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/area/delete",
-        vol.Required("area_id"): str,
-    }
-)
-@websocket_api.async_response
-async def _ws_area_delete(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_delete_area(msg["area_id"])
-    connection.send_result(msg["id"], {"ok": True})
+    area = store.get_area(area_id) or {"scenes": [], "matchers": [], "rules": []}
+    connection.send_result(msg["id"], area)
 
 
 @websocket_api.require_admin
@@ -175,8 +160,16 @@ async def _ws_area_save(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
+    area_id = msg["area_id"]
+    if ar.async_get(hass).async_get_area(area_id) is None:
+        connection.send_error(
+            msg["id"],
+            "validation_error",
+            f"unknown area: {area_id}",
+        )
+        return
     try:
-        _validate_area_config(hass, msg["area_id"], msg["config"])
+        _validate_area_config(hass, area_id, msg["config"])
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return

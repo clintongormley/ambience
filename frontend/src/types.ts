@@ -18,12 +18,12 @@ export type ActionSpec = {
 };
 
 export type AreaConfig = {
-  name: string;
   scenes: string[];
   matchers: string[];
   rules: Rule[];
 };
 
+// `name` is resolved by the backend from HA's area registry, not stored.
 export type AreaListItem = {
   area_id: string;
   name: string;

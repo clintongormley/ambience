@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import DATA_STORE, DOMAIN
@@ -17,6 +18,12 @@ async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> 
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
     return mock_config_entry
+
+
+@pytest.fixture
+def area_id(hass: HomeAssistant) -> str:
+    """Register an HA area so area/save accepts it; returns its registry id."""
+    return ar.async_get(hass).async_create("Living Room").id
 
 
 async def _ws_send(hass_ws_client, **payload: Any) -> dict:
@@ -32,17 +39,22 @@ async def test_areas_list_empty(hass: HomeAssistant, installed, hass_ws_client) 
     assert resp["result"] == []
 
 
-async def test_areas_list_returns_saved_areas(
+async def test_areas_list_returns_all_ha_areas(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
+    """areas/list reflects every area in HA's registry, configured in Ambience or not."""
+    reg = ar.async_get(hass)
+    kitchen = reg.async_create("Kitchen")
+    bedroom = reg.async_create("Bedroom")
+    # Only one has Ambience config — both must still be listed, sorted by name.
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(
-        "lr",
-        {"name": "Living Room", "scenes": [], "matchers": [], "rules": []},
-    )
+    await store.async_save_area(kitchen.id, {"scenes": [], "matchers": [], "rules": []})
     resp = await _ws_send(hass_ws_client, type="ambience/areas/list")
     assert resp["success"] is True
-    assert resp["result"] == [{"area_id": "lr", "name": "Living Room"}]
+    assert resp["result"] == [
+        {"area_id": bedroom.id, "name": "Bedroom"},
+        {"area_id": kitchen.id, "name": "Kitchen"},
+    ]
 
 
 async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
@@ -69,14 +81,23 @@ async def test_actions_list(hass: HomeAssistant, installed, hass_ws_client) -> N
 
 
 async def test_area_get_unknown(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    """area/get errors when the area_id is not in HA's registry at all."""
     resp = await _ws_send(hass_ws_client, type="ambience/area/get", area_id="nope")
     assert resp["success"] is False
     assert resp["error"]["code"] == "unknown_area"
 
 
-async def test_area_save_then_get(hass: HomeAssistant, installed, hass_ws_client) -> None:
+async def test_area_get_unconfigured_returns_empty_config(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """Opening a real HA area with no stored Ambience config yields a blank config."""
+    resp = await _ws_send(hass_ws_client, type="ambience/area/get", area_id=area_id)
+    assert resp["success"] is True
+    assert resp["result"] == {"scenes": [], "matchers": [], "rules": []}
+
+
+async def test_area_save_then_get(hass: HomeAssistant, installed, area_id, hass_ws_client) -> None:
     config = {
-        "name": "Living Room",
         "scenes": ["movie", "reading"],
         "matchers": ["time_of_day"],
         "rules": [
@@ -94,21 +115,35 @@ async def test_area_save_then_get(hass: HomeAssistant, installed, hass_ws_client
     save = await _ws_send(
         hass_ws_client,
         type="ambience/area/save",
-        area_id="lr",
+        area_id=area_id,
         config=config,
     )
     assert save["success"] is True
 
-    get = await _ws_send(hass_ws_client, id=2, type="ambience/area/get", area_id="lr")
+    get = await _ws_send(hass_ws_client, id=2, type="ambience/area/get", area_id=area_id)
     assert get["success"] is True
     assert get["result"] == config
 
 
-async def test_area_save_rejects_invalid_predicate(
+async def test_area_save_rejects_area_id_not_in_registry(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
+    """area/save only accepts area_ids that exist in HA's area registry."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id="not_a_real_area",
+        config={"scenes": [], "matchers": [], "rules": []},
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "not_a_real_area" in resp["error"]["message"]
+
+
+async def test_area_save_rejects_invalid_predicate(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
     config = {
-        "name": "X",
         "scenes": ["movie"],
         "matchers": ["time_of_day"],
         "rules": [
@@ -121,7 +156,7 @@ async def test_area_save_rejects_invalid_predicate(
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/area/save",
-        area_id="lr",
+        area_id=area_id,
         config=config,
     )
     assert resp["success"] is False
@@ -129,10 +164,9 @@ async def test_area_save_rejects_invalid_predicate(
 
 
 async def test_area_save_rejects_invalid_action_params(
-    hass: HomeAssistant, installed, hass_ws_client
+    hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
     config = {
-        "name": "X",
         "scenes": ["movie"],
         "matchers": [],
         "rules": [
@@ -150,7 +184,7 @@ async def test_area_save_rejects_invalid_action_params(
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/area/save",
-        area_id="lr",
+        area_id=area_id,
         config=config,
     )
     assert resp["success"] is False
@@ -158,14 +192,13 @@ async def test_area_save_rejects_invalid_action_params(
 
 
 async def test_area_save_rejects_duplicate_scene_names(
-    hass: HomeAssistant, installed, hass_ws_client
+    hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/area/save",
-        area_id="lr",
+        area_id=area_id,
         config={
-            "name": "X",
             "scenes": ["a", "a"],
             "matchers": [],
             "rules": [],
@@ -175,37 +208,11 @@ async def test_area_save_rejects_duplicate_scene_names(
     assert "duplicate" in resp["error"]["message"].lower()
 
 
-async def test_area_delete_removes_area(hass: HomeAssistant, installed, hass_ws_client) -> None:
-    save = await _ws_send(
-        hass_ws_client,
-        type="ambience/area/save",
-        area_id="lr",
-        config={"name": "X", "scenes": [], "matchers": [], "rules": []},
-    )
-    assert save["success"] is True
-
-    resp = await _ws_send(
-        hass_ws_client,
-        id=2,
-        type="ambience/area/delete",
-        area_id="lr",
-    )
-    assert resp["success"] is True
-
-    listing = await _ws_send(hass_ws_client, id=3, type="ambience/areas/list")
-    assert listing["result"] == []
-
-
-async def test_area_delete_unknown_is_ok(hass: HomeAssistant, installed, hass_ws_client) -> None:
-    resp = await _ws_send(hass_ws_client, type="ambience/area/delete", area_id="nope")
-    assert resp["success"] is True
-
-
 async def test_validate_ok(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/validate",
-        config={"name": "X", "scenes": ["a"], "matchers": [], "rules": []},
+        config={"scenes": ["a"], "matchers": [], "rules": []},
     )
     assert resp["success"] is True
     assert resp["result"] == {"ok": True}
@@ -216,7 +223,6 @@ async def test_validate_error(hass: HomeAssistant, installed, hass_ws_client) ->
         hass_ws_client,
         type="ambience/validate",
         config={
-            "name": "X",
             "scenes": ["a", "a"],
             "matchers": [],
             "rules": [],
@@ -226,13 +232,14 @@ async def test_validate_error(hass: HomeAssistant, installed, hass_ws_client) ->
     assert "duplicate" in resp["error"]["message"].lower()
 
 
-async def test_dry_run_returns_matched_rule(hass: HomeAssistant, installed, hass_ws_client) -> None:
+async def test_dry_run_returns_matched_rule(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
     save = await _ws_send(
         hass_ws_client,
         type="ambience/area/save",
-        area_id="lr",
+        area_id=area_id,
         config={
-            "name": "LR",
             "scenes": ["movie"],
             "matchers": [],
             "rules": [
@@ -254,7 +261,7 @@ async def test_dry_run_returns_matched_rule(hass: HomeAssistant, installed, hass
         hass_ws_client,
         id=2,
         type="ambience/dry_run",
-        area_id="lr",
+        area_id=area_id,
         scene="movie",
     )
     assert resp["success"] is True
@@ -263,13 +270,12 @@ async def test_dry_run_returns_matched_rule(hass: HomeAssistant, installed, hass
     assert resp["result"]["actions"][0]["action"] == "set_light"
 
 
-async def test_dry_run_no_match(hass: HomeAssistant, installed, hass_ws_client) -> None:
+async def test_dry_run_no_match(hass: HomeAssistant, installed, area_id, hass_ws_client) -> None:
     await _ws_send(
         hass_ws_client,
         type="ambience/area/save",
-        area_id="lr",
+        area_id=area_id,
         config={
-            "name": "LR",
             "scenes": ["movie"],
             "matchers": [],
             "rules": [],
@@ -279,7 +285,7 @@ async def test_dry_run_no_match(hass: HomeAssistant, installed, hass_ws_client) 
         hass_ws_client,
         id=2,
         type="ambience/dry_run",
-        area_id="lr",
+        area_id=area_id,
         scene="movie",
     )
     assert resp["success"] is True

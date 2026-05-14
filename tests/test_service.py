@@ -90,7 +90,7 @@ async def test_unknown_area_raises(hass: HomeAssistant) -> None:
 async def test_unknown_scene_raises(hass: HomeAssistant) -> None:
     _install(
         hass,
-        areas={"lr": {"name": "LR", "scenes": ["movie"], "matchers": [], "rules": []}},
+        areas={"lr": {"scenes": ["movie"], "matchers": [], "rules": []}},
         matchers={},
         actions={},
     )
@@ -103,7 +103,6 @@ async def test_happy_path_executes_matching_rule(hass: HomeAssistant) -> None:
     matchers = {"tod": FixedMatcher("evening")}
     areas = {
         "lr": {
-            "name": "LR",
             "scenes": ["movie"],
             "matchers": ["tod"],
             "rules": [
@@ -130,7 +129,6 @@ async def test_no_match_is_silent_noop(hass: HomeAssistant) -> None:
     matchers = {"tod": FixedMatcher("evening")}
     areas = {
         "lr": {
-            "name": "LR",
             "scenes": ["movie"],
             "matchers": ["tod"],
             "rules": [
@@ -150,7 +148,6 @@ async def test_snapshot_failure_treats_matcher_as_unresolved(
     matchers = {"tod": FixedMatcher("evening"), "weather": FailingMatcher()}
     areas = {
         "lr": {
-            "name": "LR",
             "scenes": ["movie"],
             "matchers": ["tod", "weather"],
             "rules": [
@@ -179,7 +176,6 @@ async def test_unknown_action_skipped_other_actions_run(
     matchers = {"tod": FixedMatcher("evening")}
     areas = {
         "lr": {
-            "name": "LR",
             "scenes": ["movie"],
             "matchers": ["tod"],
             "rules": [
@@ -220,7 +216,6 @@ async def test_action_failure_does_not_block_other_actions(
     matchers = {"tod": FixedMatcher("evening")}
     areas = {
         "lr": {
-            "name": "LR",
             "scenes": ["movie"],
             "matchers": ["tod"],
             "rules": [
@@ -274,7 +269,6 @@ async def test_cancellation_treated_as_failure_isolation(
     action = RecordingAction()
     areas = {
         "lr": {
-            "name": "LR",
             "scenes": ["movie"],
             "matchers": ["tod"],
             "rules": [

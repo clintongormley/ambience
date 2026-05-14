@@ -126,6 +126,7 @@ export class AmbienceAreasList extends LitElement {
         listMatchers(this.hass),
         listActions(this.hass),
       ]);
+      if (!this.isConnected) return;
       this._matchers = matchers;
       this._actions = actions;
     } catch (e) {
@@ -142,6 +143,7 @@ export class AmbienceAreasList extends LitElement {
           configs.set(a.area_id, await getArea(this.hass, a.area_id));
         }),
       );
+      if (!this.isConnected) return;
       this._areas = areas;
       this._configs = configs;
     } catch (e) {
@@ -154,7 +156,9 @@ export class AmbienceAreasList extends LitElement {
       (event) => {
         if (event.data.action === "remove") {
           const id = event.data.area_id;
-          this._expanded.delete(id);
+          const expanded = new Set(this._expanded);
+          expanded.delete(id);
+          this._expanded = expanded;
           if (this._editing?.areaId === id) this._editing = null;
           if (this._matchersModalArea === id) this._matchersModalArea = null;
         }
@@ -174,7 +178,12 @@ export class AmbienceAreasList extends LitElement {
     this._configs = next;
   }
 
-  /** Apply `next` optimistically, persist, reconcile with the stored config. */
+  /**
+   * Apply `next` optimistically, persist, reconcile with the stored config.
+   * Not serialised per area: overlapping saves to the same area could revert
+   * to a stale intermediate config on error. In practice the UI serialises
+   * mutations (one modal / one interaction at a time), so this is acceptable.
+   */
   private async _mutate(areaId: string, next: AreaConfig) {
     const prev = this._configs.get(areaId);
     this._setConfig(areaId, next);
@@ -233,7 +242,9 @@ export class AmbienceAreasList extends LitElement {
   private _duplicateRule(areaId: string, e: CustomEvent<{ index: number }>) {
     const cfg = this._configs.get(areaId);
     if (!cfg) return;
-    const copy: Rule = JSON.parse(JSON.stringify(cfg.rules[e.detail.index]));
+    const original = cfg.rules[e.detail.index];
+    if (!original) return;
+    const copy: Rule = JSON.parse(JSON.stringify(original));
     const rules = [...cfg.rules];
     rules.splice(e.detail.index + 1, 0, copy);
     void this._mutate(areaId, { ...cfg, rules });

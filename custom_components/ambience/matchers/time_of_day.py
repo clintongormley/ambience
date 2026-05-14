@@ -69,6 +69,7 @@ class TimeOfDayMatcher:
 
     toggleable = True
     input = "text"
+    priority = 100
 
     async def snapshot(self, hass: HomeAssistant) -> TimeOfDaySnapshot:
         state = hass.states.get("sun.sun")
@@ -123,6 +124,38 @@ class TimeOfDayMatcher:
         start, end = self._resolve_range(text, snapshot)
         return _in_range(snapshot.now, start, end)
 
+    def _intervals(self, predicate) -> list[tuple[float, float]]:  # noqa: ANN001
+        """Resolve a predicate to a list of [start, end) minute intervals within
+        [0, 1440), splitting any range that wraps midnight at 00:00."""
+        items = predicate if isinstance(predicate, list) else [predicate]
+        snapshot = _synthetic_snapshot()
+        result: list[tuple[float, float]] = []
+        for item in items:
+            start, end = self._resolve_range(item, snapshot)
+            start_min = _minute_of_day(start)
+            end_min = _minute_of_day(end)
+            if end_min <= start_min:  # wraps midnight (== means a full day)
+                result.append((start_min, 1440.0))
+                result.append((0.0, end_min))
+            else:
+                result.append((start_min, end_min))
+        return result
+
+    def contains(self, outer, inner) -> bool:  # noqa: ANN001
+        """True iff every minute matched by `inner` is also matched by `outer`."""
+        outer_intervals = _merge_intervals(self._intervals(outer))
+        inner_intervals = self._intervals(inner)
+        return all(
+            any(o_start <= i_start and i_end <= o_end for o_start, o_end in outer_intervals)
+            for i_start, i_end in inner_intervals
+        )
+
+    def order_key(self, predicate) -> float:  # noqa: ANN001
+        """Earliest start-minute-of-day across the predicate's range(s)."""
+        items = predicate if isinstance(predicate, list) else [predicate]
+        snapshot = _synthetic_snapshot()
+        return min(_minute_of_day(self._resolve_range(item, snapshot)[0]) for item in items)
+
     def _span_minutes(self, text: str, snapshot: TimeOfDaySnapshot) -> float:
         """Minutes covered by one predicate expression (wraps midnight)."""
         start, end = self._resolve_range(text, snapshot)
@@ -174,6 +207,8 @@ class TimeOfDayMatcher:
     def validate_predicate(self, predicate) -> None:  # noqa: ANN001
         if predicate is None or not isinstance(predicate, (str, list)):
             raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
+        if isinstance(predicate, list) and not predicate:
+            raise ValueError("time_of_day predicate list must not be empty")
         items = predicate if isinstance(predicate, list) else [predicate]
         synthetic = _synthetic_snapshot()
         for item in items:
@@ -200,6 +235,29 @@ def _in_range(now: datetime, start: datetime, end: datetime) -> bool:
         # wrap midnight
         return now >= start or now < end
     return start <= now < end
+
+
+def _minute_of_day(value: datetime) -> float:
+    """Minutes since midnight for a datetime; the date component is ignored."""
+    return value.hour * 60 + value.minute + value.second / 60
+
+
+def _merge_intervals(
+    intervals: list[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    """Merge overlapping/touching [start, end) minute intervals into a sorted,
+    disjoint list."""
+    if not intervals:
+        return []
+    ordered = sorted(intervals)
+    merged = [ordered[0]]
+    for start, end in ordered[1:]:
+        last_start, last_end = merged[-1]
+        if start <= last_end:
+            merged[-1] = (last_start, max(last_end, end))
+        else:
+            merged.append((start, end))
+    return merged
 
 
 def _synthetic_snapshot() -> TimeOfDaySnapshot:

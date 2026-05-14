@@ -340,3 +340,67 @@ def test_specificity_named_period_is_between_0_and_1() -> None:
     # (sunset..dusk) is a deterministic 30-minute span.
     score = TimeOfDayMatcher().specificity("evening")
     assert score == pytest.approx(30 / 1440)
+
+
+def test_priority() -> None:
+    assert TimeOfDayMatcher().priority == 100
+
+
+def test_contains_nested_range() -> None:
+    m = TimeOfDayMatcher()
+    assert m.contains("10:00-14:00", "12:00-13:00") is True
+    assert m.contains("12:00-13:00", "10:00-14:00") is False
+
+
+def test_contains_equal_range() -> None:
+    assert TimeOfDayMatcher().contains("10:00-14:00", "10:00-14:00") is True
+
+
+def test_contains_disjoint_ranges() -> None:
+    assert TimeOfDayMatcher().contains("08:00-10:00", "18:00-19:00") is False
+
+
+def test_contains_partial_overlap_neither_contains() -> None:
+    m = TimeOfDayMatcher()
+    assert m.contains("10:00-12:00", "11:00-13:00") is False
+    assert m.contains("11:00-13:00", "10:00-12:00") is False
+
+
+def test_contains_wrap_midnight() -> None:
+    m = TimeOfDayMatcher()
+    # 22:00-02:00 covers 23:00-01:00; the reverse does not hold
+    assert m.contains("22:00-02:00", "23:00-01:00") is True
+    assert m.contains("23:00-01:00", "22:00-02:00") is False
+
+
+def test_contains_named_period() -> None:
+    # synthetic snapshot: day = 06:00-18:00, noon = 11:00-13:00
+    assert TimeOfDayMatcher().contains("day", "noon") is True
+
+
+def test_contains_list_predicate_union() -> None:
+    m = TimeOfDayMatcher()
+    # the union of the list covers the inner range even though no single
+    # element does
+    assert m.contains(["10:00-12:00", "11:00-14:00"], "11:30-13:00") is True
+
+
+def test_order_key_is_start_minute_of_day() -> None:
+    m = TimeOfDayMatcher()
+    assert m.order_key("08:00-10:00") == 480
+    assert m.order_key("18:00-19:00") == 1080
+    assert m.order_key("08:00-10:00") < m.order_key("18:00-19:00")
+
+
+def test_order_key_list_takes_earliest_start() -> None:
+    assert TimeOfDayMatcher().order_key(["18:00-19:00", "08:00-10:00"]) == 480
+
+
+def test_validate_predicate_rejects_empty_list() -> None:
+    with pytest.raises(ValueError, match="empty"):
+        TimeOfDayMatcher().validate_predicate([])
+
+
+def test_order_key_named_period() -> None:
+    # synthetic snapshot: dusk = 18:30 -> "night" (dusk..dawn) starts at 1110
+    assert TimeOfDayMatcher().order_key("night") == 1110.0

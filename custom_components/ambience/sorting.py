@@ -1,4 +1,18 @@
-"""Pure rule sorting by specificity. No HA, no I/O."""
+"""Pure rule sorting: containment-aware topological sort. No HA, no I/O.
+
+See spec §5. Rule order has two parts:
+
+  * a hard partial order — rule P must precede rule Q when P's match-set is a
+    strict subset of Q's (under first-match-wins, Q would otherwise permanently
+    shadow P);
+  * a linearisation — among rules the partial order leaves free, the one with
+    the smaller linearisation key (a per-matcher tuple of `order_key` values,
+    the slots ordered by matcher `priority`; a slot a rule does not constrain
+    sorts last).
+
+The result is a stable topological sort: rules tying on everything keep their
+original relative order.
+"""
 
 from __future__ import annotations
 
@@ -6,40 +20,85 @@ from typing import Any
 
 Rule = dict[str, Any]
 
-# Sorts after every real scene name (case-insensitive comparison).
-_SCENE_ANY = "￿"
+_DEFAULT_PRIORITY = 1000
+
+
+def _priority(matcher: Any) -> int:
+    value = getattr(matcher, "priority", _DEFAULT_PRIORITY)
+    return value if isinstance(value, int) else _DEFAULT_PRIORITY
+
+
+def _constrained(rule: Rule) -> dict[str, Any]:
+    """The `when` entries that actually constrain — non-None predicates."""
+    return {k: v for k, v in rule.get("when", {}).items() if v is not None}
 
 
 def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
-    """Return a new list of rules sorted by specificity (stable).
+    """Return a new list of rules in containment-aware topological order."""
+    count = len(rules)
+    if count < 2:
+        return list(rules)
 
-    Sort key per rule, in order:
-      1. scene name, case-insensitive ascending — rules with no scene
-         constraint sort last.
-      2. constrained-dimension count, descending (more constraints first).
-      3. sum of matcher.specificity(predicate) over the constrained matchers,
-         ascending (narrower predicates first). A matcher with no
-         specificity() method contributes 0.5.
+    constrained = [_constrained(rule) for rule in rules]
 
-    Python's `sorted` is stable, so rules that tie on all three keep their
-    original relative order.
-    """
+    # --- linearisation key per rule --------------------------------------
+    # One slot per matcher named anywhere in a `when`, ordered by `priority`
+    # (ties broken by name for determinism).
+    slot_names = sorted(
+        {name for rule in rules for name in rule.get("when", {})},
+        key=lambda name: (_priority(matchers.get(name)), name),
+    )
 
-    def key(rule: Rule) -> tuple[str, int, float]:
+    def lin_key(rule: Rule) -> tuple:
         when = rule.get("when", {})
-        constrained = {k: v for k, v in when.items() if v is not None}
+        slots: list[tuple[int, Any]] = []
+        for name in slot_names:
+            predicate = when.get(name)
+            order_fn = getattr(matchers.get(name), "order_key", None)
+            if predicate is not None and callable(order_fn):
+                slots.append((0, order_fn(predicate)))
+            else:
+                # Unconstrained (or no order_key) is a wildcard: sorts last.
+                slots.append((1, None))
+        return tuple(slots)
 
-        scene = constrained.get("scene")
-        scene_key = scene.lower() if isinstance(scene, str) and scene else _SCENE_ANY
+    lin_keys = [lin_key(rule) for rule in rules]
 
-        dims = len(constrained)
+    # --- hard partial order ----------------------------------------------
+    def precedes(a: int, b: int) -> bool:
+        """True if rule `a` must precede rule `b` — a's match-set is a strict
+        subset of b's."""
+        cons_a, cons_b = constrained[a], constrained[b]
+        if not cons_b.keys() <= cons_a.keys():
+            return False
+        strict = cons_a.keys() > cons_b.keys()
+        for key, b_pred in cons_b.items():
+            a_pred = cons_a[key]
+            if a_pred == b_pred:
+                continue
+            contains = getattr(matchers.get(key), "contains", None)
+            if callable(contains) and contains(b_pred, a_pred):
+                strict = True  # a_pred is strictly within b_pred
+            else:
+                return False  # cannot establish a_pred is within b_pred
+        return strict
 
-        narrowness = 0.0
-        for name, predicate in constrained.items():
-            matcher = matchers.get(name)
-            spec_fn = getattr(matcher, "specificity", None)
-            narrowness += spec_fn(predicate) if callable(spec_fn) else 0.5
+    # predecessors[i] = rules that must come before rule i
+    predecessors = [{j for j in range(count) if j != i and precedes(j, i)} for i in range(count)]
 
-        return (scene_key, -dims, narrowness)
+    # --- stable topological sort, smallest linearisation key first -------
+    emitted: list[int] = []
+    emitted_set: set[int] = set()
+    remaining = set(range(count))
+    while remaining:
+        ready = [i for i in remaining if predecessors[i] <= emitted_set]
+        if not ready:
+            # Defensive: a misbehaving `contains` produced a cycle. Break it
+            # by treating everything still left as ready.
+            ready = list(remaining)
+        nxt = min(ready, key=lambda i: (lin_keys[i], i))
+        emitted.append(nxt)
+        emitted_set.add(nxt)
+        remaining.discard(nxt)
 
-    return sorted(rules, key=key)
+    return [rules[i] for i in emitted]

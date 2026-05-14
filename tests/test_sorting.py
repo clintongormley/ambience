@@ -1,4 +1,4 @@
-"""Pure rule sort by specificity. No HA, no I/O."""
+"""Pure rule sort: containment-aware topological sort. No HA, no I/O."""
 
 from __future__ import annotations
 
@@ -7,112 +7,182 @@ from typing import Any
 from custom_components.ambience.sorting import sort_rules
 
 
-class SpecMatcher:
-    """Matcher test double exposing only specificity()."""
+class IntervalMatcher:
+    """Test double: predicates are (start, end) tuples; `contains` is interval
+    containment and `order_key` is the start."""
 
-    def __init__(self, spec_fn) -> None:  # noqa: ANN001
-        self._spec_fn = spec_fn
+    def __init__(self, priority: int = 100) -> None:
+        self.priority = priority
 
-    def specificity(self, predicate: Any) -> float:
-        return self._spec_fn(predicate)
+    def contains(self, outer: Any, inner: Any) -> bool:
+        return outer[0] <= inner[0] and inner[1] <= outer[1]
+
+    def order_key(self, predicate: Any) -> float:
+        return predicate[0]
 
 
-class NoSpecMatcher:
-    """Matcher test double WITHOUT specificity() — must default to 0.5."""
+class SceneLike:
+    """Test double for an always-on string-equality matcher (like `scene`):
+    `order_key` only, no `contains` (equality is handled generically)."""
+
+    priority = 0
+
+    def order_key(self, predicate: Any) -> str:
+        return predicate.lower()
+
+
+class BareMatcher:
+    """Test double with no sort members at all."""
 
 
 def _rule(name: str, when: dict[str, Any]) -> dict[str, Any]:
     return {"name": name, "when": when, "actions": []}
 
 
-def test_groups_by_scene_name_case_insensitive() -> None:
-    matchers = {"scene": NoSpecMatcher()}
+def _names(rules: list[dict[str, Any]]) -> list[str]:
+    return [r["name"] for r in rules]
+
+
+def test_empty_and_single_returned_as_is() -> None:
+    assert sort_rules([], {}) == []
+    one = [_rule("only", {"scene": "movie"})]
+    assert sort_rules(one, {"scene": SceneLike()}) == one
+
+
+def test_contained_rule_precedes_its_container() -> None:
+    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    rules = [
+        _rule("wide", {"scene": "movie", "tod": (10, 14)}),
+        _rule("narrow", {"scene": "movie", "tod": (12, 13)}),
+    ]
+    assert _names(sort_rules(rules, matchers)) == ["narrow", "wide"]
+
+
+def test_extra_constrained_dimension_is_more_specific() -> None:
+    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    rules = [
+        _rule("scene-only", {"scene": "movie"}),
+        _rule("scene-and-tod", {"scene": "movie", "tod": (10, 14)}),
+    ]
+    assert _names(sort_rules(rules, matchers)) == ["scene-and-tod", "scene-only"]
+
+
+def test_named_scene_precedes_scene_any() -> None:
+    matchers = {"scene": SceneLike()}
+    rules = [
+        _rule("catchall", {"scene": None}),
+        _rule("movie", {"scene": "movie"}),
+        _rule("no-scene-key", {}),
+    ]
+    out = _names(sort_rules(rules, matchers))
+    assert out[0] == "movie"
+    assert set(out[1:]) == {"catchall", "no-scene-key"}
+
+
+def test_scene_grouping_via_linearisation() -> None:
+    matchers = {"scene": SceneLike()}
     rules = [
         _rule("r-reading", {"scene": "Reading"}),
         _rule("r-movie", {"scene": "movie"}),
         _rule("r-arcade", {"scene": "arcade"}),
     ]
-    assert [r["name"] for r in sort_rules(rules, matchers)] == [
-        "r-arcade",
-        "r-movie",
-        "r-reading",
-    ]
+    assert _names(sort_rules(rules, matchers)) == ["r-arcade", "r-movie", "r-reading"]
 
 
-def test_scene_any_sorts_last() -> None:
-    matchers = {"scene": NoSpecMatcher()}
+def test_disjoint_ranges_linearise_chronologically() -> None:
+    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
     rules = [
-        _rule("any", {"scene": None}),
-        _rule("zebra", {"scene": "zebra"}),
-        _rule("no-scene-key", {}),
+        _rule("evening", {"scene": "movie", "tod": (18, 19)}),
+        _rule("morning", {"scene": "movie", "tod": (8, 10)}),
     ]
-    out = [r["name"] for r in sort_rules(rules, matchers)]
-    assert out == ["zebra", "any", "no-scene-key"] or out == ["zebra", "no-scene-key", "any"]
-    assert out[0] == "zebra"
+    assert _names(sort_rules(rules, matchers)) == ["morning", "evening"]
 
 
-def test_more_constrained_dimensions_sort_first_within_scene() -> None:
-    matchers = {"scene": NoSpecMatcher(), "tod": NoSpecMatcher(), "wx": NoSpecMatcher()}
+def test_partial_overlap_neither_contains_uses_start_time() -> None:
+    matchers = {"tod": IntervalMatcher()}
     rules = [
-        _rule("one-dim", {"scene": "movie"}),
-        _rule("three-dim", {"scene": "movie", "tod": "evening", "wx": "rainy"}),
-        _rule("two-dim", {"scene": "movie", "tod": "evening"}),
+        _rule("later", {"tod": (11, 13)}),
+        _rule("earlier", {"tod": (10, 12)}),
     ]
-    assert [r["name"] for r in sort_rules(rules, matchers)] == [
-        "three-dim",
-        "two-dim",
-        "one-dim",
-    ]
+    # neither contains the other => incomparable => ordered by start time
+    assert _names(sort_rules(rules, matchers)) == ["earlier", "later"]
 
 
-def test_narrower_predicate_sorts_first_on_dimension_tie() -> None:
-    # Both rules: scene + tod (2 dims). Narrower tod wins.
+def test_wildcard_slot_sorts_last() -> None:
+    # tod has higher priority (lower number) than weather; the two rules are
+    # incomparable, so the highest-priority slot decides — and the rule that
+    # leaves `tod` unconstrained (a wildcard) sorts after the one that sets it.
     matchers = {
-        "scene": SpecMatcher(lambda p: 0.0),
-        "tod": SpecMatcher(lambda p: {"12:00-13:00": 0.04, "10:00-14:00": 0.17}[p]),
+        "tod": IntervalMatcher(priority=100),
+        "weather": IntervalMatcher(priority=200),
     }
     rules = [
-        _rule("wide", {"scene": "movie", "tod": "10:00-14:00"}),
-        _rule("narrow", {"scene": "movie", "tod": "12:00-13:00"}),
+        _rule("weather-only", {"weather": (0, 5)}),
+        _rule("tod-only", {"tod": (8, 10)}),
     ]
-    assert [r["name"] for r in sort_rules(rules, matchers)] == ["narrow", "wide"]
+    assert _names(sort_rules(rules, matchers)) == ["tod-only", "weather-only"]
 
 
-def test_matcher_without_specificity_defaults_to_half() -> None:
-    # Two rules tie on scene + dims; the matcher has no specificity() so both
-    # score 0.5 and the sort is stable (insertion order preserved).
-    matchers = {"scene": NoSpecMatcher(), "tod": NoSpecMatcher()}
+def test_matcher_without_contains_yields_no_hard_edge() -> None:
+    # BareMatcher has no `contains`; differing predicates cannot produce a
+    # containment edge, so the rules are incomparable and keep input order.
+    matchers = {"bare": BareMatcher()}
     rules = [
-        _rule("first", {"scene": "movie", "tod": "a"}),
-        _rule("second", {"scene": "movie", "tod": "b"}),
+        _rule("first", {"bare": "x"}),
+        _rule("second", {"bare": "y"}),
     ]
-    assert [r["name"] for r in sort_rules(rules, matchers)] == ["first", "second"]
+    assert _names(sort_rules(rules, matchers)) == ["first", "second"]
 
 
-def test_sort_is_stable_on_full_ties() -> None:
-    matchers = {"scene": NoSpecMatcher()}
+def test_hard_edges_override_linearisation_no_loop() -> None:
+    # A=(5,20) contains B=(10,12) and C=(7,8); B and C are disjoint.
+    # Linearisation by start time alone would want A(5), C(7), B(10) — but the
+    # hard edges force B and C before A. The topological sort must respect them
+    # and still terminate.
+    matchers = {"tod": IntervalMatcher()}
+    rules = [
+        _rule("A", {"tod": (5, 20)}),
+        _rule("B", {"tod": (10, 12)}),
+        _rule("C", {"tod": (7, 8)}),
+    ]
+    out = _names(sort_rules(rules, matchers))
+    assert out.index("B") < out.index("A")
+    assert out.index("C") < out.index("A")
+    # among the two free nodes, start time orders C before B
+    assert out == ["C", "B", "A"]
+
+
+def test_stable_on_full_ties() -> None:
+    matchers = {"scene": SceneLike()}
     rules = [
         _rule("a", {"scene": "movie"}),
         _rule("b", {"scene": "movie"}),
         _rule("c", {"scene": "movie"}),
     ]
-    assert [r["name"] for r in sort_rules(rules, matchers)] == ["a", "b", "c"]
-
-
-def test_none_predicate_is_not_a_constrained_dimension() -> None:
-    matchers = {"scene": NoSpecMatcher(), "tod": NoSpecMatcher()}
-    rules = [
-        _rule("scene-and-tod", {"scene": "movie", "tod": "evening"}),
-        _rule("scene-only-explicit-none", {"scene": "movie", "tod": None}),
-    ]
-    assert [r["name"] for r in sort_rules(rules, matchers)] == [
-        "scene-and-tod",
-        "scene-only-explicit-none",
-    ]
+    assert _names(sort_rules(rules, matchers)) == ["a", "b", "c"]
 
 
 def test_does_not_mutate_input() -> None:
-    matchers = {"scene": NoSpecMatcher()}
+    matchers = {"scene": SceneLike()}
     rules = [_rule("b", {"scene": "b"}), _rule("a", {"scene": "a"})]
     sort_rules(rules, matchers)
-    assert [r["name"] for r in rules] == ["b", "a"]
+    assert _names(rules) == ["b", "a"]
+
+
+def test_cyclic_contains_does_not_loop() -> None:
+    # A pathological matcher whose `contains` is always True makes every pair
+    # precede every other — a cycle. The defensive fallback must still
+    # terminate and return every rule exactly once.
+    class AlwaysContains:
+        priority = 100
+
+        def contains(self, outer: Any, inner: Any) -> bool:
+            return True
+
+        def order_key(self, predicate: Any) -> float:
+            return predicate
+
+    matchers = {"m": AlwaysContains()}
+    rules = [_rule("a", {"m": 3}), _rule("b", {"m": 1}), _rule("c", {"m": 2})]
+    out = sort_rules(rules, matchers)
+    assert sorted(_names(out)) == ["a", "b", "c"]

@@ -25,8 +25,12 @@ class Matcher(Protocol):
 
     Optional (duck-typed, read via getattr with defaults — not part of the
     Protocol so they stay optional for isinstance checks):
-      - ``specificity(predicate) -> float``: 0..1, lower = narrower/more
-        specific. Used to auto-sort rules. Default 0.5.
+      - ``contains(outer, inner) -> bool``: True iff every state matching
+        ``inner`` also matches ``outer``. The hard-constraint primitive for
+        the rule sort. Absent => no containment edges from this matcher.
+      - ``order_key(predicate)``: a sortable linearisation key for the
+        predicate (e.g. start-minute-of-day). Absent => the slot sorts last.
+      - ``priority: int``: linearisation-slot order, lower first. Default 1000.
       - ``toggleable: bool``: False for always-on matchers (``scene``).
         Default True.
       - ``input: str``: rule-editor widget hint. Default "text".

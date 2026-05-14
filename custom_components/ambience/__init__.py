@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 
@@ -12,7 +13,8 @@ from homeassistant.components.frontend import (
 )
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import Event, HomeAssistant, ServiceCall
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
@@ -23,6 +25,7 @@ from .const import (
     DATA_STORE,
     DOMAIN,
 )
+from .matchers.scene import SceneMatcher
 from .matchers.time_of_day import TimeOfDayMatcher
 from .registry import register_action, register_matcher
 from .service import async_apply_scene
@@ -45,6 +48,14 @@ _APPLY_SCENE_SCHEMA = vol.Schema(
 )
 
 
+def _hash_bundle(bundle_path: Path) -> str:
+    """Return a short content hash of the panel bundle, or 'missing' if absent."""
+    try:
+        return hashlib.sha256(bundle_path.read_bytes()).hexdigest()[:12]
+    except OSError:
+        return "missing"
+
+
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     return True
 
@@ -58,6 +69,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await store.async_load()
     domain_data[DATA_STORE] = store
 
+    register_matcher(hass, SceneMatcher())
     register_matcher(hass, TimeOfDayMatcher())
     register_action(hass, SetLightAction())
 
@@ -73,11 +85,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_register_commands(hass)
 
+    async def _handle_area_registry_update(event: Event) -> None:
+        """Drop an area's config when the HA area is deleted from the registry."""
+        if event.data["action"] != "remove":
+            return
+        await store.async_delete_area(event.data["area_id"])
+
+    entry.async_on_unload(
+        hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _handle_area_registry_update)
+    )
+
     # Serve the bundled JS from the integration's frontend/ directory.
     bundle_dir = Path(__file__).parent / "frontend"
+    bundle_path = bundle_dir / "ambience-panel.js"
     await hass.http.async_register_static_paths(
         [StaticPathConfig(_PANEL_STATIC_PATH, str(bundle_dir), False)]
     )
+
+    # Append a content hash so browsers fetch the fresh bundle after a rebuild
+    # instead of serving a stale cached copy.
+    bundle_hash = await hass.async_add_executor_job(_hash_bundle, bundle_path)
+    module_url = f"{_PANEL_JS_URL}?hash={bundle_hash}"
 
     async_register_built_in_panel(
         hass,
@@ -89,7 +117,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         config={
             "_panel_custom": {
                 "name": "ambience-panel",
-                "module_url": _PANEL_JS_URL,
+                "module_url": module_url,
                 "embed_iframe": False,
                 "trust_external": False,
             }

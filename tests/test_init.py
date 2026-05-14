@@ -7,6 +7,7 @@ from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
@@ -56,6 +57,7 @@ async def test_setup_seeds_registries_and_store(
 
     data = hass.data[DOMAIN]
     assert DATA_STORE in data
+    assert "scene" in data[DATA_MATCHERS]
     assert "time_of_day" in data[DATA_MATCHERS]
     assert "set_light" in data[DATA_ACTIONS]
 
@@ -99,6 +101,41 @@ async def test_panel_is_registered(
     panel = panels["ambience"]
     assert panel.frontend_url_path == "ambience"
     assert panel.config["_panel_custom"]["name"] == "ambience-panel"
+
+
+async def test_panel_url_has_cache_buster(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """The panel module_url carries a content hash so browsers reload after a rebuild."""
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    panels = hass.data.get("frontend_panels", {})
+    module_url = panels["ambience"].config["_panel_custom"]["module_url"]
+    assert module_url.startswith("/ambience-panel/ambience-panel.js?hash=")
+    assert len(module_url.split("?hash=")[1]) > 0
+
+
+async def test_area_registry_removal_deletes_ambience_config(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Deleting an HA area removes the matching Ambience config automatically."""
+    area = ar.async_get(hass).async_create("Garage")
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(area.id, {"scenes": [], "matchers": [], "rules": []})
+    assert store.get_area(area.id) is not None
+
+    ar.async_get(hass).async_delete(area.id)
+    await hass.async_block_till_done()
+
+    assert store.get_area(area.id) is None
 
 
 async def test_panel_is_removed_on_unload(

@@ -377,3 +377,55 @@ async def test_area_save_sorts_by_default_when_auto_sort_absent(
     sorted_rules = save["result"]["config"]["rules"]
     assert sorted_rules[0]["when"]["time_of_day"] == "12:00-13:00"
     assert sorted_rules[1]["when"]["time_of_day"] == "10:00-14:00"
+
+
+async def test_area_save_rejects_scene_in_matchers_list(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """`scene` is always-on and must never be listed in an area's `matchers`."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={"matchers": ["scene"], "auto_sort": True, "rules": []},
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "scene" in resp["error"]["message"]
+
+
+async def test_sorted_rules_resolve_named_scene_over_catchall(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """A catch-all (scene=any) rule submitted first must not shadow a named-scene
+    rule after auto-sort: the named rule sorts ahead and wins in dry_run."""
+    config = {
+        "matchers": [],
+        "auto_sort": True,
+        "rules": [
+            {"name": "catchall", "when": {"scene": None}, "actions": []},
+            {"name": "movie-rule", "when": {"scene": "movie"}, "actions": []},
+        ],
+    }
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert save["success"] is True
+    # After auto-sort the named-scene rule comes before the catch-all.
+    assert [r["name"] for r in save["result"]["config"]["rules"]] == [
+        "movie-rule",
+        "catchall",
+    ]
+
+    dry = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/dry_run",
+        area_id=area_id,
+        scene="movie",
+    )
+    assert dry["success"] is True
+    assert dry["result"]["rule_name"] == "movie-rule"

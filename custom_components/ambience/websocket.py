@@ -39,6 +39,8 @@ def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, A
     if not isinstance(config, dict):
         raise ValueError("config must be an object")
     active_matcher_names: list[str] = list(config.get("matchers", []))
+    if "scene" in active_matcher_names:
+        raise ValueError("`scene` is always-on and must not be listed in matchers")
     matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
     actions_registry = hass.data[DOMAIN][DATA_ACTIONS]
     for name in active_matcher_names:

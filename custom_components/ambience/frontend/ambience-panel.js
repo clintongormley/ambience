@@ -490,10 +490,10 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,e,t
                 <label class="autosort">
                   <input
                     type="checkbox"
-                    .checked=${r.auto_sort}
-                    @change=${i=>this._toggleAutoSort(t.area_id,i.target.checked)}
+                    .checked=${!r.auto_sort}
+                    @change=${i=>this._toggleAutoSort(t.area_id,!i.target.checked)}
                   />
-                  Auto-sort rules
+                  Order rules manually
                 </label>
                 <ambience-rules-list
                   .rules=${r.rules}

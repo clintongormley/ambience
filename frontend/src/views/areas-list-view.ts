@@ -395,14 +395,14 @@ export class AmbienceAreasList extends LitElement {
                 <label class="autosort">
                   <input
                     type="checkbox"
-                    .checked=${cfg.auto_sort}
+                    .checked=${!cfg.auto_sort}
                     @change=${(e: Event) =>
                       this._toggleAutoSort(
                         a.area_id,
-                        (e.target as HTMLInputElement).checked,
+                        !(e.target as HTMLInputElement).checked,
                       )}
                   />
-                  Auto-sort rules
+                  Order rules manually
                 </label>
                 <ambience-rules-list
                   .rules=${cfg.rules}

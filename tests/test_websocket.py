@@ -455,3 +455,21 @@ async def test_sorted_rules_resolve_named_scene_over_catchall(
     )
     assert dry["success"] is True
     assert dry["result"]["rule_name"] == "movie-rule"
+
+
+# ---------------------------------------------------------------------------
+# B7: ambience/time_of_day_periods/list
+# ---------------------------------------------------------------------------
+
+
+async def test_ws_periods_list_returns_builtins_custom_hidden(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """The list command returns the full {builtins, custom, hidden} view."""
+    resp = await _ws_send(hass_ws_client, type="ambience/time_of_day_periods/list")
+
+    assert resp["success"]
+    result = resp["result"]
+    assert set(result["builtins"]) == {"morning", "afternoon", "evening", "night", "day"}
+    assert result["custom"] == {}
+    assert result["hidden"] == []

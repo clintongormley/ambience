@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 
-from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_STORE, DOMAIN
+from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_PERIODS, DATA_STORE, DOMAIN
 from .service import async_resolve_only
 from .sorting import sort_rules
 
@@ -22,6 +22,9 @@ _WS_COMMANDS = (
     "ambience/actions/list",
     "ambience/validate",
     "ambience/dry_run",
+    "ambience/time_of_day_periods/list",
+    "ambience/time_of_day_periods/save",
+    "ambience/time_of_day_periods/reset",
 )
 
 
@@ -33,6 +36,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_area_save)
     websocket_api.async_register_command(hass, _ws_validate)
     websocket_api.async_register_command(hass, _ws_dry_run)
+    websocket_api.async_register_command(hass, _ws_periods_list)
 
 
 def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
@@ -231,6 +235,18 @@ async def _ws_dry_run(
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
     connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/time_of_day_periods/list"})
+@websocket_api.async_response
+async def _ws_periods_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    period_store = hass.data[DOMAIN][DATA_PERIODS]
+    connection.send_result(msg["id"], period_store.view_for_ui())
 
 
 def async_unregister_commands(hass: HomeAssistant) -> None:

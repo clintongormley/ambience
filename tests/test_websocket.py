@@ -473,3 +473,102 @@ async def test_ws_periods_list_returns_builtins_custom_hidden(
     assert set(result["builtins"]) == {"morning", "afternoon", "evening", "night", "day"}
     assert result["custom"] == {}
     assert result["hidden"] == []
+
+
+# ---------------------------------------------------------------------------
+# B8: ambience/time_of_day_periods/save
+# ---------------------------------------------------------------------------
+
+
+async def test_ws_periods_save_persists_payload(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    payload = {
+        "custom": {
+            "wind_down": {
+                "from": {"kind": "time", "hh": 20, "mm": 0},
+                "to": {"kind": "time", "hh": 22, "mm": 0},
+                "label": "Wind down",
+            }
+        },
+        "hidden": ["day"],
+    }
+    client = await hass_ws_client()
+    await client.send_json({"id": 1, "type": "ambience/time_of_day_periods/save", **payload})
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["ok"] is True
+    assert msg["result"]["warnings"] == []
+
+    await client.send_json({"id": 2, "type": "ambience/time_of_day_periods/list"})
+    msg = await client.receive_json()
+    assert msg["result"]["custom"] == payload["custom"]
+    assert msg["result"]["hidden"] == payload["hidden"]
+
+
+async def test_ws_periods_save_rejects_malformed(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    client = await hass_ws_client()
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "ambience/time_of_day_periods/save",
+            "custom": {"bad": {"from": {"kind": "time", "hh": 25, "mm": 0}}},
+            "hidden": [],
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"] is False
+    assert msg["error"]["code"] == "validation_error"
+
+
+async def test_ws_periods_save_returns_warnings_for_dangling_refs(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """If a saved set leaves an existing rule referencing a now-missing period,
+    save succeeds but returns a warning listing the affected rules."""
+    from homeassistant.helpers import area_registry as ar
+
+    area_reg = ar.async_get(hass)
+    area = area_reg.async_create("Living Room")
+    client = await hass_ws_client()
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "ambience/area/save",
+            "area_id": area.id,
+            "config": {
+                "matchers": ["time_of_day"],
+                "auto_sort": False,
+                "rules": [
+                    {
+                        "name": "Evening rule",
+                        "when": {"time_of_day": {"period": "evening"}},
+                        "actions": [],
+                    }
+                ],
+            },
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+
+    # Now hide 'evening' via the periods save command
+    await client.send_json(
+        {
+            "id": 2,
+            "type": "ambience/time_of_day_periods/save",
+            "custom": {},
+            "hidden": ["evening"],
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+    warnings = msg["result"]["warnings"]
+    assert any(
+        w["area_id"] == area.id
+        and w["rule_name"] == "Evening rule"
+        and w["missing_period"] == "evening"
+        for w in warnings
+    )

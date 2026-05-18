@@ -37,6 +37,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_validate)
     websocket_api.async_register_command(hass, _ws_dry_run)
     websocket_api.async_register_command(hass, _ws_periods_list)
+    websocket_api.async_register_command(hass, _ws_periods_save)
 
 
 def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
@@ -237,6 +238,22 @@ async def _ws_dry_run(
     connection.send_result(msg["id"], result)
 
 
+def _missing_period_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
+    """Return a list of period ids referenced by predicate that are not in effective_ids."""
+    if predicate is None:
+        return []
+    if isinstance(predicate, list):
+        result: list[str] = []
+        for item in predicate:
+            result.extend(_missing_period_refs(item, effective_ids))
+        return result
+    if isinstance(predicate, dict) and "period" in predicate:
+        pid = predicate["period"]
+        if isinstance(pid, str) and pid not in effective_ids:
+            return [pid]
+    return []
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "ambience/time_of_day_periods/list"})
 @websocket_api.async_response
@@ -247,6 +264,46 @@ async def _ws_periods_list(
 ) -> None:
     period_store = hass.data[DOMAIN][DATA_PERIODS]
     connection.send_result(msg["id"], period_store.view_for_ui())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/time_of_day_periods/save",
+        vol.Required("custom"): dict,
+        vol.Required("hidden"): list,
+    }
+)
+@websocket_api.async_response
+async def _ws_periods_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    period_store = hass.data[DOMAIN][DATA_PERIODS]
+    try:
+        await period_store.save(msg["custom"], msg["hidden"])
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+
+    # Walk every persisted rule and collect dangling-period warnings.
+    store = hass.data[DOMAIN][DATA_STORE]
+    effective_ids = set(period_store.effective())
+    warnings: list[dict[str, Any]] = []
+    for area_id, area_cfg in store.areas().items():
+        for rule in area_cfg.get("rules", []):
+            pred = rule.get("when", {}).get("time_of_day")
+            for missing in _missing_period_refs(pred, effective_ids):
+                warnings.append(
+                    {
+                        "area_id": area_id,
+                        "rule_name": rule.get("name", ""),
+                        "missing_period": missing,
+                    }
+                )
+
+    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
 
 
 def async_unregister_commands(hass: HomeAssistant) -> None:

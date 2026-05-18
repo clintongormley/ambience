@@ -112,15 +112,4 @@ export class AmbienceTimeEndpoint extends LitElement {
     `;
   }
 
-  // Explicitly sync the anchor <select> value after each render.  Lit's
-  // ?selected binding inside map() is correct in real browsers but can be
-  // misapplied in test environments (happy-dom) due to its iterable-part
-  // walker; setting .value directly is always reliable.
-  override updated() {
-    if (this.value.kind === "sun") {
-      const selects = this.shadowRoot?.querySelectorAll("select");
-      const anchorSelect = selects?.[1] as HTMLSelectElement | undefined;
-      if (anchorSelect) anchorSelect.value = this.value.anchor;
-    }
-  }
 }

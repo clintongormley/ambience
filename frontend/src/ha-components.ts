@@ -46,15 +46,46 @@ let _kickedOff = false;
  * Diagnostics emitted via `console.log` / `console.warn` so failures are
  * visible if it doesn't work in your HA version.
  */
+// Components we'll probe for diagnostic purposes — broader than HA_COMPONENTS
+// because in HA 2026.05+ the form/selector lineup is changing (Material You
+// rewrite). We log which are registered so we can pick the best available
+// HA-native widget without depending on a loader that may not exist.
+const PROBE_COMPONENTS = [
+  // Classic form components
+  "ha-combo-box",
+  "ha-textfield",
+  "ha-input",
+  "ha-form",
+  "ha-select",
+  "ha-listbox",
+  "ha-entity-picker",
+  "ha-selector",
+  "ha-selector-text",
+  "ha-selector-select",
+  // Material You / new design system
+  "ha-md-textfield",
+  "ha-md-select",
+  "ha-md-outlined-text-field",
+  "ha-md-outlined-select",
+  "ha-md-autocomplete",
+  "ha-md-list",
+  "ha-md-list-item",
+  "ha-md-menu",
+  "ha-md-menu-item",
+  // Useful infrastructure
+  "ha-dialog",
+  "ha-card",
+] as const;
+
 export function ensureHaComponents(hass?: AnyHass): Promise<void> {
   if (_loadAttempt) return _loadAttempt;
   _loadAttempt = (async () => {
     if (HA_COMPONENTS.every((n) => customElements.get(n))) return;
 
-    // Primary strategy: HA's frontend ships an import map for
-    // `custom-card-helpers`, so a dynamic import resolves to HA's actual
-    // helpers (the modern home of loadCardHelpers in HA 2026.05+). This
-    // works even when the legacy `window.loadCardHelpers` global is gone.
+    // Primary strategy: HA's frontend may ship an import map for
+    // `custom-card-helpers`. If it does, dynamic import resolves to HA's
+    // actual helpers (which include loadCardHelpers). If not, this throws
+    // a "Failed to resolve module specifier" and we move on.
     try {
       const mod = await import("custom-card-helpers");
       if (typeof mod.loadCardHelpers === "function") {
@@ -70,13 +101,20 @@ export function ensureHaComponents(hass?: AnyHass): Promise<void> {
     }
 
     const candidates = _collectLoaderCandidates(hass);
+    const hassKeys = hass && typeof hass === "object"
+      ? Object.keys(hass as object).filter((k) =>
+          /load|helper|card|form|element|register/i.test(k),
+        )
+      : [];
     console.log(
       "ambience: probing for HA component loaders →",
       Object.fromEntries(candidates.map((c) => [c.name, c.fn ? "found" : "—"])),
-      "components defined:",
+      "components registered (broad probe):",
       Object.fromEntries(
-        HA_COMPONENTS.map((n) => [n, !!customElements.get(n)]),
+        PROBE_COMPONENTS.map((n) => [n, !!customElements.get(n)]),
       ),
+      "hass-object keys matching /load|helper|card|form|element|register/i:",
+      hassKeys,
     );
 
     for (const { name, fn } of candidates) {

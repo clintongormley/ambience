@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from custom_components.ambience.periods import BUILTIN_PERIODS, PeriodStore
 
 
@@ -98,3 +100,101 @@ def test_effective_iteration_order_builtins_then_custom_only() -> None:
     ids = list(store.effective())
     assert ids[: len(BUILTIN_PERIODS)] == list(BUILTIN_PERIODS)
     assert ids[-1] == "wind_down"
+
+
+def test_validate_definition_accepts_time_endpoints() -> None:
+    PeriodStore(_FakeStorage()).validate_definition(
+        {
+            "from": {"kind": "time", "hh": 8, "mm": 0},
+            "to": {"kind": "time", "hh": 10, "mm": 30},
+        }
+    )  # no raise
+
+
+def test_validate_definition_accepts_sun_endpoints() -> None:
+    PeriodStore(_FakeStorage()).validate_definition(
+        {
+            "from": {"kind": "sun", "anchor": "sunrise", "offset_min": -30},
+            "to": {"kind": "sun", "anchor": "sunset", "offset_min": 60},
+        }
+    )  # no raise
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {},
+        {"from": {"kind": "time", "hh": 8, "mm": 0}},  # missing to
+        {"from": {"kind": "time", "hh": 25, "mm": 0}, "to": {"kind": "time", "hh": 10, "mm": 0}},
+        {"from": {"kind": "time", "hh": 8, "mm": 60}, "to": {"kind": "time", "hh": 10, "mm": 0}},
+        {
+            "from": {"kind": "sun", "anchor": "zenith", "offset_min": 0},
+            "to": {"kind": "sun", "anchor": "sunset", "offset_min": 0},
+        },
+        {
+            "from": {"kind": "sun", "anchor": "sunset", "offset_min": "thirty"},
+            "to": {"kind": "sun", "anchor": "sunrise", "offset_min": 0},
+        },
+        {"from": {"kind": "bogus"}, "to": {"kind": "time", "hh": 10, "mm": 0}},
+    ],
+)
+def test_validate_definition_rejects_invalid(bad: dict) -> None:
+    with pytest.raises(ValueError):
+        PeriodStore(_FakeStorage()).validate_definition(bad)
+
+
+async def test_save_persists_full_payload() -> None:
+    storage = _FakeStorage()
+    store = PeriodStore(storage)
+    payload = {
+        "custom": {
+            "wind_down": {
+                "from": {"kind": "time", "hh": 20, "mm": 0},
+                "to": {"kind": "time", "hh": 22, "mm": 0},
+                "label": "Wind down",
+            }
+        },
+        "hidden": ["day"],
+    }
+    await store.save(payload["custom"], payload["hidden"])
+    assert storage.saved == [payload]
+
+
+async def test_save_rejects_malformed_custom_entry() -> None:
+    storage = _FakeStorage()
+    store = PeriodStore(storage)
+    with pytest.raises(ValueError):
+        await store.save({"bad": {"from": {"kind": "time", "hh": 25, "mm": 0}}}, [])
+    assert storage.saved == []  # nothing persisted on failure
+
+
+async def test_save_rejects_invalid_period_id() -> None:
+    storage = _FakeStorage()
+    store = PeriodStore(storage)
+    valid_def = {
+        "from": {"kind": "time", "hh": 8, "mm": 0},
+        "to": {"kind": "time", "hh": 10, "mm": 0},
+        "label": None,
+    }
+    with pytest.raises(ValueError, match="invalid period id"):
+        await store.save({"Has Space": valid_def}, [])
+    with pytest.raises(ValueError, match="invalid period id"):
+        await store.save({"1starts_with_digit": valid_def}, [])
+
+
+async def test_reset_clears_custom_and_hidden() -> None:
+    storage = _FakeStorage(
+        {
+            "custom": {
+                "wind_down": {
+                    "from": {"kind": "time", "hh": 20, "mm": 0},
+                    "to": {"kind": "time", "hh": 22, "mm": 0},
+                    "label": None,
+                }
+            },
+            "hidden": ["day"],
+        }
+    )
+    store = PeriodStore(storage)
+    await store.reset()
+    assert storage.saved == [{"custom": {}, "hidden": []}]

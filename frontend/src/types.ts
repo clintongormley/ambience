@@ -67,3 +67,33 @@ export type DryRunResult = {
   actions: ActionSpec[];
   snapshots_described: Record<string, string | null>;
 };
+
+export type SunAnchor =
+  | "sunrise"
+  | "sunset"
+  | "noon"
+  | "midnight"
+  | "dawn"
+  | "dusk";
+
+export type TimeEndpoint =
+  | { kind: "time"; hh: number; mm: number }
+  | { kind: "sun"; anchor: SunAnchor; offset_min: number };
+
+export type TimeRange = { from: TimeEndpoint; to: TimeEndpoint };
+
+export type PeriodRef = { period: string };
+
+export type TimeOfDayPredicate =
+  | null
+  | PeriodRef
+  | TimeRange
+  | Array<PeriodRef | TimeRange>;
+
+export type PeriodDef = TimeRange & { label?: string | null };
+
+export type PeriodStoreView = {
+  builtins: Record<string, PeriodDef>;
+  custom: Record<string, PeriodDef>;
+  hidden: string[];
+};

@@ -8,6 +8,8 @@ import type {
   AreaListItem,
   DryRunResult,
   MatcherInfo,
+  PeriodDef,
+  PeriodStoreView,
 } from "./types.js";
 
 // HA fires this on the event bus whenever an area is created/updated/removed.
@@ -78,4 +80,24 @@ export async function dryRun(
     area_id: areaId,
     scene,
   });
+}
+
+export async function listPeriods(hass: HassConnection): Promise<PeriodStoreView> {
+  return hass.callWS({ type: "ambience/time_of_day_periods/list" });
+}
+
+export async function savePeriods(
+  hass: HassConnection,
+  custom: Record<string, PeriodDef>,
+  hidden: string[],
+): Promise<{ ok: true; warnings: Array<{ area_id: string; rule_name: string; missing_period: string }> }> {
+  return hass.callWS({
+    type: "ambience/time_of_day_periods/save",
+    custom,
+    hidden,
+  });
+}
+
+export async function resetPeriods(hass: HassConnection): Promise<{ ok: true }> {
+  return hass.callWS({ type: "ambience/time_of_day_periods/reset" });
 }

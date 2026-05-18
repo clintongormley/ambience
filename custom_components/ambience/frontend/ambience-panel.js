@@ -497,7 +497,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,e,t
                 </label>
                 <ambience-rules-list
                   .rules=${r.rules}
-                  ?autoSort=${r.auto_sort}
+                  .autoSort=${r.auto_sort}
                   @add-rule=${()=>this._addRule(t.area_id)}
                   @edit-rule=${i=>this._editRule(t.area_id,i)}
                   @duplicate-rule=${i=>this._duplicateRule(t.area_id,i)}

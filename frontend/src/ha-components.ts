@@ -6,30 +6,20 @@ type CardHelpers = {
   }>;
 };
 
-// Required HA components we wait for. `ha-combo-box` is always needed for
-// the scene picker. For text inputs we accept either of two variants:
-// `ha-input` (newer, HA 2026.05+) or `ha-textfield` (older). Whichever
-// the running HA version ships will be registered by ha-form's chunk.
-const REQUIRED = ["ha-combo-box"] as const;
+// HA's lazy form components we'd prefer to use if registered.
+const HA_COMPONENTS = [
+  "ha-combo-box",
+  "ha-input",
+  "ha-textfield",
+] as const;
+
 const TEXT_INPUT_VARIANTS = ["ha-input", "ha-textfield"] as const;
 
 export type HaTextInputTag = (typeof TEXT_INPUT_VARIANTS)[number];
 
-function _hasTextInput(): boolean {
-  return TEXT_INPUT_VARIANTS.some((n) => customElements.get(n) !== undefined);
-}
-
-function _allReady(): boolean {
-  return (
-    REQUIRED.every((n) => customElements.get(n) !== undefined) &&
-    _hasTextInput()
-  );
-}
-
 /**
- * Returns the best available text-input custom element tag, or null if
- * neither variant is registered yet. Callers should fall back to a plain
- * `<input>` for the null case.
+ * Returns the best available text-input custom element tag (`ha-input` >
+ * `ha-textfield`), or null if neither is in the registry yet.
  */
 export function pickHaTextInput(): HaTextInputTag | null {
   for (const n of TEXT_INPUT_VARIANTS) {
@@ -38,105 +28,76 @@ export function pickHaTextInput(): HaTextInputTag | null {
   return null;
 }
 
-let _loader: Promise<boolean> | null = null;
+let _loadAttempt: Promise<void> | null = null;
 
 /**
- * Force-loads HA's lazy form components. In a custom panel context they
- * are NOT guaranteed to be in the global custom-element registry — they
- * would render blank. The widely-used trick: call HA's global
- * `loadCardHelpers()`, create any card element, and request its config
- * editor — that side-effect pulls in HA's ha-form chunk, which transitively
- * registers ha-combo-box and the text-input variant (ha-input on HA
- * 2026.05+, ha-textfield on older releases). Runs once per page load.
+ * Best-effort: try to coax HA into loading its lazy form components
+ * (ha-combo-box, ha-input/ha-textfield). The classic trick is to call
+ * `window.loadCardHelpers()` and request a card editor — that pulls in HA's
+ * ha-form chunk. As of HA 2026.05 `loadCardHelpers` is no longer on window
+ * for custom panels, so this is genuinely best-effort: callers should NOT
+ * gate their UI on it. Consumers render the HA element if registered, else
+ * a self-contained fallback. The `HaComponentsController` re-renders the
+ * host if any tracked component becomes defined later.
+ *
+ * Diagnostics are emitted via `console.warn` so failures are visible.
  */
-export function ensureHaComponents(): Promise<boolean> {
-  if (_allReady()) return Promise.resolve(true);
-  if (_loader) return _loader;
-  _loader = (async () => {
-    const loader = (
-      window as Window & { loadCardHelpers?: () => Promise<CardHelpers> }
-    ).loadCardHelpers;
-    if (typeof loader !== "function") {
-      console.warn(
-        "ambience: window.loadCardHelpers is not available; HA form " +
-          "components will not be loaded.",
-      );
-      return false;
+export function ensureHaComponents(): Promise<void> {
+  if (_loadAttempt) return _loadAttempt;
+  _loadAttempt = (async () => {
+    if (HA_COMPONENTS.every((n) => customElements.get(n))) return;
+
+    const w = window as Window & {
+      loadCardHelpers?: () => Promise<CardHelpers>;
+    };
+
+    // Strategy 1: classic window.loadCardHelpers (HA < 2026.05).
+    if (typeof w.loadCardHelpers === "function") {
+      try {
+        const helpers = await w.loadCardHelpers();
+        const card = await helpers.createCardElement({
+          type: "entities",
+          entities: [],
+        });
+        await card.constructor?.getConfigElement?.();
+      } catch (e) {
+        console.warn("ambience: loadCardHelpers strategy failed", e);
+      }
+      return;
     }
-    try {
-      const helpers = await loader();
-      const card = await helpers.createCardElement({
-        type: "entities",
-        entities: [],
-      });
-      await card.constructor?.getConfigElement?.();
-    } catch (e) {
-      console.warn(
-        "ambience: loadCardHelpers trick failed to trigger ha-form load",
-        e,
-      );
-    }
-    // Whether the trick threw or not, give the registry up to 10s to settle.
-    try {
-      await Promise.race([
-        (async () => {
-          await Promise.all(
-            REQUIRED.map((n) => customElements.whenDefined(n)),
-          );
-          // Whichever text-input variant resolves first is fine.
-          await Promise.race(
-            TEXT_INPUT_VARIANTS.map((n) => customElements.whenDefined(n)),
-          );
-        })(),
-        new Promise<void>((_, rej) =>
-          setTimeout(() => rej(new Error("timeout")), 10000),
-        ),
-      ]);
-    } catch (e) {
-      console.warn(
-        "ambience: timed out waiting for HA components",
-        { required: REQUIRED, textInputs: TEXT_INPUT_VARIANTS },
-        "registered now:",
-        {
-          "ha-combo-box": !!customElements.get("ha-combo-box"),
-          "ha-input": !!customElements.get("ha-input"),
-          "ha-textfield": !!customElements.get("ha-textfield"),
-        },
-        e,
-      );
-    }
-    const ok = _allReady();
-    if (!ok) {
-      console.warn("ambience: HA components still missing after load attempt");
-    }
-    return ok;
+    console.warn(
+      "ambience: window.loadCardHelpers is not available (removed in HA 2026.05?). " +
+        "Panel will use self-contained fallback widgets where HA's lazy form " +
+        "components aren't already in the custom-element registry.",
+    );
   })();
-  return _loader;
+  return _loadAttempt;
 }
 
 /**
- * Lit ReactiveController exposing tri-state `state` ("loading" | "ready" |
- * "failed"). Kicks off the load on host connect and re-renders the host
- * when the state flips. Multiple hosts share the same module-level loader,
- * so the load is attempted at most once per page.
+ * Lit ReactiveController that re-renders its host whenever any of HA's
+ * tracked form components become defined. The host can call
+ * `customElements.get(...)` directly in render() to decide what to show.
+ * Also triggers `ensureHaComponents()` once per page.
  */
 export class HaComponentsController implements ReactiveController {
-  state: "loading" | "ready" | "failed" = _allReady() ? "ready" : "loading";
-
   constructor(private host: ReactiveControllerHost) {
     host.addController(this);
   }
 
-  get ready(): boolean {
-    return this.state === "ready";
-  }
-
   hostConnected(): void {
-    if (this.state === "ready") return;
-    void ensureHaComponents().then((ok) => {
-      this.state = ok ? "ready" : "failed";
-      this.host.requestUpdate();
-    });
+    // Watch for any currently-missing component to be defined later; when
+    // it is, re-render the host so it can switch from the fallback to the
+    // HA-native element in place.
+    for (const name of HA_COMPONENTS) {
+      if (!customElements.get(name)) {
+        void customElements.whenDefined(name).then(() => {
+          this.host.requestUpdate();
+        });
+      }
+    }
+    // Best-effort trigger; harmless if it never resolves to anything.
+    void ensureHaComponents();
   }
 
   hostDisconnected(): void {}

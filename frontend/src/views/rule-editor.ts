@@ -80,11 +80,6 @@ export class AmbienceRuleEditor extends LitElement {
       color: var(--primary-text-color, inherit);
       border: 1px solid var(--divider-color, #ccc);
     }
-    .loading {
-      padding: 0.6rem 0.75rem;
-      color: var(--secondary-text-color, #888);
-      font-style: italic;
-    }
   `;
 
   @property({ type: Boolean, reflect: true }) open = false;
@@ -117,25 +112,23 @@ export class AmbienceRuleEditor extends LitElement {
 
   /**
    * Picks the best available HA text-input variant: `ha-input` (HA 2026.05+)
-   * or `ha-textfield` (older). While HA's lazy form chunk is still loading,
-   * shows a placeholder. If loading fails outright, falls back to a plain
-   * native `<input>` so the panel stays usable.
+   * or `ha-textfield` (older), falling back to a plain `<input>` when
+   * neither is registered. The HaComponentsController re-renders us if a
+   * tracked component becomes defined later, so we upgrade in place.
    */
   private _renderNameField() {
     const value = this._draft!.name ?? "";
-    if (this._ha.state === "loading") {
-      return html`<div class="loading">Loading…</div>`;
+    const tag = pickHaTextInput();
+    if (tag === "ha-input") {
+      return html`
+        <ha-input
+          label="Name (optional)"
+          .value=${value}
+          @input=${this._onNameInput}
+        ></ha-input>
+      `;
     }
-    if (this._ha.state === "ready") {
-      if (pickHaTextInput() === "ha-input") {
-        return html`
-          <ha-input
-            label="Name (optional)"
-            .value=${value}
-            @input=${this._onNameInput}
-          ></ha-input>
-        `;
-      }
+    if (tag === "ha-textfield") {
       return html`
         <ha-textfield
           label="Name (optional)"
@@ -144,8 +137,6 @@ export class AmbienceRuleEditor extends LitElement {
         ></ha-textfield>
       `;
     }
-    // Failed — last-resort plain-input fallback (keeps the panel usable
-    // when HA's lazy form components can't be loaded).
     return html`
       <label>Name (optional)</label>
       <input

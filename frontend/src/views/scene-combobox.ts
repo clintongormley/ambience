@@ -26,14 +26,6 @@ export class AmbienceSceneCombobox extends LitElement {
       display: block;
       position: relative;
     }
-    .placeholder {
-      padding: 0.6rem 0.75rem;
-      border: 1px solid var(--divider-color, #ccc);
-      border-radius: 4px;
-      color: var(--secondary-text-color, #888);
-      font-style: italic;
-    }
-    /* Fallback dropdown */
     .control {
       display: flex;
       align-items: stretch;
@@ -170,10 +162,7 @@ export class AmbienceSceneCombobox extends LitElement {
   // --- render --------------------------------------------------------------
 
   override render() {
-    if (this._ha.state === "loading") {
-      return html`<div class="placeholder">Loading scene picker…</div>`;
-    }
-    if (this._ha.state === "ready") {
+    if (customElements.get("ha-combo-box")) {
       const items = this.suggestions.map((s) => ({ value: s, label: s }));
       return html`
         <ha-combo-box
@@ -187,7 +176,11 @@ export class AmbienceSceneCombobox extends LitElement {
         ></ha-combo-box>
       `;
     }
-    // Failed — render the self-contained fallback dropdown.
+    // ha-combo-box not registered (HA 2026.05+ removed loadCardHelpers, the
+    // panel-context trigger we relied on). Render the self-contained
+    // dropdown; the HaComponentsController will re-render us if HA ever
+    // defines ha-combo-box later (e.g. user navigates somewhere that loads
+    // it) so we'll upgrade in place.
     return html`
       <div class="control">
         <input

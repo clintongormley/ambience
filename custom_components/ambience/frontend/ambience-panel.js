@@ -1,14 +1,14 @@
 /* Ambience panel — bundled output. Do not edit by hand. */
-var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t,e)=>{for(var s=e>1?void 0:e?Ot(r,t):r,i=n.length-1,o;i>=0;i--)(o=n[i])&&(s=(e?o(r,t,s):o(s))||s);return e&&s&&Mt(r,t,s),s};var J=globalThis,V=J.ShadowRoot&&(J.ShadyCSS===void 0||J.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,X=Symbol(),dt=new WeakMap,D=class{constructor(r,t,e){if(this._$cssResult$=!0,e!==X)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=r,this.t=t}get styleSheet(){let r=this.o,t=this.t;if(V&&r===void 0){let e=t!==void 0&&t.length===1;e&&(r=dt.get(t)),r===void 0&&((this.o=r=new CSSStyleSheet).replaceSync(this.cssText),e&&dt.set(t,r))}return r}toString(){return this.cssText}},ht=n=>new D(typeof n=="string"?n:n+"",void 0,X),v=(n,...r)=>{let t=n.length===1?n[0]:r.reduce((e,s,i)=>e+(o=>{if(o._$cssResult$===!0)return o.cssText;if(typeof o=="number")return o;throw Error("Value passed to 'css' function must be a 'css' function result: "+o+". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.")})(s)+n[i+1],n[0]);return new D(t,n,X)},ut=(n,r)=>{if(V)n.adoptedStyleSheets=r.map(t=>t instanceof CSSStyleSheet?t:t.styleSheet);else for(let t of r){let e=document.createElement("style"),s=J.litNonce;s!==void 0&&e.setAttribute("nonce",s),e.textContent=t.cssText,n.appendChild(e)}},Y=V?n=>n:n=>n instanceof CSSStyleSheet?(r=>{let t="";for(let e of r.cssRules)t+=e.cssText;return ht(t)})(n):n;var{is:Ht,defineProperty:Nt,getOwnPropertyDescriptor:Ut,getOwnPropertyNames:Dt,getOwnPropertySymbols:jt,getPrototypeOf:zt}=Object,K=globalThis,pt=K.trustedTypes,It=pt?pt.emptyScript:"",qt=K.reactiveElementPolyfillSupport,j=(n,r)=>n,z={toAttribute(n,r){switch(r){case Boolean:n=n?It:null;break;case Object:case Array:n=n==null?n:JSON.stringify(n)}return n},fromAttribute(n,r){let t=n;switch(r){case Boolean:t=n!==null;break;case Number:t=n===null?null:Number(n);break;case Object:case Array:try{t=JSON.parse(n)}catch{t=null}}return t}},Z=(n,r)=>!Ht(n,r),mt={attribute:!0,type:String,converter:z,reflect:!1,useDefault:!1,hasChanged:Z};Symbol.metadata??=Symbol("metadata"),K.litPropertyMetadata??=new WeakMap;var A=class extends HTMLElement{static addInitializer(r){this._$Ei(),(this.l??=[]).push(r)}static get observedAttributes(){return this.finalize(),this._$Eh&&[...this._$Eh.keys()]}static createProperty(r,t=mt){if(t.state&&(t.attribute=!1),this._$Ei(),this.prototype.hasOwnProperty(r)&&((t=Object.create(t)).wrapped=!0),this.elementProperties.set(r,t),!t.noAccessor){let e=Symbol(),s=this.getPropertyDescriptor(r,e,t);s!==void 0&&Nt(this.prototype,r,s)}}static getPropertyDescriptor(r,t,e){let{get:s,set:i}=Ut(this.prototype,r)??{get(){return this[t]},set(o){this[t]=o}};return{get:s,set(o){let a=s?.call(this);i?.call(this,o),this.requestUpdate(r,a,e)},configurable:!0,enumerable:!0}}static getPropertyOptions(r){return this.elementProperties.get(r)??mt}static _$Ei(){if(this.hasOwnProperty(j("elementProperties")))return;let r=zt(this);r.finalize(),r.l!==void 0&&(this.l=[...r.l]),this.elementProperties=new Map(r.elementProperties)}static finalize(){if(this.hasOwnProperty(j("finalized")))return;if(this.finalized=!0,this._$Ei(),this.hasOwnProperty(j("properties"))){let t=this.properties,e=[...Dt(t),...jt(t)];for(let s of e)this.createProperty(s,t[s])}let r=this[Symbol.metadata];if(r!==null){let t=litPropertyMetadata.get(r);if(t!==void 0)for(let[e,s]of t)this.elementProperties.set(e,s)}this._$Eh=new Map;for(let[t,e]of this.elementProperties){let s=this._$Eu(t,e);s!==void 0&&this._$Eh.set(s,t)}this.elementStyles=this.finalizeStyles(this.styles)}static finalizeStyles(r){let t=[];if(Array.isArray(r)){let e=new Set(r.flat(1/0).reverse());for(let s of e)t.unshift(Y(s))}else r!==void 0&&t.push(Y(r));return t}static _$Eu(r,t){let e=t.attribute;return e===!1?void 0:typeof e=="string"?e:typeof r=="string"?r.toLowerCase():void 0}constructor(){super(),this._$Ep=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this._$Em=null,this._$Ev()}_$Ev(){this._$ES=new Promise(r=>this.enableUpdating=r),this._$AL=new Map,this._$E_(),this.requestUpdate(),this.constructor.l?.forEach(r=>r(this))}addController(r){(this._$EO??=new Set).add(r),this.renderRoot!==void 0&&this.isConnected&&r.hostConnected?.()}removeController(r){this._$EO?.delete(r)}_$E_(){let r=new Map,t=this.constructor.elementProperties;for(let e of t.keys())this.hasOwnProperty(e)&&(r.set(e,this[e]),delete this[e]);r.size>0&&(this._$Ep=r)}createRenderRoot(){let r=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return ut(r,this.constructor.elementStyles),r}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this._$EO?.forEach(r=>r.hostConnected?.())}enableUpdating(r){}disconnectedCallback(){this._$EO?.forEach(r=>r.hostDisconnected?.())}attributeChangedCallback(r,t,e){this._$AK(r,e)}_$ET(r,t){let e=this.constructor.elementProperties.get(r),s=this.constructor._$Eu(r,e);if(s!==void 0&&e.reflect===!0){let i=(e.converter?.toAttribute!==void 0?e.converter:z).toAttribute(t,e.type);this._$Em=r,i==null?this.removeAttribute(s):this.setAttribute(s,i),this._$Em=null}}_$AK(r,t){let e=this.constructor,s=e._$Eh.get(r);if(s!==void 0&&this._$Em!==s){let i=e.getPropertyOptions(s),o=typeof i.converter=="function"?{fromAttribute:i.converter}:i.converter?.fromAttribute!==void 0?i.converter:z;this._$Em=s;let a=o.fromAttribute(t,i.type);this[s]=a??this._$Ej?.get(s)??a,this._$Em=null}}requestUpdate(r,t,e,s=!1,i){if(r!==void 0){let o=this.constructor;if(s===!1&&(i=this[r]),e??=o.getPropertyOptions(r),!((e.hasChanged??Z)(i,t)||e.useDefault&&e.reflect&&i===this._$Ej?.get(r)&&!this.hasAttribute(o._$Eu(r,e))))return;this.C(r,t,e)}this.isUpdatePending===!1&&(this._$ES=this._$EP())}C(r,t,{useDefault:e,reflect:s,wrapped:i},o){e&&!(this._$Ej??=new Map).has(r)&&(this._$Ej.set(r,o??t??this[r]),i!==!0||o!==void 0)||(this._$AL.has(r)||(this.hasUpdated||e||(t=void 0),this._$AL.set(r,t)),s===!0&&this._$Em!==r&&(this._$Eq??=new Set).add(r))}async _$EP(){this.isUpdatePending=!0;try{await this._$ES}catch(t){Promise.reject(t)}let r=this.scheduleUpdate();return r!=null&&await r,!this.isUpdatePending}scheduleUpdate(){return this.performUpdate()}performUpdate(){if(!this.isUpdatePending)return;if(!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),this._$Ep){for(let[s,i]of this._$Ep)this[s]=i;this._$Ep=void 0}let e=this.constructor.elementProperties;if(e.size>0)for(let[s,i]of e){let{wrapped:o}=i,a=this[s];o!==!0||this._$AL.has(s)||a===void 0||this.C(s,void 0,i,a)}}let r=!1,t=this._$AL;try{r=this.shouldUpdate(t),r?(this.willUpdate(t),this._$EO?.forEach(e=>e.hostUpdate?.()),this.update(t)):this._$EM()}catch(e){throw r=!1,this._$EM(),e}r&&this._$AE(t)}willUpdate(r){}_$AE(r){this._$EO?.forEach(t=>t.hostUpdated?.()),this.hasUpdated||(this.hasUpdated=!0,this.firstUpdated(r)),this.updated(r)}_$EM(){this._$AL=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this._$ES}shouldUpdate(r){return!0}update(r){this._$Eq&&=this._$Eq.forEach(t=>this._$ET(t,this[t])),this._$EM()}updated(r){}firstUpdated(r){}};A.elementStyles=[],A.shadowRootOptions={mode:"open"},A[j("elementProperties")]=new Map,A[j("finalized")]=new Map,qt?.({ReactiveElement:A}),(K.reactiveElementVersions??=[]).push("2.1.2");var ot=globalThis,gt=n=>n,G=ot.trustedTypes,ft=G?G.createPolicy("lit-html",{createHTML:n=>n}):void 0,xt="$lit$",C=`lit$${Math.random().toFixed(9).slice(2)}$`,At="?"+C,Lt=`<${At}>`,T=document,q=()=>T.createComment(""),L=n=>n===null||typeof n!="object"&&typeof n!="function",at=Array.isArray,Bt=n=>at(n)||typeof n?.[Symbol.iterator]=="function",tt=`[ 	
-\f\r]`,I=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,_t=/-->/g,vt=/>/g,P=RegExp(`>|${tt}(?:([^\\s"'>=/]+)(${tt}*=${tt}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`,"g"),yt=/'/g,$t=/"/g,Et=/^(?:script|style|textarea|title)$/i,lt=n=>(r,...t)=>({_$litType$:n,strings:r,values:t}),h=lt(1),te=lt(2),ee=lt(3),M=Symbol.for("lit-noChange"),f=Symbol.for("lit-nothing"),bt=new WeakMap,R=T.createTreeWalker(T,129);function St(n,r){if(!at(n)||!n.hasOwnProperty("raw"))throw Error("invalid template strings array");return ft!==void 0?ft.createHTML(r):r}var Wt=(n,r)=>{let t=n.length-1,e=[],s,i=r===2?"<svg>":r===3?"<math>":"",o=I;for(let a=0;a<t;a++){let l=n[a],d,g,p=-1,x=0;for(;x<l.length&&(o.lastIndex=x,g=o.exec(l),g!==null);)x=o.lastIndex,o===I?g[1]==="!--"?o=_t:g[1]!==void 0?o=vt:g[2]!==void 0?(Et.test(g[2])&&(s=RegExp("</"+g[2],"g")),o=P):g[3]!==void 0&&(o=P):o===P?g[0]===">"?(o=s??I,p=-1):g[1]===void 0?p=-2:(p=o.lastIndex-g[2].length,d=g[1],o=g[3]===void 0?P:g[3]==='"'?$t:yt):o===$t||o===yt?o=P:o===_t||o===vt?o=I:(o=P,s=void 0);let w=o===P&&n[a+1].startsWith("/>")?" ":"";i+=o===I?l+Lt:p>=0?(e.push(d),l.slice(0,p)+xt+l.slice(p)+C+w):l+C+(p===-2?a:w)}return[St(n,i+(n[t]||"<?>")+(r===2?"</svg>":r===3?"</math>":"")),e]},B=class n{constructor({strings:r,_$litType$:t},e){let s;this.parts=[];let i=0,o=0,a=r.length-1,l=this.parts,[d,g]=Wt(r,t);if(this.el=n.createElement(d,e),R.currentNode=this.el.content,t===2||t===3){let p=this.el.content.firstChild;p.replaceWith(...p.childNodes)}for(;(s=R.nextNode())!==null&&l.length<a;){if(s.nodeType===1){if(s.hasAttributes())for(let p of s.getAttributeNames())if(p.endsWith(xt)){let x=g[o++],w=s.getAttribute(p).split(C),F=/([.?@])?(.*)/.exec(x);l.push({type:1,index:i,name:F[2],strings:w,ctor:F[1]==="."?rt:F[1]==="?"?st:F[1]==="@"?it:N}),s.removeAttribute(p)}else p.startsWith(C)&&(l.push({type:6,index:i}),s.removeAttribute(p));if(Et.test(s.tagName)){let p=s.textContent.split(C),x=p.length-1;if(x>0){s.textContent=G?G.emptyScript:"";for(let w=0;w<x;w++)s.append(p[w],q()),R.nextNode(),l.push({type:2,index:++i});s.append(p[x],q())}}}else if(s.nodeType===8)if(s.data===At)l.push({type:2,index:i});else{let p=-1;for(;(p=s.data.indexOf(C,p+1))!==-1;)l.push({type:7,index:i}),p+=C.length-1}i++}}static createElement(r,t){let e=T.createElement("template");return e.innerHTML=r,e}};function H(n,r,t=n,e){if(r===M)return r;let s=e!==void 0?t._$Co?.[e]:t._$Cl,i=L(r)?void 0:r._$litDirective$;return s?.constructor!==i&&(s?._$AO?.(!1),i===void 0?s=void 0:(s=new i(n),s._$AT(n,t,e)),e!==void 0?(t._$Co??=[])[e]=s:t._$Cl=s),s!==void 0&&(r=H(n,s._$AS(n,r.values),s,e)),r}var et=class{constructor(r,t){this._$AV=[],this._$AN=void 0,this._$AD=r,this._$AM=t}get parentNode(){return this._$AM.parentNode}get _$AU(){return this._$AM._$AU}u(r){let{el:{content:t},parts:e}=this._$AD,s=(r?.creationScope??T).importNode(t,!0);R.currentNode=s;let i=R.nextNode(),o=0,a=0,l=e[0];for(;l!==void 0;){if(o===l.index){let d;l.type===2?d=new W(i,i.nextSibling,this,r):l.type===1?d=new l.ctor(i,l.name,l.strings,this,r):l.type===6&&(d=new nt(i,this,r)),this._$AV.push(d),l=e[++a]}o!==l?.index&&(i=R.nextNode(),o++)}return R.currentNode=T,s}p(r){let t=0;for(let e of this._$AV)e!==void 0&&(e.strings!==void 0?(e._$AI(r,e,t),t+=e.strings.length-2):e._$AI(r[t])),t++}},W=class n{get _$AU(){return this._$AM?._$AU??this._$Cv}constructor(r,t,e,s){this.type=2,this._$AH=f,this._$AN=void 0,this._$AA=r,this._$AB=t,this._$AM=e,this.options=s,this._$Cv=s?.isConnected??!0}get parentNode(){let r=this._$AA.parentNode,t=this._$AM;return t!==void 0&&r?.nodeType===11&&(r=t.parentNode),r}get startNode(){return this._$AA}get endNode(){return this._$AB}_$AI(r,t=this){r=H(this,r,t),L(r)?r===f||r==null||r===""?(this._$AH!==f&&this._$AR(),this._$AH=f):r!==this._$AH&&r!==M&&this._(r):r._$litType$!==void 0?this.$(r):r.nodeType!==void 0?this.T(r):Bt(r)?this.k(r):this._(r)}O(r){return this._$AA.parentNode.insertBefore(r,this._$AB)}T(r){this._$AH!==r&&(this._$AR(),this._$AH=this.O(r))}_(r){this._$AH!==f&&L(this._$AH)?this._$AA.nextSibling.data=r:this.T(T.createTextNode(r)),this._$AH=r}$(r){let{values:t,_$litType$:e}=r,s=typeof e=="number"?this._$AC(r):(e.el===void 0&&(e.el=B.createElement(St(e.h,e.h[0]),this.options)),e);if(this._$AH?._$AD===s)this._$AH.p(t);else{let i=new et(s,this),o=i.u(this.options);i.p(t),this.T(o),this._$AH=i}}_$AC(r){let t=bt.get(r.strings);return t===void 0&&bt.set(r.strings,t=new B(r)),t}k(r){at(this._$AH)||(this._$AH=[],this._$AR());let t=this._$AH,e,s=0;for(let i of r)s===t.length?t.push(e=new n(this.O(q()),this.O(q()),this,this.options)):e=t[s],e._$AI(i),s++;s<t.length&&(this._$AR(e&&e._$AB.nextSibling,s),t.length=s)}_$AR(r=this._$AA.nextSibling,t){for(this._$AP?.(!1,!0,t);r!==this._$AB;){let e=gt(r).nextSibling;gt(r).remove(),r=e}}setConnected(r){this._$AM===void 0&&(this._$Cv=r,this._$AP?.(r))}},N=class{get tagName(){return this.element.tagName}get _$AU(){return this._$AM._$AU}constructor(r,t,e,s,i){this.type=1,this._$AH=f,this._$AN=void 0,this.element=r,this.name=t,this._$AM=s,this.options=i,e.length>2||e[0]!==""||e[1]!==""?(this._$AH=Array(e.length-1).fill(new String),this.strings=e):this._$AH=f}_$AI(r,t=this,e,s){let i=this.strings,o=!1;if(i===void 0)r=H(this,r,t,0),o=!L(r)||r!==this._$AH&&r!==M,o&&(this._$AH=r);else{let a=r,l,d;for(r=i[0],l=0;l<i.length-1;l++)d=H(this,a[e+l],t,l),d===M&&(d=this._$AH[l]),o||=!L(d)||d!==this._$AH[l],d===f?r=f:r!==f&&(r+=(d??"")+i[l+1]),this._$AH[l]=d}o&&!s&&this.j(r)}j(r){r===f?this.element.removeAttribute(this.name):this.element.setAttribute(this.name,r??"")}},rt=class extends N{constructor(){super(...arguments),this.type=3}j(r){this.element[this.name]=r===f?void 0:r}},st=class extends N{constructor(){super(...arguments),this.type=4}j(r){this.element.toggleAttribute(this.name,!!r&&r!==f)}},it=class extends N{constructor(r,t,e,s,i){super(r,t,e,s,i),this.type=5}_$AI(r,t=this){if((r=H(this,r,t,0)??f)===M)return;let e=this._$AH,s=r===f&&e!==f||r.capture!==e.capture||r.once!==e.once||r.passive!==e.passive,i=r!==f&&(e===f||s);s&&this.element.removeEventListener(this.name,this,e),i&&this.element.addEventListener(this.name,this,r),this._$AH=r}handleEvent(r){typeof this._$AH=="function"?this._$AH.call(this.options?.host??this.element,r):this._$AH.handleEvent(r)}},nt=class{constructor(r,t,e){this.element=r,this.type=6,this._$AN=void 0,this._$AM=t,this.options=e}get _$AU(){return this._$AM._$AU}_$AI(r){H(this,r)}};var Ft=ot.litHtmlPolyfillSupport;Ft?.(B,W),(ot.litHtmlVersions??=[]).push("3.3.2");var wt=(n,r,t)=>{let e=t?.renderBefore??r,s=e._$litPart$;if(s===void 0){let i=t?.renderBefore??null;e._$litPart$=s=new W(r.insertBefore(q(),i),i,void 0,t??{})}return s._$AI(n),s};var ct=globalThis,m=class extends A{constructor(){super(...arguments),this.renderOptions={host:this},this._$Do=void 0}createRenderRoot(){let r=super.createRenderRoot();return this.renderOptions.renderBefore??=r.firstChild,r}update(r){let t=this.render();this.hasUpdated||(this.renderOptions.isConnected=this.isConnected),super.update(r),this._$Do=wt(t,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this._$Do?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this._$Do?.setConnected(!1)}render(){return M}};m._$litElement$=!0,m.finalized=!0,ct.litElementHydrateSupport?.({LitElement:m});var Jt=ct.litElementPolyfillSupport;Jt?.({LitElement:m});(ct.litElementVersions??=[]).push("4.2.2");var y=n=>(r,t)=>{t!==void 0?t.addInitializer(()=>{customElements.define(n,r)}):customElements.define(n,r)};var Vt={attribute:!0,type:String,converter:z,reflect:!1,hasChanged:Z},Kt=(n=Vt,r,t)=>{let{kind:e,metadata:s}=t,i=globalThis.litPropertyMetadata.get(s);if(i===void 0&&globalThis.litPropertyMetadata.set(s,i=new Map),e==="setter"&&((n=Object.create(n)).wrapped=!0),i.set(t.name,n),e==="accessor"){let{name:o}=t;return{set(a){let l=r.get.call(this);r.set.call(this,a),this.requestUpdate(o,l,n,!0,a)},init(a){return a!==void 0&&this.C(o,void 0,n,a),a}}}if(e==="setter"){let{name:o}=t;return function(a){let l=this[o];r.call(this,a),this.requestUpdate(o,l,n,!0,a)}}throw Error("Unsupported decorator location: "+e)};function u(n){return(r,t)=>typeof t=="object"?Kt(n,r,t):((e,s,i)=>{let o=s.hasOwnProperty(i);return s.constructor.createProperty(i,e),o?Object.getOwnPropertyDescriptor(s,i):void 0})(n,r,t)}function _(n){return u({...n,state:!0,attribute:!1})}async function Ct(n){return n.callWS({type:"ambience/areas/list"})}async function kt(n,r){return n.callWS({type:"ambience/area/get",area_id:r})}async function Pt(n,r,t){return n.callWS({type:"ambience/area/save",area_id:r,config:t})}async function Rt(n){return n.callWS({type:"ambience/matchers/list"})}async function Tt(n){return n.callWS({type:"ambience/actions/list"})}var E=class extends m{constructor(){super(...arguments);this.rules=[];this.autoSort=!0;this._dragFrom=null;this._dragOver=null}_emit(t,e){this.dispatchEvent(new CustomEvent(t,{detail:e,bubbles:!0,composed:!0}))}_summary(t){let e=Object.keys(t.when).filter(o=>t.when[o]!=null),s=e.length===0?"any":e.map(o=>`${o}=${String(t.when[o])}`).join(", "),i=t.actions.length;return`${s} \xB7 ${i} action${i===1?"":"s"}`}_onDragStart(t){this._dragFrom=t}_onDragOver(t,e){this._dragFrom===null||e===this._dragFrom||(t.preventDefault(),this._dragOver=e)}_onDrop(t){let e=this._dragFrom;this._dragFrom=null,this._dragOver=null,!(e===null||e===t)&&this._emit("reorder-rules",{from:e,to:t})}_onDragEnd(){this._dragFrom=null,this._dragOver=null}_confirmDelete(t,e){let s=e.name||`Rule ${t+1}`;window.confirm(`Delete "${s}"?`)&&this._emit("delete-rule",{index:t})}render(){return this.rules.length===0?h`
+var Tt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t,e)=>{for(var s=e>1?void 0:e?Ot(r,t):r,i=n.length-1,o;i>=0;i--)(o=n[i])&&(s=(e?o(r,t,s):o(s))||s);return e&&s&&Tt(r,t,s),s};var K=globalThis,J=K.ShadowRoot&&(K.ShadyCSS===void 0||K.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,X=Symbol(),dt=new WeakMap,D=class{constructor(r,t,e){if(this._$cssResult$=!0,e!==X)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=r,this.t=t}get styleSheet(){let r=this.o,t=this.t;if(J&&r===void 0){let e=t!==void 0&&t.length===1;e&&(r=dt.get(t)),r===void 0&&((this.o=r=new CSSStyleSheet).replaceSync(this.cssText),e&&dt.set(t,r))}return r}toString(){return this.cssText}},ht=n=>new D(typeof n=="string"?n:n+"",void 0,X),v=(n,...r)=>{let t=n.length===1?n[0]:r.reduce((e,s,i)=>e+(o=>{if(o._$cssResult$===!0)return o.cssText;if(typeof o=="number")return o;throw Error("Value passed to 'css' function must be a 'css' function result: "+o+". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.")})(s)+n[i+1],n[0]);return new D(t,n,X)},ut=(n,r)=>{if(J)n.adoptedStyleSheets=r.map(t=>t instanceof CSSStyleSheet?t:t.styleSheet);else for(let t of r){let e=document.createElement("style"),s=K.litNonce;s!==void 0&&e.setAttribute("nonce",s),e.textContent=t.cssText,n.appendChild(e)}},Y=J?n=>n:n=>n instanceof CSSStyleSheet?(r=>{let t="";for(let e of r.cssRules)t+=e.cssText;return ht(t)})(n):n;var{is:Ht,defineProperty:Nt,getOwnPropertyDescriptor:Ut,getOwnPropertyNames:Dt,getOwnPropertySymbols:jt,getPrototypeOf:zt}=Object,V=globalThis,pt=V.trustedTypes,It=pt?pt.emptyScript:"",Lt=V.reactiveElementPolyfillSupport,j=(n,r)=>n,z={toAttribute(n,r){switch(r){case Boolean:n=n?It:null;break;case Object:case Array:n=n==null?n:JSON.stringify(n)}return n},fromAttribute(n,r){let t=n;switch(r){case Boolean:t=n!==null;break;case Number:t=n===null?null:Number(n);break;case Object:case Array:try{t=JSON.parse(n)}catch{t=null}}return t}},Z=(n,r)=>!Ht(n,r),mt={attribute:!0,type:String,converter:z,reflect:!1,useDefault:!1,hasChanged:Z};Symbol.metadata??=Symbol("metadata"),V.litPropertyMetadata??=new WeakMap;var E=class extends HTMLElement{static addInitializer(r){this._$Ei(),(this.l??=[]).push(r)}static get observedAttributes(){return this.finalize(),this._$Eh&&[...this._$Eh.keys()]}static createProperty(r,t=mt){if(t.state&&(t.attribute=!1),this._$Ei(),this.prototype.hasOwnProperty(r)&&((t=Object.create(t)).wrapped=!0),this.elementProperties.set(r,t),!t.noAccessor){let e=Symbol(),s=this.getPropertyDescriptor(r,e,t);s!==void 0&&Nt(this.prototype,r,s)}}static getPropertyDescriptor(r,t,e){let{get:s,set:i}=Ut(this.prototype,r)??{get(){return this[t]},set(o){this[t]=o}};return{get:s,set(o){let a=s?.call(this);i?.call(this,o),this.requestUpdate(r,a,e)},configurable:!0,enumerable:!0}}static getPropertyOptions(r){return this.elementProperties.get(r)??mt}static _$Ei(){if(this.hasOwnProperty(j("elementProperties")))return;let r=zt(this);r.finalize(),r.l!==void 0&&(this.l=[...r.l]),this.elementProperties=new Map(r.elementProperties)}static finalize(){if(this.hasOwnProperty(j("finalized")))return;if(this.finalized=!0,this._$Ei(),this.hasOwnProperty(j("properties"))){let t=this.properties,e=[...Dt(t),...jt(t)];for(let s of e)this.createProperty(s,t[s])}let r=this[Symbol.metadata];if(r!==null){let t=litPropertyMetadata.get(r);if(t!==void 0)for(let[e,s]of t)this.elementProperties.set(e,s)}this._$Eh=new Map;for(let[t,e]of this.elementProperties){let s=this._$Eu(t,e);s!==void 0&&this._$Eh.set(s,t)}this.elementStyles=this.finalizeStyles(this.styles)}static finalizeStyles(r){let t=[];if(Array.isArray(r)){let e=new Set(r.flat(1/0).reverse());for(let s of e)t.unshift(Y(s))}else r!==void 0&&t.push(Y(r));return t}static _$Eu(r,t){let e=t.attribute;return e===!1?void 0:typeof e=="string"?e:typeof r=="string"?r.toLowerCase():void 0}constructor(){super(),this._$Ep=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this._$Em=null,this._$Ev()}_$Ev(){this._$ES=new Promise(r=>this.enableUpdating=r),this._$AL=new Map,this._$E_(),this.requestUpdate(),this.constructor.l?.forEach(r=>r(this))}addController(r){(this._$EO??=new Set).add(r),this.renderRoot!==void 0&&this.isConnected&&r.hostConnected?.()}removeController(r){this._$EO?.delete(r)}_$E_(){let r=new Map,t=this.constructor.elementProperties;for(let e of t.keys())this.hasOwnProperty(e)&&(r.set(e,this[e]),delete this[e]);r.size>0&&(this._$Ep=r)}createRenderRoot(){let r=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return ut(r,this.constructor.elementStyles),r}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this._$EO?.forEach(r=>r.hostConnected?.())}enableUpdating(r){}disconnectedCallback(){this._$EO?.forEach(r=>r.hostDisconnected?.())}attributeChangedCallback(r,t,e){this._$AK(r,e)}_$ET(r,t){let e=this.constructor.elementProperties.get(r),s=this.constructor._$Eu(r,e);if(s!==void 0&&e.reflect===!0){let i=(e.converter?.toAttribute!==void 0?e.converter:z).toAttribute(t,e.type);this._$Em=r,i==null?this.removeAttribute(s):this.setAttribute(s,i),this._$Em=null}}_$AK(r,t){let e=this.constructor,s=e._$Eh.get(r);if(s!==void 0&&this._$Em!==s){let i=e.getPropertyOptions(s),o=typeof i.converter=="function"?{fromAttribute:i.converter}:i.converter?.fromAttribute!==void 0?i.converter:z;this._$Em=s;let a=o.fromAttribute(t,i.type);this[s]=a??this._$Ej?.get(s)??a,this._$Em=null}}requestUpdate(r,t,e,s=!1,i){if(r!==void 0){let o=this.constructor;if(s===!1&&(i=this[r]),e??=o.getPropertyOptions(r),!((e.hasChanged??Z)(i,t)||e.useDefault&&e.reflect&&i===this._$Ej?.get(r)&&!this.hasAttribute(o._$Eu(r,e))))return;this.C(r,t,e)}this.isUpdatePending===!1&&(this._$ES=this._$EP())}C(r,t,{useDefault:e,reflect:s,wrapped:i},o){e&&!(this._$Ej??=new Map).has(r)&&(this._$Ej.set(r,o??t??this[r]),i!==!0||o!==void 0)||(this._$AL.has(r)||(this.hasUpdated||e||(t=void 0),this._$AL.set(r,t)),s===!0&&this._$Em!==r&&(this._$Eq??=new Set).add(r))}async _$EP(){this.isUpdatePending=!0;try{await this._$ES}catch(t){Promise.reject(t)}let r=this.scheduleUpdate();return r!=null&&await r,!this.isUpdatePending}scheduleUpdate(){return this.performUpdate()}performUpdate(){if(!this.isUpdatePending)return;if(!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),this._$Ep){for(let[s,i]of this._$Ep)this[s]=i;this._$Ep=void 0}let e=this.constructor.elementProperties;if(e.size>0)for(let[s,i]of e){let{wrapped:o}=i,a=this[s];o!==!0||this._$AL.has(s)||a===void 0||this.C(s,void 0,i,a)}}let r=!1,t=this._$AL;try{r=this.shouldUpdate(t),r?(this.willUpdate(t),this._$EO?.forEach(e=>e.hostUpdate?.()),this.update(t)):this._$EM()}catch(e){throw r=!1,this._$EM(),e}r&&this._$AE(t)}willUpdate(r){}_$AE(r){this._$EO?.forEach(t=>t.hostUpdated?.()),this.hasUpdated||(this.hasUpdated=!0,this.firstUpdated(r)),this.updated(r)}_$EM(){this._$AL=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this._$ES}shouldUpdate(r){return!0}update(r){this._$Eq&&=this._$Eq.forEach(t=>this._$ET(t,this[t])),this._$EM()}updated(r){}firstUpdated(r){}};E.elementStyles=[],E.shadowRootOptions={mode:"open"},E[j("elementProperties")]=new Map,E[j("finalized")]=new Map,Lt?.({ReactiveElement:E}),(V.reactiveElementVersions??=[]).push("2.1.2");var ot=globalThis,gt=n=>n,G=ot.trustedTypes,ft=G?G.createPolicy("lit-html",{createHTML:n=>n}):void 0,xt="$lit$",C=`lit$${Math.random().toFixed(9).slice(2)}$`,Et="?"+C,qt=`<${Et}>`,T=document,L=()=>T.createComment(""),q=n=>n===null||typeof n!="object"&&typeof n!="function",at=Array.isArray,Bt=n=>at(n)||typeof n?.[Symbol.iterator]=="function",tt=`[ 	
+\f\r]`,I=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,_t=/-->/g,vt=/>/g,M=RegExp(`>|${tt}(?:([^\\s"'>=/]+)(${tt}*=${tt}*(?:[^ 	
+\f\r"'\`<>=]|("|')|))|$)`,"g"),yt=/'/g,$t=/"/g,At=/^(?:script|style|textarea|title)$/i,lt=n=>(r,...t)=>({_$litType$:n,strings:r,values:t}),d=lt(1),te=lt(2),ee=lt(3),O=Symbol.for("lit-noChange"),f=Symbol.for("lit-nothing"),bt=new WeakMap,R=T.createTreeWalker(T,129);function wt(n,r){if(!at(n)||!n.hasOwnProperty("raw"))throw Error("invalid template strings array");return ft!==void 0?ft.createHTML(r):r}var Wt=(n,r)=>{let t=n.length-1,e=[],s,i=r===2?"<svg>":r===3?"<math>":"",o=I;for(let a=0;a<t;a++){let l=n[a],h,g,p=-1,x=0;for(;x<l.length&&(o.lastIndex=x,g=o.exec(l),g!==null);)x=o.lastIndex,o===I?g[1]==="!--"?o=_t:g[1]!==void 0?o=vt:g[2]!==void 0?(At.test(g[2])&&(s=RegExp("</"+g[2],"g")),o=M):g[3]!==void 0&&(o=M):o===M?g[0]===">"?(o=s??I,p=-1):g[1]===void 0?p=-2:(p=o.lastIndex-g[2].length,h=g[1],o=g[3]===void 0?M:g[3]==='"'?$t:yt):o===$t||o===yt?o=M:o===_t||o===vt?o=I:(o=M,s=void 0);let S=o===M&&n[a+1].startsWith("/>")?" ":"";i+=o===I?l+qt:p>=0?(e.push(h),l.slice(0,p)+xt+l.slice(p)+C+S):l+C+(p===-2?a:S)}return[wt(n,i+(n[t]||"<?>")+(r===2?"</svg>":r===3?"</math>":"")),e]},B=class n{constructor({strings:r,_$litType$:t},e){let s;this.parts=[];let i=0,o=0,a=r.length-1,l=this.parts,[h,g]=Wt(r,t);if(this.el=n.createElement(h,e),R.currentNode=this.el.content,t===2||t===3){let p=this.el.content.firstChild;p.replaceWith(...p.childNodes)}for(;(s=R.nextNode())!==null&&l.length<a;){if(s.nodeType===1){if(s.hasAttributes())for(let p of s.getAttributeNames())if(p.endsWith(xt)){let x=g[o++],S=s.getAttribute(p).split(C),F=/([.?@])?(.*)/.exec(x);l.push({type:1,index:i,name:F[2],strings:S,ctor:F[1]==="."?rt:F[1]==="?"?st:F[1]==="@"?it:N}),s.removeAttribute(p)}else p.startsWith(C)&&(l.push({type:6,index:i}),s.removeAttribute(p));if(At.test(s.tagName)){let p=s.textContent.split(C),x=p.length-1;if(x>0){s.textContent=G?G.emptyScript:"";for(let S=0;S<x;S++)s.append(p[S],L()),R.nextNode(),l.push({type:2,index:++i});s.append(p[x],L())}}}else if(s.nodeType===8)if(s.data===Et)l.push({type:2,index:i});else{let p=-1;for(;(p=s.data.indexOf(C,p+1))!==-1;)l.push({type:7,index:i}),p+=C.length-1}i++}}static createElement(r,t){let e=T.createElement("template");return e.innerHTML=r,e}};function H(n,r,t=n,e){if(r===O)return r;let s=e!==void 0?t._$Co?.[e]:t._$Cl,i=q(r)?void 0:r._$litDirective$;return s?.constructor!==i&&(s?._$AO?.(!1),i===void 0?s=void 0:(s=new i(n),s._$AT(n,t,e)),e!==void 0?(t._$Co??=[])[e]=s:t._$Cl=s),s!==void 0&&(r=H(n,s._$AS(n,r.values),s,e)),r}var et=class{constructor(r,t){this._$AV=[],this._$AN=void 0,this._$AD=r,this._$AM=t}get parentNode(){return this._$AM.parentNode}get _$AU(){return this._$AM._$AU}u(r){let{el:{content:t},parts:e}=this._$AD,s=(r?.creationScope??T).importNode(t,!0);R.currentNode=s;let i=R.nextNode(),o=0,a=0,l=e[0];for(;l!==void 0;){if(o===l.index){let h;l.type===2?h=new W(i,i.nextSibling,this,r):l.type===1?h=new l.ctor(i,l.name,l.strings,this,r):l.type===6&&(h=new nt(i,this,r)),this._$AV.push(h),l=e[++a]}o!==l?.index&&(i=R.nextNode(),o++)}return R.currentNode=T,s}p(r){let t=0;for(let e of this._$AV)e!==void 0&&(e.strings!==void 0?(e._$AI(r,e,t),t+=e.strings.length-2):e._$AI(r[t])),t++}},W=class n{get _$AU(){return this._$AM?._$AU??this._$Cv}constructor(r,t,e,s){this.type=2,this._$AH=f,this._$AN=void 0,this._$AA=r,this._$AB=t,this._$AM=e,this.options=s,this._$Cv=s?.isConnected??!0}get parentNode(){let r=this._$AA.parentNode,t=this._$AM;return t!==void 0&&r?.nodeType===11&&(r=t.parentNode),r}get startNode(){return this._$AA}get endNode(){return this._$AB}_$AI(r,t=this){r=H(this,r,t),q(r)?r===f||r==null||r===""?(this._$AH!==f&&this._$AR(),this._$AH=f):r!==this._$AH&&r!==O&&this._(r):r._$litType$!==void 0?this.$(r):r.nodeType!==void 0?this.T(r):Bt(r)?this.k(r):this._(r)}O(r){return this._$AA.parentNode.insertBefore(r,this._$AB)}T(r){this._$AH!==r&&(this._$AR(),this._$AH=this.O(r))}_(r){this._$AH!==f&&q(this._$AH)?this._$AA.nextSibling.data=r:this.T(T.createTextNode(r)),this._$AH=r}$(r){let{values:t,_$litType$:e}=r,s=typeof e=="number"?this._$AC(r):(e.el===void 0&&(e.el=B.createElement(wt(e.h,e.h[0]),this.options)),e);if(this._$AH?._$AD===s)this._$AH.p(t);else{let i=new et(s,this),o=i.u(this.options);i.p(t),this.T(o),this._$AH=i}}_$AC(r){let t=bt.get(r.strings);return t===void 0&&bt.set(r.strings,t=new B(r)),t}k(r){at(this._$AH)||(this._$AH=[],this._$AR());let t=this._$AH,e,s=0;for(let i of r)s===t.length?t.push(e=new n(this.O(L()),this.O(L()),this,this.options)):e=t[s],e._$AI(i),s++;s<t.length&&(this._$AR(e&&e._$AB.nextSibling,s),t.length=s)}_$AR(r=this._$AA.nextSibling,t){for(this._$AP?.(!1,!0,t);r!==this._$AB;){let e=gt(r).nextSibling;gt(r).remove(),r=e}}setConnected(r){this._$AM===void 0&&(this._$Cv=r,this._$AP?.(r))}},N=class{get tagName(){return this.element.tagName}get _$AU(){return this._$AM._$AU}constructor(r,t,e,s,i){this.type=1,this._$AH=f,this._$AN=void 0,this.element=r,this.name=t,this._$AM=s,this.options=i,e.length>2||e[0]!==""||e[1]!==""?(this._$AH=Array(e.length-1).fill(new String),this.strings=e):this._$AH=f}_$AI(r,t=this,e,s){let i=this.strings,o=!1;if(i===void 0)r=H(this,r,t,0),o=!q(r)||r!==this._$AH&&r!==O,o&&(this._$AH=r);else{let a=r,l,h;for(r=i[0],l=0;l<i.length-1;l++)h=H(this,a[e+l],t,l),h===O&&(h=this._$AH[l]),o||=!q(h)||h!==this._$AH[l],h===f?r=f:r!==f&&(r+=(h??"")+i[l+1]),this._$AH[l]=h}o&&!s&&this.j(r)}j(r){r===f?this.element.removeAttribute(this.name):this.element.setAttribute(this.name,r??"")}},rt=class extends N{constructor(){super(...arguments),this.type=3}j(r){this.element[this.name]=r===f?void 0:r}},st=class extends N{constructor(){super(...arguments),this.type=4}j(r){this.element.toggleAttribute(this.name,!!r&&r!==f)}},it=class extends N{constructor(r,t,e,s,i){super(r,t,e,s,i),this.type=5}_$AI(r,t=this){if((r=H(this,r,t,0)??f)===O)return;let e=this._$AH,s=r===f&&e!==f||r.capture!==e.capture||r.once!==e.once||r.passive!==e.passive,i=r!==f&&(e===f||s);s&&this.element.removeEventListener(this.name,this,e),i&&this.element.addEventListener(this.name,this,r),this._$AH=r}handleEvent(r){typeof this._$AH=="function"?this._$AH.call(this.options?.host??this.element,r):this._$AH.handleEvent(r)}},nt=class{constructor(r,t,e){this.element=r,this.type=6,this._$AN=void 0,this._$AM=t,this.options=e}get _$AU(){return this._$AM._$AU}_$AI(r){H(this,r)}};var Ft=ot.litHtmlPolyfillSupport;Ft?.(B,W),(ot.litHtmlVersions??=[]).push("3.3.2");var St=(n,r,t)=>{let e=t?.renderBefore??r,s=e._$litPart$;if(s===void 0){let i=t?.renderBefore??null;e._$litPart$=s=new W(r.insertBefore(L(),i),i,void 0,t??{})}return s._$AI(n),s};var ct=globalThis,m=class extends E{constructor(){super(...arguments),this.renderOptions={host:this},this._$Do=void 0}createRenderRoot(){let r=super.createRenderRoot();return this.renderOptions.renderBefore??=r.firstChild,r}update(r){let t=this.render();this.hasUpdated||(this.renderOptions.isConnected=this.isConnected),super.update(r),this._$Do=St(t,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this._$Do?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this._$Do?.setConnected(!1)}render(){return O}};m._$litElement$=!0,m.finalized=!0,ct.litElementHydrateSupport?.({LitElement:m});var Kt=ct.litElementPolyfillSupport;Kt?.({LitElement:m});(ct.litElementVersions??=[]).push("4.2.2");var y=n=>(r,t)=>{t!==void 0?t.addInitializer(()=>{customElements.define(n,r)}):customElements.define(n,r)};var Jt={attribute:!0,type:String,converter:z,reflect:!1,hasChanged:Z},Vt=(n=Jt,r,t)=>{let{kind:e,metadata:s}=t,i=globalThis.litPropertyMetadata.get(s);if(i===void 0&&globalThis.litPropertyMetadata.set(s,i=new Map),e==="setter"&&((n=Object.create(n)).wrapped=!0),i.set(t.name,n),e==="accessor"){let{name:o}=t;return{set(a){let l=r.get.call(this);r.set.call(this,a),this.requestUpdate(o,l,n,!0,a)},init(a){return a!==void 0&&this.C(o,void 0,n,a),a}}}if(e==="setter"){let{name:o}=t;return function(a){let l=this[o];r.call(this,a),this.requestUpdate(o,l,n,!0,a)}}throw Error("Unsupported decorator location: "+e)};function u(n){return(r,t)=>typeof t=="object"?Vt(n,r,t):((e,s,i)=>{let o=s.hasOwnProperty(i);return s.constructor.createProperty(i,e),o?Object.getOwnPropertyDescriptor(s,i):void 0})(n,r,t)}function _(n){return u({...n,state:!0,attribute:!1})}async function Ct(n){return n.callWS({type:"ambience/areas/list"})}async function kt(n,r){return n.callWS({type:"ambience/area/get",area_id:r})}async function Pt(n,r,t){return n.callWS({type:"ambience/area/save",area_id:r,config:t})}async function Mt(n){return n.callWS({type:"ambience/matchers/list"})}async function Rt(n){return n.callWS({type:"ambience/actions/list"})}var A=class extends m{constructor(){super(...arguments);this.rules=[];this.autoSort=!0;this._dragFrom=null;this._dragOver=null}_emit(t,e){this.dispatchEvent(new CustomEvent(t,{detail:e,bubbles:!0,composed:!0}))}_summary(t){let e=Object.keys(t.when).filter(o=>t.when[o]!=null),s=e.length===0?"any":e.map(o=>`${o}=${String(t.when[o])}`).join(", "),i=t.actions.length;return`${s} \xB7 ${i} action${i===1?"":"s"}`}_onDragStart(t){this._dragFrom=t}_onDragOver(t,e){this._dragFrom===null||e===this._dragFrom||(t.preventDefault(),this._dragOver=e)}_onDrop(t){let e=this._dragFrom;this._dragFrom=null,this._dragOver=null,!(e===null||e===t)&&this._emit("reorder-rules",{from:e,to:t})}_onDragEnd(){this._dragFrom=null,this._dragOver=null}_confirmDelete(t,e){let s=e.name||`Rule ${t+1}`;window.confirm(`Delete "${s}"?`)&&this._emit("delete-rule",{index:t})}render(){return this.rules.length===0?d`
         <p class="empty">No rules yet.</p>
         <button class="add" @click=${()=>this._emit("add-rule",{})}>
           + Add rule
         </button>
-      `:h`
+      `:d`
       <ul>
-        ${this.rules.map((t,e)=>h`
+        ${this.rules.map((t,e)=>d`
             <li
               class=${this._dragOver===e?"drag-over":""}
               draggable=${!this.autoSort}
@@ -17,7 +17,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
               @drop=${()=>this._onDrop(e)}
               @dragend=${this._onDragEnd}
             >
-              ${this.autoSort?"":h`<span class="handle" title="Drag to reorder">⠿</span>`}
+              ${this.autoSort?"":d`<span class="handle" title="Drag to reorder">⠿</span>`}
               <span class="idx">${e+1}</span>
               <div class="body">
                 <div
@@ -46,7 +46,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
       <button class="add" @click=${()=>this._emit("add-rule",{})}>
         + Add rule
       </button>
-    `}};E.styles=v`
+    `}};A.styles=v`
     :host {
       display: block;
     }
@@ -113,27 +113,111 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
       border-radius: 4px;
       margin-top: 0.5rem;
     }
-  `,c([u({attribute:!1})],E.prototype,"rules",2),c([u({type:Boolean})],E.prototype,"autoSort",2),c([_()],E.prototype,"_dragFrom",2),c([_()],E.prototype,"_dragOver",2),E=c([y("ambience-rules-list")],E);var O=class extends m{constructor(){super(...arguments);this.value=null;this.suggestions=[]}_onValueChanged(t){t.stopPropagation();let e=t.detail.value;this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e===""?null:e},bubbles:!0,composed:!0}))}render(){let t=this.suggestions.map(e=>({value:e,label:e}));return h`
-      <ha-combo-box
-        .items=${t}
-        .value=${this.value??""}
-        item-value-path="value"
-        item-label-path="label"
-        placeholder="(any scene)"
-        allow-custom-value
-        @value-changed=${this._onValueChanged}
-      ></ha-combo-box>
-    `}};O.styles=v`
+  `,c([u({attribute:!1})],A.prototype,"rules",2),c([u({type:Boolean})],A.prototype,"autoSort",2),c([_()],A.prototype,"_dragFrom",2),c([_()],A.prototype,"_dragOver",2),A=c([y("ambience-rules-list")],A);var k=class extends m{constructor(){super(...arguments);this.value=null;this.suggestions=[];this._open=!1;this._onDocMousedown=t=>{this._open&&(t.composedPath().includes(this)||(this._open=!1))}}connectedCallback(){super.connectedCallback(),document.addEventListener("mousedown",this._onDocMousedown)}disconnectedCallback(){super.disconnectedCallback(),document.removeEventListener("mousedown",this._onDocMousedown)}_emit(t){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_onInput(t){let e=t.target.value;this._emit(e.trim()===""?null:e),this._open=!0}_onFocus(){this._open=!0}_onKeyDown(t){t.key==="Escape"&&this._open&&(this._open=!1,t.stopPropagation())}_toggle(t){t.preventDefault(),this._open=!this._open}_select(t,e){e.preventDefault(),this._emit(t),this._open=!1}render(){return d`
+      <div class="control">
+        <input
+          type="text"
+          placeholder="(any scene)"
+          .value=${this.value??""}
+          @input=${this._onInput}
+          @focus=${this._onFocus}
+          @keydown=${this._onKeyDown}
+        />
+        <button
+          class="toggle"
+          type="button"
+          tabindex="-1"
+          aria-label="Show scene suggestions"
+          @mousedown=${this._toggle}
+        >
+          ▼
+        </button>
+      </div>
+      ${this._open?d`
+            <div class="menu" role="listbox">
+              ${this.suggestions.length===0?d`<div class="empty">
+                    No scenes yet — type to create one
+                  </div>`:this.suggestions.map(t=>d`
+                      <div
+                        class="item ${t===this.value?"selected":""}"
+                        role="option"
+                        @mousedown=${e=>this._select(t,e)}
+                      >
+                        ${t}
+                      </div>
+                    `)}
+            </div>
+          `:""}
+    `}};k.styles=v`
     :host {
       display: block;
+      position: relative;
     }
-  `,c([u()],O.prototype,"value",2),c([u({attribute:!1})],O.prototype,"suggestions",2),O=c([y("ambience-scene-combobox")],O);var k=class extends m{constructor(){super(...arguments);this.value=null;this.sceneSuggestions=[]}_emit(t){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_onText(t){let e=t.target.value;this._emit(e.trim()===""?null:e)}render(){return this.matcher.input==="scene_combobox"?h`
+    .control {
+      display: flex;
+      align-items: stretch;
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 4px;
+      background: var(--card-background-color, #fff);
+    }
+    .control:focus-within {
+      border-color: var(--primary-color, #03a9f4);
+    }
+    input {
+      flex: 1;
+      min-width: 0;
+      padding: 0.5rem;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      outline: none;
+      font: inherit;
+    }
+    .toggle {
+      background: transparent;
+      border: 0;
+      padding: 0 0.6rem;
+      cursor: pointer;
+      color: var(--secondary-text-color, #888);
+      font-size: 0.7em;
+      line-height: 1;
+    }
+    .menu {
+      position: absolute;
+      top: calc(100% + 2px);
+      left: 0;
+      right: 0;
+      max-height: 14rem;
+      overflow-y: auto;
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      z-index: 10;
+    }
+    .item {
+      padding: 0.5rem;
+      cursor: pointer;
+    }
+    .item:hover {
+      background: var(--secondary-background-color, #f5f5f5);
+    }
+    .item.selected {
+      background: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+    }
+    .empty {
+      padding: 0.5rem;
+      color: var(--secondary-text-color, #888);
+      font-style: italic;
+    }
+  `,c([u()],k.prototype,"value",2),c([u({attribute:!1})],k.prototype,"suggestions",2),c([_()],k.prototype,"_open",2),k=c([y("ambience-scene-combobox")],k);var P=class extends m{constructor(){super(...arguments);this.value=null;this.sceneSuggestions=[]}_emit(t){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_onText(t){let e=t.target.value;this._emit(e.trim()===""?null:e)}render(){return this.matcher.input==="scene_combobox"?d`
         <ambience-scene-combobox
           .value=${this.value??null}
           .suggestions=${this.sceneSuggestions}
           @value-changed=${t=>{t.stopPropagation(),this._emit(t.detail.value)}}
         ></ambience-scene-combobox>
-      `:h`
+      `:d`
       <input
         type="text"
         placeholder="(any)"
@@ -141,7 +225,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
         @input=${this._onText}
       />
       <div class="help">${this.matcher.predicate_help}</div>
-    `}};k.styles=v`
+    `}};P.styles=v`
     :host {
       display: block;
     }
@@ -160,12 +244,12 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
       white-space: pre-wrap;
       margin-top: 0.25rem;
     }
-  `,c([u({attribute:!1})],k.prototype,"matcher",2),c([u({attribute:!1})],k.prototype,"value",2),c([u({attribute:!1})],k.prototype,"sceneSuggestions",2),k=c([y("ambience-matcher-input")],k);var b=class extends m{constructor(){super(...arguments);this.open=!1;this.rule=null;this.matchers=[];this.sceneSuggestions=[];this.availableActions=[];this._draft=null}willUpdate(t){t.has("rule")&&(this._draft=this.rule?JSON.parse(JSON.stringify(this.rule)):null)}_setName(t){this._draft&&(this._draft={...this._draft,name:t||void 0})}_setPredicate(t,e){if(!this._draft)return;let s={...this._draft.when};e==null?delete s[t]:s[t]=e,this._draft={...this._draft,when:s}}_addActionSlot(){if(!this._draft)return;let t={action:"set_light",targets:{}};this._draft={...this._draft,actions:[...this._draft.actions,t]}}_updateActionAt(t,e){if(!this._draft)return;let s=this._draft.actions.map((i,o)=>o===t?e(i):i);this._draft={...this._draft,actions:s}}_changeActionType(t,e){this._updateActionAt(t,()=>({action:e,targets:{}}))}_deleteAction(t){this._draft&&(this._draft={...this._draft,actions:this._draft.actions.filter((e,s)=>s!==t)})}_addTarget(t){this._updateActionAt(t,e=>{let s=this.availableActions.find(o=>o.name===e.action),i={};return s?.target_params.forEach(o=>{"default"in o&&(i[o.name]=o.default)}),{...e,targets:{...e.targets,"":i}}})}_updateTargetId(t,e,s){this._updateActionAt(t,i=>{if(e===s)return i;let o={...i.targets};return o[s]=o[e],delete o[e],{...i,targets:o}})}_updateTargetParam(t,e,s,i){this._updateActionAt(t,o=>{let a={...o.targets},l={...a[e]??{}},d=i;return s.type==="int"?d=i===""?void 0:parseInt(i,10):s.type==="number"?d=i===""?void 0:parseFloat(i):s.type==="boolean"&&(d=i==="true"),d===void 0?delete l[s.name]:l[s.name]=d,a[e]=l,{...o,targets:a}})}_deleteTarget(t,e){this._updateActionAt(t,s=>{let i={...s.targets};return delete i[e],{...s,targets:i}})}_renderTargets(t,e){let s=this.availableActions.find(a=>a.name===e.action),i=s?.target_params??[],o=Object.entries(e.targets);return o.length===0?h`<p
+  `,c([u({attribute:!1})],P.prototype,"matcher",2),c([u({attribute:!1})],P.prototype,"value",2),c([u({attribute:!1})],P.prototype,"sceneSuggestions",2),P=c([y("ambience-matcher-input")],P);var b=class extends m{constructor(){super(...arguments);this.open=!1;this.rule=null;this.matchers=[];this.sceneSuggestions=[];this.availableActions=[];this._draft=null}willUpdate(t){t.has("rule")&&(this._draft=this.rule?JSON.parse(JSON.stringify(this.rule)):null)}_setName(t){this._draft&&(this._draft={...this._draft,name:t||void 0})}_setPredicate(t,e){if(!this._draft)return;let s={...this._draft.when};e==null?delete s[t]:s[t]=e,this._draft={...this._draft,when:s}}_addActionSlot(){if(!this._draft)return;let t={action:"set_light",targets:{}};this._draft={...this._draft,actions:[...this._draft.actions,t]}}_updateActionAt(t,e){if(!this._draft)return;let s=this._draft.actions.map((i,o)=>o===t?e(i):i);this._draft={...this._draft,actions:s}}_changeActionType(t,e){this._updateActionAt(t,()=>({action:e,targets:{}}))}_deleteAction(t){this._draft&&(this._draft={...this._draft,actions:this._draft.actions.filter((e,s)=>s!==t)})}_addTarget(t){this._updateActionAt(t,e=>{let s=this.availableActions.find(o=>o.name===e.action),i={};return s?.target_params.forEach(o=>{"default"in o&&(i[o.name]=o.default)}),{...e,targets:{...e.targets,"":i}}})}_updateTargetId(t,e,s){this._updateActionAt(t,i=>{if(e===s)return i;let o={...i.targets};return o[s]=o[e],delete o[e],{...i,targets:o}})}_updateTargetParam(t,e,s,i){this._updateActionAt(t,o=>{let a={...o.targets},l={...a[e]??{}},h=i;return s.type==="int"?h=i===""?void 0:parseInt(i,10):s.type==="number"?h=i===""?void 0:parseFloat(i):s.type==="boolean"&&(h=i==="true"),h===void 0?delete l[s.name]:l[s.name]=h,a[e]=l,{...o,targets:a}})}_deleteTarget(t,e){this._updateActionAt(t,s=>{let i={...s.targets};return delete i[e],{...s,targets:i}})}_renderTargets(t,e){let s=this.availableActions.find(a=>a.name===e.action),i=s?.target_params??[],o=Object.entries(e.targets);return o.length===0?d`<p
         style="color: var(--secondary-text-color, #888); margin: 0.5rem 0;"
       >
         No targets yet.
-      </p>`:h`
-      ${o.map(([a,l])=>h`
+      </p>`:d`
+      ${o.map(([a,l])=>d`
           <div
             style="display: grid; grid-template-columns: 1fr ${"1fr ".repeat(i.length)}auto; gap: 0.5rem; margin: 0.5rem 0; align-items: end;"
           >
@@ -175,18 +259,18 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
                 type="text"
                 .value=${a}
                 placeholder="${s?.domains?.[0]??"domain"}.example"
-                @change=${d=>this._updateTargetId(t,a,d.target.value)}
+                @change=${h=>this._updateTargetId(t,a,h.target.value)}
               />
             </div>
-            ${i.map(d=>h`
+            ${i.map(h=>d`
                 <div>
-                  <label>${d.name}${d.required?" *":""}</label>
+                  <label>${h.name}${h.required?" *":""}</label>
                   <input
-                    type=${d.type==="int"||d.type==="number"?"number":"text"}
-                    .value=${String(l[d.name]??"")}
-                    min=${d.min??""}
-                    max=${d.max??""}
-                    @input=${g=>this._updateTargetParam(t,a,d,g.target.value)}
+                    type=${h.type==="int"||h.type==="number"?"number":"text"}
+                    .value=${String(l[h.name]??"")}
+                    min=${h.min??""}
+                    max=${h.max??""}
+                    @input=${g=>this._updateTargetParam(t,a,h,g.target.value)}
                   />
                 </div>
               `)}
@@ -199,7 +283,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
             </button>
           </div>
         `)}
-    `}_save(){this._draft&&this.dispatchEvent(new CustomEvent("save-rule",{detail:this._draft,bubbles:!0,composed:!0}))}_cancel(){this.dispatchEvent(new CustomEvent("cancel-rule",{bubbles:!0,composed:!0}))}render(){return this._draft?h`
+    `}_save(){this._draft&&this.dispatchEvent(new CustomEvent("save-rule",{detail:this._draft,bubbles:!0,composed:!0}))}_cancel(){this.dispatchEvent(new CustomEvent("cancel-rule",{bubbles:!0,composed:!0}))}render(){return this._draft?d`
       <div class="modal">
         <h2>${this._draft.name||"New rule"}</h2>
 
@@ -211,7 +295,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
         />
 
         <h3>When</h3>
-        ${this.matchers.map(t=>h`
+        ${this.matchers.map(t=>d`
             <label>${t.name==="scene"?"Scene":t.name}</label>
             <ambience-matcher-input
               .matcher=${t}
@@ -222,7 +306,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
           `)}
 
         <h3>Actions</h3>
-        ${this._draft.actions.map((t,e)=>h`
+        ${this._draft.actions.map((t,e)=>d`
             <div
               style="border: 1px solid var(--divider-color, #e0e0e0); border-radius: 4px; padding: 0.75rem; margin-bottom: 0.5rem;"
             >
@@ -230,7 +314,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
                 <select
                   @change=${s=>this._changeActionType(e,s.target.value)}
                 >
-                  ${this.availableActions.map(s=>h`
+                  ${this.availableActions.map(s=>d`
                       <option
                         value=${s.name}
                         ?selected=${t.action===s.name}
@@ -267,7 +351,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
           <button class="primary" @click=${this._save}>Save rule</button>
         </div>
       </div>
-    `:h``}};b.styles=v`
+    `:d``}};b.styles=v`
     :host {
       display: none;
       position: fixed;
@@ -334,13 +418,13 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
       color: var(--primary-text-color, inherit);
       border: 1px solid var(--divider-color, #ccc);
     }
-  `,c([u({type:Boolean,reflect:!0})],b.prototype,"open",2),c([u({attribute:!1})],b.prototype,"rule",2),c([u({attribute:!1})],b.prototype,"matchers",2),c([u({attribute:!1})],b.prototype,"sceneSuggestions",2),c([u({attribute:!1})],b.prototype,"availableActions",2),c([_()],b.prototype,"_draft",2),b=c([y("ambience-rule-editor")],b);var S=class extends m{constructor(){super(...arguments);this.open=!1;this.matchers=[];this.selected=[];this._draft=new Set}willUpdate(t){(t.has("selected")||t.has("open"))&&this.open&&(this._draft=new Set(this.selected))}_toggle(t,e){let s=new Set(this._draft);e?s.add(t):s.delete(t),this._draft=s}_apply(){this.dispatchEvent(new CustomEvent("apply-matchers",{detail:{matchers:[...this._draft]},bubbles:!0,composed:!0}))}_cancel(){this.dispatchEvent(new CustomEvent("cancel-matchers",{bubbles:!0,composed:!0}))}render(){let t=this.matchers.filter(e=>e.toggleable);return h`
+  `,c([u({type:Boolean,reflect:!0})],b.prototype,"open",2),c([u({attribute:!1})],b.prototype,"rule",2),c([u({attribute:!1})],b.prototype,"matchers",2),c([u({attribute:!1})],b.prototype,"sceneSuggestions",2),c([u({attribute:!1})],b.prototype,"availableActions",2),c([_()],b.prototype,"_draft",2),b=c([y("ambience-rule-editor")],b);var w=class extends m{constructor(){super(...arguments);this.open=!1;this.matchers=[];this.selected=[];this._draft=new Set}willUpdate(t){(t.has("selected")||t.has("open"))&&this.open&&(this._draft=new Set(this.selected))}_toggle(t,e){let s=new Set(this._draft);e?s.add(t):s.delete(t),this._draft=s}_apply(){this.dispatchEvent(new CustomEvent("apply-matchers",{detail:{matchers:[...this._draft]},bubbles:!0,composed:!0}))}_cancel(){this.dispatchEvent(new CustomEvent("cancel-matchers",{bubbles:!0,composed:!0}))}render(){let t=this.matchers.filter(e=>e.toggleable);return d`
       <div class="modal">
         <h2>Matchers</h2>
         <p class="intro">
           Select which matchers can be used in this area's rule predicates.
         </p>
-        ${t.map(e=>h`
+        ${t.map(e=>d`
             <label class="matcher-row">
               <input
                 type="checkbox"
@@ -359,7 +443,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
           <button class="primary" @click=${this._apply}>Apply</button>
         </div>
       </div>
-    `}};S.styles=v`
+    `}};w.styles=v`
     :host {
       display: none;
       position: fixed;
@@ -435,9 +519,9 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
       color: var(--primary-text-color, inherit);
       border: 1px solid var(--divider-color, #ccc);
     }
-  `,c([u({type:Boolean,reflect:!0})],S.prototype,"open",2),c([u({attribute:!1})],S.prototype,"matchers",2),c([u({attribute:!1})],S.prototype,"selected",2),c([_()],S.prototype,"_draft",2),S=c([y("ambience-matchers-modal")],S);var $=class extends m{constructor(){super(...arguments);this._areas=[];this._matchers=[];this._actions=[];this._configs=new Map;this._expanded=new Set;this._error="";this._editing=null;this._matchersModalArea=null}async connectedCallback(){super.connectedCallback(),await this._loadStatic(),await this._refreshAreas(),await this._subscribe()}disconnectedCallback(){super.disconnectedCallback(),this._unsub?.(),this._unsub=void 0}async _loadStatic(){try{let[t,e]=await Promise.all([Rt(this.hass),Tt(this.hass)]);if(!this.isConnected)return;this._matchers=t,this._actions=e}catch(t){this._error=t.message||String(t)}}async _refreshAreas(){try{let t=await Ct(this.hass),e=new Map;if(await Promise.all(t.map(async s=>{e.set(s.area_id,this._normalize(await kt(this.hass,s.area_id)))})),!this.isConnected)return;this._areas=t,this._configs=e}catch(t){this._error=t.message||String(t)}}_normalize(t){return{matchers:t.matchers??[],rules:t.rules??[],auto_sort:t.auto_sort??!0}}async _subscribe(){let t=await this.hass.connection.subscribeEvents(e=>{if(e.data.action==="remove"){let s=e.data.area_id,i=new Set(this._expanded);i.delete(s),this._expanded=i,this._editing?.areaId===s&&(this._editing=null),this._matchersModalArea===s&&(this._matchersModalArea=null)}this._refreshAreas()},"area_registry_updated");this.isConnected?this._unsub=t:t()}_setConfig(t,e){let s=new Map(this._configs);s.set(t,e),this._configs=s}async _mutate(t,e){let s=this._configs.get(t);this._setConfig(t,e),this._error="";try{let{config:i}=await Pt(this.hass,t,e);this._setConfig(t,this._normalize(i))}catch(i){s&&this._setConfig(t,s),this._error=i.message||String(i)}}_toggleExpand(t){let e=new Set(this._expanded);e.has(t)?e.delete(t):e.add(t),this._expanded=e}_openMatchersModal(t){this._matchersModalArea=t}_applyMatchers(t){let e=this._matchersModalArea;if(this._matchersModalArea=null,!e)return;let s=this._configs.get(e);s&&this._mutate(e,{...s,matchers:t.detail.matchers})}_toggleAutoSort(t,e){let s=this._configs.get(t);s&&this._mutate(t,{...s,auto_sort:e})}_addRule(t){let e=this._configs.get(t);e&&(this._editing={areaId:t,index:e.rules.length,isNew:!0})}_editRule(t,e){this._editing={areaId:t,index:e.detail.index,isNew:!1}}_duplicateRule(t,e){let s=this._configs.get(t);if(!s)return;let i=s.rules[e.detail.index];if(!i)return;let o=JSON.parse(JSON.stringify(i)),a=[...s.rules];a.splice(e.detail.index+1,0,o),this._mutate(t,{...s,rules:a})}_deleteRule(t,e){let s=this._configs.get(t);if(!s)return;let i=s.rules.filter((o,a)=>a!==e.detail.index);this._mutate(t,{...s,rules:i})}_reorderRules(t,e){let s=this._configs.get(t);if(!s)return;let{from:i,to:o}=e.detail,a=[...s.rules],[l]=a.splice(i,1);a.splice(o,0,l),this._mutate(t,{...s,rules:a})}_saveRule(t){let e=this._editing;if(this._editing=null,!e)return;let s=this._configs.get(e.areaId);if(!s)return;let i=[...s.rules];e.isNew?i.push(t.detail):i[e.index]=t.detail,this._mutate(e.areaId,{...s,rules:i})}_cancelRule(){this._editing=null}get _editingRule(){return this._editing?this._editing.isNew?{when:{},actions:[]}:this._configs.get(this._editing.areaId)?.rules[this._editing.index]??null:null}get _sceneSuggestions(){if(!this._editing)return[];let t=this._configs.get(this._editing.areaId);if(!t)return[];let e=new Set;for(let s of t.rules){let i=s.when.scene;typeof i=="string"&&i&&e.add(i)}return[...e].sort((s,i)=>s.toLowerCase().localeCompare(i.toLowerCase()))}get _editorMatchers(){if(!this._editing)return[];let t=this._configs.get(this._editing.areaId);if(!t)return[];let e=this._matchers.find(i=>i.name==="scene"),s=this._matchers.filter(i=>t.matchers.includes(i.name));return e?[e,...s]:s}_summary(t){if(t.rules.length===0&&t.matchers.length===0)return"not configured";let e=t.rules.length,s=t.matchers.length;return`${e} rule${e===1?"":"s"} \xB7 ${s} matcher${s===1?"":"s"}`}render(){return h`
-      ${this._error?h`<p class="error">${this._error}</p>`:""}
-      ${this._areas.length===0?h`<p class="empty">No areas found in Home Assistant.</p>`:h`<ul>
+  `,c([u({type:Boolean,reflect:!0})],w.prototype,"open",2),c([u({attribute:!1})],w.prototype,"matchers",2),c([u({attribute:!1})],w.prototype,"selected",2),c([_()],w.prototype,"_draft",2),w=c([y("ambience-matchers-modal")],w);var $=class extends m{constructor(){super(...arguments);this._areas=[];this._matchers=[];this._actions=[];this._configs=new Map;this._expanded=new Set;this._error="";this._editing=null;this._matchersModalArea=null}async connectedCallback(){super.connectedCallback(),await this._loadStatic(),await this._refreshAreas(),await this._subscribe()}disconnectedCallback(){super.disconnectedCallback(),this._unsub?.(),this._unsub=void 0}async _loadStatic(){try{let[t,e]=await Promise.all([Mt(this.hass),Rt(this.hass)]);if(!this.isConnected)return;this._matchers=t,this._actions=e}catch(t){this._error=t.message||String(t)}}async _refreshAreas(){try{let t=await Ct(this.hass),e=new Map;if(await Promise.all(t.map(async s=>{e.set(s.area_id,this._normalize(await kt(this.hass,s.area_id)))})),!this.isConnected)return;this._areas=t,this._configs=e}catch(t){this._error=t.message||String(t)}}_normalize(t){return{matchers:t.matchers??[],rules:t.rules??[],auto_sort:t.auto_sort??!0}}async _subscribe(){let t=await this.hass.connection.subscribeEvents(e=>{if(e.data.action==="remove"){let s=e.data.area_id,i=new Set(this._expanded);i.delete(s),this._expanded=i,this._editing?.areaId===s&&(this._editing=null),this._matchersModalArea===s&&(this._matchersModalArea=null)}this._refreshAreas()},"area_registry_updated");this.isConnected?this._unsub=t:t()}_setConfig(t,e){let s=new Map(this._configs);s.set(t,e),this._configs=s}async _mutate(t,e){let s=this._configs.get(t);this._setConfig(t,e),this._error="";try{let{config:i}=await Pt(this.hass,t,e);this._setConfig(t,this._normalize(i))}catch(i){s&&this._setConfig(t,s),this._error=i.message||String(i)}}_toggleExpand(t){let e=new Set(this._expanded);e.has(t)?e.delete(t):e.add(t),this._expanded=e}_openMatchersModal(t){this._matchersModalArea=t}_applyMatchers(t){let e=this._matchersModalArea;if(this._matchersModalArea=null,!e)return;let s=this._configs.get(e);s&&this._mutate(e,{...s,matchers:t.detail.matchers})}_toggleAutoSort(t,e){let s=this._configs.get(t);s&&this._mutate(t,{...s,auto_sort:e})}_addRule(t){let e=this._configs.get(t);e&&(this._editing={areaId:t,index:e.rules.length,isNew:!0})}_editRule(t,e){this._editing={areaId:t,index:e.detail.index,isNew:!1}}_duplicateRule(t,e){let s=this._configs.get(t);if(!s)return;let i=s.rules[e.detail.index];if(!i)return;let o=JSON.parse(JSON.stringify(i)),a=[...s.rules];a.splice(e.detail.index+1,0,o),this._mutate(t,{...s,rules:a})}_deleteRule(t,e){let s=this._configs.get(t);if(!s)return;let i=s.rules.filter((o,a)=>a!==e.detail.index);this._mutate(t,{...s,rules:i})}_reorderRules(t,e){let s=this._configs.get(t);if(!s)return;let{from:i,to:o}=e.detail,a=[...s.rules],[l]=a.splice(i,1);a.splice(o,0,l),this._mutate(t,{...s,rules:a})}_saveRule(t){let e=this._editing;if(this._editing=null,!e)return;let s=this._configs.get(e.areaId);if(!s)return;let i=[...s.rules];e.isNew?i.push(t.detail):i[e.index]=t.detail,this._mutate(e.areaId,{...s,rules:i})}_cancelRule(){this._editing=null}get _editingRule(){return this._editing?this._editing.isNew?{when:{},actions:[]}:this._configs.get(this._editing.areaId)?.rules[this._editing.index]??null:null}get _sceneSuggestions(){if(!this._editing)return[];let t=this._configs.get(this._editing.areaId);if(!t)return[];let e=new Set;for(let s of t.rules){let i=s.when.scene;typeof i=="string"&&i&&e.add(i)}return[...e].sort((s,i)=>s.toLowerCase().localeCompare(i.toLowerCase()))}get _editorMatchers(){if(!this._editing)return[];let t=this._configs.get(this._editing.areaId);if(!t)return[];let e=this._matchers.find(i=>i.name==="scene"),s=this._matchers.filter(i=>t.matchers.includes(i.name));return e?[e,...s]:s}_summary(t){if(t.rules.length===0&&t.matchers.length===0)return"not configured";let e=t.rules.length,s=t.matchers.length;return`${e} rule${e===1?"":"s"} \xB7 ${s} matcher${s===1?"":"s"}`}render(){return d`
+      ${this._error?d`<p class="error">${this._error}</p>`:""}
+      ${this._areas.length===0?d`<p class="empty">No areas found in Home Assistant.</p>`:d`<ul>
             ${this._areas.map(t=>this._renderArea(t))}
           </ul>`}
 
@@ -458,7 +542,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
         @apply-matchers=${this._applyMatchers}
         @cancel-matchers=${()=>this._matchersModalArea=null}
       ></ambience-matchers-modal>
-    `}_renderArea(t){let e=this._configs.get(t.area_id);if(!e)return h``;let s=this._expanded.has(t.area_id);return h`
+    `}_renderArea(t){let e=this._configs.get(t.area_id);if(!e)return d``;let s=this._expanded.has(t.area_id);return d`
       <li>
         <div
           class="area-header"
@@ -475,7 +559,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
             ⚙
           </button>
         </div>
-        ${s?h`
+        ${s?d`
               <div class="area-body">
                 <label class="autosort">
                   <input
@@ -566,7 +650,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var c=(n,r,t
       margin: 0.5rem 0 1rem 0;
       font-size: 0.9em;
     }
-  `,c([u({attribute:!1})],$.prototype,"hass",2),c([_()],$.prototype,"_areas",2),c([_()],$.prototype,"_matchers",2),c([_()],$.prototype,"_actions",2),c([_()],$.prototype,"_configs",2),c([_()],$.prototype,"_expanded",2),c([_()],$.prototype,"_error",2),c([_()],$.prototype,"_editing",2),c([_()],$.prototype,"_matchersModalArea",2),$=c([y("ambience-areas-list")],$);var U=class extends m{render(){return h`
+  `,c([u({attribute:!1})],$.prototype,"hass",2),c([_()],$.prototype,"_areas",2),c([_()],$.prototype,"_matchers",2),c([_()],$.prototype,"_actions",2),c([_()],$.prototype,"_configs",2),c([_()],$.prototype,"_expanded",2),c([_()],$.prototype,"_error",2),c([_()],$.prototype,"_editing",2),c([_()],$.prototype,"_matchersModalArea",2),$=c([y("ambience-areas-list")],$);var U=class extends m{render(){return d`
       <header><h1>Ambience</h1></header>
       <ambience-areas-list .hass=${this.hass}></ambience-areas-list>
     `}};U.styles=v`

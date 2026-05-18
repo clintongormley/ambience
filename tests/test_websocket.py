@@ -69,7 +69,7 @@ async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> 
 
     tod = by_name["time_of_day"]
     assert tod["toggleable"] is True
-    assert tod["input"] == "text"
+    assert tod["input"] == "time_of_day"
     assert tod["priority"] == 100
     assert tod["description"].strip() != ""
     assert tod["predicate_help"].strip() != ""
@@ -110,7 +110,7 @@ async def test_area_save_then_get(hass: HomeAssistant, installed, area_id, hass_
         "auto_sort": False,
         "rules": [
             {
-                "when": {"scene": "movie", "time_of_day": "evening"},
+                "when": {"scene": "movie", "time_of_day": {"period": "evening"}},
                 "actions": [
                     {
                         "action": "set_light",
@@ -290,12 +290,20 @@ async def test_area_save_sorts_rules_when_auto_sort_on(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
     """With auto_sort on, the stored rules come back sorted (narrower predicate first)."""
+    wide = {
+        "from": {"kind": "time", "hh": 10, "mm": 0},
+        "to": {"kind": "time", "hh": 14, "mm": 0},
+    }
+    narrow = {
+        "from": {"kind": "time", "hh": 12, "mm": 0},
+        "to": {"kind": "time", "hh": 13, "mm": 0},
+    }
     config = {
         "matchers": ["time_of_day"],
         "auto_sort": True,
         "rules": [
-            {"when": {"scene": "movie", "time_of_day": "10:00-14:00"}, "actions": []},
-            {"when": {"scene": "movie", "time_of_day": "12:00-13:00"}, "actions": []},
+            {"when": {"scene": "movie", "time_of_day": wide}, "actions": []},
+            {"when": {"scene": "movie", "time_of_day": narrow}, "actions": []},
         ],
     }
     save = await _ws_send(
@@ -307,20 +315,28 @@ async def test_area_save_sorts_rules_when_auto_sort_on(
     assert save["success"] is True
     sorted_rules = save["result"]["config"]["rules"]
     # narrower predicate (12:00-13:00) sorts first
-    assert sorted_rules[0]["when"]["time_of_day"] == "12:00-13:00"
-    assert sorted_rules[1]["when"]["time_of_day"] == "10:00-14:00"
+    assert sorted_rules[0]["when"]["time_of_day"] == narrow
+    assert sorted_rules[1]["when"]["time_of_day"] == wide
 
 
 async def test_area_save_preserves_order_when_auto_sort_off(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
     """With auto_sort off, the stored rule order is preserved as submitted."""
+    wide = {
+        "from": {"kind": "time", "hh": 10, "mm": 0},
+        "to": {"kind": "time", "hh": 14, "mm": 0},
+    }
+    narrow = {
+        "from": {"kind": "time", "hh": 12, "mm": 0},
+        "to": {"kind": "time", "hh": 13, "mm": 0},
+    }
     config = {
         "matchers": ["time_of_day"],
         "auto_sort": False,
         "rules": [
-            {"when": {"scene": "movie", "time_of_day": "10:00-14:00"}, "actions": []},
-            {"when": {"scene": "movie", "time_of_day": "12:00-13:00"}, "actions": []},
+            {"when": {"scene": "movie", "time_of_day": wide}, "actions": []},
+            {"when": {"scene": "movie", "time_of_day": narrow}, "actions": []},
         ],
     }
     save = await _ws_send(
@@ -331,8 +347,8 @@ async def test_area_save_preserves_order_when_auto_sort_off(
     )
     assert save["success"] is True
     rules = save["result"]["config"]["rules"]
-    assert rules[0]["when"]["time_of_day"] == "10:00-14:00"
-    assert rules[1]["when"]["time_of_day"] == "12:00-13:00"
+    assert rules[0]["when"]["time_of_day"] == wide
+    assert rules[1]["when"]["time_of_day"] == narrow
 
 
 async def test_unload_deregisters_ws_commands(
@@ -362,11 +378,19 @@ async def test_area_save_sorts_by_default_when_auto_sort_absent(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
     """A config submitted without `auto_sort` is sorted (default on)."""
+    wide = {
+        "from": {"kind": "time", "hh": 10, "mm": 0},
+        "to": {"kind": "time", "hh": 14, "mm": 0},
+    }
+    narrow = {
+        "from": {"kind": "time", "hh": 12, "mm": 0},
+        "to": {"kind": "time", "hh": 13, "mm": 0},
+    }
     config = {
         "matchers": ["time_of_day"],
         "rules": [
-            {"when": {"scene": "movie", "time_of_day": "10:00-14:00"}, "actions": []},
-            {"when": {"scene": "movie", "time_of_day": "12:00-13:00"}, "actions": []},
+            {"when": {"scene": "movie", "time_of_day": wide}, "actions": []},
+            {"when": {"scene": "movie", "time_of_day": narrow}, "actions": []},
         ],
     }
     save = await _ws_send(
@@ -377,8 +401,8 @@ async def test_area_save_sorts_by_default_when_auto_sort_absent(
     )
     assert save["success"] is True
     sorted_rules = save["result"]["config"]["rules"]
-    assert sorted_rules[0]["when"]["time_of_day"] == "12:00-13:00"
-    assert sorted_rules[1]["when"]["time_of_day"] == "10:00-14:00"
+    assert sorted_rules[0]["when"]["time_of_day"] == narrow
+    assert sorted_rules[1]["when"]["time_of_day"] == wide
 
 
 async def test_area_save_rejects_scene_in_matchers_list(

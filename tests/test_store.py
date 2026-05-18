@@ -73,3 +73,37 @@ async def test_persisted_data_survives_new_store_instance(hass: HomeAssistant) -
     s2 = AmbienceStore(hass)
     await s2.async_load()
     assert s2.get_area("hall") == config
+
+
+async def test_periods_default_to_empty_on_fresh_load(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.get_periods() == {"custom": {}, "hidden": []}
+
+
+async def test_periods_round_trip(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    payload = {
+        "custom": {
+            "wind_down": {
+                "from": {"kind": "time", "hh": 20, "mm": 0},
+                "to": {"kind": "time", "hh": 22, "mm": 0},
+                "label": "Wind down",
+            }
+        },
+        "hidden": ["day"],
+    }
+    await store.async_save_periods(payload)
+    assert store.get_periods() == payload
+
+
+async def test_periods_load_handles_legacy_payload_without_periods_key(
+    hass: HomeAssistant,
+) -> None:
+    """Storage written before this feature shipped has no time_of_day_periods key.
+    Loading must not raise; periods default to empty."""
+    store = AmbienceStore(hass)
+    # Simulate a load where on-disk payload lacks the new key.
+    store._data = {"version": 1, "areas": {}}
+    assert store.get_periods() == {"custom": {}, "hidden": []}

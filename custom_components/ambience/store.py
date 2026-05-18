@@ -23,7 +23,11 @@ class AmbienceStore:
 
     @staticmethod
     def _empty() -> dict[str, Any]:
-        return {"version": STORAGE_VERSION, "areas": {}}
+        return {
+            "version": STORAGE_VERSION,
+            "areas": {},
+            "time_of_day_periods": {"custom": {}, "hidden": []},
+        }
 
     async def async_load(self) -> None:
         raw = await self._store.async_load()
@@ -50,3 +54,12 @@ class AmbienceStore:
         if area_id in self._data["areas"]:
             del self._data["areas"][area_id]
             await self._store.async_save(self._data)
+
+    def get_periods(self) -> dict[str, Any]:
+        """Return the user-owned period slice ({custom, hidden}), defaulting on absent key."""
+        return self._data.get("time_of_day_periods", {"custom": {}, "hidden": []})
+
+    async def async_save_periods(self, payload: dict[str, Any]) -> None:
+        """Persist the full user-owned period slice."""
+        self._data["time_of_day_periods"] = payload
+        await self._store.async_save(self._data)

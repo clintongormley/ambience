@@ -1,9 +1,9 @@
 import type { ReactiveControllerHost } from "lit";
 
 type CardHelpers = {
-  createCardElement(config: object): Promise<{
+  createCardElement(config: { type: string; [k: string]: unknown }): {
     constructor?: { getConfigElement?: () => Promise<unknown> };
-  }>;
+  };
 };
 
 // HA's lazy form components we'd prefer to use if registered.
@@ -28,50 +28,148 @@ export function pickHaTextInput(): HaTextInputTag | null {
   return null;
 }
 
+type AnyHass = unknown;
+
 let _loadAttempt: Promise<void> | null = null;
+let _kickedOff = false;
 
 /**
- * Best-effort: try to coax HA into loading its lazy form components
- * (ha-combo-box, ha-input/ha-textfield). The classic trick is to call
- * `window.loadCardHelpers()` and request a card editor — that pulls in HA's
- * ha-form chunk. As of HA 2026.05 `loadCardHelpers` is no longer on window
- * for custom panels, so this is genuinely best-effort: callers should NOT
- * gate their UI on it. Consumers render the HA element if registered, else
- * a self-contained fallback. The `HaComponentsController` re-renders the
- * host if any tracked component becomes defined later.
+ * Best-effort: try several known ways to coax HA into loading its lazy form
+ * components (ha-combo-box, ha-input/ha-textfield). HA's `loadCardHelpers`
+ * has moved around between releases; we probe for it on `window`, on the
+ * `hass` object, on the `<home-assistant>` root, and on `<home-assistant-main>`,
+ * then call whichever variant exists and ask it for a card-editor (which
+ * transitively pulls in ha-form). If multiple strategies are available we
+ * try them in order until one succeeds.
  *
- * Diagnostics are emitted via `console.warn` so failures are visible.
+ * Pass `hass` from the panel root for the widest coverage; not required.
+ * Diagnostics emitted via `console.log` / `console.warn` so failures are
+ * visible if it doesn't work in your HA version.
  */
-export function ensureHaComponents(): Promise<void> {
+export function ensureHaComponents(hass?: AnyHass): Promise<void> {
   if (_loadAttempt) return _loadAttempt;
   _loadAttempt = (async () => {
     if (HA_COMPONENTS.every((n) => customElements.get(n))) return;
 
-    const w = window as Window & {
-      loadCardHelpers?: () => Promise<CardHelpers>;
-    };
-
-    // Strategy 1: classic window.loadCardHelpers (HA < 2026.05).
-    if (typeof w.loadCardHelpers === "function") {
-      try {
-        const helpers = await w.loadCardHelpers();
-        const card = await helpers.createCardElement({
-          type: "entities",
-          entities: [],
-        });
-        await card.constructor?.getConfigElement?.();
-      } catch (e) {
-        console.warn("ambience: loadCardHelpers strategy failed", e);
+    // Primary strategy: HA's frontend ships an import map for
+    // `custom-card-helpers`, so a dynamic import resolves to HA's actual
+    // helpers (the modern home of loadCardHelpers in HA 2026.05+). This
+    // works even when the legacy `window.loadCardHelpers` global is gone.
+    try {
+      const mod = await import("custom-card-helpers");
+      if (typeof mod.loadCardHelpers === "function") {
+        const helpers = await mod.loadCardHelpers();
+        if (await _triggerLoad(helpers, "custom-card-helpers")) return;
       }
-      return;
+    } catch (e) {
+      console.warn(
+        "ambience: dynamic import of 'custom-card-helpers' failed; falling " +
+          "back to legacy loader probes",
+        e,
+      );
     }
+
+    const candidates = _collectLoaderCandidates(hass);
+    console.log(
+      "ambience: probing for HA component loaders →",
+      Object.fromEntries(candidates.map((c) => [c.name, c.fn ? "found" : "—"])),
+      "components defined:",
+      Object.fromEntries(
+        HA_COMPONENTS.map((n) => [n, !!customElements.get(n)]),
+      ),
+    );
+
+    for (const { name, fn } of candidates) {
+      if (typeof fn !== "function") continue;
+      let helpers: CardHelpers | undefined;
+      try {
+        helpers = (await fn()) as CardHelpers;
+      } catch (e) {
+        console.warn(`ambience: ${name}() threw`, e);
+        continue;
+      }
+      if (!helpers?.createCardElement) {
+        console.warn(`ambience: ${name}() returned no createCardElement`);
+        continue;
+      }
+      if (await _triggerLoad(helpers, name)) return;
+    }
+
     console.warn(
-      "ambience: window.loadCardHelpers is not available (removed in HA 2026.05?). " +
-        "Panel will use self-contained fallback widgets where HA's lazy form " +
-        "components aren't already in the custom-element registry.",
+      "ambience: every load strategy was tried; HA form components are still " +
+        "not in the custom-element registry. Panel will use self-contained " +
+        "fallback widgets. Please report this with the probe output above " +
+        "and your HA version.",
     );
   })();
   return _loadAttempt;
+}
+
+/**
+ * Try several card types via the given helpers and return true if any
+ * actually pulls ha-combo-box into the registry. Card-editor sub-modules
+ * vary across HA versions, so a single type might not transitively load
+ * ha-form on every install.
+ */
+async function _triggerLoad(
+  helpers: CardHelpers,
+  loaderName: string,
+): Promise<boolean> {
+  const cardTypes = [
+    "entities",
+    "tile",
+    "thermostat",
+    "weather-forecast",
+    "markdown",
+  ];
+  for (const type of cardTypes) {
+    try {
+      const card = await helpers.createCardElement({ type, entities: [] });
+      await card.constructor?.getConfigElement?.();
+    } catch (e) {
+      console.debug(`ambience: ${loaderName} + ${type} card editor failed`, e);
+    }
+    if (customElements.get("ha-combo-box")) {
+      console.log(
+        `ambience: HA components loaded via ${loaderName} + ${type} card editor`,
+      );
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Collect every place we know to look for HA's `loadCardHelpers` function.
+ * Some HA versions expose it on `window`, some on the `hass` object, some
+ * only on the `<home-assistant>` root element. Probe all of them.
+ */
+function _collectLoaderCandidates(
+  hass?: AnyHass,
+): Array<{ name: string; fn: (() => Promise<unknown>) | undefined }> {
+  const w = window as Window & {
+    loadCardHelpers?: () => Promise<unknown>;
+  };
+  const haRoot = document.querySelector("home-assistant") as
+    | (Element & { loadCardHelpers?: () => Promise<unknown> })
+    | null;
+  const haMain = haRoot?.shadowRoot?.querySelector("home-assistant-main") as
+    | (Element & { loadCardHelpers?: () => Promise<unknown> })
+    | null;
+  const h = hass as { loadCardHelpers?: () => Promise<unknown> } | undefined;
+
+  return [
+    { name: "window.loadCardHelpers", fn: w.loadCardHelpers?.bind(w) },
+    { name: "hass.loadCardHelpers", fn: h?.loadCardHelpers?.bind(h) },
+    {
+      name: "<home-assistant>.loadCardHelpers",
+      fn: haRoot?.loadCardHelpers?.bind(haRoot),
+    },
+    {
+      name: "<home-assistant-main>.loadCardHelpers",
+      fn: haMain?.loadCardHelpers?.bind(haMain),
+    },
+  ];
 }
 
 /**
@@ -88,16 +186,21 @@ export function ensureHaComponents(): Promise<void> {
  *       watchHaComponents(this);
  *     }
  *
- * The closures hold a reference to `host` until each `whenDefined` resolves;
- * in practice this is one closure per missing component per page mount, which
- * is bounded and acceptable. requestUpdate on a disconnected element is a
- * no-op, so no harm if the element is gone by the time it fires.
+ * Note: only the FIRST caller's `hass` (if any) is used to bootstrap the
+ * loader, since the module-level `_loadAttempt` is a singleton. Pass it
+ * from the panel root for best coverage.
  */
-export function watchHaComponents(host: ReactiveControllerHost): void {
+export function watchHaComponents(
+  host: ReactiveControllerHost,
+  hass?: AnyHass,
+): void {
   for (const name of HA_COMPONENTS) {
     if (!customElements.get(name)) {
       void customElements.whenDefined(name).then(() => host.requestUpdate());
     }
   }
-  void ensureHaComponents();
+  if (!_kickedOff) {
+    _kickedOff = true;
+    void ensureHaComponents(hass);
+  }
 }

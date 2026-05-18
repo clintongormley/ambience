@@ -2,10 +2,10 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 /**
- * Editable scene combobox. A free-text input backed by a native <datalist>
- * of suggestions (the scenes already named by the area's rules). Typing a
- * brand-new name is how a scene comes into existence; clearing the field is
- * how a rule becomes "any scene".
+ * Editable scene combobox. Wraps HA's globally-registered <ha-combo-box>
+ * so the dropdown shows every scene already named by the area's rules in
+ * HA's native selector styling, and supports typing a brand-new name
+ * (allow-custom-value). Clearing the field makes the rule "any scene".
  *
  * Emits `value-changed` with `{ value: string | null }` — null means "any".
  */
@@ -15,30 +15,19 @@ export class AmbienceSceneCombobox extends LitElement {
     :host {
       display: block;
     }
-    input {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 0.5rem;
-      border: 1px solid var(--divider-color, #ccc);
-      border-radius: 4px;
-      background: var(--card-background-color, #fff);
-      color: inherit;
-    }
   `;
 
   @property() value: string | null = null;
   @property({ attribute: false }) suggestions: string[] = [];
 
-  // Unique per instance so multiple comboboxes on a page don't share a list.
-  private readonly _listId = `scene-suggestions-${Math.random()
-    .toString(36)
-    .slice(2)}`;
-
-  private _onInput(e: InputEvent) {
-    const raw = (e.target as HTMLInputElement).value;
+  private _onValueChanged(e: CustomEvent<{ value: string }>) {
+    // ha-combo-box dispatches its own `value-changed`; stop it at our shadow
+    // boundary and re-emit with the wildcard contract (empty string → null).
+    e.stopPropagation();
+    const v = e.detail.value;
     this.dispatchEvent(
       new CustomEvent("value-changed", {
-        detail: { value: raw.trim() === "" ? null : raw },
+        detail: { value: v === "" ? null : v },
         bubbles: true,
         composed: true,
       }),
@@ -46,17 +35,17 @@ export class AmbienceSceneCombobox extends LitElement {
   }
 
   override render() {
+    const items = this.suggestions.map((s) => ({ value: s, label: s }));
     return html`
-      <input
-        type="text"
-        list=${this._listId}
-        placeholder="(any scene)"
+      <ha-combo-box
+        .items=${items}
         .value=${this.value ?? ""}
-        @input=${this._onInput}
-      />
-      <datalist id=${this._listId}>
-        ${this.suggestions.map((s) => html`<option value=${s}></option>`)}
-      </datalist>
+        item-value-path="value"
+        item-label-path="label"
+        placeholder="(any scene)"
+        allow-custom-value
+        @value-changed=${this._onValueChanged}
+      ></ha-combo-box>
     `;
   }
 }

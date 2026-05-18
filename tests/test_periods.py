@@ -198,3 +198,23 @@ async def test_reset_clears_custom_and_hidden() -> None:
     store = PeriodStore(storage)
     await store.reset()
     assert storage.saved == [{"custom": {}, "hidden": []}]
+
+
+def test_view_for_ui_returns_builtins_custom_hidden() -> None:
+    storage = _FakeStorage(
+        {
+            "custom": {
+                "wind_down": {
+                    "from": {"kind": "time", "hh": 20, "mm": 0},
+                    "to": {"kind": "time", "hh": 22, "mm": 0},
+                    "label": "Wind down",
+                }
+            },
+            "hidden": ["day"],
+        }
+    )
+    store = PeriodStore(storage)
+    view = store.view_for_ui()
+    assert view["builtins"] == BUILTIN_PERIODS
+    assert view["custom"] == storage.get_periods()["custom"]
+    assert view["hidden"] == ["day"]

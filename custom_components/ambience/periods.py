@@ -91,6 +91,15 @@ class PeriodStore:
             result[pid] = defn
         return result
 
+    def view_for_ui(self) -> dict[str, Any]:
+        """Returns {builtins, custom, hidden} for the period management screen."""
+        user = self._storage.get_periods()
+        return {
+            "builtins": BUILTIN_PERIODS,
+            "custom": user.get("custom", {}),
+            "hidden": user.get("hidden", []),
+        }
+
     def validate_definition(self, defn: Any) -> None:
         """Raise ValueError if defn is not a well-shaped {from, to} period definition."""
         if not isinstance(defn, dict):

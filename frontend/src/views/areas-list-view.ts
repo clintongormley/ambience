@@ -140,7 +140,10 @@ export class AmbienceAreasList extends LitElement {
       const configs = new Map<string, AreaConfig>();
       await Promise.all(
         areas.map(async (a) => {
-          configs.set(a.area_id, await getArea(this.hass, a.area_id));
+          configs.set(
+            a.area_id,
+            this._normalize(await getArea(this.hass, a.area_id)),
+          );
         }),
       );
       if (!this.isConnected) return;
@@ -149,6 +152,21 @@ export class AmbienceAreasList extends LitElement {
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
+  }
+
+  /**
+   * Defaults missing keys so `cfg.auto_sort` is always a defined boolean.
+   * Older stored areas predate the field; without this, `!undefined === true`
+   * would render the "Order rules manually" checkbox as checked, AND sends
+   * to area/save would drop the undefined key so the backend's own default
+   * (True) would re-sort the rules — silently undoing manual reorders.
+   */
+  private _normalize(cfg: AreaConfig): AreaConfig {
+    return {
+      matchers: cfg.matchers ?? [],
+      rules: cfg.rules ?? [],
+      auto_sort: cfg.auto_sort ?? true,
+    };
   }
 
   private async _subscribe() {
@@ -190,7 +208,7 @@ export class AmbienceAreasList extends LitElement {
     this._error = "";
     try {
       const { config } = await saveArea(this.hass, areaId, next);
-      this._setConfig(areaId, config);
+      this._setConfig(areaId, this._normalize(config));
     } catch (e) {
       if (prev) this._setConfig(areaId, prev);
       this._error = (e as Error).message || String(e);

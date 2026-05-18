@@ -71,6 +71,10 @@ class TimeOfDayMatcher:
     input = "text"
     priority = 100
 
+    def __init__(self, period_lookup=None) -> None:
+        """Accept period_lookup callable. Full structured-format wiring follows in Task B6."""
+        self._period_lookup = period_lookup
+
     async def snapshot(self, hass: HomeAssistant) -> TimeOfDaySnapshot:
         state = hass.states.get("sun.sun")
         if state is None:

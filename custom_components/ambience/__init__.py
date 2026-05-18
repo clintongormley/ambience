@@ -22,11 +22,13 @@ from .actions.set_light import SetLightAction
 from .const import (
     DATA_ACTIONS,
     DATA_MATCHERS,
+    DATA_PERIODS,
     DATA_STORE,
     DOMAIN,
 )
 from .matchers.scene import SceneMatcher
 from .matchers.time_of_day import TimeOfDayMatcher
+from .periods import PeriodStore
 from .registry import register_action, register_matcher
 from .service import async_apply_scene
 from .store import AmbienceStore
@@ -69,8 +71,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await store.async_load()
     domain_data[DATA_STORE] = store
 
+    period_store = PeriodStore(store)
+    domain_data[DATA_PERIODS] = period_store
+
     register_matcher(hass, SceneMatcher())
-    register_matcher(hass, TimeOfDayMatcher())
+    register_matcher(hass, TimeOfDayMatcher(period_lookup=period_store.effective))
     register_action(hass, SetLightAction())
 
     async def _handle_apply_scene(call: ServiceCall) -> None:

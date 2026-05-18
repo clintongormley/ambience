@@ -56,7 +56,13 @@ export function ensureHaComponents(): Promise<boolean> {
     const loader = (
       window as Window & { loadCardHelpers?: () => Promise<CardHelpers> }
     ).loadCardHelpers;
-    if (typeof loader !== "function") return false;
+    if (typeof loader !== "function") {
+      console.warn(
+        "ambience: window.loadCardHelpers is not available; HA form " +
+          "components will not be loaded.",
+      );
+      return false;
+    }
     try {
       const helpers = await loader();
       const card = await helpers.createCardElement({
@@ -64,8 +70,14 @@ export function ensureHaComponents(): Promise<boolean> {
         entities: [],
       });
       await card.constructor?.getConfigElement?.();
-      // Element registration is async after the chunk loads; race against
-      // a timeout so a misbehaving HA build can't hang the panel forever.
+    } catch (e) {
+      console.warn(
+        "ambience: loadCardHelpers trick failed to trigger ha-form load",
+        e,
+      );
+    }
+    // Whether the trick threw or not, give the registry up to 10s to settle.
+    try {
       await Promise.race([
         (async () => {
           await Promise.all(
@@ -77,33 +89,52 @@ export function ensureHaComponents(): Promise<boolean> {
           );
         })(),
         new Promise<void>((_, rej) =>
-          setTimeout(() => rej(new Error("timeout")), 5000),
+          setTimeout(() => rej(new Error("timeout")), 10000),
         ),
       ]);
-      return _allReady();
-    } catch {
-      return false;
+    } catch (e) {
+      console.warn(
+        "ambience: timed out waiting for HA components",
+        { required: REQUIRED, textInputs: TEXT_INPUT_VARIANTS },
+        "registered now:",
+        {
+          "ha-combo-box": !!customElements.get("ha-combo-box"),
+          "ha-input": !!customElements.get("ha-input"),
+          "ha-textfield": !!customElements.get("ha-textfield"),
+        },
+        e,
+      );
     }
+    const ok = _allReady();
+    if (!ok) {
+      console.warn("ambience: HA components still missing after load attempt");
+    }
+    return ok;
   })();
   return _loader;
 }
 
 /**
- * Lit ReactiveController: exposes `ready` (true once HA components have
- * loaded), kicks off the load on host connect, and re-renders the host
- * when loading finishes. Multiple hosts share the same module-level loader.
+ * Lit ReactiveController exposing tri-state `state` ("loading" | "ready" |
+ * "failed"). Kicks off the load on host connect and re-renders the host
+ * when the state flips. Multiple hosts share the same module-level loader,
+ * so the load is attempted at most once per page.
  */
 export class HaComponentsController implements ReactiveController {
-  ready = _allReady();
+  state: "loading" | "ready" | "failed" = _allReady() ? "ready" : "loading";
 
   constructor(private host: ReactiveControllerHost) {
     host.addController(this);
   }
 
+  get ready(): boolean {
+    return this.state === "ready";
+  }
+
   hostConnected(): void {
-    if (this.ready) return;
+    if (this.state === "ready") return;
     void ensureHaComponents().then((ok) => {
-      this.ready = ok;
+      this.state = ok ? "ready" : "failed";
       this.host.requestUpdate();
     });
   }

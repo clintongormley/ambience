@@ -117,30 +117,42 @@ export class AmbienceRuleEditor extends LitElement {
 
   /**
    * Picks the best available HA text-input variant: `ha-input` (HA 2026.05+)
-   * or `ha-textfield` (older). Shows a placeholder while HA's lazy form
-   * chunk is still loading; the HaComponentsController guarantees `ready`
-   * implies one of the two variants is in the custom-element registry.
+   * or `ha-textfield` (older). While HA's lazy form chunk is still loading,
+   * shows a placeholder. If loading fails outright, falls back to a plain
+   * native `<input>` so the panel stays usable.
    */
   private _renderNameField() {
-    if (!this._ha.ready) {
+    const value = this._draft!.name ?? "";
+    if (this._ha.state === "loading") {
       return html`<div class="loading">Loading…</div>`;
     }
-    const value = this._draft!.name ?? "";
-    if (pickHaTextInput() === "ha-input") {
+    if (this._ha.state === "ready") {
+      if (pickHaTextInput() === "ha-input") {
+        return html`
+          <ha-input
+            label="Name (optional)"
+            .value=${value}
+            @input=${this._onNameInput}
+          ></ha-input>
+        `;
+      }
       return html`
-        <ha-input
+        <ha-textfield
           label="Name (optional)"
           .value=${value}
           @input=${this._onNameInput}
-        ></ha-input>
+        ></ha-textfield>
       `;
     }
+    // Failed — last-resort plain-input fallback (keeps the panel usable
+    // when HA's lazy form components can't be loaded).
     return html`
-      <ha-textfield
-        label="Name (optional)"
+      <label>Name (optional)</label>
+      <input
+        type="text"
         .value=${value}
         @input=${this._onNameInput}
-      ></ha-textfield>
+      />
     `;
   }
 

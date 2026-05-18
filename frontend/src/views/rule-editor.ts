@@ -8,7 +8,7 @@ import type {
   ParamSpec,
   Rule,
 } from "../types.js";
-import { HaComponentsController, pickHaTextInput } from "../ha-components.js";
+import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import "./matcher-input.js";
 
 @customElement("ambience-rule-editor")
@@ -91,7 +91,10 @@ export class AmbienceRuleEditor extends LitElement {
 
   @state() private _draft: Rule | null = null;
 
-  private _ha = new HaComponentsController(this);
+  override connectedCallback() {
+    super.connectedCallback();
+    watchHaComponents(this);
+  }
 
   override willUpdate(changed: Map<string, unknown>) {
     if (changed.has("rule")) {

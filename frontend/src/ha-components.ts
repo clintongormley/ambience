@@ -1,4 +1,4 @@
-import type { ReactiveController, ReactiveControllerHost } from "lit";
+import type { ReactiveControllerHost } from "lit";
 
 type CardHelpers = {
   createCardElement(config: object): Promise<{
@@ -75,30 +75,29 @@ export function ensureHaComponents(): Promise<void> {
 }
 
 /**
- * Lit ReactiveController that re-renders its host whenever any of HA's
- * tracked form components become defined. The host can call
- * `customElements.get(...)` directly in render() to decide what to show.
- * Also triggers `ensureHaComponents()` once per page.
+ * Watches the custom-element registry for HA's lazy form components and
+ * requests a host re-render whenever any of them become defined. The host
+ * can call `customElements.get(...)` directly in render() to choose between
+ * the HA element and its fallback. Also triggers `ensureHaComponents()`
+ * once per page (best-effort load).
+ *
+ * Call from `connectedCallback`:
+ *
+ *     override connectedCallback() {
+ *       super.connectedCallback();
+ *       watchHaComponents(this);
+ *     }
+ *
+ * The closures hold a reference to `host` until each `whenDefined` resolves;
+ * in practice this is one closure per missing component per page mount, which
+ * is bounded and acceptable. requestUpdate on a disconnected element is a
+ * no-op, so no harm if the element is gone by the time it fires.
  */
-export class HaComponentsController implements ReactiveController {
-  constructor(private host: ReactiveControllerHost) {
-    host.addController(this);
-  }
-
-  hostConnected(): void {
-    // Watch for any currently-missing component to be defined later; when
-    // it is, re-render the host so it can switch from the fallback to the
-    // HA-native element in place.
-    for (const name of HA_COMPONENTS) {
-      if (!customElements.get(name)) {
-        void customElements.whenDefined(name).then(() => {
-          this.host.requestUpdate();
-        });
-      }
+export function watchHaComponents(host: ReactiveControllerHost): void {
+  for (const name of HA_COMPONENTS) {
+    if (!customElements.get(name)) {
+      void customElements.whenDefined(name).then(() => host.requestUpdate());
     }
-    // Best-effort trigger; harmless if it never resolves to anything.
-    void ensureHaComponents();
   }
-
-  hostDisconnected(): void {}
+  void ensureHaComponents();
 }

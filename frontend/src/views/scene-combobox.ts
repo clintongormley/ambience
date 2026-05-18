@@ -1,7 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { HaComponentsController } from "../ha-components.js";
+import { watchHaComponents } from "../ha-components.js";
 
 /**
  * Editable scene combobox.
@@ -89,8 +89,6 @@ export class AmbienceSceneCombobox extends LitElement {
   @property() value: string | null = null;
   @property({ attribute: false }) suggestions: string[] = [];
 
-  private _ha = new HaComponentsController(this);
-
   @state() private _open = false;
 
   private _onDocMousedown = (e: MouseEvent) => {
@@ -101,6 +99,7 @@ export class AmbienceSceneCombobox extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
+    watchHaComponents(this);
     document.addEventListener("mousedown", this._onDocMousedown);
   }
 

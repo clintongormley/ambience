@@ -1,6 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
+import type { HassConnection } from "../api.js";
 import type { MatcherInfo } from "../types.js";
 import "./scene-combobox.js";
 
@@ -40,6 +41,7 @@ export class AmbienceMatcherInput extends LitElement {
   @property({ attribute: false }) matcher!: MatcherInfo;
   @property({ attribute: false }) value: unknown = null;
   @property({ attribute: false }) sceneSuggestions: string[] = [];
+  @property({ attribute: false }) hass?: HassConnection;
 
   private _emit(value: unknown) {
     this.dispatchEvent(
@@ -60,6 +62,7 @@ export class AmbienceMatcherInput extends LitElement {
     if (this.matcher.input === "scene_combobox") {
       return html`
         <ambience-scene-combobox
+          .hass=${this.hass}
           .value=${(this.value as string | null) ?? null}
           .suggestions=${this.sceneSuggestions}
           @value-changed=${(e: CustomEvent<{ value: string | null }>) => {

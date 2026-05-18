@@ -15,7 +15,10 @@ export type AreaRegistryEvent = {
   data: { action: "create" | "update" | "remove"; area_id: string };
 };
 
-// HA panel components receive a `hass` object. We type only what we use.
+// HA panel components receive a `hass` object. We type only what we use,
+// plus an index signature for the surface we hand to HA components like
+// `<ha-form>` that expect the full HomeAssistant shape (hass.localize,
+// hass.config, hass.themes, etc.).
 export type HassConnection = {
   callWS<T = unknown>(message: Record<string, unknown>): Promise<T>;
   connection: {
@@ -24,6 +27,7 @@ export type HassConnection = {
       eventType: string,
     ): Promise<() => void>;
   };
+  [key: string]: unknown;
 };
 
 export async function listAreas(hass: HassConnection): Promise<AreaListItem[]> {

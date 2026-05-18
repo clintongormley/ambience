@@ -1,21 +1,32 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
+import type { HassConnection } from "../api.js";
 import { watchHaComponents } from "../ha-components.js";
+
+type HaFormSchema = {
+  name: string;
+  selector: {
+    select: {
+      options: Array<{ value: string; label: string }>;
+      custom_value: boolean;
+      mode: "dropdown";
+    };
+  };
+};
 
 /**
  * Editable scene combobox.
  *
- * Primary path: wraps HA's <ha-combo-box> (force-loaded via
- * `ensureHaComponents`) for native HA-themed styling and a real selector
- * dropdown of every scene already named by the area's rules. Supports typing
- * a brand-new scene name (allow-custom-value). Clearing the field makes the
- * rule "any scene".
+ * Primary path: HA's <ha-form> with a `select` selector and
+ * `custom_value: true`. ha-form is registered eagerly in HA 2026.05+ and
+ * internally picks whatever the current native combobox widget is (loading
+ * any sub-components it needs). This is the official schema-driven path
+ * recommended by HA's frontend docs, and works without depending on the
+ * removed `loadCardHelpers` global.
  *
- * Fallback path (when HA's lazy form chunk fails to load): a self-contained
- * Lit dropdown with the same behaviour, themed via HA CSS custom properties.
- * The fallback exists because, in some HA versions/contexts, our loader
- * cannot pull ha-combo-box into the registry — the panel should still work.
+ * Fallback path (when ha-form is somehow not registered): a self-contained
+ * Lit dropdown themed with HA CSS variables, so the panel stays usable.
  *
  * Emits `value-changed` with `{ value: string | null }` — null means "any".
  */
@@ -26,6 +37,7 @@ export class AmbienceSceneCombobox extends LitElement {
       display: block;
       position: relative;
     }
+    /* Fallback dropdown */
     .control {
       display: flex;
       align-items: stretch;
@@ -86,8 +98,13 @@ export class AmbienceSceneCombobox extends LitElement {
     }
   `;
 
+  @property({ attribute: false }) hass?: HassConnection;
   @property() value: string | null = null;
   @property({ attribute: false }) suggestions: string[] = [];
+
+  // Memoised so ha-form sees a stable reference until suggestions actually
+  // change — avoids re-initialising the form on every parent re-render.
+  @state() private _schema: HaFormSchema[] = [];
 
   @state() private _open = false;
 
@@ -99,13 +116,30 @@ export class AmbienceSceneCombobox extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    watchHaComponents(this);
+    watchHaComponents(this, this.hass);
     document.addEventListener("mousedown", this._onDocMousedown);
   }
 
   override disconnectedCallback() {
     super.disconnectedCallback();
     document.removeEventListener("mousedown", this._onDocMousedown);
+  }
+
+  override willUpdate(changed: Map<string, unknown>) {
+    if (changed.has("suggestions")) {
+      this._schema = [
+        {
+          name: "scene",
+          selector: {
+            select: {
+              options: this.suggestions.map((s) => ({ value: s, label: s })),
+              custom_value: true,
+              mode: "dropdown",
+            },
+          },
+        },
+      ];
+    }
   }
 
   private _emit(value: string | null) {
@@ -118,15 +152,17 @@ export class AmbienceSceneCombobox extends LitElement {
     );
   }
 
-  // --- ha-combo-box path ---------------------------------------------------
+  // --- ha-form path --------------------------------------------------------
 
-  private _onHaValueChanged(e: CustomEvent<{ value: string }>) {
-    // ha-combo-box also dispatches `value-changed`; stop it at our shadow
+  private _onHaFormValueChanged = (
+    e: CustomEvent<{ value: { scene?: string } }>,
+  ) => {
+    // ha-form also dispatches `value-changed`; stop it at our shadow
     // boundary and re-emit with the wildcard contract (empty → null).
     e.stopPropagation();
-    const v = e.detail.value;
-    this._emit(v === "" ? null : v);
-  }
+    const v = e.detail.value?.scene ?? "";
+    this._emit(v.trim() === "" ? null : v);
+  };
 
   // --- fallback dropdown path ---------------------------------------------
 
@@ -161,25 +197,19 @@ export class AmbienceSceneCombobox extends LitElement {
   // --- render --------------------------------------------------------------
 
   override render() {
-    if (customElements.get("ha-combo-box")) {
-      const items = this.suggestions.map((s) => ({ value: s, label: s }));
+    if (customElements.get("ha-form")) {
+      const data = { scene: this.value ?? "" };
       return html`
-        <ha-combo-box
-          .items=${items}
-          .value=${this.value ?? ""}
-          item-value-path="value"
-          item-label-path="label"
-          placeholder="(any scene)"
-          allow-custom-value
-          @value-changed=${this._onHaValueChanged}
-        ></ha-combo-box>
+        <ha-form
+          .hass=${this.hass}
+          .schema=${this._schema}
+          .data=${data}
+          @value-changed=${this._onHaFormValueChanged}
+        ></ha-form>
       `;
     }
-    // ha-combo-box not registered (HA 2026.05+ removed loadCardHelpers, the
-    // panel-context trigger we relied on). Render the self-contained
-    // dropdown; the HaComponentsController will re-render us if HA ever
-    // defines ha-combo-box later (e.g. user navigates somewhere that loads
-    // it) so we'll upgrade in place.
+    // ha-form not registered (very old HA?). Render the self-contained
+    // fallback dropdown.
     return html`
       <div class="control">
         <input

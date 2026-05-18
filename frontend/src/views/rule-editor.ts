@@ -8,6 +8,7 @@ import type {
   ParamSpec,
   Rule,
 } from "../types.js";
+import type { HassConnection } from "../api.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import "./matcher-input.js";
 
@@ -88,6 +89,7 @@ export class AmbienceRuleEditor extends LitElement {
   @property({ attribute: false }) matchers: MatcherInfo[] = [];
   @property({ attribute: false }) sceneSuggestions: string[] = [];
   @property({ attribute: false }) availableActions: ActionInfo[] = [];
+  @property({ attribute: false }) hass?: HassConnection;
 
   @state() private _draft: Rule | null = null;
 
@@ -344,6 +346,7 @@ export class AmbienceRuleEditor extends LitElement {
           (m) => html`
             <label>${m.name === "scene" ? "Scene" : m.name}</label>
             <ambience-matcher-input
+              .hass=${this.hass}
               .matcher=${m}
               .value=${this._draft!.when[m.name] ?? null}
               .sceneSuggestions=${this.sceneSuggestions}

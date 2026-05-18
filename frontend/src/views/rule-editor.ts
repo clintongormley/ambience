@@ -8,6 +8,7 @@ import type {
   ParamSpec,
   Rule,
 } from "../types.js";
+import { HaComponentsController, pickHaTextInput } from "../ha-components.js";
 import "./matcher-input.js";
 
 @customElement("ambience-rule-editor")
@@ -79,6 +80,11 @@ export class AmbienceRuleEditor extends LitElement {
       color: var(--primary-text-color, inherit);
       border: 1px solid var(--divider-color, #ccc);
     }
+    .loading {
+      padding: 0.6rem 0.75rem;
+      color: var(--secondary-text-color, #888);
+      font-style: italic;
+    }
   `;
 
   @property({ type: Boolean, reflect: true }) open = false;
@@ -90,6 +96,8 @@ export class AmbienceRuleEditor extends LitElement {
 
   @state() private _draft: Rule | null = null;
 
+  private _ha = new HaComponentsController(this);
+
   override willUpdate(changed: Map<string, unknown>) {
     if (changed.has("rule")) {
       // Deep clone so the user can cancel without affecting the source.
@@ -100,6 +108,40 @@ export class AmbienceRuleEditor extends LitElement {
   private _setName(v: string) {
     if (!this._draft) return;
     this._draft = { ...this._draft, name: v || undefined };
+  }
+
+  private _onNameInput = (e: Event) => {
+    // ha-input and ha-textfield both expose `value: string` on their host.
+    this._setName((e.target as HTMLElement & { value: string }).value);
+  };
+
+  /**
+   * Picks the best available HA text-input variant: `ha-input` (HA 2026.05+)
+   * or `ha-textfield` (older). Shows a placeholder while HA's lazy form
+   * chunk is still loading; the HaComponentsController guarantees `ready`
+   * implies one of the two variants is in the custom-element registry.
+   */
+  private _renderNameField() {
+    if (!this._ha.ready) {
+      return html`<div class="loading">Loading…</div>`;
+    }
+    const value = this._draft!.name ?? "";
+    if (pickHaTextInput() === "ha-input") {
+      return html`
+        <ha-input
+          label="Name (optional)"
+          .value=${value}
+          @input=${this._onNameInput}
+        ></ha-input>
+      `;
+    }
+    return html`
+      <ha-textfield
+        label="Name (optional)"
+        .value=${value}
+        @input=${this._onNameInput}
+      ></ha-textfield>
+    `;
   }
 
   private _setPredicate(matcher: string, value: unknown) {
@@ -289,13 +331,7 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="modal">
         <h2>${this._draft.name || "New rule"}</h2>
 
-        <label>Name (optional)</label>
-        <input
-          type="text"
-          .value=${this._draft.name ?? ""}
-          @input=${(e: InputEvent) =>
-            this._setName((e.target as HTMLInputElement).value)}
-        />
+        ${this._renderNameField()}
 
         <h3>When</h3>
         ${this.matchers.map(

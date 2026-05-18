@@ -7,6 +7,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "./api.js";
+import { ensureHaComponents } from "./ha-components.js";
 import "./views/areas-list-view.js";
 
 @customElement("ambience-panel")
@@ -30,6 +31,14 @@ export class AmbiencePanel extends LitElement {
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
+
+  override connectedCallback() {
+    super.connectedCallback();
+    // Kick off HA's lazy form-component load early so modals don't flash a
+    // loading state on first open. Fire-and-forget; per-component
+    // HaComponentsControllers will pick up the resolved state.
+    void ensureHaComponents();
+  }
 
   override render() {
     return html`

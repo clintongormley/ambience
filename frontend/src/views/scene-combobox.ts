@@ -154,6 +154,7 @@ export class AmbienceSceneCombobox extends LitElement {
 
   // --- ha-form path --------------------------------------------------------
 
+  /* v8 ignore next 8 -- ha-form is eagerly registered in HA 2026.05+, not in jsdom */
   private _onHaFormValueChanged = (
     e: CustomEvent<{ value: { scene?: string } }>,
   ) => {
@@ -197,6 +198,7 @@ export class AmbienceSceneCombobox extends LitElement {
   // --- render --------------------------------------------------------------
 
   override render() {
+    /* v8 ignore next 10 -- ha-form is eagerly registered in HA 2026.05+, not in jsdom */
     if (customElements.get("ha-form")) {
       const data = { scene: this.value ?? "" };
       return html`

@@ -54,4 +54,46 @@ describe("matcher-input dispatcher", () => {
     }));
     expect(received).toEqual({ value: { period: "afternoon" } });
   });
+
+  test("renders scene-combobox for scene_combobox input", async () => {
+    el = await mount({ ...baseMatcher, input: "scene_combobox", name: "scene" });
+    expect(el.shadowRoot.querySelector("ambience-scene-combobox")).toBeTruthy();
+  });
+
+  test("re-emits value-changed from scene-combobox", async () => {
+    el = await mount({ ...baseMatcher, input: "scene_combobox", name: "scene" });
+    let received: any;
+    el.addEventListener("value-changed", (e: CustomEvent) => { received = e.detail; });
+    const widget = el.shadowRoot.querySelector("ambience-scene-combobox")!;
+    widget.dispatchEvent(new CustomEvent("value-changed", {
+      detail: { value: "movie" },
+      bubbles: true, composed: true,
+    }));
+    expect(received).toEqual({ value: "movie" });
+  });
+
+  test("renders text input for unknown matcher.input", async () => {
+    el = await mount({ ...baseMatcher, input: "text", name: "custom" });
+    expect(el.shadowRoot.querySelector("input[type='text']")).toBeTruthy();
+  });
+
+  test("text input emits value-changed with null when empty", async () => {
+    el = await mount({ ...baseMatcher, input: "text", name: "custom" });
+    let received: any;
+    el.addEventListener("value-changed", (e: CustomEvent) => { received = e.detail; });
+    const input = el.shadowRoot.querySelector("input[type='text']") as HTMLInputElement;
+    input.value = "  ";
+    input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    expect(received?.value).toBeNull();
+  });
+
+  test("text input emits value-changed with non-empty value", async () => {
+    el = await mount({ ...baseMatcher, input: "text", name: "custom" });
+    let received: any;
+    el.addEventListener("value-changed", (e: CustomEvent) => { received = e.detail; });
+    const input = el.shadowRoot.querySelector("input[type='text']") as HTMLInputElement;
+    input.value = "hello";
+    input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    expect(received?.value).toBe("hello");
+  });
 });

@@ -20,7 +20,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html"],
       include: ["frontend/src/**/*.ts"],
-      exclude: ["frontend/src/**/*.d.ts", "frontend/src/main.ts"],
+      exclude: ["frontend/src/**/*.d.ts", "frontend/src/main.ts", "frontend/src/types.ts"],
       thresholds: {
         lines: 90,
         functions: 90,

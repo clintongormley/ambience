@@ -2,8 +2,9 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
-import type { MatcherInfo } from "../types.js";
+import type { MatcherInfo, PeriodStoreView } from "../types.js";
 import "./scene-combobox.js";
+import "./time-of-day-input.js";
 
 /**
  * Dispatcher element for one matcher's predicate input. Given a matcher's
@@ -41,6 +42,7 @@ export class AmbienceMatcherInput extends LitElement {
   @property({ attribute: false }) matcher!: MatcherInfo;
   @property({ attribute: false }) value: unknown = null;
   @property({ attribute: false }) sceneSuggestions: string[] = [];
+  @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) hass?: HassConnection;
 
   private _emit(value: unknown) {
@@ -59,6 +61,19 @@ export class AmbienceMatcherInput extends LitElement {
   }
 
   override render() {
+    if (this.matcher.input === "time_of_day") {
+      return html`
+        <ambience-time-of-day-input
+          .value=${this.value as any}
+          .periods=${this.periods}
+          .hass=${this.hass as any}
+          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
+            e.stopPropagation();
+            this._emit(e.detail.value);
+          }}
+        ></ambience-time-of-day-input>
+      `;
+    }
     if (this.matcher.input === "scene_combobox") {
       return html`
         <ambience-scene-combobox

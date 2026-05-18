@@ -7,6 +7,7 @@ import {
   listActions,
   listAreas,
   listMatchers,
+  listPeriods,
   saveArea,
 } from "../api.js";
 import type {
@@ -14,6 +15,7 @@ import type {
   AreaConfig,
   AreaListItem,
   MatcherInfo,
+  PeriodStoreView,
   Rule,
 } from "../types.js";
 import "./rules-list.js";
@@ -100,6 +102,7 @@ export class AmbienceAreasList extends LitElement {
   @state() private _areas: AreaListItem[] = [];
   @state() private _matchers: MatcherInfo[] = [];
   @state() private _actions: ActionInfo[] = [];
+  @state() private _periods?: PeriodStoreView;
   @state() private _configs = new Map<string, AreaConfig>();
   @state() private _expanded = new Set<string>();
   @state() private _error = "";
@@ -122,13 +125,15 @@ export class AmbienceAreasList extends LitElement {
 
   private async _loadStatic() {
     try {
-      const [matchers, actions] = await Promise.all([
+      const [matchers, actions, periods] = await Promise.all([
         listMatchers(this.hass),
         listActions(this.hass),
+        listPeriods(this.hass),
       ]);
       if (!this.isConnected) return;
       this._matchers = matchers;
       this._actions = actions;
+      this._periods = periods;
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
@@ -367,6 +372,7 @@ export class AmbienceAreasList extends LitElement {
         .rule=${this._editingRule}
         .matchers=${this._editorMatchers}
         .sceneSuggestions=${this._sceneSuggestions}
+        .periods=${this._periods}
         .availableActions=${this._actions}
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}

@@ -6,6 +6,7 @@ import type {
   ActionSpec,
   MatcherInfo,
   ParamSpec,
+  PeriodStoreView,
   Rule,
 } from "../types.js";
 import type { HassConnection } from "../api.js";
@@ -88,6 +89,7 @@ export class AmbienceRuleEditor extends LitElement {
   /** Matcher rows to render, in display order (scene first). */
   @property({ attribute: false }) matchers: MatcherInfo[] = [];
   @property({ attribute: false }) sceneSuggestions: string[] = [];
+  @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) availableActions: ActionInfo[] = [];
   @property({ attribute: false }) hass?: HassConnection;
 
@@ -350,6 +352,7 @@ export class AmbienceRuleEditor extends LitElement {
               .matcher=${m}
               .value=${this._draft!.when[m.name] ?? null}
               .sceneSuggestions=${this.sceneSuggestions}
+              .periods=${this.periods}
               @value-changed=${(e: CustomEvent<{ value: unknown }>) =>
                 this._setPredicate(m.name, e.detail.value)}
             ></ambience-matcher-input>

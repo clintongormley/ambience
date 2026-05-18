@@ -1,6 +1,17 @@
 import { defineConfig } from "vitest/config";
+import path from "path";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // custom-card-helpers is not installed; stub it so ha-components.ts
+      // can be imported in tests without Vite erroring on the dynamic import.
+      "custom-card-helpers": path.resolve(
+        __dirname,
+        "test/stubs/custom-card-helpers.ts",
+      ),
+    },
+  },
   test: {
     environment: "jsdom",
     setupFiles: ["./test/setup.ts"],

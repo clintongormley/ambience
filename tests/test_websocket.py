@@ -572,3 +572,42 @@ async def test_ws_periods_save_returns_warnings_for_dangling_refs(
         and w["missing_period"] == "evening"
         for w in warnings
     )
+
+
+# ---------------------------------------------------------------------------
+# B9: ambience/time_of_day_periods/reset
+# ---------------------------------------------------------------------------
+
+
+async def test_ws_periods_reset_clears_custom_and_hidden(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    client = await hass_ws_client()
+    # First save some custom + hidden
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "ambience/time_of_day_periods/save",
+            "custom": {
+                "wind_down": {
+                    "from": {"kind": "time", "hh": 20, "mm": 0},
+                    "to": {"kind": "time", "hh": 22, "mm": 0},
+                }
+            },
+            "hidden": ["day"],
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+
+    # Reset
+    await client.send_json({"id": 2, "type": "ambience/time_of_day_periods/reset"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["ok"] is True
+
+    # Verify via list
+    await client.send_json({"id": 3, "type": "ambience/time_of_day_periods/list"})
+    msg = await client.receive_json()
+    assert msg["result"]["custom"] == {}
+    assert msg["result"]["hidden"] == []

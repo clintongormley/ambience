@@ -38,6 +38,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_dry_run)
     websocket_api.async_register_command(hass, _ws_periods_list)
     websocket_api.async_register_command(hass, _ws_periods_save)
+    websocket_api.async_register_command(hass, _ws_periods_reset)
 
 
 def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
@@ -304,6 +305,19 @@ async def _ws_periods_save(
                 )
 
     connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/time_of_day_periods/reset"})
+@websocket_api.async_response
+async def _ws_periods_reset(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    period_store = hass.data[DOMAIN][DATA_PERIODS]
+    await period_store.reset()
+    connection.send_result(msg["id"], {"ok": True})
 
 
 def async_unregister_commands(hass: HomeAssistant) -> None:

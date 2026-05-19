@@ -107,3 +107,89 @@ async def test_periods_load_handles_legacy_payload_without_periods_key(
     # Simulate a load where on-disk payload lacks the new key.
     store._data = {"version": 1, "areas": {}}
     assert store.get_periods() == {"custom": {}, "hidden": []}
+
+
+def test_async_load_migrates_old_action_targets(hass: HomeAssistant) -> None:
+    """Old dict-shaped targets are split by params group into new entity_ids/params shape."""
+    store = AmbienceStore(hass)
+    store._data = {
+        "version": 1,
+        "areas": {
+            "living_room": {
+                "matchers": [],
+                "auto_sort": True,
+                "rules": [
+                    {
+                        "name": "test",
+                        "when": {},
+                        "actions": [
+                            {
+                                "action": "set_light",
+                                "targets": {
+                                    "light.a": {"brightness": 100},
+                                    "light.b": {"brightness": 100},
+                                    "light.c": {"brightness": 50},
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        },
+    }
+    store._migrate_actions()
+    actions = store._data["areas"]["living_room"]["rules"][0]["actions"]
+    # Two groups: brightness=100 (a, b) and brightness=50 (c)
+    assert len(actions) == 2
+    by_brightness = {a["params"]["brightness"]: a for a in actions}
+    assert sorted(by_brightness[100]["entity_ids"]) == ["light.a", "light.b"]
+    assert by_brightness[100]["action"] == "set_light"
+    assert by_brightness[50]["entity_ids"] == ["light.c"]
+
+
+def test_async_load_leaves_new_shape_unchanged(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    new_action = {
+        "action": "set_light",
+        "entity_ids": ["light.a"],
+        "params": {"brightness": 80},
+    }
+    store._data = {
+        "version": 1,
+        "areas": {
+            "living_room": {
+                "matchers": [],
+                "auto_sort": True,
+                "rules": [{"name": "test", "when": {}, "actions": [new_action]}],
+            }
+        },
+    }
+    store._migrate_actions()
+    assert store._data["areas"]["living_room"]["rules"][0]["actions"] == [new_action]
+
+
+def test_async_load_handles_empty_targets_dict(hass: HomeAssistant) -> None:
+    """An old-shape action with empty targets becomes an entry with no entity_ids."""
+    store = AmbienceStore(hass)
+    store._data = {
+        "version": 1,
+        "areas": {
+            "living_room": {
+                "matchers": [],
+                "auto_sort": True,
+                "rules": [
+                    {
+                        "name": "test",
+                        "when": {},
+                        "actions": [{"action": "set_light", "targets": {}}],
+                    }
+                ],
+            }
+        },
+    }
+    store._migrate_actions()
+    actions = store._data["areas"]["living_room"]["rules"][0]["actions"]
+    assert len(actions) == 1
+    assert actions[0]["action"] == "set_light"
+    assert actions[0]["entity_ids"] == []
+    assert actions[0]["params"] == {}

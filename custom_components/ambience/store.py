@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -29,6 +30,48 @@ class AmbienceStore:
             "time_of_day_periods": {"custom": {}, "hidden": []},
         }
 
+    @staticmethod
+    def _migrate_one_action(action: dict[str, Any]) -> list[dict[str, Any]]:
+        """Convert a single action dict from old to new shape.
+
+        Returns one or more new-shape actions. New-shape actions are passed
+        through unchanged. Old-shape actions (with `targets` dict) are split
+        by params group into one new-shape action per distinct params dict.
+        """
+        if "entity_ids" in action and "params" in action:
+            return [action]
+        targets = action.get("targets")
+        if not isinstance(targets, dict):
+            return [action]
+        if not targets:
+            return [
+                {
+                    "action": action.get("action", ""),
+                    "entity_ids": [],
+                    "params": {},
+                }
+            ]
+        groups: dict[str, dict[str, Any]] = {}
+        for entity_id, params in targets.items():
+            key = json.dumps(params, sort_keys=True)
+            if key not in groups:
+                groups[key] = {
+                    "action": action.get("action", ""),
+                    "entity_ids": [],
+                    "params": params,
+                }
+            groups[key]["entity_ids"].append(entity_id)
+        return list(groups.values())
+
+    def _migrate_actions(self) -> None:
+        """Walk every persisted rule and convert old-shape actions to new shape."""
+        for area_cfg in self._data.get("areas", {}).values():
+            for rule in area_cfg.get("rules", []):
+                new_actions: list[dict[str, Any]] = []
+                for action in rule.get("actions", []):
+                    new_actions.extend(self._migrate_one_action(action))
+                rule["actions"] = new_actions
+
     async def async_load(self) -> None:
         raw = await self._store.async_load()
         if raw is None:
@@ -39,6 +82,7 @@ class AmbienceStore:
             self._data = self._empty()
             return
         self._data = raw
+        self._migrate_actions()
 
     def areas(self) -> dict[str, dict[str, Any]]:
         return dict(self._data["areas"])

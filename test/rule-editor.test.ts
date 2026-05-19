@@ -57,7 +57,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   test("matcher rows render as collapsed summaries by default", async () => {
     el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
     const rows = el.shadowRoot.querySelectorAll(".slot.collapsed");
-    expect(rows.length).toBe(2);  // scene + time_of_day
+    expect(rows.length).toBe(3);  // name + scene + time_of_day
   });
 
   test("clicking a collapsed matcher summary expands it", async () => {
@@ -298,7 +298,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("typing in name input updates the draft name", async () => {
     el = await mount({ name: "original", when: {}, actions: [] });
-    const nameInput = el.shadowRoot.querySelector('input[type="text"]') as HTMLInputElement;
+    // Open the name slot first
+    const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const nameInput = nameRow.querySelector('input[type="text"]') as HTMLInputElement;
     nameInput.value = "renamed";
     nameInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
     await el.updateComplete;
@@ -307,6 +311,41 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     expect(saved?.name).toBe("renamed");
+  });
+
+  test("name slot renders as collapsed summary with current name", async () => {
+    el = await mount({ name: "My Rule", when: {}, actions: [] });
+    const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    expect(nameRow.classList.contains("collapsed")).toBe(true);
+    expect(nameRow.textContent).toContain("My Rule");
+  });
+
+  test("name slot summary shows 'New rule' when name is empty", async () => {
+    el = await mount({ name: "", when: {}, actions: [] });
+    const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    expect(nameRow.textContent).toContain("New rule");
+  });
+
+  test("clicking name summary expands the input", async () => {
+    el = await mount({ name: "", when: {}, actions: [] });
+    const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    expect(nameRow.querySelector('input[type="text"]')).toBeNull();
+    nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(nameRow.querySelector('input[type="text"]')).toBeTruthy();
+  });
+
+  test("opening name slot collapses an open matcher row", async () => {
+    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
+    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(scene.classList.contains("expanded")).toBe(true);
+    const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(scene.classList.contains("collapsed")).toBe(true);
+    expect(nameRow.classList.contains("expanded")).toBe(true);
   });
 
   test("matcher input value-changed event calls _setPredicate", async () => {

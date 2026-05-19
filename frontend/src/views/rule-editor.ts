@@ -18,6 +18,7 @@ import "./matcher-input.js";
 import "./target-picker.js";
 
 type OpenSlot =
+  | { kind: "name" }
   | { kind: "matcher"; id: string }
   | { kind: "action"; idx: number }
   | null;
@@ -36,7 +37,6 @@ export class AmbienceRuleEditor extends LitElement {
       border-radius: 8px; padding: 1.5rem;
       width: 90%; max-width: 40rem; max-height: 90vh; overflow-y: auto;
     }
-    h2 { margin: 0 0 1rem 0; }
     h3 {
       margin: 1.5rem 0 0.5rem 0;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
@@ -123,14 +123,32 @@ export class AmbienceRuleEditor extends LitElement {
     this._setName((e.target as HTMLElement & { value: string }).value);
   };
 
-  /**
-   * Picks the best available HA text-input variant: `ha-input` (HA 2026.05+)
-   * or `ha-textfield` (older), falling back to a plain `<input>` when
-   * neither is registered. The HaComponentsController re-renders us if a
-   * tracked component becomes defined later, so we upgrade in place.
-   */
-  private _renderNameField() {
+  private _renderNameSlot() {
     const value = this._draft!.name ?? "";
+    const open = this._isOpen({ kind: "name" });
+    const summaryText = value || "New rule";
+    return html`
+      <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="name">
+        <div class="summary" @click=${() => this._toggleSlot({ kind: "name" })}>
+          <span class="summary-label"><strong>${summaryText}</strong></span>
+        </div>
+        ${open ? html`
+          <div class="body">
+            <label>Name (optional)</label>
+            ${this._renderNameInputControl(value)}
+          </div>
+        ` : ""}
+      </div>
+    `;
+  }
+
+  /**
+   * Renders just the input control (no label, no slot wrapper). The label is
+   * already provided by the slot body; this method exists so the input
+   * stays the same across the three HA variants without duplicating
+   * shell markup.
+   */
+  private _renderNameInputControl(value: string) {
     const tag = pickHaTextInput();
     /* v8 ignore next 8 -- ha-input is eagerly registered in HA 2026.05+, not in jsdom */
     if (tag === "ha-input") {
@@ -140,22 +158,20 @@ export class AmbienceRuleEditor extends LitElement {
     if (tag === "ha-textfield") {
       return html`<ha-textfield label="Name (optional)" .value=${value} @input=${this._onNameInput}></ha-textfield>`;
     }
-    return html`
-      <label>Name (optional)</label>
-      <input type="text" .value=${value} @input=${this._onNameInput} />
-    `;
+    return html`<input type="text" .value=${value} @input=${this._onNameInput} />`;
   }
 
   // --- Collapse helpers ---
 
-  private _isOpen(slot: { kind: "matcher"; id: string } | { kind: "action"; idx: number }): boolean {
+  private _isOpen(slot: { kind: "name" } | { kind: "matcher"; id: string } | { kind: "action"; idx: number }): boolean {
     if (this._open === null) return false;
+    if (slot.kind === "name" && this._open.kind === "name") return true;
     if (slot.kind === "matcher" && this._open.kind === "matcher") return slot.id === this._open.id;
     if (slot.kind === "action" && this._open.kind === "action") return slot.idx === this._open.idx;
     return false;
   }
 
-  private _toggleSlot(slot: { kind: "matcher"; id: string } | { kind: "action"; idx: number }) {
+  private _toggleSlot(slot: { kind: "name" } | { kind: "matcher"; id: string } | { kind: "action"; idx: number }) {
     this._open = this._isOpen(slot) ? null : slot;
   }
 
@@ -321,8 +337,7 @@ export class AmbienceRuleEditor extends LitElement {
     if (!this._draft) return html``;
     return html`
       <div class="modal">
-        <h2>${this._draft.name || "New rule"}</h2>
-        ${this._renderNameField()}
+        ${this._renderNameSlot()}
 
         <h3>When</h3>
         ${this.matchers.map((m) => this._renderMatcherRow(m))}

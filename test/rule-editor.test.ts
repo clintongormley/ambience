@@ -13,8 +13,8 @@ const availableActions: ActionInfo[] = [
     description: "",
     domains: ["light"],
     target_params: [
-      { name: "brightness", type: "int", required: true },
-      { name: "transition", type: "number", required: false },
+      { name: "brightness", type: "int", required: true, min: 0, max: 100, description: "Percentage brightness, 0 for off" },
+      { name: "transition", type: "number", required: false, min: 0, description: "Milliseconds" },
     ],
   },
 ];
@@ -368,5 +368,72 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     expect(saved?.when?.scene).toBe("relaxed");
+  });
+
+  test("brightness input is clamped to [0, 100] on entry above max", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp_a"], params: { brightness: 50 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const inputs = action.querySelectorAll('input[type="number"]');
+    const brightness = inputs[0] as HTMLInputElement;
+    brightness.value = "150";
+    brightness.dispatchEvent(new Event("input"));
+    await el.updateComplete;
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    (Array.from(el.shadowRoot.querySelectorAll("button.primary")) as HTMLButtonElement[])
+      .find((b) => b.textContent?.trim() === "Save rule")!
+      .click();
+    expect(saved.actions[0].params.brightness).toBe(100);
+  });
+
+  test("brightness input is clamped to [0, 100] on entry below min", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp_a"], params: { brightness: 50 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const brightness = action.querySelector('input[type="number"]') as HTMLInputElement;
+    brightness.value = "-50";
+    brightness.dispatchEvent(new Event("input"));
+    await el.updateComplete;
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    (Array.from(el.shadowRoot.querySelectorAll("button.primary")) as HTMLButtonElement[])
+      .find((b) => b.textContent?.trim() === "Save rule")!
+      .click();
+    expect(saved.actions[0].params.brightness).toBe(0);
+  });
+
+  test("param labels use friendly title-case form", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp_a"], params: { brightness: 80 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const labels = Array.from(action.querySelectorAll("label")).map((l) => l.textContent?.trim());
+    expect(labels).toContain("Brightness *");  // required: true → asterisk
+    expect(labels).toContain("Transition");    // not required → no asterisk
+  });
+
+  test("param placeholders use description from backend", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp_a"], params: { brightness: 80 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const inputs = Array.from(action.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
+    expect(inputs[0].placeholder).toBe("Percentage brightness, 0 for off");
+    expect(inputs[1].placeholder).toBe("Milliseconds");
   });
 });

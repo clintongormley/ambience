@@ -245,6 +245,13 @@ export class AmbienceRuleEditor extends LitElement {
     this._updateActionAt(idx, (a) => ({ ...a, entity_ids }));
   }
 
+  private _paramLabel(name: string): string {
+    // brightness → "Brightness"; transition → "Transition"
+    // Same snake_case → title-case rule we use for matcher/action labels.
+    const spaced = name.replaceAll("_", " ").toLowerCase();
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  }
+
   private _updateActionParam(idx: number, param: ParamSpec, rawValue: string) {
     this._updateActionAt(idx, (a) => {
       const params = { ...a.params };
@@ -255,6 +262,13 @@ export class AmbienceRuleEditor extends LitElement {
         parsed = rawValue === "" ? undefined : parseFloat(rawValue);
       /* v8 ignore next -- boolean params are rare; not exercised in current actions */
       else if (param.type === "boolean") parsed = rawValue === "true";
+      // Clamp numeric values to [min, max] if those bounds are defined.
+      if (typeof parsed === "number" && Number.isFinite(parsed)) {
+        let num = parsed;
+        if (typeof param.min === "number" && num < param.min) num = param.min;
+        if (typeof param.max === "number" && num > param.max) num = param.max;
+        parsed = num;
+      }
       if (parsed === undefined) delete params[param.name];
       else params[param.name] = parsed;
       return { ...a, params };
@@ -266,9 +280,10 @@ export class AmbienceRuleEditor extends LitElement {
     return html`
       ${params.map((p) => html`
         <div>
-          <label>${p.name}${p.required ? " *" : ""}</label>
+          <label>${this._paramLabel(p.name)}${p.required ? " *" : ""}</label>
           <input
             type=${p.type === "int" || p.type === "number" ? "number" : "text"}
+            placeholder=${p.description ?? ""}
             .value=${String(action.params[p.name] ?? "")}
             min=${p.min ?? ""}
             max=${p.max ?? ""}

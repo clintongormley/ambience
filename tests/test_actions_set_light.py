@@ -51,24 +51,40 @@ def test_validate_transition_nonnegative() -> None:
 async def test_execute_turns_on_each_entity(hass: HomeAssistant) -> None:
     on_calls = async_mock_service(hass, "light", "turn_on")
     action = SetLightAction()
-    await action.execute(hass, ["light.a", "light.b"], {"brightness": 80, "transition": 0.5})
+    # Transition is in MILLISECONDS in the API; HA receives seconds.
+    await action.execute(hass, ["light.a", "light.b"], {"brightness": 80, "transition": 500})
     assert len(on_calls) == 2
     entities = {c.data["entity_id"] for c in on_calls}
     assert entities == {"light.a", "light.b"}
     # Check params on the first call (both share the same params)
     call_a = next(c for c in on_calls if c.data["entity_id"] == "light.a")
     assert call_a.data["brightness_pct"] == 80
-    assert call_a.data["transition"] == 0.5
+    assert call_a.data["transition"] == 0.5  # 500ms → 0.5s
 
 
 async def test_execute_zero_brightness_turns_off(hass: HomeAssistant) -> None:
     on_calls = async_mock_service(hass, "light", "turn_on")
     off_calls = async_mock_service(hass, "light", "turn_off")
     action = SetLightAction()
-    await action.execute(hass, ["light.a"], {"brightness": 0})
+    await action.execute(hass, ["light.a"], {"brightness": 0, "transition": 0})
     assert len(on_calls) == 0
     assert len(off_calls) == 1
     assert off_calls[0].data["entity_id"] == "light.a"
+    assert off_calls[0].data["transition"] == 0
+
+
+async def test_execute_converts_transition_ms_to_seconds(hass: HomeAssistant) -> None:
+    on_calls = async_mock_service(hass, "light", "turn_on")
+    action = SetLightAction()
+    await action.execute(hass, ["light.a"], {"brightness": 100, "transition": 2500})
+    assert on_calls[0].data["transition"] == 2.5
+
+
+async def test_execute_zero_transition_passes_zero_seconds(hass: HomeAssistant) -> None:
+    off_calls = async_mock_service(hass, "light", "turn_off")
+    action = SetLightAction()
+    await action.execute(hass, ["light.a"], {"brightness": 0, "transition": 0})
+    assert off_calls[0].data["transition"] == 0
 
 
 async def test_execute_logs_warning_on_service_exception(

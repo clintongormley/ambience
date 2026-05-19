@@ -434,12 +434,13 @@ var tt=Object.defineProperty;var it=Object.getOwnPropertyDescriptor;var a=(n,i,e
           </div>
         `:""}
       </div>
-    `}_addActionSlot(){if(!this._draft)return;let e={action:"set_light",entity_ids:[],params:{}},t=this._draft.actions.length;this._draft={...this._draft,actions:[...this._draft.actions,e]},this._open={kind:"action",idx:t}}_updateActionAt(e,t){if(!this._draft)return;let r=this._draft.actions.map((s,o)=>o===e?t(s):s);this._draft={...this._draft,actions:r}}_changeActionType(e,t){this._updateActionAt(e,()=>{let r=this.availableActions.find(o=>o.name===t),s={};return r?.target_params.forEach(o=>{"default"in o&&(s[o.name]=o.default)}),{action:t,entity_ids:[],params:s}})}_deleteAction(e){this._draft&&(this._draft={...this._draft,actions:this._draft.actions.filter((t,r)=>r!==e)},this._open?.kind==="action"&&this._open.idx===e&&(this._open=null))}_setActionTargets(e,t){this._updateActionAt(e,r=>({...r,entity_ids:t}))}_updateActionParam(e,t,r){this._updateActionAt(e,s=>{let o={...s.params},d=r;return t.type==="int"?d=r===""?void 0:parseInt(r,10):t.type==="number"?d=r===""?void 0:parseFloat(r):t.type==="boolean"&&(d=r==="true"),d===void 0?delete o[t.name]:o[t.name]=d,{...s,params:o}})}_renderActionParams(e,t,r){let s=r?.target_params??[];return l`
+    `}_addActionSlot(){if(!this._draft)return;let e={action:"set_light",entity_ids:[],params:{}},t=this._draft.actions.length;this._draft={...this._draft,actions:[...this._draft.actions,e]},this._open={kind:"action",idx:t}}_updateActionAt(e,t){if(!this._draft)return;let r=this._draft.actions.map((s,o)=>o===e?t(s):s);this._draft={...this._draft,actions:r}}_changeActionType(e,t){this._updateActionAt(e,()=>{let r=this.availableActions.find(o=>o.name===t),s={};return r?.target_params.forEach(o=>{"default"in o&&(s[o.name]=o.default)}),{action:t,entity_ids:[],params:s}})}_deleteAction(e){this._draft&&(this._draft={...this._draft,actions:this._draft.actions.filter((t,r)=>r!==e)},this._open?.kind==="action"&&this._open.idx===e&&(this._open=null))}_setActionTargets(e,t){this._updateActionAt(e,r=>({...r,entity_ids:t}))}_paramLabel(e){let t=e.replaceAll("_"," ").toLowerCase();return t.charAt(0).toUpperCase()+t.slice(1)}_updateActionParam(e,t,r){this._updateActionAt(e,s=>{let o={...s.params},d=r;if(t.type==="int"?d=r===""?void 0:parseInt(r,10):t.type==="number"?d=r===""?void 0:parseFloat(r):t.type==="boolean"&&(d=r==="true"),typeof d=="number"&&Number.isFinite(d)){let c=d;typeof t.min=="number"&&c<t.min&&(c=t.min),typeof t.max=="number"&&c>t.max&&(c=t.max),d=c}return d===void 0?delete o[t.name]:o[t.name]=d,{...s,params:o}})}_renderActionParams(e,t,r){let s=r?.target_params??[];return l`
       ${s.map(o=>l`
         <div>
-          <label>${o.name}${o.required?" *":""}</label>
+          <label>${this._paramLabel(o.name)}${o.required?" *":""}</label>
           <input
             type=${o.type==="int"||o.type==="number"?"number":"text"}
+            placeholder=${o.description??""}
             .value=${String(t.params[o.name]??"")}
             min=${o.min??""}
             max=${o.max??""}

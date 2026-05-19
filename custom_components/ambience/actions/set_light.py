@@ -25,7 +25,7 @@ class SetLightAction:
             "required": True,
             "min": 0,
             "max": 100,
-            "description": "Brightness percent (0 = off, 100 = full).",
+            "description": "Percentage brightness, 0 for off",
         },
         {
             "name": "transition",
@@ -33,7 +33,7 @@ class SetLightAction:
             "required": False,
             "default": 0,
             "min": 0,
-            "description": "Transition duration in seconds.",
+            "description": "Milliseconds",
         },
     ]
 
@@ -51,12 +51,13 @@ class SetLightAction:
 
     async def _apply_one(self, hass: HomeAssistant, entity_id: str, params: dict[str, Any]) -> None:
         brightness = params.get("brightness", 0)
-        transition = params.get("transition", 0)
+        transition_ms = params.get("transition", 0)
+        transition_s = transition_ms / 1000  # HA's light.turn_on transition is in seconds
         if brightness == 0:
             await hass.services.async_call(
                 "light",
                 "turn_off",
-                {"entity_id": entity_id, "transition": transition},
+                {"entity_id": entity_id, "transition": transition_s},
                 blocking=True,
             )
             return
@@ -66,7 +67,7 @@ class SetLightAction:
             {
                 "entity_id": entity_id,
                 "brightness_pct": brightness,
-                "transition": transition,
+                "transition": transition_s,
             },
             blocking=True,
         )

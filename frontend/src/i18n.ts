@@ -12,12 +12,26 @@ function _resolve(hass: HassLike | undefined, key: string, fallback: string): st
   return fallback;
 }
 
+/**
+ * Convert a snake_case identifier into a friendly display string:
+ *   "scene"       → "Scene"
+ *   "time_of_day" → "Time of day"
+ *   "set_light"   → "Set light"
+ *
+ * Used as the fallback for matcher/action labels when hass.localize
+ * doesn't have a translation for the key.
+ */
+function _friendlyFallback(id: string): string {
+  const spaced = id.replaceAll("_", " ").toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 export function matcherLabel(hass: HassLike | undefined, name: string): string {
-  return _resolve(hass, `component.ambience.matcher.${name}`, name);
+  return _resolve(hass, `component.ambience.matcher.${name}`, _friendlyFallback(name));
 }
 
 export function actionLabel(hass: HassLike | undefined, name: string): string {
-  return _resolve(hass, `component.ambience.action.${name}`, name);
+  return _resolve(hass, `component.ambience.action.${name}`, _friendlyFallback(name));
 }
 
 /**

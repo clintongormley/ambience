@@ -88,7 +88,7 @@ describe("summariseAction", () => {
       params: { brightness: 80 },
     };
     expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("set_light: 2 lights, brightness 80");
+      .toBe("Set light: 2 lights, brightness 80");
   });
 
   test("action with one entity uses singular", () => {
@@ -98,7 +98,7 @@ describe("summariseAction", () => {
       params: { brightness: 80 },
     };
     expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("set_light: 1 light, brightness 80");
+      .toBe("Set light: 1 light, brightness 80");
   });
 
   test("action with no entities", () => {
@@ -108,7 +108,7 @@ describe("summariseAction", () => {
       params: { brightness: 80 },
     };
     expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("set_light: (no targets), brightness 80");
+      .toBe("Set light: (no targets), brightness 80");
   });
 
   test("action with no params omits the params clause", () => {
@@ -118,7 +118,7 @@ describe("summariseAction", () => {
       params: {},
     };
     expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("set_light: 1 light");
+      .toBe("Set light: 1 light");
   });
 
   test("uses actionLabel for the action name when hass.localize hits", () => {
@@ -140,6 +140,6 @@ describe("summariseAction", () => {
       params: {},
     };
     expect(summariseAction(action, undefined, { hass: noLocalize }))
-      .toBe("unknown: 2 targets");
+      .toBe("Unknown: 2 targets");
   });
 });

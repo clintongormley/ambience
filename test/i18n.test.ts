@@ -48,18 +48,22 @@ describe("matcherLabel", () => {
     expect(matcherLabel(hass, "scene")).toBe("Scene");
   });
 
-  test("falls back to raw name when hass.localize misses", () => {
+  test("falls back to friendly form of name when hass.localize misses", () => {
     const hass = { localize: () => undefined };
-    expect(matcherLabel(hass, "scene")).toBe("scene");
+    expect(matcherLabel(hass, "scene")).toBe("Scene");
   });
 
-  test("falls back to raw name when localize returns the key itself", () => {
+  test("falls back to friendly form for multi-word ids", () => {
+    expect(matcherLabel(undefined, "time_of_day")).toBe("Time of day");
+  });
+
+  test("falls back to friendly form when localize returns the key itself", () => {
     const hass = { localize: (k: string) => k };
-    expect(matcherLabel(hass, "time_of_day")).toBe("time_of_day");
+    expect(matcherLabel(hass, "time_of_day")).toBe("Time of day");
   });
 
   test("works with undefined hass", () => {
-    expect(matcherLabel(undefined, "scene")).toBe("scene");
+    expect(matcherLabel(undefined, "scene")).toBe("Scene");
   });
 });
 
@@ -70,7 +74,7 @@ describe("actionLabel", () => {
     expect(actionLabel(hass, "set_light")).toBe("Set light");
   });
 
-  test("falls back to raw name", () => {
-    expect(actionLabel(undefined, "set_light")).toBe("set_light");
+  test("falls back to friendly form of name", () => {
+    expect(actionLabel(undefined, "set_light")).toBe("Set light");
   });
 });

@@ -6,6 +6,7 @@ import { watchHaComponents } from "../ha-components.js";
 
 type HaFormSchema = {
   name: string;
+  label?: string;
   selector: {
     select: {
       options: Array<{ value: string; label: string }>;
@@ -130,6 +131,7 @@ export class AmbienceSceneCombobox extends LitElement {
       this._schema = [
         {
           name: "scene",
+          label: "Scene name",
           selector: {
             select: {
               options: this.suggestions.map((s) => ({ value: s, label: s })),
@@ -216,7 +218,7 @@ export class AmbienceSceneCombobox extends LitElement {
       <div class="control">
         <input
           type="text"
-          placeholder="(any scene)"
+          placeholder="Scene name"
           .value=${this.value ?? ""}
           @input=${this._onInput}
           @focus=${this._onFocus}

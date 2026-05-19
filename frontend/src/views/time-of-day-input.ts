@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { periodLabel } from "../i18n.js";
+import { summariseTimeOfDay } from "../summary.js";
 import type {
   PeriodStoreView,
   TimeEndpoint,
@@ -53,6 +54,17 @@ export class AmbienceTimeOfDayInput extends LitElement {
       background: none; border: 1px dashed var(--divider-color, #ccc);
       padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer; color: inherit;
     }
+    .summary-chip {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.4rem 0.6rem;
+      border: 1px solid var(--divider-color, #ddd);
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+      background: var(--secondary-background-color, #f5f5f5);
+      cursor: pointer;
+    }
+    .summary-chip:hover { border-color: var(--primary-color, #03a9f4); }
+    .chip-label { flex: 1; }
   `;
 
   @property({ attribute: false }) value: TimeOfDayPredicate = null;
@@ -60,21 +72,29 @@ export class AmbienceTimeOfDayInput extends LitElement {
   @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
 
   @state() private _entries: Entry[] = [ANY];
+  @state() private _openIdx: number = 0;
 
   override willUpdate(changed: Map<string, unknown>): void {
     if (changed.has("value")) {
       this._entries = this._predicateToEntries(this.value);
       if (this._entries.length === 0) this._entries = [ANY];
+      // Default open index to last entry when loading from value
+      this._openIdx = Math.max(0, this._entries.length - 1);
+    }
+    if (this._openIdx >= this._entries.length) {
+      this._openIdx = Math.max(0, this._entries.length - 1);
     }
   }
 
   override updated(): void {
-    // Imperatively sync each entry's select value after DOM is committed.
+    // Imperatively sync each expanded entry's select value after DOM is committed.
     // Needed because the <select>.value property must be set after <option>
     // children exist (jsdom and some browsers require this ordering).
+    // In multi-entry mode only one entry is expanded (at _openIdx), so there
+    // is at most one .entry select in the DOM.
     const selects = this.shadowRoot?.querySelectorAll<HTMLSelectElement>(".entry select");
-    selects?.forEach((sel, idx) => {
-      const entry = this._entries[idx];
+    selects?.forEach((sel) => {
+      const entry = this._entries[this._openIdx];
       if (!entry) return;
       const target =
         entry.kind === "any" ? "__any__"
@@ -145,13 +165,42 @@ export class AmbienceTimeOfDayInput extends LitElement {
   private _onRemove(idx: number) {
     const entries = this._entries.filter((_, i) => i !== idx);
     this._entries = entries.length === 0 ? [ANY] : entries;
+    if (this._openIdx >= this._entries.length) {
+      this._openIdx = Math.max(0, this._entries.length - 1);
+    } else if (idx < this._openIdx) {
+      this._openIdx -= 1;
+    }
     this._emit(this._entries);
   }
 
   private _onAdd() {
     const entries = [...this._entries, { kind: "range", ...DEFAULT_RANGE } as Entry];
     this._entries = entries;
+    this._openIdx = entries.length - 1;
     this._emit(entries);
+  }
+
+  private _onChipClick(idx: number) {
+    this._openIdx = idx;
+  }
+
+  private _renderChip(entry: Entry, idx: number) {
+    let label: string;
+    if (entry.kind === "any") {
+      label = "(any)";
+    } else if (entry.kind === "period") {
+      label = summariseTimeOfDay({ period: entry.period }, { hass: this.hass, periods: this.periods });
+    } else {
+      label = summariseTimeOfDay({ from: entry.from, to: entry.to }, { hass: this.hass, periods: this.periods });
+    }
+    return html`
+      <div class="summary-chip" @click=${() => this._onChipClick(idx)}>
+        <span class="chip-label">${label}</span>
+        ${this._entries.length > 1
+          ? html`<button class="remove" @click=${(e: Event) => { e.stopPropagation(); this._onRemove(idx); }} title="Remove">✕</button>`
+          : ""}
+      </div>
+    `;
   }
 
   private _renderEntry(entry: Entry, idx: number, allowAny: boolean) {
@@ -199,8 +248,13 @@ export class AmbienceTimeOfDayInput extends LitElement {
 
   override render() {
     const hasNonAny = this._entries.some((e) => e.kind !== "any");
+    const multi = this._entries.length > 1;
     return html`
-      ${this._entries.map((entry, idx) => this._renderEntry(entry, idx, idx === 0))}
+      ${this._entries.map((entry, idx) =>
+        multi && idx !== this._openIdx
+          ? this._renderChip(entry, idx)
+          : this._renderEntry(entry, idx, idx === 0),
+      )}
       ${hasNonAny ? html`<button class="add-btn" @click=${this._onAdd}>+ add another time range</button>` : ""}
     `;
   }

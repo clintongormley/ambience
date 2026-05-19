@@ -119,4 +119,45 @@ describe("ambience-time-of-day-input", () => {
     pickPeriod(el, 0, "__any__");
     expect(get()).toBeNull();
   });
+
+  test("single entry stays expanded — no summary chip", async () => {
+    el = await mount({ period: "afternoon" });
+    // No .summary-chip element for the single-entry case
+    expect(el.shadowRoot.querySelectorAll(".summary-chip").length).toBe(0);
+    // The select is rendered (expanded form)
+    expect(el.shadowRoot.querySelector(".entry select")).toBeTruthy();
+  });
+
+  test("2+ entries render n-1 summaries and 1 expanded entry", async () => {
+    el = await mount([{ period: "afternoon" }, { period: "evening" }]);
+    await el.updateComplete;
+    // One chip (the non-open entry) + one expanded form (the open one)
+    expect(el.shadowRoot.querySelectorAll(".summary-chip").length).toBe(1);
+    expect(el.shadowRoot.querySelectorAll(".entry select").length).toBe(1);
+  });
+
+  test("clicking add-another opens the newly added entry, collapses the previous", async () => {
+    el = await mount({ period: "afternoon" });
+    const addBtn = el.shadowRoot.querySelector(".add-btn") as HTMLButtonElement;
+    addBtn.click();
+    await el.updateComplete;
+    // Two entries; the first should now be a summary chip, the second expanded
+    expect(el.shadowRoot.querySelectorAll(".summary-chip").length).toBe(1);
+    expect(el.shadowRoot.querySelectorAll(".entry select").length).toBe(1);
+  });
+
+  test("clicking a summary chip expands it and collapses the previously open one", async () => {
+    el = await mount([{ period: "afternoon" }, { period: "evening" }]);
+    await el.updateComplete;
+    // The expanded entry is initially the last one (index 1 = evening)
+    let expandedSelect = el.shadowRoot.querySelector(".entry select") as HTMLSelectElement;
+    expect(expandedSelect.value).toBe("evening");
+    // Click the summary chip (index 0 = afternoon)
+    const chip = el.shadowRoot.querySelector(".summary-chip") as HTMLElement;
+    chip.click();
+    await el.updateComplete;
+    // Now the expanded entry should be afternoon
+    expandedSelect = el.shadowRoot.querySelector(".entry select") as HTMLSelectElement;
+    expect(expandedSelect.value).toBe("afternoon");
+  });
 });

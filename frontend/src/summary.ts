@@ -84,9 +84,13 @@ export function summariseAction(
   if (n === 0) targets = "(no targets)";
   else if (n === 1) targets = `1 ${noun}`;
   else targets = `${n} ${noun}s`;
+  const unitFor: Record<string, string> = {};
+  for (const p of info?.target_params ?? []) {
+    if (p.unit) unitFor[p.name] = p.unit;
+  }
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${k} ${v}`)
+    .map(([k, v]) => `${k} ${v}${unitFor[k] ?? ""}`)
     .join(", ");
   return params ? `${name}: ${targets}, ${params}` : `${name}: ${targets}`;
 }

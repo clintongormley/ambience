@@ -108,8 +108,8 @@ describe("summariseAction", () => {
     description: "",
     domains: ["light"],
     target_params: [
-      { name: "brightness", type: "int", required: true },
-      { name: "transition", type: "number", required: false },
+      { name: "brightness", type: "int", required: true, unit: "%" },
+      { name: "transition", type: "number", required: false, unit: "s" },
     ],
   };
 
@@ -120,7 +120,7 @@ describe("summariseAction", () => {
       params: { brightness: 80 },
     };
     expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("Set light: 2 lights, brightness 80");
+      .toBe("Set light: 2 lights, brightness 80%");
   });
 
   test("action with one entity uses singular", () => {
@@ -130,7 +130,7 @@ describe("summariseAction", () => {
       params: { brightness: 80 },
     };
     expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("Set light: 1 light, brightness 80");
+      .toBe("Set light: 1 light, brightness 80%");
   });
 
   test("action with no entities", () => {
@@ -140,7 +140,7 @@ describe("summariseAction", () => {
       params: { brightness: 80 },
     };
     expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("Set light: (no targets), brightness 80");
+      .toBe("Set light: (no targets), brightness 80%");
   });
 
   test("action with no params omits the params clause", () => {
@@ -162,6 +162,34 @@ describe("summariseAction", () => {
       params: { brightness: 50 },
     };
     expect(summariseAction(action, info, { hass }))
+      .toBe("Set light: 1 light, brightness 50%");
+  });
+
+  test("appends param unit suffix when ParamSpec has unit", () => {
+    const action: ActionSpec = {
+      action: "set_light",
+      entity_ids: ["light.a"],
+      params: { brightness: 80, transition: 1.5 },
+    };
+    expect(summariseAction(action, info, { hass: noLocalize }))
+      .toBe("Set light: 1 light, brightness 80%, transition 1.5s");
+  });
+
+  test("omits unit suffix when ParamSpec has no unit field", () => {
+    const noUnitInfo: ActionInfo = {
+      name: "set_light",
+      description: "",
+      domains: ["light"],
+      target_params: [
+        { name: "brightness", type: "int", required: true },
+      ],
+    };
+    const action: ActionSpec = {
+      action: "set_light",
+      entity_ids: ["light.a"],
+      params: { brightness: 50 },
+    };
+    expect(summariseAction(action, noUnitInfo, { hass: noLocalize }))
       .toBe("Set light: 1 light, brightness 50");
   });
 

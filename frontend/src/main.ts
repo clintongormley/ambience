@@ -7,7 +7,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import type { HassConnection } from "./api.js";
-import { ensureHaComponents } from "./ha-components.js";
+import { watchHaComponents } from "./ha-components.js";
 import "./views/areas-list-view.js";
 import "./views/periods-view.js";
 
@@ -60,10 +60,10 @@ export class AmbiencePanel extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    // Kick off HA's lazy form-component load early so modals don't flash a
-    // loading state on first open. Fire-and-forget; per-component
-    // HaComponentsControllers will pick up the resolved state.
-    void ensureHaComponents();
+    // Register whenDefined callbacks so sub-components re-render if HA
+    // registers form elements lazily (no-op on HA 2026.05+ where they are
+    // eagerly registered).
+    watchHaComponents(this);
   }
 
   override render() {

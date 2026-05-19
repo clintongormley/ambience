@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { periodLabel, matcherLabel, actionLabel } from "../frontend/src/i18n";
+import { periodLabel, matcherLabel, actionLabel, anchorLabel } from "../frontend/src/i18n";
 import type { PeriodDef } from "../frontend/src/types";
 
 const def = (label: string | null = null): PeriodDef => ({
@@ -76,5 +76,17 @@ describe("actionLabel", () => {
 
   test("falls back to friendly form of name", () => {
     expect(actionLabel(undefined, "set_light")).toBe("Set light");
+  });
+});
+
+describe("anchorLabel", () => {
+  test("returns translated label when hass.localize hits", () => {
+    const hass = { localize: (k: string) =>
+      k === "component.ambience.anchor.dawn" ? "Morgendämmerung" : undefined };
+    expect(anchorLabel(hass, "dawn")).toBe("Morgendämmerung");
+  });
+
+  test("falls back to capitalised name", () => {
+    expect(anchorLabel(undefined, "sunset")).toBe("Sunset");
   });
 });

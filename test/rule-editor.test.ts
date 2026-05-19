@@ -512,6 +512,32 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(expanded.querySelector(".body")).toBeTruthy();
   });
 
+  test("clicking inside a nested shadow element (Time/Sun kind dropdown) does not collapse the slot", async () => {
+    el = await mount({
+      name: "test",
+      when: { time_of_day: { from: { kind: "time", hh: 9, mm: 0 }, to: { kind: "time", hh: 17, mm: 0 } } },
+      actions: [],
+    });
+    const todRow = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    todRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    // Allow nested custom elements to render
+    await new Promise(r => setTimeout(r, 0));
+    await el.updateComplete;
+    // Re-query after expansion
+    const todExpanded = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    expect(todExpanded.classList.contains("expanded")).toBe(true);
+    // Simulate a click event on a nested element (ambience-matcher-input inside the slot).
+    // Dispatching on the matcher-input host with composed: true mimics a real click that
+    // crosses shadow boundaries — composedPath() will include the .slot ancestor.
+    const matcherInput = todExpanded.querySelector("ambience-matcher-input") as HTMLElement;
+    matcherInput.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    // Slot stays expanded
+    const after = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    expect(after.classList.contains("expanded")).toBe(true);
+  });
+
   test("param unit suffix renders when ParamSpec has unit", async () => {
     el = await mount({
       name: "test", when: {},

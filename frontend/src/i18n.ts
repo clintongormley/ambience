@@ -34,6 +34,10 @@ export function actionLabel(hass: HassLike | undefined, name: string): string {
   return _resolve(hass, `component.ambience.action.${name}`, _friendlyFallback(name));
 }
 
+export function anchorLabel(hass: HassLike | undefined, anchor: string): string {
+  return _resolve(hass, `component.ambience.anchor.${anchor}`, _friendlyFallback(anchor));
+}
+
 /**
  * Resolve a period id to a display name.
  *   1. If the id is in `custom` and has a non-empty `label`, return the label.

@@ -126,4 +126,22 @@ describe("ambience-time-endpoint", () => {
     anchorSelect.dispatchEvent(new Event("change"));
     expect(get()).toEqual({ kind: "sun", anchor: "sunrise", offset_min: -30 });
   });
+
+  test("anchor dropdown options are in time order starting with dawn", async () => {
+    el = await mount({ kind: "sun", anchor: "noon", offset_min: 0 });
+    await el.updateComplete;
+    const selects = el.shadowRoot.querySelectorAll("select");
+    const anchorSelect = selects[1] as HTMLSelectElement;
+    const values = Array.from(anchorSelect.options).map(o => o.value);
+    expect(values).toEqual(["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"]);
+  });
+
+  test("anchor option labels are capitalised", async () => {
+    el = await mount({ kind: "sun", anchor: "dawn", offset_min: 0 });
+    await el.updateComplete;
+    const selects = el.shadowRoot.querySelectorAll("select");
+    const anchorSelect = selects[1] as HTMLSelectElement;
+    const labels = Array.from(anchorSelect.options).map(o => o.textContent?.trim());
+    expect(labels).toEqual(["Dawn", "Sunrise", "Noon", "Sunset", "Dusk", "Midnight"]);
+  });
 });

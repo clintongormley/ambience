@@ -23,5 +23,13 @@
   },
   "action": {
     "set_light": "Set light"
+  },
+  "anchor": {
+    "dawn": "Dawn",
+    "sunrise": "Sunrise",
+    "noon": "Noon",
+    "sunset": "Sunset",
+    "dusk": "Dusk",
+    "midnight": "Midnight"
   }
 }

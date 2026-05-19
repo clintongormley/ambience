@@ -59,7 +59,7 @@ describe("summariseTimeOfDay", () => {
         to: { kind: "time", hh: 22, mm: 0 },
       },
       { hass: noLocalize, periods },
-    )).toBe("sunset-30m→22:00");
+    )).toBe("Sunset-30m→22:00");
   });
 
   test("OR-list joins with comma", () => {

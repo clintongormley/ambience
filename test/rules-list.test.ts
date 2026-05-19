@@ -283,7 +283,7 @@ describe("ambience-rules-list", () => {
     };
     el = await mount([sunRule]);
     const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
-    expect(summary).toContain("sunrise");
+    expect(summary).toContain("Sunrise");
   });
 
   test("summary uses friendly matcher labels", async () => {

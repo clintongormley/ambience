@@ -1,4 +1,4 @@
-import { actionLabel, periodLabel } from "./i18n.js";
+import { actionLabel, anchorLabel, periodLabel } from "./i18n.js";
 import type {
   ActionInfo,
   ActionSpec,
@@ -44,19 +44,20 @@ export function summariseTimeOfDay(
       if ("period" in item) {
         return periodLabel(ctx.hass, item.period, customMap);
       }
-      return `${_fmtEndpoint(item.from)}→${_fmtEndpoint(item.to)}`;
+      return `${_fmtEndpoint(item.from, ctx)}→${_fmtEndpoint(item.to, ctx)}`;
     })
     .join(", ");
 }
 
-function _fmtEndpoint(ep: TimeEndpoint): string {
+function _fmtEndpoint(ep: TimeEndpoint, ctx: MatcherContext): string {
   if (ep.kind === "time") {
     return `${String(ep.hh).padStart(2, "0")}:${String(ep.mm).padStart(2, "0")}`;
   }
-  if (ep.offset_min === 0) return ep.anchor;
+  const anchor = anchorLabel(ctx.hass, ep.anchor);
+  if (ep.offset_min === 0) return anchor;
   const abs = Math.abs(ep.offset_min);
   const unit = abs % 60 === 0 ? `${abs / 60}h` : `${abs}m`;
-  return `${ep.anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
+  return `${anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
 }
 
 export function summariseAction(

@@ -227,6 +227,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
               <div class="range-row">
                 <label>From</label>
                 <ambience-time-endpoint
+                  .hass=${this.hass}
                   .value=${entry.from}
                   @value-changed=${(e: CustomEvent<{ value: TimeEndpoint }>) =>
                     this._onRangeChange(idx, "from", e)}
@@ -235,6 +236,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
               <div class="range-row">
                 <label>To</label>
                 <ambience-time-endpoint
+                  .hass=${this.hass}
                   .value=${entry.to}
                   @value-changed=${(e: CustomEvent<{ value: TimeEndpoint }>) =>
                     this._onRangeChange(idx, "to", e)}

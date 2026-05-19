@@ -39,6 +39,7 @@ export class AmbiencePeriodEditModal extends LitElement {
     button { padding: 0.5rem 1rem; cursor: pointer; }
   `;
 
+  @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
   @property({ attribute: false }) existingId?: string;
   @property({ attribute: false }) initial: PeriodDef = {
     from: { kind: "time", hh: 9, mm: 0 },
@@ -128,11 +129,11 @@ export class AmbiencePeriodEditModal extends LitElement {
         </div>
         <div class="row">
           <label style="min-width: 3em;">From</label>
-          <ambience-time-endpoint .value=${this._def.from} @value-changed=${this._onFromChange}></ambience-time-endpoint>
+          <ambience-time-endpoint .hass=${this.hass} .value=${this._def.from} @value-changed=${this._onFromChange}></ambience-time-endpoint>
         </div>
         <div class="row">
           <label style="min-width: 3em;">To</label>
-          <ambience-time-endpoint .value=${this._def.to} @value-changed=${this._onToChange}></ambience-time-endpoint>
+          <ambience-time-endpoint .hass=${this.hass} .value=${this._def.to} @value-changed=${this._onToChange}></ambience-time-endpoint>
         </div>
         <div class="error">${this._error}</div>
         <div class="actions">

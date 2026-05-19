@@ -2,8 +2,9 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { SunAnchor, TimeEndpoint } from "../types.js";
+import { anchorLabel } from "../i18n.js";
 
-const ANCHORS: SunAnchor[] = ["sunrise", "noon", "sunset", "midnight", "dawn", "dusk"];
+const ANCHORS: SunAnchor[] = ["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"];
 
 /**
  * Editor for one TimeEndpoint. Renders a kind dropdown (Time | Sun) and the
@@ -34,6 +35,7 @@ export class AmbienceTimeEndpoint extends LitElement {
     }
   `;
 
+  @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
   @property({ attribute: false }) value: TimeEndpoint = { kind: "time", hh: 12, mm: 0 };
 
   private _emit(value: TimeEndpoint) {
@@ -84,7 +86,7 @@ export class AmbienceTimeEndpoint extends LitElement {
     return html`
       <select @change=${this._onAnchorChange}>
         ${ANCHORS.map(
-          (a) => html`<option value=${a} ?selected=${a === v.anchor}>${a}</option>`,
+          (a) => html`<option value=${a} ?selected=${a === v.anchor}>${anchorLabel(this.hass, a)}</option>`,
         )}
       </select>
       <input

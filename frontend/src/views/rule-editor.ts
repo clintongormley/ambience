@@ -261,10 +261,16 @@ export class AmbienceRuleEditor extends LitElement {
   }
 
   private _onModalClick(e: MouseEvent) {
-    const target = e.target as HTMLElement;
-    // If the click landed inside any editable region or the actions bar,
-    // don't treat it as a "click outside".
-    if (target.closest(".slot") || target.closest(".actions-bar")) return;
+    // composedPath() includes all elements across shadow DOM boundaries,
+    // unlike closest() which stops at the first shadow root.
+    // When the click originates inside a nested custom element (e.g. the
+    // Time/Sun select inside <ambience-time-endpoint>), the retargeted
+    // e.target loses the .slot ancestor — composedPath does not.
+    for (const node of e.composedPath()) {
+      if (!(node instanceof Element)) continue;
+      if (node.classList.contains("slot")) return;
+      if (node.classList.contains("actions-bar")) return;
+    }
     this._tryCloseCurrent();
   }
 

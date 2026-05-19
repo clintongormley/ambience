@@ -72,6 +72,40 @@ class AmbienceStore:
                     new_actions.extend(self._migrate_one_action(action))
                 rule["actions"] = new_actions
 
+    @staticmethod
+    def _migrate_period_in_predicate(pred: Any) -> Any:
+        """Rename old period ids (night→nighttime, day→daytime) inside a
+        time_of_day predicate. Idempotent and lossless for already-renamed
+        predicates. Returns the (possibly new) predicate value."""
+        renames = {"night": "nighttime", "day": "daytime"}
+        if isinstance(pred, list):
+            return [AmbienceStore._migrate_period_in_predicate(item) for item in pred]
+        if isinstance(pred, dict) and "period" in pred:
+            new_pid = renames.get(pred["period"], pred["period"])
+            if new_pid != pred["period"]:
+                return {**pred, "period": new_pid}
+        return pred
+
+    def _migrate_periods(self) -> None:
+        """Walk every persisted rule and rename old period ids in time_of_day predicates,
+        and rename old period ids in the time_of_day_periods.custom map."""
+        # Rules
+        for area_cfg in self._data.get("areas", {}).values():
+            for rule in area_cfg.get("rules", []):
+                when = rule.get("when", {})
+                if "time_of_day" in when:
+                    when["time_of_day"] = self._migrate_period_in_predicate(when["time_of_day"])
+        # Custom-period store
+        periods_data = self._data.get("time_of_day_periods", {})
+        custom = periods_data.get("custom", {})
+        if "night" in custom:
+            custom["nighttime"] = custom.pop("night")
+        if "day" in custom:
+            custom["daytime"] = custom.pop("day")
+        # Hidden list
+        hidden = periods_data.get("hidden", [])
+        periods_data["hidden"] = ["nighttime" if h == "night" else "daytime" if h == "day" else h for h in hidden]
+
     async def async_load(self) -> None:
         raw = await self._store.async_load()
         if raw is None:
@@ -83,6 +117,7 @@ class AmbienceStore:
             return
         self._data = raw
         self._migrate_actions()
+        self._migrate_periods()
 
     def areas(self) -> dict[str, dict[str, Any]]:
         return dict(self._data["areas"])

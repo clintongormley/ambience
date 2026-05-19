@@ -30,11 +30,11 @@ BUILTIN_PERIODS: dict[str, dict[str, Any]] = {
         "from": {"kind": "sun", "anchor": "sunset", "offset_min": 0},
         "to": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
     },
-    "night": {
+    "nighttime": {
         "from": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
         "to": {"kind": "sun", "anchor": "dawn", "offset_min": 0},
     },
-    "day": {
+    "daytime": {
         "from": {"kind": "sun", "anchor": "sunrise", "offset_min": 0},
         "to": {"kind": "sun", "anchor": "sunset", "offset_min": 0},
     },

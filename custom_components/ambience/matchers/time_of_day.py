@@ -122,7 +122,10 @@ class TimeOfDayMatcher:
                 raise ValueError(f"invalid hh: {hh!r}")
             if not isinstance(mm, int) or not 0 <= mm <= 59:
                 raise ValueError(f"invalid mm: {mm!r}")
-            return snapshot.now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+            # The absolute time the user entered is HA's local clock time; convert
+            # snapshot.now (UTC) to local first so DST is honoured for the date.
+            local_now = dt_util.as_local(snapshot.now)
+            return local_now.replace(hour=hh, minute=mm, second=0, microsecond=0)
         if kind == "sun":
             anchor = ep.get("anchor")
             if anchor not in _ANCHOR_ATTR:

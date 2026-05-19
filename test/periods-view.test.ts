@@ -16,7 +16,7 @@ const baseView: PeriodStoreView = {
   builtins: {
     morning:   { from: {kind:"sun",anchor:"sunrise",offset_min:30}, to: {kind:"sun",anchor:"noon",offset_min:-60} },
     afternoon: { from: {kind:"sun",anchor:"noon",offset_min:60}, to: {kind:"sun",anchor:"sunset",offset_min:-30} },
-    day:       { from: {kind:"sun",anchor:"sunrise",offset_min:0}, to: {kind:"sun",anchor:"sunset",offset_min:0} },
+    daytime:   { from: {kind:"sun",anchor:"sunrise",offset_min:0}, to: {kind:"sun",anchor:"sunset",offset_min:0} },
   },
   custom: {},
   hidden: [],
@@ -81,7 +81,7 @@ describe("ambience-periods-view", () => {
   });
 
   test("revert on hidden builtin removes from hidden list", async () => {
-    el = await mount({ ...baseView, hidden: ["day"] });
+    el = await mount({ ...baseView, hidden: ["daytime"] });
     const rows = el.shadowRoot.querySelectorAll(".row");
     const lastRow = rows[rows.length - 1];
     const revertBtn = lastRow.querySelector('button[title="Restore"]') as HTMLButtonElement;
@@ -91,7 +91,7 @@ describe("ambience-periods-view", () => {
   });
 
   test("reset all calls resetPeriods after confirm", async () => {
-    el = await mount({ ...baseView, hidden: ["day"] });
+    el = await mount({ ...baseView, hidden: ["daytime"] });
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const resetBtn = el.shadowRoot.querySelector("header button") as HTMLButtonElement;
     resetBtn.click();
@@ -100,7 +100,7 @@ describe("ambience-periods-view", () => {
   });
 
   test("reset all is cancellable", async () => {
-    el = await mount({ ...baseView, hidden: ["day"] });
+    el = await mount({ ...baseView, hidden: ["daytime"] });
     vi.spyOn(window, "confirm").mockReturnValue(false);
     const resetBtn = el.shadowRoot.querySelector("header button") as HTMLButtonElement;
     resetBtn.click();

@@ -44,7 +44,7 @@ export function summariseTimeOfDay(
       if ("period" in item) {
         return periodLabel(ctx.hass, item.period, customMap);
       }
-      return `${_fmtEndpoint(item.from, ctx)}→${_fmtEndpoint(item.to, ctx)}`;
+      return `${_fmtEndpoint(item.from, ctx)} → ${_fmtEndpoint(item.to, ctx)}`;
     })
     .join(", ");
 }

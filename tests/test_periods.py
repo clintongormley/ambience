@@ -23,7 +23,7 @@ class _FakeStorage:
 
 
 def test_builtin_periods_contains_expected_seeds() -> None:
-    assert set(BUILTIN_PERIODS) == {"morning", "afternoon", "evening", "night", "day"}
+    assert set(BUILTIN_PERIODS) == {"morning", "afternoon", "evening", "nighttime", "daytime"}
 
 
 def test_builtin_periods_have_from_to_endpoints() -> None:
@@ -41,9 +41,9 @@ def test_effective_returns_builtins_when_no_custom_or_hidden() -> None:
 
 
 def test_effective_excludes_hidden_builtins() -> None:
-    store = PeriodStore(_FakeStorage({"custom": {}, "hidden": ["day"]}))
+    store = PeriodStore(_FakeStorage({"custom": {}, "hidden": ["daytime"]}))
     effective = store.effective()
-    assert "day" not in effective
+    assert "daytime" not in effective
     assert "morning" in effective
 
 
@@ -154,7 +154,7 @@ async def test_save_persists_full_payload() -> None:
                 "label": "Wind down",
             }
         },
-        "hidden": ["day"],
+        "hidden": ["daytime"],
     }
     await store.save(payload["custom"], payload["hidden"])
     assert storage.saved == [payload]
@@ -192,7 +192,7 @@ async def test_reset_clears_custom_and_hidden() -> None:
                     "label": None,
                 }
             },
-            "hidden": ["day"],
+            "hidden": ["daytime"],
         }
     )
     store = PeriodStore(storage)
@@ -210,11 +210,11 @@ def test_view_for_ui_returns_builtins_custom_hidden() -> None:
                     "label": "Wind down",
                 }
             },
-            "hidden": ["day"],
+            "hidden": ["daytime"],
         }
     )
     store = PeriodStore(storage)
     view = store.view_for_ui()
     assert view["builtins"] == BUILTIN_PERIODS
     assert view["custom"] == storage.get_periods()["custom"]
-    assert view["hidden"] == ["day"]
+    assert view["hidden"] == ["daytime"]

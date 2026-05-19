@@ -38,11 +38,11 @@ describe("Ambience API period methods", () => {
         label: "Wind down",
       },
     };
-    const res = await savePeriods(fakeHass, custom, ["day"]);
+    const res = await savePeriods(fakeHass, custom, ["daytime"]);
     expect(sent[0]).toEqual({
       type: "ambience/time_of_day_periods/save",
       custom,
-      hidden: ["day"],
+      hidden: ["daytime"],
     });
     expect(res.ok).toBe(true);
   });

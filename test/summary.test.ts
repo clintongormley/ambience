@@ -45,11 +45,11 @@ describe("summariseTimeOfDay", () => {
       .toBe("Afternoon");
   });
 
-  test("time range renders as HH:MM→HH:MM", () => {
+  test("time range renders as HH:MM → HH:MM", () => {
     expect(summariseTimeOfDay(
       { from: { kind: "time", hh: 16, mm: 0 }, to: { kind: "time", hh: 18, mm: 30 } },
       { hass: noLocalize, periods },
-    )).toBe("16:00→18:30");
+    )).toBe("16:00 → 18:30");
   });
 
   test("sun-relative range uses anchor + offset", () => {
@@ -59,14 +59,14 @@ describe("summariseTimeOfDay", () => {
         to: { kind: "time", hh: 22, mm: 0 },
       },
       { hass: noLocalize, periods },
-    )).toBe("Sunset-30m→22:00");
+    )).toBe("Sunset-30m → 22:00");
   });
 
   test("OR-list joins with comma", () => {
     expect(summariseTimeOfDay(
       [{ period: "afternoon" }, { from: { kind: "time", hh: 22, mm: 0 }, to: { kind: "time", hh: 23, mm: 0 } }],
       { hass: noLocalize, periods },
-    )).toBe("Afternoon, 22:00→23:00");
+    )).toBe("Afternoon, 22:00 → 23:00");
   });
 });
 

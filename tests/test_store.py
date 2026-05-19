@@ -92,7 +92,7 @@ async def test_periods_round_trip(hass: HomeAssistant) -> None:
                 "label": "Wind down",
             }
         },
-        "hidden": ["day"],
+        "hidden": ["daytime"],
     }
     await store.async_save_periods(payload)
     assert store.get_periods() == payload
@@ -213,3 +213,44 @@ def test_migrate_one_action_passthrough_when_targets_not_dict(hass: HomeAssistan
     actions = store._data["areas"]["living_room"]["rules"][0]["actions"]
     # Malformed action is passed through without modification
     assert actions == [bad_action]
+
+
+def test_async_load_migrates_old_period_names(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    store._data = {
+        "version": 1,
+        "areas": {
+            "living_room": {
+                "matchers": [],
+                "auto_sort": True,
+                "rules": [
+                    {
+                        "name": "old",
+                        "when": {"time_of_day": {"period": "night"}},
+                        "actions": [],
+                    },
+                    {
+                        "name": "list",
+                        "when": {"time_of_day": [{"period": "day"}, {"period": "evening"}]},
+                        "actions": [],
+                    },
+                ],
+            }
+        },
+        "time_of_day_periods": {
+            "custom": {
+                "night": {"from": {"kind": "time", "hh": 22, "mm": 0}, "to": {"kind": "time", "hh": 6, "mm": 0}, "label": "Custom night"},
+            },
+            "hidden": ["day"],
+        },
+    }
+    store._migrate_periods()
+    rules = store._data["areas"]["living_room"]["rules"]
+    assert rules[0]["when"]["time_of_day"] == {"period": "nighttime"}
+    assert rules[1]["when"]["time_of_day"] == [{"period": "daytime"}, {"period": "evening"}]
+    custom = store._data["time_of_day_periods"]["custom"]
+    assert "night" not in custom
+    assert "nighttime" in custom
+    assert custom["nighttime"]["label"] == "Custom night"
+    hidden = store._data["time_of_day_periods"]["hidden"]
+    assert hidden == ["daytime"]

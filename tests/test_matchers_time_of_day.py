@@ -7,12 +7,26 @@ from typing import Any
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from custom_components.ambience.matchers.time_of_day import (
     TimeOfDayMatcher,
     TimeOfDaySnapshot,
 )
 from custom_components.ambience.periods import BUILTIN_PERIODS
+
+
+@pytest.fixture(autouse=True)
+def force_utc_timezone():
+    """Force dt_util's default timezone to UTC for the duration of each test.
+
+    The hass fixture sets it to US/Pacific; absolute-time endpoint tests must
+    compare against UTC-anchored datetimes so we pin it back here.
+    """
+    orig = dt_util.DEFAULT_TIME_ZONE
+    dt_util.DEFAULT_TIME_ZONE = UTC
+    yield
+    dt_util.DEFAULT_TIME_ZONE = orig
 
 
 def _build_snapshot(now: datetime, **overrides: datetime) -> TimeOfDaySnapshot:
@@ -150,11 +164,11 @@ def test_matches_sun_relative_with_positive_offset_hours() -> None:
         ("afternoon", 18, 0, False),
         ("evening", 18, 15, True),
         ("evening", 19, 0, False),
-        ("day", 12, 0, True),
-        ("day", 19, 0, False),
-        ("night", 22, 0, True),
-        ("night", 4, 0, True),
-        ("night", 10, 0, False),
+        ("daytime", 12, 0, True),
+        ("daytime", 19, 0, False),
+        ("nighttime", 22, 0, True),
+        ("nighttime", 4, 0, True),
+        ("nighttime", 10, 0, False),
     ],
 )
 def test_matches_named_period(period: str, now_hour: int, now_minute: int, expected: bool) -> None:
@@ -301,7 +315,7 @@ def test_contains_wrap_midnight() -> None:
 
 def test_contains_named_period() -> None:
     m = _matcher()
-    assert m.contains({"period": "day"}, {"period": "afternoon"}) is True
+    assert m.contains({"period": "daytime"}, {"period": "afternoon"}) is True
 
 
 def test_contains_list_predicate_union() -> None:
@@ -334,7 +348,7 @@ def test_order_key_list_takes_earliest_start() -> None:
 
 
 def test_order_key_named_period() -> None:
-    assert _matcher().order_key({"period": "night"}) == 1110.0
+    assert _matcher().order_key({"period": "nighttime"}) == 1110.0
 
 
 # ── matcher metadata ───────────────────────────────────────────────────────
@@ -350,3 +364,18 @@ def test_matcher_exposes_description() -> None:
 
 def test_priority() -> None:
     assert _matcher().priority == 100
+
+
+def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:
+    """An absolute time {kind: time, hh: 16, mm: 0} is interpreted as 16:00
+    in HA's local timezone, not UTC. With HA's default test tz (UTC), this
+    means 16:00Z. If a non-UTC tz is configured, the resolved start would
+    be 16:00 in that tz."""
+    # Test that the resolved time is in the local tz (UTC in tests by default)
+    from custom_components.ambience.matchers.time_of_day import TimeOfDayMatcher
+    matcher = TimeOfDayMatcher(period_lookup=lambda: {})
+    snap = _build_snapshot(datetime(2026, 5, 13, 17, 0, tzinfo=UTC))
+    assert matcher.matches(
+        {"from": {"kind": "time", "hh": 16, "mm": 0}, "to": {"kind": "time", "hh": 18, "mm": 30}},
+        snap,
+    ) is True

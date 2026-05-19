@@ -473,7 +473,7 @@ async def test_ws_periods_list_returns_builtins_custom_hidden(
 
     assert resp["success"]
     result = resp["result"]
-    assert set(result["builtins"]) == {"morning", "afternoon", "evening", "night", "day"}
+    assert set(result["builtins"]) == {"morning", "afternoon", "evening", "nighttime", "daytime"}
     assert result["custom"] == {}
     assert result["hidden"] == []
 
@@ -494,7 +494,7 @@ async def test_ws_periods_save_persists_payload(
                 "label": "Wind down",
             }
         },
-        "hidden": ["day"],
+        "hidden": ["daytime"],
     }
     client = await hass_ws_client()
     await client.send_json({"id": 1, "type": "ambience/time_of_day_periods/save", **payload})
@@ -597,7 +597,7 @@ async def test_ws_periods_reset_clears_custom_and_hidden(
                     "to": {"kind": "time", "hh": 22, "mm": 0},
                 }
             },
-            "hidden": ["day"],
+            "hidden": ["daytime"],
         }
     )
     msg = await client.receive_json()

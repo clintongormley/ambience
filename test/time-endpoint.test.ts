@@ -115,4 +115,15 @@ describe("ambience-time-endpoint", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".offset-hint").textContent.trim()).toBe("+1 hour");
   });
+
+  test("changing anchor emits new sun endpoint with updated anchor", async () => {
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: -30 });
+    const get = captureEmit(el);
+    const selects = el.shadowRoot.querySelectorAll("select");
+    // selects[0] = kind, selects[1] = anchor
+    const anchorSelect = selects[1] as HTMLSelectElement;
+    anchorSelect.value = "sunrise";
+    anchorSelect.dispatchEvent(new Event("change"));
+    expect(get()).toEqual({ kind: "sun", anchor: "sunrise", offset_min: -30 });
+  });
 });

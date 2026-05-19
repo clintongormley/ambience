@@ -173,4 +173,161 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelectorAll(".slot[data-slot-id^='action-']").length).toBe(1);
   });
+
+  test("updating an int param (brightness) via input fires _updateActionParam", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    // Add an action and open it
+    el.shadowRoot.querySelector(".add-action")!.dispatchEvent(new MouseEvent("click"));
+    await el.updateComplete;
+    // The action slot is now expanded; find the brightness input
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    const inputs = action.querySelectorAll('input[type="number"]');
+    const brightnessInput = inputs[0] as HTMLInputElement;
+    brightnessInput.value = "75";
+    brightnessInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    await el.updateComplete;
+    // Save and check the draft value
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    expect(saved?.actions[0]?.params?.brightness).toBe(75);
+  });
+
+  test("clearing a number param (transition) via input removes it from params", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: [], params: { brightness: 50, transition: 2 } }],
+    });
+    const action0 = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action0.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+
+    const inputs = action0.querySelectorAll('input[type="number"]');
+    // transition is the second input
+    const transitionInput = inputs[1] as HTMLInputElement;
+    transitionInput.value = "";
+    transitionInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    await el.updateComplete;
+
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    expect(saved?.actions[0]?.params?.transition).toBeUndefined();
+  });
+
+  test("target-picker value-changed updates action entity_ids", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    el.shadowRoot.querySelector(".add-action")!.dispatchEvent(new MouseEvent("click"));
+    await el.updateComplete;
+
+    const picker = el.shadowRoot.querySelector("ambience-target-picker")!;
+    picker.dispatchEvent(new CustomEvent("value-changed", {
+      detail: { value: ["light.lamp_a", "light.lamp_b"] },
+      bubbles: true,
+      composed: true,
+    }));
+    await el.updateComplete;
+
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    expect(saved?.actions[0]?.entity_ids).toEqual(["light.lamp_a", "light.lamp_b"]);
+  });
+
+  test("deleting the open action clears _open state", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: [], params: { brightness: 50 } }],
+    });
+    // Open the action
+    const action0 = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action0.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(action0.classList.contains("expanded")).toBe(true);
+
+    // Delete it via the remove button
+    const removeBtn = action0.querySelector(".summary .remove") as HTMLButtonElement;
+    removeBtn.click();
+    await el.updateComplete;
+    // No action slots remain
+    expect(el.shadowRoot.querySelectorAll(".slot[data-slot-id^='action-']").length).toBe(0);
+  });
+
+  test("changing action type dropdown calls _changeActionType", async () => {
+    const twoActions: ActionInfo[] = [
+      {
+        name: "set_light",
+        description: "",
+        domains: ["light"],
+        target_params: [{ name: "brightness", type: "int", required: true, default: 50 }],
+      },
+      {
+        name: "set_light_alt",
+        description: "",
+        domains: ["light"],
+        target_params: [],
+      },
+    ];
+    el = document.createElement("ambience-rule-editor") as any;
+    el.matchers = matchers;
+    el.availableActions = twoActions;
+    el.periods = periods;
+    el.hass = hass;
+    el.areaId = "living_room";
+    el.rule = { name: "test", when: {}, actions: [{ action: "set_light", entity_ids: [], params: {} }] };
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+
+    // Open the action
+    const action0 = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action0.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+
+    // Change the action type dropdown
+    const select = action0.querySelector("select.action-type") as HTMLSelectElement;
+    select.value = "set_light_alt";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    expect(saved?.actions[0]?.action).toBe("set_light_alt");
+  });
+
+  test("typing in name input updates the draft name", async () => {
+    el = await mount({ name: "original", when: {}, actions: [] });
+    const nameInput = el.shadowRoot.querySelector('input[type="text"]') as HTMLInputElement;
+    nameInput.value = "renamed";
+    nameInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    await el.updateComplete;
+
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    expect(saved?.name).toBe("renamed");
+  });
+
+  test("matcher input value-changed event calls _setPredicate", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    // Expand the scene matcher
+    const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+
+    // Fire value-changed from ambience-matcher-input
+    const matcherInput = sceneRow.querySelector("ambience-matcher-input")!;
+    matcherInput.dispatchEvent(new CustomEvent("value-changed", {
+      detail: { value: "relaxed" },
+      bubbles: true,
+      composed: true,
+    }));
+    await el.updateComplete;
+
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    expect(saved?.when?.scene).toBe("relaxed");
+  });
 });

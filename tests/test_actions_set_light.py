@@ -69,3 +69,30 @@ async def test_execute_zero_brightness_turns_off(hass: HomeAssistant) -> None:
     assert len(on_calls) == 0
     assert len(off_calls) == 1
     assert off_calls[0].data["entity_id"] == "light.a"
+
+
+async def test_execute_logs_warning_on_service_exception(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """If _apply_one raises, execute logs a warning per entity and continues."""
+    from unittest.mock import AsyncMock, patch
+
+    action = SetLightAction()
+    with patch.object(
+        action, "_apply_one", new=AsyncMock(side_effect=RuntimeError("boom"))
+    ):
+        # Must not propagate; execute catches exceptions via gather(return_exceptions=True)
+        await action.execute(hass, ["light.a", "light.b"], {"brightness": 50})
+    assert "set_light failed" in caplog.text
+
+
+def test_validate_rejects_non_int_brightness() -> None:
+    action = SetLightAction()
+    with pytest.raises(ValueError, match="brightness must be int"):
+        action.validate_target_params(["light.a"], {"brightness": 50.5})
+
+
+def test_validate_rejects_non_number_transition() -> None:
+    action = SetLightAction()
+    with pytest.raises(ValueError, match="transition must be number"):
+        action.validate_target_params(["light.a"], {"brightness": 50, "transition": "fast"})

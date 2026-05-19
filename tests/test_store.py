@@ -193,3 +193,23 @@ def test_async_load_handles_empty_targets_dict(hass: HomeAssistant) -> None:
     assert actions[0]["action"] == "set_light"
     assert actions[0]["entity_ids"] == []
     assert actions[0]["params"] == {}
+
+
+def test_migrate_one_action_passthrough_when_targets_not_dict(hass: HomeAssistant) -> None:
+    """Action with a non-dict 'targets' value (malformed) is passed through unchanged."""
+    store = AmbienceStore(hass)
+    bad_action = {"action": "set_light", "targets": "not_a_dict"}
+    store._data = {
+        "version": 1,
+        "areas": {
+            "living_room": {
+                "matchers": [],
+                "auto_sort": True,
+                "rules": [{"name": "bad", "when": {}, "actions": [bad_action]}],
+            }
+        },
+    }
+    store._migrate_actions()
+    actions = store._data["areas"]["living_room"]["rules"][0]["actions"]
+    # Malformed action is passed through without modification
+    assert actions == [bad_action]

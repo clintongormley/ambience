@@ -160,4 +160,79 @@ describe("ambience-time-of-day-input", () => {
     expandedSelect = el.shadowRoot.querySelector(".entry select") as HTMLSelectElement;
     expect(expandedSelect.value).toBe("afternoon");
   });
+
+  test("removing an entry before openIdx shifts openIdx down by one", async () => {
+    // Start with 3 entries; openIdx = last (2)
+    el = await mount([{ period: "afternoon" }, { period: "evening" }, { from: {kind:"time",hh:9,mm:0}, to: {kind:"time",hh:10,mm:0} }]);
+    await el.updateComplete;
+    // Chips are rendered for all non-open entries; remove the chip for index 0
+    const chips = el.shadowRoot.querySelectorAll(".summary-chip") as NodeListOf<HTMLElement>;
+    expect(chips.length).toBe(2); // indices 0 and 1 are chips; index 2 is expanded
+    // Remove index 0 via its remove button inside the chip
+    const removeInChip = chips[0].querySelector(".remove") as HTMLButtonElement;
+    removeInChip.click();
+    await el.updateComplete;
+    // After removing index 0 (before openIdx=2), openIdx should shift to 1
+    // The expanded entry should now be the range (previously at index 2, now index 1)
+    const expandedEndpoints = el.shadowRoot.querySelectorAll("ambience-time-endpoint");
+    expect(expandedEndpoints.length).toBe(2); // range entry is still expanded
+  });
+
+  test("summary chip for a range entry shows summarised text", async () => {
+    // Two entries; range is at index 0 (chip), period at index 1 (open)
+    el = await mount([
+      { from: { kind: "time", hh: 9, mm: 0 }, to: { kind: "time", hh: 17, mm: 0 } },
+      { period: "evening" },
+    ]);
+    await el.updateComplete;
+    // Index 0 is rendered as a chip; index 1 is expanded
+    const chip = el.shadowRoot.querySelector(".summary-chip .chip-label") as HTMLElement;
+    expect(chip).toBeTruthy();
+    // Should have some text (summariseTimeOfDay returns "09:00 – 17:00" or similar)
+    expect(chip.textContent!.trim().length).toBeGreaterThan(0);
+  });
+
+  test("summary chip for an 'any' entry shows '(any)'", async () => {
+    // Start with a period so the add-btn appears, then add a second entry
+    el = await mount({ period: "afternoon" });
+    // Add a second entry (the first is now a chip, second is expanded range)
+    el.shadowRoot.querySelector(".add-btn")!.dispatchEvent(new MouseEvent("click"));
+    await el.updateComplete;
+    // Now force the open entry (index 1, range) back to "any" — but that hides add-btn.
+    // Instead, switch the chip (index 0, afternoon) to "any" by clicking it first
+    // to expand it, then changing its dropdown.
+    const chip = el.shadowRoot.querySelector(".summary-chip") as HTMLElement;
+    chip.click();
+    await el.updateComplete;
+    // Now index 0 is expanded; change its dropdown to __any__
+    pickPeriod(el, 0, "__any__");
+    await el.updateComplete;
+    // After that, index 0 is "any" and it's the open slot, so it renders as an entry not a chip.
+    // We want to see the chip for the OTHER (non-open) entry. Let's click the add-btn on index 1.
+    // Actually: switch to index 1 to open it, making index 0 (now "any") a chip.
+    // The select at index 0 (currently open) shows __any__; click the other entry's chip.
+    // Re-open via the period entry — click add-btn again to see what's visible now
+    // Simpler: start with afternoon+evening, open index 0, switch it to __any__, open index 1
+    el.remove();
+    el = document.createElement("ambience-time-of-day-input") as any;
+    el.value = [{ period: "afternoon" }, { period: "evening" }];
+    el.periods = periods;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    // openIdx starts at 1 (last); chip for index 0 = afternoon. Switch chip 0 to "any" by expanding it.
+    const chip0 = el.shadowRoot.querySelector(".summary-chip") as HTMLElement;
+    chip0.click();
+    await el.updateComplete;
+    // index 0 is now open; change to __any__
+    pickPeriod(el, 0, "__any__");
+    await el.updateComplete;
+    // Now click the chip for index 1 (evening) to make index 0 (any) a chip again
+    const eveningChip = el.shadowRoot.querySelector(".summary-chip") as HTMLElement;
+    eveningChip.click();
+    await el.updateComplete;
+    // Now index 1 is open; index 0 (any) is a chip — check its label
+    const anyChipLabel = el.shadowRoot.querySelector(".summary-chip .chip-label") as HTMLElement;
+    expect(anyChipLabel).toBeTruthy();
+    expect(anyChipLabel.textContent!.trim()).toBe("(any)");
+  });
 });

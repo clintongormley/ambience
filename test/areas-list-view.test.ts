@@ -595,4 +595,50 @@ describe("ambience-areas-list", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(unsubFn).toHaveBeenCalled();
   });
+
+  test("listMatchers error is surfaced in _error", async () => {
+    vi.mocked(api.listMatchers).mockRejectedValueOnce(new Error("matchers fetch failed"));
+    el = await mount();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // _loadStatic catch sets _error
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+  });
+
+  test("listAreas error is surfaced in _error", async () => {
+    vi.mocked(api.listAreas).mockRejectedValueOnce(new Error("areas fetch failed"));
+    el = await mount();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // _refreshAreas catch sets _error
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+  });
+
+  test("_subscribe calls unsub immediately if disconnected before subscribe resolves", async () => {
+    // subscribeEvents resolves after a delay so the element can be removed first
+    const unsubFn = vi.fn();
+    let resolveSubscribe!: (v: typeof unsubFn) => void;
+    const subscribePromise = new Promise<typeof unsubFn>((res) => { resolveSubscribe = res; });
+    vi.mocked(api.listAreas).mockResolvedValue(baseAreas);
+    vi.mocked(api.getArea).mockResolvedValue(baseConfig);
+    vi.mocked(api.listMatchers).mockResolvedValue(matchers);
+    vi.mocked(api.listActions).mockResolvedValue(actions);
+    vi.mocked(api.listPeriods).mockResolvedValue(periods);
+
+    const hass = {
+      connection: {
+        subscribeEvents: vi.fn().mockReturnValue(subscribePromise),
+      },
+    };
+
+    const localEl: any = document.createElement("ambience-areas-list");
+    localEl.hass = hass;
+    document.body.appendChild(localEl);
+    // Remove before subscribeEvents promise resolves
+    localEl.remove();
+    // Now resolve the subscribe promise — since element is disconnected, unsub() should be called
+    resolveSubscribe(unsubFn);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(unsubFn).toHaveBeenCalled();
+  });
 });

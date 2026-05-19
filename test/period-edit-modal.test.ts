@@ -33,41 +33,48 @@ describe("ambience-period-edit-modal", () => {
   let el: any;
   afterEach(() => { el?.remove(); });
 
-  test("Add mode renders id field; Edit mode hides it", async () => {
-    el = await mount();
-    expect(el.shadowRoot.querySelector('input[id="id"]')).toBeTruthy();
-    el.remove();
-    el = await mount({ existingId: "afternoon", initial: defaultDef });
-    expect(el.shadowRoot.querySelector('input[id="id"]')).toBeNull();
-  });
-
-  test("emits period-save with id + definition + label", async () => {
+  test("derives id from label on save", async () => {
     el = await mount();
     const get = captureSave(el);
-    (el.shadowRoot.querySelector('input[id="id"]') as HTMLInputElement).value = "wind_down";
-    (el.shadowRoot.querySelector('input[id="id"]') as HTMLInputElement).dispatchEvent(new Event("input"));
-    (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).value = "Wind down";
+    (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).value = "Wind Down";
     (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).dispatchEvent(new Event("input"));
     clickSave(el);
     expect(get()?.id).toBe("wind_down");
-    expect(get()?.definition.label).toBe("Wind down");
+    expect(get()?.definition.label).toBe("Wind Down");
   });
 
-  test("rejects invalid id format", async () => {
+  test("derived id strips special characters", async () => {
     el = await mount();
     const get = captureSave(el);
-    (el.shadowRoot.querySelector('input[id="id"]') as HTMLInputElement).value = "1bad";
-    (el.shadowRoot.querySelector('input[id="id"]') as HTMLInputElement).dispatchEvent(new Event("input"));
+    (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).value = "Workout time!";
+    (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).dispatchEvent(new Event("input"));
     clickSave(el);
-    expect(get()).toBeUndefined();
-    expect(el.shadowRoot.querySelector(".error").textContent).toContain("lowercase");
+    expect(get()?.id).toBe("workout_time");
   });
 
-  test("rejects id that collides with takenIds", async () => {
+  test("rejects label that derives to id starting with digit", async () => {
+    el = await mount();
+    const get = captureSave(el);
+    (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).value = "1st of the month";
+    (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).dispatchEvent(new Event("input"));
+    clickSave(el);
+    expect(get()).toBeUndefined();
+    expect(el.shadowRoot.querySelector(".error").textContent).toContain("must start with a letter");
+  });
+
+  test("rejects empty label", async () => {
+    el = await mount();
+    const get = captureSave(el);
+    clickSave(el);
+    expect(get()).toBeUndefined();
+    expect(el.shadowRoot.querySelector(".error").textContent).toContain("Please enter a name");
+  });
+
+  test("rejects label that collides with takenIds", async () => {
     el = await mount({ takenIds: new Set(["afternoon"]) });
     const get = captureSave(el);
-    (el.shadowRoot.querySelector('input[id="id"]') as HTMLInputElement).value = "afternoon";
-    (el.shadowRoot.querySelector('input[id="id"]') as HTMLInputElement).dispatchEvent(new Event("input"));
+    (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).value = "Afternoon";
+    (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).dispatchEvent(new Event("input"));
     clickSave(el);
     expect(get()).toBeUndefined();
     expect(el.shadowRoot.querySelector(".error").textContent).toContain("already exists");
@@ -80,13 +87,42 @@ describe("ambience-period-edit-modal", () => {
     expect(get()?.id).toBe("afternoon");
   });
 
-  test("empty label is stored as null", async () => {
-    el = await mount();
+  test("Edit mode preserves existingId regardless of label", async () => {
+    el = await mount({ existingId: "afternoon", initial: { ...defaultDef, label: "Afternoon" } });
     const get = captureSave(el);
-    (el.shadowRoot.querySelector('input[id="id"]') as HTMLInputElement).value = "wind_down";
-    (el.shadowRoot.querySelector('input[id="id"]') as HTMLInputElement).dispatchEvent(new Event("input"));
+    (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).value = "Something completely different";
+    (el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement).dispatchEvent(new Event("input"));
+    clickSave(el);
+    expect(get()?.id).toBe("afternoon");
+    expect(get()?.definition.label).toBe("Something completely different");
+  });
+
+  test("Edit mode allows clearing label back to null", async () => {
+    el = await mount({ existingId: "afternoon", initial: { ...defaultDef, label: "Afternoon" } });
+    const get = captureSave(el);
+    const input = el.shadowRoot.querySelector('input[id="label"]') as HTMLInputElement;
+    input.value = "";
+    input.dispatchEvent(new Event("input"));
     clickSave(el);
     expect(get()?.definition.label).toBeNull();
+  });
+
+  test("id field is not present (always absent)", async () => {
+    el = await mount();
+    expect(el.shadowRoot.querySelector('input[id="id"]')).toBeNull();
+    el.remove();
+    el = await mount({ existingId: "afternoon", initial: defaultDef });
+    expect(el.shadowRoot.querySelector('input[id="id"]')).toBeNull();
+  });
+
+  test("heading shows 'Add custom period' in Add mode", async () => {
+    el = await mount();
+    expect(el.shadowRoot.querySelector("h3").textContent).toContain("Add custom period");
+  });
+
+  test("heading shows friendly label in Edit mode", async () => {
+    el = await mount({ existingId: "afternoon", initial: { ...defaultDef, label: "Afternoon" } });
+    expect(el.shadowRoot.querySelector("h3").textContent).toContain("Afternoon");
   });
 
   test("Cancel emits period-cancel", async () => {

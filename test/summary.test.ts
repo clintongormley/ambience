@@ -1,5 +1,6 @@
 import { describe, test, expect } from "vitest";
 import {
+  ruleDisplayName,
   summariseMatcher,
   summariseTimeOfDay,
   summariseAction,
@@ -18,6 +19,37 @@ const periods: PeriodStoreView = {
   custom: {},
   hidden: [],
 };
+
+describe("ruleDisplayName", () => {
+  test("returns the name when set", () => {
+    expect(ruleDisplayName({ name: "My rule", when: {}, actions: [] })).toBe("My rule");
+  });
+
+  test("falls back to scene when name is empty", () => {
+    expect(ruleDisplayName({ name: "", when: { scene: "movie" }, actions: [] }))
+      .toBe("movie");
+  });
+
+  test("falls back to default when neither is set", () => {
+    expect(ruleDisplayName({ name: "", when: {}, actions: [] })).toBe("New rule");
+  });
+
+  test("uses custom default placeholder", () => {
+    expect(ruleDisplayName({ name: "", when: {}, actions: [] }, "Rule 3"))
+      .toBe("Rule 3");
+  });
+
+  test("treats whitespace-only name as empty", () => {
+    expect(ruleDisplayName({ name: "   ", when: { scene: "movie" }, actions: [] }))
+      .toBe("movie");
+  });
+
+  test("treats non-string scene as no scene", () => {
+    // scene predicate could be null (wildcard) — fall through to default
+    expect(ruleDisplayName({ name: "", when: { scene: null as any }, actions: [] }))
+      .toBe("New rule");
+  });
+});
 
 describe("summariseMatcher", () => {
   test("null predicate renders as '(any)'", () => {

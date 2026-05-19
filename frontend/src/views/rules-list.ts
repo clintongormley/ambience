@@ -2,7 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { matcherLabel } from "../i18n.js";
-import { summariseMatcher } from "../summary.js";
+import { ruleDisplayName, summariseMatcher } from "../summary.js";
 import type {
   PeriodStoreView,
   Rule,
@@ -171,7 +171,7 @@ export class AmbienceRulesList extends LitElement {
                   class="name"
                   @click=${() => this._emit("edit-rule", { index: i })}
                 >
-                  ${rule.name || `Rule ${i + 1}`}
+                  ${ruleDisplayName(rule, `Rule ${i + 1}`)}
                 </div>
                 <div class="summary">${this._summary(rule)}</div>
               </div>

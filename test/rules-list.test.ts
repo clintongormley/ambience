@@ -286,6 +286,30 @@ describe("ambience-rules-list", () => {
     expect(summary).toContain("Sunrise");
   });
 
+  test("rules-list shows scene name when rule name is empty", async () => {
+    el = await mount([
+      { name: "", when: { scene: "Cozy evening" }, actions: [] },
+    ]);
+    const name = el.shadowRoot.querySelector(".name")?.textContent?.trim();
+    expect(name).toBe("Cozy evening");
+  });
+
+  test("rules-list shows default Rule N when both name and scene are empty", async () => {
+    el = await mount([
+      { name: "", when: {}, actions: [] },
+    ]);
+    const name = el.shadowRoot.querySelector(".name")?.textContent?.trim();
+    expect(name).toBe("Rule 1");
+  });
+
+  test("rules-list prefers explicit name over scene", async () => {
+    el = await mount([
+      { name: "My rule", when: { scene: "Cozy evening" }, actions: [] },
+    ]);
+    const name = el.shadowRoot.querySelector(".name")?.textContent?.trim();
+    expect(name).toBe("My rule");
+  });
+
   test("summary uses friendly matcher labels", async () => {
     const rules: Rule[] = [{
       name: "test",

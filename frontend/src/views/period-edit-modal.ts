@@ -6,11 +6,20 @@ import "./time-endpoint.js";
 
 const ID_RE = /^[a-z][a-z0-9_]*$/;
 
+function _labelToId(label: string): string {
+  return label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")   // any run of non-[a-z0-9] → single underscore
+    .replace(/^_+|_+$/g, "");      // trim leading/trailing underscores
+}
+
 /**
  * Modal form for adding or editing a period. Emits `period-save` with
  * `{ id, definition }` on commit, `period-cancel` on dismiss.
  *
- * For Edit mode, pass `existingId` (readonly); the id field is hidden.
+ * For Edit mode, pass `existingId` (readonly); the id is preserved as-is.
+ * In Add mode the id is derived automatically from the entered name.
  */
 @customElement("ambience-period-edit-modal")
 export class AmbiencePeriodEditModal extends LitElement {
@@ -48,21 +57,16 @@ export class AmbiencePeriodEditModal extends LitElement {
   };
   @property({ attribute: false }) takenIds: Set<string> = new Set();
 
-  @state() private _id = "";
   @state() private _label = "";
   @state() private _def: PeriodDef = this.initial;
   @state() private _error = "";
 
   override connectedCallback(): void {
     super.connectedCallback();
-    this._id = this.existingId ?? "";
     this._label = this.initial.label ?? "";
     this._def = this.initial;
   }
 
-  private _onIdInput(e: Event) {
-    this._id = (e.target as HTMLInputElement).value;
-  }
   private _onLabelInput(e: Event) {
     this._label = (e.target as HTMLInputElement).value;
   }
@@ -75,20 +79,19 @@ export class AmbiencePeriodEditModal extends LitElement {
     this._def = { ...this._def, to: e.detail.value };
   }
 
-  private _validate(): string {
+  private _validate(id: string): string {
     if (!this.existingId) {
-      if (!ID_RE.test(this._id)) {
-        return "Id must be lowercase, start with a letter, and contain only letters, digits, and underscores.";
-      }
-      if (this.takenIds.has(this._id)) {
-        return "An id already exists with this name. To shadow a built-in, use Edit on the built-in row.";
-      }
+      if (!this._label.trim()) return "Please enter a name.";
+      if (!id) return "Name must start with a letter.";
+      if (!ID_RE.test(id)) return "Name must start with a letter.";
+      if (this.takenIds.has(id)) return "A period with this name already exists. Choose a different name.";
     }
     return "";
   }
 
   private _onSave() {
-    const err = this._validate();
+    const id = this.existingId ?? _labelToId(this._label);
+    const err = this._validate(id);
     if (err) {
       this._error = err;
       // Flush synchronously so the updated error message is in the DOM
@@ -96,7 +99,6 @@ export class AmbiencePeriodEditModal extends LitElement {
       this.performUpdate();
       return;
     }
-    const id = this.existingId ?? this._id;
     const definition: PeriodDef = {
       from: this._def.from,
       to:   this._def.to,
@@ -115,16 +117,14 @@ export class AmbiencePeriodEditModal extends LitElement {
   }
 
   override render() {
+    const heading = this.existingId
+      ? `Edit "${this.initial?.label ?? this.existingId}"`
+      : "Add custom period";
     return html`
       <div class="modal" role="dialog" aria-modal="true">
-        <h3>${this.existingId ? `Edit ${this.existingId}` : "Add custom period"}</h3>
-        ${!this.existingId ? html`
-          <div class="field">
-            <label for="id">Id</label>
-            <input id="id" type="text" .value=${this._id} @input=${this._onIdInput} placeholder="e.g. wind_down" />
-          </div>` : ""}
+        <h3>${heading}</h3>
         <div class="field">
-          <label for="label">Label (display name)</label>
+          <label for="label">Name</label>
           <input id="label" type="text" .value=${this._label} @input=${this._onLabelInput} placeholder="e.g. Wind down" />
         </div>
         <div class="row">

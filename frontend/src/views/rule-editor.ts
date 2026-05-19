@@ -13,7 +13,7 @@ import type { HassConnection } from "../api.js";
 import { entitiesInArea } from "../area-entities.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { matcherLabel } from "../i18n.js";
-import { summariseMatcher, summariseAction } from "../summary.js";
+import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
 import "./matcher-input.js";
 import "./target-picker.js";
 
@@ -164,7 +164,7 @@ export class AmbienceRuleEditor extends LitElement {
         </div>
       `;
     }
-    const summaryText = value || "New rule";
+    const summaryText = ruleDisplayName(this._draft!, "New rule");
     return html`
       <div class="slot collapsed" data-slot-id="name">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "name" })}>

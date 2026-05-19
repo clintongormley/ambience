@@ -53,6 +53,7 @@ export type ParamSpec = {
   min?: number;
   max?: number;
   description?: string;
+  unit?: string;
 };
 
 export type ActionInfo = {

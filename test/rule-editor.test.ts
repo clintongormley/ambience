@@ -13,8 +13,8 @@ const availableActions: ActionInfo[] = [
     description: "",
     domains: ["light"],
     target_params: [
-      { name: "brightness", type: "int", required: true, min: 0, max: 100, description: "Percentage brightness, 0 for off" },
-      { name: "transition", type: "number", required: false, min: 0, description: "Milliseconds" },
+      { name: "brightness", type: "int", required: true, min: 0, max: 100, unit: "%", description: "Percentage brightness, 0 for off" },
+      { name: "transition", type: "number", required: false, min: 0, unit: "s", description: "Seconds" },
     ],
   },
 ];
@@ -434,6 +434,67 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
     const inputs = Array.from(action.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
     expect(inputs[0].placeholder).toBe("Percentage brightness, 0 for off");
-    expect(inputs[1].placeholder).toBe("Milliseconds");
+    expect(inputs[1].placeholder).toBe("Seconds");
+  });
+
+  test("clicking outside an open slot collapses it when valid", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    // Open scene slot
+    sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(sceneRow.classList.contains("expanded")).toBe(true);
+    // Click on a non-slot region inside the modal (h3 header)
+    const h3 = el.shadowRoot.querySelector("h3") as HTMLElement;
+    h3.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(sceneRow.classList.contains("collapsed")).toBe(true);
+  });
+
+  test("clicking outside an action slot with no targets keeps it open and shows an error", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: [], params: { brightness: 80 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    // Open action slot
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(action.classList.contains("expanded")).toBe(true);
+    // Click on a non-slot region
+    const h3 = el.shadowRoot.querySelector("h3") as HTMLElement;
+    h3.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    // Still expanded, error visible
+    expect(action.classList.contains("expanded")).toBe(true);
+    expect(action.querySelector(".error")?.textContent).toContain("target is required");
+  });
+
+  test("clicking another slot's summary while current is invalid keeps current open", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: [], params: { brightness: 80 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(action.classList.contains("expanded")).toBe(true);
+    expect(scene.classList.contains("collapsed")).toBe(true);
+  });
+
+  test("param unit suffix renders when ParamSpec has unit", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp_a"], params: { brightness: 80 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const units = Array.from(action.querySelectorAll(".param-unit")).map(e => e.textContent?.trim());
+    expect(units).toContain("%");
+    expect(units).toContain("s");
   });
 });

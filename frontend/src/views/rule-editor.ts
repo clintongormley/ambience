@@ -86,6 +86,25 @@ export class AmbienceRuleEditor extends LitElement {
       cursor: pointer; font-size: 1.1em;
       padding: 0; width: auto;
     }
+    .param-input {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .param-input input {
+      flex: 1;
+    }
+    .param-unit {
+      color: var(--secondary-text-color, #888);
+      font-size: 0.9em;
+      min-width: 1.5em;
+    }
+    .error {
+      color: var(--error-color, #c62828);
+      font-size: 0.9em;
+      margin-top: 0.5rem;
+      padding: 0.3rem 0;
+    }
   `;
 
   @property({ type: Boolean, reflect: true }) open = false;
@@ -99,6 +118,7 @@ export class AmbienceRuleEditor extends LitElement {
 
   @state() private _draft: Rule | null = null;
   @state() private _open: OpenSlot = null;
+  @state() private _showError = false;
 
   override connectedCallback() {
     super.connectedCallback();
@@ -109,6 +129,7 @@ export class AmbienceRuleEditor extends LitElement {
     if (changed.has("rule")) {
       this._draft = this.rule ? JSON.parse(JSON.stringify(this.rule)) : null;
       this._open = null;  // new rule loaded → everything collapsed
+      this._showError = false;
     }
   }
 
@@ -171,8 +192,69 @@ export class AmbienceRuleEditor extends LitElement {
     return false;
   }
 
+  /**
+   * Returns a user-facing error string if the currently open slot has invalid
+   * data, or null if valid.
+   *
+   * - Name slot: always valid (optional).
+   * - Matcher slots: predicates are valid by construction (form inputs constrain shape).
+   * - Action slots: must have at least one target, and all required params set.
+   */
+  private _validationError(slot: OpenSlot): string | null {
+    if (slot === null) return null;
+    if (slot.kind === "name") return null;
+    if (slot.kind === "matcher") return null;
+    // slot.kind === "action"
+    const action = this._draft?.actions[slot.idx];
+    if (!action) return null;
+    if (action.entity_ids.length === 0) {
+      return "At least one target is required.";
+    }
+    const info = this.availableActions.find((x) => x.name === action.action);
+    if (!info) return null;
+    for (const p of info.target_params) {
+      if (!p.required) continue;
+      const v = action.params[p.name];
+      if (v === undefined || v === null || v === "") {
+        return `${this._paramLabel(p.name)} is required.`;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Attempt to close the currently open slot. Returns true if successfully
+   * closed; false if blocked by a validation error (in which case `_showError`
+   * is set so the error renders).
+   */
+  private _tryCloseCurrent(): boolean {
+    if (this._open === null) return true;
+    if (this._validationError(this._open) !== null) {
+      this._showError = true;
+      return false;
+    }
+    this._open = null;
+    this._showError = false;
+    return true;
+  }
+
   private _toggleSlot(slot: { kind: "name" } | { kind: "matcher"; id: string } | { kind: "action"; idx: number }) {
-    this._open = this._isOpen(slot) ? null : slot;
+    if (this._isOpen(slot)) {
+      this._tryCloseCurrent();
+      return;
+    }
+    // Switching to a different slot — try to close current first
+    if (this._open !== null && !this._tryCloseCurrent()) return;
+    this._open = slot;
+    this._showError = false;
+  }
+
+  private _onModalClick(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    // If the click landed inside any editable region or the actions bar,
+    // don't treat it as a "click outside".
+    if (target.closest(".slot") || target.closest(".actions-bar")) return;
+    this._tryCloseCurrent();
   }
 
   // --- Matcher row ---
@@ -279,16 +361,19 @@ export class AmbienceRuleEditor extends LitElement {
     const params: ParamSpec[] = info?.target_params ?? [];
     return html`
       ${params.map((p) => html`
-        <div>
+        <div class="param-row">
           <label>${this._paramLabel(p.name)}${p.required ? " *" : ""}</label>
-          <input
-            type=${p.type === "int" || p.type === "number" ? "number" : "text"}
-            placeholder=${p.description ?? ""}
-            .value=${String(action.params[p.name] ?? "")}
-            min=${p.min ?? ""}
-            max=${p.max ?? ""}
-            @input=${(e: InputEvent) => this._updateActionParam(idx, p, (e.target as HTMLInputElement).value)}
-          />
+          <div class="param-input">
+            <input
+              type=${p.type === "int" || p.type === "number" ? "number" : "text"}
+              placeholder=${p.description ?? ""}
+              .value=${String(action.params[p.name] ?? "")}
+              min=${p.min ?? ""}
+              max=${p.max ?? ""}
+              @input=${(e: InputEvent) => this._updateActionParam(idx, p, (e.target as HTMLInputElement).value)}
+            />
+            ${p.unit ? html`<span class="param-unit">${p.unit}</span>` : ""}
+          </div>
         </div>
       `)}
     `;
@@ -329,6 +414,10 @@ export class AmbienceRuleEditor extends LitElement {
             ></ambience-target-picker>
 
             ${this._renderActionParams(idx, action, info)}
+
+            ${this._showError && this._validationError({ kind: "action", idx }) ? html`
+              <div class="error">${this._validationError({ kind: "action", idx })}</div>
+            ` : ""}
           </div>
         ` : ""}
       </div>
@@ -351,7 +440,7 @@ export class AmbienceRuleEditor extends LitElement {
   override render() {
     if (!this._draft) return html``;
     return html`
-      <div class="modal">
+      <div class="modal" @click=${this._onModalClick}>
         ${this._renderNameSlot()}
 
         <h3>When</h3>

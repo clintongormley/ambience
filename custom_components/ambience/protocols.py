@@ -17,6 +17,7 @@ class ParamSpec(TypedDict):
     min: NotRequired[float]
     max: NotRequired[float]
     description: NotRequired[str]
+    unit: NotRequired[str]
 
 
 @runtime_checkable

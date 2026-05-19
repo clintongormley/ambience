@@ -56,7 +56,7 @@ async def test_service_call_invokes_light_turn_on(
                         {
                             "action": "set_light",
                             "entity_ids": ["light.lamp"],
-                            "params": {"brightness": 30, "transition": 2000},
+                            "params": {"brightness": 30, "transition": 2.0},
                         }
                     ],
                 }
@@ -74,4 +74,4 @@ async def test_service_call_invokes_light_turn_on(
     assert len(on_calls) == 1
     assert on_calls[0].data["entity_id"] == "light.lamp"
     assert on_calls[0].data["brightness_pct"] == 30
-    assert on_calls[0].data["transition"] == 2.0  # 2000ms → 2s
+    assert on_calls[0].data["transition"] == 2.0  # passed straight through

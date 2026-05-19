@@ -65,29 +65,40 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
     sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    expect(sceneRow.classList.contains("expanded")).toBe(true);
+    // Re-query: Lit replaces the collapsed element with a new expanded element
+    const expanded = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    expect(expanded.classList.contains("expanded")).toBe(true);
   });
 
   test("opening a second matcher collapses the first", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
     scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
+    // Re-query tod after scene expansion (Lit replaces the scene element, tod may shift)
+    const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
     tod.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    expect(scene.classList.contains("collapsed")).toBe(true);
-    expect(tod.classList.contains("expanded")).toBe(true);
+    // Re-query both after renders settle
+    const sceneAfter = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    const todAfter = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    expect(sceneAfter.classList.contains("collapsed")).toBe(true);
+    expect(todAfter.classList.contains("expanded")).toBe(true);
   });
 
   test("clicking an already-expanded summary collapses it", async () => {
+    // Use time_of_day (non-combobox) for this test: it keeps its .summary when expanded
+    // so the second click can target it. Scene (combobox) drops chrome when expanded.
     el = await mount({ name: "test", when: {}, actions: [] });
-    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    tod.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    // Re-query: Lit replaces the collapsed element with a new expanded element
+    const todExpanded = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    todExpanded.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    expect(scene.classList.contains("collapsed")).toBe(true);
+    const todCollapsed = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    expect(todCollapsed.classList.contains("collapsed")).toBe(true);
   });
 
   test("matcher row labels use friendly names from i18n", async () => {
@@ -344,11 +355,15 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
     scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    expect(scene.classList.contains("expanded")).toBe(true);
+    // Re-query: Lit replaces the collapsed element with a new expanded (chrome-free) element
+    const sceneExpanded = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    expect(sceneExpanded.classList.contains("expanded")).toBe(true);
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
     nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    expect(scene.classList.contains("collapsed")).toBe(true);
+    // Re-query: Lit replaces the expanded scene element with a new collapsed element
+    const sceneCollapsed = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    expect(sceneCollapsed.classList.contains("collapsed")).toBe(true);
     // Re-query: Lit replaces the collapsed element with a new expanded element
     const expandedNameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
     expect(expandedNameRow.classList.contains("expanded")).toBe(true);
@@ -361,8 +376,10 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
 
-    // Fire value-changed from ambience-matcher-input
-    const matcherInput = sceneRow.querySelector("ambience-matcher-input")!;
+    // Re-query: Lit replaces the collapsed element with a new expanded (chrome-free) element
+    const expandedScene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    // Fire value-changed from ambience-matcher-input (directly inside the slot, no .body wrapper)
+    const matcherInput = expandedScene.querySelector("ambience-matcher-input")!;
     matcherInput.dispatchEvent(new CustomEvent("value-changed", {
       detail: { value: "relaxed" },
       bubbles: true,
@@ -449,12 +466,16 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     // Open scene slot
     sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    expect(sceneRow.classList.contains("expanded")).toBe(true);
+    // Re-query: Lit replaces the collapsed element with a new expanded (chrome-free) element
+    const expandedScene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    expect(expandedScene.classList.contains("expanded")).toBe(true);
     // Click on a non-slot region inside the modal (h3 header)
     const h3 = el.shadowRoot.querySelector("h3") as HTMLElement;
     h3.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    expect(sceneRow.classList.contains("collapsed")).toBe(true);
+    // Re-query: Lit replaces the expanded element with a new collapsed element
+    const collapsedScene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    expect(collapsedScene.classList.contains("collapsed")).toBe(true);
   });
 
   test("clicking outside an action slot with no targets keeps it open and shows an error", async () => {
@@ -504,6 +525,33 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(expanded.querySelector("label")).toBeNull();
     // But the input IS rendered
     expect(expanded.querySelector('input[type="text"]')).toBeTruthy();
+  });
+
+  test("expanded scene slot renders just the matcher-input — no summary header", async () => {
+    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
+    const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    // Click to expand
+    sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    // Re-query because the expanded element is a fresh template
+    const expanded = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    // No .summary child
+    expect(expanded.querySelector(".summary")).toBeNull();
+    // No .body wrapper either
+    expect(expanded.querySelector(".body")).toBeNull();
+    // But the matcher-input is rendered
+    expect(expanded.querySelector("ambience-matcher-input")).toBeTruthy();
+  });
+
+  test("time-of-day slot keeps the summary header when expanded", async () => {
+    el = await mount({ name: "test", when: { time_of_day: { period: "afternoon" } }, actions: [] });
+    const todRow = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    todRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const expanded = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    // Summary stays — user said they like it there
+    expect(expanded.querySelector(".summary")).toBeTruthy();
+    expect(expanded.querySelector(".body")).toBeTruthy();
   });
 
   test("param unit suffix renders when ParamSpec has unit", async () => {

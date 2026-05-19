@@ -39,8 +39,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
     :host { display: block; }
     .entry {
       display: flex; flex-direction: column; gap: 0.5rem;
-      padding: 0.5rem; border: 1px solid var(--divider-color, #ddd);
-      border-radius: 4px; margin-bottom: 0.5rem;
+      margin-bottom: 0.5rem;
     }
     .entry-header { display: flex; align-items: center; gap: 0.5rem; }
     select { padding: 0.4rem; flex: 1; }

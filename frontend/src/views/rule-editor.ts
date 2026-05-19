@@ -66,6 +66,7 @@ export class AmbienceRuleEditor extends LitElement {
     .slot.expanded .summary {
       background: var(--secondary-background-color, #f5f5f5);
     }
+    .slot.combobox-slot.expanded,
     .slot.name-slot.expanded {
       border: none;
       padding: 0;
@@ -280,6 +281,24 @@ export class AmbienceRuleEditor extends LitElement {
   private _renderMatcherRow(m: MatcherInfo) {
     const value = this._draft!.when[m.name] ?? null;
     const open = this._isOpen({ kind: "matcher", id: m.name });
+    const isCombobox = m.input === "scene_combobox";
+
+    // Expanded simple-combobox: drop chrome — just the input.
+    if (open && isCombobox) {
+      return html`
+        <div class="slot combobox-slot expanded" data-slot-id=${m.name}>
+          <ambience-matcher-input
+            .hass=${this.hass}
+            .matcher=${m}
+            .value=${value}
+            .sceneSuggestions=${this.sceneSuggestions}
+            .periods=${this.periods}
+            @value-changed=${(e: CustomEvent<{ value: unknown }>) => this._setPredicate(m.name, e.detail.value)}
+          ></ambience-matcher-input>
+        </div>
+      `;
+    }
+
     const summary = summariseMatcher(m.name, value, { hass: this.hass as any, periods: this.periods });
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id=${m.name}>

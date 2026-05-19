@@ -297,8 +297,7 @@ var tt=Object.defineProperty;var it=Object.getOwnPropertyDescriptor;var a=(n,i,e
     :host { display: block; }
     .entry {
       display: flex; flex-direction: column; gap: 0.5rem;
-      padding: 0.5rem; border: 1px solid var(--divider-color, #ddd);
-      border-radius: 4px; margin-bottom: 0.5rem;
+      margin-bottom: 0.5rem;
     }
     .entry-header { display: flex; align-items: center; gap: 0.5rem; }
     select { padding: 0.4rem; flex: 1; }
@@ -414,10 +413,21 @@ var tt=Object.defineProperty;var it=Object.getOwnPropertyDescriptor;var a=(n,i,e
           <span class="summary-label"><strong>${e||"New rule"}</strong></span>
         </div>
       </div>
-    `}_renderNameInputControl(e){let t=ze();return t==="ha-input"?l`<ha-input label="Name (optional)" .value=${e} @input=${this._onNameInput}></ha-input>`:t==="ha-textfield"?l`<ha-textfield label="Name (optional)" .value=${e} @input=${this._onNameInput}></ha-textfield>`:l`<input type="text" .value=${e} @input=${this._onNameInput} />`}_isOpen(e){return this._open===null?!1:e.kind==="name"&&this._open.kind==="name"?!0:e.kind==="matcher"&&this._open.kind==="matcher"?e.id===this._open.id:e.kind==="action"&&this._open.kind==="action"?e.idx===this._open.idx:!1}_validationError(e){if(e===null||e.kind==="name"||e.kind==="matcher")return null;let t=this._draft?.actions[e.idx];if(!t)return null;if(t.entity_ids.length===0)return"At least one target is required.";let r=this.availableActions.find(s=>s.name===t.action);if(!r)return null;for(let s of r.target_params){if(!s.required)continue;let o=t.params[s.name];if(o==null||o==="")return`${this._paramLabel(s.name)} is required.`}return null}_tryCloseCurrent(){return this._open===null?!0:this._validationError(this._open)!==null?(this._showError=!0,!1):(this._open=null,this._showError=!1,!0)}_toggleSlot(e){if(this._isOpen(e)){this._tryCloseCurrent();return}this._open!==null&&!this._tryCloseCurrent()||(this._open=e,this._showError=!1)}_onModalClick(e){let t=e.target;t.closest(".slot")||t.closest(".actions-bar")||this._tryCloseCurrent()}_setPredicate(e,t){if(!this._draft)return;let r={...this._draft.when};t==null?delete r[e]:r[e]=t,this._draft={...this._draft,when:r}}_renderMatcherRow(e){let t=this._draft.when[e.name]??null,r=this._isOpen({kind:"matcher",id:e.name}),s=de(e.name,t,{hass:this.hass,periods:this.periods});return l`
+    `}_renderNameInputControl(e){let t=ze();return t==="ha-input"?l`<ha-input label="Name (optional)" .value=${e} @input=${this._onNameInput}></ha-input>`:t==="ha-textfield"?l`<ha-textfield label="Name (optional)" .value=${e} @input=${this._onNameInput}></ha-textfield>`:l`<input type="text" .value=${e} @input=${this._onNameInput} />`}_isOpen(e){return this._open===null?!1:e.kind==="name"&&this._open.kind==="name"?!0:e.kind==="matcher"&&this._open.kind==="matcher"?e.id===this._open.id:e.kind==="action"&&this._open.kind==="action"?e.idx===this._open.idx:!1}_validationError(e){if(e===null||e.kind==="name"||e.kind==="matcher")return null;let t=this._draft?.actions[e.idx];if(!t)return null;if(t.entity_ids.length===0)return"At least one target is required.";let r=this.availableActions.find(s=>s.name===t.action);if(!r)return null;for(let s of r.target_params){if(!s.required)continue;let o=t.params[s.name];if(o==null||o==="")return`${this._paramLabel(s.name)} is required.`}return null}_tryCloseCurrent(){return this._open===null?!0:this._validationError(this._open)!==null?(this._showError=!0,!1):(this._open=null,this._showError=!1,!0)}_toggleSlot(e){if(this._isOpen(e)){this._tryCloseCurrent();return}this._open!==null&&!this._tryCloseCurrent()||(this._open=e,this._showError=!1)}_onModalClick(e){let t=e.target;t.closest(".slot")||t.closest(".actions-bar")||this._tryCloseCurrent()}_setPredicate(e,t){if(!this._draft)return;let r={...this._draft.when};t==null?delete r[e]:r[e]=t,this._draft={...this._draft,when:r}}_renderMatcherRow(e){let t=this._draft.when[e.name]??null,r=this._isOpen({kind:"matcher",id:e.name}),s=e.input==="scene_combobox";if(r&&s)return l`
+        <div class="slot combobox-slot expanded" data-slot-id=${e.name}>
+          <ambience-matcher-input
+            .hass=${this.hass}
+            .matcher=${e}
+            .value=${t}
+            .sceneSuggestions=${this.sceneSuggestions}
+            .periods=${this.periods}
+            @value-changed=${d=>this._setPredicate(e.name,d.detail.value)}
+          ></ambience-matcher-input>
+        </div>
+      `;let o=de(e.name,t,{hass:this.hass,periods:this.periods});return l`
       <div class="slot ${r?"expanded":"collapsed"}" data-slot-id=${e.name}>
         <div class="summary" @click=${()=>this._toggleSlot({kind:"matcher",id:e.name})}>
-          <span class="summary-label"><strong>${ae(this.hass,e.name)}:</strong> ${s}</span>
+          <span class="summary-label"><strong>${ae(this.hass,e.name)}:</strong> ${o}</span>
         </div>
         ${r?l`
           <div class="body">
@@ -427,7 +437,7 @@ var tt=Object.defineProperty;var it=Object.getOwnPropertyDescriptor;var a=(n,i,e
               .value=${t}
               .sceneSuggestions=${this.sceneSuggestions}
               .periods=${this.periods}
-              @value-changed=${o=>this._setPredicate(e.name,o.detail.value)}
+              @value-changed=${d=>this._setPredicate(e.name,d.detail.value)}
             ></ambience-matcher-input>
           </div>
         `:""}
@@ -539,6 +549,7 @@ var tt=Object.defineProperty;var it=Object.getOwnPropertyDescriptor;var a=(n,i,e
     .slot.expanded .summary {
       background: var(--secondary-background-color, #f5f5f5);
     }
+    .slot.combobox-slot.expanded,
     .slot.name-slot.expanded {
       border: none;
       padding: 0;

@@ -25,3 +25,4 @@ docs/superpowers/
 node_modules/
 frontend/dist/
 .superpowers/
+coverage/

@@ -16,5 +16,12 @@
     "evening": "Evening",
     "night": "Night",
     "day": "Day"
+  },
+  "matcher": {
+    "scene": "Scene",
+    "time_of_day": "Time of day"
+  },
+  "action": {
+    "set_light": "Set light"
   }
 }

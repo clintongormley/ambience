@@ -6,6 +6,20 @@ interface HassLike {
   localize?: Localizer;
 }
 
+function _resolve(hass: HassLike | undefined, key: string, fallback: string): string {
+  const localised = hass?.localize?.(key);
+  if (localised && localised !== key) return localised;
+  return fallback;
+}
+
+export function matcherLabel(hass: HassLike | undefined, name: string): string {
+  return _resolve(hass, `component.ambience.matcher.${name}`, name);
+}
+
+export function actionLabel(hass: HassLike | undefined, name: string): string {
+  return _resolve(hass, `component.ambience.action.${name}`, name);
+}
+
 /**
  * Resolve a period id to a display name.
  *   1. If the id is in `custom` and has a non-empty `label`, return the label.
@@ -21,9 +35,6 @@ export function periodLabel(
   const custom_label = custom[id]?.label;
   if (custom_label) return custom_label;
 
-  const key = `component.ambience.time_of_day_period.${id}`;
-  const localised = hass?.localize?.(key);
-  if (localised && localised !== key) return localised;
-
-  return id.charAt(0).toUpperCase() + id.slice(1);
+  const fallback = id.charAt(0).toUpperCase() + id.slice(1);
+  return _resolve(hass, `component.ambience.time_of_day_period.${id}`, fallback);
 }

@@ -66,6 +66,11 @@ export class AmbienceRuleEditor extends LitElement {
     .slot.expanded .summary {
       background: var(--secondary-background-color, #f5f5f5);
     }
+    .slot.name-slot.expanded {
+      border: none;
+      padding: 0;
+      margin-bottom: 0.5rem;
+    }
     .body {
       padding: 0.75rem;
       border-top: 1px solid var(--divider-color, #e0e0e0);
@@ -147,18 +152,23 @@ export class AmbienceRuleEditor extends LitElement {
   private _renderNameSlot() {
     const value = this._draft!.name ?? "";
     const open = this._isOpen({ kind: "name" });
+    if (open) {
+      // Just the input — no header, no label, no enclosing chrome.
+      // The .slot class is kept (with the .name-slot.expanded variant) so the
+      // click-outside detection in _onModalClick still treats this region as
+      // "inside" an editable slot.
+      return html`
+        <div class="slot name-slot expanded" data-slot-id="name">
+          ${this._renderNameInputControl(value)}
+        </div>
+      `;
+    }
     const summaryText = value || "New rule";
     return html`
-      <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="name">
+      <div class="slot collapsed" data-slot-id="name">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "name" })}>
           <span class="summary-label"><strong>${summaryText}</strong></span>
         </div>
-        ${open ? html`
-          <div class="body">
-            <label>Name (optional)</label>
-            ${this._renderNameInputControl(value)}
-          </div>
-        ` : ""}
       </div>
     `;
   }

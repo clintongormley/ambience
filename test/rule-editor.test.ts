@@ -302,7 +302,9 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
     nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    const nameInput = nameRow.querySelector('input[type="text"]') as HTMLInputElement;
+    // Re-query: Lit replaces the collapsed element with a new expanded element
+    const expandedNameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    const nameInput = expandedNameRow.querySelector('input[type="text"]') as HTMLInputElement;
     nameInput.value = "renamed";
     nameInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
     await el.updateComplete;
@@ -332,7 +334,9 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(nameRow.querySelector('input[type="text"]')).toBeNull();
     nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    expect(nameRow.querySelector('input[type="text"]')).toBeTruthy();
+    // Re-query: Lit replaces the collapsed element with a new expanded element
+    const expandedRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    expect(expandedRow.querySelector('input[type="text"]')).toBeTruthy();
   });
 
   test("opening name slot collapses an open matcher row", async () => {
@@ -345,7 +349,9 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
     expect(scene.classList.contains("collapsed")).toBe(true);
-    expect(nameRow.classList.contains("expanded")).toBe(true);
+    // Re-query: Lit replaces the collapsed element with a new expanded element
+    const expandedNameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    expect(expandedNameRow.classList.contains("expanded")).toBe(true);
   });
 
   test("matcher input value-changed event calls _setPredicate", async () => {
@@ -483,6 +489,21 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
     expect(action.classList.contains("expanded")).toBe(true);
     expect(scene.classList.contains("collapsed")).toBe(true);
+  });
+
+  test("expanded name slot renders just the input — no summary header, no duplicate label", async () => {
+    el = await mount({ name: "My rule", when: {}, actions: [] });
+    const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    // Open it
+    nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const expanded = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    // No .summary child inside the expanded name slot
+    expect(expanded.querySelector(".summary")).toBeNull();
+    // No <label> child either
+    expect(expanded.querySelector("label")).toBeNull();
+    // But the input IS rendered
+    expect(expanded.querySelector('input[type="text"]')).toBeTruthy();
   });
 
   test("param unit suffix renders when ParamSpec has unit", async () => {

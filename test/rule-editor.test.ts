@@ -1,398 +1,176 @@
 import { describe, test, expect, afterEach } from "vitest";
 import "../frontend/src/views/rule-editor";
-import type { Rule, MatcherInfo, ActionInfo, PeriodStoreView } from "../frontend/src/types";
+import type { ActionInfo, MatcherInfo, Rule } from "../frontend/src/types";
 
-const periods: PeriodStoreView = { builtins: {}, custom: {}, hidden: [] };
+const matchers: MatcherInfo[] = [
+  { name: "scene", description: "", predicate_help: "", toggleable: false, input: "scene_combobox", priority: 0 },
+  { name: "time_of_day", description: "", predicate_help: "", toggleable: true, input: "time_of_day", priority: 100 },
+];
 
-const sceneMatcher: MatcherInfo = {
-  name: "scene",
-  description: "Scene matcher",
-  predicate_help: "",
-  toggleable: false,
-  input: "scene_combobox",
-  priority: 0,
-};
+const availableActions: ActionInfo[] = [
+  {
+    name: "set_light",
+    description: "",
+    domains: ["light"],
+    target_params: [
+      { name: "brightness", type: "int", required: true },
+      { name: "transition", type: "number", required: false },
+    ],
+  },
+];
 
-const setLightAction: ActionInfo = {
-  name: "set_light",
-  description: "Set light",
-  domains: ["light"],
-  target_params: [
-    { name: "brightness", type: "int", required: false, min: 0, max: 100 },
-    { name: "transition", type: "number", required: false },
-  ],
-};
+const periods = { builtins: {}, custom: {}, hidden: [] };
 
-const baseRule: Rule = {
-  name: "Test rule",
-  when: { scene: "movie" },
-  actions: [],
-};
+const hass = {
+  localize: (k: string) => {
+    if (k === "component.ambience.matcher.scene") return "Scene";
+    if (k === "component.ambience.matcher.time_of_day") return "Time of day";
+    if (k === "component.ambience.action.set_light") return "Set light";
+    return undefined;
+  },
+  entities: {
+    "light.lamp_a": { entity_id: "light.lamp_a", area_id: "living_room" },
+    "light.lamp_b": { entity_id: "light.lamp_b", area_id: "living_room" },
+  },
+} as any;
 
-async function mount(opts: {
-  rule?: Rule | null;
-  matchers?: MatcherInfo[];
-  availableActions?: ActionInfo[];
-  open?: boolean;
-} = {}): Promise<any> {
+async function mount(rule: Rule | null, opts: { areaId?: string } = {}): Promise<any> {
   const el: any = document.createElement("ambience-rule-editor");
-  el.rule = opts.rule !== undefined ? opts.rule : baseRule;
-  el.matchers = opts.matchers ?? [sceneMatcher];
-  el.availableActions = opts.availableActions ?? [setLightAction];
+  el.matchers = matchers;
+  el.availableActions = availableActions;
   el.periods = periods;
-  el.sceneSuggestions = [];
-  if (opts.open !== undefined) el.open = opts.open;
+  el.hass = hass;
+  el.areaId = opts.areaId ?? "living_room";
+  el.rule = rule;
+  el.open = true;
   document.body.appendChild(el);
+  await el.updateComplete;
+  await new Promise((r) => setTimeout(r, 0));
   await el.updateComplete;
   return el;
 }
 
-function captureEvent(el: HTMLElement, name: string) {
-  let detail: any;
-  el.addEventListener(name, (e: Event) => { detail = (e as CustomEvent).detail; });
-  return () => detail;
-}
-
-describe("ambience-rule-editor", () => {
+describe("ambience-rule-editor — collapse + friendly labels", () => {
   let el: any;
   afterEach(() => { el?.remove(); });
 
-  test("renders nothing when rule is null", async () => {
-    el = await mount({ rule: null });
-    // Should return empty template when _draft is null
-    expect(el.shadowRoot.querySelector(".modal")).toBeFalsy();
+  test("matcher rows render as collapsed summaries by default", async () => {
+    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
+    const rows = el.shadowRoot.querySelectorAll(".slot.collapsed");
+    expect(rows.length).toBe(2);  // scene + time_of_day
   });
 
-  test("renders modal when rule is provided", async () => {
-    el = await mount({ open: true });
-    expect(el.shadowRoot.querySelector(".modal")).toBeTruthy();
+  test("clicking a collapsed matcher summary expands it", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(sceneRow.classList.contains("expanded")).toBe(true);
   });
 
-  test("shows rule name in heading", async () => {
-    el = await mount({ open: true });
-    expect(el.shadowRoot.querySelector("h2")?.textContent).toContain("Test rule");
+  test("opening a second matcher collapses the first", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    tod.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(scene.classList.contains("collapsed")).toBe(true);
+    expect(tod.classList.contains("expanded")).toBe(true);
   });
 
-  test("shows 'New rule' when rule has no name", async () => {
-    el = await mount({ rule: { when: {}, actions: [] }, open: true });
-    expect(el.shadowRoot.querySelector("h2")?.textContent).toContain("New rule");
+  test("clicking an already-expanded summary collapses it", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(scene.classList.contains("collapsed")).toBe(true);
   });
 
-  test("emits cancel-rule when Cancel clicked", async () => {
-    el = await mount({ open: true });
+  test("matcher row labels use friendly names from i18n", async () => {
+    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
+    const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    expect(sceneRow.textContent).toContain("Scene");
+    expect(sceneRow.textContent).toContain("movie");
+  });
+
+  test("action rows render as collapsed summaries", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp_a"], params: { brightness: 80 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    expect(action.classList.contains("collapsed")).toBe(true);
+    expect(action.textContent).toContain("Set light");
+  });
+
+  test("adding a new action auto-opens it", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const addBtn = el.shadowRoot.querySelector(".add-action") as HTMLButtonElement;
+    addBtn.click();
+    await el.updateComplete;
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    expect(action.classList.contains("expanded")).toBe(true);
+  });
+
+  test("expanded action editor uses target picker", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp_a"], params: { brightness: 80 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(action.querySelector("ambience-target-picker")).toBeTruthy();
+  });
+
+  test("action dropdown uses friendly names", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const addBtn = el.shadowRoot.querySelector(".add-action") as HTMLButtonElement;
+    addBtn.click();
+    await el.updateComplete;
+    const select = el.shadowRoot.querySelector("select.action-type") as HTMLSelectElement;
+    const opt = select.querySelector('option[value="set_light"]') as HTMLOptionElement;
+    expect(opt.textContent?.trim()).toBe("Set light");
+  });
+
+  test("emits save-rule with the draft", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    let saved: Rule | undefined;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
+      (b: any) => b.textContent.trim() === "Save rule"
+    ) as HTMLButtonElement;
+    saveBtn.click();
+    expect(saved?.name).toBe("test");
+  });
+
+  test("emits cancel-rule", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
     let cancelled = false;
     el.addEventListener("cancel-rule", () => { cancelled = true; });
-
-    const buttons = el.shadowRoot.querySelectorAll(".actions-bar button");
-    const cancelBtn = [...buttons].find((b: any) => b.textContent.includes("Cancel")) as HTMLButtonElement;
+    const cancelBtn = Array.from(el.shadowRoot.querySelectorAll("button.secondary")).find(
+      (b: any) => b.textContent.trim() === "Cancel"
+    ) as HTMLButtonElement;
     cancelBtn.click();
-
     expect(cancelled).toBe(true);
   });
 
-  test("emits save-rule with draft when Save clicked", async () => {
-    el = await mount({ open: true });
-    const get = captureEvent(el, "save-rule");
-
-    const buttons = el.shadowRoot.querySelectorAll(".actions-bar button");
-    const saveBtn = [...buttons].find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-    saveBtn.click();
-
-    expect(get()).toBeDefined();
-    expect(get().name).toBe("Test rule");
-    expect(get().when).toEqual({ scene: "movie" });
-  });
-
-  test("Add action button adds an action slot", async () => {
-    el = await mount({ open: true });
-    const addActionBtn = [...el.shadowRoot.querySelectorAll("button")]
-      .find((b: any) => b.textContent.includes("+ Add action")) as HTMLButtonElement;
-    addActionBtn.click();
-    await el.updateComplete;
-
-    const get = captureEvent(el, "save-rule");
-    const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-      .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-    saveBtn.click();
-    expect(get().actions.length).toBe(1);
-    expect(get().actions[0].action).toBe("set_light");
-  });
-
-  test("Remove action button removes the action", async () => {
-    el = await mount({ rule: { ...baseRule, actions: [{ action: "set_light", targets: {} }] }, open: true });
-    const removeBtn = [...el.shadowRoot.querySelectorAll("button")]
-      .find((b: any) => b.textContent.includes("Remove action")) as HTMLButtonElement;
-    removeBtn.click();
-    await el.updateComplete;
-
-    const get = captureEvent(el, "save-rule");
-    const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-      .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-    saveBtn.click();
-    expect(get().actions.length).toBe(0);
-  });
-
-  test("Add target button adds a target slot to an action", async () => {
-    el = await mount({ rule: { ...baseRule, actions: [{ action: "set_light", targets: {} }] }, open: true });
-    const addTargetBtn = [...el.shadowRoot.querySelectorAll("button")]
-      .find((b: any) => b.textContent.includes("+ Add target")) as HTMLButtonElement;
-    addTargetBtn.click();
-    await el.updateComplete;
-
-    const get = captureEvent(el, "save-rule");
-    const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-      .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-    saveBtn.click();
-    expect(Object.keys(get().actions[0].targets).length).toBe(1);
-  });
-
-  test("renders 'No targets yet' when action has no targets", async () => {
-    el = await mount({ rule: { ...baseRule, actions: [{ action: "set_light", targets: {} }] }, open: true });
-    expect(el.shadowRoot.textContent).toContain("No targets yet");
-  });
-
-  test("renders matcher inputs for provided matchers", async () => {
-    el = await mount({ open: true });
-    expect(el.shadowRoot.querySelector("ambience-matcher-input")).toBeTruthy();
-  });
-
-  test("draft updates when rule prop changes", async () => {
-    el = await mount({ rule: baseRule, open: true });
-    el.rule = { name: "New name", when: {}, actions: [] };
-    await el.updateComplete;
-
-    const get = captureEvent(el, "save-rule");
-    const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-      .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-    saveBtn.click();
-    expect(get().name).toBe("New name");
-  });
-
-  test("name input updates the draft name", async () => {
-    el = await mount({ rule: { when: {}, actions: [] }, open: true });
-    // Use the plain fallback input (no ha-input registered in jsdom)
-    const nameInput = el.shadowRoot.querySelector("input[type='text']") as HTMLInputElement;
-    if (nameInput) {
-      nameInput.value = "Updated name";
-      nameInput.dispatchEvent(new Event("input", { bubbles: true }));
-      await el.updateComplete;
-
-      const get = captureEvent(el, "save-rule");
-      const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-        .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-      saveBtn.click();
-      expect(get().name).toBe("Updated name");
-    }
-  });
-
-  test("remove target button removes target from action", async () => {
-    const rule: Rule = {
-      ...baseRule,
-      actions: [{ action: "set_light", targets: { "light.x": { brightness: 50 } } }],
-    };
-    el = await mount({ rule, open: true });
-    const removeBtn = el.shadowRoot.querySelector("button[title='Remove target']") as HTMLButtonElement;
-    removeBtn.click();
-    await el.updateComplete;
-
-    const get = captureEvent(el, "save-rule");
-    const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-      .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-    saveBtn.click();
-    expect(Object.keys(get().actions[0].targets).length).toBe(0);
-  });
-
-  test("param int input parses integer values", async () => {
-    const rule: Rule = {
-      ...baseRule,
-      actions: [{ action: "set_light", targets: { "light.x": { brightness: 50 } } }],
-    };
-    el = await mount({ rule, open: true });
-
-    // There should be number inputs for brightness and transition params
-    const inputs = el.shadowRoot.querySelectorAll("input[type='number']");
-    if (inputs.length > 0) {
-      const brightnessInput = inputs[0] as HTMLInputElement;
-      brightnessInput.value = "80";
-      brightnessInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
-      await el.updateComplete;
-
-      const get = captureEvent(el, "save-rule");
-      const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-        .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-      saveBtn.click();
-      expect(get().actions[0].targets["light.x"].brightness).toBe(80);
-    }
-  });
-
-  test("param int input with empty value removes the param", async () => {
-    const rule: Rule = {
-      ...baseRule,
-      actions: [{ action: "set_light", targets: { "light.x": { brightness: 50 } } }],
-    };
-    el = await mount({ rule, open: true });
-
-    const inputs = el.shadowRoot.querySelectorAll("input[type='number']");
-    if (inputs.length > 0) {
-      const brightnessInput = inputs[0] as HTMLInputElement;
-      brightnessInput.value = "";
-      brightnessInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
-      await el.updateComplete;
-
-      const get = captureEvent(el, "save-rule");
-      const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-        .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-      saveBtn.click();
-      expect(get().actions[0].targets["light.x"].brightness).toBeUndefined();
-    }
-  });
-
-  test("entity_id input updates target key", async () => {
-    const rule: Rule = {
-      ...baseRule,
-      actions: [{ action: "set_light", targets: { "light.old": { brightness: 50 } } }],
-    };
-    el = await mount({ rule, open: true });
-
-    // The entity_id input is a text input in the target row
-    const entityInput = [...el.shadowRoot.querySelectorAll("input[type='text']")]
-      .find((i: any) => (i as HTMLInputElement).value === "light.old") as HTMLInputElement | undefined;
-    if (entityInput) {
-      entityInput.value = "light.new";
-      entityInput.dispatchEvent(new Event("change", { bubbles: true }));
-      await el.updateComplete;
-
-      const get = captureEvent(el, "save-rule");
-      const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-        .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-      saveBtn.click();
-      expect(get().actions[0].targets["light.new"]).toBeDefined();
-      expect(get().actions[0].targets["light.old"]).toBeUndefined();
-    }
-  });
-
-  test("changing action type via select resets targets", async () => {
-    const rule: Rule = {
-      ...baseRule,
-      actions: [{ action: "set_light", targets: { "light.x": { brightness: 50 } } }],
-    };
+  test("deleting an action removes it from the draft", async () => {
     el = await mount({
-      rule,
-      availableActions: [
-        setLightAction,
-        { name: "other_action", description: "", domains: ["switch"], target_params: [] },
+      name: "test", when: {},
+      actions: [
+        { action: "set_light", entity_ids: ["light.lamp_a"], params: { brightness: 80 } },
+        { action: "set_light", entity_ids: ["light.lamp_b"], params: { brightness: 40 } },
       ],
-      open: true,
     });
-
-    const select = el.shadowRoot.querySelector("select") as HTMLSelectElement;
-    select.value = "other_action";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    const action0 = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    const removeBtn = action0.querySelector(".summary .remove") as HTMLButtonElement;
+    removeBtn.click();
     await el.updateComplete;
-
-    const get = captureEvent(el, "save-rule");
-    const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-      .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-    saveBtn.click();
-    expect(get().actions[0].action).toBe("other_action");
-    expect(Object.keys(get().actions[0].targets).length).toBe(0);
-  });
-
-  test("matcher-input value-changed updates the draft predicate", async () => {
-    el = await mount({ open: true });
-    const matcherInput = el.shadowRoot.querySelector("ambience-matcher-input")!;
-    matcherInput.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value: "relaxed" },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await el.updateComplete;
-
-    const get = captureEvent(el, "save-rule");
-    const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-      .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-    saveBtn.click();
-    expect(get().when.scene).toBe("relaxed");
-  });
-
-  test("param number input parses float values", async () => {
-    const numberAction: ActionInfo = {
-      name: "set_light",
-      description: "Set light",
-      domains: ["light"],
-      target_params: [
-        { name: "level", type: "number", required: false },
-      ],
-    };
-    const rule: Rule = {
-      ...baseRule,
-      actions: [{ action: "set_light", targets: { "light.x": { level: 0.5 } } }],
-    };
-    el = await mount({ rule, availableActions: [numberAction], open: true });
-
-    const inputs = el.shadowRoot.querySelectorAll("input[type='number']");
-    if (inputs.length > 0) {
-      const levelInput = inputs[0] as HTMLInputElement;
-      levelInput.value = "0.75";
-      levelInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
-      await el.updateComplete;
-
-      const get = captureEvent(el, "save-rule");
-      const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-        .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-      saveBtn.click();
-      expect(get().actions[0].targets["light.x"].level).toBe(0.75);
-    }
-  });
-
-  test("param number input with empty value removes the param", async () => {
-    const numberAction: ActionInfo = {
-      name: "set_light",
-      description: "Set light",
-      domains: ["light"],
-      target_params: [
-        { name: "level", type: "number", required: false },
-      ],
-    };
-    const rule: Rule = {
-      ...baseRule,
-      actions: [{ action: "set_light", targets: { "light.x": { level: 0.5 } } }],
-    };
-    el = await mount({ rule, availableActions: [numberAction], open: true });
-
-    const inputs = el.shadowRoot.querySelectorAll("input[type='number']");
-    if (inputs.length > 0) {
-      const levelInput = inputs[0] as HTMLInputElement;
-      levelInput.value = "";
-      levelInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
-      await el.updateComplete;
-
-      const get = captureEvent(el, "save-rule");
-      const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-        .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-      saveBtn.click();
-      expect(get().actions[0].targets["light.x"].level).toBeUndefined();
-    }
-  });
-
-  test("matcher-input null value removes the predicate key", async () => {
-    el = await mount({ open: true });
-    const matcherInput = el.shadowRoot.querySelector("ambience-matcher-input")!;
-    matcherInput.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value: null },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await el.updateComplete;
-
-    const get = captureEvent(el, "save-rule");
-    const saveBtn = [...el.shadowRoot.querySelectorAll(".actions-bar button")]
-      .find((b: any) => b.textContent.includes("Save")) as HTMLButtonElement;
-    saveBtn.click();
-    expect("scene" in get().when).toBe(false);
+    expect(el.shadowRoot.querySelectorAll(".slot[data-slot-id^='action-']").length).toBe(1);
   });
 });

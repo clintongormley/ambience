@@ -138,14 +138,15 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(action.querySelector("ambience-target-picker")).toBeTruthy();
   });
 
-  test("action dropdown uses friendly names", async () => {
-    el = await mount({ name: "test", when: {}, actions: [] });
-    const addBtn = el.shadowRoot.querySelector(".add-action") as HTMLButtonElement;
-    addBtn.click();
+  test("expanded action body does not include an action type dropdown", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp_a"], params: { brightness: 80 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    const select = el.shadowRoot.querySelector("select.action-type") as HTMLSelectElement;
-    const opt = select.querySelector('option[value="set_light"]') as HTMLOptionElement;
-    expect(opt.textContent?.trim()).toBe("Set light");
+    expect(action.querySelector("select.action-type")).toBeNull();
   });
 
   test("emits save-rule with the draft", async () => {
@@ -262,49 +263,6 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
     // No action slots remain
     expect(el.shadowRoot.querySelectorAll(".slot[data-slot-id^='action-']").length).toBe(0);
-  });
-
-  test("changing action type dropdown calls _changeActionType", async () => {
-    const twoActions: ActionInfo[] = [
-      {
-        name: "set_light",
-        description: "",
-        domains: ["light"],
-        target_params: [{ name: "brightness", type: "int", required: true, default: 50 }],
-      },
-      {
-        name: "set_light_alt",
-        description: "",
-        domains: ["light"],
-        target_params: [],
-      },
-    ];
-    el = document.createElement("ambience-rule-editor") as any;
-    el.matchers = matchers;
-    el.availableActions = twoActions;
-    el.periods = periods;
-    el.hass = hass;
-    el.areaId = "living_room";
-    el.rule = { name: "test", when: {}, actions: [{ action: "set_light", entity_ids: [], params: {} }] };
-    el.open = true;
-    document.body.appendChild(el);
-    await el.updateComplete;
-
-    // Open the action
-    const action0 = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
-    action0.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await el.updateComplete;
-
-    // Change the action type dropdown
-    const select = action0.querySelector("select.action-type") as HTMLSelectElement;
-    select.value = "set_light_alt";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-
-    let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
-    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
-    expect(saved?.actions[0]?.action).toBe("set_light_alt");
   });
 
   test("typing in name input updates the draft name", async () => {

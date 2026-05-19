@@ -63,6 +63,7 @@ export class AmbienceTargetPicker extends LitElement {
     const schema = [
       {
         name: "entity_ids",
+        label: "",  // hide the field label — outer "Target" label is enough
         selector: {
           entity: {
             multiple: true,

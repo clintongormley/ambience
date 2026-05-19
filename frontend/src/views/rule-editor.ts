@@ -12,7 +12,7 @@ import type {
 import type { HassConnection } from "../api.js";
 import { entitiesInArea } from "../area-entities.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
-import { matcherLabel, actionLabel } from "../i18n.js";
+import { matcherLabel } from "../i18n.js";
 import { summariseMatcher, summariseAction } from "../summary.js";
 import "./matcher-input.js";
 import "./target-picker.js";
@@ -337,15 +337,6 @@ export class AmbienceRuleEditor extends LitElement {
     this._draft = { ...this._draft, actions };
   }
 
-  private _changeActionType(idx: number, name: string) {
-    this._updateActionAt(idx, () => {
-      const info = this.availableActions.find((x) => x.name === name);
-      const params: Record<string, unknown> = {};
-      info?.target_params.forEach((p) => { if ("default" in p) params[p.name] = p.default; });
-      return { action: name, entity_ids: [], params };
-    });
-  }
-
   private _deleteAction(idx: number) {
     if (!this._draft) return;
     this._draft = { ...this._draft, actions: this._draft.actions.filter((_, i) => i !== idx) };
@@ -421,16 +412,6 @@ export class AmbienceRuleEditor extends LitElement {
         </div>
         ${open ? html`
           <div class="body">
-            <label>Action type</label>
-            <select class="action-type" @change=${(e: Event) =>
-              this._changeActionType(idx, (e.target as HTMLSelectElement).value)}>
-              ${this.availableActions.map((info) => html`
-                <option value=${info.name} ?selected=${action.action === info.name}>
-                  ${actionLabel(this.hass as any, info.name)}
-                </option>
-              `)}
-            </select>
-
             <label>Target</label>
             <ambience-target-picker
               .hass=${this.hass}

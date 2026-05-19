@@ -28,7 +28,7 @@ const periods: PeriodStoreView = {
 const movieRule: Rule = {
   name: "Movie rule",
   when: { scene: "movie" },
-  actions: [{ action: "set_light", targets: { "light.lamp": { brightness: 30 } } }],
+  actions: [{ action: "set_light", entity_ids: ["light.lamp"], params: { brightness: 30 } }],
 };
 
 const eveningRule: Rule = {
@@ -37,12 +37,20 @@ const eveningRule: Rule = {
   actions: [],
 };
 
+const testHass = {
+  localize: (k: string) => {
+    if (k === "component.ambience.matcher.scene") return "Scene";
+    if (k === "component.ambience.matcher.time_of_day") return "Time of day";
+    return undefined;
+  },
+};
+
 async function mount(rules: Rule[] = [], autoSort = true): Promise<any> {
   const el: any = document.createElement("ambience-rules-list");
   el.rules = rules;
   el.autoSort = autoSort;
   el.periods = periods;
-  el.hass = {};
+  el.hass = testHass;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
@@ -276,5 +284,19 @@ describe("ambience-rules-list", () => {
     el = await mount([sunRule]);
     const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
     expect(summary).toContain("sunrise");
+  });
+
+  test("summary uses friendly matcher labels", async () => {
+    const rules: Rule[] = [{
+      name: "test",
+      when: { time_of_day: { period: "afternoon" }, scene: "movie" },
+      actions: [{ action: "set_light", entity_ids: ["light.a"], params: { brightness: 80 } }],
+    }];
+    el = await mount(rules);
+    const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
+    expect(summary).toContain("Time of day:");
+    expect(summary).toContain("Afternoon");
+    expect(summary).toContain("Scene:");
+    expect(summary).toContain("movie");
   });
 });

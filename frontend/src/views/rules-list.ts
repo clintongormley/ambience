@@ -1,12 +1,11 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { periodLabel } from "../i18n.js";
+import { matcherLabel } from "../i18n.js";
+import { summariseMatcher } from "../summary.js";
 import type {
-  PeriodDef,
   PeriodStoreView,
   Rule,
-  TimeOfDayPredicate,
 } from "../types.js";
 
 @customElement("ambience-rules-list")
@@ -98,56 +97,18 @@ export class AmbienceRulesList extends LitElement {
 
   /** Human-readable one-line summary of a rule's `when` map + action count. */
   private _summary(rule: Rule): string {
-    const custom: Record<string, PeriodDef> = this.periods?.custom ?? {};
     const keys = Object.keys(rule.when).filter((k) => rule.when[k] != null);
     const when =
       keys.length === 0
         ? "any"
         : keys
-            .map((k) => `${k}=${this._describeValue(k, rule.when[k], custom)}`)
+            .map(
+              (k) =>
+                `${matcherLabel(this.hass as any, k)}: ${summariseMatcher(k, rule.when[k], { hass: this.hass as any, periods: this.periods })}`,
+            )
             .join(", ");
     const n = rule.actions.length;
     return `${when} · ${n} action${n === 1 ? "" : "s"}`;
-  }
-
-  /**
-   * Convert a matcher predicate value to a human-readable string.
-   * For `time_of_day`, period references are resolved via `periodLabel`.
-   */
-  private _describeValue(
-    key: string,
-    value: unknown,
-    custom: Record<string, PeriodDef>,
-  ): string {
-    if (key === "time_of_day") {
-      return this._describeTimeOfDay(value as TimeOfDayPredicate, custom);
-    }
-    return String(value);
-  }
-
-  private _describeTimeOfDay(
-    pred: TimeOfDayPredicate,
-    custom: Record<string, PeriodDef>,
-  ): string {
-    if (pred === null) return "any";
-    const list = Array.isArray(pred) ? pred : [pred];
-    return list
-      .map((item) => {
-        if ("period" in item) {
-          return periodLabel(this.hass, item.period, custom);
-        }
-        // TimeRange — render as HH:MM→HH:MM
-        const fmt = (ep: { kind: string; hh?: number; mm?: number; anchor?: string; offset_min?: number }) => {
-          if (ep.kind === "time") {
-            return `${String(ep.hh ?? 0).padStart(2, "0")}:${String(ep.mm ?? 0).padStart(2, "0")}`;
-          }
-          const abs = Math.abs(ep.offset_min ?? 0);
-          const unit = abs % 60 === 0 ? `${abs / 60}h` : `${abs}m`;
-          return `${ep.anchor}${(ep.offset_min ?? 0) < 0 ? "-" : "+"}${unit === "0h" ? "" : unit}`;
-        };
-        return `${fmt(item.from as any)}→${fmt(item.to as any)}`;
-      })
-      .join(", ");
   }
 
   private _onDragStart(i: number) {

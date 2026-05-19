@@ -73,15 +73,46 @@ describe("ambience-time-endpoint", () => {
     expect(get()).toEqual({ kind: "sun", anchor: "sunrise", offset_min: -45 });
   });
 
-  test("renders human-readable offset hint for multiples of 60", async () => {
+  test("renders human-readable signed offset for multiples of 60", async () => {
     el = await mount({ kind: "sun", anchor: "noon", offset_min: 120 });
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".offset-hint").textContent.trim()).toBe("2h");
+    expect(el.shadowRoot.querySelector(".offset-hint").textContent.trim()).toBe("+2 hours");
   });
 
   test("hint shows minutes when not divisible by 60", async () => {
     el = await mount({ kind: "sun", anchor: "noon", offset_min: 45 });
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".offset-hint").textContent.trim()).toBe("45m");
+    expect(el.shadowRoot.querySelector(".offset-hint").textContent.trim()).toBe("+45 min");
+  });
+
+  test("hint for negative offset uses unicode minus", async () => {
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: -30 });
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".offset-hint").textContent.trim()).toBe("−30 min");
+  });
+
+  test("hint for negative hour offset", async () => {
+    el = await mount({ kind: "sun", anchor: "sunrise", offset_min: -60 });
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".offset-hint").textContent.trim()).toBe("−1 hour");
+  });
+
+  test("hint for zero is empty", async () => {
+    el = await mount({ kind: "sun", anchor: "noon", offset_min: 0 });
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".offset-hint").textContent.trim()).toBe("");
+  });
+
+  test("offset input has placeholder describing what to enter", async () => {
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: 0 });
+    await el.updateComplete;
+    const offset = el.shadowRoot.querySelector('input[type="number"]') as HTMLInputElement;
+    expect(offset.placeholder).toContain("min");
+  });
+
+  test("hint pluralises 'hour' correctly", async () => {
+    el = await mount({ kind: "sun", anchor: "noon", offset_min: 60 });
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".offset-hint").textContent.trim()).toBe("+1 hour");
   });
 });

@@ -80,12 +80,7 @@ export class AmbienceTimeEndpoint extends LitElement {
   }
 
   private _renderSun(v: { anchor: SunAnchor; offset_min: number }) {
-    const hint =
-      v.offset_min === 0
-        ? ""
-        : v.offset_min % 60 === 0
-          ? `${v.offset_min / 60}h`
-          : `${v.offset_min}m`;
+    const hint = _formatOffsetHint(v.offset_min);
     return html`
       <select @change=${this._onAnchorChange}>
         ${ANCHORS.map(
@@ -95,6 +90,7 @@ export class AmbienceTimeEndpoint extends LitElement {
       <input
         type="number"
         step="1"
+        placeholder="±min, e.g. -30"
         .value=${String(v.offset_min)}
         @input=${this._onOffsetChange}
       />
@@ -112,4 +108,15 @@ export class AmbienceTimeEndpoint extends LitElement {
     `;
   }
 
+}
+
+function _formatOffsetHint(offset_min: number): string {
+  if (offset_min === 0) return "";
+  const abs = Math.abs(offset_min);
+  const sign = offset_min < 0 ? "−" : "+"; // U+2212 minus, ASCII +
+  if (abs % 60 === 0) {
+    const hours = abs / 60;
+    return `${sign}${hours} ${hours === 1 ? "hour" : "hours"}`;
+  }
+  return `${sign}${abs} min`;
 }

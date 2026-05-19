@@ -13,7 +13,8 @@ export type Rule = {
 
 export type ActionSpec = {
   action: string;
-  targets: Record<string, Record<string, unknown>>;
+  entity_ids: string[];
+  params: Record<string, unknown>;
 };
 
 export type AreaConfig = {

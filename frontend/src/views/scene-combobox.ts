@@ -6,7 +6,6 @@ import { watchHaComponents } from "../ha-components.js";
 
 type HaFormSchema = {
   name: string;
-  label?: string;
   selector: {
     select: {
       options: Array<{ value: string; label: string }>;
@@ -131,7 +130,6 @@ export class AmbienceSceneCombobox extends LitElement {
       this._schema = [
         {
           name: "scene",
-          label: "Scene name",
           selector: {
             select: {
               options: this.suggestions.map((s) => ({ value: s, label: s })),
@@ -200,7 +198,7 @@ export class AmbienceSceneCombobox extends LitElement {
   // --- render --------------------------------------------------------------
 
   override render() {
-    /* v8 ignore next 10 -- ha-form is eagerly registered in HA 2026.05+, not in jsdom */
+    /* v8 ignore next 11 -- ha-form is eagerly registered in HA 2026.05+, not in jsdom */
     if (customElements.get("ha-form")) {
       const data = { scene: this.value ?? "" };
       return html`
@@ -208,6 +206,7 @@ export class AmbienceSceneCombobox extends LitElement {
           .hass=${this.hass}
           .schema=${this._schema}
           .data=${data}
+          .computeLabel=${_sceneComputeLabel}
           @value-changed=${this._onHaFormValueChanged}
         ></ha-form>
       `;
@@ -257,4 +256,12 @@ export class AmbienceSceneCombobox extends LitElement {
         : ""}
     `;
   }
+}
+
+// ha-form derives a field's displayed label via this callback. Without it,
+// the floating label inside the field shows the schema's raw `name`
+// ("scene") instead of a friendly human label.
+function _sceneComputeLabel(schema: { name: string }): string {
+  if (schema.name === "scene") return "Scene name";
+  return schema.name;
 }

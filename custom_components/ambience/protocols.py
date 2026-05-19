@@ -69,11 +69,16 @@ class Action(Protocol):
     async def execute(
         self,
         hass: HomeAssistant,
-        targets: dict[str, dict[str, Any]],
+        entity_ids: list[str],
+        params: dict[str, Any],
     ) -> None:
-        """Apply this action to its targets."""
+        """Apply this action to the given entity ids using shared params."""
         ...
 
-    def validate_target_params(self, entity_id: str, params: dict[str, Any]) -> None:
-        """Raise ValueError if params for this target are malformed."""
+    def validate_target_params(
+        self,
+        entity_ids: list[str],
+        params: dict[str, Any],
+    ) -> None:
+        """Raise ValueError if the entity_ids list or params are malformed."""
         ...

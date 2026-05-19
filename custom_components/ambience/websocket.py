@@ -71,8 +71,9 @@ def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, A
                 raise ValueError(
                     f"rule {rule_idx} action {action_idx}: unknown action {action_name}"
                 )
-            for entity_id, params in action_spec.get("targets", {}).items():
-                action.validate_target_params(entity_id, params)
+            entity_ids = action_spec.get("entity_ids", [])
+            params = action_spec.get("params", {})
+            action.validate_target_params(entity_ids, params)
 
 
 @websocket_api.require_admin

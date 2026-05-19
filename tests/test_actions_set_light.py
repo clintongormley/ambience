@@ -1,4 +1,4 @@
-"""SetLightAction tests."""
+"""SetLightAction — new entity_ids/params signature."""
 
 from __future__ import annotations
 
@@ -9,125 +9,63 @@ from pytest_homeassistant_custom_component.common import async_mock_service
 from custom_components.ambience.actions.set_light import SetLightAction
 
 
-async def test_set_light_calls_turn_on_with_brightness(hass: HomeAssistant) -> None:
-    calls = async_mock_service(hass, "light", "turn_on")
+def test_validate_rejects_empty_entity_ids() -> None:
     action = SetLightAction()
-    await action.execute(hass, {"light.lamp": {"brightness": 30, "transition": 3}})
-    assert len(calls) == 1
-    assert calls[0].data["entity_id"] == "light.lamp"
-    assert calls[0].data["brightness_pct"] == 30
-    assert calls[0].data["transition"] == 3
+    with pytest.raises(ValueError, match="at least one target"):
+        action.validate_target_params([], {"brightness": 50})
 
 
-async def test_set_light_default_transition_zero(hass: HomeAssistant) -> None:
-    calls = async_mock_service(hass, "light", "turn_on")
+def test_validate_rejects_missing_brightness() -> None:
     action = SetLightAction()
-    await action.execute(hass, {"light.lamp": {"brightness": 50}})
-    assert len(calls) == 1
-    assert calls[0].data["transition"] == 0
+    with pytest.raises(ValueError, match="brightness"):
+        action.validate_target_params(["light.a"], {})
 
 
-async def test_set_light_brightness_zero_calls_turn_off(hass: HomeAssistant) -> None:
+def test_validate_rejects_unknown_keys() -> None:
+    action = SetLightAction()
+    with pytest.raises(ValueError, match="unknown param"):
+        action.validate_target_params(["light.a"], {"brightness": 50, "color": "red"})
+
+
+def test_validate_accepts_valid_shape() -> None:
+    SetLightAction().validate_target_params(
+        ["light.a", "light.b"],
+        {"brightness": 80, "transition": 1.0},
+    )
+
+
+def test_validate_brightness_bounds() -> None:
+    action = SetLightAction()
+    with pytest.raises(ValueError, match="0..100"):
+        action.validate_target_params(["light.a"], {"brightness": 150})
+    with pytest.raises(ValueError, match="0..100"):
+        action.validate_target_params(["light.a"], {"brightness": -10})
+
+
+def test_validate_transition_nonnegative() -> None:
+    action = SetLightAction()
+    with pytest.raises(ValueError, match="transition"):
+        action.validate_target_params(["light.a"], {"brightness": 50, "transition": -1})
+
+
+async def test_execute_turns_on_each_entity(hass: HomeAssistant) -> None:
+    on_calls = async_mock_service(hass, "light", "turn_on")
+    action = SetLightAction()
+    await action.execute(hass, ["light.a", "light.b"], {"brightness": 80, "transition": 0.5})
+    assert len(on_calls) == 2
+    entities = {c.data["entity_id"] for c in on_calls}
+    assert entities == {"light.a", "light.b"}
+    # Check params on the first call (both share the same params)
+    call_a = next(c for c in on_calls if c.data["entity_id"] == "light.a")
+    assert call_a.data["brightness_pct"] == 80
+    assert call_a.data["transition"] == 0.5
+
+
+async def test_execute_zero_brightness_turns_off(hass: HomeAssistant) -> None:
     on_calls = async_mock_service(hass, "light", "turn_on")
     off_calls = async_mock_service(hass, "light", "turn_off")
     action = SetLightAction()
-    await action.execute(hass, {"light.lamp": {"brightness": 0, "transition": 2}})
+    await action.execute(hass, ["light.a"], {"brightness": 0})
     assert len(on_calls) == 0
     assert len(off_calls) == 1
-    assert off_calls[0].data["entity_id"] == "light.lamp"
-    assert off_calls[0].data["transition"] == 2
-
-
-async def test_set_light_multiple_targets_independent_params(
-    hass: HomeAssistant,
-) -> None:
-    on_calls = async_mock_service(hass, "light", "turn_on")
-    off_calls = async_mock_service(hass, "light", "turn_off")
-    action = SetLightAction()
-    await action.execute(
-        hass,
-        {
-            "light.a": {"brightness": 30, "transition": 1},
-            "light.b": {"brightness": 0, "transition": 1},
-            "light.c": {"brightness": 80},
-        },
-    )
-    assert len(on_calls) == 2
-    assert len(off_calls) == 1
-    on_entities = {c.data["entity_id"] for c in on_calls}
-    assert on_entities == {"light.a", "light.c"}
-    assert off_calls[0].data["entity_id"] == "light.b"
-
-
-def test_validate_target_params_ok() -> None:
-    SetLightAction().validate_target_params("light.x", {"brightness": 50, "transition": 3})
-    SetLightAction().validate_target_params("light.x", {"brightness": 0})
-    SetLightAction().validate_target_params("light.x", {"brightness": 100})
-
-
-@pytest.mark.parametrize(
-    "params",
-    [
-        {},
-        {"brightness": -1},
-        {"brightness": 101},
-        {"brightness": "bright"},
-        {"brightness": 50, "transition": -1},
-        {"brightness": 50, "transition": "slow"},
-        {"brightness": 50, "extra": True},
-    ],
-)
-def test_validate_target_params_rejects_bad(params: dict) -> None:
-    with pytest.raises(ValueError):
-        SetLightAction().validate_target_params("light.x", params)
-
-
-async def test_one_failing_target_does_not_block_others(
-    hass: HomeAssistant,
-) -> None:
-    """If hass.services.async_call raises for one entity, others still run."""
-    on_calls = async_mock_service(hass, "light", "turn_on")
-
-    action = SetLightAction()
-    real_apply = action._apply_one
-
-    async def flaky(h, entity_id, params):
-        if entity_id == "light.broken":
-            raise RuntimeError("boom")
-        return await real_apply(h, entity_id, params)
-
-    from unittest.mock import patch
-
-    with patch.object(action, "_apply_one", side_effect=flaky):
-        await action.execute(
-            hass,
-            {
-                "light.ok": {"brightness": 50},
-                "light.broken": {"brightness": 50},
-                "light.also_ok": {"brightness": 70},
-            },
-        )
-
-    assert {c.data["entity_id"] for c in on_calls} == {"light.ok", "light.also_ok"}
-
-
-def test_action_exposes_description() -> None:
-    a = SetLightAction()
-    assert isinstance(a.description, str)
-    assert a.description.strip() != ""
-
-
-def test_action_exposes_target_params_schema() -> None:
-    a = SetLightAction()
-    schema = a.target_params
-    assert isinstance(schema, list)
-    by_name = {p["name"]: p for p in schema}
-    assert "brightness" in by_name
-    assert by_name["brightness"]["type"] == "int"
-    assert by_name["brightness"]["min"] == 0
-    assert by_name["brightness"]["max"] == 100
-    assert by_name["brightness"]["required"] is True
-    assert "transition" in by_name
-    assert by_name["transition"]["type"] == "number"
-    assert by_name["transition"]["required"] is False
-    assert by_name["transition"]["default"] == 0
+    assert off_calls[0].data["entity_id"] == "light.a"

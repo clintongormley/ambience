@@ -103,8 +103,9 @@ async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str) -> No
                 area_id,
             )
             continue
-        targets = action_spec.get("targets", {})
-        coros.append(action.execute(hass, targets))
+        entity_ids = action_spec.get("entity_ids", [])
+        params = action_spec.get("params", {})
+        coros.append(action.execute(hass, entity_ids, params))
     results = await asyncio.gather(*coros, return_exceptions=True)
     for result in results:
         if isinstance(result, BaseException):

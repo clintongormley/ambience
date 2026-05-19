@@ -114,7 +114,8 @@ async def test_area_save_then_get(hass: HomeAssistant, installed, area_id, hass_
                 "actions": [
                     {
                         "action": "set_light",
-                        "targets": {"light.lamp": {"brightness": 30}},
+                        "entity_ids": ["light.lamp"],
+                        "params": {"brightness": 30},
                     }
                 ],
             }
@@ -185,7 +186,8 @@ async def test_area_save_rejects_invalid_action_params(
                 "actions": [
                     {
                         "action": "set_light",
-                        "targets": {"light.x": {"brightness": 200}},  # out of range
+                        "entity_ids": ["light.x"],
+                        "params": {"brightness": 200},  # out of range
                     }
                 ],
             }
@@ -243,7 +245,8 @@ async def test_dry_run_returns_matched_rule(
                     "actions": [
                         {
                             "action": "set_light",
-                            "targets": {"light.lamp": {"brightness": 30}},
+                            "entity_ids": ["light.lamp"],
+                            "params": {"brightness": 30},
                         }
                     ],
                 }

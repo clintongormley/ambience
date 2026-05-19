@@ -55,7 +55,8 @@ async def test_service_call_invokes_light_turn_on(
                     "actions": [
                         {
                             "action": "set_light",
-                            "targets": {"light.lamp": {"brightness": 30, "transition": 2}},
+                            "entity_ids": ["light.lamp"],
+                            "params": {"brightness": 30, "transition": 2},
                         }
                     ],
                 }

@@ -58,12 +58,12 @@ class RecordingAction:
     domains = ("light",)
 
     def __init__(self) -> None:
-        self.executions: list[dict] = []
+        self.executions: list[tuple] = []
 
-    async def execute(self, hass, targets):
-        self.executions.append(dict(targets))
+    async def execute(self, hass, entity_ids, params):
+        self.executions.append((list(entity_ids), dict(params)))
 
-    def validate_target_params(self, entity_id, params):
+    def validate_target_params(self, entity_ids, params):
         return
 
 
@@ -97,11 +97,23 @@ async def test_happy_path_executes_matching_rule(hass: HomeAssistant) -> None:
             "rules": [
                 {
                     "when": {"scene": "movie", "tod": "morning"},
-                    "actions": [{"action": "record", "targets": {"light.a": {"brightness": 10}}}],
+                    "actions": [
+                        {
+                            "action": "record",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness": 10},
+                        }
+                    ],
                 },
                 {
                     "when": {"scene": "movie", "tod": "evening"},
-                    "actions": [{"action": "record", "targets": {"light.b": {"brightness": 30}}}],
+                    "actions": [
+                        {
+                            "action": "record",
+                            "entity_ids": ["light.b"],
+                            "params": {"brightness": 30},
+                        }
+                    ],
                 },
             ],
         }
@@ -110,7 +122,7 @@ async def test_happy_path_executes_matching_rule(hass: HomeAssistant) -> None:
 
     await async_apply_scene(hass, "lr", "movie")
 
-    assert action.executions == [{"light.b": {"brightness": 30}}]
+    assert action.executions == [(["light.b"], {"brightness": 30})]
 
 
 async def test_no_match_is_silent_noop(hass: HomeAssistant) -> None:
@@ -140,11 +152,23 @@ async def test_snapshot_failure_treats_matcher_as_unresolved(
             "rules": [
                 {
                     "when": {"scene": "movie", "weather": "rainy"},
-                    "actions": [{"action": "record", "targets": {"light.a": {"brightness": 10}}}],
+                    "actions": [
+                        {
+                            "action": "record",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness": 10},
+                        }
+                    ],
                 },
                 {
                     "when": {"scene": "movie"},
-                    "actions": [{"action": "record", "targets": {"light.b": {"brightness": 20}}}],
+                    "actions": [
+                        {
+                            "action": "record",
+                            "entity_ids": ["light.b"],
+                            "params": {"brightness": 20},
+                        }
+                    ],
                 },
             ],
         }
@@ -153,7 +177,7 @@ async def test_snapshot_failure_treats_matcher_as_unresolved(
 
     await async_apply_scene(hass, "lr", "movie")
 
-    assert action.executions == [{"light.b": {"brightness": 20}}]
+    assert action.executions == [(["light.b"], {"brightness": 20})]
 
 
 async def test_unknown_action_skipped_other_actions_run(
@@ -168,10 +192,11 @@ async def test_unknown_action_skipped_other_actions_run(
                 {
                     "when": {"scene": "movie"},
                     "actions": [
-                        {"action": "nonexistent", "targets": {"x.y": {}}},
+                        {"action": "nonexistent", "entity_ids": ["x.y"], "params": {}},
                         {
                             "action": "record",
-                            "targets": {"light.a": {"brightness": 50}},
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness": 50},
                         },
                     ],
                 }
@@ -182,7 +207,7 @@ async def test_unknown_action_skipped_other_actions_run(
 
     await async_apply_scene(hass, "lr", "movie")
 
-    assert recorded.executions == [{"light.a": {"brightness": 50}}]
+    assert recorded.executions == [(["light.a"], {"brightness": 50})]
 
 
 async def test_action_failure_does_not_block_other_actions(
@@ -192,10 +217,10 @@ async def test_action_failure_does_not_block_other_actions(
         name = "fail"
         domains = ("light",)
 
-        async def execute(self, hass, targets):
+        async def execute(self, hass, entity_ids, params):
             raise RuntimeError("boom")
 
-        def validate_target_params(self, entity_id, params):
+        def validate_target_params(self, entity_ids, params):
             return
 
     recorded = RecordingAction()
@@ -207,10 +232,11 @@ async def test_action_failure_does_not_block_other_actions(
                 {
                     "when": {"scene": "movie"},
                     "actions": [
-                        {"action": "fail", "targets": {"x.y": {}}},
+                        {"action": "fail", "entity_ids": ["x.y"], "params": {}},
                         {
                             "action": "record",
-                            "targets": {"light.a": {"brightness": 50}},
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness": 50},
                         },
                     ],
                 }
@@ -226,7 +252,7 @@ async def test_action_failure_does_not_block_other_actions(
 
     await async_apply_scene(hass, "lr", "movie")
 
-    assert recorded.executions == [{"light.a": {"brightness": 50}}]
+    assert recorded.executions == [(["light.a"], {"brightness": 50})]
 
 
 async def test_cancellation_treated_as_failure_isolation(
@@ -258,7 +284,13 @@ async def test_cancellation_treated_as_failure_isolation(
             "rules": [
                 {
                     "when": {"scene": "movie"},
-                    "actions": [{"action": "record", "targets": {"light.a": {"brightness": 10}}}],
+                    "actions": [
+                        {
+                            "action": "record",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness": 10},
+                        }
+                    ],
                 }
             ],
         }
@@ -273,7 +305,7 @@ async def test_cancellation_treated_as_failure_isolation(
     await async_apply_scene(hass, "lr", "movie")
 
     # Wildcard rule should still match (cancelled snapshot becomes None).
-    assert action.executions == [{"light.a": {"brightness": 10}}]
+    assert action.executions == [(["light.a"], {"brightness": 10})]
 
 
 async def test_resolve_only_describes_activating_scene(hass: HomeAssistant) -> None:

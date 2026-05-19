@@ -40,11 +40,12 @@ class SetLightAction:
     async def execute(
         self,
         hass: HomeAssistant,
-        targets: dict[str, dict[str, Any]],
+        entity_ids: list[str],
+        params: dict[str, Any],
     ) -> None:
-        coros = [self._apply_one(hass, entity_id, params) for entity_id, params in targets.items()]
+        coros = [self._apply_one(hass, eid, params) for eid in entity_ids]
         results = await asyncio.gather(*coros, return_exceptions=True)
-        for entity_id, result in zip(targets.keys(), results, strict=True):
+        for entity_id, result in zip(entity_ids, results, strict=True):
             if isinstance(result, Exception):
                 _LOGGER.warning("set_light failed for %s: %s", entity_id, result)
 
@@ -70,14 +71,18 @@ class SetLightAction:
             blocking=True,
         )
 
-    def validate_target_params(self, entity_id: str, params: dict[str, Any]) -> None:
+    def validate_target_params(
+        self,
+        entity_ids: list[str],
+        params: dict[str, Any],
+    ) -> None:
+        if not entity_ids:
+            raise ValueError("set_light requires at least one target entity")
         unknown = set(params) - _ALLOWED_KEYS
         if unknown:
-            raise ValueError(
-                f"unknown param(s) for set_light target {entity_id}: {sorted(unknown)}"
-            )
+            raise ValueError(f"unknown param(s) for set_light: {sorted(unknown)}")
         if "brightness" not in params:
-            raise ValueError(f"set_light target {entity_id} missing 'brightness'")
+            raise ValueError("set_light missing 'brightness'")
         brightness = params["brightness"]
         if not isinstance(brightness, int) or isinstance(brightness, bool):
             raise ValueError(f"set_light brightness must be int (got {brightness!r})")

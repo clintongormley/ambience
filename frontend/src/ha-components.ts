@@ -11,6 +11,7 @@ const HA_COMPONENTS = [
   "ha-combo-box",
   "ha-input",
   "ha-textfield",
+  "ha-form",
 ] as const;
 
 const TEXT_INPUT_VARIANTS = ["ha-input", "ha-textfield"] as const;

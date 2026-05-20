@@ -1,6 +1,8 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
+import type { HassConnection } from "../api.js";
+import { dayItemKindLabel, localize, weekdayLabel } from "../i18n.js";
 import type { DayConfig, DayItem, DayPredicate } from "../types.js";
 
 const KINDS: DayItem["kind"][] = [
@@ -8,22 +10,8 @@ const KINDS: DayItem["kind"][] = [
   "last_day", "workday", "holiday", "first_workday", "last_workday",
 ];
 
-const KIND_LABEL: Record<DayItem["kind"], string> = {
-  weekday: "Day of week",
-  day_of_month: "Day of month",
-  date: "Date (annual)",
-  date_range: "Date range (annual)",
-  last_day: "Last day of month",
-  workday: "Workday",
-  holiday: "Holiday",
-  first_workday: "First workday of month",
-  last_workday: "Last workday of month",
-};
-
 const SENSOR_DEPENDENT = new Set<DayItem["kind"]>(["workday", "holiday"]);
 const CALENDAR_DEPENDENT = new Set<DayItem["kind"]>(["first_workday", "last_workday"]);
-
-const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function _defaultItem(kind: DayItem["kind"]): DayItem {
   switch (kind) {
@@ -62,6 +50,7 @@ export class AmbienceDayPredicateInput extends LitElement {
     }
   `;
 
+  @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) value: DayPredicate = null;
   @property({ attribute: false }) dayConfig: DayConfig = { workday_sensor: null, workday_calendar: null };
 
@@ -113,17 +102,17 @@ export class AmbienceDayPredicateInput extends LitElement {
             this._updateItem(section, idx, _defaultItem(kind));
           }}
         >
-          ${KINDS.map(k => html`<option value=${k} ?disabled=${this._kindDisabled(k)}>${KIND_LABEL[k]}</option>`)}
+          ${KINDS.map(k => html`<option value=${k} ?disabled=${this._kindDisabled(k)}>${dayItemKindLabel(this.hass, k)}</option>`)}
         </select>
         <div class="body">${this._renderItemBody(section, idx, item)}</div>
-        <button class="remove" title="Remove" @click=${() => this._removeItem(section, idx)}>✕</button>
+        <button class="remove" title=${localize(this.hass, "ui.remove", "Remove")} @click=${() => this._removeItem(section, idx)}>✕</button>
       </div>
     `;
   }
 
   private _renderItemBody(section: "include" | "exclude", idx: number, item: DayItem) {
     if (item.kind === "weekday") {
-      return html`${WEEKDAY_NAMES.map((name, dayIdx) => html`
+      return html`${[0, 1, 2, 3, 4, 5, 6].map((dayIdx) => html`
         <label class="day-pill">
           <input
             type="checkbox"
@@ -135,13 +124,13 @@ export class AmbienceDayPredicateInput extends LitElement {
                 : item.days.filter(d => d !== dayIdx);
               this._updateItem(section, idx, { kind: "weekday", days });
             }}
-          />${name}
+          />${weekdayLabel(this.hass, dayIdx)}
         </label>
       `)}`;
     }
     if (item.kind === "day_of_month") {
       return html`<input
-        type="text" placeholder="e.g. 1, 15, 31"
+        type="text" placeholder=${localize(this.hass, "ui.day_of_month_placeholder", "e.g. 1, 15, 31")}
         .value=${item.days.join(", ")}
         @change=${(e: Event) => {
           const days = (e.target as HTMLInputElement).value
@@ -165,7 +154,7 @@ export class AmbienceDayPredicateInput extends LitElement {
       const fromM = item.from.month, fromD = item.from.day;
       const toM = item.to.month, toD = item.to.day;
       return html`
-        <span>from</span>
+        <span>${localize(this.hass, "ui.from", "from")}</span>
         <input type="number" min="1" max="12" .value=${String(fromM)}
           @change=${(e: Event) => this._updateItem(section, idx, {
             kind: "date_range",
@@ -179,7 +168,7 @@ export class AmbienceDayPredicateInput extends LitElement {
             from: { month: fromM, day: parseInt((e.target as HTMLInputElement).value, 10) },
             to: item.to,
           })} />
-        <span>to</span>
+        <span>${localize(this.hass, "ui.to", "to")}</span>
         <input type="number" min="1" max="12" .value=${String(toM)}
           @change=${(e: Event) => this._updateItem(section, idx, {
             kind: "date_range",
@@ -201,9 +190,11 @@ export class AmbienceDayPredicateInput extends LitElement {
   private _renderSection(name: "include" | "exclude", items: DayItem[]) {
     return html`
       <div class="section">
-        <h4>${name === "include" ? "Include" : "Exclude"}</h4>
+        <h4>${name === "include"
+          ? localize(this.hass, "ui.include", "Include")
+          : localize(this.hass, "ui.exclude", "Exclude")}</h4>
         ${items.length === 0 && name === "include"
-          ? html`<div class="hint">(empty → all days)</div>`
+          ? html`<div class="hint">${localize(this.hass, "ui.empty_all_days", "(empty → all days)")}</div>`
           : ""}
         ${items.map((it, i) => this._renderItem(name, i, it))}
         <select
@@ -215,8 +206,10 @@ export class AmbienceDayPredicateInput extends LitElement {
             (e.target as HTMLSelectElement).value = "";
           }}
         >
-          <option value="">+ Add ${name} item</option>
-          ${KINDS.map(k => html`<option value=${k} ?disabled=${this._kindDisabled(k)}>${KIND_LABEL[k]}</option>`)}
+          <option value="">${name === "include"
+            ? localize(this.hass, "ui.add_include_item", "+ Add include item")
+            : localize(this.hass, "ui.add_exclude_item", "+ Add exclude item")}</option>
+          ${KINDS.map(k => html`<option value=${k} ?disabled=${this._kindDisabled(k)}>${dayItemKindLabel(this.hass, k)}</option>`)}
         </select>
       </div>
     `;

@@ -7,6 +7,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import type { HassConnection } from "./api.js";
+import { localize } from "./i18n.js";
 import { watchHaComponents } from "./ha-components.js";
 import "./views/areas-list-view.js";
 import "./views/configuration-view.js";
@@ -69,16 +70,16 @@ export class AmbiencePanel extends LitElement {
   override render() {
     return html`
       <header>
-        <h1>Ambience</h1>
+        <h1>${localize(this.hass, "ui.panel_title", "Ambience")}</h1>
         <nav>
           <button
             class=${this._view === "areas" ? "active" : ""}
             @click=${() => { this._view = "areas"; }}
-          >Areas</button>
+          >${localize(this.hass, "ui.tab_areas", "Areas")}</button>
           <button
             class=${this._view === "configuration" ? "active" : ""}
             @click=${() => { this._view = "configuration"; }}
-          >Configuration</button>
+          >${localize(this.hass, "ui.tab_configuration", "Configuration")}</button>
         </nav>
       </header>
       ${this._view === "areas"

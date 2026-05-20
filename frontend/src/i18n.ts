@@ -4,6 +4,7 @@ type Localizer = (key: string) => string | undefined;
 
 interface HassLike {
   localize?: Localizer;
+  [key: string]: unknown;
 }
 
 function _resolve(hass: HassLike | undefined, key: string, fallback: string): string {

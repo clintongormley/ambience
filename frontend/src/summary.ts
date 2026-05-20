@@ -1,4 +1,4 @@
-import { actionLabel, anchorLabel, periodLabel } from "./i18n.js";
+import { actionLabel, anchorLabel, localize, periodLabel, weekdayLabel } from "./i18n.js";
 import type {
   ActionInfo,
   ActionSpec,
@@ -12,6 +12,7 @@ import type {
 
 interface HassLike {
   localize?: (k: string) => string | undefined;
+  [key: string]: unknown;
 }
 
 interface MatcherContext {
@@ -44,42 +45,44 @@ export function summariseMatcher(
     return summariseTimeOfDay(predicate as TimeOfDayPredicate, ctx);
   }
   if (matcherName === "day") {
-    return summariseDay(predicate as DayPredicate);
+    return summariseDay(predicate as DayPredicate, ctx);
   }
   return String(predicate);
 }
 
-const _WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-export function summariseDay(pred: DayPredicate): string {
-  if (pred === null) return "any";
+export function summariseDay(pred: DayPredicate, ctx: MatcherContext = {}): string {
+  if (pred === null) return localize(ctx.hass, "day_summary.any", "any");
   const include = pred.include ?? [];
   const exclude = pred.exclude ?? [];
-  const inc = include.length === 0 ? "any day" : include.map(_fmtDayItem).join(", ");
+  const inc =
+    include.length === 0
+      ? localize(ctx.hass, "day_summary.any_day", "any day")
+      : include.map((it) => _fmtDayItem(it, ctx)).join(", ");
   if (exclude.length === 0) return inc;
-  return `${inc} (except ${exclude.map(_fmtDayItem).join(", ")})`;
+  const except = localize(ctx.hass, "day_summary.except", "except");
+  return `${inc} (${except} ${exclude.map((it) => _fmtDayItem(it, ctx)).join(", ")})`;
 }
 
-function _fmtDayItem(item: DayItem): string {
+function _fmtDayItem(item: DayItem, ctx: MatcherContext): string {
   switch (item.kind) {
     case "weekday":
-      return item.days.map((d) => _WEEKDAY_NAMES[d]).join("/");
+      return item.days.map((d) => weekdayLabel(ctx.hass, d)).join("/");
     case "day_of_month":
-      return `day ${item.days.join(",")}`;
+      return `${localize(ctx.hass, "day_summary.day_prefix", "day")} ${item.days.join(",")}`;
     case "date":
       return `${item.month}/${item.day}`;
     case "date_range":
       return `${item.from.month}/${item.from.day} → ${item.to.month}/${item.to.day}`;
     case "last_day":
-      return "last day";
+      return localize(ctx.hass, "day_summary.last_day", "last day");
     case "workday":
-      return "workday";
+      return localize(ctx.hass, "day_summary.workday", "workday");
     case "holiday":
-      return "holiday";
+      return localize(ctx.hass, "day_summary.holiday", "holiday");
     case "first_workday":
-      return "first workday";
+      return localize(ctx.hass, "day_summary.first_workday", "first workday");
     case "last_workday":
-      return "last workday";
+      return localize(ctx.hass, "day_summary.last_workday", "last workday");
   }
 }
 

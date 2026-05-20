@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { getDayConfig, saveDayConfig, type HassConnection } from "../api.js";
+import { localize } from "../i18n.js";
 import type { DayConfig } from "../types.js";
 
 type Warning = { area_id: string; rule_name: string; reason: string };
@@ -54,7 +55,7 @@ export class AmbienceDayConfig extends LitElement {
     }];
     return html`
       <div class="row">
-        <label>Workday sensor</label>
+        <label>${localize(this.hass, "ui.workday_sensor", "Workday sensor")}</label>
         <ha-form
           .hass=${this.hass as any}
           .schema=${sensorSchema}
@@ -68,7 +69,7 @@ export class AmbienceDayConfig extends LitElement {
         ></ha-form>
       </div>
       <div class="row">
-        <label>Workday calendar</label>
+        <label>${localize(this.hass, "ui.workday_calendar", "Workday calendar")}</label>
         <ha-form
           .hass=${this.hass as any}
           .schema=${calendarSchema}
@@ -83,7 +84,7 @@ export class AmbienceDayConfig extends LitElement {
       </div>
       ${this._warnings.length ? html`
         <div class="warnings">
-          <strong>Warning:</strong> rules now reference unconfigured entities:
+          <strong>${localize(this.hass, "ui.day_warning_prefix", "Warning:")}</strong> ${localize(this.hass, "ui.day_warning_text", "rules now reference unconfigured entities:")}
           <ul>
             ${this._warnings.map(w => html`<li>${w.area_id} / "${w.rule_name}" → ${w.reason}</li>`)}
           </ul>

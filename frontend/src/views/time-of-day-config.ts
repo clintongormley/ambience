@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { listPeriods, resetPeriods, savePeriods } from "../api.js";
 import type { HassConnection } from "../api.js";
-import { periodLabel } from "../i18n.js";
+import { localize, periodLabel } from "../i18n.js";
 import type { PeriodDef, PeriodStoreView, TimeEndpoint } from "../types.js";
 import "./period-edit-modal.js";
 
@@ -153,14 +153,18 @@ export class AmbienceTimeOfDayConfig extends LitElement {
       <div class="row">
         <span class="name">${periodLabel(this.hass as any, item.id, customMap)}</span>
         <span class="def">${formatDef(item.defn)}</span>
-        <span class="badge">${item.provenance === "builtin" ? "builtin" : item.provenance === "builtin-edited" ? "builtin, edited" : "custom"}</span>
+        <span class="badge">${item.provenance === "builtin"
+          ? localize(this.hass, "ui.badge_builtin", "builtin")
+          : item.provenance === "builtin-edited"
+          ? localize(this.hass, "ui.badge_builtin_edited", "builtin, edited")
+          : localize(this.hass, "ui.badge_custom", "custom")}</span>
         <span class="actions">
-          <button class="icon" title="Edit" @click=${() => this._onEdit(item.id, item.defn)}>✎</button>
+          <button class="icon" title=${localize(this.hass, "ui.title_edit", "Edit")} @click=${() => this._onEdit(item.id, item.defn)}>✎</button>
           ${isBuiltinEdited
-            ? html`<button class="icon" title="Revert to default" @click=${() => this._onRevertEdited(item.id)}>↺</button>`
+            ? html`<button class="icon" title=${localize(this.hass, "ui.title_revert", "Revert to default")} @click=${() => this._onRevertEdited(item.id)}>↺</button>`
             : ""}
           ${isCustom || item.provenance === "builtin" || isBuiltinEdited
-            ? html`<button class="icon" title="Delete" @click=${() => this._onDelete(item.id)}>✕</button>`
+            ? html`<button class="icon" title=${localize(this.hass, "ui.title_delete", "Delete")} @click=${() => this._onDelete(item.id)}>✕</button>`
             : ""}
         </span>
       </div>
@@ -171,10 +175,10 @@ export class AmbienceTimeOfDayConfig extends LitElement {
     return html`
       <div class="row">
         <span class="name">${periodLabel(this.hass as any, id, {})}</span>
-        <span class="def">(hidden)</span>
-        <span class="badge">hidden</span>
+        <span class="def">${localize(this.hass, "ui.hidden_marker", "(hidden)")}</span>
+        <span class="badge">${localize(this.hass, "ui.badge_hidden", "hidden")}</span>
         <span class="actions">
-          <button class="icon" title="Restore" @click=${() => this._onRevertHidden(id)}>↺</button>
+          <button class="icon" title=${localize(this.hass, "ui.title_restore", "Restore")} @click=${() => this._onRevertHidden(id)}>↺</button>
         </span>
       </div>
     `;
@@ -184,12 +188,12 @@ export class AmbienceTimeOfDayConfig extends LitElement {
     const effective = this._effective();
     return html`
       <header>
-        <h2>Periods</h2>
-        <button @click=${this._onResetAll}>Reset all to defaults</button>
+        <h2>${localize(this.hass, "ui.periods_heading", "Periods")}</h2>
+        <button @click=${this._onResetAll}>${localize(this.hass, "ui.reset_all_to_defaults", "Reset all to defaults")}</button>
       </header>
       ${this._warnings.length
         ? html`<div class="warnings">
-            <strong>Warning:</strong> some rules now reference missing periods:
+            <strong>${localize(this.hass, "ui.period_warning_prefix", "Warning:")}</strong> ${localize(this.hass, "ui.period_warning_text", "some rules now reference missing periods:")}
             <ul>
               ${this._warnings.map(
                 (w) => html`<li>${w.area_id} / "${w.rule_name}" → ${w.missing_period}</li>`,
@@ -199,7 +203,7 @@ export class AmbienceTimeOfDayConfig extends LitElement {
         : ""}
       ${effective.map((item) => this._renderRow(item))}
       ${this._view.hidden.map((id) => this._renderHiddenRow(id))}
-      <button class="add" @click=${this._onAdd}>+ Add custom period</button>
+      <button class="add" @click=${this._onAdd}>${localize(this.hass, "ui.add_custom_period", "+ Add custom period")}</button>
       ${this._modal.mode === "edit"
         ? html`<ambience-period-edit-modal
             .existingId=${this._modal.id}

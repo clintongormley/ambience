@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import type { AreaRegistryEvent, HassConnection } from "../api.js";
+import { localize } from "../i18n.js";
 import {
   getArea,
   getDayConfig,
@@ -330,8 +331,12 @@ export class AmbienceAreasList extends LitElement {
 
   private _summary(cfg: AreaConfig): string {
     const r = cfg.rules.length;
-    if (r === 0) return "not configured";
-    return `${r} rule${r === 1 ? "" : "s"}`;
+    if (r === 0) return localize(this.hass, "ui.not_configured", "not configured");
+    const noun =
+      r === 1
+        ? localize(this.hass, "ui.rule_singular", "rule")
+        : localize(this.hass, "ui.rule_plural", "rules");
+    return `${r} ${noun}`;
   }
 
   // --- render --------------------------------------------------------------
@@ -340,7 +345,7 @@ export class AmbienceAreasList extends LitElement {
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
       ${this._areas.length === 0
-        ? html`<p class="empty">No areas found in Home Assistant.</p>`
+        ? html`<p class="empty">${localize(this.hass, "ui.no_areas", "No areas found in Home Assistant.")}</p>`
         : html`<ul>
             ${this._areas.map((a) => this._renderArea(a))}
           </ul>`}
@@ -388,7 +393,7 @@ export class AmbienceAreasList extends LitElement {
                         !(e.target as HTMLInputElement).checked,
                       )}
                   />
-                  Order rules manually
+                  ${localize(this.hass, "ui.order_rules_manually", "Order rules manually")}
                 </label>
                 <ambience-rules-list
                   .rules=${cfg.rules}

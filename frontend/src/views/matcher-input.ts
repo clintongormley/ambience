@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
+import { localize } from "../i18n.js";
 import type { DayConfig, MatcherInfo, PeriodStoreView } from "../types.js";
 import "./scene-combobox.js";
 import "./time-of-day-input.js";
@@ -92,6 +93,7 @@ export class AmbienceMatcherInput extends LitElement {
     if (this.matcher.input === "day_predicate") {
       return html`
         <ambience-day-predicate-input
+          .hass=${this.hass}
           .value=${this.value as any}
           .dayConfig=${this.dayConfig ?? { workday_sensor: null, workday_calendar: null }}
           @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
@@ -104,7 +106,7 @@ export class AmbienceMatcherInput extends LitElement {
     return html`
       <input
         type="text"
-        placeholder="(any)"
+        placeholder=${localize(this.hass, "ui.any_placeholder", "(any)")}
         .value=${this.value == null ? "" : String(this.value)}
         @input=${this._onText}
       />

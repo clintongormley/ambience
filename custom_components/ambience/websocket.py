@@ -27,6 +27,8 @@ _WS_COMMANDS = (
     "ambience/time_of_day_periods/reset",
     "ambience/matchers/enabled/list",
     "ambience/matchers/enabled/save",
+    "ambience/matchers/day/config/list",
+    "ambience/matchers/day/config/save",
 )
 
 
@@ -43,6 +45,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_periods_reset)
     websocket_api.async_register_command(hass, _ws_enabled_matchers_list)
     websocket_api.async_register_command(hass, _ws_enabled_matchers_save)
+    websocket_api.async_register_command(hass, _ws_day_config_list)
+    websocket_api.async_register_command(hass, _ws_day_config_save)
 
 
 def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
@@ -391,6 +395,77 @@ def _dangling_matcher_warnings(hass: HomeAssistant, enabled: set[str]) -> list[d
                             "area_id": area_id,
                             "rule_name": rule.get("name", ""),
                             "reason": f"references disabled matcher `{matcher_name}`",
+                        }
+                    )
+    return warnings
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/matchers/day/config/list"})
+@websocket_api.async_response
+async def _ws_day_config_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    connection.send_result(msg["id"], store.get_matcher_config("day"))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/matchers/day/config/save",
+        vol.Optional("workday_sensor"): vol.Any(str, None),
+        vol.Optional("workday_calendar"): vol.Any(str, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_day_config_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    new_cfg = {
+        "workday_sensor": msg.get("workday_sensor"),
+        "workday_calendar": msg.get("workday_calendar"),
+    }
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_matcher_config("day", new_cfg)
+    warnings = _dangling_day_entity_warnings(hass, new_cfg)
+    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
+
+
+_SENSOR_DEPENDENT_KINDS = {"workday", "holiday"}
+_CALENDAR_DEPENDENT_KINDS = {"first_workday", "last_workday"}
+
+
+def _dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    store = hass.data[DOMAIN][DATA_STORE]
+    sensor_ok = bool(cfg.get("workday_sensor"))
+    calendar_ok = bool(cfg.get("workday_calendar"))
+    warnings: list[dict[str, Any]] = []
+    for area_id, area_cfg in store.areas().items():
+        for rule in area_cfg.get("rules", []):
+            pred = rule.get("when", {}).get("day")
+            if not isinstance(pred, dict):
+                continue
+            for slot in (pred.get("include") or []) + (pred.get("exclude") or []):
+                kind = (slot or {}).get("kind")
+                if kind in _SENSOR_DEPENDENT_KINDS and not sensor_ok:
+                    warnings.append(
+                        {
+                            "area_id": area_id,
+                            "rule_name": rule.get("name", ""),
+                            "reason": f"uses `{kind}` item but `workday_sensor` is unset",
+                        }
+                    )
+                if kind in _CALENDAR_DEPENDENT_KINDS and not calendar_ok:
+                    warnings.append(
+                        {
+                            "area_id": area_id,
+                            "rule_name": rule.get("name", ""),
+                            "reason": f"uses `{kind}` item but `workday_calendar` is unset",
                         }
                     )
     return warnings

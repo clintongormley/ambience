@@ -693,3 +693,65 @@ async def test_enabled_matchers_save_emits_warnings_for_dangling_predicates(
     assert warnings[0]["area_id"] == area_id
     assert warnings[0]["rule_name"] == "Movie night"
     assert "day" in warnings[0]["reason"]
+
+
+# ---------------------------------------------------------------------------
+# C2: ambience/matchers/day/config/list + save
+# ---------------------------------------------------------------------------
+
+
+async def test_day_config_list_defaults(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/matchers/day/config/list")
+    assert resp["success"] is True
+    assert resp["result"] == {"workday_sensor": None, "workday_calendar": None}
+
+
+async def test_day_config_save_round_trips(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/matchers/day/config/save",
+        workday_sensor="binary_sensor.workday",
+        workday_calendar="calendar.workday",
+    )
+    assert resp["success"] is True
+    assert resp["result"]["ok"] is True
+    assert resp["result"]["warnings"] == []
+    resp2 = await _ws_send(hass_ws_client, type="ambience/matchers/day/config/list")
+    assert resp2["result"] == {
+        "workday_sensor": "binary_sensor.workday",
+        "workday_calendar": "calendar.workday",
+    }
+
+
+async def test_day_config_save_emits_warnings_when_clearing_sensor(
+    hass, installed, hass_ws_client, area_id
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_matcher_config(
+        "day",
+        {
+            "workday_sensor": "binary_sensor.workday",
+            "workday_calendar": None,
+        },
+    )
+    await store.async_save_area(
+        area_id,
+        {
+            "rules": [
+                {
+                    "name": "Pay reminder",
+                    "when": {"day": {"include": [{"kind": "workday"}], "exclude": []}},
+                    "actions": [],
+                }
+            ],
+            "auto_sort": True,
+        },
+    )
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/matchers/day/config/save",
+        workday_sensor=None,
+        workday_calendar=None,
+    )
+    assert resp["success"] is True
+    assert any("workday_sensor" in w["reason"] for w in resp["result"]["warnings"])

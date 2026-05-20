@@ -2,6 +2,8 @@ import { actionLabel, anchorLabel, periodLabel } from "./i18n.js";
 import type {
   ActionInfo,
   ActionSpec,
+  DayItem,
+  DayPredicate,
   PeriodStoreView,
   Rule,
   TimeEndpoint,
@@ -41,7 +43,44 @@ export function summariseMatcher(
   if (matcherName === "time_of_day") {
     return summariseTimeOfDay(predicate as TimeOfDayPredicate, ctx);
   }
+  if (matcherName === "day") {
+    return summariseDay(predicate as DayPredicate);
+  }
   return String(predicate);
+}
+
+const _WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+export function summariseDay(pred: DayPredicate): string {
+  if (pred === null) return "any";
+  const include = pred.include ?? [];
+  const exclude = pred.exclude ?? [];
+  const inc = include.length === 0 ? "any day" : include.map(_fmtDayItem).join(", ");
+  if (exclude.length === 0) return inc;
+  return `${inc} (except ${exclude.map(_fmtDayItem).join(", ")})`;
+}
+
+function _fmtDayItem(item: DayItem): string {
+  switch (item.kind) {
+    case "weekday":
+      return item.days.map((d) => _WEEKDAY_NAMES[d]).join("/");
+    case "day_of_month":
+      return `day ${item.days.join(",")}`;
+    case "date":
+      return `${item.month}/${item.day}`;
+    case "date_range":
+      return `${item.from.month}/${item.from.day} → ${item.to.month}/${item.to.day}`;
+    case "last_day":
+      return "last day";
+    case "workday":
+      return "workday";
+    case "holiday":
+      return "holiday";
+    case "first_workday":
+      return "first workday";
+    case "last_workday":
+      return "last workday";
+  }
 }
 
 export function summariseTimeOfDay(

@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import type { AreaRegistryEvent, HassConnection } from "../api.js";
 import {
   getArea,
+  getDayConfig,
   listActions,
   listAreas,
   listEnabledMatchers,
@@ -15,6 +16,7 @@ import type {
   ActionInfo,
   AreaConfig,
   AreaListItem,
+  DayConfig,
   MatcherInfo,
   PeriodStoreView,
   Rule,
@@ -95,6 +97,7 @@ export class AmbienceAreasList extends LitElement {
   @state() private _matchers: MatcherInfo[] = [];
   @state() private _actions: ActionInfo[] = [];
   @state() private _periods?: PeriodStoreView;
+  @state() private _dayConfig?: DayConfig;
   @state() private _configs = new Map<string, AreaConfig>();
   @state() private _expanded = new Set<string>();
   @state() private _error = "";
@@ -117,17 +120,19 @@ export class AmbienceAreasList extends LitElement {
 
   private async _loadStatic() {
     try {
-      const [matchers, actions, periods, enabled] = await Promise.all([
+      const [matchers, actions, periods, enabled, dayConfig] = await Promise.all([
         listMatchers(this.hass),
         listActions(this.hass),
         listPeriods(this.hass),
         listEnabledMatchers(this.hass),
+        getDayConfig(this.hass),
       ]);
       if (!this.isConnected) return;
       this._matchers = matchers;
       this._actions = actions;
       this._periods = periods;
       this._enabledMatchers = new Set(enabled.enabled);
+      this._dayConfig = dayConfig;
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
@@ -348,6 +353,7 @@ export class AmbienceAreasList extends LitElement {
         .matchers=${this._editorMatchers}
         .sceneSuggestions=${this._sceneSuggestions}
         .periods=${this._periods}
+        .dayConfig=${this._dayConfig}
         .availableActions=${this._actions}
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}

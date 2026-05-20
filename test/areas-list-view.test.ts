@@ -17,6 +17,7 @@ vi.mock("../frontend/src/api", () => ({
   listEnabledMatchers: vi.fn(async () => ({ enabled: ["time_of_day", "day"] })),
   listActions: vi.fn(),
   listPeriods: vi.fn(),
+  getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
 }));
 
 import * as api from "../frontend/src/api";

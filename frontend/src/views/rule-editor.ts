@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import type {
   ActionInfo,
   ActionSpec,
+  DayConfig,
   MatcherInfo,
   ParamSpec,
   PeriodStoreView,
@@ -118,6 +119,7 @@ export class AmbienceRuleEditor extends LitElement {
   @property({ attribute: false }) matchers: MatcherInfo[] = [];
   @property({ attribute: false }) sceneSuggestions: string[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
+  @property({ attribute: false }) dayConfig?: DayConfig;
   @property({ attribute: false }) availableActions: ActionInfo[] = [];
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) areaId?: string;
@@ -299,6 +301,7 @@ export class AmbienceRuleEditor extends LitElement {
             .value=${value}
             .sceneSuggestions=${this.sceneSuggestions}
             .periods=${this.periods}
+            .dayConfig=${this.dayConfig}
             @value-changed=${(e: CustomEvent<{ value: unknown }>) => this._setPredicate(m.name, e.detail.value)}
           ></ambience-matcher-input>
         </div>
@@ -319,6 +322,7 @@ export class AmbienceRuleEditor extends LitElement {
               .value=${value}
               .sceneSuggestions=${this.sceneSuggestions}
               .periods=${this.periods}
+              .dayConfig=${this.dayConfig}
               @value-changed=${(e: CustomEvent<{ value: unknown }>) => this._setPredicate(m.name, e.detail.value)}
             ></ambience-matcher-input>
           </div>

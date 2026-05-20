@@ -101,7 +101,60 @@ class DayMatcher:
         return tuple(sorted(d for d in dates if d.month == today.month and d.year == today.year))
 
     def matches(self, predicate: Any, snapshot: DaySnapshot) -> bool:
-        raise NotImplementedError
+        if predicate is None:
+            return True
+        if not isinstance(predicate, dict):
+            return False
+        include = predicate.get("include") or []
+        exclude = predicate.get("exclude") or []
+        in_ok = not include or any(self._item_matches(item, snapshot) for item in include)
+        out_ok = not exclude or not any(self._item_matches(item, snapshot) for item in exclude)
+        return in_ok and out_ok
+
+    def _item_matches(self, item: Any, snap: DaySnapshot) -> bool:
+        if not isinstance(item, dict):
+            return False
+        kind = item.get("kind")
+        if kind == "weekday":
+            return snap.weekday in set(item.get("days", []))
+        if kind == "day_of_month":
+            return snap.today.day in set(item.get("days", []))
+        if kind == "last_day":
+            return snap.today.day == snap.days_in_month
+        if kind == "workday":
+            return snap.workday_state == "on"
+        if kind == "holiday":
+            return snap.workday_state == "off"
+        if kind == "date":
+            return (snap.today.month, snap.today.day) == (item.get("month"), item.get("day"))
+        if kind == "date_range":
+            return self._date_range_matches(item, snap)
+        if kind == "first_workday":
+            return (
+                snap.month_workdays is not None
+                and bool(snap.month_workdays)
+                and snap.today == snap.month_workdays[0]
+            )
+        if kind == "last_workday":
+            return (
+                snap.month_workdays is not None
+                and bool(snap.month_workdays)
+                and snap.today == snap.month_workdays[-1]
+            )
+        return False
+
+    @staticmethod
+    def _date_range_matches(item: dict[str, Any], snap: DaySnapshot) -> bool:
+        frm, to = item.get("from") or {}, item.get("to") or {}
+        today_md = (snap.today.month, snap.today.day)
+        from_md = (frm.get("month"), frm.get("day"))
+        to_md = (to.get("month"), to.get("day"))
+        if None in from_md or None in to_md:
+            return False
+        if from_md <= to_md:
+            return from_md <= today_md <= to_md
+        # wraparound (e.g. Dec 20 -> Jan 5)
+        return today_md >= from_md or today_md <= to_md
 
     def describe(self, snapshot: DaySnapshot) -> str | None:
         return None

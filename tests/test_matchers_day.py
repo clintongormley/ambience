@@ -129,3 +129,124 @@ async def test_snapshot_month_workdays_handles_fetch_error(
 
     assert snap.month_workdays is None
     assert "entity missing" in caplog.text
+
+
+def test_matches_weekday() -> None:
+    m = DayMatcher()
+    mon = _snap(date(2026, 5, 18))  # Monday
+    fri = _snap(date(2026, 5, 22))  # Friday
+    pred = {"include": [{"kind": "weekday", "days": [0, 4]}], "exclude": []}
+    assert m.matches(pred, mon) is True
+    assert m.matches(pred, fri) is True
+    sat = _snap(date(2026, 5, 23))  # Saturday
+    assert m.matches(pred, sat) is False
+
+
+def test_matches_day_of_month() -> None:
+    m = DayMatcher()
+    pred = {"include": [{"kind": "day_of_month", "days": [1, 15]}], "exclude": []}
+    assert m.matches(pred, _snap(date(2026, 5, 1))) is True
+    assert m.matches(pred, _snap(date(2026, 5, 15))) is True
+    assert m.matches(pred, _snap(date(2026, 5, 16))) is False
+
+
+def test_matches_last_day() -> None:
+    m = DayMatcher()
+    pred = {"include": [{"kind": "last_day"}], "exclude": []}
+    assert m.matches(pred, _snap(date(2026, 5, 31), days_in_month=31)) is True
+    assert m.matches(pred, _snap(date(2026, 5, 30), days_in_month=31)) is False
+
+
+def test_matches_workday_and_holiday() -> None:
+    m = DayMatcher()
+    work_pred = {"include": [{"kind": "workday"}], "exclude": []}
+    hol_pred = {"include": [{"kind": "holiday"}], "exclude": []}
+    on = _snap(date(2026, 5, 18), workday_state="on")
+    off = _snap(date(2026, 5, 17), workday_state="off")
+    unknown = _snap(date(2026, 5, 18), workday_state=None)
+    assert m.matches(work_pred, on) is True
+    assert m.matches(work_pred, off) is False
+    assert m.matches(work_pred, unknown) is False
+    assert m.matches(hol_pred, off) is True
+    assert m.matches(hol_pred, on) is False
+    assert m.matches(hol_pred, unknown) is False
+
+
+def test_matches_date_annual() -> None:
+    m = DayMatcher()
+    pred = {"include": [{"kind": "date", "month": 12, "day": 25}], "exclude": []}
+    assert m.matches(pred, _snap(date(2026, 12, 25))) is True
+    assert m.matches(pred, _snap(date(2027, 12, 25))) is True
+    assert m.matches(pred, _snap(date(2026, 12, 24))) is False
+
+
+def test_matches_date_range_forward() -> None:
+    m = DayMatcher()
+    pred = {
+        "include": [
+            {"kind": "date_range", "from": {"month": 7, "day": 15}, "to": {"month": 8, "day": 31}}
+        ],
+        "exclude": [],
+    }
+    assert m.matches(pred, _snap(date(2026, 7, 15))) is True
+    assert m.matches(pred, _snap(date(2026, 8, 31))) is True
+    assert m.matches(pred, _snap(date(2026, 7, 14))) is False
+    assert m.matches(pred, _snap(date(2026, 9, 1))) is False
+
+
+def test_matches_date_range_wraparound() -> None:
+    m = DayMatcher()
+    pred = {
+        "include": [
+            {"kind": "date_range", "from": {"month": 12, "day": 20}, "to": {"month": 1, "day": 5}}
+        ],
+        "exclude": [],
+    }
+    assert m.matches(pred, _snap(date(2026, 12, 31))) is True
+    assert m.matches(pred, _snap(date(2026, 1, 5))) is True
+    assert m.matches(pred, _snap(date(2026, 6, 1))) is False
+
+
+def test_matches_first_workday() -> None:
+    m = DayMatcher()
+    workdays = tuple(date(2026, 5, d) for d in (4, 5, 6, 7, 8, 11, 12, 13, 14, 15))
+    pred = {"include": [{"kind": "first_workday"}], "exclude": []}
+    assert m.matches(pred, _snap(date(2026, 5, 4), month_workdays=workdays)) is True
+    assert m.matches(pred, _snap(date(2026, 5, 5), month_workdays=workdays)) is False
+    assert m.matches(pred, _snap(date(2026, 5, 4), month_workdays=None)) is False
+
+
+def test_matches_last_workday() -> None:
+    m = DayMatcher()
+    workdays = tuple(date(2026, 5, d) for d in (4, 5, 6, 7, 8, 11, 12, 13, 14, 15))
+    pred = {"include": [{"kind": "last_workday"}], "exclude": []}
+    assert m.matches(pred, _snap(date(2026, 5, 15), month_workdays=workdays)) is True
+    assert m.matches(pred, _snap(date(2026, 5, 14), month_workdays=workdays)) is False
+    assert m.matches(pred, _snap(date(2026, 5, 15), month_workdays=None)) is False
+
+
+def test_matches_null_predicate_is_wildcard() -> None:
+    assert DayMatcher().matches(None, _snap(date(2026, 5, 1))) is True
+
+
+def test_matches_empty_include_is_all_days() -> None:
+    m = DayMatcher()
+    pred = {"include": [], "exclude": [{"kind": "weekday", "days": [5, 6]}]}
+    assert m.matches(pred, _snap(date(2026, 5, 18))) is True  # Mon
+    assert m.matches(pred, _snap(date(2026, 5, 23))) is False  # Sat
+
+
+def test_matches_exclude_overrides_include() -> None:
+    m = DayMatcher()
+    pred = {
+        "include": [{"kind": "weekday", "days": [0, 1, 2, 3, 4]}],
+        "exclude": [{"kind": "date", "month": 5, "day": 18}],
+    }
+    assert m.matches(pred, _snap(date(2026, 5, 19))) is True  # Tue, kept
+    assert m.matches(pred, _snap(date(2026, 5, 18))) is False  # Mon May 18, excluded
+
+
+def test_matches_unknown_kind_evaluates_false() -> None:
+    m = DayMatcher()
+    pred = {"include": [{"kind": "wat", "x": 1}], "exclude": []}
+    assert m.matches(pred, _snap(date(2026, 5, 18))) is False

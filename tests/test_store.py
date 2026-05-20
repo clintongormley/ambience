@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from homeassistant.core import HomeAssistant
 
+from custom_components.ambience.const import STORAGE_KEY, STORAGE_VERSION
 from custom_components.ambience.store import AmbienceStore
 
 
@@ -67,7 +68,7 @@ async def test_persisted_data_survives_new_store_instance(hass: HomeAssistant) -
     """Save with one AmbienceStore, then load with a fresh one — data must survive."""
     s1 = AmbienceStore(hass)
     await s1.async_load()
-    config = {"scenes": ["welcome"], "matchers": [], "rules": []}
+    config = {"scenes": ["welcome"], "rules": []}
     await s1.async_save_area("hall", config)
 
     s2 = AmbienceStore(hass)
@@ -285,3 +286,71 @@ async def test_save_matcher_config_round_trips(hass: HomeAssistant) -> None:
         "workday_sensor": "binary_sensor.workday",
         "workday_calendar": "calendar.workday",
     }
+
+
+async def test_migration_drops_area_matchers(hass: HomeAssistant) -> None:
+    from homeassistant.helpers.storage import Store
+    raw = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    await raw.async_save({
+        "version": STORAGE_VERSION,
+        "areas": {
+            "a1": {"matchers": ["time_of_day"], "rules": [], "auto_sort": True},
+        },
+        "time_of_day_periods": {"custom": {}, "hidden": []},
+    })
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert "matchers" not in store.get_area("a1")
+
+
+async def test_migration_relocates_periods(hass: HomeAssistant) -> None:
+    from homeassistant.helpers.storage import Store
+    raw = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    await raw.async_save({
+        "version": STORAGE_VERSION,
+        "areas": {},
+        "time_of_day_periods": {
+            "custom": {"latenight": {"from": {"kind": "time", "hh": 22, "mm": 0},
+                                       "to":   {"kind": "time", "hh": 3, "mm": 0}}},
+            "hidden": ["evening"],
+        },
+    })
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.get_matcher_config("time_of_day") == {
+        "custom": {"latenight": {"from": {"kind": "time", "hh": 22, "mm": 0},
+                                   "to":   {"kind": "time", "hh": 3, "mm": 0}}},
+        "hidden": ["evening"],
+    }
+
+
+async def test_migration_seeds_enabled_matchers_from_registry(hass: HomeAssistant) -> None:
+    from homeassistant.helpers.storage import Store
+    raw = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    await raw.async_save({
+        "version": STORAGE_VERSION,
+        "areas": {"a1": {"matchers": ["time_of_day"], "rules": [], "auto_sort": True}},
+    })
+    store = AmbienceStore(hass)
+    await store.async_load()
+    # Seeded with all toggleable matchers when absent.
+    assert sorted(store.enabled_matchers()) == ["day", "time_of_day"]
+
+
+async def test_migration_idempotent_on_new_shape(hass: HomeAssistant) -> None:
+    from homeassistant.helpers.storage import Store
+    raw = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    new_shape = {
+        "version": STORAGE_VERSION,
+        "areas": {},
+        "enabled_matchers": ["time_of_day"],
+        "matchers": {
+            "time_of_day": {"custom": {}, "hidden": []},
+            "day": {"workday_sensor": None, "workday_calendar": None},
+        },
+    }
+    await raw.async_save(new_shape)
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.enabled_matchers() == ["time_of_day"]
+    assert store.get_matcher_config("time_of_day") == {"custom": {}, "hidden": []}

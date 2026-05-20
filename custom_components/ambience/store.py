@@ -9,7 +9,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import STORAGE_KEY, STORAGE_VERSION
+from .const import DATA_MATCHERS, DOMAIN, STORAGE_KEY, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -110,6 +110,39 @@ class AmbienceStore:
         hidden = periods_data.get("hidden", [])
         periods_data["hidden"] = ["nighttime" if h == "night" else "daytime" if h == "day" else h for h in hidden]
 
+    def _migrate_drop_area_matchers(self) -> None:
+        """Per-area `matchers` is no longer a UI gate — drop the field from every area."""
+        for area_cfg in self._data.get("areas", {}).values():
+            area_cfg.pop("matchers", None)
+
+    def _migrate_relocate_periods(self) -> None:
+        """Move top-level `time_of_day_periods` to `matchers.time_of_day`."""
+        if "time_of_day_periods" not in self._data:
+            return
+        self._data.setdefault("matchers", {})["time_of_day"] = self._data.pop(
+            "time_of_day_periods"
+        )
+
+    def _migrate_seed_enabled_matchers(self) -> None:
+        """Seed `enabled_matchers` from the live matcher registry if the field is
+        absent. Fallback to a hardcoded list when the registry isn't yet populated
+        (typical in unit tests for the store in isolation)."""
+        if "enabled_matchers" in self._data:
+            return
+        registry = self._hass.data.get(DOMAIN, {}).get(DATA_MATCHERS, {})
+        toggleable = [
+            name for name, m in registry.items() if getattr(m, "toggleable", True)
+        ]
+        if not toggleable:
+            toggleable = ["time_of_day", "day"]
+        self._data["enabled_matchers"] = sorted(toggleable)
+
+    def _ensure_matchers_namespace(self) -> None:
+        """Make sure `matchers.day` (and any future per-matcher key) has a default."""
+        namespace = self._data.setdefault("matchers", {})
+        namespace.setdefault("time_of_day", {"custom": {}, "hidden": []})
+        namespace.setdefault("day", {"workday_sensor": None, "workday_calendar": None})
+
     async def async_load(self) -> None:
         raw = await self._store.async_load()
         if raw is None:
@@ -122,6 +155,10 @@ class AmbienceStore:
         self._data = raw
         self._migrate_actions()
         self._migrate_periods()
+        self._migrate_drop_area_matchers()
+        self._migrate_relocate_periods()
+        self._migrate_seed_enabled_matchers()
+        self._ensure_matchers_namespace()
 
     def areas(self) -> dict[str, dict[str, Any]]:
         return dict(self._data["areas"])

@@ -619,3 +619,77 @@ async def test_ws_periods_reset_clears_custom_and_hidden(
     msg = await client.receive_json()
     assert msg["result"]["custom"] == {}
     assert msg["result"]["hidden"] == []
+
+
+# ---------------------------------------------------------------------------
+# C1: ambience/matchers/enabled/list + save
+# ---------------------------------------------------------------------------
+
+
+async def test_enabled_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/matchers/enabled/list")
+    assert resp["success"] is True
+    assert sorted(resp["result"]["enabled"]) == ["day", "time_of_day"]
+
+
+async def test_enabled_matchers_save_round_trips(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/matchers/enabled/save",
+        enabled=["time_of_day"],
+    )
+    assert resp["success"] is True
+    assert resp["result"]["ok"] is True
+    assert resp["result"]["warnings"] == []
+    resp2 = await _ws_send(hass_ws_client, type="ambience/matchers/enabled/list")
+    assert resp2["result"]["enabled"] == ["time_of_day"]
+
+
+async def test_enabled_matchers_save_rejects_unknown(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/matchers/enabled/save",
+        enabled=["bogus"],
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_enabled_matchers_save_emits_warnings_for_dangling_predicates(
+    hass: HomeAssistant, installed, hass_ws_client, area_id
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "rules": [
+                {
+                    "name": "Movie night",
+                    "when": {
+                        "scene": "movie",
+                        "day": {
+                            "include": [{"kind": "weekday", "days": [5, 6]}],
+                            "exclude": [],
+                        },
+                    },
+                    "actions": [],
+                }
+            ],
+            "auto_sort": True,
+        },
+    )
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/matchers/enabled/save",
+        enabled=["time_of_day"],
+    )
+    assert resp["success"] is True
+    warnings = resp["result"]["warnings"]
+    assert len(warnings) == 1
+    assert warnings[0]["area_id"] == area_id
+    assert warnings[0]["rule_name"] == "Movie night"
+    assert "day" in warnings[0]["reason"]

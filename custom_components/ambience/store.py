@@ -21,6 +21,7 @@ class AmbienceStore:
         self._hass = hass
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data: dict[str, Any] = self._empty()
+        self._enabled_matchers_persisted = False
 
     @staticmethod
     def _empty() -> dict[str, Any]:
@@ -153,12 +154,31 @@ class AmbienceStore:
             self._data = self._empty()
             return
         self._data = raw
+        self._enabled_matchers_persisted = "enabled_matchers" in raw
         self._migrate_actions()
         self._migrate_periods()
         self._migrate_drop_area_matchers()
         self._migrate_relocate_periods()
         self._migrate_seed_enabled_matchers()
         self._ensure_matchers_namespace()
+
+    async def async_seed_enabled_matchers_if_absent(self) -> None:
+        """Seed `enabled_matchers` from the live matcher registry on a fresh install.
+
+        Called from setup after the matcher registry is populated. Only seeds when
+        the field was never persisted, so an explicitly-empty selection is preserved.
+        """
+        if self._enabled_matchers_persisted or self._data.get("enabled_matchers"):
+            return
+        registry = self._hass.data.get(DOMAIN, {}).get(DATA_MATCHERS, {})
+        toggleable = sorted(
+            name for name, m in registry.items() if getattr(m, "toggleable", True)
+        )
+        if not toggleable:
+            return
+        self._data["enabled_matchers"] = toggleable
+        self._enabled_matchers_persisted = True
+        await self._store.async_save(self._data)
 
     def areas(self) -> dict[str, dict[str, Any]]:
         return dict(self._data["areas"])
@@ -180,6 +200,7 @@ class AmbienceStore:
 
     async def async_save_enabled_matchers(self, names: list[str]) -> None:
         self._data["enabled_matchers"] = list(names)
+        self._enabled_matchers_persisted = True
         await self._store.async_save(self._data)
 
     def get_matcher_config(self, name: str) -> dict[str, Any]:

@@ -1,5 +1,13 @@
 import { describe, test, expect } from "vitest";
-import { periodLabel, matcherLabel, actionLabel, anchorLabel } from "../frontend/src/i18n";
+import {
+  periodLabel,
+  matcherLabel,
+  actionLabel,
+  anchorLabel,
+  localize,
+  weekdayLabel,
+  dayItemKindLabel,
+} from "../frontend/src/i18n";
 import type { PeriodDef } from "../frontend/src/types";
 
 const def = (label: string | null = null): PeriodDef => ({
@@ -88,5 +96,42 @@ describe("anchorLabel", () => {
 
   test("falls back to capitalised name", () => {
     expect(anchorLabel(undefined, "sunset")).toBe("Sunset");
+  });
+});
+
+describe("localize", () => {
+  test("returns fallback when hass has no localize", () => {
+    expect(localize(undefined, "ui.include", "Include")).toBe("Include");
+  });
+  test("returns fallback when localize misses (returns the key)", () => {
+    const hass = { localize: (k: string) => k };
+    expect(localize(hass, "ui.include", "Include")).toBe("Include");
+  });
+  test("returns localized value on hit", () => {
+    const hass = { localize: (k: string) => (k === "component.ambience.ui.include" ? "Inclure" : undefined) };
+    expect(localize(hass, "ui.include", "Include")).toBe("Inclure");
+  });
+});
+
+describe("weekdayLabel", () => {
+  test("English fallbacks, 0=Mon..6=Sun", () => {
+    expect(weekdayLabel(undefined, 0)).toBe("Mon");
+    expect(weekdayLabel(undefined, 5)).toBe("Sat");
+    expect(weekdayLabel(undefined, 6)).toBe("Sun");
+  });
+  test("localizes via component.ambience.weekday.<id>", () => {
+    const hass = { localize: (k: string) => (k === "component.ambience.weekday.mon" ? "Lun" : undefined) };
+    expect(weekdayLabel(hass, 0)).toBe("Lun");
+  });
+});
+
+describe("dayItemKindLabel", () => {
+  test("English fallbacks per kind", () => {
+    expect(dayItemKindLabel(undefined, "weekday")).toBe("Day of week");
+    expect(dayItemKindLabel(undefined, "first_workday")).toBe("First workday of month");
+  });
+  test("localizes via component.ambience.day_item.<kind>", () => {
+    const hass = { localize: (k: string) => (k === "component.ambience.day_item.workday" ? "Jour ouvré" : undefined) };
+    expect(dayItemKindLabel(hass, "workday")).toBe("Jour ouvré");
   });
 });

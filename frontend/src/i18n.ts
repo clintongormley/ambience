@@ -56,3 +56,44 @@ export function periodLabel(
   const fallback = id.charAt(0).toUpperCase() + id.slice(1);
   return _resolve(hass, `component.ambience.time_of_day_period.${id}`, fallback);
 }
+
+/** Generic localizer: resolves `component.ambience.<subKey>` with an English fallback. */
+export function localize(
+  hass: HassLike | undefined,
+  subKey: string,
+  fallback: string,
+): string {
+  return _resolve(hass, `component.ambience.${subKey}`, fallback);
+}
+
+const _WEEKDAY_IDS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const _WEEKDAY_FALLBACKS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** index: 0=Mon … 6=Sun (matches Python date.weekday()). */
+export function weekdayLabel(hass: HassLike | undefined, index: number): string {
+  return _resolve(
+    hass,
+    `component.ambience.weekday.${_WEEKDAY_IDS[index]}`,
+    _WEEKDAY_FALLBACKS[index] ?? String(index),
+  );
+}
+
+const _DAY_ITEM_FALLBACKS: Record<string, string> = {
+  weekday: "Day of week",
+  day_of_month: "Day of month",
+  date: "Date (annual)",
+  date_range: "Date range (annual)",
+  last_day: "Last day of month",
+  workday: "Workday",
+  holiday: "Holiday",
+  first_workday: "First workday of month",
+  last_workday: "Last workday of month",
+};
+
+export function dayItemKindLabel(hass: HassLike | undefined, kind: string): string {
+  return _resolve(
+    hass,
+    `component.ambience.day_item.${kind}`,
+    _DAY_ITEM_FALLBACKS[kind] ?? kind,
+  );
+}

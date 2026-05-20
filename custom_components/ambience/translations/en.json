@@ -17,6 +17,26 @@
     "nighttime": "Nighttime",
     "daytime": "Daytime"
   },
+  "weekday": {
+    "mon": "Mon",
+    "tue": "Tue",
+    "wed": "Wed",
+    "thu": "Thu",
+    "fri": "Fri",
+    "sat": "Sat",
+    "sun": "Sun"
+  },
+  "day_item": {
+    "weekday": "Day of week",
+    "day_of_month": "Day of month",
+    "date": "Date (annual)",
+    "date_range": "Date range (annual)",
+    "last_day": "Last day of month",
+    "workday": "Workday",
+    "holiday": "Holiday",
+    "first_workday": "First workday of month",
+    "last_workday": "Last workday of month"
+  },
   "matcher": {
     "scene": "Scene",
     "time_of_day": "Time of day"

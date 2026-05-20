@@ -14,6 +14,7 @@ vi.mock("../frontend/src/api", () => ({
   getArea: vi.fn(),
   saveArea: vi.fn(),
   listMatchers: vi.fn(),
+  listEnabledMatchers: vi.fn(async () => ({ enabled: ["time_of_day", "day"] })),
   listActions: vi.fn(),
   listPeriods: vi.fn(),
 }));
@@ -25,7 +26,7 @@ const baseAreas: AreaListItem[] = [
   { area_id: "bedroom", name: "Bedroom" },
 ];
 
-const baseConfig: AreaConfig = { matchers: [], rules: [], auto_sort: true };
+const baseConfig: AreaConfig = { rules: [], auto_sort: true };
 
 const matchers: MatcherInfo[] = [
   { name: "scene", description: "", predicate_help: "", toggleable: false, input: "scene_combobox", priority: 0 },
@@ -55,6 +56,7 @@ async function mount(
     configs[areaId] ?? structuredClone(baseConfig),
   );
   vi.mocked(api.listMatchers).mockResolvedValue(matchers);
+  vi.mocked(api.listEnabledMatchers).mockResolvedValue({ enabled: ["time_of_day"] });
   vi.mocked(api.listActions).mockResolvedValue(actions);
   vi.mocked(api.listPeriods).mockResolvedValue(periods);
   vi.mocked(api.saveArea).mockResolvedValue({ ok: true, config: baseConfig });
@@ -114,22 +116,15 @@ describe("ambience-areas-list", () => {
     expect(el.shadowRoot.querySelector(".area-body")).toBeFalsy();
   });
 
-  test("clicking the cog button opens matchers modal", async () => {
+  test("there is no per-area cog button", async () => {
     el = await mount();
-    const cogBtn = el.shadowRoot.querySelector("button.cog") as HTMLButtonElement;
-    cogBtn.click();
-    await el.updateComplete;
-    const modal = el.shadowRoot.querySelector("ambience-matchers-modal") as any;
-    expect(modal?.open).toBe(true);
+    const cogs = el.shadowRoot.querySelectorAll(".cog");
+    expect(cogs.length).toBe(0);
   });
 
-  test("cog click does not toggle the area expansion", async () => {
+  test("does not mount the matchers-modal", async () => {
     el = await mount();
-    const cogBtn = el.shadowRoot.querySelector("button.cog") as HTMLButtonElement;
-    cogBtn.click();
-    await el.updateComplete;
-    // Area should NOT be expanded (cog click should stopPropagation)
-    expect(el.shadowRoot.querySelector(".area-body")).toBeFalsy();
+    expect(el.shadowRoot.querySelector("ambience-matchers-modal")).toBeNull();
   });
 
   test("summary shows 'not configured' for empty area", async () => {
@@ -137,9 +132,8 @@ describe("ambience-areas-list", () => {
     expect(el.shadowRoot.textContent).toContain("not configured");
   });
 
-  test("summary shows rule and matcher counts", async () => {
+  test("summary shows rule count", async () => {
     const config: AreaConfig = {
-      matchers: ["time_of_day"],
       rules: [{ when: { scene: "movie" }, actions: [] }, { when: {}, actions: [] }],
       auto_sort: true,
     };
@@ -147,43 +141,6 @@ describe("ambience-areas-list", () => {
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
     expect(el.shadowRoot.textContent).toContain("2 rules");
-    expect(el.shadowRoot.textContent).toContain("1 matcher");
-  });
-
-  test("apply-matchers event from modal persists matchers", async () => {
-    el = await mount();
-    const cogBtn = el.shadowRoot.querySelector("button.cog") as HTMLButtonElement;
-    cogBtn.click();
-    await el.updateComplete;
-
-    const modal = el.shadowRoot.querySelector("ambience-matchers-modal")!;
-    modal.dispatchEvent(
-      new CustomEvent("apply-matchers", {
-        detail: { matchers: ["time_of_day"] },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await new Promise((r) => setTimeout(r, 0));
-    expect(api.saveArea).toHaveBeenCalledWith(
-      expect.anything(),
-      "living_room",
-      expect.objectContaining({ matchers: ["time_of_day"] }),
-    );
-  });
-
-  test("cancel-matchers closes the modal", async () => {
-    el = await mount();
-    const cogBtn = el.shadowRoot.querySelector("button.cog") as HTMLButtonElement;
-    cogBtn.click();
-    await el.updateComplete;
-
-    const modal = el.shadowRoot.querySelector("ambience-matchers-modal") as any;
-    modal.dispatchEvent(
-      new CustomEvent("cancel-matchers", { bubbles: true, composed: true }),
-    );
-    await el.updateComplete;
-    expect(modal.open).toBe(false);
   });
 
   test("expanded area shows rules-list component", async () => {
@@ -261,7 +218,6 @@ describe("ambience-areas-list", () => {
 
   test("delete-rule event removes rule at given index", async () => {
     const config: AreaConfig = {
-      matchers: [],
       rules: [
         { name: "Rule A", when: {}, actions: [] },
         { name: "Rule B", when: {}, actions: [] },
@@ -295,7 +251,6 @@ describe("ambience-areas-list", () => {
 
   test("duplicate-rule event inserts a copy after the original", async () => {
     const config: AreaConfig = {
-      matchers: [],
       rules: [{ name: "Rule A", when: {}, actions: [] }],
       auto_sort: false,
     };
@@ -331,7 +286,6 @@ describe("ambience-areas-list", () => {
 
   test("reorder-rules event moves a rule", async () => {
     const config: AreaConfig = {
-      matchers: [],
       rules: [
         { name: "Rule A", when: {}, actions: [] },
         { name: "Rule B", when: {}, actions: [] },
@@ -415,7 +369,6 @@ describe("ambience-areas-list", () => {
 
   test("edit-rule event opens editor for an existing rule", async () => {
     const config: AreaConfig = {
-      matchers: [],
       rules: [{ name: "Rule A", when: {}, actions: [] }],
       auto_sort: false,
     };
@@ -445,7 +398,6 @@ describe("ambience-areas-list", () => {
 
   test("save-rule for existing rule (not new) replaces at index", async () => {
     const config: AreaConfig = {
-      matchers: [],
       rules: [
         { name: "Rule A", when: {}, actions: [] },
         { name: "Rule B", when: {}, actions: [] },
@@ -497,19 +449,14 @@ describe("ambience-areas-list", () => {
     vi.mocked(api.saveArea).mockRejectedValueOnce(new Error("Save failed"));
     el = await mount();
 
-    // Trigger a matchers apply to call _mutate
-    const cogBtn = el.shadowRoot.querySelector("button.cog") as HTMLButtonElement;
-    cogBtn.click();
+    // Trigger a mutation (auto_sort toggle) to call _mutate
+    const headers = el.shadowRoot.querySelectorAll(".area-header");
+    (headers[0] as HTMLElement).click();
     await el.updateComplete;
 
-    const modal = el.shadowRoot.querySelector("ambience-matchers-modal")!;
-    modal.dispatchEvent(
-      new CustomEvent("apply-matchers", {
-        detail: { matchers: ["time_of_day"] },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    const checkbox = el.shadowRoot.querySelector("input[type='checkbox']") as HTMLInputElement;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
 
@@ -518,7 +465,6 @@ describe("ambience-areas-list", () => {
 
   test("_sceneSuggestions collects scene names from area rules", async () => {
     const config: AreaConfig = {
-      matchers: [],
       rules: [
         { name: "Rule A", when: { scene: "movie" }, actions: [] },
         { name: "Rule B", when: { scene: "relaxed" }, actions: [] },
@@ -545,9 +491,8 @@ describe("ambience-areas-list", () => {
     expect(Array.isArray(editor?.sceneSuggestions)).toBe(true);
   });
 
-  test("_editorMatchers includes scene + enabled matchers when editing", async () => {
+  test("_editorMatchers includes scene + globally enabled matchers when editing", async () => {
     const config: AreaConfig = {
-      matchers: ["time_of_day"],
       rules: [],
       auto_sort: true,
     };
@@ -566,8 +511,11 @@ describe("ambience-areas-list", () => {
     await el.updateComplete;
 
     const editor = el.shadowRoot.querySelector("ambience-rule-editor") as any;
-    // Should have scene + time_of_day matchers
-    expect(editor?.matchers?.length).toBeGreaterThan(0);
+    // scene (always) + time_of_day (globally enabled in the mount() stub)
+    expect(editor?.matchers?.map((m: MatcherInfo) => m.name)).toEqual([
+      "scene",
+      "time_of_day",
+    ]);
   });
 
   test("disconnectedCallback unsubscribes from events", async () => {

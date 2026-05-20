@@ -6,6 +6,7 @@ import {
   getArea,
   listActions,
   listAreas,
+  listEnabledMatchers,
   listMatchers,
   listPeriods,
   saveArea,
@@ -20,7 +21,6 @@ import type {
 } from "../types.js";
 import "./rules-list.js";
 import "./rule-editor.js";
-import "./matchers-modal.js";
 
 type EditingState = { areaId: string; index: number; isNew: boolean };
 
@@ -76,14 +76,6 @@ export class AmbienceAreasList extends LitElement {
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
     }
-    .cog {
-      background: transparent;
-      border: 0;
-      color: var(--primary-color, #03a9f4);
-      cursor: pointer;
-      font-size: 1.1rem;
-      padding: 0.25rem 0.5rem;
-    }
     .area-body {
       padding: 0.5rem 1rem 1rem 1rem;
       border-top: 1px solid var(--divider-color, #e0e0e0);
@@ -107,7 +99,7 @@ export class AmbienceAreasList extends LitElement {
   @state() private _expanded = new Set<string>();
   @state() private _error = "";
   @state() private _editing: EditingState | null = null;
-  @state() private _matchersModalArea: string | null = null;
+  @state() private _enabledMatchers = new Set<string>();
   private _unsub?: () => void;
 
   override async connectedCallback() {
@@ -125,15 +117,17 @@ export class AmbienceAreasList extends LitElement {
 
   private async _loadStatic() {
     try {
-      const [matchers, actions, periods] = await Promise.all([
+      const [matchers, actions, periods, enabled] = await Promise.all([
         listMatchers(this.hass),
         listActions(this.hass),
         listPeriods(this.hass),
+        listEnabledMatchers(this.hass),
       ]);
       if (!this.isConnected) return;
       this._matchers = matchers;
       this._actions = actions;
       this._periods = periods;
+      this._enabledMatchers = new Set(enabled.enabled);
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
@@ -168,7 +162,6 @@ export class AmbienceAreasList extends LitElement {
    */
   private _normalize(cfg: AreaConfig): AreaConfig {
     return {
-      matchers: cfg.matchers ?? [],
       rules: cfg.rules ?? [],
       auto_sort: cfg.auto_sort ?? true,
     };
@@ -183,7 +176,6 @@ export class AmbienceAreasList extends LitElement {
           expanded.delete(id);
           this._expanded = expanded;
           if (this._editing?.areaId === id) this._editing = null;
-          if (this._matchersModalArea === id) this._matchersModalArea = null;
         }
         void this._refreshAreas();
       },
@@ -220,26 +212,13 @@ export class AmbienceAreasList extends LitElement {
     }
   }
 
-  // --- expand / cog --------------------------------------------------------
+  // --- expand --------------------------------------------------------------
 
   private _toggleExpand(areaId: string) {
     const next = new Set(this._expanded);
     if (next.has(areaId)) next.delete(areaId);
     else next.add(areaId);
     this._expanded = next;
-  }
-
-  private _openMatchersModal(areaId: string) {
-    this._matchersModalArea = areaId;
-  }
-
-  private _applyMatchers(e: CustomEvent<{ matchers: string[] }>) {
-    const areaId = this._matchersModalArea;
-    this._matchersModalArea = null;
-    if (!areaId) return;
-    const cfg = this._configs.get(areaId);
-    if (!cfg) return;
-    void this._mutate(areaId, { ...cfg, matchers: e.detail.matchers });
   }
 
   // --- auto_sort -----------------------------------------------------------
@@ -334,25 +313,20 @@ export class AmbienceAreasList extends LitElement {
     );
   }
 
-  /** Matcher rows for the rule editor: `scene` first, then the area's enabled matchers. */
+  /** Matcher rows for the rule editor: `scene` first, then the globally enabled matchers. */
   private get _editorMatchers(): MatcherInfo[] {
     if (!this._editing) return [];
-    const cfg = this._configs.get(this._editing.areaId);
-    if (!cfg) return [];
     const scene = this._matchers.find((m) => m.name === "scene");
-    const enabled = this._matchers.filter((m) => cfg.matchers.includes(m.name));
+    const enabled = this._matchers.filter(
+      (m) => m.toggleable && this._enabledMatchers.has(m.name),
+    );
     return scene ? [scene, ...enabled] : enabled;
   }
 
   private _summary(cfg: AreaConfig): string {
-    if (cfg.rules.length === 0 && cfg.matchers.length === 0) {
-      return "not configured";
-    }
     const r = cfg.rules.length;
-    const m = cfg.matchers.length;
-    return `${r} rule${r === 1 ? "" : "s"} · ${m} matcher${
-      m === 1 ? "" : "s"
-    }`;
+    if (r === 0) return "not configured";
+    return `${r} rule${r === 1 ? "" : "s"}`;
   }
 
   // --- render --------------------------------------------------------------
@@ -378,16 +352,6 @@ export class AmbienceAreasList extends LitElement {
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}
       ></ambience-rule-editor>
-
-      <ambience-matchers-modal
-        ?open=${this._matchersModalArea !== null}
-        .matchers=${this._matchers}
-        .selected=${this._matchersModalArea
-          ? (this._configs.get(this._matchersModalArea)?.matchers ?? [])
-          : []}
-        @apply-matchers=${this._applyMatchers}
-        @cancel-matchers=${() => (this._matchersModalArea = null)}
-      ></ambience-matchers-modal>
     `;
   }
 
@@ -404,16 +368,6 @@ export class AmbienceAreasList extends LitElement {
           <span class="chevron ${open ? "open" : ""}">▶</span>
           <span class="area-name">${a.name}</span>
           <span class="area-summary">${this._summary(cfg)}</span>
-          <button
-            class="cog"
-            title="Matchers"
-            @click=${(e: Event) => {
-              e.stopPropagation();
-              this._openMatchersModal(a.area_id);
-            }}
-          >
-            ⚙
-          </button>
         </div>
         ${open
           ? html`

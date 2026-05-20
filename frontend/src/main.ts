@@ -9,9 +9,9 @@ import { customElement, property, state } from "lit/decorators.js";
 import type { HassConnection } from "./api.js";
 import { watchHaComponents } from "./ha-components.js";
 import "./views/areas-list-view.js";
-import "./views/periods-view.js";
+import "./views/configuration-view.js";
 
-type PanelView = "areas" | "periods";
+type PanelView = "areas" | "configuration";
 
 @customElement("ambience-panel")
 export class AmbiencePanel extends LitElement {
@@ -76,14 +76,14 @@ export class AmbiencePanel extends LitElement {
             @click=${() => { this._view = "areas"; }}
           >Areas</button>
           <button
-            class=${this._view === "periods" ? "active" : ""}
-            @click=${() => { this._view = "periods"; }}
-          >Periods</button>
+            class=${this._view === "configuration" ? "active" : ""}
+            @click=${() => { this._view = "configuration"; }}
+          >Configuration</button>
         </nav>
       </header>
       ${this._view === "areas"
         ? html`<ambience-areas-list .hass=${this.hass}></ambience-areas-list>`
-        : html`<ambience-periods-view .hass=${this.hass}></ambience-periods-view>`}
+        : html`<ambience-configuration-view .hass=${this.hass}></ambience-configuration-view>`}
     `;
   }
 }

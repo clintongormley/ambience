@@ -7,16 +7,18 @@ import { localize, periodLabel } from "../i18n.js";
 import type { PeriodDef, PeriodStoreView, TimeEndpoint } from "../types.js";
 import "./period-edit-modal.js";
 
-function formatEndpoint(ep: TimeEndpoint): string {
+function formatEndpoint(ep: TimeEndpoint, hass?: HassConnection): string {
   if (ep.kind === "time") return `${String(ep.hh).padStart(2, "0")}:${String(ep.mm).padStart(2, "0")}`;
   if (ep.offset_min === 0) return ep.anchor;
   const abs = Math.abs(ep.offset_min);
-  const unit = abs % 60 === 0 ? `${abs / 60}h` : `${abs}m`;
+  const unit = abs % 60 === 0
+    ? `${abs / 60}${localize(hass, "ui.unit_hour_abbr", "h")}`
+    : `${abs}${localize(hass, "ui.unit_min_abbr", "m")}`;
   return `${ep.anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
 }
 
-function formatDef(d: PeriodDef): string {
-  return `${formatEndpoint(d.from)} → ${formatEndpoint(d.to)}`;
+function formatDef(d: PeriodDef, hass?: HassConnection): string {
+  return `${formatEndpoint(d.from, hass)} → ${formatEndpoint(d.to, hass)}`;
 }
 
 type ModalState =
@@ -154,7 +156,7 @@ export class AmbienceTimeOfDayConfig extends LitElement {
     return html`
       <div class="row">
         <span class="name">${periodLabel(this.hass as any, item.id, customMap)}</span>
-        <span class="def">${formatDef(item.defn)}</span>
+        <span class="def">${formatDef(item.defn, this.hass)}</span>
         <span class="badge">${item.provenance === "builtin"
           ? localize(this.hass, "ui.badge_builtin", "builtin")
           : item.provenance === "builtin-edited"

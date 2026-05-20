@@ -82,7 +82,7 @@ export class AmbienceTimeEndpoint extends LitElement {
   }
 
   private _renderSun(v: { anchor: SunAnchor; offset_min: number }) {
-    const hint = _formatOffsetHint(v.offset_min);
+    const hint = _formatOffsetHint(v.offset_min, this.hass);
     return html`
       <select @change=${this._onAnchorChange}>
         ${ANCHORS.map(
@@ -112,13 +112,17 @@ export class AmbienceTimeEndpoint extends LitElement {
 
 }
 
-function _formatOffsetHint(offset_min: number): string {
+function _formatOffsetHint(
+  offset_min: number,
+  hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown },
+): string {
   if (offset_min === 0) return "";
   const abs = Math.abs(offset_min);
   const sign = offset_min < 0 ? "−" : "+"; // U+2212 minus, ASCII +
   if (abs % 60 === 0) {
     const hours = abs / 60;
-    return `${sign}${hours} ${hours === 1 ? "hour" : "hours"}`;
+    const unit = hours === 1 ? localize(hass, "ui.unit_hour", "hour") : localize(hass, "ui.unit_hours", "hours");
+    return `${sign}${hours} ${unit}`;
   }
-  return `${sign}${abs} min`;
+  return `${sign}${abs} ${localize(hass, "ui.unit_min", "min")}`;
 }

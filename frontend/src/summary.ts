@@ -110,7 +110,9 @@ function _fmtEndpoint(ep: TimeEndpoint, ctx: MatcherContext): string {
   const anchor = anchorLabel(ctx.hass, ep.anchor);
   if (ep.offset_min === 0) return anchor;
   const abs = Math.abs(ep.offset_min);
-  const unit = abs % 60 === 0 ? `${abs / 60}h` : `${abs}m`;
+  const unit = abs % 60 === 0
+    ? `${abs / 60}${localize(ctx.hass, "ui.unit_hour_abbr", "h")}`
+    : `${abs}${localize(ctx.hass, "ui.unit_min_abbr", "m")}`;
   return `${anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
 }
 

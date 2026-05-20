@@ -250,3 +250,110 @@ def test_matches_unknown_kind_evaluates_false() -> None:
     m = DayMatcher()
     pred = {"include": [{"kind": "wat", "x": 1}], "exclude": []}
     assert m.matches(pred, _snap(date(2026, 5, 18))) is False
+
+
+@pytest.fixture
+def m_with_entities(hass: HomeAssistant) -> DayMatcher:
+    _install_store_stub(
+        hass,
+        workday_sensor="binary_sensor.workday",
+        workday_calendar="calendar.workday",
+    )
+    return DayMatcher(hass=hass)
+
+
+@pytest.fixture
+def m_no_entities(hass: HomeAssistant) -> DayMatcher:
+    _install_store_stub(hass)
+    return DayMatcher(hass=hass)
+
+
+def test_validate_accepts_null(m_no_entities: DayMatcher) -> None:
+    m_no_entities.validate_predicate(None)  # no raise
+
+
+def test_validate_rejects_non_dict(m_no_entities: DayMatcher) -> None:
+    with pytest.raises(ValueError):
+        m_no_entities.validate_predicate(42)
+
+
+def test_validate_rejects_unknown_kind(m_no_entities: DayMatcher) -> None:
+    with pytest.raises(ValueError, match="unknown day item kind"):
+        m_no_entities.validate_predicate(
+            {
+                "include": [{"kind": "wat"}],
+                "exclude": [],
+            }
+        )
+
+
+@pytest.mark.parametrize("days", [[], [-1], [7], "abc", 5])
+def test_validate_rejects_bad_weekday_days(m_no_entities: DayMatcher, days) -> None:
+    with pytest.raises(ValueError):
+        m_no_entities.validate_predicate(
+            {
+                "include": [{"kind": "weekday", "days": days}],
+                "exclude": [],
+            }
+        )
+
+
+@pytest.mark.parametrize("days", [[], [0], [32], "abc"])
+def test_validate_rejects_bad_day_of_month(m_no_entities: DayMatcher, days) -> None:
+    with pytest.raises(ValueError):
+        m_no_entities.validate_predicate(
+            {
+                "include": [{"kind": "day_of_month", "days": days}],
+                "exclude": [],
+            }
+        )
+
+
+@pytest.mark.parametrize("month,day", [(0, 1), (13, 1), (1, 0), (1, 32), (None, 1)])
+def test_validate_rejects_bad_date(m_no_entities: DayMatcher, month, day) -> None:
+    with pytest.raises(ValueError):
+        m_no_entities.validate_predicate(
+            {
+                "include": [{"kind": "date", "month": month, "day": day}],
+                "exclude": [],
+            }
+        )
+
+
+def test_validate_rejects_bad_date_range(m_no_entities: DayMatcher) -> None:
+    with pytest.raises(ValueError):
+        m_no_entities.validate_predicate(
+            {
+                "include": [{"kind": "date_range", "from": {"month": 1, "day": 1}}],
+                "exclude": [],
+            }
+        )
+
+
+def test_validate_workday_item_requires_sensor(m_no_entities: DayMatcher) -> None:
+    with pytest.raises(ValueError, match="workday_sensor"):
+        m_no_entities.validate_predicate(
+            {
+                "include": [{"kind": "workday"}],
+                "exclude": [],
+            }
+        )
+
+
+def test_validate_first_workday_requires_calendar(m_no_entities: DayMatcher) -> None:
+    with pytest.raises(ValueError, match="workday_calendar"):
+        m_no_entities.validate_predicate(
+            {
+                "include": [{"kind": "first_workday"}],
+                "exclude": [],
+            }
+        )
+
+
+def test_validate_with_entities_accepts_workday_items(m_with_entities: DayMatcher) -> None:
+    m_with_entities.validate_predicate(
+        {
+            "include": [{"kind": "workday"}, {"kind": "first_workday"}],
+            "exclude": [{"kind": "holiday"}, {"kind": "last_workday"}],
+        }
+    )

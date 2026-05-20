@@ -51,6 +51,19 @@ class DayMatcher:
     input = "day_predicate"
     priority = 200
 
+    def __init__(self, hass: HomeAssistant | None = None) -> None:
+        self._hass = hass
+
+    def _day_config(self) -> dict[str, Any]:
+        if self._hass is None:
+            return {"workday_sensor": None, "workday_calendar": None}
+        from ..const import DATA_STORE, DOMAIN
+
+        store = self._hass.data.get(DOMAIN, {}).get(DATA_STORE)
+        if store is None:
+            return {"workday_sensor": None, "workday_calendar": None}
+        return store.get_matcher_config("day")
+
     async def snapshot(self, hass: HomeAssistant) -> DaySnapshot:
         from ..const import DATA_STORE, DOMAIN  # local import to avoid cycles
 
@@ -160,4 +173,60 @@ class DayMatcher:
         return None
 
     def validate_predicate(self, predicate: Any) -> None:
-        raise NotImplementedError
+        if predicate is None:
+            return
+        if not isinstance(predicate, dict):
+            raise ValueError(f"day predicate must be an object or null: {predicate!r}")
+        for key in ("include", "exclude"):
+            value = predicate.get(key, [])
+            if not isinstance(value, list):
+                raise ValueError(f"day predicate `{key}` must be a list")
+            for item in value:
+                self._validate_item(item)
+
+    def _validate_item(self, item: Any) -> None:
+        if not isinstance(item, dict) or "kind" not in item:
+            raise ValueError(f"day item must be {{kind, ...}}: {item!r}")
+        kind = item["kind"]
+        if kind == "weekday":
+            self._validate_int_list(item.get("days"), 0, 6, "weekday")
+        elif kind == "day_of_month":
+            self._validate_int_list(item.get("days"), 1, 31, "day_of_month")
+        elif kind == "date":
+            self._validate_month_day(item.get("month"), item.get("day"))
+        elif kind == "date_range":
+            self._validate_month_day(
+                (item.get("from") or {}).get("month"),
+                (item.get("from") or {}).get("day"),
+            )
+            self._validate_month_day(
+                (item.get("to") or {}).get("month"),
+                (item.get("to") or {}).get("day"),
+            )
+        elif kind == "last_day":
+            pass
+        elif kind in ("workday", "holiday"):
+            if not self._day_config().get("workday_sensor"):
+                raise ValueError(f"day item {kind!r} requires `workday_sensor` to be configured")
+        elif kind in ("first_workday", "last_workday"):
+            if not self._day_config().get("workday_calendar"):
+                raise ValueError(f"day item {kind!r} requires `workday_calendar` to be configured")
+        else:
+            raise ValueError(f"unknown day item kind: {kind!r}")
+
+    @staticmethod
+    def _validate_int_list(value: Any, lo: int, hi: int, label: str) -> None:
+        if not isinstance(value, list) or not value:
+            raise ValueError(f"day item {label!r}: `days` must be a non-empty list")
+        for v in value:
+            if not isinstance(v, int) or not lo <= v <= hi:
+                raise ValueError(
+                    f"day item {label!r}: invalid day {v!r}; expected int in [{lo},{hi}]"
+                )
+
+    @staticmethod
+    def _validate_month_day(month: Any, day: Any) -> None:
+        if not isinstance(month, int) or not 1 <= month <= 12:
+            raise ValueError(f"day item: invalid month {month!r}")
+        if not isinstance(day, int) or not 1 <= day <= 31:
+            raise ValueError(f"day item: invalid day {day!r}")

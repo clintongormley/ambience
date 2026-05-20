@@ -52,25 +52,23 @@ def async_register_commands(hass: HomeAssistant) -> None:
 def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise ValueError("config must be an object")
-    active_matcher_names: list[str] = list(config.get("matchers", []))
-    if "scene" in active_matcher_names:
-        raise ValueError("`scene` is always-on and must not be listed in matchers")
+    config.pop("matchers", None)  # legacy field; dropped silently
+    store = hass.data[DOMAIN][DATA_STORE]
+    enabled = set(store.enabled_matchers())
     matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
     actions_registry = hass.data[DOMAIN][DATA_ACTIONS]
-    for name in active_matcher_names:
-        if name not in matchers_registry:
-            raise ValueError(f"unknown matcher: {name}")
     for rule_idx, rule in enumerate(config.get("rules", [])):
         when = rule.get("when", {})
         for key, predicate in when.items():
             if predicate is None:
                 continue
             if key == "scene":
-                # `scene` is an always-on matcher, never listed in `matchers`.
                 matchers_registry["scene"].validate_predicate(predicate)
                 continue
-            if key not in active_matcher_names:
-                raise ValueError(f"rule {rule_idx}: predicate references unselected matcher {key}")
+            if key not in matchers_registry:
+                raise ValueError(f"rule {rule_idx}: unknown matcher {key}")
+            if key not in enabled:
+                raise ValueError(f"rule {rule_idx}: predicate references disabled matcher {key}")
             matchers_registry[key].validate_predicate(predicate)
         for action_idx, action_spec in enumerate(rule.get("actions", [])):
             action_name = action_spec.get("action")

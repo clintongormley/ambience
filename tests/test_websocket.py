@@ -111,7 +111,6 @@ async def test_area_get_unconfigured_returns_empty_config(
 
 async def test_area_save_then_get(hass: HomeAssistant, installed, area_id, hass_ws_client) -> None:
     config = {
-        "matchers": ["time_of_day"],
         "auto_sort": False,
         "rules": [
             {
@@ -411,21 +410,6 @@ async def test_area_save_sorts_by_default_when_auto_sort_absent(
     sorted_rules = save["result"]["config"]["rules"]
     assert sorted_rules[0]["when"]["time_of_day"] == narrow
     assert sorted_rules[1]["when"]["time_of_day"] == wide
-
-
-async def test_area_save_rejects_scene_in_matchers_list(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
-) -> None:
-    """`scene` is always-on and must never be listed in an area's `matchers`."""
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/area/save",
-        area_id=area_id,
-        config={"matchers": ["scene"], "auto_sort": True, "rules": []},
-    )
-    assert resp["success"] is False
-    assert resp["error"]["code"] == "validation_error"
-    assert "scene" in resp["error"]["message"]
 
 
 async def test_sorted_rules_resolve_named_scene_over_catchall(
@@ -755,3 +739,48 @@ async def test_day_config_save_emits_warnings_when_clearing_sensor(
     )
     assert resp["success"] is True
     assert any("workday_sensor" in w["reason"] for w in resp["result"]["warnings"])
+
+
+# ---------------------------------------------------------------------------
+# C3: _validate_area_config uses global enabled matchers
+# ---------------------------------------------------------------------------
+
+
+async def test_area_save_rejects_predicate_for_disabled_matcher(
+    hass, installed, hass_ws_client, area_id
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_enabled_matchers(["time_of_day"])  # day disabled
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={
+            "rules": [
+                {
+                    "when": {"day": {"include": [{"kind": "weekday", "days": [0]}], "exclude": []}},
+                    "actions": [],
+                }
+            ],
+            "auto_sort": True,
+        },
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "day" in resp["error"]["message"]
+
+
+async def test_area_save_ignores_legacy_matchers_field(
+    hass, installed, hass_ws_client, area_id
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={
+            "matchers": ["time_of_day"],  # legacy field — ignored
+            "rules": [],
+            "auto_sort": True,
+        },
+    )
+    assert resp["success"] is True

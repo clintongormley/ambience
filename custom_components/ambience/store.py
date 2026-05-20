@@ -109,7 +109,9 @@ class AmbienceStore:
             custom["daytime"] = custom.pop("day")
         # Hidden list
         hidden = periods_data.get("hidden", [])
-        periods_data["hidden"] = ["nighttime" if h == "night" else "daytime" if h == "day" else h for h in hidden]
+        periods_data["hidden"] = [
+            "nighttime" if h == "night" else "daytime" if h == "day" else h for h in hidden
+        ]
 
     def _migrate_drop_area_matchers(self) -> None:
         """Per-area `matchers` is no longer a UI gate — drop the field from every area."""
@@ -120,9 +122,7 @@ class AmbienceStore:
         """Move top-level `time_of_day_periods` to `matchers.time_of_day`."""
         if "time_of_day_periods" not in self._data:
             return
-        self._data.setdefault("matchers", {})["time_of_day"] = self._data.pop(
-            "time_of_day_periods"
-        )
+        self._data.setdefault("matchers", {})["time_of_day"] = self._data.pop("time_of_day_periods")
 
     def _migrate_seed_enabled_matchers(self) -> None:
         """Seed `enabled_matchers` from the live matcher registry if the field is
@@ -131,9 +131,7 @@ class AmbienceStore:
         if "enabled_matchers" in self._data:
             return
         registry = self._hass.data.get(DOMAIN, {}).get(DATA_MATCHERS, {})
-        toggleable = [
-            name for name, m in registry.items() if getattr(m, "toggleable", True)
-        ]
+        toggleable = [name for name, m in registry.items() if getattr(m, "toggleable", True)]
         if not toggleable:
             toggleable = ["time_of_day", "day"]
         self._data["enabled_matchers"] = sorted(toggleable)
@@ -171,9 +169,7 @@ class AmbienceStore:
         if self._enabled_matchers_persisted or self._data.get("enabled_matchers"):
             return
         registry = self._hass.data.get(DOMAIN, {}).get(DATA_MATCHERS, {})
-        toggleable = sorted(
-            name for name, m in registry.items() if getattr(m, "toggleable", True)
-        )
+        toggleable = sorted(name for name, m in registry.items() if getattr(m, "toggleable", True))
         if not toggleable:
             return
         self._data["enabled_matchers"] = toggleable

@@ -1,7 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { periodLabel } from "../i18n.js";
+import { localize, periodLabel } from "../i18n.js";
 import { summariseTimeOfDay } from "../summary.js";
 import type {
   PeriodStoreView,
@@ -186,7 +186,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
   private _renderChip(entry: Entry, idx: number) {
     let label: string;
     if (entry.kind === "any") {
-      label = "(any)";
+      label = localize(this.hass, "ui.any_placeholder", "(any)");
     } else if (entry.kind === "period") {
       label = summariseTimeOfDay({ period: entry.period }, { hass: this.hass, periods: this.periods });
     } else {
@@ -196,7 +196,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
       <div class="summary-chip" @click=${() => this._onChipClick(idx)}>
         <span class="chip-label">${label}</span>
         ${this._entries.length > 1
-          ? html`<button class="remove" @click=${(e: Event) => { e.stopPropagation(); this._onRemove(idx); }} title="Remove">✕</button>`
+          ? html`<button class="remove" @click=${(e: Event) => { e.stopPropagation(); this._onRemove(idx); }} title=${localize(this.hass, "ui.remove", "Remove")}>✕</button>`
           : ""}
       </div>
     `;
@@ -209,23 +209,23 @@ export class AmbienceTimeOfDayInput extends LitElement {
       <div class="entry">
         <div class="entry-header">
           <select @change=${(e: Event) => this._onSelectChange(idx, e)}>
-            ${allowAny ? html`<option value="__any__">Any time</option>` : ""}
-            <option value="__custom__">Custom range</option>
+            ${allowAny ? html`<option value="__any__">${localize(this.hass, "ui.any_time", "Any time")}</option>` : ""}
+            <option value="__custom__">${localize(this.hass, "ui.custom_range", "Custom range")}</option>
             <option disabled>──────</option>
             ${ids.map(
               (id) => html`<option value=${id}>
-                ${periodLabel(this.hass, id, customMap)}${customMap[id] && !this.periods?.builtins[id] ? " (custom)" : ""}
+                ${periodLabel(this.hass, id, customMap)}${customMap[id] && !this.periods?.builtins[id] ? localize(this.hass, "ui.custom_suffix", " (custom)") : ""}
               </option>`,
             )}
           </select>
           ${this._entries.length > 1
-            ? html`<button class="remove" @click=${() => this._onRemove(idx)} title="Remove">✕</button>`
+            ? html`<button class="remove" @click=${() => this._onRemove(idx)} title=${localize(this.hass, "ui.remove", "Remove")}>✕</button>`
             : ""}
         </div>
         ${entry.kind === "range"
           ? html`
               <div class="range-row">
-                <label>From</label>
+                <label>${localize(this.hass, "ui.from_label", "From")}</label>
                 <ambience-time-endpoint
                   .hass=${this.hass}
                   .value=${entry.from}
@@ -234,7 +234,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
                 ></ambience-time-endpoint>
               </div>
               <div class="range-row">
-                <label>To</label>
+                <label>${localize(this.hass, "ui.to_label", "To")}</label>
                 <ambience-time-endpoint
                   .hass=${this.hass}
                   .value=${entry.to}
@@ -256,7 +256,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
           ? this._renderChip(entry, idx)
           : this._renderEntry(entry, idx, idx === 0),
       )}
-      ${hasNonAny ? html`<button class="add-btn" @click=${this._onAdd}>+ add another time range</button>` : ""}
+      ${hasNonAny ? html`<button class="add-btn" @click=${this._onAdd}>${localize(this.hass, "ui.add_time_range", "+ add another time range")}</button>` : ""}
     `;
   }
 }

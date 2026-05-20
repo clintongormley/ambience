@@ -2,7 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { SunAnchor, TimeEndpoint } from "../types.js";
-import { anchorLabel } from "../i18n.js";
+import { anchorLabel, localize } from "../i18n.js";
 
 const ANCHORS: SunAnchor[] = ["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"];
 
@@ -92,7 +92,7 @@ export class AmbienceTimeEndpoint extends LitElement {
       <input
         type="number"
         step="1"
-        placeholder="±min, e.g. -30"
+        placeholder=${localize(this.hass, "ui.offset_placeholder", "±min, e.g. -30")}
         .value=${String(v.offset_min)}
         @input=${this._onOffsetChange}
       />
@@ -103,8 +103,8 @@ export class AmbienceTimeEndpoint extends LitElement {
   override render() {
     return html`
       <select @change=${this._onKindChange}>
-        <option value="time" ?selected=${this.value.kind === "time"}>Time</option>
-        <option value="sun" ?selected=${this.value.kind === "sun"}>Sun</option>
+        <option value="time" ?selected=${this.value.kind === "time"}>${localize(this.hass, "ui.endpoint_time", "Time")}</option>
+        <option value="sun" ?selected=${this.value.kind === "sun"}>${localize(this.hass, "ui.endpoint_sun", "Sun")}</option>
       </select>
       ${this.value.kind === "time" ? this._renderTime(this.value) : this._renderSun(this.value)}
     `;

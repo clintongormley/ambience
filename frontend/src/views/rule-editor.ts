@@ -13,7 +13,7 @@ import type {
 import type { HassConnection } from "../api.js";
 import { entitiesInArea } from "../area-entities.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
-import { matcherLabel } from "../i18n.js";
+import { localize, matcherLabel } from "../i18n.js";
 import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
 import "./matcher-input.js";
 import "./target-picker.js";
@@ -166,7 +166,7 @@ export class AmbienceRuleEditor extends LitElement {
         </div>
       `;
     }
-    const summaryText = ruleDisplayName(this._draft!, "New rule");
+    const summaryText = ruleDisplayName(this._draft!, localize(this.hass, "ui.new_rule", "New rule"));
     return html`
       <div class="slot collapsed" data-slot-id="name">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "name" })}>
@@ -186,11 +186,11 @@ export class AmbienceRuleEditor extends LitElement {
     const tag = pickHaTextInput();
     /* v8 ignore next 8 -- ha-input is eagerly registered in HA 2026.05+, not in jsdom */
     if (tag === "ha-input") {
-      return html`<ha-input label="Name (optional)" .value=${value} @input=${this._onNameInput}></ha-input>`;
+      return html`<ha-input label=${localize(this.hass, "ui.name_optional", "Name (optional)")} .value=${value} @input=${this._onNameInput}></ha-input>`;
     }
     /* v8 ignore next 8 -- ha-textfield is legacy HA variant, not registered in jsdom */
     if (tag === "ha-textfield") {
-      return html`<ha-textfield label="Name (optional)" .value=${value} @input=${this._onNameInput}></ha-textfield>`;
+      return html`<ha-textfield label=${localize(this.hass, "ui.name_optional", "Name (optional)")} .value=${value} @input=${this._onNameInput}></ha-textfield>`;
     }
     return html`<input type="text" .value=${value} @input=${this._onNameInput} />`;
   }
@@ -221,7 +221,7 @@ export class AmbienceRuleEditor extends LitElement {
     const action = this._draft?.actions[slot.idx];
     if (!action) return null;
     if (action.entity_ids.length === 0) {
-      return "At least one target is required.";
+      return localize(this.hass, "ui.at_least_one_target", "At least one target is required.");
     }
     const info = this.availableActions.find((x) => x.name === action.action);
     if (!info) return null;
@@ -229,7 +229,7 @@ export class AmbienceRuleEditor extends LitElement {
       if (!p.required) continue;
       const v = action.params[p.name];
       if (v === undefined || v === null || v === "") {
-        return `${this._paramLabel(p.name)} is required.`;
+        return localize(this.hass, "ui.param_required", "{param} is required.").replace("{param}", this._paramLabel(p.name));
       }
     }
     return null;
@@ -418,11 +418,11 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "action", idx })}>
           <span class="summary-label">${summary}</span>
-          <button class="remove" @click=${(e: Event) => { e.stopPropagation(); this._deleteAction(idx); }} title="Remove action">✕</button>
+          <button class="remove" @click=${(e: Event) => { e.stopPropagation(); this._deleteAction(idx); }} title=${localize(this.hass, "ui.remove_action", "Remove action")}>✕</button>
         </div>
         ${open ? html`
           <div class="body">
-            <label>Target</label>
+            <label>${localize(this.hass, "ui.target", "Target")}</label>
             <ambience-target-picker
               .hass=${this.hass}
               .entities=${entities}
@@ -463,16 +463,16 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="modal" @click=${this._onModalClick}>
         ${this._renderNameSlot()}
 
-        <h3>When</h3>
+        <h3>${localize(this.hass, "ui.when_heading", "When")}</h3>
         ${this.matchers.map((m) => this._renderMatcherRow(m))}
 
-        <h3>Actions</h3>
+        <h3>${localize(this.hass, "ui.actions_heading", "Actions")}</h3>
         ${this._draft.actions.map((a, i) => this._renderActionRow(a, i))}
-        <button class="secondary add-action" @click=${this._addActionSlot}>+ Add action</button>
+        <button class="secondary add-action" @click=${this._addActionSlot}>${localize(this.hass, "ui.add_action", "+ Add action")}</button>
 
         <div class="actions-bar">
-          <button class="secondary" @click=${this._cancel}>Cancel</button>
-          <button class="primary" @click=${this._save}>Save rule</button>
+          <button class="secondary" @click=${this._cancel}>${localize(this.hass, "ui.cancel", "Cancel")}</button>
+          <button class="primary" @click=${this._save}>${localize(this.hass, "ui.save_rule", "Save rule")}</button>
         </div>
       </div>
     `;

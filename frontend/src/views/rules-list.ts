@@ -1,7 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { matcherLabel } from "../i18n.js";
+import { localize, matcherLabel } from "../i18n.js";
 import { ruleDisplayName, summariseMatcher } from "../summary.js";
 import type {
   PeriodStoreView,
@@ -100,7 +100,7 @@ export class AmbienceRulesList extends LitElement {
     const keys = Object.keys(rule.when).filter((k) => rule.when[k] != null);
     const when =
       keys.length === 0
-        ? "any"
+        ? localize(this.hass, "ui.summary_any", "any")
         : keys
             .map(
               (k) =>
@@ -108,7 +108,10 @@ export class AmbienceRulesList extends LitElement {
             )
             .join(", ");
     const n = rule.actions.length;
-    return `${when} · ${n} action${n === 1 ? "" : "s"}`;
+    const actionWord = n === 1
+      ? localize(this.hass, "ui.action_singular", "action")
+      : localize(this.hass, "ui.action_plural", "actions");
+    return `${when} · ${n} ${actionWord}`;
   }
 
   private _onDragStart(i: number) {
@@ -135,8 +138,8 @@ export class AmbienceRulesList extends LitElement {
   }
 
   private _confirmDelete(i: number, rule: Rule) {
-    const label = rule.name || `Rule ${i + 1}`;
-    if (window.confirm(`Delete "${label}"?`)) {
+    const label = rule.name || localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1));
+    if (window.confirm(localize(this.hass, "ui.confirm_delete", 'Delete "{name}"?').replace("{name}", label))) {
       this._emit("delete-rule", { index: i });
     }
   }
@@ -144,9 +147,9 @@ export class AmbienceRulesList extends LitElement {
   override render() {
     if (this.rules.length === 0) {
       return html`
-        <p class="empty">No rules yet.</p>
+        <p class="empty">${localize(this.hass, "ui.no_rules_yet", "No rules yet.")}</p>
         <button class="add" @click=${() => this._emit("add-rule", {})}>
-          + Add rule
+          ${localize(this.hass, "ui.add_rule", "+ Add rule")}
         </button>
       `;
     }
@@ -163,7 +166,7 @@ export class AmbienceRulesList extends LitElement {
               @dragend=${this._onDragEnd}
             >
               ${!this.autoSort
-                ? html`<span class="handle" title="Drag to reorder">⠿</span>`
+                ? html`<span class="handle" title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}>⠿</span>`
                 : ""}
               <span class="idx">${i + 1}</span>
               <div class="body">
@@ -171,19 +174,19 @@ export class AmbienceRulesList extends LitElement {
                   class="name"
                   @click=${() => this._emit("edit-rule", { index: i })}
                 >
-                  ${ruleDisplayName(rule, `Rule ${i + 1}`)}
+                  ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1)))}
                 </div>
                 <div class="summary">${this._summary(rule)}</div>
               </div>
               <button
                 @click=${() => this._emit("duplicate-rule", { index: i })}
-                title="Duplicate"
+                title=${localize(this.hass, "ui.duplicate", "Duplicate")}
               >
                 ⧉
               </button>
               <button
                 @click=${() => this._confirmDelete(i, rule)}
-                title="Delete"
+                title=${localize(this.hass, "ui.title_delete", "Delete")}
               >
                 🗑
               </button>
@@ -192,7 +195,7 @@ export class AmbienceRulesList extends LitElement {
         )}
       </ul>
       <button class="add" @click=${() => this._emit("add-rule", {})}>
-        + Add rule
+        ${localize(this.hass, "ui.add_rule", "+ Add rule")}
       </button>
     `;
   }

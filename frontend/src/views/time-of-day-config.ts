@@ -125,7 +125,9 @@ export class AmbienceTimeOfDayConfig extends LitElement {
   private async _onResetAll() {
     const custom = Object.keys(this._view.custom).length;
     const hidden = this._view.hidden.length;
-    const msg = `This will clear ${custom} custom period(s) and restore ${hidden} hidden built-in(s). Continue?`;
+    const msg = localize(this.hass, "ui.reset_confirm", "This will clear {custom} custom period(s) and restore {hidden} hidden built-in(s). Continue?")
+      .replace("{custom}", String(custom))
+      .replace("{hidden}", String(hidden));
     if (!confirm(msg)) return;
     await resetPeriods(this.hass);
     this._warnings = [];
@@ -206,6 +208,7 @@ export class AmbienceTimeOfDayConfig extends LitElement {
       <button class="add" @click=${this._onAdd}>${localize(this.hass, "ui.add_custom_period", "+ Add custom period")}</button>
       ${this._modal.mode === "edit"
         ? html`<ambience-period-edit-modal
+            .hass=${this.hass}
             .existingId=${this._modal.id}
             .initial=${this._modal.initial}
             .takenIds=${new Set([...Object.keys(this._view.builtins), ...Object.keys(this._view.custom)])}
@@ -214,6 +217,7 @@ export class AmbienceTimeOfDayConfig extends LitElement {
           ></ambience-period-edit-modal>`
         : this._modal.mode === "add"
         ? html`<ambience-period-edit-modal
+            .hass=${this.hass}
             .takenIds=${new Set([...Object.keys(this._view.builtins), ...Object.keys(this._view.custom)])}
             @period-save=${this._onModalSave}
             @period-cancel=${this._onModalCancel}

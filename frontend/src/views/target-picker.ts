@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import { watchHaComponents } from "../ha-components.js";
+import { localize } from "../i18n.js";
 import type { HassConnection } from "../api.js";
 
 /**
@@ -93,7 +94,7 @@ export class AmbienceTargetPicker extends LitElement {
 
   private _renderFallback() {
     if (this.entities.length === 0) {
-      return html`<p class="empty">No matching entities in this area.</p>`;
+      return html`<p class="empty">${localize(this.hass, "ui.no_matching_entities", "No matching entities in this area.")}</p>`;
     }
     return html`
       <div class="checkboxes">

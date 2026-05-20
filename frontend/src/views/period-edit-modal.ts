@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import type { PeriodDef, TimeEndpoint } from "../types.js";
+import { localize } from "../i18n.js";
 import "./time-endpoint.js";
 
 const ID_RE = /^[a-z][a-z0-9_]*$/;
@@ -81,10 +82,10 @@ export class AmbiencePeriodEditModal extends LitElement {
 
   private _validate(id: string): string {
     if (!this.existingId) {
-      if (!this._label.trim()) return "Please enter a name.";
-      if (!id) return "Name must start with a letter.";
-      if (!ID_RE.test(id)) return "Name must start with a letter.";
-      if (this.takenIds.has(id)) return "A period with this name already exists. Choose a different name.";
+      if (!this._label.trim()) return localize(this.hass, "ui.error_enter_name", "Please enter a name.");
+      if (!id) return localize(this.hass, "ui.error_start_letter", "Name must start with a letter.");
+      if (!ID_RE.test(id)) return localize(this.hass, "ui.error_start_letter", "Name must start with a letter.");
+      if (this.takenIds.has(id)) return localize(this.hass, "ui.error_name_exists", "A period with this name already exists. Choose a different name.");
     }
     return "";
   }
@@ -118,27 +119,27 @@ export class AmbiencePeriodEditModal extends LitElement {
 
   override render() {
     const heading = this.existingId
-      ? `Edit "${this.initial?.label ?? this.existingId}"`
-      : "Add custom period";
+      ? localize(this.hass, "ui.period_modal_edit_title", 'Edit "{name}"').replace("{name}", this.initial?.label ?? this.existingId)
+      : localize(this.hass, "ui.period_modal_add_title", "Add custom period");
     return html`
       <div class="modal" role="dialog" aria-modal="true">
         <h3>${heading}</h3>
         <div class="field">
-          <label for="label">Name</label>
-          <input id="label" type="text" .value=${this._label} @input=${this._onLabelInput} placeholder="e.g. Wind down" />
+          <label for="label">${localize(this.hass, "ui.name", "Name")}</label>
+          <input id="label" type="text" .value=${this._label} @input=${this._onLabelInput} placeholder=${localize(this.hass, "ui.name_placeholder", "e.g. Wind down")} />
         </div>
         <div class="row">
-          <label style="min-width: 3em;">From</label>
+          <label style="min-width: 3em;">${localize(this.hass, "ui.from_label", "From")}</label>
           <ambience-time-endpoint .hass=${this.hass} .value=${this._def.from} @value-changed=${this._onFromChange}></ambience-time-endpoint>
         </div>
         <div class="row">
-          <label style="min-width: 3em;">To</label>
+          <label style="min-width: 3em;">${localize(this.hass, "ui.to_label", "To")}</label>
           <ambience-time-endpoint .hass=${this.hass} .value=${this._def.to} @value-changed=${this._onToChange}></ambience-time-endpoint>
         </div>
         <div class="error">${this._error}</div>
         <div class="actions">
-          <button @click=${this._onCancel}>Cancel</button>
-          <button @click=${this._onSave}>Save</button>
+          <button @click=${this._onCancel}>${localize(this.hass, "ui.cancel", "Cancel")}</button>
+          <button @click=${this._onSave}>${localize(this.hass, "ui.save", "Save")}</button>
         </div>
       </div>
     `;

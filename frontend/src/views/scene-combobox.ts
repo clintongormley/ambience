@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
 import { watchHaComponents } from "../ha-components.js";
+import { localize } from "../i18n.js";
 
 type HaFormSchema = {
   name: string;
@@ -195,6 +196,15 @@ export class AmbienceSceneCombobox extends LitElement {
     this._open = false;
   }
 
+  // ha-form derives a field's displayed label via this callback. Without it,
+  // the floating label inside the field shows the schema's raw `name`
+  // ("scene") instead of a friendly human label.
+  /* v8 ignore next 4 -- ha-form is eagerly registered in HA 2026.05+, not in jsdom */
+  private _sceneComputeLabel = (schema: { name: string }): string => {
+    if (schema.name === "scene") return localize(this.hass, "ui.scene_name", "Scene name");
+    return schema.name;
+  };
+
   // --- render --------------------------------------------------------------
 
   override render() {
@@ -206,7 +216,7 @@ export class AmbienceSceneCombobox extends LitElement {
           .hass=${this.hass}
           .schema=${this._schema}
           .data=${data}
-          .computeLabel=${_sceneComputeLabel}
+          .computeLabel=${this._sceneComputeLabel}
           @value-changed=${this._onHaFormValueChanged}
         ></ha-form>
       `;
@@ -217,7 +227,7 @@ export class AmbienceSceneCombobox extends LitElement {
       <div class="control">
         <input
           type="text"
-          placeholder="Scene name"
+          placeholder=${localize(this.hass, "ui.scene_name", "Scene name")}
           .value=${this.value ?? ""}
           @input=${this._onInput}
           @focus=${this._onFocus}
@@ -227,7 +237,7 @@ export class AmbienceSceneCombobox extends LitElement {
           class="toggle"
           type="button"
           tabindex="-1"
-          aria-label="Show scene suggestions"
+          aria-label=${localize(this.hass, "ui.show_scene_suggestions", "Show scene suggestions")}
           @mousedown=${this._toggle}
         >
           ▼
@@ -238,7 +248,7 @@ export class AmbienceSceneCombobox extends LitElement {
             <div class="menu" role="listbox">
               ${this.suggestions.length === 0
                 ? html`<div class="empty">
-                    No scenes yet — type to create one
+                    ${localize(this.hass, "ui.no_scenes_yet", "No scenes yet — type to create one")}
                   </div>`
                 : this.suggestions.map(
                     (s) => html`
@@ -256,12 +266,4 @@ export class AmbienceSceneCombobox extends LitElement {
         : ""}
     `;
   }
-}
-
-// ha-form derives a field's displayed label via this callback. Without it,
-// the floating label inside the field shows the schema's raw `name`
-// ("scene") instead of a friendly human label.
-function _sceneComputeLabel(schema: { name: string }): string {
-  if (schema.name === "scene") return "Scene name";
-  return schema.name;
 }

@@ -12,6 +12,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.service import async_resolve_only
 
 
 async def _setup_with_sun(hass: HomeAssistant) -> None:
@@ -75,3 +76,49 @@ async def test_service_call_invokes_light_turn_on(
     assert on_calls[0].data["entity_id"] == "light.lamp"
     assert on_calls[0].data["brightness_pct"] == 30
     assert on_calls[0].data["transition"] == 2.0  # passed straight through
+
+
+async def test_time_of_day_rule_matches_for_area_without_matchers_field(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """Regression: areas loaded from disk have no per-area `matchers` field (it is
+    dropped on migration). Matcher enablement is global. A rule with a time_of_day
+    predicate must still resolve, which requires the service to source active
+    matchers from store.enabled_matchers() rather than the (absent) per-area field.
+    """
+    store = hass.data[DOMAIN][DATA_STORE]
+    # Fresh-install default seeds the global toggleable matchers.
+    assert "time_of_day" in store.enabled_matchers()
+
+    # Save an area WITHOUT a `matchers` key — exactly as a disk-loaded, migrated
+    # area looks in production.
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "name": "all-day",
+                    # Full-day range (00:00 -> 00:00) is always active regardless of
+                    # the real clock, so the assertion is deterministic.
+                    "when": {
+                        "scene": "movie",
+                        "time_of_day": {
+                            "from": {"kind": "time", "hh": 0, "mm": 0},
+                            "to": {"kind": "time", "hh": 0, "mm": 0},
+                        },
+                    },
+                    "actions": [],
+                }
+            ],
+            "auto_sort": True,
+        },
+    )
+
+    result = await async_resolve_only(hass, "lr", "movie")
+
+    # The time_of_day matcher must have been activated (snapshot captured)...
+    assert "time_of_day" in result["snapshots_described"]
+    # ...and the rule must match. Before the fix, no time_of_day snapshot is taken,
+    # so resolve() sees no value for the predicate and the rule does not match.
+    assert result["matched_rule_index"] == 0
+    assert result["rule_name"] == "all-day"

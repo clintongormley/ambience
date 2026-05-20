@@ -74,6 +74,16 @@ class FakeStore:
     def get_area(self, area_id):
         return self._areas.get(area_id)
 
+    def enabled_matchers(self):
+        # Matcher enablement is global. Tests declare the matchers they want via
+        # each area's `matchers` list; union them to drive the global setting.
+        names: list[str] = []
+        for area in self._areas.values():
+            for name in area.get("matchers", []):
+                if name not in names:
+                    names.append(name)
+        return names
+
 
 def _install(hass: HomeAssistant, *, areas: dict, matchers: dict, actions: dict) -> None:
     hass.data.setdefault(DOMAIN, {})

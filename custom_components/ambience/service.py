@@ -28,7 +28,7 @@ async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> d
     if area is None:
         raise ServiceValidationError(f"unknown_area: {area_id!r}")
 
-    active_matcher_names = list(area.get("matchers", []))
+    active_matcher_names = list(store.enabled_matchers())
     active_matchers = {
         name: matchers_registry[name] for name in active_matcher_names if name in matchers_registry
     }

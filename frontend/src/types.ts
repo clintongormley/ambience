@@ -18,8 +18,6 @@ export type ActionSpec = {
 };
 
 export type AreaConfig = {
-  // Toggleable matcher names enabled for the area. `scene` is never listed.
-  matchers: string[];
   // Ordered list — array order is authoritative for the engine.
   rules: Rule[];
   // When true the backend keeps `rules` sorted on every save.
@@ -99,3 +97,25 @@ export type PeriodStoreView = {
   custom: Record<string, PeriodDef>;
   hidden: string[];
 };
+
+export type EnabledMatchers = { enabled: string[] };
+
+export type DayConfig = {
+  workday_sensor: string | null;
+  workday_calendar: string | null;
+};
+
+export type DayItem =
+  | { kind: "weekday"; days: number[] }
+  | { kind: "day_of_month"; days: number[] }
+  | { kind: "date"; month: number; day: number }
+  | { kind: "date_range"; from: { month: number; day: number }; to: { month: number; day: number } }
+  | { kind: "last_day" }
+  | { kind: "workday" }
+  | { kind: "holiday" }
+  | { kind: "first_workday" }
+  | { kind: "last_workday" };
+
+export type DayPredicate =
+  | null
+  | { include: DayItem[]; exclude: DayItem[] };

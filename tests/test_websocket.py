@@ -74,6 +74,11 @@ async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> 
     assert tod["description"].strip() != ""
     assert tod["predicate_help"].strip() != ""
 
+    day = by_name["day"]
+    assert day["toggleable"] is True
+    assert day["input"] == "day_predicate"
+    assert day["priority"] == 200
+
 
 async def test_actions_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/actions/list")

@@ -254,3 +254,34 @@ def test_async_load_migrates_old_period_names(hass: HomeAssistant) -> None:
     assert custom["nighttime"]["label"] == "Custom night"
     hidden = store._data["time_of_day_periods"]["hidden"]
     assert hidden == ["daytime"]
+
+
+async def test_empty_store_has_new_shape(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.enabled_matchers() == []
+    assert store.get_matcher_config("time_of_day") == {"custom": {}, "hidden": []}
+    assert store.get_matcher_config("day") == {
+        "workday_sensor": None,
+        "workday_calendar": None,
+    }
+
+
+async def test_save_enabled_matchers_round_trips(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_enabled_matchers(["time_of_day", "day"])
+    assert store.enabled_matchers() == ["time_of_day", "day"]
+
+
+async def test_save_matcher_config_round_trips(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_matcher_config("day", {
+        "workday_sensor": "binary_sensor.workday",
+        "workday_calendar": "calendar.workday",
+    })
+    assert store.get_matcher_config("day") == {
+        "workday_sensor": "binary_sensor.workday",
+        "workday_calendar": "calendar.workday",
+    }

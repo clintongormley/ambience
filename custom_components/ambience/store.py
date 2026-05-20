@@ -27,7 +27,11 @@ class AmbienceStore:
         return {
             "version": STORAGE_VERSION,
             "areas": {},
-            "time_of_day_periods": {"custom": {}, "hidden": []},
+            "enabled_matchers": [],
+            "matchers": {
+                "time_of_day": {"custom": {}, "hidden": []},
+                "day": {"workday_sensor": None, "workday_calendar": None},
+            },
         }
 
     @staticmethod
@@ -134,11 +138,34 @@ class AmbienceStore:
             del self._data["areas"][area_id]
             await self._store.async_save(self._data)
 
+    def enabled_matchers(self) -> list[str]:
+        return list(self._data.get("enabled_matchers", []))
+
+    async def async_save_enabled_matchers(self, names: list[str]) -> None:
+        self._data["enabled_matchers"] = list(names)
+        await self._store.async_save(self._data)
+
+    def get_matcher_config(self, name: str) -> dict[str, Any]:
+        """Return per-matcher config dict, with defaults applied for missing keys."""
+        cfg = self._data.get("matchers", {}).get(name, {})
+        if name == "time_of_day":
+            return {
+                "custom": cfg.get("custom", {}),
+                "hidden": cfg.get("hidden", []),
+            }
+        if name == "day":
+            return {
+                "workday_sensor": cfg.get("workday_sensor"),
+                "workday_calendar": cfg.get("workday_calendar"),
+            }
+        return dict(cfg)
+
+    async def async_save_matcher_config(self, name: str, config: dict[str, Any]) -> None:
+        self._data.setdefault("matchers", {})[name] = config
+        await self._store.async_save(self._data)
+
     def get_periods(self) -> dict[str, Any]:
-        """Return the user-owned period slice ({custom, hidden}), defaulting on absent key."""
-        return self._data.get("time_of_day_periods", {"custom": {}, "hidden": []})
+        return self.get_matcher_config("time_of_day")
 
     async def async_save_periods(self, payload: dict[str, Any]) -> None:
-        """Persist the full user-owned period slice."""
-        self._data["time_of_day_periods"] = payload
-        await self._store.async_save(self._data)
+        await self.async_save_matcher_config("time_of_day", payload)

@@ -94,9 +94,7 @@ async def test_execute_logs_warning_on_service_exception(
     from unittest.mock import AsyncMock, patch
 
     action = SetLightAction()
-    with patch.object(
-        action, "_apply_one", new=AsyncMock(side_effect=RuntimeError("boom"))
-    ):
+    with patch.object(action, "_apply_one", new=AsyncMock(side_effect=RuntimeError("boom"))):
         # Must not propagate; execute catches exceptions via gather(return_exceptions=True)
         await action.execute(hass, ["light.a", "light.b"], {"brightness": 50})
     assert "set_light failed" in caplog.text

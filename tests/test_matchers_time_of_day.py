@@ -373,9 +373,16 @@ def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:
     be 16:00 in that tz."""
     # Test that the resolved time is in the local tz (UTC in tests by default)
     from custom_components.ambience.matchers.time_of_day import TimeOfDayMatcher
+
     matcher = TimeOfDayMatcher(period_lookup=lambda: {})
     snap = _build_snapshot(datetime(2026, 5, 13, 17, 0, tzinfo=UTC))
-    assert matcher.matches(
-        {"from": {"kind": "time", "hh": 16, "mm": 0}, "to": {"kind": "time", "hh": 18, "mm": 30}},
-        snap,
-    ) is True
+    assert (
+        matcher.matches(
+            {
+                "from": {"kind": "time", "hh": 16, "mm": 0},
+                "to": {"kind": "time", "hh": 18, "mm": 30},
+            },
+            snap,
+        )
+        is True
+    )

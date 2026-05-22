@@ -98,3 +98,17 @@ export function dayItemKindLabel(hass: HassLike | undefined, kind: string): stri
     _DAY_ITEM_FALLBACKS[kind] ?? kind,
   );
 }
+
+const _MONTH_FALLBACKS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** month: 1=January … 12=December. */
+export function monthLabel(hass: HassLike | undefined, month: number): string {
+  return _resolve(
+    hass,
+    `component.ambience.month.${month}`,
+    _MONTH_FALLBACKS[month - 1] ?? String(month),
+  );
+}

@@ -7,6 +7,7 @@ import {
   localize,
   weekdayLabel,
   dayItemKindLabel,
+  monthLabel,
 } from "../frontend/src/i18n";
 import type { PeriodDef } from "../frontend/src/types";
 
@@ -133,5 +134,17 @@ describe("dayItemKindLabel", () => {
   test("localizes via component.ambience.day_item.<kind>", () => {
     const hass = { localize: (k: string) => (k === "component.ambience.day_item.workday" ? "Jour ouvré" : undefined) };
     expect(dayItemKindLabel(hass, "workday")).toBe("Jour ouvré");
+  });
+});
+
+describe("monthLabel", () => {
+  test("English fallbacks, 1=January..12=December", () => {
+    expect(monthLabel(undefined, 1)).toBe("January");
+    expect(monthLabel(undefined, 2)).toBe("February");
+    expect(monthLabel(undefined, 12)).toBe("December");
+  });
+  test("localizes via component.ambience.month.<n>", () => {
+    const hass = { localize: (k: string) => (k === "component.ambience.month.1" ? "Janvier" : undefined) };
+    expect(monthLabel(hass, 1)).toBe("Janvier");
   });
 });

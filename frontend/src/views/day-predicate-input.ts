@@ -2,7 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
-import { dayItemKindLabel, localize, weekdayLabel } from "../i18n.js";
+import { dayItemKindLabel, localize, monthLabel, weekdayLabel } from "../i18n.js";
 import type { DayConfig, DayItem, DayPredicate } from "../types.js";
 
 const KINDS: DayItem["kind"][] = [
@@ -13,8 +13,22 @@ const KINDS: DayItem["kind"][] = [
 const SENSOR_DEPENDENT = new Set<DayItem["kind"]>(["workday", "holiday"]);
 const CALENDAR_DEPENDENT = new Set<DayItem["kind"]>(["first_workday", "last_workday"]);
 
-/** Loose ha-form schema item — selectors are passed through to HA. */
-type HaFormSchema = { name: string; selector: Record<string, unknown> };
+// Annual day caps; February allows 29 so leap-day dates can be targeted.
+const _DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/** Days in the given month (1-12), Feb=29. Out-of-range months cap at 31. */
+function _daysInMonth(month: number): number {
+  return _DAYS_IN_MONTH[month - 1] ?? 31;
+}
+
+/** Loose ha-form schema item — selectors / grid layout are passed through to HA. */
+type HaFormSchema = {
+  name: string;
+  type?: string;
+  selector?: Record<string, unknown>;
+  schema?: HaFormSchema[];
+  column_min_width?: string;
+};
 
 function _defaultItem(kind: DayItem["kind"]): DayItem {
   switch (kind) {
@@ -119,42 +133,83 @@ export class AmbienceDayPredicateInput extends LitElement {
     ];
   }
 
+  /** A month dropdown selector with localized January…December options. */
+  private _monthSelector(): Record<string, unknown> {
+    return {
+      select: {
+        mode: "dropdown",
+        options: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => ({
+          value: String(m),
+          label: monthLabel(this.hass, m),
+        })),
+      },
+    };
+  }
+
+  /** A day number selector whose max is the number of days in `month`. */
+  private _daySelector(month: number): Record<string, unknown> {
+    return { number: { min: 1, max: _daysInMonth(month), mode: "box" } };
+  }
+
   /** The body schema for an item's kind, or null when the kind has no ha-form
    * body (weekday is rendered as native checkboxes; the entity-only kinds and
-   * last_day have no fields). */
+   * last_day have no fields). Month is a dropdown and day's max follows the
+   * selected month; month+day share one grid row. */
   _bodySchema(item: DayItem): HaFormSchema[] | null {
     switch (item.kind) {
       case "day_of_month":
         return [{ name: "days", selector: { text: {} } }];
       case "date":
         return [
-          { name: "month", selector: { number: { min: 1, max: 12, mode: "box" } } },
-          { name: "day", selector: { number: { min: 1, max: 31, mode: "box" } } },
+          {
+            name: "date_row",
+            type: "grid",
+            column_min_width: "120px",
+            schema: [
+              { name: "month", selector: this._monthSelector() },
+              { name: "day", selector: this._daySelector(item.month) },
+            ],
+          },
         ];
       case "date_range":
         return [
-          { name: "from_month", selector: { number: { min: 1, max: 12, mode: "box" } } },
-          { name: "from_day", selector: { number: { min: 1, max: 31, mode: "box" } } },
-          { name: "to_month", selector: { number: { min: 1, max: 12, mode: "box" } } },
-          { name: "to_day", selector: { number: { min: 1, max: 31, mode: "box" } } },
+          {
+            name: "from_row",
+            type: "grid",
+            column_min_width: "120px",
+            schema: [
+              { name: "from_month", selector: this._monthSelector() },
+              { name: "from_day", selector: this._daySelector(item.from.month) },
+            ],
+          },
+          {
+            name: "to_row",
+            type: "grid",
+            column_min_width: "120px",
+            schema: [
+              { name: "to_month", selector: this._monthSelector() },
+              { name: "to_day", selector: this._daySelector(item.to.month) },
+            ],
+          },
         ];
       default:
         return null;
     }
   }
 
-  /** Map an item to the flat ha-form `data` object for its body schema. */
+  /** Map an item to the flat ha-form `data` object for its body schema.
+   * Month values are strings to match the select options. */
   _bodyData(item: DayItem): Record<string, unknown> {
     switch (item.kind) {
       case "day_of_month":
         return { days: item.days.join(", ") };
       case "date":
-        return { month: item.month, day: item.day };
+        return { month: String(item.month), day: item.day };
       case "date_range":
         return {
-          from_month: item.from.month,
+          from_month: String(item.from.month),
           from_day: item.from.day,
-          to_month: item.to.month,
+          to_month: String(item.to.month),
           to_day: item.to.day,
         };
       default:
@@ -162,7 +217,8 @@ export class AmbienceDayPredicateInput extends LitElement {
     }
   }
 
-  /** Parse an ha-form body `value` back into a full DayItem of the same kind. */
+  /** Parse an ha-form body `value` back into a full DayItem of the same kind.
+   * The day is clamped to the (possibly just-changed) month's maximum. */
   _bodyPatch(item: DayItem, value: Record<string, unknown>): DayItem {
     switch (item.kind) {
       case "day_of_month": {
@@ -172,14 +228,20 @@ export class AmbienceDayPredicateInput extends LitElement {
           .filter((n) => Number.isFinite(n));
         return { kind: "day_of_month", days };
       }
-      case "date":
-        return { kind: "date", month: Number(value.month), day: Number(value.day) };
-      case "date_range":
+      case "date": {
+        const month = Number(value.month);
+        const day = Math.min(Number(value.day), _daysInMonth(month));
+        return { kind: "date", month, day };
+      }
+      case "date_range": {
+        const fromMonth = Number(value.from_month);
+        const toMonth = Number(value.to_month);
         return {
           kind: "date_range",
-          from: { month: Number(value.from_month), day: Number(value.from_day) },
-          to: { month: Number(value.to_month), day: Number(value.to_day) },
+          from: { month: fromMonth, day: Math.min(Number(value.from_day), _daysInMonth(fromMonth)) },
+          to: { month: toMonth, day: Math.min(Number(value.to_day), _daysInMonth(toMonth)) },
         };
+      }
       default:
         return item;
     }
@@ -320,45 +382,35 @@ export class AmbienceDayPredicateInput extends LitElement {
       return html`
         <input type="number" min="1" max="12" .value=${String(item.month)}
           @change=${(e: Event) =>
-            this._updateItem(section, idx, { kind: "date", month: parseInt((e.target as HTMLInputElement).value, 10), day: item.day })} />
+            this._updateItem(section, idx, this._bodyPatch(item,
+              { month: (e.target as HTMLInputElement).value, day: item.day }))} />
         /
-        <input type="number" min="1" max="31" .value=${String(item.day)}
+        <input type="number" min="1" max=${String(_daysInMonth(item.month))} .value=${String(item.day)}
           @change=${(e: Event) =>
-            this._updateItem(section, idx, { kind: "date", month: item.month, day: parseInt((e.target as HTMLInputElement).value, 10) })} />
+            this._updateItem(section, idx, this._bodyPatch(item,
+              { month: item.month, day: (e.target as HTMLInputElement).value }))} />
       `;
     }
     if (item.kind === "date_range") {
       const fromM = item.from.month, fromD = item.from.day;
       const toM = item.to.month, toD = item.to.day;
+      const patchRange = (changes: Record<string, unknown>) =>
+        this._updateItem(section, idx, this._bodyPatch(item, {
+          from_month: fromM, from_day: fromD, to_month: toM, to_day: toD, ...changes,
+        }));
       return html`
         <span>${localize(this.hass, "ui.from", "from")}</span>
         <input type="number" min="1" max="12" .value=${String(fromM)}
-          @change=${(e: Event) => this._updateItem(section, idx, {
-            kind: "date_range",
-            from: { month: parseInt((e.target as HTMLInputElement).value, 10), day: fromD },
-            to: item.to,
-          })} />
+          @change=${(e: Event) => patchRange({ from_month: (e.target as HTMLInputElement).value })} />
         /
-        <input type="number" min="1" max="31" .value=${String(fromD)}
-          @change=${(e: Event) => this._updateItem(section, idx, {
-            kind: "date_range",
-            from: { month: fromM, day: parseInt((e.target as HTMLInputElement).value, 10) },
-            to: item.to,
-          })} />
+        <input type="number" min="1" max=${String(_daysInMonth(fromM))} .value=${String(fromD)}
+          @change=${(e: Event) => patchRange({ from_day: (e.target as HTMLInputElement).value })} />
         <span>${localize(this.hass, "ui.to", "to")}</span>
         <input type="number" min="1" max="12" .value=${String(toM)}
-          @change=${(e: Event) => this._updateItem(section, idx, {
-            kind: "date_range",
-            from: item.from,
-            to: { month: parseInt((e.target as HTMLInputElement).value, 10), day: toD },
-          })} />
+          @change=${(e: Event) => patchRange({ to_month: (e.target as HTMLInputElement).value })} />
         /
-        <input type="number" min="1" max="31" .value=${String(toD)}
-          @change=${(e: Event) => this._updateItem(section, idx, {
-            kind: "date_range",
-            from: item.from,
-            to: { month: toM, day: parseInt((e.target as HTMLInputElement).value, 10) },
-          })} />
+        <input type="number" min="1" max=${String(_daysInMonth(toM))} .value=${String(toD)}
+          @change=${(e: Event) => patchRange({ to_day: (e.target as HTMLInputElement).value })} />
       `;
     }
     return html``;

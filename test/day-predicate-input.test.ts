@@ -93,22 +93,39 @@ describe("ambience-day-predicate-input", () => {
     expect(schema[0].selector.text).toBeDefined();
   });
 
-  test("_bodySchema returns two number selectors for date", async () => {
+  test("_bodySchema groups date month+day in one grid row", async () => {
     el = await mount();
     const schema = el._bodySchema({ kind: "date", month: 1, day: 1 });
-    expect(schema.map((s: any) => s.name)).toEqual(["month", "day"]);
-    expect(schema[0].selector.number.max).toBe(12);
-    expect(schema[1].selector.number.max).toBe(31);
+    expect(schema).toHaveLength(1);
+    expect(schema[0].type).toBe("grid");
+    const inner = schema[0].schema;
+    expect(inner.map((s: any) => s.name)).toEqual(["month", "day"]);
+    expect(inner[0].selector.select).toBeDefined(); // month is a dropdown
+    expect(inner[1].selector.number).toBeDefined(); // day is a number
   });
 
-  test("_bodySchema returns four number selectors for date_range", async () => {
+  test("_bodySchema day max depends on the selected month (Feb=29)", async () => {
+    el = await mount();
+    const dayMax = (m: number) =>
+      el._bodySchema({ kind: "date", month: m, day: 1 })[0].schema[1].selector.number.max;
+    expect(dayMax(1)).toBe(31); // Jan
+    expect(dayMax(2)).toBe(29); // Feb — leap day allowed
+    expect(dayMax(4)).toBe(30); // Apr
+  });
+
+  test("_bodySchema returns from/to grid rows for date_range", async () => {
     el = await mount();
     const schema = el._bodySchema({
       kind: "date_range",
-      from: { month: 1, day: 1 },
-      to: { month: 12, day: 31 },
+      from: { month: 2, day: 1 },
+      to: { month: 4, day: 1 },
     });
-    expect(schema.map((s: any) => s.name)).toEqual(["from_month", "from_day", "to_month", "to_day"]);
+    expect(schema.map((s: any) => s.type)).toEqual(["grid", "grid"]);
+    expect(schema[0].schema.map((s: any) => s.name)).toEqual(["from_month", "from_day"]);
+    expect(schema[1].schema.map((s: any) => s.name)).toEqual(["to_month", "to_day"]);
+    // day max follows each row's own month
+    expect(schema[0].schema[1].selector.number.max).toBe(29); // from = Feb
+    expect(schema[1].schema[1].selector.number.max).toBe(30); // to = Apr
   });
 
   test("_bodySchema returns null for weekday and bodyless kinds", async () => {
@@ -120,15 +137,15 @@ describe("ambience-day-predicate-input", () => {
 
   // --- ha-form data + parsers --------------------------------------------
 
-  test("_bodyData maps each item kind to ha-form data", async () => {
+  test("_bodyData maps each item kind to ha-form data (month as select string)", async () => {
     el = await mount();
     expect(el._bodyData({ kind: "day_of_month", days: [1, 15] })).toEqual({ days: "1, 15" });
-    expect(el._bodyData({ kind: "date", month: 12, day: 25 })).toEqual({ month: 12, day: 25 });
+    expect(el._bodyData({ kind: "date", month: 12, day: 25 })).toEqual({ month: "12", day: 25 });
     expect(el._bodyData({
       kind: "date_range",
       from: { month: 7, day: 15 },
       to: { month: 8, day: 31 },
-    })).toEqual({ from_month: 7, from_day: 15, to_month: 8, to_day: 31 });
+    })).toEqual({ from_month: "7", from_day: 15, to_month: "8", to_day: 31 });
   });
 
   test("_bodyPatch parses day_of_month text into a number array", async () => {
@@ -152,6 +169,25 @@ describe("ambience-day-predicate-input", () => {
       kind: "date_range",
       from: { month: 7, day: 15 },
       to: { month: 8, day: 31 },
+    });
+  });
+
+  test("_bodyPatch clamps the date day to the new month's maximum", async () => {
+    el = await mount();
+    // switching month to Feb while day is 31 → clamp to 29
+    expect(el._bodyPatch({ kind: "date", month: 1, day: 31 }, { month: "2", day: 31 }))
+      .toEqual({ kind: "date", month: 2, day: 29 });
+  });
+
+  test("_bodyPatch clamps date_range from/to days to their months", async () => {
+    el = await mount();
+    expect(el._bodyPatch(
+      { kind: "date_range", from: { month: 1, day: 31 }, to: { month: 1, day: 31 } },
+      { from_month: "2", from_day: 31, to_month: "4", to_day: 31 },
+    )).toEqual({
+      kind: "date_range",
+      from: { month: 2, day: 29 },
+      to: { month: 4, day: 30 },
     });
   });
 

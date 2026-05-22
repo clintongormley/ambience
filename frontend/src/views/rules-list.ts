@@ -83,6 +83,10 @@ export class AmbienceRulesList extends LitElement {
   @property({ type: Boolean }) autoSort = true;
   @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
+  // Names of globally-enabled matchers. When set, predicates for disabled
+  // matchers are hidden from the summary (`scene` is always shown). Undefined
+  // means "show all" (e.g. standalone tests that don't supply it).
+  @property({ attribute: false }) enabledMatchers?: string[];
 
   // Index of the row currently being dragged, or null.
   @state() private _dragFrom: number | null = null;
@@ -97,7 +101,11 @@ export class AmbienceRulesList extends LitElement {
 
   /** Human-readable one-line summary of a rule's `when` map + action count. */
   private _summary(rule: Rule): string {
-    const keys = Object.keys(rule.when).filter((k) => rule.when[k] != null);
+    const keys = Object.keys(rule.when).filter(
+      (k) =>
+        rule.when[k] != null &&
+        (k === "scene" || !this.enabledMatchers || this.enabledMatchers.includes(k)),
+    );
     const when =
       keys.length === 0
         ? localize(this.hass, "ui.summary_any", "any")

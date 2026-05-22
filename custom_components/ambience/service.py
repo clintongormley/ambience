@@ -59,7 +59,14 @@ async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> d
         if name in engine_matchers
     }
 
-    rules = area.get("rules", [])
+    # Predicates for globally-disabled matchers are dormant: drop them from each
+    # rule's `when` before resolving so they're ignored (the rule fires as if the
+    # condition were absent) rather than failing the rule. Storage is untouched.
+    active_keys = set(engine_matchers)
+    rules = [
+        {**rule, "when": {k: v for k, v in rule.get("when", {}).items() if k in active_keys}}
+        for rule in area.get("rules", [])
+    ]
     match = resolve(rules, snapshots, engine_matchers)
     if match is None:
         return {

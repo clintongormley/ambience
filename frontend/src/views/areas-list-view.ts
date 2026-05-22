@@ -399,6 +399,7 @@ export class AmbienceAreasList extends LitElement {
                   .rules=${cfg.rules}
                   .autoSort=${cfg.auto_sort}
                   .periods=${this._periods}
+                  .enabledMatchers=${[...this._enabledMatchers]}
                   .hass=${this.hass}
                   @add-rule=${() => this._addRule(a.area_id)}
                   @edit-rule=${(e: CustomEvent<{ index: number }>) =>

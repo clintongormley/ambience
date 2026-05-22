@@ -122,3 +122,40 @@ async def test_time_of_day_rule_matches_for_area_without_matchers_field(
     # so resolve() sees no value for the predicate and the rule does not match.
     assert result["matched_rule_index"] == 0
     assert result["rule_name"] == "all-day"
+
+
+async def test_disabled_matcher_predicate_is_ignored(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """A predicate for a globally-disabled matcher is treated as dormant: it is
+    ignored during resolution (the rule fires as if that condition were absent),
+    rather than breaking the rule. Non-destructive — the predicate stays stored."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_enabled_matchers(["time_of_day"])  # `day` disabled
+
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "name": "movie",
+                    "when": {
+                        "scene": "movie",
+                        # An always-false day predicate (empty include item). If it were
+                        # evaluated the rule could never match; because `day` is disabled
+                        # the predicate is ignored and the rule matches on scene alone.
+                        "day": {"include": [{"kind": "weekday", "days": []}], "exclude": []},
+                    },
+                    "actions": [],
+                }
+            ],
+            "auto_sort": True,
+        },
+    )
+
+    result = await async_resolve_only(hass, "lr", "movie")
+    assert result["matched_rule_index"] == 0
+    # The disabled matcher is not evaluated, so it isn't in the described snapshots.
+    assert "day" not in result["snapshots_described"]
+    # The predicate is still stored (non-destructive).
+    assert "day" in store.get_area("lr")["rules"][0]["when"]

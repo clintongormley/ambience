@@ -172,6 +172,25 @@ describe("ambience-rules-list", () => {
     expect(summary.toLowerCase()).toContain("morning");
   });
 
+  test("summary hides predicates for disabled matchers (scene always shown)", async () => {
+    const rule: Rule = {
+      name: "r",
+      when: { scene: "movie", time_of_day: { period: "morning" } },
+      actions: [],
+    };
+    const el2: any = document.createElement("ambience-rules-list");
+    el2.rules = [rule];
+    el2.periods = periods;
+    el2.hass = testHass;
+    el2.enabledMatchers = []; // time_of_day disabled; scene is always active
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    const summary = el2.shadowRoot.querySelector(".summary")?.textContent?.toLowerCase() ?? "";
+    expect(summary).toContain("movie"); // scene still shown
+    expect(summary).not.toContain("morning"); // disabled time_of_day hidden
+    el2.remove();
+  });
+
   test("confirm dialog uses rule name", async () => {
     el = await mount([movieRule]);
     const spy = vi.spyOn(window, "confirm").mockReturnValue(false);

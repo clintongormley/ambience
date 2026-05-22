@@ -8,6 +8,8 @@ import {
   weekdayLabel,
   dayItemKindLabel,
   monthLabel,
+  weatherConditionLabel,
+  weatherAttrLabel,
 } from "../frontend/src/i18n";
 import type { PeriodDef } from "../frontend/src/types";
 
@@ -146,5 +148,24 @@ describe("monthLabel", () => {
   test("localizes via component.ambience.month.<n>", () => {
     const hass = { localize: (k: string) => (k === "component.ambience.month.1" ? "Janvier" : undefined) };
     expect(monthLabel(hass, 1)).toBe("Janvier");
+  });
+});
+
+describe("weatherConditionLabel", () => {
+  test("English fallbacks", () => {
+    expect(weatherConditionLabel(undefined, "rainy")).toBe("Rainy");
+    expect(weatherConditionLabel(undefined, "partlycloudy")).toBe("Partly cloudy");
+    expect(weatherConditionLabel(undefined, "clear-night")).toBe("Clear (night)");
+  });
+  test("localizes via component.ambience.weather_condition.<cond>", () => {
+    const hass = { localize: (k: string) => (k === "component.ambience.weather_condition.rainy" ? "Pluvieux" : undefined) };
+    expect(weatherConditionLabel(hass, "rainy")).toBe("Pluvieux");
+  });
+});
+
+describe("weatherAttrLabel", () => {
+  test("English fallbacks", () => {
+    expect(weatherAttrLabel(undefined, "temperature")).toBe("Temperature");
+    expect(weatherAttrLabel(undefined, "wind_speed")).toBe("Wind speed");
   });
 });

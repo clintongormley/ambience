@@ -148,7 +148,12 @@
     "field_to_month": "To month",
     "field_to_day": "To day",
     "day_spec_error": "Use days 1–31 and ranges like 1-10, separated by commas",
-    "title_override": "Override"
+    "title_override": "Override",
+    "conditions": "Conditions",
+    "thresholds": "Thresholds",
+    "add_threshold": "+ Add threshold",
+    "weather_entity": "Weather entity",
+    "weather_warning_text": "rules now reference an unconfigured weather entity:"
   },
   "day_summary": {
     "any": "any",
@@ -174,5 +179,29 @@
     "10": "October",
     "11": "November",
     "12": "December"
+  },
+  "weather_condition": {
+    "clear-night": "Clear (night)",
+    "cloudy": "Cloudy",
+    "fog": "Fog",
+    "hail": "Hail",
+    "lightning": "Lightning",
+    "lightning-rainy": "Lightning-rainy",
+    "partlycloudy": "Partly cloudy",
+    "pouring": "Pouring",
+    "rainy": "Rainy",
+    "snowy": "Snowy",
+    "snowy-rainy": "Snowy-rainy",
+    "sunny": "Sunny",
+    "windy": "Windy",
+    "windy-variant": "Windy (variant)",
+    "exceptional": "Exceptional"
+  },
+  "weather_attr": {
+    "temperature": "Temperature",
+    "apparent_temperature": "Apparent temperature",
+    "humidity": "Humidity",
+    "wind_speed": "Wind speed",
+    "pressure": "Pressure"
   }
 }

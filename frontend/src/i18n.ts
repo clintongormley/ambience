@@ -112,3 +112,45 @@ export function monthLabel(hass: HassLike | undefined, month: number): string {
     _MONTH_FALLBACKS[month - 1] ?? String(month),
   );
 }
+
+const _WEATHER_CONDITION_FALLBACKS: Record<string, string> = {
+  "clear-night": "Clear (night)",
+  cloudy: "Cloudy",
+  fog: "Fog",
+  hail: "Hail",
+  lightning: "Lightning",
+  "lightning-rainy": "Lightning-rainy",
+  partlycloudy: "Partly cloudy",
+  pouring: "Pouring",
+  rainy: "Rainy",
+  snowy: "Snowy",
+  "snowy-rainy": "Snowy-rainy",
+  sunny: "Sunny",
+  windy: "Windy",
+  "windy-variant": "Windy (variant)",
+  exceptional: "Exceptional",
+};
+
+export function weatherConditionLabel(hass: HassLike | undefined, cond: string): string {
+  return _resolve(
+    hass,
+    `component.ambience.weather_condition.${cond}`,
+    _WEATHER_CONDITION_FALLBACKS[cond] ?? cond,
+  );
+}
+
+const _WEATHER_ATTR_FALLBACKS: Record<string, string> = {
+  temperature: "Temperature",
+  apparent_temperature: "Apparent temperature",
+  humidity: "Humidity",
+  wind_speed: "Wind speed",
+  pressure: "Pressure",
+};
+
+export function weatherAttrLabel(hass: HassLike | undefined, attr: string): string {
+  return _resolve(
+    hass,
+    `component.ambience.weather_attr.${attr}`,
+    _WEATHER_ATTR_FALLBACKS[attr] ?? attr,
+  );
+}

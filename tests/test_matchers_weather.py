@@ -63,6 +63,27 @@ async def test_snapshot_unavailable_entity(hass: HomeAssistant) -> None:
     assert snap.condition is None
 
 
+async def test_snapshot_unknown_state(hass: HomeAssistant) -> None:
+    _install_store_stub(hass, entity="weather.home")
+    hass.states.async_set("weather.home", "unknown", {})
+    snap = await WeatherMatcher().snapshot(hass)
+    assert snap.condition is None
+
+
+async def test_snapshot_entity_configured_but_absent(hass: HomeAssistant) -> None:
+    _install_store_stub(hass, entity="weather.home")  # never async_set → state is None
+    snap = await WeatherMatcher().snapshot(hass)
+    assert snap.condition is None
+    assert snap.attributes == {}
+
+
+async def test_snapshot_excludes_bool_attributes(hass: HomeAssistant) -> None:
+    _install_store_stub(hass, entity="weather.home")
+    hass.states.async_set("weather.home", "sunny", {"temperature": 20.0, "is_daytime": True})
+    snap = await WeatherMatcher().snapshot(hass)
+    assert snap.attributes == {"temperature": 20.0}
+
+
 def test_matches_condition_in_set() -> None:
     m = WeatherMatcher()
     pred = {"conditions": ["rainy", "pouring"], "thresholds": []}

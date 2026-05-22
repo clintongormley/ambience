@@ -147,7 +147,8 @@
     "field_from_day": "From day",
     "field_to_month": "To month",
     "field_to_day": "To day",
-    "day_spec_error": "Use days 1–31 and ranges like 1-10, separated by commas"
+    "day_spec_error": "Use days 1–31 and ranges like 1-10, separated by commas",
+    "title_override": "Override"
   },
   "day_summary": {
     "any": "any",

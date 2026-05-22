@@ -63,17 +63,53 @@ describe("ambience-time-of-day-config", () => {
     expect(rows.length).toBe(3); // morning, afternoon, day
   });
 
-  test("delete on a built-in adds id to hidden", async () => {
+  test("built-ins are not deletable, only overridable", async () => {
     el = await mount();
     const rows = el.shadowRoot.querySelectorAll(".row");
-    const delBtn = rows[0].querySelector('button[title="Delete"]') as HTMLButtonElement;
-    delBtn.click();
-    await new Promise(r => setTimeout(r, 0));
-    await el.updateComplete;
-    expect(api.savePeriods).toHaveBeenCalledWith(expect.anything(), {}, ["morning"]);
+    // No delete on any built-in row; each offers an Override action instead.
+    expect(rows[0].querySelector('button[title="Delete"]')).toBeNull();
+    expect(rows[0].querySelector('button[title="Override"]')).toBeTruthy();
   });
 
-  test("custom entry deletion removes from custom map", async () => {
+  test("overriding a built-in opens the editor pre-filled with its definition", async () => {
+    el = await mount();
+    const rows = el.shadowRoot.querySelectorAll(".row");
+    (rows[0].querySelector('button[title="Override"]') as HTMLButtonElement).click();
+    await el.updateComplete;
+    const modal = el.shadowRoot.querySelector("ambience-period-edit-modal") as any;
+    expect(modal).toBeTruthy();
+    expect(modal.existingId).toBe("morning");
+    expect(modal.initial).toEqual(baseView.builtins.morning);
+  });
+
+  test("a custom override strikes the built-in and shows the custom below it", async () => {
+    const view = { ...baseView, custom: {
+      afternoon: { from: {kind:"time",hh:13,mm:0} as const, to: {kind:"time",hh:17,mm:0} as const, label: null },
+    }};
+    el = await mount(view);
+    const rows = Array.from(el.shadowRoot.querySelectorAll(".row")) as HTMLElement[];
+    // 3 built-ins + 1 override row = 4 rows
+    expect(rows.length).toBe(4);
+    const overridden = rows.find((r) => r.classList.contains("overridden"))!;
+    expect(overridden).toBeTruthy();
+    // the overridden built-in has no actions; the custom row that follows is editable/deletable
+    const customRow = overridden.nextElementSibling as HTMLElement;
+    expect(customRow.classList.contains("custom")).toBe(true);
+    expect(customRow.querySelector('button[title="Delete"]')).toBeTruthy();
+  });
+
+  test("deleting a custom override reverts to the built-in", async () => {
+    const view = { ...baseView, custom: {
+      afternoon: { from: {kind:"time",hh:13,mm:0} as const, to: {kind:"time",hh:17,mm:0} as const, label: null },
+    }};
+    el = await mount(view);
+    const customRow = Array.from(el.shadowRoot.querySelectorAll(".row.custom"))[0] as HTMLElement;
+    (customRow.querySelector('button[title="Delete"]') as HTMLButtonElement).click();
+    await new Promise(r => setTimeout(r, 0));
+    expect(api.savePeriods).toHaveBeenCalledWith(expect.anything(), {}, []);
+  });
+
+  test("custom-only entry deletion removes it from the custom map", async () => {
     const view = { ...baseView, custom: {
       wind_down: { from: {kind:"time",hh:20,mm:0} as const, to: {kind:"time",hh:22,mm:0} as const, label: "Wind down" },
     }};
@@ -86,43 +122,9 @@ describe("ambience-time-of-day-config", () => {
     expect(api.savePeriods).toHaveBeenCalledWith(expect.anything(), {}, []);
   });
 
-  test("revert removes custom shadow for builtin-edited entry", async () => {
-    const view = { ...baseView, custom: {
-      afternoon: { from: {kind:"time",hh:13,mm:0} as const, to: {kind:"time",hh:17,mm:0} as const, label: null },
-    }};
-    el = await mount(view);
-    const revertBtn = el.shadowRoot.querySelector('button[title="Revert to default"]') as HTMLButtonElement;
-    revertBtn.click();
-    await new Promise(r => setTimeout(r, 0));
-    expect(api.savePeriods).toHaveBeenCalledWith(expect.anything(), {}, []);
-  });
-
-  test("revert on hidden builtin removes from hidden list", async () => {
-    el = await mount({ ...baseView, hidden: ["daytime"] });
-    const rows = el.shadowRoot.querySelectorAll(".row");
-    const lastRow = rows[rows.length - 1];
-    const revertBtn = lastRow.querySelector('button[title="Restore"]') as HTMLButtonElement;
-    revertBtn.click();
-    await new Promise(r => setTimeout(r, 0));
-    expect(api.savePeriods).toHaveBeenCalledWith(expect.anything(), {}, []);
-  });
-
-  test("reset all calls resetPeriods after confirm", async () => {
-    el = await mount({ ...baseView, hidden: ["daytime"] });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    const resetBtn = el.shadowRoot.querySelector("header button") as HTMLButtonElement;
-    resetBtn.click();
-    await new Promise(r => setTimeout(r, 0));
-    expect(api.resetPeriods).toHaveBeenCalled();
-  });
-
-  test("reset all is cancellable", async () => {
-    el = await mount({ ...baseView, hidden: ["daytime"] });
-    vi.spyOn(window, "confirm").mockReturnValue(false);
-    const resetBtn = el.shadowRoot.querySelector("header button") as HTMLButtonElement;
-    resetBtn.click();
-    await new Promise(r => setTimeout(r, 0));
-    expect(api.resetPeriods).not.toHaveBeenCalled();
+  test("there is no reset-defaults button", async () => {
+    el = await mount();
+    expect(el.shadowRoot.querySelector("header button")).toBeNull();
   });
 
   test("Add opens the modal", async () => {
@@ -154,13 +156,16 @@ describe("ambience-time-of-day-config", () => {
   });
 
   test("displays warnings banner when save returns warnings", async () => {
-    el = await mount();
+    const view = { ...baseView, custom: {
+      wind_down: { from: {kind:"time",hh:20,mm:0} as const, to: {kind:"time",hh:22,mm:0} as const, label: "Wind down" },
+    }};
+    el = await mount(view);
     vi.mocked(api.savePeriods).mockResolvedValueOnce({
       ok: true,
       warnings: [{ area_id: "abc", rule_name: "Evening rule", missing_period: "evening" }],
     });
-    const rows = el.shadowRoot.querySelectorAll(".row");
-    (rows[0].querySelector('button[title="Delete"]') as HTMLButtonElement).click();
+    const customRow = Array.from(el.shadowRoot.querySelectorAll(".row.custom"))[0] as HTMLElement;
+    (customRow.querySelector('button[title="Delete"]') as HTMLButtonElement).click();
     await new Promise(r => setTimeout(r, 0));
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".warnings")).toBeTruthy();

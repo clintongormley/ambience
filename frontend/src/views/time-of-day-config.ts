@@ -1,7 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { listPeriods, resetPeriods, savePeriods } from "../api.js";
+import { listPeriods, savePeriods } from "../api.js";
 import type { HassConnection } from "../api.js";
 import { anchorLabel, localize, periodLabel } from "../i18n.js";
 import type { PeriodDef, PeriodStoreView, TimeEndpoint } from "../types.js";
@@ -43,6 +43,10 @@ export class AmbienceTimeOfDayConfig extends LitElement {
     }
     .name { font-weight: 500; }
     .def { color: var(--secondary-text-color); font-family: monospace; font-size: 0.9em; }
+    .row.overridden .name, .row.overridden .def {
+      text-decoration: line-through; opacity: 0.55;
+    }
+    .row.custom .name { padding-left: 0.75rem; }
     .badge {
       font-size: 0.7em; padding: 0.1em 0.5em; border-radius: 3px;
       background: var(--secondary-background-color, #eee); color: var(--secondary-text-color);
@@ -76,65 +80,25 @@ export class AmbienceTimeOfDayConfig extends LitElement {
     this._view = await listPeriods(this.hass);
   }
 
-  private _effective(): Array<{ id: string; defn: PeriodDef; provenance: "builtin" | "builtin-edited" | "custom" }> {
-    const hidden = new Set(this._view.hidden);
-    const out: Array<{ id: string; defn: PeriodDef; provenance: "builtin" | "builtin-edited" | "custom" }> = [];
-    for (const [id, defn] of Object.entries(this._view.builtins)) {
-      if (hidden.has(id)) continue;
-      const custom = this._view.custom[id];
-      if (custom) out.push({ id, defn: custom, provenance: "builtin-edited" });
-      else out.push({ id, defn, provenance: "builtin" });
-    }
-    for (const [id, defn] of Object.entries(this._view.custom)) {
-      if (id in this._view.builtins) continue;
-      out.push({ id, defn, provenance: "custom" });
-    }
-    return out;
-  }
-
-  private async _saveState(custom: Record<string, PeriodDef>, hidden: string[]) {
-    const res = await savePeriods(this.hass, custom, hidden);
+  private async _saveState(custom: Record<string, PeriodDef>) {
+    // `hidden` is preserved as-is; there is no longer a UI to hide built-ins.
+    const res = await savePeriods(this.hass, custom, this._view.hidden);
     this._warnings = res.warnings;
     await this._reload();
   }
 
+  /** Open the editor for a custom period (a new override of a built-in, or an
+   * existing custom entry). The id is fixed to `id`. */
   private _onEdit(id: string, defn: PeriodDef) {
     this._modal = { mode: "edit", id, initial: defn };
   }
 
+  /** Remove a custom entry. For an override this reverts to the built-in; for a
+   * custom-only period it deletes it. Built-ins are never removed. */
   private async _onDelete(id: string) {
-    const isBuiltin = id in this._view.builtins;
-    if (isBuiltin) {
-      const newCustom = { ...this._view.custom };
-      delete newCustom[id];
-      await this._saveState(newCustom, [...this._view.hidden, id]);
-    } else {
-      const newCustom = { ...this._view.custom };
-      delete newCustom[id];
-      await this._saveState(newCustom, this._view.hidden);
-    }
-  }
-
-  private async _onRevertEdited(id: string) {
     const newCustom = { ...this._view.custom };
     delete newCustom[id];
-    await this._saveState(newCustom, this._view.hidden);
-  }
-
-  private async _onRevertHidden(id: string) {
-    await this._saveState(this._view.custom, this._view.hidden.filter((h) => h !== id));
-  }
-
-  private async _onResetAll() {
-    const custom = Object.keys(this._view.custom).length;
-    const hidden = this._view.hidden.length;
-    const msg = localize(this.hass, "ui.reset_confirm", "This will clear {custom} custom period(s) and restore {hidden} hidden built-in(s). Continue?")
-      .replace("{custom}", String(custom))
-      .replace("{hidden}", String(hidden));
-    if (!confirm(msg)) return;
-    await resetPeriods(this.hass);
-    this._warnings = [];
-    await this._reload();
+    await this._saveState(newCustom);
   }
 
   private _onAdd() { this._modal = { mode: "add" }; }
@@ -143,58 +107,51 @@ export class AmbienceTimeOfDayConfig extends LitElement {
     e.stopPropagation();
     const { id, definition } = e.detail;
     const newCustom = { ...this._view.custom, [id]: definition };
-    const newHidden = this._view.hidden.filter((h) => h !== id);
     this._modal = { mode: "closed" };
-    await this._saveState(newCustom, newHidden);
+    await this._saveState(newCustom);
   }
 
   private _onModalCancel() { this._modal = { mode: "closed" }; }
 
-  private _renderRow(item: { id: string; defn: PeriodDef; provenance: string }) {
-    const customMap = this._view.custom;
-    const isBuiltinEdited = item.provenance === "builtin-edited";
-    const isCustom = item.provenance === "custom";
+  /** A built-in row. Read-only; offers an "Override" action unless an override
+   * already exists, in which case the row is struck through (the custom
+   * override is rendered separately, below). */
+  private _renderBuiltinRow(id: string, defn: PeriodDef, overridden: boolean) {
     return html`
-      <div class="row">
-        <span class="name">${periodLabel(this.hass as any, item.id, customMap)}</span>
-        <span class="def">${formatDef(item.defn, this.hass)}</span>
-        <span class="badge">${item.provenance === "builtin"
-          ? localize(this.hass, "ui.badge_builtin", "builtin")
-          : item.provenance === "builtin-edited"
-          ? localize(this.hass, "ui.badge_builtin_edited", "builtin, edited")
-          : localize(this.hass, "ui.badge_custom", "custom")}</span>
+      <div class="row ${overridden ? "overridden" : ""}">
+        <span class="name">${periodLabel(this.hass as any, id, {})}</span>
+        <span class="def">${formatDef(defn, this.hass)}</span>
+        <span class="badge">${localize(this.hass, "ui.badge_builtin", "builtin")}</span>
         <span class="actions">
-          <button class="icon" title=${localize(this.hass, "ui.title_edit", "Edit")} @click=${() => this._onEdit(item.id, item.defn)}>✎</button>
-          ${isBuiltinEdited
-            ? html`<button class="icon" title=${localize(this.hass, "ui.title_revert", "Revert to default")} @click=${() => this._onRevertEdited(item.id)}>↺</button>`
-            : ""}
-          ${isCustom || item.provenance === "builtin" || isBuiltinEdited
-            ? html`<button class="icon" title=${localize(this.hass, "ui.title_delete", "Delete")} @click=${() => this._onDelete(item.id)}>✕</button>`
-            : ""}
+          ${overridden
+            ? ""
+            : html`<button class="icon" title=${localize(this.hass, "ui.title_override", "Override")} @click=${() => this._onEdit(id, defn)}>✎</button>`}
         </span>
       </div>
     `;
   }
 
-  private _renderHiddenRow(id: string) {
+  /** A custom row — either an override of a built-in or a standalone custom
+   * period. Editable and deletable. */
+  private _renderCustomRow(id: string, defn: PeriodDef) {
     return html`
-      <div class="row">
-        <span class="name">${periodLabel(this.hass as any, id, {})}</span>
-        <span class="def">${localize(this.hass, "ui.hidden_marker", "(hidden)")}</span>
-        <span class="badge">${localize(this.hass, "ui.badge_hidden", "hidden")}</span>
+      <div class="row custom">
+        <span class="name">${periodLabel(this.hass as any, id, this._view.custom)}</span>
+        <span class="def">${formatDef(defn, this.hass)}</span>
+        <span class="badge">${localize(this.hass, "ui.badge_custom", "custom")}</span>
         <span class="actions">
-          <button class="icon" title=${localize(this.hass, "ui.title_restore", "Restore")} @click=${() => this._onRevertHidden(id)}>↺</button>
+          <button class="icon" title=${localize(this.hass, "ui.title_edit", "Edit")} @click=${() => this._onEdit(id, defn)}>✎</button>
+          <button class="icon" title=${localize(this.hass, "ui.title_delete", "Delete")} @click=${() => this._onDelete(id)}>✕</button>
         </span>
       </div>
     `;
   }
 
   override render() {
-    const effective = this._effective();
+    const custom = this._view.custom;
     return html`
       <header>
         <h2>${localize(this.hass, "ui.periods_heading", "Periods")}</h2>
-        <button @click=${this._onResetAll}>${localize(this.hass, "ui.reset_all_to_defaults", "Reset all to defaults")}</button>
       </header>
       ${this._warnings.length
         ? html`<div class="warnings">
@@ -206,8 +163,16 @@ export class AmbienceTimeOfDayConfig extends LitElement {
             </ul>
           </div>`
         : ""}
-      ${effective.map((item) => this._renderRow(item))}
-      ${this._view.hidden.map((id) => this._renderHiddenRow(id))}
+      ${Object.entries(this._view.builtins).map(([id, defn]) => {
+        const override = custom[id];
+        return html`
+          ${this._renderBuiltinRow(id, defn, override != null)}
+          ${override != null ? this._renderCustomRow(id, override) : ""}
+        `;
+      })}
+      ${Object.entries(custom)
+        .filter(([id]) => !(id in this._view.builtins))
+        .map(([id, defn]) => this._renderCustomRow(id, defn))}
       <button class="add" @click=${this._onAdd}>${localize(this.hass, "ui.add_custom_period", "+ Add custom period")}</button>
       ${this._modal.mode === "edit"
         ? html`<ambience-period-edit-modal

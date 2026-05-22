@@ -144,10 +144,26 @@ def test_matches_weekday() -> None:
 
 def test_matches_day_of_month() -> None:
     m = DayMatcher()
-    pred = {"include": [{"kind": "day_of_month", "days": [1, 15]}], "exclude": []}
+    pred = {"include": [{"kind": "day_of_month", "days": "1, 15"}], "exclude": []}
     assert m.matches(pred, _snap(date(2026, 5, 1))) is True
     assert m.matches(pred, _snap(date(2026, 5, 15))) is True
     assert m.matches(pred, _snap(date(2026, 5, 16))) is False
+
+
+def test_matches_day_of_month_ranges() -> None:
+    m = DayMatcher()
+    pred = {"include": [{"kind": "day_of_month", "days": "1-10, 15"}], "exclude": []}
+    assert m.matches(pred, _snap(date(2026, 5, 1))) is True
+    assert m.matches(pred, _snap(date(2026, 5, 10))) is True
+    assert m.matches(pred, _snap(date(2026, 5, 15))) is True
+    assert m.matches(pred, _snap(date(2026, 5, 11))) is False
+    assert m.matches(pred, _snap(date(2026, 5, 16))) is False
+
+
+def test_matches_day_of_month_malformed_spec_does_not_match() -> None:
+    m = DayMatcher()
+    pred = {"include": [{"kind": "day_of_month", "days": "garbage"}], "exclude": []}
+    assert m.matches(pred, _snap(date(2026, 5, 1))) is False
 
 
 def test_matches_last_day() -> None:
@@ -298,7 +314,7 @@ def test_validate_rejects_bad_weekday_days(m_no_entities: DayMatcher, days) -> N
         )
 
 
-@pytest.mark.parametrize("days", [[], [0], [32], "abc"])
+@pytest.mark.parametrize("days", ["", "0", "32", "abc", "5-", "-5", "10-2", ",,,", 5, [1, 2]])
 def test_validate_rejects_bad_day_of_month(m_no_entities: DayMatcher, days) -> None:
     with pytest.raises(ValueError):
         m_no_entities.validate_predicate(
@@ -307,6 +323,16 @@ def test_validate_rejects_bad_day_of_month(m_no_entities: DayMatcher, days) -> N
                 "exclude": [],
             }
         )
+
+
+@pytest.mark.parametrize("days", ["1", "1, 15, 31", "1-10", "1-10, 15", " 2 - 4 , 20 "])
+def test_validate_accepts_day_of_month_specs(m_no_entities: DayMatcher, days) -> None:
+    m_no_entities.validate_predicate(
+        {
+            "include": [{"kind": "day_of_month", "days": days}],
+            "exclude": [],
+        }
+    )
 
 
 @pytest.mark.parametrize("month,day", [(0, 1), (13, 1), (1, 0), (1, 32), (None, 1)])

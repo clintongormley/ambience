@@ -70,7 +70,7 @@
     "from": "from",
     "to": "to",
     "remove": "Remove",
-    "day_of_month_placeholder": "e.g. 1, 15, 31",
+    "day_of_month_placeholder": "e.g. 1-10, 15",
     "workday_sensor": "Workday sensor",
     "workday_calendar": "Workday calendar",
     "day_warning_prefix": "Warning:",

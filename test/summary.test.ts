@@ -137,8 +137,8 @@ describe("summariseDay", () => {
       include: [{ kind: "date_range", from: { month: 7, day: 15 }, to: { month: 8, day: 31 } }],
       exclude: [],
     })).toBe("7/15 → 8/31");
-    expect(summariseDay({ include: [{ kind: "day_of_month", days: [1, 15] }], exclude: [] }))
-      .toBe("day 1,15");
+    expect(summariseDay({ include: [{ kind: "day_of_month", days: "1-10, 15" }], exclude: [] }))
+      .toBe("day 1-10, 15");
     expect(summariseDay({ include: [{ kind: "last_day" }], exclude: [] })).toBe("last day");
     expect(summariseDay({ include: [{ kind: "workday" }], exclude: [] })).toBe("workday");
     expect(summariseDay({ include: [{ kind: "first_workday" }], exclude: [] })).toBe("first workday");

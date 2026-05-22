@@ -85,110 +85,62 @@ describe("ambience-day-predicate-input", () => {
     expect(disabled.every((d: boolean) => d === false)).toBe(true);
   });
 
-  test("_bodySchema returns a text selector for day_of_month", async () => {
+  test("day-of-month is a free-text spec field (preserves commas and dashes)", async () => {
     el = await mount();
-    const schema = el._bodySchema({ kind: "day_of_month", days: [] });
+    const schema = el._bodySchema({ kind: "day_of_month", days: "" });
     expect(schema).toHaveLength(1);
     expect(schema[0].name).toBe("days");
     expect(schema[0].selector.text).toBeDefined();
+    // data is the raw string; patch stores it verbatim (no number round-trip)
+    expect(el._bodyData({ kind: "day_of_month", days: "1-10, 15" })).toEqual({ days: "1-10, 15" });
+    expect(el._bodyPatch({ kind: "day_of_month", days: "" }, { days: "1-10, 15" }))
+      .toEqual({ kind: "day_of_month", days: "1-10, 15" });
   });
 
-  test("_bodySchema groups date month+day in one grid row", async () => {
-    el = await mount();
-    const schema = el._bodySchema({ kind: "date", month: 1, day: 1 });
-    expect(schema).toHaveLength(1);
-    expect(schema[0].type).toBe("grid");
-    const inner = schema[0].schema;
-    expect(inner.map((s: any) => s.name)).toEqual(["month", "day"]);
-    expect(inner[0].selector.select).toBeDefined(); // month is a dropdown
-    expect(inner[1].selector.number).toBeDefined(); // day is a number
-  });
-
-  test("_bodySchema day max depends on the selected month (Feb=29)", async () => {
-    el = await mount();
-    const dayMax = (m: number) =>
-      el._bodySchema({ kind: "date", month: m, day: 1 })[0].schema[1].selector.number.max;
-    expect(dayMax(1)).toBe(31); // Jan
-    expect(dayMax(2)).toBe(29); // Feb — leap day allowed
-    expect(dayMax(4)).toBe(30); // Apr
-  });
-
-  test("_bodySchema returns from/to grid rows for date_range", async () => {
-    el = await mount();
-    const schema = el._bodySchema({
-      kind: "date_range",
-      from: { month: 2, day: 1 },
-      to: { month: 4, day: 1 },
-    });
-    expect(schema.map((s: any) => s.type)).toEqual(["grid", "grid"]);
-    expect(schema[0].schema.map((s: any) => s.name)).toEqual(["from_month", "from_day"]);
-    expect(schema[1].schema.map((s: any) => s.name)).toEqual(["to_month", "to_day"]);
-    // day max follows each row's own month
-    expect(schema[0].schema[1].selector.number.max).toBe(29); // from = Feb
-    expect(schema[1].schema[1].selector.number.max).toBe(30); // to = Apr
-  });
-
-  test("_bodySchema returns null for weekday and bodyless kinds", async () => {
+  test("_bodySchema returns null for kinds rendered without a single ha-form body", async () => {
     el = await mount();
     expect(el._bodySchema({ kind: "weekday", days: [] })).toBeNull();
+    expect(el._bodySchema({ kind: "date", month: 1, day: 1 })).toBeNull();
+    expect(el._bodySchema({ kind: "date_range", from: { month: 1, day: 1 }, to: { month: 12, day: 31 } })).toBeNull();
     expect(el._bodySchema({ kind: "last_day" })).toBeNull();
     expect(el._bodySchema({ kind: "workday" })).toBeNull();
   });
 
-  // --- ha-form data + parsers --------------------------------------------
+  // --- date controls: month dropdown + month-aware day field ---------------
 
-  test("_bodyData maps each item kind to ha-form data (month as select string)", async () => {
+  test("_monthSelector lists twelve month options with string values", async () => {
     el = await mount();
-    expect(el._bodyData({ kind: "day_of_month", days: [1, 15] })).toEqual({ days: "1, 15" });
-    expect(el._bodyData({ kind: "date", month: 12, day: 25 })).toEqual({ month: "12", day: 25 });
-    expect(el._bodyData({
-      kind: "date_range",
-      from: { month: 7, day: 15 },
-      to: { month: 8, day: 31 },
-    })).toEqual({ from_month: "7", from_day: 15, to_month: "8", to_day: 31 });
+    const sel = el._monthSelector();
+    expect(sel.select.options).toHaveLength(12);
+    expect(sel.select.options[0].value).toBe("1");
+    expect(sel.select.options[11].value).toBe("12");
   });
 
-  test("_bodyPatch parses day_of_month text into a number array", async () => {
+  test("_daySelector max depends on the month (Feb=29)", async () => {
     el = await mount();
-    expect(el._bodyPatch({ kind: "day_of_month", days: [] }, { days: "1, 15, 31" }))
-      .toEqual({ kind: "day_of_month", days: [1, 15, 31] });
+    expect(el._daySelector(1).number.max).toBe(31); // Jan
+    expect(el._daySelector(2).number.max).toBe(29); // Feb — leap day allowed
+    expect(el._daySelector(4).number.max).toBe(30); // Apr
   });
 
-  test("_bodyPatch parses date numbers", async () => {
+  test("_setDatePart updates a date field and clamps the day to the new month", async () => {
     el = await mount();
-    expect(el._bodyPatch({ kind: "date", month: 1, day: 1 }, { month: 12, day: 25 }))
+    expect(el._setDatePart({ kind: "date", month: 1, day: 25 }, "month", "12"))
       .toEqual({ kind: "date", month: 12, day: 25 });
-  });
-
-  test("_bodyPatch parses date_range numbers", async () => {
-    el = await mount();
-    expect(el._bodyPatch(
-      { kind: "date_range", from: { month: 1, day: 1 }, to: { month: 12, day: 31 } },
-      { from_month: 7, from_day: 15, to_month: 8, to_day: 31 },
-    )).toEqual({
-      kind: "date_range",
-      from: { month: 7, day: 15 },
-      to: { month: 8, day: 31 },
-    });
-  });
-
-  test("_bodyPatch clamps the date day to the new month's maximum", async () => {
-    el = await mount();
-    // switching month to Feb while day is 31 → clamp to 29
-    expect(el._bodyPatch({ kind: "date", month: 1, day: 31 }, { month: "2", day: 31 }))
+    // switching to Feb while day is 31 → clamp to 29
+    expect(el._setDatePart({ kind: "date", month: 1, day: 31 }, "month", "2"))
       .toEqual({ kind: "date", month: 2, day: 29 });
+    expect(el._setDatePart({ kind: "date", month: 5, day: 1 }, "day", "20"))
+      .toEqual({ kind: "date", month: 5, day: 20 });
   });
 
-  test("_bodyPatch clamps date_range from/to days to their months", async () => {
+  test("_setDatePart updates date_range from/to parts with clamping", async () => {
     el = await mount();
-    expect(el._bodyPatch(
-      { kind: "date_range", from: { month: 1, day: 31 }, to: { month: 1, day: 31 } },
-      { from_month: "2", from_day: 31, to_month: "4", to_day: 31 },
-    )).toEqual({
-      kind: "date_range",
-      from: { month: 2, day: 29 },
-      to: { month: 4, day: 30 },
-    });
+    const item = { kind: "date_range", from: { month: 1, day: 31 }, to: { month: 1, day: 31 } };
+    expect(el._setDatePart(item, "from_month", "2"))
+      .toEqual({ kind: "date_range", from: { month: 2, day: 29 }, to: { month: 1, day: 31 } });
+    expect(el._setDatePart(item, "to_day", "10"))
+      .toEqual({ kind: "date_range", from: { month: 1, day: 31 }, to: { month: 1, day: 10 } });
   });
 
   test("_onKindForm ignores switching to a disabled kind", async () => {
@@ -212,7 +164,7 @@ describe("ambience-day-predicate-input", () => {
 
   test("_computeFieldHelper shows the day-of-month format for the days field", async () => {
     el = await mount();
-    expect(el._computeFieldHelper({ name: "days" })).toBe("e.g. 1, 15, 31");
+    expect(el._computeFieldHelper({ name: "days" })).toBe("e.g. 1-10, 15");
   });
 
   test("_computeFieldHelper returns no helper for other fields", async () => {

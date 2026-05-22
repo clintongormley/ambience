@@ -37,6 +37,38 @@ async def _fetch_calendar_events(
     return await entity.async_get_events(hass, start, end)
 
 
+def _parse_day_spec(spec: Any) -> list[tuple[int, int]]:
+    """Parse a day-of-month spec like "1-10, 15" into inclusive (lo, hi) ranges.
+
+    Accepts single days ("15") and inclusive ranges ("1-10"), comma-separated,
+    whitespace tolerated. Raises ValueError on anything malformed or out of the
+    1-31 bounds (or a reversed range). At least one token is required.
+    """
+    if not isinstance(spec, str):
+        raise ValueError(f"day_of_month `days` must be a string spec: {spec!r}")
+    tokens = [t.strip() for t in spec.split(",") if t.strip()]
+    if not tokens:
+        raise ValueError("day_of_month `days` must list at least one day")
+    ranges: list[tuple[int, int]] = []
+    for tok in tokens:
+        if "-" in tok:
+            parts = [p.strip() for p in tok.split("-")]
+            if len(parts) != 2 or not (parts[0].isdigit() and parts[1].isdigit()):
+                raise ValueError(f"invalid day range: {tok!r}")
+            lo, hi = int(parts[0]), int(parts[1])
+            if not 1 <= lo <= hi <= 31:
+                raise ValueError(f"day range out of bounds (1-31, lo<=hi): {tok!r}")
+            ranges.append((lo, hi))
+        else:
+            if not tok.isdigit():
+                raise ValueError(f"invalid day: {tok!r}")
+            d = int(tok)
+            if not 1 <= d <= 31:
+                raise ValueError(f"day out of bounds (1-31): {tok!r}")
+            ranges.append((d, d))
+    return ranges
+
+
 class DayMatcher:
     name = "day"
     description = "Matches based on the current date, weekday, or workday status."
@@ -131,7 +163,11 @@ class DayMatcher:
         if kind == "weekday":
             return snap.weekday in set(item.get("days", []))
         if kind == "day_of_month":
-            return snap.today.day in set(item.get("days", []))
+            try:
+                ranges = _parse_day_spec(item.get("days"))
+            except ValueError:
+                return False
+            return any(lo <= snap.today.day <= hi for lo, hi in ranges)
         if kind == "last_day":
             return snap.today.day == snap.days_in_month
         if kind == "workday":
@@ -191,7 +227,7 @@ class DayMatcher:
         if kind == "weekday":
             self._validate_int_list(item.get("days"), 0, 6, "weekday")
         elif kind == "day_of_month":
-            self._validate_int_list(item.get("days"), 1, 31, "day_of_month")
+            _parse_day_spec(item.get("days"))
         elif kind == "date":
             self._validate_month_day(item.get("month"), item.get("day"))
         elif kind == "date_range":

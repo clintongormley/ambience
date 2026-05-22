@@ -68,7 +68,7 @@ function _fmtDayItem(item: DayItem, ctx: MatcherContext): string {
     case "weekday":
       return item.days.map((d) => weekdayLabel(ctx.hass, d)).join("/");
     case "day_of_month":
-      return `${localize(ctx.hass, "day_summary.day_prefix", "day")} ${item.days.join(",")}`;
+      return `${localize(ctx.hass, "day_summary.day_prefix", "day")} ${item.days}`;
     case "date":
       return `${item.month}/${item.day}`;
     case "date_range":

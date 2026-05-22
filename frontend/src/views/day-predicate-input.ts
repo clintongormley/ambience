@@ -21,19 +21,16 @@ function _daysInMonth(month: number): number {
   return _DAYS_IN_MONTH[month - 1] ?? 31;
 }
 
-/** Loose ha-form schema item — selectors / grid layout are passed through to HA. */
-type HaFormSchema = {
-  name: string;
-  type?: string;
-  selector?: Record<string, unknown>;
-  schema?: HaFormSchema[];
-  column_min_width?: string;
-};
+/** Loose ha-form schema item — the selector is passed through to HA. */
+type HaFormSchema = { name: string; selector: Record<string, unknown> };
+
+/** Parts of a date / date_range item that an ha-form field can set. */
+type DatePart = "month" | "day" | "from_month" | "from_day" | "to_month" | "to_day";
 
 function _defaultItem(kind: DayItem["kind"]): DayItem {
   switch (kind) {
     case "weekday": return { kind, days: [] };
-    case "day_of_month": return { kind, days: [] };
+    case "day_of_month": return { kind, days: "" };
     case "date": return { kind, month: 1, day: 1 };
     case "date_range": return { kind, from: { month: 1, day: 1 }, to: { month: 12, day: 31 } };
     default: return { kind } as DayItem;
@@ -57,6 +54,10 @@ export class AmbienceDayPredicateInput extends LitElement {
     .item .kind { min-width: 12rem; }
     .item .body { flex: 1; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
     .item ha-form { display: block; flex: 1; }
+    .date-row {
+      display: flex; gap: 0.5rem; align-items: flex-end; width: 100%;
+    }
+    .date-row ha-form { flex: 1 1 8rem; }
     .remove {
       background: none; border: none; color: var(--secondary-text-color);
       cursor: pointer; font-size: 1em; padding: 0.25rem 0 0 0;
@@ -134,7 +135,7 @@ export class AmbienceDayPredicateInput extends LitElement {
   }
 
   /** A month dropdown selector with localized January…December options. */
-  private _monthSelector(): Record<string, unknown> {
+  _monthSelector(): Record<string, unknown> {
     return {
       select: {
         mode: "dropdown",
@@ -147,104 +148,58 @@ export class AmbienceDayPredicateInput extends LitElement {
   }
 
   /** A day number selector whose max is the number of days in `month`. */
-  private _daySelector(month: number): Record<string, unknown> {
+  _daySelector(month: number): Record<string, unknown> {
     return { number: { min: 1, max: _daysInMonth(month), mode: "box" } };
   }
 
-  /** The body schema for an item's kind, or null when the kind has no ha-form
-   * body (weekday is rendered as native checkboxes; the entity-only kinds and
-   * last_day have no fields). Month is a dropdown and day's max follows the
-   * selected month; month+day share one grid row. */
+  /** The body schema for the single-field ha-form bodies. Only day_of_month
+   * uses one (a free-text spec); weekday is native checkboxes, date/date_range
+   * are rendered as their own month+day field pairs, and the remaining kinds
+   * have no body. */
   _bodySchema(item: DayItem): HaFormSchema[] | null {
-    switch (item.kind) {
-      case "day_of_month":
-        return [{ name: "days", selector: { text: {} } }];
-      case "date":
-        return [
-          {
-            name: "date_row",
-            type: "grid",
-            column_min_width: "120px",
-            schema: [
-              { name: "month", selector: this._monthSelector() },
-              { name: "day", selector: this._daySelector(item.month) },
-            ],
-          },
-        ];
-      case "date_range":
-        return [
-          {
-            name: "from_row",
-            type: "grid",
-            column_min_width: "120px",
-            schema: [
-              { name: "from_month", selector: this._monthSelector() },
-              { name: "from_day", selector: this._daySelector(item.from.month) },
-            ],
-          },
-          {
-            name: "to_row",
-            type: "grid",
-            column_min_width: "120px",
-            schema: [
-              { name: "to_month", selector: this._monthSelector() },
-              { name: "to_day", selector: this._daySelector(item.to.month) },
-            ],
-          },
-        ];
-      default:
-        return null;
+    if (item.kind === "day_of_month") {
+      return [{ name: "days", selector: { text: {} } }];
     }
+    return null;
   }
 
-  /** Map an item to the flat ha-form `data` object for its body schema.
-   * Month values are strings to match the select options. */
+  /** Flat ha-form `data` for a single-field body (day_of_month only). */
   _bodyData(item: DayItem): Record<string, unknown> {
-    switch (item.kind) {
-      case "day_of_month":
-        return { days: item.days.join(", ") };
-      case "date":
-        return { month: String(item.month), day: item.day };
-      case "date_range":
-        return {
-          from_month: String(item.from.month),
-          from_day: item.from.day,
-          to_month: String(item.to.month),
-          to_day: item.to.day,
-        };
-      default:
-        return {};
-    }
+    if (item.kind === "day_of_month") return { days: item.days };
+    return {};
   }
 
-  /** Parse an ha-form body `value` back into a full DayItem of the same kind.
-   * The day is clamped to the (possibly just-changed) month's maximum. */
+  /** Parse a single-field ha-form body `value` (day_of_month only). The raw
+   * spec string is stored verbatim — parsing/validation happens on the backend,
+   * so the field never fights the user's commas/dashes mid-edit. */
   _bodyPatch(item: DayItem, value: Record<string, unknown>): DayItem {
-    switch (item.kind) {
-      case "day_of_month": {
-        const days = String(value.days ?? "")
-          .split(",")
-          .map((s) => parseInt(s.trim(), 10))
-          .filter((n) => Number.isFinite(n));
-        return { kind: "day_of_month", days };
-      }
-      case "date": {
-        const month = Number(value.month);
-        const day = Math.min(Number(value.day), _daysInMonth(month));
-        return { kind: "date", month, day };
-      }
-      case "date_range": {
-        const fromMonth = Number(value.from_month);
-        const toMonth = Number(value.to_month);
-        return {
-          kind: "date_range",
-          from: { month: fromMonth, day: Math.min(Number(value.from_day), _daysInMonth(fromMonth)) },
-          to: { month: toMonth, day: Math.min(Number(value.to_day), _daysInMonth(toMonth)) },
-        };
-      }
-      default:
-        return item;
+    if (item.kind === "day_of_month") {
+      return { kind: "day_of_month", days: String(value.days ?? "") };
     }
+    return item;
+  }
+
+  /** Set one month/day part of a date or date_range item, clamping the day to
+   * the (possibly just-changed) month's maximum. */
+  _setDatePart(item: DayItem, part: DatePart, raw: unknown): DayItem {
+    if (item.kind === "date") {
+      let { month, day } = item;
+      if (part === "month") month = Number(raw);
+      if (part === "day") day = Number(raw);
+      return { kind: "date", month, day: Math.min(day, _daysInMonth(month)) };
+    }
+    if (item.kind === "date_range") {
+      const from = { ...item.from };
+      const to = { ...item.to };
+      if (part === "from_month") from.month = Number(raw);
+      if (part === "from_day") from.day = Number(raw);
+      if (part === "to_month") to.month = Number(raw);
+      if (part === "to_day") to.day = Number(raw);
+      from.day = Math.min(from.day, _daysInMonth(from.month));
+      to.day = Math.min(to.day, _daysInMonth(to.month));
+      return { kind: "date_range", from, to };
+    }
+    return item;
   }
 
   /** ha-form kind-picker change: switch the item to the chosen kind's default,
@@ -271,7 +226,7 @@ export class AmbienceDayPredicateInput extends LitElement {
    * format hint; everything else has none. */
   _computeFieldHelper = (schema: { name: string }): string => {
     if (schema.name === "days") {
-      return localize(this.hass, "ui.day_of_month_placeholder", "e.g. 1, 15, 31");
+      return localize(this.hass, "ui.day_of_month_placeholder", "e.g. 1-10, 15");
     }
     return "";
   };
@@ -349,10 +304,19 @@ export class AmbienceDayPredicateInput extends LitElement {
 
   private _renderItemBody(section: "include" | "exclude", idx: number, item: DayItem) {
     if (item.kind === "weekday") return this._renderWeekday(section, idx, item);
-    const schema = this._bodySchema(item);
-    if (!schema) return html``;
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
+      // date / date_range use one ha-form per field so a month change can resize
+      // the day field without re-initialising (and resetting) the month dropdown.
+      if (item.kind === "date") return this._renderDateRow(section, idx, item, "month", "day", item.month, item.day);
+      if (item.kind === "date_range") {
+        return html`
+          ${this._renderDateRow(section, idx, item, "from_month", "from_day", item.from.month, item.from.day)}
+          ${this._renderDateRow(section, idx, item, "to_month", "to_day", item.to.month, item.to.day)}
+        `;
+      }
+      const schema = this._bodySchema(item);
+      if (!schema) return html``;
       return html`<ha-form
         .hass=${this.hass}
         .schema=${schema}
@@ -369,48 +333,74 @@ export class AmbienceDayPredicateInput extends LitElement {
     return this._renderNativeBody(section, idx, item);
   }
 
+  /* v8 ignore start -- ha-form path (real HA only) */
+  private _renderDateRow(
+    section: "include" | "exclude",
+    idx: number,
+    item: DayItem,
+    monthPart: DatePart,
+    dayPart: DatePart,
+    month: number,
+    day: number,
+  ) {
+    const onPart = (part: DatePart, value: Record<string, unknown>) => {
+      this._updateItem(section, idx, this._setDatePart(item, part, value[part]));
+    };
+    return html`
+      <div class="date-row">
+        <ha-form
+          .hass=${this.hass}
+          .schema=${[{ name: monthPart, selector: this._monthSelector() }]}
+          .data=${{ [monthPart]: String(month) }}
+          .computeLabel=${this._computeFieldLabel}
+          @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => {
+            e.stopPropagation();
+            onPart(monthPart, e.detail.value);
+          }}
+        ></ha-form>
+        <ha-form
+          .hass=${this.hass}
+          .schema=${[{ name: dayPart, selector: this._daySelector(month) }]}
+          .data=${{ [dayPart]: day }}
+          .computeLabel=${this._computeFieldLabel}
+          @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => {
+            e.stopPropagation();
+            onPart(dayPart, e.detail.value);
+          }}
+        ></ha-form>
+      </div>
+    `;
+  }
+  /* v8 ignore stop */
+
   private _renderNativeBody(section: "include" | "exclude", idx: number, item: DayItem) {
     if (item.kind === "day_of_month") {
       return html`<input
-        type="text" placeholder=${localize(this.hass, "ui.day_of_month_placeholder", "e.g. 1, 15, 31")}
-        .value=${item.days.join(", ")}
+        type="text" placeholder=${localize(this.hass, "ui.day_of_month_placeholder", "e.g. 1-10, 15")}
+        .value=${item.days}
         @change=${(e: Event) =>
           this._updateItem(section, idx, this._bodyPatch(item, { days: (e.target as HTMLInputElement).value }))}
       />`;
     }
+    const monthInput = (part: DatePart, month: number) => html`
+      <input type="number" min="1" max="12" .value=${String(month)}
+        @change=${(e: Event) => this._updateItem(section, idx,
+          this._setDatePart(item, part, (e.target as HTMLInputElement).value))} />
+    `;
+    const dayInput = (part: DatePart, month: number, day: number) => html`
+      <input type="number" min="1" max=${String(_daysInMonth(month))} .value=${String(day)}
+        @change=${(e: Event) => this._updateItem(section, idx,
+          this._setDatePart(item, part, (e.target as HTMLInputElement).value))} />
+    `;
     if (item.kind === "date") {
-      return html`
-        <input type="number" min="1" max="12" .value=${String(item.month)}
-          @change=${(e: Event) =>
-            this._updateItem(section, idx, this._bodyPatch(item,
-              { month: (e.target as HTMLInputElement).value, day: item.day }))} />
-        /
-        <input type="number" min="1" max=${String(_daysInMonth(item.month))} .value=${String(item.day)}
-          @change=${(e: Event) =>
-            this._updateItem(section, idx, this._bodyPatch(item,
-              { month: item.month, day: (e.target as HTMLInputElement).value }))} />
-      `;
+      return html`${monthInput("month", item.month)} / ${dayInput("day", item.month, item.day)}`;
     }
     if (item.kind === "date_range") {
-      const fromM = item.from.month, fromD = item.from.day;
-      const toM = item.to.month, toD = item.to.day;
-      const patchRange = (changes: Record<string, unknown>) =>
-        this._updateItem(section, idx, this._bodyPatch(item, {
-          from_month: fromM, from_day: fromD, to_month: toM, to_day: toD, ...changes,
-        }));
       return html`
         <span>${localize(this.hass, "ui.from", "from")}</span>
-        <input type="number" min="1" max="12" .value=${String(fromM)}
-          @change=${(e: Event) => patchRange({ from_month: (e.target as HTMLInputElement).value })} />
-        /
-        <input type="number" min="1" max=${String(_daysInMonth(fromM))} .value=${String(fromD)}
-          @change=${(e: Event) => patchRange({ from_day: (e.target as HTMLInputElement).value })} />
+        ${monthInput("from_month", item.from.month)} / ${dayInput("from_day", item.from.month, item.from.day)}
         <span>${localize(this.hass, "ui.to", "to")}</span>
-        <input type="number" min="1" max="12" .value=${String(toM)}
-          @change=${(e: Event) => patchRange({ to_month: (e.target as HTMLInputElement).value })} />
-        /
-        <input type="number" min="1" max=${String(_daysInMonth(toM))} .value=${String(toD)}
-          @change=${(e: Event) => patchRange({ to_day: (e.target as HTMLInputElement).value })} />
+        ${monthInput("to_month", item.to.month)} / ${dayInput("to_day", item.to.month, item.to.day)}
       `;
     }
     return html``;

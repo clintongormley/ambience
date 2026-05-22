@@ -107,7 +107,7 @@ export type DayConfig = {
 
 export type DayItem =
   | { kind: "weekday"; days: number[] }
-  | { kind: "day_of_month"; days: number[] }
+  | { kind: "day_of_month"; days: string }
   | { kind: "date"; month: number; day: number }
   | { kind: "date_range"; from: { month: number; day: number }; to: { month: number; day: number } }
   | { kind: "last_day" }

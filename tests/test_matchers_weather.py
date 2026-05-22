@@ -1,0 +1,136 @@
+"""WeatherMatcher — condition + numeric-threshold predicate."""
+
+from __future__ import annotations
+
+from homeassistant.core import HomeAssistant
+
+from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.matchers.weather import WeatherMatcher, WeatherSnapshot
+
+
+def _install_store_stub(hass: HomeAssistant, entity: str | None = None) -> None:
+    class _Store:
+        def get_matcher_config(self, name: str) -> dict[str, object]:
+            return {"entity": entity} if name == "weather" else {}
+
+    hass.data.setdefault(DOMAIN, {})[DATA_STORE] = _Store()
+
+
+def _snap(condition: str | None = "sunny", **attrs: float) -> WeatherSnapshot:
+    return WeatherSnapshot(condition=condition, attributes=dict(attrs))
+
+
+def test_protocol_fields() -> None:
+    m = WeatherMatcher()
+    assert m.name == "weather"
+    assert m.toggleable is True
+    assert m.input == "weather_predicate"
+    assert m.priority == 300
+    assert m.description.strip() != ""
+    assert m.predicate_help.strip() != ""
+
+
+async def test_snapshot_unset_entity(hass: HomeAssistant) -> None:
+    _install_store_stub(hass, entity=None)
+    snap = await WeatherMatcher().snapshot(hass)
+    assert snap.condition is None
+    assert snap.attributes == {}
+
+
+async def test_snapshot_reads_condition_and_numeric_attributes(hass: HomeAssistant) -> None:
+    _install_store_stub(hass, entity="weather.home")
+    hass.states.async_set(
+        "weather.home",
+        "rainy",
+        {
+            "temperature": 4.5,
+            "humidity": 90,
+            "wind_speed": 12.0,
+            "attribution": "ACME",
+            "forecast": [{"x": 1}],
+        },
+    )
+    snap = await WeatherMatcher().snapshot(hass)
+    assert snap.condition == "rainy"
+    assert snap.attributes == {"temperature": 4.5, "humidity": 90.0, "wind_speed": 12.0}
+
+
+async def test_snapshot_unavailable_entity(hass: HomeAssistant) -> None:
+    _install_store_stub(hass, entity="weather.home")
+    hass.states.async_set("weather.home", "unavailable", {})
+    snap = await WeatherMatcher().snapshot(hass)
+    assert snap.condition is None
+
+
+def test_matches_condition_in_set() -> None:
+    m = WeatherMatcher()
+    pred = {"conditions": ["rainy", "pouring"], "thresholds": []}
+    assert m.matches(pred, _snap("rainy")) is True
+    assert m.matches(pred, _snap("sunny")) is False
+
+
+def test_matches_empty_conditions_is_any() -> None:
+    m = WeatherMatcher()
+    pred = {"conditions": [], "thresholds": []}
+    assert m.matches(pred, _snap("sunny")) is True
+    assert m.matches(None, _snap("sunny")) is True
+
+
+def test_matches_none_condition() -> None:
+    m = WeatherMatcher()
+    pred = {"conditions": ["rainy"], "thresholds": []}
+    assert m.matches(pred, _snap(None)) is False
+
+
+def test_matches_thresholds_each_operator() -> None:
+    m = WeatherMatcher()
+    snap = _snap("rainy", temperature=4.0, humidity=90.0)
+    assert (
+        m.matches(
+            {"conditions": [], "thresholds": [{"attribute": "temperature", "op": "<", "value": 5}]},
+            snap,
+        )
+        is True
+    )
+    assert (
+        m.matches(
+            {"conditions": [], "thresholds": [{"attribute": "temperature", "op": ">", "value": 5}]},
+            snap,
+        )
+        is False
+    )
+    assert (
+        m.matches(
+            {"conditions": [], "thresholds": [{"attribute": "humidity", "op": ">=", "value": 90}]},
+            snap,
+        )
+        is True
+    )
+    assert (
+        m.matches(
+            {"conditions": [], "thresholds": [{"attribute": "humidity", "op": "<=", "value": 89}]},
+            snap,
+        )
+        is False
+    )
+
+
+def test_matches_missing_attribute_fails_threshold() -> None:
+    m = WeatherMatcher()
+    pred = {"conditions": [], "thresholds": [{"attribute": "pressure", "op": "<", "value": 1000}]}
+    assert m.matches(pred, _snap("rainy", temperature=4.0)) is False
+
+
+def test_matches_condition_and_threshold_anded() -> None:
+    m = WeatherMatcher()
+    pred = {
+        "conditions": ["rainy"],
+        "thresholds": [{"attribute": "temperature", "op": "<", "value": 5}],
+    }
+    assert m.matches(pred, _snap("rainy", temperature=4.0)) is True
+    assert m.matches(pred, _snap("rainy", temperature=8.0)) is False
+    assert m.matches(pred, _snap("sunny", temperature=4.0)) is False
+
+
+def test_matches_non_dict_is_false() -> None:
+    assert WeatherMatcher().matches(42, _snap("sunny")) is False

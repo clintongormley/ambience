@@ -1,4 +1,4 @@
-import { actionLabel, anchorLabel, localize, periodLabel, weekdayLabel } from "./i18n.js";
+import { actionLabel, anchorLabel, localize, monthLabel, periodLabel, weekdayLabel } from "./i18n.js";
 import type {
   ActionInfo,
   ActionSpec,
@@ -70,9 +70,9 @@ function _fmtDayItem(item: DayItem, ctx: MatcherContext): string {
     case "day_of_month":
       return `${localize(ctx.hass, "day_summary.day_prefix", "day")} ${item.days}`;
     case "date":
-      return `${item.month}/${item.day}`;
+      return `${monthLabel(ctx.hass, item.month)} ${item.day}`;
     case "date_range":
-      return `${item.from.month}/${item.from.day} → ${item.to.month}/${item.to.day}`;
+      return `${monthLabel(ctx.hass, item.from.month)} ${item.from.day} → ${monthLabel(ctx.hass, item.to.month)} ${item.to.day}`;
     case "last_day":
       return localize(ctx.hass, "day_summary.last_day", "last day");
     case "workday":

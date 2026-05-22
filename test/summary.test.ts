@@ -132,11 +132,11 @@ describe("summariseDay", () => {
 
   test("formats date, date_range, day_of_month, and month-position kinds", () => {
     expect(summariseDay({ include: [{ kind: "date", month: 12, day: 25 }], exclude: [] }))
-      .toBe("12/25");
+      .toBe("December 25");
     expect(summariseDay({
       include: [{ kind: "date_range", from: { month: 7, day: 15 }, to: { month: 8, day: 31 } }],
       exclude: [],
-    })).toBe("7/15 → 8/31");
+    })).toBe("July 15 → August 31");
     expect(summariseDay({ include: [{ kind: "day_of_month", days: "1-10, 15" }], exclude: [] }))
       .toBe("day 1-10, 15");
     expect(summariseDay({ include: [{ kind: "last_day" }], exclude: [] })).toBe("last day");

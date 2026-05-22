@@ -45,13 +45,15 @@ export class AmbienceDayConfig extends LitElement {
   }
 
   override render() {
+    // Filter both pickers to entities provided by the Workday integration so
+    // the lists stay short (not every binary_sensor / calendar).
     const sensorSchema = [{
       name: "workday_sensor",
-      selector: { entity: { domain: "binary_sensor" } },
+      selector: { entity: { integration: "workday", domain: "binary_sensor" } },
     }];
     const calendarSchema = [{
       name: "workday_calendar",
-      selector: { entity: { domain: "calendar" } },
+      selector: { entity: { integration: "workday", domain: "calendar" } },
     }];
     return html`
       <div class="row">
@@ -60,6 +62,7 @@ export class AmbienceDayConfig extends LitElement {
           .hass=${this.hass as any}
           .schema=${sensorSchema}
           .data=${{ workday_sensor: this._config.workday_sensor ?? "" }}
+          .computeLabel=${() => ""}
           @value-changed=${(e: CustomEvent) => {
             e.stopPropagation();
             this._onSensorChange({
@@ -74,6 +77,7 @@ export class AmbienceDayConfig extends LitElement {
           .hass=${this.hass as any}
           .schema=${calendarSchema}
           .data=${{ workday_calendar: this._config.workday_calendar ?? "" }}
+          .computeLabel=${() => ""}
           @value-changed=${(e: CustomEvent) => {
             e.stopPropagation();
             this._onCalendarChange({

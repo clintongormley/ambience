@@ -173,4 +173,15 @@ describe("ambience-day-predicate-input", () => {
     el._onKindForm("include", 0, { kind: "date" });
     expect(el.value.include[0]).toEqual({ kind: "date", month: 1, day: 1 });
   });
+
+  test("_computeFieldHelper shows the day-of-month format for the days field", async () => {
+    el = await mount();
+    expect(el._computeFieldHelper({ name: "days" })).toBe("e.g. 1, 15, 31");
+  });
+
+  test("_computeFieldHelper returns no helper for other fields", async () => {
+    el = await mount();
+    expect(el._computeFieldHelper({ name: "month" })).toBe("");
+    expect(el._computeFieldHelper({ name: "kind" })).toBe("");
+  });
 });

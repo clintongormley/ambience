@@ -205,6 +205,15 @@ export class AmbienceDayPredicateInput extends LitElement {
     this._updateItem(section, idx, this._bodyPatch(item, value));
   }
 
+  /** Helper text shown beneath an ha-form field. Only day-of-month needs a
+   * format hint; everything else has none. */
+  _computeFieldHelper = (schema: { name: string }): string => {
+    if (schema.name === "days") {
+      return localize(this.hass, "ui.day_of_month_placeholder", "e.g. 1, 15, 31");
+    }
+    return "";
+  };
+
   /* v8 ignore start -- ha-form is eagerly registered in HA 2026.05+, not in jsdom */
   private _computeFieldLabel = (schema: { name: string }): string => {
     switch (schema.name) {
@@ -287,6 +296,7 @@ export class AmbienceDayPredicateInput extends LitElement {
         .schema=${schema}
         .data=${this._bodyData(item)}
         .computeLabel=${this._computeFieldLabel}
+        .computeHelper=${this._computeFieldHelper}
         @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => {
           e.stopPropagation();
           this._onBodyForm(section, idx, item, e.detail.value);

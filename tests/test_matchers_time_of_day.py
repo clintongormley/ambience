@@ -158,10 +158,12 @@ def test_matches_sun_relative_with_positive_offset_hours() -> None:
     "period,now_hour,now_minute,expected",
     [
         ("morning", 7, 0, True),
-        ("morning", 6, 0, False),
-        ("morning", 11, 30, False),
+        ("morning", 6, 0, True),  # morning now starts at sunrise (06:00)
+        ("morning", 11, 30, True),  # ...and runs to noon (12:00)
+        ("morning", 12, 0, False),  # noon is exclusive end
         ("afternoon", 14, 0, True),
         ("afternoon", 18, 0, False),
+        ("afternoon", 12, 0, False),  # afternoon starts at noon+1m
         ("evening", 18, 15, True),
         ("evening", 19, 0, False),
         ("daytime", 12, 0, True),

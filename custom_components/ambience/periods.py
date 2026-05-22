@@ -19,12 +19,12 @@ _VALID_ANCHORS = {"sunrise", "sunset", "noon", "midnight", "dawn", "dusk"}
 
 BUILTIN_PERIODS: dict[str, dict[str, Any]] = {
     "morning": {
-        "from": {"kind": "sun", "anchor": "sunrise", "offset_min": 30},
-        "to": {"kind": "sun", "anchor": "noon", "offset_min": -60},
+        "from": {"kind": "sun", "anchor": "sunrise", "offset_min": 0},
+        "to": {"kind": "sun", "anchor": "noon", "offset_min": 0},
     },
     "afternoon": {
-        "from": {"kind": "sun", "anchor": "noon", "offset_min": 60},
-        "to": {"kind": "sun", "anchor": "sunset", "offset_min": -30},
+        "from": {"kind": "sun", "anchor": "noon", "offset_min": 1},
+        "to": {"kind": "sun", "anchor": "sunset", "offset_min": 0},
     },
     "evening": {
         "from": {"kind": "sun", "anchor": "sunset", "offset_min": 0},

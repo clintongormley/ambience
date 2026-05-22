@@ -138,7 +138,15 @@
     "no_matching_entities": "No matching entities in this area.",
     "scene_name": "Scene name",
     "show_scene_suggestions": "Show scene suggestions",
-    "no_scenes_yet": "No scenes yet — type to create one"
+    "no_scenes_yet": "No scenes yet — type to create one",
+    "field_kind": "Kind",
+    "field_days_of_month": "Days of month",
+    "field_month": "Month",
+    "field_day": "Day",
+    "field_from_month": "From month",
+    "field_from_day": "From day",
+    "field_to_month": "To month",
+    "field_to_day": "To day"
   },
   "day_summary": {
     "any": "any",

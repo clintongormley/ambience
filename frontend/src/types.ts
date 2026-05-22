@@ -119,3 +119,15 @@ export type DayItem =
 export type DayPredicate =
   | null
   | { include: DayItem[]; exclude: DayItem[] };
+
+export type WeatherConfig = { entity: string | null };
+
+export type WeatherThreshold = {
+  attribute: string;
+  op: "<" | "<=" | ">" | ">=";
+  value: number;
+};
+
+export type WeatherPredicate =
+  | null
+  | { conditions: string[]; thresholds: WeatherThreshold[] };

@@ -29,6 +29,8 @@ _WS_COMMANDS = (
     "ambience/matchers/enabled/save",
     "ambience/matchers/day/config/list",
     "ambience/matchers/day/config/save",
+    "ambience/matchers/weather/config/list",
+    "ambience/matchers/weather/config/save",
 )
 
 
@@ -47,6 +49,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_enabled_matchers_save)
     websocket_api.async_register_command(hass, _ws_day_config_list)
     websocket_api.async_register_command(hass, _ws_day_config_save)
+    websocket_api.async_register_command(hass, _ws_weather_config_list)
+    websocket_api.async_register_command(hass, _ws_weather_config_save)
 
 
 def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
@@ -466,6 +470,62 @@ def _dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> l
                             "reason": f"uses `{kind}` item but `workday_calendar` is unset",
                         }
                     )
+    return warnings
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/matchers/weather/config/list"})
+@websocket_api.async_response
+async def _ws_weather_config_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    connection.send_result(msg["id"], store.get_matcher_config("weather"))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/matchers/weather/config/save",
+        vol.Optional("entity"): vol.Any(str, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_weather_config_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    new_cfg = {"entity": msg.get("entity")}
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_matcher_config("weather", new_cfg)
+    warnings = _dangling_weather_entity_warnings(hass, new_cfg)
+    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
+
+
+def _weather_predicate_active(pred: Any) -> bool:
+    return isinstance(pred, dict) and bool(pred.get("conditions") or pred.get("thresholds"))
+
+
+def _dangling_weather_entity_warnings(
+    hass: HomeAssistant, cfg: dict[str, Any]
+) -> list[dict[str, Any]]:
+    if cfg.get("entity"):
+        return []
+    store = hass.data[DOMAIN][DATA_STORE]
+    warnings: list[dict[str, Any]] = []
+    for area_id, area_cfg in store.areas().items():
+        for rule in area_cfg.get("rules", []):
+            if _weather_predicate_active(rule.get("when", {}).get("weather")):
+                warnings.append(
+                    {
+                        "area_id": area_id,
+                        "rule_name": rule.get("name", ""),
+                        "reason": "uses a weather predicate but the weather entity is unset",
+                    }
+                )
     return warnings
 
 

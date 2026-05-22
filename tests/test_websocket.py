@@ -795,3 +795,49 @@ async def test_matchers_list_includes_weather(
     assert weather["toggleable"] is True
     assert weather["input"] == "weather_predicate"
     assert weather["priority"] == 300
+
+
+async def test_weather_config_list_default(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/matchers/weather/config/list")
+    assert resp["success"] is True
+    assert resp["result"] == {"entity": None}
+
+
+async def test_weather_config_save_round_trips(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/matchers/weather/config/save",
+        entity="weather.home",
+    )
+    assert resp["success"] is True
+    assert resp["result"]["ok"] is True
+    assert resp["result"]["warnings"] == []
+    resp2 = await _ws_send(hass_ws_client, type="ambience/matchers/weather/config/list")
+    assert resp2["result"] == {"entity": "weather.home"}
+
+
+async def test_weather_config_save_warns_when_clearing_referenced_entity(
+    hass, installed, hass_ws_client, area_id
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_matcher_config("weather", {"entity": "weather.home"})
+    await store.async_save_area(
+        area_id,
+        {
+            "rules": [
+                {
+                    "name": "Rainy",
+                    "when": {"weather": {"conditions": ["rainy"], "thresholds": []}},
+                    "actions": [],
+                }
+            ],
+            "auto_sort": True,
+        },
+    )
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/matchers/weather/config/save",
+        entity=None,
+    )
+    assert resp["success"] is True
+    assert any("weather" in w["reason"] for w in resp["result"]["warnings"])

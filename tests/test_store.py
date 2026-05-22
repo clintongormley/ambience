@@ -379,3 +379,16 @@ async def test_migration_idempotent_on_new_shape(hass: HomeAssistant) -> None:
     await store.async_load()
     assert store.enabled_matchers() == ["time_of_day"]
     assert store.get_matcher_config("time_of_day") == {"custom": {}, "hidden": []}
+
+
+async def test_empty_store_has_weather_default(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.get_matcher_config("weather") == {"entity": None}
+
+
+async def test_save_weather_config_round_trips(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_matcher_config("weather", {"entity": "weather.home"})
+    assert store.get_matcher_config("weather") == {"entity": "weather.home"}

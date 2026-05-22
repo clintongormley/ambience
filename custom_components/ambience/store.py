@@ -32,6 +32,7 @@ class AmbienceStore:
             "matchers": {
                 "time_of_day": {"custom": {}, "hidden": []},
                 "day": {"workday_sensor": None, "workday_calendar": None},
+                "weather": {"entity": None},
             },
         }
 
@@ -141,6 +142,7 @@ class AmbienceStore:
         namespace = self._data.setdefault("matchers", {})
         namespace.setdefault("time_of_day", {"custom": {}, "hidden": []})
         namespace.setdefault("day", {"workday_sensor": None, "workday_calendar": None})
+        namespace.setdefault("weather", {"entity": None})
 
     async def async_load(self) -> None:
         raw = await self._store.async_load()
@@ -212,6 +214,8 @@ class AmbienceStore:
                 "workday_sensor": cfg.get("workday_sensor"),
                 "workday_calendar": cfg.get("workday_calendar"),
             }
+        if name == "weather":
+            return {"entity": cfg.get("entity")}
         return dict(cfg)
 
     async def async_save_matcher_config(self, name: str, config: dict[str, Any]) -> None:

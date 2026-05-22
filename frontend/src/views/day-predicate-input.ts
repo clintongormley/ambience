@@ -23,7 +23,7 @@ function _daysInMonth(month: number): number {
 }
 
 /** Loose ha-form schema item — the selector is passed through to HA. */
-type HaFormSchema = { name: string; selector: Record<string, unknown> };
+type HaFormSchema = { name: string; required?: boolean; selector: Record<string, unknown> };
 
 /** Parts of a date / date_range item that an ha-form field can set. */
 type DatePart = "month" | "day" | "from_month" | "from_day" | "to_month" | "to_day";
@@ -184,21 +184,25 @@ export class AmbienceDayPredicateInput extends LitElement {
   }
 
   /** Set one month/day part of a date or date_range item, clamping the day to
-   * the (possibly just-changed) month's maximum. */
+   * the (possibly just-changed) month's maximum. A cleared/invalid value
+   * (e.g. ha-form's clear button sending `undefined` → NaN) is ignored so the
+   * item is never written with NaN. */
   _setDatePart(item: DayItem, part: DatePart, raw: unknown): DayItem {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 1) return item;
     if (item.kind === "date") {
       let { month, day } = item;
-      if (part === "month") month = Number(raw);
-      if (part === "day") day = Number(raw);
+      if (part === "month") month = n;
+      if (part === "day") day = n;
       return { kind: "date", month, day: Math.min(day, _daysInMonth(month)) };
     }
     if (item.kind === "date_range") {
       const from = { ...item.from };
       const to = { ...item.to };
-      if (part === "from_month") from.month = Number(raw);
-      if (part === "from_day") from.day = Number(raw);
-      if (part === "to_month") to.month = Number(raw);
-      if (part === "to_day") to.day = Number(raw);
+      if (part === "from_month") from.month = n;
+      if (part === "from_day") from.day = n;
+      if (part === "to_month") to.month = n;
+      if (part === "to_day") to.day = n;
       from.day = Math.min(from.day, _daysInMonth(from.month));
       to.day = Math.min(to.day, _daysInMonth(to.month));
       return { kind: "date_range", from, to };
@@ -371,7 +375,7 @@ export class AmbienceDayPredicateInput extends LitElement {
       <div class="date-row">
         <ha-form
           .hass=${this.hass}
-          .schema=${[{ name: monthPart, selector: this._monthSelector() }]}
+          .schema=${[{ name: monthPart, required: true, selector: this._monthSelector() }]}
           .data=${{ [monthPart]: String(month) }}
           .computeLabel=${this._computeFieldLabel}
           @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => {
@@ -381,7 +385,7 @@ export class AmbienceDayPredicateInput extends LitElement {
         ></ha-form>
         <ha-form
           .hass=${this.hass}
-          .schema=${[{ name: dayPart, selector: this._daySelector(month) }]}
+          .schema=${[{ name: dayPart, required: true, selector: this._daySelector(month) }]}
           .data=${{ [dayPart]: day }}
           .computeLabel=${this._computeFieldLabel}
           @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => {

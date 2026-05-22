@@ -134,6 +134,14 @@ describe("ambience-day-predicate-input", () => {
       .toEqual({ kind: "date", month: 5, day: 20 });
   });
 
+  test("_setDatePart ignores a cleared (non-numeric) value and keeps the item", async () => {
+    el = await mount();
+    const item = { kind: "date", month: 5, day: 10 };
+    expect(el._setDatePart(item, "month", undefined)).toEqual(item);
+    expect(el._setDatePart(item, "day", "")).toEqual(item);
+    expect(el._setDatePart(item, "month", "0")).toEqual(item); // 0 is not a valid month/day
+  });
+
   test("_setDatePart updates date_range from/to parts with clamping", async () => {
     el = await mount();
     const item = { kind: "date_range", from: { month: 1, day: 31 }, to: { month: 1, day: 31 } };

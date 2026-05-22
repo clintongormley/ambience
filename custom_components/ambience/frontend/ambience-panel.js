@@ -840,7 +840,7 @@ var yt=Object.defineProperty;var bt=Object.getOwnPropertyDescriptor;var d=(n,s,e
       margin: 0.5rem 0 1rem 0;
       font-size: 0.9em;
     }
-  `,d([u({attribute:!1})],k.prototype,"hass",2),d([m()],k.prototype,"_areas",2),d([m()],k.prototype,"_matchers",2),d([m()],k.prototype,"_actions",2),d([m()],k.prototype,"_periods",2),d([m()],k.prototype,"_dayConfig",2),d([m()],k.prototype,"_configs",2),d([m()],k.prototype,"_expanded",2),d([m()],k.prototype,"_error",2),d([m()],k.prototype,"_editing",2),d([m()],k.prototype,"_enabledMatchers",2),k=d([v("ambience-areas-list")],k);var D=class extends f{constructor(){super(...arguments);this.matcherName="";this.matcherDescription="";this.enabled=!1;this._expanded=!0}_toggleExpand(){this._expanded=!this._expanded}_onToggle(e){e.stopPropagation();let t=e.target.checked;this.dispatchEvent(new CustomEvent("enable-changed",{detail:{enabled:t},bubbles:!0,composed:!0}))}render(){let e=Y(this.hass,this.matcherName);return l`
+  `,d([u({attribute:!1})],k.prototype,"hass",2),d([m()],k.prototype,"_areas",2),d([m()],k.prototype,"_matchers",2),d([m()],k.prototype,"_actions",2),d([m()],k.prototype,"_periods",2),d([m()],k.prototype,"_dayConfig",2),d([m()],k.prototype,"_configs",2),d([m()],k.prototype,"_expanded",2),d([m()],k.prototype,"_error",2),d([m()],k.prototype,"_editing",2),d([m()],k.prototype,"_enabledMatchers",2),k=d([v("ambience-areas-list")],k);var D=class extends f{constructor(){super(...arguments);this.matcherName="";this.matcherDescription="";this.enabled=!1;this._expanded=!1}_toggleExpand(){this._expanded=!this._expanded}_onToggle(e){e.stopPropagation();let t=e.target.checked;this.dispatchEvent(new CustomEvent("enable-changed",{detail:{enabled:t},bubbles:!0,composed:!0}))}render(){let e=Y(this.hass,this.matcherName);return l`
       <div class="card">
         <header @click=${this._toggleExpand}>
           <span class="chevron ${this._expanded?"open":""}">▶</span>
@@ -1010,8 +1010,11 @@ var yt=Object.defineProperty;var bt=Object.getOwnPropertyDescriptor;var d=(n,s,e
     :host { display: block; }
     header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
     h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+    /* Fixed badge + actions columns so every row shares the same column
+       boundaries (an override row has two icons, a built-in one — without fixed
+       widths each row would size its own grid and the columns wouldn't align). */
     .row {
-      display: grid; grid-template-columns: 1fr 2fr auto auto; align-items: center;
+      display: grid; grid-template-columns: 1fr 2fr 5rem 4rem; align-items: center;
       gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--divider-color, #eee);
     }
     .name { font-weight: 500; }
@@ -1019,8 +1022,8 @@ var yt=Object.defineProperty;var bt=Object.getOwnPropertyDescriptor;var d=(n,s,e
     .row.overridden .name, .row.overridden .def {
       text-decoration: line-through; opacity: 0.55;
     }
-    .row.custom .name { padding-left: 0.75rem; }
     .badge {
+      justify-self: end;
       font-size: 0.7em; padding: 0.1em 0.5em; border-radius: 3px;
       background: var(--secondary-background-color, #eee); color: var(--secondary-text-color);
     }

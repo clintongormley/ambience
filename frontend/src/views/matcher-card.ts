@@ -65,7 +65,7 @@ export class AmbienceMatcherCard extends LitElement {
   @property() matcherDescription = "";
   @property({ type: Boolean }) enabled = false;
 
-  @state() private _expanded = true;
+  @state() private _expanded = false;
 
   private _toggleExpand() {
     this._expanded = !this._expanded;

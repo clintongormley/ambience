@@ -37,8 +37,11 @@ export class AmbienceTimeOfDayConfig extends LitElement {
     :host { display: block; }
     header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
     h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+    /* Fixed badge + actions columns so every row shares the same column
+       boundaries (an override row has two icons, a built-in one — without fixed
+       widths each row would size its own grid and the columns wouldn't align). */
     .row {
-      display: grid; grid-template-columns: 1fr 2fr auto auto; align-items: center;
+      display: grid; grid-template-columns: 1fr 2fr 5rem 4rem; align-items: center;
       gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--divider-color, #eee);
     }
     .name { font-weight: 500; }
@@ -46,8 +49,8 @@ export class AmbienceTimeOfDayConfig extends LitElement {
     .row.overridden .name, .row.overridden .def {
       text-decoration: line-through; opacity: 0.55;
     }
-    .row.custom .name { padding-left: 0.75rem; }
     .badge {
+      justify-self: end;
       font-size: 0.7em; padding: 0.1em 0.5em; border-radius: 3px;
       background: var(--secondary-background-color, #eee); color: var(--secondary-text-color);
     }

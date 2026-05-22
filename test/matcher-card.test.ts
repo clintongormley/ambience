@@ -43,10 +43,10 @@ describe("ambience-matcher-card", () => {
     expect(body.classList.contains("disabled")).toBe(true);
   });
 
-  test("is expanded by default", async () => {
+  test("is collapsed by default", async () => {
     el = await mount();
     const body = el.shadowRoot.querySelector(".body") as HTMLElement;
-    expect(body.classList.contains("collapsed")).toBe(false);
+    expect(body.classList.contains("collapsed")).toBe(true);
   });
 
   test("clicking the header toggles collapse", async () => {
@@ -54,10 +54,10 @@ describe("ambience-matcher-card", () => {
     const header = el.shadowRoot.querySelector("header") as HTMLElement;
     header.click();
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".body").classList.contains("collapsed")).toBe(true);
+    expect(el.shadowRoot.querySelector(".body").classList.contains("collapsed")).toBe(false);
     header.click();
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".body").classList.contains("collapsed")).toBe(false);
+    expect(el.shadowRoot.querySelector(".body").classList.contains("collapsed")).toBe(true);
   });
 
   test("clicking the checkbox toggles enable, not collapse", async () => {
@@ -70,8 +70,8 @@ describe("ambience-matcher-card", () => {
     cb.dispatchEvent(new Event("change"));
     await el.updateComplete;
     expect(detail).toEqual({ enabled: false });
-    // collapse state untouched by interacting with the checkbox
-    expect(el.shadowRoot.querySelector(".body").classList.contains("collapsed")).toBe(false);
+    // collapse state untouched by interacting with the checkbox (still collapsed)
+    expect(el.shadowRoot.querySelector(".body").classList.contains("collapsed")).toBe(true);
   });
 
   test("the enable checkbox sits after the label (right-hand side)", async () => {

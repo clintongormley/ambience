@@ -3,18 +3,19 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { listPeriods, resetPeriods, savePeriods } from "../api.js";
 import type { HassConnection } from "../api.js";
-import { localize, periodLabel } from "../i18n.js";
+import { anchorLabel, localize, periodLabel } from "../i18n.js";
 import type { PeriodDef, PeriodStoreView, TimeEndpoint } from "../types.js";
 import "./period-edit-modal.js";
 
 function formatEndpoint(ep: TimeEndpoint, hass?: HassConnection): string {
   if (ep.kind === "time") return `${String(ep.hh).padStart(2, "0")}:${String(ep.mm).padStart(2, "0")}`;
-  if (ep.offset_min === 0) return ep.anchor;
+  const anchor = anchorLabel(hass, ep.anchor);
+  if (ep.offset_min === 0) return anchor;
   const abs = Math.abs(ep.offset_min);
   const unit = abs % 60 === 0
     ? `${abs / 60}${localize(hass, "ui.unit_hour_abbr", "h")}`
     : `${abs}${localize(hass, "ui.unit_min_abbr", "m")}`;
-  return `${ep.anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
+  return `${anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
 }
 
 function formatDef(d: PeriodDef, hass?: HassConnection): string {
@@ -33,9 +34,9 @@ type ModalState =
 @customElement("ambience-time-of-day-config")
 export class AmbienceTimeOfDayConfig extends LitElement {
   static override styles = css`
-    :host { display: block; padding: 1rem; }
+    :host { display: block; }
     header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-    h2 { margin: 0; }
+    h2 { margin: 0; font-size: 1rem; font-weight: 600; }
     .row {
       display: grid; grid-template-columns: 1fr 2fr auto auto; align-items: center;
       gap: 0.5rem; padding: 0.5rem 0; border-bottom: 1px solid var(--divider-color, #eee);

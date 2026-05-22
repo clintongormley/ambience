@@ -42,4 +42,44 @@ describe("ambience-matcher-card", () => {
     const body = el.shadowRoot.querySelector(".body") as HTMLElement;
     expect(body.classList.contains("disabled")).toBe(true);
   });
+
+  test("is expanded by default", async () => {
+    el = await mount();
+    const body = el.shadowRoot.querySelector(".body") as HTMLElement;
+    expect(body.classList.contains("collapsed")).toBe(false);
+  });
+
+  test("clicking the header toggles collapse", async () => {
+    el = await mount();
+    const header = el.shadowRoot.querySelector("header") as HTMLElement;
+    header.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".body").classList.contains("collapsed")).toBe(true);
+    header.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".body").classList.contains("collapsed")).toBe(false);
+  });
+
+  test("clicking the checkbox toggles enable, not collapse", async () => {
+    el = await mount({ enabled: true });
+    const cb = el.shadowRoot.querySelector("input[type='checkbox']") as HTMLInputElement;
+    let detail: any;
+    el.addEventListener("enable-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    cb.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    cb.checked = false;
+    cb.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    expect(detail).toEqual({ enabled: false });
+    // collapse state untouched by interacting with the checkbox
+    expect(el.shadowRoot.querySelector(".body").classList.contains("collapsed")).toBe(false);
+  });
+
+  test("the enable checkbox sits after the label (right-hand side)", async () => {
+    el = await mount();
+    const header = el.shadowRoot.querySelector("header") as HTMLElement;
+    const nodes = Array.from(header.children);
+    const labelIdx = nodes.findIndex((n) => n.tagName === "LABEL");
+    const cbIdx = nodes.findIndex((n) => n.querySelector?.("input[type='checkbox']") || n.matches?.("input[type='checkbox']"));
+    expect(cbIdx).toBeGreaterThan(labelIdx);
+  });
 });

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.ambience.const import DATA_STORE, DOMAIN
@@ -134,3 +135,67 @@ def test_matches_condition_and_threshold_anded() -> None:
 
 def test_matches_non_dict_is_false() -> None:
     assert WeatherMatcher().matches(42, _snap("sunny")) is False
+
+
+@pytest.fixture
+def m_with_entity(hass: HomeAssistant) -> WeatherMatcher:
+    _install_store_stub(hass, entity="weather.home")
+    return WeatherMatcher(hass=hass)
+
+
+@pytest.fixture
+def m_no_entity(hass: HomeAssistant) -> WeatherMatcher:
+    _install_store_stub(hass, entity=None)
+    return WeatherMatcher(hass=hass)
+
+
+def test_validate_accepts_null_and_empty(m_no_entity: WeatherMatcher) -> None:
+    m_no_entity.validate_predicate(None)
+    # inactive → no entity needed
+    m_no_entity.validate_predicate({"conditions": [], "thresholds": []})
+
+
+def test_validate_rejects_non_dict(m_no_entity: WeatherMatcher) -> None:
+    with pytest.raises(ValueError):
+        m_no_entity.validate_predicate(42)
+
+
+def test_validate_rejects_unknown_condition(m_with_entity: WeatherMatcher) -> None:
+    with pytest.raises(ValueError, match="condition"):
+        m_with_entity.validate_predicate({"conditions": ["drizzle"], "thresholds": []})
+
+
+@pytest.mark.parametrize(
+    "threshold",
+    [
+        {"attribute": "nope", "op": "<", "value": 5},
+        {"attribute": "temperature", "op": "==", "value": 5},
+        {"attribute": "temperature", "op": "<", "value": "5"},
+        {"attribute": "temperature", "op": "<", "value": True},
+        {"attribute": "temperature", "op": "<"},
+    ],
+)
+def test_validate_rejects_bad_threshold(m_with_entity: WeatherMatcher, threshold) -> None:
+    with pytest.raises(ValueError):
+        m_with_entity.validate_predicate({"conditions": [], "thresholds": [threshold]})
+
+
+def test_validate_active_predicate_requires_entity(m_no_entity: WeatherMatcher) -> None:
+    with pytest.raises(ValueError, match="weather entity"):
+        m_no_entity.validate_predicate({"conditions": ["rainy"], "thresholds": []})
+    with pytest.raises(ValueError, match="weather entity"):
+        m_no_entity.validate_predicate(
+            {"conditions": [], "thresholds": [{"attribute": "temperature", "op": "<", "value": 5}]}
+        )
+
+
+def test_validate_accepts_well_formed(m_with_entity: WeatherMatcher) -> None:
+    m_with_entity.validate_predicate(
+        {
+            "conditions": ["rainy", "pouring"],
+            "thresholds": [
+                {"attribute": "temperature", "op": "<", "value": 5},
+                {"attribute": "humidity", "op": ">=", "value": 80},
+            ],
+        }
+    )

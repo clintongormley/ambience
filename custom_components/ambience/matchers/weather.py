@@ -125,4 +125,32 @@ class WeatherMatcher:
         return snapshot.condition
 
     def validate_predicate(self, predicate: Any) -> None:
-        raise NotImplementedError  # implemented in Task A3
+        if predicate is None:
+            return
+        if not isinstance(predicate, dict):
+            raise ValueError(f"weather predicate must be an object or null: {predicate!r}")
+        conditions = predicate.get("conditions", [])
+        thresholds = predicate.get("thresholds", [])
+        if not isinstance(conditions, list):
+            raise ValueError("weather `conditions` must be a list")
+        if not isinstance(thresholds, list):
+            raise ValueError("weather `thresholds` must be a list")
+        for cond in conditions:
+            if cond not in WEATHER_CONDITIONS:
+                raise ValueError(f"unknown weather condition: {cond!r}")
+        for t in thresholds:
+            self._validate_threshold(t)
+        if (conditions or thresholds) and not self._entity():
+            raise ValueError("weather predicate requires the weather entity to be configured")
+
+    @staticmethod
+    def _validate_threshold(t: Any) -> None:
+        if not isinstance(t, dict):
+            raise ValueError(f"weather threshold must be an object: {t!r}")
+        if t.get("attribute") not in THRESHOLD_ATTRIBUTES:
+            raise ValueError(f"unknown weather attribute: {t.get('attribute')!r}")
+        if t.get("op") not in THRESHOLD_OPS:
+            raise ValueError(f"invalid threshold operator: {t.get('op')!r}")
+        value = t.get("value")
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            raise ValueError(f"threshold value must be a number: {value!r}")

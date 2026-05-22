@@ -613,7 +613,7 @@ async def test_ws_periods_reset_clears_custom_and_hidden(
 async def test_enabled_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/matchers/enabled/list")
     assert resp["success"] is True
-    assert sorted(resp["result"]["enabled"]) == ["day", "time_of_day"]
+    assert sorted(resp["result"]["enabled"]) == ["day", "time_of_day", "weather"]
 
 
 async def test_enabled_matchers_save_round_trips(
@@ -784,3 +784,14 @@ async def test_area_save_ignores_legacy_matchers_field(
         },
     )
     assert resp["success"] is True
+
+
+async def test_matchers_list_includes_weather(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/matchers/list")
+    by_name = {m["name"]: m for m in resp["result"]}
+    weather = by_name["weather"]
+    assert weather["toggleable"] is True
+    assert weather["input"] == "weather_predicate"
+    assert weather["priority"] == 300

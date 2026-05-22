@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
+import { isValidDaySpec } from "../day-spec.js";
 import { dayItemKindLabel, localize, monthLabel, weekdayLabel } from "../i18n.js";
 import type { DayConfig, DayItem, DayPredicate } from "../types.js";
 
@@ -52,12 +53,15 @@ export class AmbienceDayPredicateInput extends LitElement {
     }
     .item select, .item input[type="number"], .item input[type="text"] { padding: 0.25rem; }
     .item .kind { min-width: 12rem; }
-    .item .body { flex: 1; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+    .item .body { flex: 1; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: flex-start; }
     .item ha-form { display: block; flex: 1; }
     .date-row {
-      display: flex; gap: 0.5rem; align-items: flex-end; width: 100%;
+      display: flex; gap: 0.5rem; align-items: flex-start; width: 100%;
     }
     .date-row ha-form { flex: 1 1 8rem; }
+    .field-error {
+      width: 100%; color: var(--error-color, #d32f2f); font-size: 0.85em; margin-top: 0.2rem;
+    }
     .remove {
       background: none; border: none; color: var(--secondary-text-color);
       cursor: pointer; font-size: 1em; padding: 0.25rem 0 0 0;
@@ -202,14 +206,29 @@ export class AmbienceDayPredicateInput extends LitElement {
     return item;
   }
 
-  /** ha-form kind-picker change: switch the item to the chosen kind's default,
-   * ignoring disabled kinds. */
+  /** ha-form kind-picker change: clearing the kind removes the item; otherwise
+   * switch the item to the chosen kind's default, ignoring disabled kinds. */
   _onKindForm(section: "include" | "exclude", idx: number, value: { kind?: DayItem["kind"] }) {
     const kind = value.kind;
-    if (!kind || this._kindDisabled(kind)) return;
+    if (!kind) {
+      this._removeItem(section, idx);
+      return;
+    }
+    if (this._kindDisabled(kind)) return;
     const current = this._current()[section][idx];
     if (current && current.kind === kind) return;
     this._updateItem(section, idx, _defaultItem(kind));
+  }
+
+  /** Inline validation message for a day-of-month spec, or null. Empty defers
+   * to the format hint (no error); a non-empty invalid spec gets a message. */
+  _dayOfMonthError(days: string): string | null {
+    if (days.trim() === "" || isValidDaySpec(days)) return null;
+    return localize(
+      this.hass,
+      "ui.day_spec_error",
+      "Use days 1–31 and ranges like 1-10, separated by commas",
+    );
   }
 
   /** ha-form body change: apply the parsed patch for the item's kind. */
@@ -317,10 +336,12 @@ export class AmbienceDayPredicateInput extends LitElement {
       }
       const schema = this._bodySchema(item);
       if (!schema) return html``;
+      const err = item.kind === "day_of_month" ? this._dayOfMonthError(item.days) : null;
       return html`<ha-form
         .hass=${this.hass}
         .schema=${schema}
         .data=${this._bodyData(item)}
+        .error=${err ? { days: err } : undefined}
         .computeLabel=${this._computeFieldLabel}
         .computeHelper=${this._computeFieldHelper}
         @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => {
@@ -375,12 +396,13 @@ export class AmbienceDayPredicateInput extends LitElement {
 
   private _renderNativeBody(section: "include" | "exclude", idx: number, item: DayItem) {
     if (item.kind === "day_of_month") {
+      const err = this._dayOfMonthError(item.days);
       return html`<input
         type="text" placeholder=${localize(this.hass, "ui.day_of_month_placeholder", "e.g. 1-10, 15")}
         .value=${item.days}
         @change=${(e: Event) =>
           this._updateItem(section, idx, this._bodyPatch(item, { days: (e.target as HTMLInputElement).value }))}
-      />`;
+      />${err ? html`<div class="field-error">${err}</div>` : ""}`;
     }
     const monthInput = (part: DatePart, month: number) => html`
       <input type="number" min="1" max="12" .value=${String(month)}

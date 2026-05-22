@@ -162,6 +162,30 @@ describe("ambience-day-predicate-input", () => {
     expect(el.value.include[0]).toEqual({ kind: "date", month: 1, day: 1 });
   });
 
+  test("_onKindForm removes the item when the kind selector is cleared", async () => {
+    el = await mount();
+    el._addItem("include", "weekday");
+    expect(el.value.include).toHaveLength(1);
+    el._onKindForm("include", 0, {}); // cleared (no kind)
+    expect(el.value).toBeNull(); // last item removed → empty predicate
+  });
+
+  // --- day-of-month validation -------------------------------------------
+
+  test("_dayOfMonthError is null for empty (defers to hint) and valid specs", async () => {
+    el = await mount();
+    expect(el._dayOfMonthError("")).toBeNull();
+    expect(el._dayOfMonthError("   ")).toBeNull();
+    expect(el._dayOfMonthError("1-10, 15")).toBeNull();
+  });
+
+  test("_dayOfMonthError returns a message for invalid non-empty specs", async () => {
+    el = await mount();
+    expect(el._dayOfMonthError("abc")).toBeTruthy();
+    expect(el._dayOfMonthError("10-2")).toBeTruthy();
+    expect(el._dayOfMonthError("0")).toBeTruthy();
+  });
+
   test("_computeFieldHelper shows the day-of-month format for the days field", async () => {
     el = await mount();
     expect(el._computeFieldHelper({ name: "days" })).toBe("e.g. 1-10, 15");

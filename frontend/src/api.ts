@@ -12,6 +12,7 @@ import type {
   PeriodDef,
   PeriodStoreView,
   WeatherConfig,
+  WeatherGroup,
 } from "./types.js";
 
 // HA fires this on the event bus whenever an area is created/updated/removed.
@@ -140,6 +141,11 @@ export async function getWeatherConfig(hass: HassConnection): Promise<WeatherCon
 export async function saveWeatherConfig(
   hass: HassConnection,
   entity: string | null,
+  groups: WeatherGroup[],
 ): Promise<{ ok: true; warnings: Array<{ area_id: string; rule_name: string; reason: string }> }> {
-  return hass.callWS({ type: "ambience/matchers/weather/config/save", entity });
+  return hass.callWS({
+    type: "ambience/matchers/weather/config/save",
+    entity,
+    groups,
+  });
 }

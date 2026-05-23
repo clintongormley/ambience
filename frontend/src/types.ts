@@ -120,7 +120,16 @@ export type DayPredicate =
   | null
   | { include: DayItem[]; exclude: DayItem[] };
 
-export type WeatherConfig = { entity: string | null };
+export type WeatherGroup = {
+  id: string;
+  label: string;
+  conditions: string[];
+};
+
+export type WeatherConfig = {
+  entity: string | null;
+  groups: WeatherGroup[];
+};
 
 export type WeatherThreshold = {
   attribute: string;
@@ -130,4 +139,4 @@ export type WeatherThreshold = {
 
 export type WeatherPredicate =
   | null
-  | { conditions: string[]; thresholds: WeatherThreshold[] };
+  | { groups: string[]; thresholds: WeatherThreshold[] };

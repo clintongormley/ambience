@@ -33,6 +33,44 @@ THRESHOLD_ATTRIBUTES = (
 )
 THRESHOLD_OPS = ("<", "<=", ">", ">=")
 
+DEFAULT_WEATHER_GROUPS: list[dict[str, Any]] = [
+    {"id": "sunny", "label": "Sunny", "conditions": ["sunny"]},
+    {"id": "dim", "label": "Dim", "conditions": ["cloudy", "partlycloudy", "rainy"]},
+    {
+        "id": "dark",
+        "label": "Dark",
+        "conditions": [
+            "clear-night",
+            "fog",
+            "hail",
+            "lightning",
+            "lightning-rainy",
+            "pouring",
+            "snowy",
+            "snowy-rainy",
+            "exceptional",
+        ],
+    },
+    {
+        "id": "wet",
+        "label": "Wet",
+        "conditions": [
+            "hail",
+            "lightning",
+            "lightning-rainy",
+            "pouring",
+            "rainy",
+            "snowy",
+            "snowy-rainy",
+        ],
+    },
+    {
+        "id": "windy",
+        "label": "Windy",
+        "conditions": ["windy", "windy-variant", "exceptional"],
+    },
+]
+
 _UNAVAILABLE = ("unknown", "unavailable")
 
 

@@ -798,12 +798,16 @@ async def test_matchers_list_includes_weather(
 
 
 async def test_weather_config_list_default(hass, installed, hass_ws_client) -> None:
+    from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
+
     resp = await _ws_send(hass_ws_client, type="ambience/matchers/weather/config/list")
     assert resp["success"] is True
-    assert resp["result"] == {"entity": None}
+    assert resp["result"] == {"entity": None, "groups": DEFAULT_WEATHER_GROUPS}
 
 
 async def test_weather_config_save_round_trips(hass, installed, hass_ws_client) -> None:
+    from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
+
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/matchers/weather/config/save",
@@ -813,7 +817,7 @@ async def test_weather_config_save_round_trips(hass, installed, hass_ws_client) 
     assert resp["result"]["ok"] is True
     assert resp["result"]["warnings"] == []
     resp2 = await _ws_send(hass_ws_client, type="ambience/matchers/weather/config/list")
-    assert resp2["result"] == {"entity": "weather.home"}
+    assert resp2["result"] == {"entity": "weather.home", "groups": DEFAULT_WEATHER_GROUPS}
 
 
 async def test_weather_config_save_warns_when_clearing_referenced_entity(

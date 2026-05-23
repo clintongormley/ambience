@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .const import DATA_MATCHERS, DOMAIN, STORAGE_KEY, STORAGE_VERSION
+from .matchers.weather import DEFAULT_WEATHER_GROUPS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class AmbienceStore:
             "matchers": {
                 "time_of_day": {"custom": {}, "hidden": []},
                 "day": {"workday_sensor": None, "workday_calendar": None},
-                "weather": {"entity": None},
+                "weather": {"entity": None, "groups": list(DEFAULT_WEATHER_GROUPS)},
             },
         }
 
@@ -142,7 +143,9 @@ class AmbienceStore:
         namespace = self._data.setdefault("matchers", {})
         namespace.setdefault("time_of_day", {"custom": {}, "hidden": []})
         namespace.setdefault("day", {"workday_sensor": None, "workday_calendar": None})
-        namespace.setdefault("weather", {"entity": None})
+        weather = namespace.setdefault("weather", {})
+        weather.setdefault("entity", None)
+        weather.setdefault("groups", list(DEFAULT_WEATHER_GROUPS))
 
     async def async_load(self) -> None:
         raw = await self._store.async_load()
@@ -215,7 +218,10 @@ class AmbienceStore:
                 "workday_calendar": cfg.get("workday_calendar"),
             }
         if name == "weather":
-            return {"entity": cfg.get("entity")}
+            groups = cfg.get("groups")
+            if groups is None:
+                groups = list(DEFAULT_WEATHER_GROUPS)
+            return {"entity": cfg.get("entity"), "groups": groups}
         return dict(cfg)
 
     async def async_save_matcher_config(self, name: str, config: dict[str, Any]) -> None:

@@ -382,13 +382,54 @@ async def test_migration_idempotent_on_new_shape(hass: HomeAssistant) -> None:
 
 
 async def test_empty_store_has_weather_default(hass: HomeAssistant) -> None:
+    from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
+
     store = AmbienceStore(hass)
     await store.async_load()
-    assert store.get_matcher_config("weather") == {"entity": None}
+    assert store.get_matcher_config("weather") == {
+        "entity": None,
+        "groups": DEFAULT_WEATHER_GROUPS,
+    }
 
 
 async def test_save_weather_config_round_trips(hass: HomeAssistant) -> None:
+    from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
+
     store = AmbienceStore(hass)
     await store.async_load()
     await store.async_save_matcher_config("weather", {"entity": "weather.home"})
-    assert store.get_matcher_config("weather") == {"entity": "weather.home"}
+    assert store.get_matcher_config("weather") == {
+        "entity": "weather.home",
+        "groups": DEFAULT_WEATHER_GROUPS,
+    }
+
+
+async def test_empty_store_seeds_default_weather_groups(hass: HomeAssistant) -> None:
+    from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
+
+    store = AmbienceStore(hass)
+    await store.async_load()
+    cfg = store.get_matcher_config("weather")
+    assert cfg["entity"] is None
+    assert cfg["groups"] == DEFAULT_WEATHER_GROUPS
+
+
+async def test_existing_weather_entity_keeps_user_groups(hass: HomeAssistant) -> None:
+    from homeassistant.helpers.storage import Store
+
+    from custom_components.ambience.const import STORAGE_KEY, STORAGE_VERSION
+
+    raw = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    user_groups = [{"id": "only", "label": "Only", "conditions": ["sunny"]}]
+    await raw.async_save(
+        {
+            "version": STORAGE_VERSION,
+            "areas": {},
+            "enabled_matchers": ["weather"],
+            "matchers": {"weather": {"entity": "weather.home", "groups": user_groups}},
+        }
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    cfg = store.get_matcher_config("weather")
+    assert cfg == {"entity": "weather.home", "groups": user_groups}

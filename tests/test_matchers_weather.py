@@ -6,7 +6,12 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.ambience.const import DATA_STORE, DOMAIN
-from custom_components.ambience.matchers.weather import WeatherMatcher, WeatherSnapshot
+from custom_components.ambience.matchers.weather import (
+    DEFAULT_WEATHER_GROUPS,
+    WEATHER_CONDITIONS,
+    WeatherMatcher,
+    WeatherSnapshot,
+)
 
 
 def _install_store_stub(hass: HomeAssistant, entity: str | None = None) -> None:
@@ -220,3 +225,16 @@ def test_validate_accepts_well_formed(m_with_entity: WeatherMatcher) -> None:
             ],
         }
     )
+
+
+def test_default_groups_cover_every_ha_condition() -> None:
+    covered: set[str] = set()
+    for g in DEFAULT_WEATHER_GROUPS:
+        covered.update(g["conditions"])
+    assert covered == set(WEATHER_CONDITIONS), f"missing: {set(WEATHER_CONDITIONS) - covered}"
+
+
+def test_default_groups_have_unique_ids() -> None:
+    ids = [g["id"] for g in DEFAULT_WEATHER_GROUPS]
+    assert len(ids) == len(set(ids))
+    assert all(isinstance(i, str) and i for i in ids)

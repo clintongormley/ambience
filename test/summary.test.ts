@@ -255,17 +255,34 @@ describe("summariseAction", () => {
   });
 });
 
-test("summariseWeather formats conditions and thresholds", () => {
-  expect(summariseWeather({ conditions: ["rainy", "pouring"], thresholds: [] }))
-    .toBe("Rainy/Pouring");
-  expect(summariseWeather({ conditions: [], thresholds: [{ attribute: "temperature", op: "<", value: 5 }] }))
-    .toBe("Temperature < 5");
-  expect(summariseWeather({ conditions: ["rainy"], thresholds: [{ attribute: "humidity", op: ">=", value: 80 }] }))
-    .toBe("Rainy, Humidity ≥ 80");
-  expect(summariseWeather(null)).toBe("any");
+test("summariseWeather formats group labels + thresholds", () => {
+  const ctx = {
+    weatherGroups: [
+      { id: "wet", label: "Wet", conditions: ["rainy"] },
+      { id: "sunny", label: "Sunny", conditions: ["sunny"] },
+    ],
+  };
+  expect(summariseWeather({ groups: ["wet", "sunny"], thresholds: [] }, ctx))
+    .toBe("Wet/Sunny");
+  expect(summariseWeather({
+    groups: [],
+    thresholds: [{ attribute: "temperature", op: "<", value: 5 }],
+  }, ctx)).toBe("Temperature < 5");
+  expect(summariseWeather({
+    groups: ["wet"],
+    thresholds: [{ attribute: "humidity", op: ">=", value: 80 }],
+  }, ctx)).toBe("Wet, Humidity ≥ 80");
+  expect(summariseWeather(null, ctx)).toBe("any");
+});
+
+test("summariseWeather marks dangling group ids with a '?'", () => {
+  const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
+  expect(summariseWeather({ groups: ["wet", "ghost"], thresholds: [] }, ctx))
+    .toBe("Wet/ghost?");
 });
 
 test("summariseMatcher delegates weather", () => {
-  expect(summariseMatcher("weather", { conditions: ["rainy"], thresholds: [] }, {}))
-    .toBe("Rainy");
+  const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
+  expect(summariseMatcher("weather", { groups: ["wet"], thresholds: [] }, ctx))
+    .toBe("Wet");
 });

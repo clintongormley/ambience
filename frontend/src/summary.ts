@@ -5,7 +5,6 @@ import {
   monthLabel,
   periodLabel,
   weatherAttrLabel,
-  weatherConditionLabel,
   weekdayLabel,
 } from "./i18n.js";
 import type {
@@ -17,6 +16,7 @@ import type {
   Rule,
   TimeEndpoint,
   TimeOfDayPredicate,
+  WeatherGroup,
   WeatherPredicate,
 } from "./types.js";
 
@@ -28,6 +28,7 @@ interface HassLike {
 interface MatcherContext {
   hass?: HassLike;
   periods?: PeriodStoreView;
+  weatherGroups?: WeatherGroup[];
 }
 
 interface ActionContext {
@@ -103,11 +104,14 @@ const _OP_LABEL: Record<string, string> = { "<": "<", "<=": "≤", ">": ">", ">=
 
 export function summariseWeather(pred: WeatherPredicate, ctx: MatcherContext = {}): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
-  const conds = (pred.conditions ?? []).map((c) => weatherConditionLabel(ctx.hass, c)).join("/");
+  const groupMap = new Map((ctx.weatherGroups ?? []).map((g) => [g.id, g.label]));
+  const groups = (pred.groups ?? [])
+    .map((id) => groupMap.get(id) ?? `${id}?`)
+    .join("/");
   const thr = (pred.thresholds ?? [])
     .map((t) => `${weatherAttrLabel(ctx.hass, t.attribute)} ${_OP_LABEL[t.op] ?? t.op} ${t.value}`)
     .join(", ");
-  const parts = [conds, thr].filter((s) => s !== "");
+  const parts = [groups, thr].filter((s) => s !== "");
   return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
 }
 

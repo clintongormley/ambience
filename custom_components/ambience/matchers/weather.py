@@ -188,18 +188,23 @@ class WeatherMatcher:
             return
         if not isinstance(predicate, dict):
             raise ValueError(f"weather predicate must be an object or null: {predicate!r}")
-        conditions = predicate.get("conditions", [])
+        groups = predicate.get("groups", [])
         thresholds = predicate.get("thresholds", [])
-        if not isinstance(conditions, list):
-            raise ValueError("weather `conditions` must be a list")
+        if not isinstance(groups, list):
+            raise ValueError("weather `groups` must be a list")
         if not isinstance(thresholds, list):
             raise ValueError("weather `thresholds` must be a list")
-        for cond in conditions:
-            if cond not in WEATHER_CONDITIONS:
-                raise ValueError(f"unknown weather condition: {cond!r}")
+        for g in groups:
+            if not isinstance(g, str) or not g:
+                raise ValueError(f"weather group id must be a non-empty string: {g!r}")
+        if groups and self._hass is not None:
+            known = {gr.get("id") for gr in self._configured_groups()}
+            for g in groups:
+                if g not in known:
+                    raise ValueError(f"unknown weather group: {g!r}")
         for t in thresholds:
             self._validate_threshold(t)
-        if (conditions or thresholds) and not self._entity():
+        if (groups or thresholds) and self._hass is not None and not self._entity():
             raise ValueError("weather predicate requires the weather entity to be configured")
 
     @staticmethod

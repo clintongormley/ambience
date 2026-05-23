@@ -156,14 +156,14 @@ def m_with_entity(hass: HomeAssistant) -> WeatherMatcher:
 
 @pytest.fixture
 def m_no_entity(hass: HomeAssistant) -> WeatherMatcher:
-    _install_store_stub(hass, entity=None)
+    _install_store_stub_groups(hass, entity=None, groups=[])
     return WeatherMatcher(hass=hass)
 
 
 def test_validate_accepts_null_and_empty(m_no_entity: WeatherMatcher) -> None:
     m_no_entity.validate_predicate(None)
     # inactive → no entity needed
-    m_no_entity.validate_predicate({"conditions": [], "thresholds": []})
+    m_no_entity.validate_predicate({"groups": [], "thresholds": []})
 
 
 def test_validate_rejects_non_dict(m_no_entity: WeatherMatcher) -> None:
@@ -171,9 +171,22 @@ def test_validate_rejects_non_dict(m_no_entity: WeatherMatcher) -> None:
         m_no_entity.validate_predicate(42)
 
 
-def test_validate_rejects_unknown_condition(m_with_entity: WeatherMatcher) -> None:
-    with pytest.raises(ValueError, match="condition"):
-        m_with_entity.validate_predicate({"conditions": ["drizzle"], "thresholds": []})
+def test_validate_rejects_unknown_group(hass: HomeAssistant) -> None:
+    _install_store_stub_groups(
+        hass,
+        groups=[
+            {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
+        ],
+    )
+    m = WeatherMatcher(hass=hass)
+    with pytest.raises(ValueError, match="weather group"):
+        m.validate_predicate({"groups": ["bogus"], "thresholds": []})
+
+
+def test_validate_skips_group_existence_when_no_hass() -> None:
+    # no hass → no group-existence check; shape checks still apply
+    m = WeatherMatcher()
+    m.validate_predicate({"groups": ["anything"], "thresholds": []})
 
 
 @pytest.mark.parametrize(
@@ -188,26 +201,30 @@ def test_validate_rejects_unknown_condition(m_with_entity: WeatherMatcher) -> No
 )
 def test_validate_rejects_bad_threshold(m_with_entity: WeatherMatcher, threshold) -> None:
     with pytest.raises(ValueError):
-        m_with_entity.validate_predicate({"conditions": [], "thresholds": [threshold]})
+        m_with_entity.validate_predicate({"groups": [], "thresholds": [threshold]})
 
 
 def test_validate_active_predicate_requires_entity(m_no_entity: WeatherMatcher) -> None:
     with pytest.raises(ValueError, match="weather entity"):
-        m_no_entity.validate_predicate({"conditions": ["rainy"], "thresholds": []})
+        m_no_entity.validate_predicate({"groups": ["sunny"], "thresholds": []})
     with pytest.raises(ValueError, match="weather entity"):
         m_no_entity.validate_predicate(
-            {"conditions": [], "thresholds": [{"attribute": "temperature", "op": "<", "value": 5}]}
+            {"groups": [], "thresholds": [{"attribute": "temperature", "op": "<", "value": 5}]}
         )
 
 
-def test_validate_accepts_well_formed(m_with_entity: WeatherMatcher) -> None:
-    m_with_entity.validate_predicate(
+def test_validate_accepts_well_formed(hass: HomeAssistant) -> None:
+    _install_store_stub_groups(
+        hass,
+        groups=[
+            {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
+        ],
+    )
+    m = WeatherMatcher(hass=hass)
+    m.validate_predicate(
         {
-            "conditions": ["rainy", "pouring"],
-            "thresholds": [
-                {"attribute": "temperature", "op": "<", "value": 5},
-                {"attribute": "humidity", "op": ">=", "value": 80},
-            ],
+            "groups": ["wet"],
+            "thresholds": [{"attribute": "temperature", "op": "<", "value": 5}],
         }
     )
 

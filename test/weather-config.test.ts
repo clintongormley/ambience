@@ -89,4 +89,27 @@ describe("ambience-weather-config", () => {
     expect(el._config.groups.map((g: any) => g.id)).toEqual(["sunny"]);
     expect(saveWeatherConfig).toHaveBeenCalled();
   });
+
+  test("_conditionsSchema is a select(dropdown) multi-select listing all 15 HA conditions", async () => {
+    el = await mount();
+    const schema = el._conditionsSchema();
+    expect(schema).toHaveLength(1);
+    expect(schema[0].name).toBe("conditions");
+    const sel = schema[0].selector.select;
+    expect(sel.multiple).toBe(true);
+    expect(sel.mode).toBe("dropdown");
+    expect(sel.options).toHaveLength(15);
+    // Each option has a value + a (resolved-via-i18n) label.
+    expect(sel.options[0]).toEqual({ value: expect.any(String), label: expect.any(String) });
+  });
+
+  test("native fallback lists only the selected condition labels per group", async () => {
+    el = await mount();
+    // The "wet" group has conditions: ["rainy"] → only "Rainy" should appear in
+    // its body; the other 14 HA condition labels must NOT appear (no checkbox grid).
+    const txt = el.shadowRoot.textContent ?? "";
+    expect(txt).toContain("Rainy");          // selected condition rendered
+    expect(txt).not.toContain("Lightning");  // unselected condition not rendered
+    expect(txt).not.toContain("Hail");       // unselected condition not rendered
+  });
 });

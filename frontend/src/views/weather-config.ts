@@ -34,14 +34,9 @@ export class AmbienceWeatherConfig extends LitElement {
       border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
       background: var(--card-background-color, #fff); color: inherit;
     }
-    .conditions {
-      display: flex; flex-wrap: wrap; gap: 0.25rem;
-    }
-    label.condition {
-      display: inline-flex; gap: 0.25rem; align-items: center;
-      padding: 0.15rem 0.4rem; border-radius: 3px;
-      background: var(--secondary-background-color, #f5f5f5);
-      cursor: pointer;
+    .conditions-list {
+      display: block; color: var(--secondary-text-color, #888);
+      font-size: 0.9em; padding: 0.15rem 0;
     }
     button.icon {
       background: none; border: none; padding: 0.2rem 0.4rem; cursor: pointer;
@@ -118,6 +113,45 @@ export class AmbienceWeatherConfig extends LitElement {
     void this._persist();
   }
 
+  /** ha-form schema for the per-group conditions multi-selector. */
+  _conditionsSchema() {
+    return [
+      {
+        name: "conditions",
+        selector: {
+          select: {
+            multiple: true,
+            mode: "dropdown",
+            options: ALL_CONDITIONS.map((c) => ({
+              value: c,
+              label: weatherConditionLabel(this.hass, c),
+            })),
+          },
+        },
+      },
+    ];
+  }
+
+  private _renderConditions(idx: number, g: WeatherGroup) {
+    /* v8 ignore start -- ha-form path (real HA only) */
+    if (customElements.get("ha-form")) {
+      return html`<ha-form
+        .hass=${this.hass as any}
+        .schema=${this._conditionsSchema()}
+        .data=${{ conditions: g.conditions }}
+        .computeLabel=${() => ""}
+        @value-changed=${(e: CustomEvent<{ value: { conditions?: string[] } }>) => {
+          e.stopPropagation();
+          this._updateGroup(idx, { conditions: e.detail.value.conditions ?? [] });
+        }}
+      ></ha-form>`;
+    }
+    /* v8 ignore stop */
+    // Native fallback (jsdom / old HA): just list the selected codes.
+    const labels = g.conditions.map((c) => weatherConditionLabel(this.hass, c));
+    return html`<span class="conditions-list">${labels.join(", ")}</span>`;
+  }
+
   private _renderGroup(idx: number, g: WeatherGroup) {
     return html`
       <div class="group" data-label=${g.label}>
@@ -131,22 +165,7 @@ export class AmbienceWeatherConfig extends LitElement {
             @click=${() => this._removeGroup(idx)}>✕</button>
         </div>
         <span class="sr-label">${g.label}</span>
-        <div class="conditions">
-          ${ALL_CONDITIONS.map((c) => html`
-            <label class="condition">
-              <input type="checkbox"
-                .checked=${g.conditions.includes(c)}
-                @change=${(e: Event) => {
-                  const on = (e.target as HTMLInputElement).checked;
-                  const conds = on
-                    ? [...g.conditions, c]
-                    : g.conditions.filter((x) => x !== c);
-                  this._updateGroup(idx, { conditions: conds });
-                }} />
-              ${weatherConditionLabel(this.hass, c)}
-            </label>
-          `)}
-        </div>
+        ${this._renderConditions(idx, g)}
       </div>
     `;
   }

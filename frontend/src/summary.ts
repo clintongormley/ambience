@@ -102,11 +102,21 @@ function _fmtDayItem(item: DayItem, ctx: MatcherContext): string {
 
 const _OP_LABEL: Record<string, string> = { "<": "<", "<=": "≤", ">": ">", ">=": "≥" };
 
+/** Fallback display for a group id that no longer matches any configured
+ *  group — split on `_`/`-`/whitespace and title-case each word. */
+function _humaniseGroupId(id: string): string {
+  return id
+    .split(/[\s_-]+/)
+    .filter((w) => w !== "")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
 export function summariseWeather(pred: WeatherPredicate, ctx: MatcherContext = {}): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
   const groupMap = new Map((ctx.weatherGroups ?? []).map((g) => [g.id, g.label]));
   const groups = (pred.groups ?? [])
-    .map((id) => groupMap.get(id) ?? id)
+    .map((id) => groupMap.get(id) ?? _humaniseGroupId(id))
     .join("/");
   const thr = (pred.thresholds ?? [])
     .map((t) => `${weatherAttrLabel(ctx.hass, t.attribute)} ${_OP_LABEL[t.op] ?? t.op} ${t.value}`)

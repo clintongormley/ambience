@@ -275,10 +275,15 @@ test("summariseWeather formats group labels + thresholds", () => {
   expect(summariseWeather(null, ctx)).toBe("any");
 });
 
-test("summariseWeather renders dangling group ids as plain strings (no '?' suffix)", () => {
+test("summariseWeather renders dangling group ids title-cased (no '?' suffix)", () => {
+  // `stormy` and `cold_snap` aren't in the configured groups — simulates a
+  // rule whose referenced group was renamed or deleted in the matcher config.
   const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
-  expect(summariseWeather({ groups: ["wet", "ghost"], thresholds: [] }, ctx))
-    .toBe("Wet/ghost");
+  expect(summariseWeather({ groups: ["wet", "stormy"], thresholds: [] }, ctx))
+    .toBe("Wet/Stormy");
+  // Multi-word ids: split on underscore/dash/whitespace, capitalize each word.
+  expect(summariseWeather({ groups: ["cold_snap", "heat-wave"], thresholds: [] }, ctx))
+    .toBe("Cold Snap/Heat Wave");
 });
 
 test("summariseMatcher delegates weather", () => {

@@ -106,7 +106,7 @@ export function summariseWeather(pred: WeatherPredicate, ctx: MatcherContext = {
   if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
   const groupMap = new Map((ctx.weatherGroups ?? []).map((g) => [g.id, g.label]));
   const groups = (pred.groups ?? [])
-    .map((id) => groupMap.get(id) ?? `${id}?`)
+    .map((id) => groupMap.get(id) ?? id)
     .join("/");
   const thr = (pred.thresholds ?? [])
     .map((t) => `${weatherAttrLabel(ctx.hass, t.attribute)} ${_OP_LABEL[t.op] ?? t.op} ${t.value}`)

@@ -275,10 +275,10 @@ test("summariseWeather formats group labels + thresholds", () => {
   expect(summariseWeather(null, ctx)).toBe("any");
 });
 
-test("summariseWeather marks dangling group ids with a '?'", () => {
+test("summariseWeather renders dangling group ids as plain strings (no '?' suffix)", () => {
   const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
   expect(summariseWeather({ groups: ["wet", "ghost"], thresholds: [] }, ctx))
-    .toBe("Wet/ghost?");
+    .toBe("Wet/ghost");
 });
 
 test("summariseMatcher delegates weather", () => {

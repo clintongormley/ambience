@@ -11,6 +11,7 @@ import type { MatcherInfo } from "../types.js";
 import "./matcher-card.js";
 import "./time-of-day-config.js";
 import "./day-config.js";
+import "./weather-config.js";
 
 @customElement("ambience-configuration-view")
 export class AmbienceConfigurationView extends LitElement {
@@ -73,7 +74,9 @@ export class AmbienceConfigurationView extends LitElement {
             ? html`<ambience-time-of-day-config .hass=${this.hass}></ambience-time-of-day-config>`
             : m.name === "day"
               ? html`<ambience-day-config .hass=${this.hass}></ambience-day-config>`
-              : html``}
+              : m.name === "weather"
+                ? html`<ambience-weather-config .hass=${this.hass}></ambience-weather-config>`
+                : html``}
         </ambience-matcher-card>
       `)}
     `;

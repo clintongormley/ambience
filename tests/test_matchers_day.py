@@ -30,7 +30,7 @@ def test_matcher_protocol_fields() -> None:
     assert m.name == "day"
     assert m.toggleable is True
     assert m.input == "day_predicate"
-    assert m.priority == 200
+    assert m.priority == 100
     assert m.description.strip() != ""
     assert m.predicate_help.strip() != ""
 

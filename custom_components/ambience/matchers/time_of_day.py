@@ -48,7 +48,7 @@ class TimeOfDayMatcher:
     )
     toggleable = True
     input = "time_of_day"
-    priority = 100
+    priority = 200
 
     def __init__(
         self,

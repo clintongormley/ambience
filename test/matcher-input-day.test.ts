@@ -3,7 +3,7 @@ import "../frontend/src/views/matcher-input";
 
 async function mount(matcherInput: string): Promise<any> {
   const el: any = document.createElement("ambience-matcher-input");
-  el.matcher = { name: "day", description: "", predicate_help: "", toggleable: true, input: matcherInput, priority: 200 };
+  el.matcher = { name: "day", description: "", predicate_help: "", toggleable: true, input: matcherInput, priority: 100 };
   el.value = null;
   el.dayConfig = { workday_sensor: null, workday_calendar: null };
   document.body.appendChild(el);

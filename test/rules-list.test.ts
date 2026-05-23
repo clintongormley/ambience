@@ -12,7 +12,14 @@ beforeAll(() => {
   }
 });
 import "../frontend/src/views/rules-list";
-import type { Rule, PeriodStoreView } from "../frontend/src/types";
+import type { MatcherInfo, Rule, PeriodStoreView } from "../frontend/src/types";
+
+const matchers: MatcherInfo[] = [
+  { name: "scene",       description: "", predicate_help: "", toggleable: false, input: "scene_combobox", priority: 0 },
+  { name: "day",         description: "", predicate_help: "", toggleable: true,  input: "day_predicate",      priority: 100 },
+  { name: "time_of_day", description: "", predicate_help: "", toggleable: true,  input: "time_of_day",        priority: 200 },
+  { name: "weather",     description: "", predicate_help: "", toggleable: true,  input: "weather_predicate",  priority: 300 },
+];
 
 const periods: PeriodStoreView = {
   builtins: {
@@ -41,6 +48,8 @@ const testHass = {
   localize: (k: string) => {
     if (k === "component.ambience.matcher.scene") return "Scene";
     if (k === "component.ambience.matcher.time_of_day") return "Time of day";
+    if (k === "component.ambience.matcher.day") return "Day";
+    if (k === "component.ambience.matcher.weather") return "Weather";
     return undefined;
   },
 };
@@ -50,6 +59,7 @@ async function mount(rules: Rule[] = [], autoSort = true): Promise<any> {
   el.rules = rules;
   el.autoSort = autoSort;
   el.periods = periods;
+  el.matchers = matchers;
   el.hass = testHass;
   document.body.appendChild(el);
   await el.updateComplete;
@@ -341,5 +351,32 @@ describe("ambience-rules-list", () => {
     expect(summary).toContain("Afternoon");
     expect(summary).toContain("Scene:");
     expect(summary).toContain("movie");
+  });
+
+  test("summary lists matchers in priority order (scene, day, time_of_day, weather)", async () => {
+    const rules: Rule[] = [{
+      name: "test",
+      // Deliberately interleave the `when` keys to confirm the summary does
+      // NOT follow insertion order.
+      when: {
+        weather: { groups: [], thresholds: [{ attribute: "temperature", op: "<", value: 5 }] },
+        time_of_day: { period: "afternoon" },
+        scene: "movie",
+        day: [{ kind: "weekday", days: [0] }],
+      },
+      actions: [],
+    }];
+    el = await mount(rules);
+    el.enabledMatchers = ["time_of_day", "day", "weather"];
+    await el.updateComplete;
+    const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
+    const iScene = summary.indexOf("Scene:");
+    const iDay = summary.indexOf("Day:");
+    const iTod = summary.indexOf("Time of day:");
+    const iWeather = summary.indexOf("Weather:");
+    expect(iScene).toBeGreaterThanOrEqual(0);
+    expect(iDay).toBeGreaterThan(iScene);
+    expect(iTod).toBeGreaterThan(iDay);
+    expect(iWeather).toBeGreaterThan(iTod);
   });
 });

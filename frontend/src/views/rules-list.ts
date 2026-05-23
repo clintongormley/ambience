@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { localize, matcherLabel } from "../i18n.js";
 import { ruleDisplayName, summariseMatcher } from "../summary.js";
 import type {
+  MatcherInfo,
   PeriodStoreView,
   Rule,
 } from "../types.js";
@@ -88,6 +89,10 @@ export class AmbienceRulesList extends LitElement {
   // matchers are hidden from the summary (`scene` is always shown). Undefined
   // means "show all" (e.g. standalone tests that don't supply it).
   @property({ attribute: false }) enabledMatchers?: string[];
+  // Matcher registry — used to sort `when` keys by `priority` in the summary
+  // so it reads in the same order as the linearisation tiebreaker (lower
+  // priority first). Undefined → falls back to `when`-dict insertion order.
+  @property({ attribute: false }) matchers?: MatcherInfo[];
 
   // Index of the row currently being dragged, or null.
   @state() private _dragFrom: number | null = null;
@@ -102,11 +107,15 @@ export class AmbienceRulesList extends LitElement {
 
   /** Human-readable one-line summary of a rule's `when` map + action count. */
   private _summary(rule: Rule): string {
-    const keys = Object.keys(rule.when).filter(
-      (k) =>
-        rule.when[k] != null &&
-        (k === "scene" || !this.enabledMatchers || this.enabledMatchers.includes(k)),
-    );
+    const priorityOf = new Map((this.matchers ?? []).map((m) => [m.name, m.priority]));
+    const keys = Object.keys(rule.when)
+      .filter(
+        (k) =>
+          rule.when[k] != null &&
+          (k === "scene" || !this.enabledMatchers || this.enabledMatchers.includes(k)),
+      )
+      // Stable sort by matcher priority (lower first); unknown matchers go last.
+      .sort((a, b) => (priorityOf.get(a) ?? Infinity) - (priorityOf.get(b) ?? Infinity));
     const when =
       keys.length === 0
         ? localize(this.hass, "ui.summary_any", "any")

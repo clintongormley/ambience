@@ -81,7 +81,9 @@ class DayMatcher:
     )
     toggleable = True
     input = "day_predicate"
-    priority = 200
+    # Lower than time_of_day: day fires first as a linearisation tiebreaker
+    # (which date the rule's about disambiguates before which hour).
+    priority = 100
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass

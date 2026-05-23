@@ -32,7 +32,7 @@ const baseConfig: AreaConfig = { rules: [], auto_sort: true };
 
 const matchers: MatcherInfo[] = [
   { name: "scene", description: "", predicate_help: "", toggleable: false, input: "scene_combobox", priority: 0 },
-  { name: "time_of_day", description: "", predicate_help: "", toggleable: true, input: "time_of_day", priority: 100 },
+  { name: "time_of_day", description: "", predicate_help: "", toggleable: true, input: "time_of_day", priority: 200 },
 ];
 
 const actions: ActionInfo[] = [
@@ -517,6 +517,47 @@ describe("ambience-areas-list", () => {
     expect(editor?.matchers?.map((m: MatcherInfo) => m.name)).toEqual([
       "scene",
       "time_of_day",
+    ]);
+  });
+
+  test("_editorMatchers is ordered by matcher priority (scene, day, time_of_day, weather)", async () => {
+    // Override the default mocks with the full matcher set in deliberate
+    // registration-order (NOT priority order) — we expect the getter to sort.
+    const allMatchers: MatcherInfo[] = [
+      { name: "scene",       description: "", predicate_help: "", toggleable: false, input: "scene_combobox",     priority: 0 },
+      { name: "time_of_day", description: "", predicate_help: "", toggleable: true,  input: "time_of_day",        priority: 200 },
+      { name: "day",         description: "", predicate_help: "", toggleable: true,  input: "day_predicate",      priority: 100 },
+      { name: "weather",     description: "", predicate_help: "", toggleable: true,  input: "weather_predicate",  priority: 300 },
+    ];
+    el = await mount(baseAreas, { living_room: { rules: [], auto_sort: true } });
+    // mount() reset the matchers mock to the 2-item default; re-override and
+    // re-trigger a load by reassigning the element's internal state directly.
+    vi.mocked(api.listMatchers).mockResolvedValue(allMatchers);
+    vi.mocked(api.listEnabledMatchers).mockResolvedValue({
+      enabled: ["time_of_day", "day", "weather"],
+    });
+    el._matchers = allMatchers;
+    el._enabledMatchers = new Set(["time_of_day", "day", "weather"]);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const headers = el.shadowRoot.querySelectorAll(".area-header");
+    (headers[0] as HTMLElement).click();
+    await el.updateComplete;
+
+    const rulesList = el.shadowRoot.querySelector("ambience-rules-list")!;
+    rulesList.dispatchEvent(
+      new CustomEvent("add-rule", { detail: {}, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+
+    const editor = el.shadowRoot.querySelector("ambience-rule-editor") as any;
+    expect(editor?.matchers?.map((m: MatcherInfo) => m.name)).toEqual([
+      "scene",
+      "day",
+      "time_of_day",
+      "weather",
     ]);
   });
 

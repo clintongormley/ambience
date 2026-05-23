@@ -56,7 +56,13 @@ export class AmbienceConfigurationView extends LitElement {
   }
 
   override render() {
-    const toggleable = this._matchers.filter((m) => m.toggleable);
+    // Show cards in linearisation-priority order (lower first) so the
+    // Configuration tab matches the order used by rule summaries and the
+    // rule editor's matcher rows.
+    const toggleable = this._matchers
+      .filter((m) => m.toggleable)
+      .slice()
+      .sort((a, b) => a.priority - b.priority);
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
       ${toggleable.map((m) => html`

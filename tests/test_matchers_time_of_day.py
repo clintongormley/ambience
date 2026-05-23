@@ -365,7 +365,7 @@ def test_matcher_exposes_description() -> None:
 
 
 def test_priority() -> None:
-    assert _matcher().priority == 100
+    assert _matcher().priority == 200
 
 
 def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:

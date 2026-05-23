@@ -324,14 +324,15 @@ export class AmbienceAreasList extends LitElement {
     );
   }
 
-  /** Matcher rows for the rule editor: `scene` first, then the globally enabled matchers. */
+  /** Matcher rows for the rule editor — sorted by `priority` (lower first), so
+   *  rows render in the same order as the summary tiebreaker chain:
+   *  scene → day → time_of_day → weather. */
   private get _editorMatchers(): MatcherInfo[] {
     if (!this._editing) return [];
-    const scene = this._matchers.find((m) => m.name === "scene");
-    const enabled = this._matchers.filter(
-      (m) => m.toggleable && this._enabledMatchers.has(m.name),
-    );
-    return scene ? [scene, ...enabled] : enabled;
+    return this._matchers
+      .filter((m) => m.name === "scene" || (m.toggleable && this._enabledMatchers.has(m.name)))
+      .slice()
+      .sort((a, b) => a.priority - b.priority);
   }
 
   private _summary(cfg: AreaConfig): string {
@@ -407,6 +408,7 @@ export class AmbienceAreasList extends LitElement {
                   .periods=${this._periods}
                   .weatherConfig=${this._weatherConfig}
                   .enabledMatchers=${[...this._enabledMatchers]}
+                  .matchers=${this._matchers}
                   .hass=${this.hass}
                   @add-rule=${() => this._addRule(a.area_id)}
                   @edit-rule=${(e: CustomEvent<{ index: number }>) =>

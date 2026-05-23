@@ -20,7 +20,7 @@ const baseMatcher = {
   predicate_help: "",
   toggleable: true,
   input: "time_of_day",
-  priority: 100,
+  priority: 200,
 } satisfies MatcherInfo;
 
 describe("matcher-input dispatcher", () => {

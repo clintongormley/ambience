@@ -67,17 +67,18 @@ async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> 
     assert by_name["scene"]["input"] == "scene_combobox"
     assert by_name["scene"]["priority"] == 0
 
-    tod = by_name["time_of_day"]
-    assert tod["toggleable"] is True
-    assert tod["input"] == "time_of_day"
-    assert tod["priority"] == 100
-    assert tod["description"].strip() != ""
-    assert tod["predicate_help"].strip() != ""
-
+    # day fires before time_of_day in the linearisation tiebreaker.
     day = by_name["day"]
     assert day["toggleable"] is True
     assert day["input"] == "day_predicate"
-    assert day["priority"] == 200
+    assert day["priority"] == 100
+
+    tod = by_name["time_of_day"]
+    assert tod["toggleable"] is True
+    assert tod["input"] == "time_of_day"
+    assert tod["priority"] == 200
+    assert tod["description"].strip() != ""
+    assert tod["predicate_help"].strip() != ""
 
 
 async def test_actions_list(hass: HomeAssistant, installed, hass_ws_client) -> None:

@@ -4,7 +4,7 @@ import type { ActionInfo, MatcherInfo, Rule } from "../frontend/src/types";
 
 const matchers: MatcherInfo[] = [
   { name: "scene", description: "", predicate_help: "", toggleable: false, input: "scene_combobox", priority: 0 },
-  { name: "time_of_day", description: "", predicate_help: "", toggleable: true, input: "time_of_day", priority: 100 },
+  { name: "time_of_day", description: "", predicate_help: "", toggleable: true, input: "time_of_day", priority: 200 },
 ];
 
 const availableActions: ActionInfo[] = [

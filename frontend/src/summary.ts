@@ -1,4 +1,13 @@
-import { actionLabel, anchorLabel, localize, monthLabel, periodLabel, weekdayLabel } from "./i18n.js";
+import {
+  actionLabel,
+  anchorLabel,
+  localize,
+  monthLabel,
+  periodLabel,
+  weatherAttrLabel,
+  weatherConditionLabel,
+  weekdayLabel,
+} from "./i18n.js";
 import type {
   ActionInfo,
   ActionSpec,
@@ -8,6 +17,7 @@ import type {
   Rule,
   TimeEndpoint,
   TimeOfDayPredicate,
+  WeatherPredicate,
 } from "./types.js";
 
 interface HassLike {
@@ -47,6 +57,9 @@ export function summariseMatcher(
   if (matcherName === "day") {
     return summariseDay(predicate as DayPredicate, ctx);
   }
+  if (matcherName === "weather") {
+    return summariseWeather(predicate as WeatherPredicate, ctx);
+  }
   return String(predicate);
 }
 
@@ -84,6 +97,18 @@ function _fmtDayItem(item: DayItem, ctx: MatcherContext): string {
     case "last_workday":
       return localize(ctx.hass, "day_summary.last_workday", "last workday");
   }
+}
+
+const _OP_LABEL: Record<string, string> = { "<": "<", "<=": "≤", ">": ">", ">=": "≥" };
+
+export function summariseWeather(pred: WeatherPredicate, ctx: MatcherContext = {}): string {
+  if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
+  const conds = (pred.conditions ?? []).map((c) => weatherConditionLabel(ctx.hass, c)).join("/");
+  const thr = (pred.thresholds ?? [])
+    .map((t) => `${weatherAttrLabel(ctx.hass, t.attribute)} ${_OP_LABEL[t.op] ?? t.op} ${t.value}`)
+    .join(", ");
+  const parts = [conds, thr].filter((s) => s !== "");
+  return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
 }
 
 export function summariseTimeOfDay(

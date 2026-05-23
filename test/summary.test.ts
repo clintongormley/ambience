@@ -5,6 +5,7 @@ import {
   summariseTimeOfDay,
   summariseDay,
   summariseAction,
+  summariseWeather,
 } from "../frontend/src/summary";
 import type {
   ActionInfo,
@@ -252,4 +253,19 @@ describe("summariseAction", () => {
     expect(summariseAction(action, undefined, { hass: noLocalize }))
       .toBe("Unknown: 2 targets");
   });
+});
+
+test("summariseWeather formats conditions and thresholds", () => {
+  expect(summariseWeather({ conditions: ["rainy", "pouring"], thresholds: [] }))
+    .toBe("Rainy/Pouring");
+  expect(summariseWeather({ conditions: [], thresholds: [{ attribute: "temperature", op: "<", value: 5 }] }))
+    .toBe("Temperature < 5");
+  expect(summariseWeather({ conditions: ["rainy"], thresholds: [{ attribute: "humidity", op: ">=", value: 80 }] }))
+    .toBe("Rainy, Humidity ≥ 80");
+  expect(summariseWeather(null)).toBe("any");
+});
+
+test("summariseMatcher delegates weather", () => {
+  expect(summariseMatcher("weather", { conditions: ["rainy"], thresholds: [] }, {}))
+    .toBe("Rainy");
 });

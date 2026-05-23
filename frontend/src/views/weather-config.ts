@@ -27,12 +27,26 @@ export class AmbienceWeatherConfig extends LitElement {
       margin-bottom: 0.5rem;
     }
     .group-header {
-      display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem;
+      display: flex; gap: 0.5rem; align-items: center;
+      cursor: pointer; user-select: none;
     }
-    .group-header input {
-      flex: 1; padding: 0.25rem 0.5rem;
+    .chevron {
+      color: var(--secondary-text-color, #888);
+      font-size: 0.7em; transition: transform 0.15s ease;
+      width: 0.8em; flex: 0 0 auto;
+    }
+    .chevron.open { transform: rotate(90deg); }
+    .group-header .label { font-weight: 500; flex: 0 0 auto; min-width: 6rem; }
+    .group-header .codes {
+      flex: 1; color: var(--secondary-text-color, #888); font-size: 0.9em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .body { padding: 0.5rem 0 0.25rem 1.5rem; }
+    .body input {
+      width: 100%; padding: 0.25rem 0.5rem; margin-bottom: 0.4rem;
       border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
       background: var(--card-background-color, #fff); color: inherit;
+      box-sizing: border-box;
     }
     .conditions-list {
       display: block; color: var(--secondary-text-color, #888);
@@ -41,11 +55,7 @@ export class AmbienceWeatherConfig extends LitElement {
     button.icon {
       background: none; border: none; padding: 0.2rem 0.4rem; cursor: pointer;
       color: var(--secondary-text-color); font-size: 1em;
-    }
-    .sr-label {
-      position: absolute; width: 1px; height: 1px;
-      padding: 0; margin: -1px; overflow: hidden;
-      clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+      flex: 0 0 auto;
     }
     button.add {
       background: transparent; border: 1px dashed var(--divider-color, #ccc);
@@ -63,6 +73,9 @@ export class AmbienceWeatherConfig extends LitElement {
   @property({ attribute: false }) hass!: HassConnection;
   @state() private _config: WeatherConfig = { entity: null, groups: [] };
   @state() private _warnings: Warning[] = [];
+  // Ids of currently-expanded group rows. Collapsed by default; only the
+  // expanded body shows the label input + ha-form conditions selector.
+  @state() private _expanded = new Set<string>();
 
   override async connectedCallback() {
     super.connectedCallback();
@@ -94,7 +107,16 @@ export class AmbienceWeatherConfig extends LitElement {
       ...this._config,
       groups: [...this._config.groups, { id, label: "", conditions: [] }],
     };
+    // Auto-expand the new row so the user can start editing immediately.
+    this._expanded = new Set([...this._expanded, id]);
     void this._persist();
+  }
+
+  _toggleExpand(id: string) {
+    const next = new Set(this._expanded);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    this._expanded = next;
   }
 
   _updateGroup(idx: number, patch: Partial<WeatherGroup>) {
@@ -106,10 +128,16 @@ export class AmbienceWeatherConfig extends LitElement {
   }
 
   _removeGroup(idx: number) {
+    const removed = this._config.groups[idx];
     this._config = {
       ...this._config,
       groups: this._config.groups.filter((_, i) => i !== idx),
     };
+    if (removed) {
+      const next = new Set(this._expanded);
+      next.delete(removed.id);
+      this._expanded = next;
+    }
     void this._persist();
   }
 
@@ -153,19 +181,30 @@ export class AmbienceWeatherConfig extends LitElement {
   }
 
   private _renderGroup(idx: number, g: WeatherGroup) {
+    const expanded = this._expanded.has(g.id);
+    const codeLabels = g.conditions.map((c) => weatherConditionLabel(this.hass, c)).join(", ");
     return html`
-      <div class="group" data-label=${g.label}>
-        <div class="group-header">
-          <input
-            .value=${g.label}
-            aria-label=${g.label}
-            @change=${(e: Event) => this._updateGroup(idx, { label: (e.target as HTMLInputElement).value })}
-          />
-          <button class="icon" title=${localize(this.hass, "ui.title_delete", "Delete")}
-            @click=${() => this._removeGroup(idx)}>✕</button>
+      <div class="group">
+        <div class="group-header" @click=${() => this._toggleExpand(g.id)}>
+          <span class="chevron ${expanded ? "open" : ""}">▶</span>
+          <span class="label">${g.label}</span>
+          <span class="codes">${codeLabels}</span>
+          <button
+            class="icon"
+            title=${localize(this.hass, "ui.title_delete", "Delete")}
+            @click=${(e: Event) => { e.stopPropagation(); this._removeGroup(idx); }}
+          >✕</button>
         </div>
-        <span class="sr-label">${g.label}</span>
-        ${this._renderConditions(idx, g)}
+        ${expanded
+          ? html`<div class="body" @click=${(e: Event) => e.stopPropagation()}>
+              <input
+                .value=${g.label}
+                aria-label=${g.label}
+                @change=${(e: Event) => this._updateGroup(idx, { label: (e.target as HTMLInputElement).value })}
+              />
+              ${this._renderConditions(idx, g)}
+            </div>`
+          : ""}
       </div>
     `;
   }

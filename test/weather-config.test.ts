@@ -112,4 +112,52 @@ describe("ambience-weather-config", () => {
     expect(txt).not.toContain("Lightning");  // unselected condition not rendered
     expect(txt).not.toContain("Hail");       // unselected condition not rendered
   });
+
+  test("groups are collapsed by default (no edit body rendered)", async () => {
+    el = await mount();
+    expect(el.shadowRoot.querySelector(".group .body")).toBeNull();
+  });
+
+  test("clicking a group header expands it", async () => {
+    el = await mount();
+    const header = el.shadowRoot.querySelector(".group .group-header") as HTMLElement;
+    header.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".group .body")).toBeTruthy();
+    // Click again to collapse
+    header.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".group .body")).toBeNull();
+  });
+
+  test("clicking the delete button does not toggle expand", async () => {
+    el = await mount();
+    // Trigger removal via the click handler; the bubbling click must not expand.
+    const btn = el.shadowRoot.querySelector(".group .group-header button.icon") as HTMLButtonElement;
+    btn.click();
+    await el.updateComplete;
+    // The deletion handler ran, AND no group is left expanded.
+    expect(el._config.groups.length).toBe(1);
+    expect(el.shadowRoot.querySelector(".group .body")).toBeNull();
+  });
+
+  test("_addGroup auto-expands the new row", async () => {
+    el = await mount();
+    el._addGroup();
+    await el.updateComplete;
+    // Exactly one expanded row — the newly added one (last in the list).
+    const bodies = el.shadowRoot.querySelectorAll(".group .body");
+    expect(bodies.length).toBe(1);
+    const groups = el.shadowRoot.querySelectorAll(".group");
+    expect(groups[groups.length - 1].querySelector(".body")).toBeTruthy();
+  });
+
+  test("collapsed header shows label and condition labels", async () => {
+    el = await mount();
+    const headers = el.shadowRoot.querySelectorAll(".group .group-header");
+    const wetHeader = headers[1] as HTMLElement;
+    const text = wetHeader.textContent ?? "";
+    expect(text).toContain("Wet");    // group label
+    expect(text).toContain("Rainy");  // selected condition label
+  });
 });

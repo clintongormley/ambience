@@ -22,6 +22,22 @@ def _install_store_stub(hass: HomeAssistant, entity: str | None = None) -> None:
     hass.data.setdefault(DOMAIN, {})[DATA_STORE] = _Store()
 
 
+def _install_store_stub_groups(
+    hass: HomeAssistant,
+    entity: str | None = "weather.home",
+    groups: list[dict] | None = None,
+) -> None:
+    """Plant a store stub returning a custom weather config with groups."""
+
+    class _Store:
+        def get_matcher_config(self, name: str) -> dict[str, object]:
+            if name == "weather":
+                return {"entity": entity, "groups": groups or list(DEFAULT_WEATHER_GROUPS)}
+            return {}
+
+    hass.data.setdefault(DOMAIN, {})[DATA_STORE] = _Store()
+
+
 def _snap(condition: str | None = "sunny", **attrs: float) -> WeatherSnapshot:
     return WeatherSnapshot(condition=condition, attributes=dict(attrs))
 
@@ -89,26 +105,6 @@ async def test_snapshot_excludes_bool_attributes(hass: HomeAssistant) -> None:
     assert snap.attributes == {"temperature": 20.0}
 
 
-def test_matches_condition_in_set() -> None:
-    m = WeatherMatcher()
-    pred = {"conditions": ["rainy", "pouring"], "thresholds": []}
-    assert m.matches(pred, _snap("rainy")) is True
-    assert m.matches(pred, _snap("sunny")) is False
-
-
-def test_matches_empty_conditions_is_any() -> None:
-    m = WeatherMatcher()
-    pred = {"conditions": [], "thresholds": []}
-    assert m.matches(pred, _snap("sunny")) is True
-    assert m.matches(None, _snap("sunny")) is True
-
-
-def test_matches_none_condition() -> None:
-    m = WeatherMatcher()
-    pred = {"conditions": ["rainy"], "thresholds": []}
-    assert m.matches(pred, _snap(None)) is False
-
-
 def test_matches_thresholds_each_operator() -> None:
     m = WeatherMatcher()
     snap = _snap("rainy", temperature=4.0, humidity=90.0)
@@ -146,17 +142,6 @@ def test_matches_missing_attribute_fails_threshold() -> None:
     m = WeatherMatcher()
     pred = {"conditions": [], "thresholds": [{"attribute": "pressure", "op": "<", "value": 1000}]}
     assert m.matches(pred, _snap("rainy", temperature=4.0)) is False
-
-
-def test_matches_condition_and_threshold_anded() -> None:
-    m = WeatherMatcher()
-    pred = {
-        "conditions": ["rainy"],
-        "thresholds": [{"attribute": "temperature", "op": "<", "value": 5}],
-    }
-    assert m.matches(pred, _snap("rainy", temperature=4.0)) is True
-    assert m.matches(pred, _snap("rainy", temperature=8.0)) is False
-    assert m.matches(pred, _snap("sunny", temperature=4.0)) is False
 
 
 def test_matches_non_dict_is_false() -> None:
@@ -238,3 +223,68 @@ def test_default_groups_have_unique_ids() -> None:
     ids = [g["id"] for g in DEFAULT_WEATHER_GROUPS]
     assert len(ids) == len(set(ids))
     assert all(isinstance(i, str) and i for i in ids)
+
+
+async def test_matches_resolves_groups_via_config(hass: HomeAssistant) -> None:
+    _install_store_stub_groups(
+        hass,
+        groups=[
+            {"id": "wet", "label": "Wet", "conditions": ["rainy", "pouring"]},
+            {"id": "sunny", "label": "Sunny", "conditions": ["sunny"]},
+        ],
+    )
+    m = WeatherMatcher(hass=hass)
+    pred = {"groups": ["wet"], "thresholds": []}
+    assert m.matches(pred, _snap("rainy")) is True
+    assert m.matches(pred, _snap("pouring")) is True
+    assert m.matches(pred, _snap("sunny")) is False
+
+
+async def test_matches_unions_multiple_groups(hass: HomeAssistant) -> None:
+    _install_store_stub_groups(
+        hass,
+        groups=[
+            {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
+            {"id": "windy", "label": "Windy", "conditions": ["windy"]},
+        ],
+    )
+    m = WeatherMatcher(hass=hass)
+    pred = {"groups": ["wet", "windy"], "thresholds": []}
+    assert m.matches(pred, _snap("rainy")) is True
+    assert m.matches(pred, _snap("windy")) is True
+    assert m.matches(pred, _snap("sunny")) is False
+
+
+async def test_matches_empty_groups_is_wildcard(hass: HomeAssistant) -> None:
+    _install_store_stub_groups(hass)
+    m = WeatherMatcher(hass=hass)
+    assert m.matches({"groups": [], "thresholds": []}, _snap("rainy")) is True
+
+
+async def test_matches_dangling_group_just_doesnt_match(hass: HomeAssistant) -> None:
+    _install_store_stub_groups(
+        hass,
+        groups=[
+            {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
+        ],
+    )
+    m = WeatherMatcher(hass=hass)
+    pred = {"groups": ["nonexistent"], "thresholds": []}
+    assert m.matches(pred, _snap("rainy")) is False
+
+
+async def test_matches_groups_and_thresholds_anded(hass: HomeAssistant) -> None:
+    _install_store_stub_groups(
+        hass,
+        groups=[
+            {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
+        ],
+    )
+    m = WeatherMatcher(hass=hass)
+    pred = {
+        "groups": ["wet"],
+        "thresholds": [{"attribute": "temperature", "op": "<", "value": 5}],
+    }
+    assert m.matches(pred, _snap("rainy", temperature=4.0)) is True
+    assert m.matches(pred, _snap("rainy", temperature=10.0)) is False
+    assert m.matches(pred, _snap("sunny", temperature=4.0)) is False

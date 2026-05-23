@@ -141,11 +141,32 @@ class WeatherMatcher:
             return True
         if not isinstance(predicate, dict):
             return False
-        conditions = predicate.get("conditions") or []
+        groups = predicate.get("groups") or []
         thresholds = predicate.get("thresholds") or []
-        cond_ok = not conditions or snapshot.condition in conditions
-        thr_ok = all(self._threshold_ok(t, snapshot) for t in thresholds)
-        return cond_ok and thr_ok
+        if groups:
+            allowed = self._allowed_conditions(groups)
+            if snapshot.condition not in allowed:
+                return False
+        return all(self._threshold_ok(t, snapshot) for t in thresholds)
+
+    def _configured_groups(self) -> list[dict[str, Any]]:
+        hass = self._hass
+        if hass is None:
+            return []
+        from ..const import DATA_STORE, DOMAIN
+
+        store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+        if store is None:
+            return []
+        return list(store.get_matcher_config("weather").get("groups") or [])
+
+    def _allowed_conditions(self, group_ids: list[str]) -> set[str]:
+        allowed: set[str] = set()
+        wanted = set(group_ids)
+        for group in self._configured_groups():
+            if group.get("id") in wanted:
+                allowed.update(group.get("conditions") or [])
+        return allowed
 
     @staticmethod
     def _threshold_ok(t: Any, snap: WeatherSnapshot) -> bool:

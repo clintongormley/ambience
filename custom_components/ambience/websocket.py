@@ -11,6 +11,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 
 from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_PERIODS, DATA_STORE, DOMAIN
+from .matchers.weather import WEATHER_CONDITIONS
 from .service import async_resolve_only
 from .sorting import sort_rules
 
@@ -490,6 +491,7 @@ async def _ws_weather_config_list(
     {
         vol.Required("type"): "ambience/matchers/weather/config/save",
         vol.Optional("entity"): vol.Any(str, None),
+        vol.Optional("groups"): list,
     }
 )
 @websocket_api.async_response
@@ -498,27 +500,70 @@ async def _ws_weather_config_save(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    new_cfg = {"entity": msg.get("entity")}
+    try:
+        groups = _validate_weather_groups(msg.get("groups"))
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    new_cfg = {"entity": msg.get("entity"), "groups": groups}
     store = hass.data[DOMAIN][DATA_STORE]
+    old_cfg = store.get_matcher_config("weather")
     await store.async_save_matcher_config("weather", new_cfg)
-    warnings = _dangling_weather_entity_warnings(hass, new_cfg)
+    warnings = _dangling_weather_warnings(hass, old_cfg, new_cfg)
     connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
 
 
-def _weather_predicate_active(pred: Any) -> bool:
-    return isinstance(pred, dict) and bool(pred.get("conditions") or pred.get("thresholds"))
-
-
-def _dangling_weather_entity_warnings(
-    hass: HomeAssistant, cfg: dict[str, Any]
-) -> list[dict[str, Any]]:
-    if cfg.get("entity"):
+def _validate_weather_groups(groups: Any) -> list[dict[str, Any]]:
+    if groups is None:
         return []
+    if not isinstance(groups, list):
+        raise ValueError("groups must be a list")
+    seen_ids: set[str] = set()
+    valid_conditions = set(WEATHER_CONDITIONS)
+    cleaned: list[dict[str, Any]] = []
+    for raw in groups:
+        if not isinstance(raw, dict):
+            raise ValueError("each group must be an object")
+        gid = raw.get("id")
+        label = raw.get("label")
+        conds = raw.get("conditions")
+        if not isinstance(gid, str) or not gid:
+            raise ValueError(f"group id must be a non-empty string: {gid!r}")
+        if gid in seen_ids:
+            raise ValueError(f"duplicate group id: {gid!r}")
+        seen_ids.add(gid)
+        if not isinstance(label, str) or not label:
+            raise ValueError(f"group {gid!r} label must be a non-empty string")
+        if not isinstance(conds, list) or any(
+            not isinstance(c, str) or c not in valid_conditions for c in conds
+        ):
+            raise ValueError(f"group {gid!r} has invalid condition(s)")
+        cleaned.append({"id": gid, "label": label, "conditions": list(conds)})
+    return cleaned
+
+
+def _weather_predicate_active(pred: Any) -> bool:
+    return isinstance(pred, dict) and bool(pred.get("groups") or pred.get("thresholds"))
+
+
+def _dangling_weather_warnings(
+    hass: HomeAssistant,
+    old_cfg: dict[str, Any],
+    new_cfg: dict[str, Any],
+) -> list[dict[str, Any]]:
     store = hass.data[DOMAIN][DATA_STORE]
+    new_ids = {g["id"] for g in (new_cfg.get("groups") or [])}
+    old_ids = {g["id"] for g in (old_cfg.get("groups") or [])}
+    removed_ids = old_ids - new_ids
+    entity_cleared = not new_cfg.get("entity")
+
     warnings: list[dict[str, Any]] = []
     for area_id, area_cfg in store.areas().items():
         for rule in area_cfg.get("rules", []):
-            if _weather_predicate_active(rule.get("when", {}).get("weather")):
+            pred = rule.get("when", {}).get("weather")
+            if not _weather_predicate_active(pred):
+                continue
+            if entity_cleared:
                 warnings.append(
                     {
                         "area_id": area_id,
@@ -526,6 +571,15 @@ def _dangling_weather_entity_warnings(
                         "reason": "uses a weather predicate but the weather entity is unset",
                     }
                 )
+            for gid in pred.get("groups", []):
+                if gid in removed_ids:
+                    warnings.append(
+                        {
+                            "area_id": area_id,
+                            "rule_name": rule.get("name", ""),
+                            "reason": f"references deleted weather group {gid!r}",
+                        }
+                    )
     return warnings
 
 

@@ -806,32 +806,38 @@ async def test_weather_config_list_default(hass, installed, hass_ws_client) -> N
 
 
 async def test_weather_config_save_round_trips(hass, installed, hass_ws_client) -> None:
-    from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
-
+    custom = [{"id": "wet", "label": "Wet", "conditions": ["rainy", "pouring"]}]
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/matchers/weather/config/save",
         entity="weather.home",
+        groups=custom,
     )
     assert resp["success"] is True
     assert resp["result"]["ok"] is True
     assert resp["result"]["warnings"] == []
     resp2 = await _ws_send(hass_ws_client, type="ambience/matchers/weather/config/list")
-    assert resp2["result"] == {"entity": "weather.home", "groups": DEFAULT_WEATHER_GROUPS}
+    assert resp2["result"] == {"entity": "weather.home", "groups": custom}
 
 
 async def test_weather_config_save_warns_when_clearing_referenced_entity(
     hass, installed, hass_ws_client, area_id
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_matcher_config("weather", {"entity": "weather.home"})
+    await store.async_save_matcher_config(
+        "weather",
+        {
+            "entity": "weather.home",
+            "groups": [{"id": "wet", "label": "Wet", "conditions": ["rainy"]}],
+        },
+    )
     await store.async_save_area(
         area_id,
         {
             "rules": [
                 {
                     "name": "Rainy",
-                    "when": {"weather": {"conditions": ["rainy"], "thresholds": []}},
+                    "when": {"weather": {"groups": ["wet"], "thresholds": []}},
                     "actions": [],
                 }
             ],
@@ -842,6 +848,77 @@ async def test_weather_config_save_warns_when_clearing_referenced_entity(
         hass_ws_client,
         type="ambience/matchers/weather/config/save",
         entity=None,
+        groups=[{"id": "wet", "label": "Wet", "conditions": ["rainy"]}],
     )
     assert resp["success"] is True
-    assert any("weather" in w["reason"] for w in resp["result"]["warnings"])
+    assert any("weather entity" in w["reason"] for w in resp["result"]["warnings"])
+
+
+async def test_weather_config_save_warns_when_deleting_referenced_group(
+    hass, installed, hass_ws_client, area_id
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_matcher_config(
+        "weather",
+        {
+            "entity": "weather.home",
+            "groups": [
+                {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
+                {"id": "sunny", "label": "Sunny", "conditions": ["sunny"]},
+            ],
+        },
+    )
+    await store.async_save_area(
+        area_id,
+        {
+            "rules": [
+                {
+                    "name": "Rainy rule",
+                    "when": {"weather": {"groups": ["wet"], "thresholds": []}},
+                    "actions": [],
+                }
+            ],
+            "auto_sort": True,
+        },
+    )
+    # Save with `wet` removed.
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/matchers/weather/config/save",
+        entity="weather.home",
+        groups=[{"id": "sunny", "label": "Sunny", "conditions": ["sunny"]}],
+    )
+    assert resp["success"] is True
+    warnings = resp["result"]["warnings"]
+    assert any("wet" in w["reason"] and w["rule_name"] == "Rainy rule" for w in warnings)
+
+
+async def test_weather_config_save_rejects_malformed_groups(
+    hass, installed, hass_ws_client
+) -> None:
+    bad = [{"id": "wet", "label": "Wet", "conditions": ["not-a-real-condition"]}]
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/matchers/weather/config/save",
+        entity="weather.home",
+        groups=bad,
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_weather_config_save_rejects_duplicate_group_ids(
+    hass, installed, hass_ws_client
+) -> None:
+    dup = [
+        {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
+        {"id": "wet", "label": "Wet again", "conditions": ["pouring"]},
+    ]
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/matchers/weather/config/save",
+        entity="weather.home",
+        groups=dup,
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"

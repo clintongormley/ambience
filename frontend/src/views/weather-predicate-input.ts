@@ -2,14 +2,9 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
-import { localize, weatherAttrLabel, weatherConditionLabel } from "../i18n.js";
-import type { WeatherPredicate, WeatherThreshold } from "../types.js";
+import { localize, weatherAttrLabel } from "../i18n.js";
+import type { WeatherGroup, WeatherPredicate, WeatherThreshold } from "../types.js";
 
-const CONDITIONS = [
-  "clear-night", "cloudy", "fog", "hail", "lightning", "lightning-rainy",
-  "partlycloudy", "pouring", "rainy", "snowy", "snowy-rainy", "sunny",
-  "windy", "windy-variant", "exceptional",
-];
 const ATTRIBUTES = ["temperature", "apparent_temperature", "humidity", "wind_speed", "pressure"];
 const OPS: WeatherThreshold["op"][] = ["<", "<=", ">", ">="];
 
@@ -38,22 +33,23 @@ export class AmbienceWeatherPredicateInput extends LitElement {
 
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) value: WeatherPredicate = null;
+  @property({ attribute: false }) groups: WeatherGroup[] = [];
 
-  private _current(): { conditions: string[]; thresholds: WeatherThreshold[] } {
-    if (this.value === null) return { conditions: [], thresholds: [] };
-    return { conditions: [...this.value.conditions], thresholds: [...this.value.thresholds] };
+  private _current(): { groups: string[]; thresholds: WeatherThreshold[] } {
+    if (this.value === null) return { groups: [], thresholds: [] };
+    return { groups: [...this.value.groups], thresholds: [...this.value.thresholds] };
   }
 
-  private _emit(next: { conditions: string[]; thresholds: WeatherThreshold[] }) {
-    const empty = next.conditions.length === 0 && next.thresholds.length === 0;
+  private _emit(next: { groups: string[]; thresholds: WeatherThreshold[] }) {
+    const empty = next.groups.length === 0 && next.thresholds.length === 0;
     this.value = empty ? null : next;
     this.dispatchEvent(new CustomEvent("value-changed", {
       detail: { value: this.value }, bubbles: true, composed: true,
     }));
   }
 
-  _setConditions(conditions: string[]) {
-    this._emit({ ...this._current(), conditions });
+  _setGroups(groups: string[]) {
+    this._emit({ ...this._current(), groups });
   }
 
   _addThreshold() {
@@ -74,40 +70,40 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     this._emit(next);
   }
 
-  _conditionsSchema(): HaFormSchema[] {
+  _groupsSchema(): HaFormSchema[] {
     return [{
-      name: "conditions",
+      name: "groups",
       selector: {
         select: {
           multiple: true,
           mode: "list",
-          options: CONDITIONS.map((c) => ({ value: c, label: weatherConditionLabel(this.hass, c) })),
+          options: this.groups.map((g) => ({ value: g.id, label: g.label })),
         },
       },
     }];
   }
 
   /* v8 ignore start -- ha-form path (real HA only) */
-  private _renderConditions(conditions: string[]) {
+  private _renderGroups(groups: string[]) {
     if (customElements.get("ha-form")) {
       return html`<ha-form
         .hass=${this.hass}
-        .schema=${this._conditionsSchema()}
-        .data=${{ conditions }}
+        .schema=${this._groupsSchema()}
+        .data=${{ groups }}
         .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { conditions?: string[] } }>) => {
+        @value-changed=${(e: CustomEvent<{ value: { groups?: string[] } }>) => {
           e.stopPropagation();
-          this._setConditions(e.detail.value.conditions ?? []);
+          this._setGroups(e.detail.value.groups ?? []);
         }}
       ></ha-form>`;
     }
-    return html`${CONDITIONS.map((c) => html`
+    return html`${this.groups.map((g) => html`
       <label style="display:inline-flex;gap:0.25rem;margin:0 0.5rem 0.25rem 0;">
-        <input type="checkbox" .checked=${conditions.includes(c)}
+        <input type="checkbox" .checked=${groups.includes(g.id)}
           @change=${(e: Event) => {
             const on = (e.target as HTMLInputElement).checked;
-            this._setConditions(on ? [...conditions, c] : conditions.filter((x) => x !== c));
-          }} />${weatherConditionLabel(this.hass, c)}
+            this._setGroups(on ? [...groups, g.id] : groups.filter((x) => x !== g.id));
+          }} />${g.label}
       </label>`)}`;
   }
   /* v8 ignore stop */
@@ -132,11 +128,11 @@ export class AmbienceWeatherPredicateInput extends LitElement {
   }
 
   override render() {
-    const { conditions, thresholds } = this._current();
+    const { groups, thresholds } = this._current();
     return html`
       <div class="section">
-        <h4>${localize(this.hass, "ui.conditions", "Conditions")}</h4>
-        ${this._renderConditions(conditions)}
+        <h4>${localize(this.hass, "ui.groups", "Groups")}</h4>
+        ${this._renderGroups(groups)}
       </div>
       <div class="section">
         <h4>${localize(this.hass, "ui.thresholds", "Thresholds")}</h4>

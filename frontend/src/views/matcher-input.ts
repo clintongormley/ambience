@@ -47,6 +47,7 @@ export class AmbienceMatcherInput extends LitElement {
   @property({ attribute: false }) sceneSuggestions: string[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) dayConfig?: DayConfig;
+  @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) hass?: HassConnection;
 
   private _emit(value: unknown) {
@@ -109,6 +110,7 @@ export class AmbienceMatcherInput extends LitElement {
         <ambience-weather-predicate-input
           .hass=${this.hass}
           .value=${this.value as any}
+          .groups=${this.weatherConfig?.groups ?? []}
           @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
             e.stopPropagation();
             this._emit(e.detail.value);

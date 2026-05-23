@@ -120,6 +120,7 @@ export class AmbienceRuleEditor extends LitElement {
   @property({ attribute: false }) sceneSuggestions: string[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) dayConfig?: DayConfig;
+  @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) availableActions: ActionInfo[] = [];
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) areaId?: string;
@@ -302,6 +303,7 @@ export class AmbienceRuleEditor extends LitElement {
             .sceneSuggestions=${this.sceneSuggestions}
             .periods=${this.periods}
             .dayConfig=${this.dayConfig}
+            .weatherConfig=${this.weatherConfig}
             @value-changed=${(e: CustomEvent<{ value: unknown }>) => this._setPredicate(m.name, e.detail.value)}
           ></ambience-matcher-input>
         </div>
@@ -323,6 +325,7 @@ export class AmbienceRuleEditor extends LitElement {
               .sceneSuggestions=${this.sceneSuggestions}
               .periods=${this.periods}
               .dayConfig=${this.dayConfig}
+              .weatherConfig=${this.weatherConfig}
               @value-changed=${(e: CustomEvent<{ value: unknown }>) => this._setPredicate(m.name, e.detail.value)}
             ></ambience-matcher-input>
           </div>

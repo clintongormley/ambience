@@ -82,6 +82,7 @@ export class AmbienceRulesList extends LitElement {
   @property({ attribute: false }) rules: Rule[] = [];
   @property({ type: Boolean }) autoSort = true;
   @property({ attribute: false }) periods?: PeriodStoreView;
+  @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
   // Names of globally-enabled matchers. When set, predicates for disabled
   // matchers are hidden from the summary (`scene` is always shown). Undefined
@@ -112,7 +113,7 @@ export class AmbienceRulesList extends LitElement {
         : keys
             .map(
               (k) =>
-                `${matcherLabel(this.hass as any, k)}: ${summariseMatcher(k, rule.when[k], { hass: this.hass as any, periods: this.periods })}`,
+                `${matcherLabel(this.hass as any, k)}: ${summariseMatcher(k, rule.when[k], { hass: this.hass as any, periods: this.periods, weatherGroups: this.weatherConfig?.groups })}`,
             )
             .join(", ");
     const n = rule.actions.length;

@@ -6,6 +6,7 @@ import { localize } from "../i18n.js";
 import {
   getArea,
   getDayConfig,
+  getWeatherConfig,
   listActions,
   listAreas,
   listEnabledMatchers,
@@ -21,6 +22,7 @@ import type {
   MatcherInfo,
   PeriodStoreView,
   Rule,
+  WeatherConfig,
 } from "../types.js";
 import "./rules-list.js";
 import "./rule-editor.js";
@@ -99,6 +101,7 @@ export class AmbienceAreasList extends LitElement {
   @state() private _actions: ActionInfo[] = [];
   @state() private _periods?: PeriodStoreView;
   @state() private _dayConfig?: DayConfig;
+  @state() private _weatherConfig?: WeatherConfig;
   @state() private _configs = new Map<string, AreaConfig>();
   @state() private _expanded = new Set<string>();
   @state() private _error = "";
@@ -121,12 +124,13 @@ export class AmbienceAreasList extends LitElement {
 
   private async _loadStatic() {
     try {
-      const [matchers, actions, periods, enabled, dayConfig] = await Promise.all([
+      const [matchers, actions, periods, enabled, dayConfig, weatherConfig] = await Promise.all([
         listMatchers(this.hass),
         listActions(this.hass),
         listPeriods(this.hass),
         listEnabledMatchers(this.hass),
         getDayConfig(this.hass),
+        getWeatherConfig(this.hass),
       ]);
       if (!this.isConnected) return;
       this._matchers = matchers;
@@ -134,6 +138,7 @@ export class AmbienceAreasList extends LitElement {
       this._periods = periods;
       this._enabledMatchers = new Set(enabled.enabled);
       this._dayConfig = dayConfig;
+      this._weatherConfig = weatherConfig;
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
@@ -359,6 +364,7 @@ export class AmbienceAreasList extends LitElement {
         .sceneSuggestions=${this._sceneSuggestions}
         .periods=${this._periods}
         .dayConfig=${this._dayConfig}
+        .weatherConfig=${this._weatherConfig}
         .availableActions=${this._actions}
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}
@@ -399,6 +405,7 @@ export class AmbienceAreasList extends LitElement {
                   .rules=${cfg.rules}
                   .autoSort=${cfg.auto_sort}
                   .periods=${this._periods}
+                  .weatherConfig=${this._weatherConfig}
                   .enabledMatchers=${[...this._enabledMatchers]}
                   .hass=${this.hass}
                   @add-rule=${() => this._addRule(a.area_id)}

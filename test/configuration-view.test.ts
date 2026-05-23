@@ -14,7 +14,7 @@ vi.mock("../frontend/src/api.js", () => ({
   listPeriods: vi.fn(async () => ({ builtins: {}, custom: {}, hidden: [] })),
   savePeriods: vi.fn(async () => ({ ok: true, warnings: [] })),
   resetPeriods: vi.fn(async () => ({ ok: true })),
-  getWeatherConfig: vi.fn(async () => ({ entity: null })),
+  getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
   saveWeatherConfig: vi.fn(async () => ({ ok: true, warnings: [] })),
 }));
 

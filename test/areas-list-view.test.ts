@@ -18,6 +18,7 @@ vi.mock("../frontend/src/api", () => ({
   listActions: vi.fn(),
   listPeriods: vi.fn(),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
+  getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
 }));
 
 import * as api from "../frontend/src/api";

@@ -153,7 +153,9 @@
     "thresholds": "Thresholds",
     "add_threshold": "+ Add threshold",
     "weather_entity": "Weather entity",
-    "weather_warning_text": "rules now reference an unconfigured weather entity:"
+    "weather_warning_text": "rules now reference an unconfigured weather entity:",
+    "groups": "Groups",
+    "add_group": "+ Add group"
   },
   "day_summary": {
     "any": "any",

@@ -2,8 +2,14 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { getWeatherConfig, saveWeatherConfig, type HassConnection } from "../api.js";
-import { localize } from "../i18n.js";
-import type { WeatherConfig } from "../types.js";
+import { localize, weatherConditionLabel } from "../i18n.js";
+import type { WeatherConfig, WeatherGroup } from "../types.js";
+
+const ALL_CONDITIONS = [
+  "clear-night", "cloudy", "fog", "hail", "lightning", "lightning-rainy",
+  "partlycloudy", "pouring", "rainy", "snowy", "snowy-rainy", "sunny",
+  "windy", "windy-variant", "exceptional",
+];
 
 type Warning = { area_id: string; rule_name: string; reason: string };
 
@@ -12,7 +18,45 @@ export class AmbienceWeatherConfig extends LitElement {
   static override styles = css`
     :host { display: block; }
     .row { margin-bottom: 0.75rem; }
-    label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+    label.section { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+    h4 { margin: 1rem 0 0.5rem 0; font-size: 0.95em; }
+    .group {
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 4px;
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .group-header {
+      display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem;
+    }
+    .group-header input {
+      flex: 1; padding: 0.25rem 0.5rem;
+      border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
+      background: var(--card-background-color, #fff); color: inherit;
+    }
+    .conditions {
+      display: flex; flex-wrap: wrap; gap: 0.25rem;
+    }
+    label.condition {
+      display: inline-flex; gap: 0.25rem; align-items: center;
+      padding: 0.15rem 0.4rem; border-radius: 3px;
+      background: var(--secondary-background-color, #f5f5f5);
+      cursor: pointer;
+    }
+    button.icon {
+      background: none; border: none; padding: 0.2rem 0.4rem; cursor: pointer;
+      color: var(--secondary-text-color); font-size: 1em;
+    }
+    .sr-label {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+    button.add {
+      background: transparent; border: 1px dashed var(--divider-color, #ccc);
+      padding: 0.4rem 0.75rem; border-radius: 4px; cursor: pointer;
+      color: var(--primary-text-color, inherit);
+    }
     .warnings {
       background: var(--warning-color, #ffd);
       border: 1px solid var(--warning-color, #cc9);
@@ -22,7 +66,7 @@ export class AmbienceWeatherConfig extends LitElement {
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
-  @state() private _config: WeatherConfig = { entity: null };
+  @state() private _config: WeatherConfig = { entity: null, groups: [] };
   @state() private _warnings: Warning[] = [];
 
   override async connectedCallback() {
@@ -30,19 +74,88 @@ export class AmbienceWeatherConfig extends LitElement {
     this._config = await getWeatherConfig(this.hass);
   }
 
+  private async _persist() {
+    const res = await saveWeatherConfig(this.hass, this._config.entity, this._config.groups);
+    this._warnings = res.warnings ?? [];
+  }
+
   _onEntityChange(e: { detail: { value: string | null } }) {
-    const entity = e.detail.value || null;
-    this._config = { entity };
-    void saveWeatherConfig(this.hass, entity).then((res) => {
-      this._warnings = res.warnings ?? [];
-    });
+    this._config = { ...this._config, entity: e.detail.value || null };
+    void this._persist();
+  }
+
+  _nextGroupId(existing: WeatherGroup[]): string {
+    const ids = new Set(existing.map((g) => g.id));
+    for (let n = 1; n <= existing.length + 1; n++) {
+      const candidate = `group_${n}`;
+      if (!ids.has(candidate)) return candidate;
+    }
+    return `group_${existing.length + 1}`;
+  }
+
+  _addGroup() {
+    const id = this._nextGroupId(this._config.groups);
+    this._config = {
+      ...this._config,
+      groups: [...this._config.groups, { id, label: "", conditions: [] }],
+    };
+    void this._persist();
+  }
+
+  _updateGroup(idx: number, patch: Partial<WeatherGroup>) {
+    this._config = {
+      ...this._config,
+      groups: this._config.groups.map((g, i) => (i === idx ? { ...g, ...patch } : g)),
+    };
+    void this._persist();
+  }
+
+  _removeGroup(idx: number) {
+    this._config = {
+      ...this._config,
+      groups: this._config.groups.filter((_, i) => i !== idx),
+    };
+    void this._persist();
+  }
+
+  private _renderGroup(idx: number, g: WeatherGroup) {
+    return html`
+      <div class="group" data-label=${g.label}>
+        <div class="group-header">
+          <input
+            .value=${g.label}
+            aria-label=${g.label}
+            @change=${(e: Event) => this._updateGroup(idx, { label: (e.target as HTMLInputElement).value })}
+          />
+          <button class="icon" title=${localize(this.hass, "ui.title_delete", "Delete")}
+            @click=${() => this._removeGroup(idx)}>✕</button>
+        </div>
+        <span class="sr-label">${g.label}</span>
+        <div class="conditions">
+          ${ALL_CONDITIONS.map((c) => html`
+            <label class="condition">
+              <input type="checkbox"
+                .checked=${g.conditions.includes(c)}
+                @change=${(e: Event) => {
+                  const on = (e.target as HTMLInputElement).checked;
+                  const conds = on
+                    ? [...g.conditions, c]
+                    : g.conditions.filter((x) => x !== c);
+                  this._updateGroup(idx, { conditions: conds });
+                }} />
+              ${weatherConditionLabel(this.hass, c)}
+            </label>
+          `)}
+        </div>
+      </div>
+    `;
   }
 
   override render() {
     const schema = [{ name: "entity", selector: { entity: { domain: "weather" } } }];
     return html`
       <div class="row">
-        <label>${localize(this.hass, "ui.weather_entity", "Weather entity")}</label>
+        <label class="section">${localize(this.hass, "ui.weather_entity", "Weather entity")}</label>
         <ha-form
           .hass=${this.hass as any}
           .schema=${schema}
@@ -54,6 +167,13 @@ export class AmbienceWeatherConfig extends LitElement {
           }}
         ></ha-form>
       </div>
+
+      <h4>${localize(this.hass, "ui.groups", "Groups")}</h4>
+      ${this._config.groups.map((g, i) => this._renderGroup(i, g))}
+      <button class="add" @click=${() => this._addGroup()}>
+        ${localize(this.hass, "ui.add_group", "+ Add group")}
+      </button>
+
       ${this._warnings.length ? html`
         <div class="warnings">
           <strong>${localize(this.hass, "ui.day_warning_prefix", "Warning:")}</strong>

@@ -30,6 +30,10 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     }
     .threshold select, .threshold input { padding: 0.25rem; }
     .threshold ha-form { flex: 1; }
+    /* Attribute names like "Apparent temperature" need room; comparators are
+       single glyphs (<, ≤, >, ≥) and need very little. */
+    .threshold .attr-form { flex: 2; }
+    .threshold .op-form { flex: 0.5; }
     .threshold .attr-form,
     .threshold .op-form {
       margin-bottom: 2rem;

@@ -12,7 +12,7 @@ const OP_LABEL: Record<WeatherThreshold["op"], string> = {
   "<": "<", "<=": "≤", ">": ">", ">=": "≥",
 };
 
-type HaFormSchema = { name: string; selector: Record<string, unknown> };
+type HaFormSchema = { name: string; required?: boolean; selector: Record<string, unknown> };
 
 @customElement("ambience-weather-predicate-input")
 export class AmbienceWeatherPredicateInput extends LitElement {
@@ -83,10 +83,14 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     this._emit(next);
   }
 
-  /** ha-form schema for a single threshold's attribute dropdown. */
+  /** ha-form schema for a single threshold's attribute dropdown.
+   *  `required: true` suppresses ha-form's clear-X — a threshold without an
+   *  attribute can't validate, so there's nothing useful for the user to
+   *  clear it to. */
   _attributeSchema(_idx: number): HaFormSchema[] {
     return [{
       name: "attribute",
+      required: true,
       selector: {
         select: {
           mode: "dropdown",
@@ -103,10 +107,26 @@ export class AmbienceWeatherPredicateInput extends LitElement {
   _opSchema(_idx: number): HaFormSchema[] {
     return [{
       name: "op",
+      required: true,
       selector: {
         select: {
           mode: "dropdown",
           options: OPS.map((o) => ({ value: o, label: OP_LABEL[o] })),
+        },
+      },
+    }];
+  }
+
+  /** ha-form schema for a single threshold's numeric value. The unit is
+   *  carried as `unit_of_measurement` so HA renders it inside the box. */
+  _valueSchema(_idx: number, attribute: string): HaFormSchema[] {
+    return [{
+      name: "value",
+      required: true,
+      selector: {
+        number: {
+          mode: "box",
+          unit_of_measurement: weatherAttrUnit(this.hass, attribute),
         },
       },
     }];
@@ -195,20 +215,42 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     </select>`;
   }
 
-  private _renderThreshold(idx: number, t: WeatherThreshold) {
+  private _renderValueInput(idx: number, t: WeatherThreshold) {
+    /* v8 ignore start -- ha-form path (real HA only) */
+    if (customElements.get("ha-form")) {
+      return html`<ha-form
+        .hass=${this.hass}
+        .schema=${this._valueSchema(idx, t.attribute)}
+        .data=${{ value: t.value }}
+        .computeLabel=${() => ""}
+        @value-changed=${(e: CustomEvent<{ value: { value?: number } }>) => {
+          e.stopPropagation();
+          const v = e.detail.value.value;
+          if (typeof v === "number" && Number.isFinite(v)) {
+            this._updateThreshold(idx, { ...t, value: v });
+          }
+        }}
+      ></ha-form>`;
+    }
+    /* v8 ignore stop */
+    // jsdom fallback: native number input + a small unit suffix.
     const unit = weatherAttrUnit(this.hass, t.attribute);
+    return html`<span class="value-wrap">
+      <input type="number" .value=${String(t.value)}
+        @change=${(e: Event) => {
+          const v = Number((e.target as HTMLInputElement).value);
+          if (Number.isFinite(v)) this._updateThreshold(idx, { ...t, value: v });
+        }} />
+      <span class="unit">${unit}</span>
+    </span>`;
+  }
+
+  private _renderThreshold(idx: number, t: WeatherThreshold) {
     return html`
       <div class="threshold">
         ${this._renderAttributeSelect(idx, t)}
         ${this._renderOpSelect(idx, t)}
-        <span class="value-wrap">
-          <input type="number" .value=${String(t.value)}
-            @change=${(e: Event) => {
-              const v = Number((e.target as HTMLInputElement).value);
-              if (Number.isFinite(v)) this._updateThreshold(idx, { ...t, value: v });
-            }} />
-          <span class="unit">${unit}</span>
-        </span>
+        ${this._renderValueInput(idx, t)}
         <button class="remove" title=${localize(this.hass, "ui.remove", "Remove")} @click=${() => this._removeThreshold(idx)}>✕</button>
       </div>
     `;

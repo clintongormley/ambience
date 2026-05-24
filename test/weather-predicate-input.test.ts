@@ -72,11 +72,12 @@ describe("ambience-weather-predicate-input", () => {
     expect(el.value).toBeNull();
   });
 
-  test("_attributeSchema is a single ha-form select(dropdown) listing all attributes", async () => {
+  test("_attributeSchema is a required ha-form select(dropdown) listing all attributes", async () => {
     el = await mount({ groups: [], thresholds: [{ attribute: "temperature", op: "<", value: 0 }] });
     const schema = el._attributeSchema(0);
     expect(schema).toHaveLength(1);
     expect(schema[0].name).toBe("attribute");
+    expect(schema[0].required).toBe(true); // no clear-X
     const sel = schema[0].selector.select;
     expect(sel.mode).toBe("dropdown");
     expect(sel.multiple).toBeFalsy();
@@ -87,11 +88,12 @@ describe("ambience-weather-predicate-input", () => {
     expect(sel.options[0]).toEqual({ value: "temperature", label: "Temperature" });
   });
 
-  test("_opSchema is a single ha-form select(dropdown) listing the four comparators", async () => {
+  test("_opSchema is a required ha-form select(dropdown) listing the four comparators", async () => {
     el = await mount({ groups: [], thresholds: [{ attribute: "temperature", op: "<", value: 0 }] });
     const schema = el._opSchema(0);
     expect(schema).toHaveLength(1);
     expect(schema[0].name).toBe("op");
+    expect(schema[0].required).toBe(true); // no clear-X
     const sel = schema[0].selector.select;
     expect(sel.mode).toBe("dropdown");
     expect(sel.multiple).toBeFalsy();
@@ -103,6 +105,29 @@ describe("ambience-weather-predicate-input", () => {
       { value: ">",  label: ">"  },
       { value: ">=", label: "≥" },
     ]);
+  });
+
+  test("_valueSchema is a required ha-form number(box) carrying the unit", async () => {
+    el = await mount({ groups: [], thresholds: [{ attribute: "temperature", op: "<", value: 5 }] });
+    const schema = el._valueSchema(0, "temperature");
+    expect(schema).toHaveLength(1);
+    expect(schema[0].name).toBe("value");
+    expect(schema[0].required).toBe(true);
+    const num = schema[0].selector.number;
+    expect(num.mode).toBe("box");
+    // Unit comes via weatherAttrUnit — temperature defaults to °C.
+    expect(num.unit_of_measurement).toBe("°C");
+  });
+
+  test("_valueSchema unit follows hass.config.unit_system overrides", async () => {
+    const el2: any = document.createElement("ambience-weather-predicate-input");
+    el2.value = { groups: [], thresholds: [{ attribute: "temperature", op: "<", value: 5 }] };
+    el2.groups = TEST_GROUPS;
+    el2.hass = { config: { unit_system: { temperature: "°F" } } } as any;
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    expect(el2._valueSchema(0, "temperature")[0].selector.number.unit_of_measurement).toBe("°F");
+    el2.remove();
   });
 
   test("native fallback renders the unit symbol next to the value input", async () => {

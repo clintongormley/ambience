@@ -63,6 +63,11 @@ export class AmbienceWeatherPredicateInput extends LitElement {
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) value: WeatherPredicate = null;
   @property({ attribute: false }) groups: WeatherGroup[] = [];
+  // Entity_id of the globally-configured weather entity. Used to look up
+  // `<attr>_unit` attributes on the entity's state so threshold units match
+  // what HA actually renders (e.g. `hPa` instead of `unit_system.pressure`
+  // which would be `Pa`).
+  @property({ attribute: false }) weatherEntity?: string;
 
   private _current(): { groups: string[]; thresholds: WeatherThreshold[] } {
     if (this.value === null) return { groups: [], thresholds: [] };
@@ -133,6 +138,14 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     }];
   }
 
+  /** Resolve the configured weather entity's state, if available. */
+  private _entityState(): { attributes?: Record<string, unknown> } | undefined {
+    const id = this.weatherEntity;
+    if (!id) return undefined;
+    const states = (this.hass as { states?: Record<string, unknown> } | undefined)?.states;
+    return states?.[id] as { attributes?: Record<string, unknown> } | undefined;
+  }
+
   /** ha-form schema for a single threshold's numeric value. The unit is
    *  carried as `unit_of_measurement` so HA renders it inside the box. */
   _valueSchema(_idx: number, attribute: string): HaFormSchema[] {
@@ -142,7 +155,7 @@ export class AmbienceWeatherPredicateInput extends LitElement {
       selector: {
         number: {
           mode: "box",
-          unit_of_measurement: weatherAttrUnit(this.hass, attribute),
+          unit_of_measurement: weatherAttrUnit(this.hass, attribute, this._entityState()),
         },
       },
     }];
@@ -252,7 +265,7 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     }
     /* v8 ignore stop */
     // jsdom fallback: native number input + a small unit suffix.
-    const unit = weatherAttrUnit(this.hass, t.attribute);
+    const unit = weatherAttrUnit(this.hass, t.attribute, this._entityState());
     return html`<span class="value-wrap">
       <input type="number" .value=${String(t.value)}
         @change=${(e: Event) => {

@@ -111,6 +111,7 @@ export class AmbienceMatcherInput extends LitElement {
           .hass=${this.hass}
           .value=${this.value as any}
           .groups=${this.weatherConfig?.groups ?? []}
+          .weatherEntity=${this.weatherConfig?.entity ?? undefined}
           @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
             e.stopPropagation();
             this._emit(e.detail.value);

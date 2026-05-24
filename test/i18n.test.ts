@@ -200,4 +200,38 @@ describe("weatherAttrUnit", () => {
   test("returns empty string for unknown attributes", () => {
     expect(weatherAttrUnit(undefined, "cloudiness")).toBe("");
   });
+
+  // --- entity-state override --------------------------------------------
+  // HA's `unit_system.pressure` is "Pa" / "psi" — the base SI unit — but
+  // weather entities report pressure in "hPa" / "inHg". The entity's own
+  // attributes (temperature_unit, pressure_unit, wind_speed_unit) carry
+  // the unit HA actually uses to display values. Read those first.
+
+  test("entity-state pressure_unit overrides unit_system.pressure", () => {
+    const hass = { config: { unit_system: { pressure: "Pa" } } } as any;
+    const state = { attributes: { pressure_unit: "hPa" } };
+    expect(weatherAttrUnit(hass, "pressure", state)).toBe("hPa");
+  });
+  test("entity-state temperature_unit overrides unit_system.temperature", () => {
+    const hass = { config: { unit_system: { temperature: "°C" } } } as any;
+    const state = { attributes: { temperature_unit: "°F" } };
+    expect(weatherAttrUnit(hass, "temperature", state)).toBe("°F");
+    // apparent_temperature shares the same unit attribute.
+    expect(weatherAttrUnit(hass, "apparent_temperature", state)).toBe("°F");
+  });
+  test("entity-state wind_speed_unit overrides unit_system.wind_speed", () => {
+    const hass = { config: { unit_system: { wind_speed: "m/s" } } } as any;
+    const state = { attributes: { wind_speed_unit: "km/h" } };
+    expect(weatherAttrUnit(hass, "wind_speed", state)).toBe("km/h");
+  });
+  test("humidity still '%' even if entity exposes a bogus unit", () => {
+    const state = { attributes: { humidity_unit: "ppm" } };
+    expect(weatherAttrUnit(undefined, "humidity", state)).toBe("%");
+  });
+  test("falls through to unit_system when the entity attribute is missing or non-string", () => {
+    const hass = { config: { unit_system: { pressure: "Pa" } } } as any;
+    expect(weatherAttrUnit(hass, "pressure", { attributes: {} })).toBe("Pa");
+    expect(weatherAttrUnit(hass, "pressure", { attributes: { pressure_unit: 42 } as any })).toBe("Pa");
+    expect(weatherAttrUnit(hass, "pressure", undefined)).toBe("Pa");
+  });
 });

@@ -130,6 +130,23 @@ describe("ambience-weather-predicate-input", () => {
     el2.remove();
   });
 
+  test("_valueSchema prefers the configured entity's pressure_unit over unit_system.pressure", async () => {
+    // unit_system says "Pa" (SI base) but the entity reports values in hPa.
+    // The schema should show hPa — what HA actually renders.
+    const el2: any = document.createElement("ambience-weather-predicate-input");
+    el2.value = { groups: [], thresholds: [{ attribute: "pressure", op: "<", value: 1013 }] };
+    el2.groups = TEST_GROUPS;
+    el2.weatherEntity = "weather.home";
+    el2.hass = {
+      config: { unit_system: { pressure: "Pa" } },
+      states: { "weather.home": { attributes: { pressure_unit: "hPa" } } },
+    } as any;
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    expect(el2._valueSchema(0, "pressure")[0].selector.number.unit_of_measurement).toBe("hPa");
+    el2.remove();
+  });
+
   test("native fallback renders the unit symbol next to the value input", async () => {
     el = await mount({
       groups: [],

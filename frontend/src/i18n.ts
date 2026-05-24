@@ -174,11 +174,42 @@ const _UNIT_SYSTEM_KEY: Record<string, string> = {
   pressure: "pressure",
 };
 
+// Which entity-state attribute carries the unit for each weather attribute.
+// Weather entities expose these on their state attributes — HA itself reads
+// them to display the value, so they're guaranteed to match what's stored.
+const _ENTITY_UNIT_ATTR: Record<string, string> = {
+  temperature: "temperature_unit",
+  apparent_temperature: "temperature_unit",
+  wind_speed: "wind_speed_unit",
+  pressure: "pressure_unit",
+};
+
+type EntityStateLike = { attributes?: Record<string, unknown> };
+
 /** Return the unit symbol to display next to a numeric weather threshold value.
- *  Prefers the HA unit system from `hass.config.unit_system`; falls back to
- *  metric defaults. Returns `""` for unknown attributes. */
-export function weatherAttrUnit(hass: HassLike | undefined, attr: string): string {
+ *
+ *  Resolution order:
+ *    1. Humidity is hard-coded to `%`.
+ *    2. The configured weather entity's own `<attr>_unit` attribute, if
+ *       provided — this is what HA actually uses to render the value.
+ *    3. `hass.config.unit_system.<attr>` — falls back to HA's global unit
+ *       system. NB: unit_system reports SI base units (e.g. `Pa`) while
+ *       weather entities typically render in display units (`hPa`); for that
+ *       reason prefer the entity state when you have it.
+ *    4. Metric defaults (`°C`, `m/s`, `hPa`) when nothing else is known.
+ *
+ *  Returns `""` for unknown attributes. */
+export function weatherAttrUnit(
+  hass: HassLike | undefined,
+  attr: string,
+  entityState?: EntityStateLike,
+): string {
   if (attr === "humidity") return "%";
+  const entityAttr = _ENTITY_UNIT_ATTR[attr];
+  if (entityAttr) {
+    const value = entityState?.attributes?.[entityAttr];
+    if (typeof value === "string" && value) return value;
+  }
   const sysKey = _UNIT_SYSTEM_KEY[attr];
   const sys = (hass as { config?: { unit_system?: Record<string, unknown> } } | undefined)
     ?.config?.unit_system;

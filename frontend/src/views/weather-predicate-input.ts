@@ -20,8 +20,12 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     :host { display: block; }
     .section { margin-bottom: 1rem; }
     .section h4 { margin: 0 0 0.5rem 0; font-size: 0.95em; }
+    /* ha-form renders the select widgets and the number widget at slightly
+       different internal heights, so centering by row centres them
+       inconsistently. Align by the bottom edge (the field underline) — the
+       natural baseline for HA form fields. */
     .threshold {
-      display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem;
+      display: flex; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.4rem;
     }
     .threshold select, .threshold input { padding: 0.25rem; }
     .threshold ha-form { flex: 1; }
@@ -36,6 +40,9 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     .remove {
       background: none; border: none; color: var(--secondary-text-color);
       cursor: pointer; font-size: 1em; padding: 0;
+      /* Lift the X up so it sits next to the input area, not below the
+         underline where the row's bottom edge lands. */
+      margin-bottom: 0.6rem;
     }
     button.add {
       background: transparent; border: 1px dashed var(--divider-color, #ccc);

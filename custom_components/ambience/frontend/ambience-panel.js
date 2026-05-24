@@ -526,7 +526,7 @@ var Ht=Object.defineProperty;var Dt=Object.getOwnPropertyDescriptor;var d=(n,s,e
     .threshold ha-form { flex: 1; }
     .threshold .attr-form,
     .threshold .op-form {
-      margin-bottom: 1rem;
+      margin-bottom: 2rem;
     }
     .threshold .value-wrap {
       display: inline-flex; align-items: center; gap: 0.25rem;
@@ -540,8 +540,8 @@ var Ht=Object.defineProperty;var Dt=Object.getOwnPropertyDescriptor;var d=(n,s,e
       background: none; border: none; color: var(--secondary-text-color);
       cursor: pointer; font-size: 1em; padding: 0;
       /* Sit next to the input area, lined up with the dropdowns' lifted
-         underlines. */
-      margin-bottom: 1.4rem;
+         underlines (which now have a 2rem margin-bottom). */
+      margin-bottom: 2.4rem;
     }
     button.add {
       background: transparent; border: 1px dashed var(--divider-color, #ccc);

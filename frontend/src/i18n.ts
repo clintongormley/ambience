@@ -154,3 +154,34 @@ export function weatherAttrLabel(hass: HassLike | undefined, attr: string): stri
     _WEATHER_ATTR_FALLBACKS[attr] ?? attr,
   );
 }
+
+// Metric defaults — used when hass.config.unit_system is unavailable or doesn't
+// expose the relevant key. Humidity is always %.
+const _DEFAULT_WEATHER_UNITS: Record<string, string> = {
+  temperature: "°C",
+  apparent_temperature: "°C",
+  humidity: "%",
+  wind_speed: "m/s",
+  pressure: "hPa",
+};
+
+// Which `unit_system` field provides the unit for each weather attribute.
+// Humidity is omitted: HA does not expose a humidity unit (it's always %).
+const _UNIT_SYSTEM_KEY: Record<string, string> = {
+  temperature: "temperature",
+  apparent_temperature: "temperature",
+  wind_speed: "wind_speed",
+  pressure: "pressure",
+};
+
+/** Return the unit symbol to display next to a numeric weather threshold value.
+ *  Prefers the HA unit system from `hass.config.unit_system`; falls back to
+ *  metric defaults. Returns `""` for unknown attributes. */
+export function weatherAttrUnit(hass: HassLike | undefined, attr: string): string {
+  if (attr === "humidity") return "%";
+  const sysKey = _UNIT_SYSTEM_KEY[attr];
+  const sys = (hass as { config?: { unit_system?: Record<string, unknown> } } | undefined)
+    ?.config?.unit_system;
+  if (sysKey && sys && typeof sys[sysKey] === "string") return sys[sysKey] as string;
+  return _DEFAULT_WEATHER_UNITS[attr] ?? "";
+}

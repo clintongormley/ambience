@@ -10,6 +10,7 @@ import {
   monthLabel,
   weatherConditionLabel,
   weatherAttrLabel,
+  weatherAttrUnit,
 } from "../frontend/src/i18n";
 import type { PeriodDef } from "../frontend/src/types";
 
@@ -167,5 +168,36 @@ describe("weatherAttrLabel", () => {
   test("English fallbacks", () => {
     expect(weatherAttrLabel(undefined, "temperature")).toBe("Temperature");
     expect(weatherAttrLabel(undefined, "wind_speed")).toBe("Wind speed");
+  });
+});
+
+describe("weatherAttrUnit", () => {
+  test("humidity is always '%' regardless of hass", () => {
+    expect(weatherAttrUnit(undefined, "humidity")).toBe("%");
+    expect(weatherAttrUnit({ config: { unit_system: { temperature: "°F" } } } as any, "humidity"))
+      .toBe("%");
+  });
+  test("temperature & apparent_temperature follow hass.config.unit_system.temperature", () => {
+    const hass = { config: { unit_system: { temperature: "°F" } } } as any;
+    expect(weatherAttrUnit(hass, "temperature")).toBe("°F");
+    expect(weatherAttrUnit(hass, "apparent_temperature")).toBe("°F");
+  });
+  test("wind_speed reads from hass.config.unit_system.wind_speed", () => {
+    const hass = { config: { unit_system: { wind_speed: "km/h" } } } as any;
+    expect(weatherAttrUnit(hass, "wind_speed")).toBe("km/h");
+  });
+  test("pressure reads from hass.config.unit_system.pressure", () => {
+    const hass = { config: { unit_system: { pressure: "inHg" } } } as any;
+    expect(weatherAttrUnit(hass, "pressure")).toBe("inHg");
+  });
+  test("falls back to metric defaults when hass is missing or has no unit_system", () => {
+    expect(weatherAttrUnit(undefined, "temperature")).toBe("°C");
+    expect(weatherAttrUnit(undefined, "apparent_temperature")).toBe("°C");
+    expect(weatherAttrUnit(undefined, "wind_speed")).toBe("m/s");
+    expect(weatherAttrUnit(undefined, "pressure")).toBe("hPa");
+    expect(weatherAttrUnit({} as any, "temperature")).toBe("°C");
+  });
+  test("returns empty string for unknown attributes", () => {
+    expect(weatherAttrUnit(undefined, "cloudiness")).toBe("");
   });
 });

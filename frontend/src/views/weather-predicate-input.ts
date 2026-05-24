@@ -2,11 +2,15 @@ import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
-import { localize, weatherAttrLabel } from "../i18n.js";
+import { localize, weatherAttrLabel, weatherAttrUnit } from "../i18n.js";
 import type { WeatherGroup, WeatherPredicate, WeatherThreshold } from "../types.js";
 
 const ATTRIBUTES = ["temperature", "apparent_temperature", "humidity", "wind_speed", "pressure"];
 const OPS: WeatherThreshold["op"][] = ["<", "<=", ">", ">="];
+// Pretty form of each operator — used as the dropdown label and in summaries.
+const OP_LABEL: Record<WeatherThreshold["op"], string> = {
+  "<": "<", "<=": "≤", ">": ">", ">=": "≥",
+};
 
 type HaFormSchema = { name: string; selector: Record<string, unknown> };
 
@@ -20,6 +24,15 @@ export class AmbienceWeatherPredicateInput extends LitElement {
       display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem;
     }
     .threshold select, .threshold input { padding: 0.25rem; }
+    .threshold ha-form { flex: 1; }
+    .threshold .value-wrap {
+      display: inline-flex; align-items: center; gap: 0.25rem;
+    }
+    .threshold .unit {
+      color: var(--secondary-text-color, #888);
+      font-size: 0.9em;
+      min-width: 2.5em;
+    }
     .remove {
       background: none; border: none; color: var(--secondary-text-color);
       cursor: pointer; font-size: 1em; padding: 0;
@@ -70,6 +83,35 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     this._emit(next);
   }
 
+  /** ha-form schema for a single threshold's attribute dropdown. */
+  _attributeSchema(_idx: number): HaFormSchema[] {
+    return [{
+      name: "attribute",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: ATTRIBUTES.map((a) => ({
+            value: a,
+            label: weatherAttrLabel(this.hass, a),
+          })),
+        },
+      },
+    }];
+  }
+
+  /** ha-form schema for a single threshold's comparator dropdown. */
+  _opSchema(_idx: number): HaFormSchema[] {
+    return [{
+      name: "op",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: OPS.map((o) => ({ value: o, label: OP_LABEL[o] })),
+        },
+      },
+    }];
+  }
+
   _groupsSchema(): HaFormSchema[] {
     return [{
       name: "groups",
@@ -108,20 +150,65 @@ export class AmbienceWeatherPredicateInput extends LitElement {
   }
   /* v8 ignore stop */
 
+  private _renderAttributeSelect(idx: number, t: WeatherThreshold) {
+    /* v8 ignore start -- ha-form path (real HA only) */
+    if (customElements.get("ha-form")) {
+      return html`<ha-form
+        .hass=${this.hass}
+        .schema=${this._attributeSchema(idx)}
+        .data=${{ attribute: t.attribute }}
+        .computeLabel=${() => ""}
+        @value-changed=${(e: CustomEvent<{ value: { attribute?: string } }>) => {
+          e.stopPropagation();
+          const a = e.detail.value.attribute;
+          if (a) this._updateThreshold(idx, { ...t, attribute: a });
+        }}
+      ></ha-form>`;
+    }
+    /* v8 ignore stop */
+    // jsdom fallback: native <select> for tests / old HA.
+    return html`<select
+      @change=${(e: Event) => this._updateThreshold(idx, { ...t, attribute: (e.target as HTMLSelectElement).value })}>
+      ${ATTRIBUTES.map((a) => html`<option value=${a} ?selected=${a === t.attribute}>${weatherAttrLabel(this.hass, a)}</option>`)}
+    </select>`;
+  }
+
+  private _renderOpSelect(idx: number, t: WeatherThreshold) {
+    /* v8 ignore start -- ha-form path (real HA only) */
+    if (customElements.get("ha-form")) {
+      return html`<ha-form
+        .hass=${this.hass}
+        .schema=${this._opSchema(idx)}
+        .data=${{ op: t.op }}
+        .computeLabel=${() => ""}
+        @value-changed=${(e: CustomEvent<{ value: { op?: WeatherThreshold["op"] } }>) => {
+          e.stopPropagation();
+          const op = e.detail.value.op;
+          if (op) this._updateThreshold(idx, { ...t, op });
+        }}
+      ></ha-form>`;
+    }
+    /* v8 ignore stop */
+    return html`<select
+      @change=${(e: Event) => this._updateThreshold(idx, { ...t, op: (e.target as HTMLSelectElement).value as WeatherThreshold["op"] })}>
+      ${OPS.map((o) => html`<option value=${o} ?selected=${o === t.op}>${OP_LABEL[o]}</option>`)}
+    </select>`;
+  }
+
   private _renderThreshold(idx: number, t: WeatherThreshold) {
+    const unit = weatherAttrUnit(this.hass, t.attribute);
     return html`
       <div class="threshold">
-        <select @change=${(e: Event) => this._updateThreshold(idx, { ...t, attribute: (e.target as HTMLSelectElement).value })}>
-          ${ATTRIBUTES.map((a) => html`<option value=${a} ?selected=${a === t.attribute}>${weatherAttrLabel(this.hass, a)}</option>`)}
-        </select>
-        <select @change=${(e: Event) => this._updateThreshold(idx, { ...t, op: (e.target as HTMLSelectElement).value as WeatherThreshold["op"] })}>
-          ${OPS.map((o) => html`<option value=${o} ?selected=${o === t.op}>${o}</option>`)}
-        </select>
-        <input type="number" .value=${String(t.value)}
-          @change=${(e: Event) => {
-            const v = Number((e.target as HTMLInputElement).value);
-            if (Number.isFinite(v)) this._updateThreshold(idx, { ...t, value: v });
-          }} />
+        ${this._renderAttributeSelect(idx, t)}
+        ${this._renderOpSelect(idx, t)}
+        <span class="value-wrap">
+          <input type="number" .value=${String(t.value)}
+            @change=${(e: Event) => {
+              const v = Number((e.target as HTMLInputElement).value);
+              if (Number.isFinite(v)) this._updateThreshold(idx, { ...t, value: v });
+            }} />
+          <span class="unit">${unit}</span>
+        </span>
         <button class="remove" title=${localize(this.hass, "ui.remove", "Remove")} @click=${() => this._removeThreshold(idx)}>✕</button>
       </div>
     `;

@@ -464,6 +464,7 @@ var Ht=Object.defineProperty;var Dt=Object.getOwnPropertyDescriptor;var d=(n,s,e
         <input type="checkbox" .checked=${e.includes(t.id)}
           @change=${r=>{let i=r.target.checked;this._setGroups(i?[...e,t.id]:e.filter(a=>a!==t.id))}} />${t.label}
       </label>`)}`}_renderAttributeSelect(e,t){return customElements.get("ha-form")?l`<ha-form
+        class="attr-form"
         .hass=${this.hass}
         .schema=${this._attributeSchema(e)}
         .data=${{attribute:t.attribute}}
@@ -473,6 +474,7 @@ var Ht=Object.defineProperty;var Dt=Object.getOwnPropertyDescriptor;var d=(n,s,e
       @change=${r=>this._updateThreshold(e,{...t,attribute:r.target.value})}>
       ${xt.map(r=>l`<option value=${r} ?selected=${r===t.attribute}>${le(this.hass,r)}</option>`)}
     </select>`}_renderOpSelect(e,t){return customElements.get("ha-form")?l`<ha-form
+        class="op-form"
         .hass=${this.hass}
         .schema=${this._opSchema(e)}
         .data=${{op:t.op}}
@@ -512,15 +514,20 @@ var Ht=Object.defineProperty;var Dt=Object.getOwnPropertyDescriptor;var d=(n,s,e
     :host { display: block; }
     .section { margin-bottom: 1rem; }
     .section h4 { margin: 0 0 0.5rem 0; font-size: 0.95em; }
-    /* ha-form renders the select widgets and the number widget at slightly
-       different internal heights, so centering by row centres them
-       inconsistently. Align by the bottom edge (the field underline) — the
-       natural baseline for HA form fields. */
+    /* ha-form-select carries extra bottom padding (for the helper/supporting
+       text slot) while ha-form-number does not. flex-end aligns the OUTER
+       box bottoms, which leaves the dropdowns' underlines sitting lower than
+       the number's underline. Compensate by giving the dropdowns a matching
+       margin-bottom, lifting their underlines up to meet the number's. */
     .threshold {
       display: flex; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.4rem;
     }
     .threshold select, .threshold input { padding: 0.25rem; }
     .threshold ha-form { flex: 1; }
+    .threshold .attr-form,
+    .threshold .op-form {
+      margin-bottom: 1rem;
+    }
     .threshold .value-wrap {
       display: inline-flex; align-items: center; gap: 0.25rem;
     }
@@ -532,9 +539,9 @@ var Ht=Object.defineProperty;var Dt=Object.getOwnPropertyDescriptor;var d=(n,s,e
     .remove {
       background: none; border: none; color: var(--secondary-text-color);
       cursor: pointer; font-size: 1em; padding: 0;
-      /* Lift the X up so it sits next to the input area, not below the
-         underline where the row's bottom edge lands. */
-      margin-bottom: 0.6rem;
+      /* Sit next to the input area, lined up with the dropdowns' lifted
+         underlines. */
+      margin-bottom: 1.4rem;
     }
     button.add {
       background: transparent; border: 1px dashed var(--divider-color, #ccc);

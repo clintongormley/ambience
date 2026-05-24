@@ -20,15 +20,20 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     :host { display: block; }
     .section { margin-bottom: 1rem; }
     .section h4 { margin: 0 0 0.5rem 0; font-size: 0.95em; }
-    /* ha-form renders the select widgets and the number widget at slightly
-       different internal heights, so centering by row centres them
-       inconsistently. Align by the bottom edge (the field underline) — the
-       natural baseline for HA form fields. */
+    /* ha-form-select carries extra bottom padding (for the helper/supporting
+       text slot) while ha-form-number does not. flex-end aligns the OUTER
+       box bottoms, which leaves the dropdowns' underlines sitting lower than
+       the number's underline. Compensate by giving the dropdowns a matching
+       margin-bottom, lifting their underlines up to meet the number's. */
     .threshold {
       display: flex; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.4rem;
     }
     .threshold select, .threshold input { padding: 0.25rem; }
     .threshold ha-form { flex: 1; }
+    .threshold .attr-form,
+    .threshold .op-form {
+      margin-bottom: 1rem;
+    }
     .threshold .value-wrap {
       display: inline-flex; align-items: center; gap: 0.25rem;
     }
@@ -40,9 +45,9 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     .remove {
       background: none; border: none; color: var(--secondary-text-color);
       cursor: pointer; font-size: 1em; padding: 0;
-      /* Lift the X up so it sits next to the input area, not below the
-         underline where the row's bottom edge lands. */
-      margin-bottom: 0.6rem;
+      /* Sit next to the input area, lined up with the dropdowns' lifted
+         underlines. */
+      margin-bottom: 1.4rem;
     }
     button.add {
       background: transparent; border: 1px dashed var(--divider-color, #ccc);
@@ -181,6 +186,7 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
       return html`<ha-form
+        class="attr-form"
         .hass=${this.hass}
         .schema=${this._attributeSchema(idx)}
         .data=${{ attribute: t.attribute }}
@@ -204,6 +210,7 @@ export class AmbienceWeatherPredicateInput extends LitElement {
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
       return html`<ha-form
+        class="op-form"
         .hass=${this.hass}
         .schema=${this._opSchema(idx)}
         .data=${{ op: t.op }}

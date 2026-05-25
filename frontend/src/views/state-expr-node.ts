@@ -82,10 +82,28 @@ export class AmbienceStateExprNode extends LitElement {
       border-radius: 4px; padding: 0.1rem 0.35rem; cursor: pointer;
       font-size: 0.85em; color: inherit;
     }
+    /* When NOT is OFF it's a quiet, low-contrast affordance — the
+       border fades into the card and the label uses secondary text
+       colour so it doesn't compete with the summary. */
+    .atom-header .not-toggle,
+    .group-header .not-toggle {
+      border-color: transparent;
+      color: var(--secondary-text-color, #888);
+      opacity: 0.6;
+    }
+    .atom-header .not-toggle:hover,
+    .group-header .not-toggle:hover {
+      opacity: 1;
+      border-color: var(--divider-color, #ccc);
+    }
+    /* Active state is loud — the negation is in effect, the user should
+       see it at a glance. */
     .atom-header .not-toggle.on,
     .group-header .not-toggle.on {
       background: var(--warning-color, #ffd);
       border-color: var(--warning-color, #cc9);
+      color: inherit;
+      opacity: 1;
       font-weight: 600;
     }
     .group-header .unwrap {

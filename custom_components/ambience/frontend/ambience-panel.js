@@ -608,11 +608,12 @@ var Ht=Object.defineProperty;var Dt=Object.getOwnPropertyDescriptor;var d=(n,s,e
       white-space: pre-wrap;
       margin-top: 0.25rem;
     }
-  `,d([u({attribute:!1})],x.prototype,"matcher",2),d([u({attribute:!1})],x.prototype,"value",2),d([u({attribute:!1})],x.prototype,"sceneSuggestions",2),d([u({attribute:!1})],x.prototype,"periods",2),d([u({attribute:!1})],x.prototype,"dayConfig",2),d([u({attribute:!1})],x.prototype,"weatherConfig",2),d([u({attribute:!1})],x.prototype,"hass",2),x=d([_("ambience-matcher-input")],x);var j=class extends f{constructor(){super(...arguments);this.entities=[];this.value=[]}connectedCallback(){super.connectedCallback(),O(this,this.hass)}_emit(e){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_onHaFormChange(e){e.stopPropagation(),this._emit(e.detail.value.entity_ids??[])}_renderHaForm(){let e=[{name:"entity_ids",label:"",selector:{entity:{multiple:!0,include_entities:this.entities}}}];return l`
+  `,d([u({attribute:!1})],x.prototype,"matcher",2),d([u({attribute:!1})],x.prototype,"value",2),d([u({attribute:!1})],x.prototype,"sceneSuggestions",2),d([u({attribute:!1})],x.prototype,"periods",2),d([u({attribute:!1})],x.prototype,"dayConfig",2),d([u({attribute:!1})],x.prototype,"weatherConfig",2),d([u({attribute:!1})],x.prototype,"hass",2),x=d([_("ambience-matcher-input")],x);var j=class extends f{constructor(){super(...arguments);this.entities=[];this.value=[]}connectedCallback(){super.connectedCallback(),O(this,this.hass)}_emit(e){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_onHaFormChange(e){e.stopPropagation(),this._emit(e.detail.value.entity_ids??[])}_renderHaForm(){let e=[{name:"entity_ids",selector:{entity:{multiple:!0,include_entities:this.entities}}}];return l`
       <ha-form
         .hass=${this.hass}
         .schema=${e}
         .data=${{entity_ids:this.value}}
+        .computeLabel=${()=>""}
         @value-changed=${this._onHaFormChange}
       ></ha-form>
     `}_toggle(e,t){let r=new Set(this.value);t?r.add(e):r.delete(e),this._emit(this.entities.filter(i=>r.has(i)))}_renderFallback(){return this.entities.length===0?l`<p class="empty">${o(this.hass,"ui.no_matching_entities","No matching entities in this area.")}</p>`:l`

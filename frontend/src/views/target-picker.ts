@@ -64,7 +64,6 @@ export class AmbienceTargetPicker extends LitElement {
     const schema = [
       {
         name: "entity_ids",
-        label: "",  // hide the field label — outer "Target" label is enough
         selector: {
           entity: {
             multiple: true,
@@ -73,11 +72,17 @@ export class AmbienceTargetPicker extends LitElement {
         },
       },
     ];
+    // `.computeLabel` returning empty suppresses ha-form's per-field label
+    // (the outer "Target" label in rule-editor is enough). Setting
+    // `label: ""` on the schema doesn't suppress it — ha-form falls back to
+    // rendering the field NAME ("entity_ids"), which is what the user was
+    // seeing.
     return html`
       <ha-form
         .hass=${this.hass}
         .schema=${schema}
         .data=${{ entity_ids: this.value }}
+        .computeLabel=${() => ""}
         @value-changed=${this._onHaFormChange}
       ></ha-form>
     `;

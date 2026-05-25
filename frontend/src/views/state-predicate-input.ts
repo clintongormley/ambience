@@ -4,6 +4,12 @@ import { customElement, property, state } from "lit/decorators.js";
 import "./state-expr-node.js";
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
+
+function _samePath(a: number[] | null, b: number[] | null): boolean {
+  if (a === null || b === null) return false;
+  if (a.length !== b.length) return false;
+  return a.every((v, i) => v === b[i]);
+}
 import type {
   StateAtom, StateExpr, StateGroup, StateNot, StatePredicate,
 } from "../types.js";
@@ -282,8 +288,8 @@ export class AmbienceStatePredicateInput extends LitElement {
 
   private _onNodeOpen = (e: CustomEvent<{ path: number[] }>) => {
     e.stopPropagation();
-    // Refuse to switch away from an invalid open atom — surface the error
-    // instead so the user sees what needs fixing.
+    // Refuse to switch (or collapse) away from an invalid open atom — surface
+    // the error instead so the user sees what needs fixing.
     if (this._openPath !== null) {
       const current = this._atomAt(this._openPath);
       if (current && this._atomError(current) !== null) {
@@ -291,7 +297,12 @@ export class AmbienceStatePredicateInput extends LitElement {
         return;
       }
     }
-    this._openPath = e.detail.path;
+    // Click on the currently-open atom → collapse it (toggle behavior).
+    if (this._openPath !== null && _samePath(this._openPath, e.detail.path)) {
+      this._openPath = null;
+    } else {
+      this._openPath = e.detail.path;
+    }
     this._showError = false;
   };
 

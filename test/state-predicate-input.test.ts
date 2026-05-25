@@ -383,6 +383,43 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.entity_id).toBe("b");
   });
 
+  test("clicking the open atom's header collapses it (toggle)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    el._setOpen([0]);
+    await flush(el);
+
+    let cards = _atomCards(el);
+    expect(cards[0].classList.contains("expanded")).toBe(true);
+    (cards[0].querySelector(".atom-header") as HTMLElement).click();
+    await flush(el);
+
+    // Open atom clicked → collapses. None left expanded.
+    expect(el._openPath).toBeNull();
+    cards = _atomCards(el);
+    expect(cards[0].classList.contains("collapsed")).toBe(true);
+    expect(cards[1].classList.contains("collapsed")).toBe(true);
+  });
+
+  test("clicking an INVALID open atom's header refuses to collapse and surfaces the error", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "",       states: [] },   // invalid
+      { kind: "is", entity_id: "b",      states: ["off"] },
+    ]});
+    el._setOpen([0]);
+    await flush(el);
+
+    const cards = _atomCards(el);
+    (cards[0].querySelector(".atom-header") as HTMLElement).click();
+    await flush(el);
+
+    // Refused: atom [0] stays open with the error visible.
+    expect(el._openPath).toEqual([0]);
+    expect(cards[0].textContent).toMatch(/required/i);
+  });
+
   test("clicking another atom while the open one is invalid keeps the open one expanded and shows an error", async () => {
     // The first atom is incomplete (no entity_id). The second is valid.
     el = await mount({ kind: "and", items: [
@@ -445,6 +482,60 @@ describe("ambience-state-predicate-input", () => {
     await flush(el);
     cards = _atomCards(el);
     expect(cards[0].textContent).not.toMatch(/required/i);
+  });
+
+  test("group child-rows no longer carry an external ✕ (atoms keep their own header X)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    await flush(el);
+    // Walk into the root state-expr-node and find its .child-actions blocks.
+    const visit = (sr: ShadowRoot | null): HTMLElement[] => {
+      if (!sr) return [];
+      const found = Array.from(sr.querySelectorAll(".child-actions")) as HTMLElement[];
+      for (const n of Array.from(sr.querySelectorAll("ambience-state-expr-node"))) {
+        found.push(...visit((n as any).shadowRoot));
+      }
+      return found;
+    };
+    const actions = visit(el.shadowRoot);
+    expect(actions.length).toBeGreaterThan(0);
+    for (const a of actions) {
+      // No external ✕ next to each condition any more.
+      expect(a.querySelector("button.remove")).toBeNull();
+      // The (…) wrap button stays.
+      expect(a.querySelector("button.wrap")).toBeTruthy();
+    }
+  });
+
+  test("group header has an ✕ that removes the whole group", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    await flush(el);
+    // Find the root group-header inside the root state-expr-node.
+    const visit = (sr: ShadowRoot | null): HTMLElement | null => {
+      if (!sr) return null;
+      const h = sr.querySelector(".group-header");
+      if (h) return h as HTMLElement;
+      for (const n of Array.from(sr.querySelectorAll("ambience-state-expr-node"))) {
+        const r = visit((n as any).shadowRoot);
+        if (r) return r;
+      }
+      return null;
+    };
+    const header = visit(el.shadowRoot);
+    expect(header).toBeTruthy();
+    const x = header!.querySelector("button.remove") as HTMLButtonElement;
+    expect(x).toBeTruthy();
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    x.click();
+    await flush(el);
+    // Root group removed → predicate clears.
+    expect(captured).toBeNull();
   });
 
   test("adding a condition via + Add opens the new (empty) atom", async () => {

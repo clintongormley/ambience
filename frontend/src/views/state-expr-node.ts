@@ -34,6 +34,11 @@ export class AmbienceStateExprNode extends LitElement {
       display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;
       font-weight: 500;
     }
+    .group-header .remove {
+      margin-left: auto;
+      background: none; border: none; color: var(--secondary-text-color, #888);
+      cursor: pointer; font-size: 1em; padding: 0 0.25rem;
+    }
     .group-op {
       padding: 0.15rem 0.5rem; border: 1px solid var(--divider-color, #ccc);
       border-radius: 4px; background: var(--card-background-color, #fff);
@@ -171,10 +176,9 @@ export class AmbienceStateExprNode extends LitElement {
     return html`
       <div class="child-row">
         <div class="child-actions">
-          <button title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
+          <button class="wrap"
+            title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
             @click=${() => this._emitAt(childPath, "node-wrap", { op: "and" })}>(…)</button>
-          <button title=${localize(this.hass, "ui.remove", "Remove")}
-            @click=${() => this._emitAt(childPath, "node-remove")}>✕</button>
         </div>
         <div class="child-body">
           <ambience-state-expr-node
@@ -208,6 +212,9 @@ export class AmbienceStateExprNode extends LitElement {
             <option value="and_not" ?selected=${currentOp === "and_not"}>${stateOpLabel(this.hass, "and_not")}</option>
             <option value="or_not"  ?selected=${currentOp === "or_not"} >${stateOpLabel(this.hass, "or_not")}</option>
           </select>
+          <button class="remove"
+            title=${localize(this.hass, "ui.state_remove_group", "Remove group")}
+            @click=${() => this._emit("node-remove")}>✕</button>
         </div>
         <div class="group-children">
           ${group.items.map((child, i) => this._renderChildRow(child, i))}

@@ -215,41 +215,77 @@ describe("ambience-state-predicate-input", () => {
     expect(el.shadowRoot.querySelector(".root-toolbar .remove")).toBeTruthy();
   });
 
-  test("_setGroupOpAt to 'and_not' wraps the group in NOT", async () => {
+  test("group dropdown has only AND and OR options (no AND_NOT / OR_NOT)", async () => {
     el = await mount({ kind: "and", items: [
       { kind: "is", entity_id: "a", states: ["on"] },
       { kind: "is", entity_id: "b", states: ["off"] },
     ]});
-    let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._setGroupOpAt([], "and_not");
-    expect(captured.kind).toBe("not");
-    expect(captured.item.kind).toBe("and");
-    expect(captured.item.items).toHaveLength(2);
+    await flush(el);
+    const visit = (sr: ShadowRoot | null): HTMLSelectElement | null => {
+      if (!sr) return null;
+      const s = sr.querySelector("select.group-op") as HTMLSelectElement | null;
+      if (s) return s;
+      for (const n of Array.from(sr.querySelectorAll("ambience-state-expr-node"))) {
+        const r = visit((n as any).shadowRoot);
+        if (r) return r;
+      }
+      return null;
+    };
+    const select = visit(el.shadowRoot);
+    const opts = Array.from(select?.options ?? []).map((o) => o.value);
+    expect(opts).toEqual(["and", "or"]);
   });
 
-  test("_setGroupOpAt to 'or_not' wraps the group in NOT (with kind=or)", async () => {
+  test("group child-rows have a NOT toggle that reflects {kind:'not'} wrap state", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "not", item: { kind: "is", entity_id: "a", states: ["on"] } },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    await flush(el);
+    const visit = (sr: ShadowRoot | null): HTMLElement[] => {
+      if (!sr) return [];
+      const found = Array.from(sr.querySelectorAll(".child-actions")) as HTMLElement[];
+      for (const n of Array.from(sr.querySelectorAll("ambience-state-expr-node"))) {
+        found.push(...visit((n as any).shadowRoot));
+      }
+      return found;
+    };
+    const actions = visit(el.shadowRoot);
+    // Both child rows have a NOT toggle; the first one is 'on' (NOT-wrapped),
+    // the second is 'off'.
+    expect(actions[0].querySelector("button.not-toggle")?.classList.contains("on")).toBe(true);
+    expect(actions[1].querySelector("button.not-toggle")?.classList.contains("on")).toBe(false);
+  });
+
+  test("clicking a child's NOT toggle wraps that child in {kind:'not'}", async () => {
     el = await mount({ kind: "and", items: [
       { kind: "is", entity_id: "a", states: ["on"] },
       { kind: "is", entity_id: "b", states: ["off"] },
     ]});
+    await flush(el);
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._setGroupOpAt([], "or_not");
-    expect(captured.kind).toBe("not");
-    expect(captured.item.kind).toBe("or");
-  });
-
-  test("_setGroupOpAt to 'and' strips an outer NOT from a NOT-wrapped group", async () => {
-    el = await mount({ kind: "not", item: { kind: "or", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]}});
-    let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._setGroupOpAt([], "and");
-    expect(captured.kind).toBe("and");
-    expect(captured.items).toHaveLength(2);
+    const visit = (sr: ShadowRoot | null): HTMLElement[] => {
+      if (!sr) return [];
+      const found = Array.from(sr.querySelectorAll(".child-actions")) as HTMLElement[];
+      for (const n of Array.from(sr.querySelectorAll("ambience-state-expr-node"))) {
+        found.push(...visit((n as any).shadowRoot));
+      }
+      return found;
+    };
+    const toggle = visit(el.shadowRoot)[0].querySelector("button.not-toggle") as HTMLButtonElement;
+    toggle.click();
+    await flush(el);
+    expect(captured.items[0].kind).toBe("not");
+    expect(captured.items[0].item.entity_id).toBe("a");
+    // Toggling again unwraps.
+    el.value = captured;
+    await flush(el);
+    const toggle2 = visit(el.shadowRoot)[0].querySelector("button.not-toggle") as HTMLButtonElement;
+    toggle2.click();
+    await flush(el);
+    expect(captured.items[0].kind).toBe("is");
+    expect(captured.items[0].entity_id).toBe("a");
   });
 
   test("clicking root Clear/Remove sets the predicate to null", async () => {

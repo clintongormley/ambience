@@ -145,21 +145,12 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._emit(next);
   }
 
-  /** Group operator includes the negated variants. AND/OR set the bare
-   *  group kind; AND_NOT/OR_NOT wrap the group in a NOT. Storage stays
-   *  the same wire-format set (and|or|not) — the UI just exposes the
-   *  combination as a single dropdown choice. */
-  _setGroupOpAt(
-    path: number[],
-    op: "and" | "or" | "and_not" | "or_not",
-  ) {
-    const wantNot = op === "and_not" || op === "or_not";
-    const innerKind: "and" | "or" =
-      op === "and" || op === "and_not" ? "and" : "or";
+  /** Set the operator of the group at `path`. Strips any legacy outer NOT
+   *  wrap; whole-group negation isn't exposed in the UI any more — per-row
+   *  NOT toggles handle child-level negation instead. */
+  _setGroupOpAt(path: number[], op: "and" | "or") {
     const next = this._patch(this.value, path, (node) => {
       if (!node) return node;
-      // Extract the underlying items list, whether the current node is a
-      // bare group or a NOT-wrapped group.
       let bareGroup: StateGroup | null = null;
       if (node.kind === "and" || node.kind === "or") {
         bareGroup = node as StateGroup;
@@ -170,8 +161,7 @@ export class AmbienceStatePredicateInput extends LitElement {
         }
       }
       if (!bareGroup) return node;
-      const replaced: StateGroup = { kind: innerKind, items: bareGroup.items };
-      return wantNot ? ({ kind: "not", item: replaced } as StateNot) : replaced;
+      return { kind: op, items: bareGroup.items } as StateGroup;
     });
     this._emit(next);
   }
@@ -241,7 +231,7 @@ export class AmbienceStatePredicateInput extends LitElement {
   };
 
   private _onNodeSetOp = (
-    e: CustomEvent<{ path: number[]; op: "and" | "or" | "and_not" | "or_not" }>,
+    e: CustomEvent<{ path: number[]; op: "and" | "or" }>,
   ) => {
     e.stopPropagation();
     this._setGroupOpAt(e.detail.path, e.detail.op);

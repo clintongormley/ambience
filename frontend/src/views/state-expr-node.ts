@@ -56,6 +56,7 @@ export class AmbienceStateExprNode extends LitElement {
     .child-actions .not-toggle.on {
       background: var(--warning-color, #ffd);
       border-color: var(--warning-color, #cc9);
+      font-weight: 600;
     }
     .actions { display: flex; gap: 0.25rem; margin-top: 0.5rem; }
 
@@ -168,14 +169,18 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   private _renderChildRow(child: StateExpr, index: number) {
-    // Defensive unwrap of legacy NOT-on-atom data. New predicates express
-    // negation via `is_not` at the atom level or via and_not/or_not on the
-    // parent group, so this NOT wrap should be uncommon.
-    const inner: StateExpr = child.kind === "not" ? (child as StateNot).item : child;
+    // Per-child NOT: each row can be wrapped in {kind:"not", item:...}. The
+    // toggle reflects the wrap state; clicking it dispatches node-toggle-not
+    // which the root handles via _toggleNotAt(path).
+    const isNot = child.kind === "not";
+    const inner: StateExpr = isNot ? (child as StateNot).item : child;
     const childPath = [...this.path, index];
     return html`
       <div class="child-row">
         <div class="child-actions">
+          <button class="not-toggle ${isNot ? "on" : ""}"
+            title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
+            @click=${() => this._emitAt(childPath, "node-toggle-not")}>${stateOpLabel(this.hass, "not")}</button>
           <button class="wrap"
             title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
             @click=${() => this._emitAt(childPath, "node-wrap", { op: "and" })}>(…)</button>
@@ -194,12 +199,9 @@ export class AmbienceStateExprNode extends LitElement {
     `;
   }
 
-  /** Group dropdown exposes 4 operators. `and_not` and `or_not` are sugar
-   *  for `{not, item: {and|or, items}}` — they negate the whole group. */
-  private _renderGroup(group: StateGroup, isNot: boolean) {
-    const currentOp = isNot
-      ? (group.kind === "and" ? "and_not" : "or_not")
-      : group.kind;
+  /** Group dropdown is AND or OR — whole-group negation is gone; per-child
+   *  NOT lives on each row instead. */
+  private _renderGroup(group: StateGroup) {
     return html`
       <div class="group">
         <div class="group-header">
@@ -207,10 +209,8 @@ export class AmbienceStateExprNode extends LitElement {
             @change=${(e: Event) => this._emit("node-set-op", {
               op: (e.target as HTMLSelectElement).value,
             })}>
-            <option value="and"     ?selected=${currentOp === "and"}    >${stateOpLabel(this.hass, "and")}</option>
-            <option value="or"      ?selected=${currentOp === "or"}     >${stateOpLabel(this.hass, "or")}</option>
-            <option value="and_not" ?selected=${currentOp === "and_not"}>${stateOpLabel(this.hass, "and_not")}</option>
-            <option value="or_not"  ?selected=${currentOp === "or_not"} >${stateOpLabel(this.hass, "or_not")}</option>
+            <option value="and" ?selected=${group.kind === "and"}>${stateOpLabel(this.hass, "and")}</option>
+            <option value="or"  ?selected=${group.kind === "or"} >${stateOpLabel(this.hass, "or")}</option>
           </select>
           <button class="remove"
             title=${localize(this.hass, "ui.state_remove_group", "Remove group")}
@@ -229,15 +229,16 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   override render() {
-    // NOT wrappers may arrive here from the root (predicate-input passes the
-    // raw value, not the unwrapped inner). For groups, the NOT-ness flows
-    // through to the group's operator dropdown (and_not / or_not). For
-    // atoms, we just unwrap defensively — the new UI doesn't create
-    // `{not, atom}` but legacy data might.
-    const isNot = this.value.kind === "not";
-    const inner = isNot ? (this.value as StateNot).item : this.value;
+    // NOT wrappers are now expressed per-child via the row toolbar, not as
+    // a group-level wrap. We still unwrap defensively in case the root
+    // happens to be a NOT-wrapped group (legacy data); the outer NOT is
+    // silently ignored visually — backend eval keeps the right semantics
+    // until the user re-saves through a dropdown change.
+    const inner = this.value.kind === "not"
+      ? (this.value as StateNot).item
+      : this.value;
     if (inner.kind === "and" || inner.kind === "or") {
-      return this._renderGroup(inner, isNot);
+      return this._renderGroup(inner);
     }
     return this._renderAtomCard(inner as StateAtom);
   }

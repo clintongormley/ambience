@@ -4,6 +4,7 @@ import {
   localize,
   monthLabel,
   periodLabel,
+  stateOpLabel,
   weatherAttrLabel,
   weekdayLabel,
 } from "./i18n.js";
@@ -14,6 +15,8 @@ import type {
   DayPredicate,
   PeriodStoreView,
   Rule,
+  StateExpr,
+  StatePredicate,
   TimeEndpoint,
   TimeOfDayPredicate,
   WeatherGroup,
@@ -60,6 +63,9 @@ export function summariseMatcher(
   }
   if (matcherName === "weather") {
     return summariseWeather(predicate as WeatherPredicate, ctx);
+  }
+  if (matcherName === "state") {
+    return summariseState(predicate as StatePredicate, ctx);
   }
   return String(predicate);
 }
@@ -123,6 +129,52 @@ export function summariseWeather(pred: WeatherPredicate, ctx: MatcherContext = {
     .join(", ");
   const parts = [groups, thr].filter((s) => s !== "");
   return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
+}
+
+export function summariseState(pred: StatePredicate, ctx: MatcherContext = {}): string {
+  if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
+  return _renderStateExpr(pred, ctx);
+}
+
+function _renderStateExpr(expr: StateExpr, ctx: MatcherContext): string {
+  if (expr.kind === "is" || expr.kind === "is_not") {
+    const verb = expr.kind === "is"
+      ? stateOpLabel(ctx.hass, "is")
+      : stateOpLabel(ctx.hass, "is_not");
+    const states = expr.states.join("/");
+    const head = `${expr.entity_id} ${verb} ${states}`;
+    if (expr.for && _hasStateDuration(expr.for)) {
+      return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(expr.for)}`;
+    }
+    return head;
+  }
+  if (expr.kind === "and" || expr.kind === "or") {
+    const sep = ` ${stateOpLabel(ctx.hass, expr.kind)} `;
+    return expr.items.map((it) => _wrapStateIfGroup(it, ctx)).join(sep);
+  }
+  if (expr.kind === "not") {
+    return `${stateOpLabel(ctx.hass, "not")} (${_renderStateExpr(expr.item, ctx)})`;
+  }
+  return "";
+}
+
+function _wrapStateIfGroup(expr: StateExpr, ctx: MatcherContext): string {
+  if (expr.kind === "and" || expr.kind === "or") {
+    return `(${_renderStateExpr(expr, ctx)})`;
+  }
+  return _renderStateExpr(expr, ctx);
+}
+
+function _hasStateDuration(d: { h: number; m: number; s: number }): boolean {
+  return d.h > 0 || d.m > 0 || d.s > 0;
+}
+
+function _fmtStateDur(d: { h: number; m: number; s: number }): string {
+  const parts: string[] = [];
+  if (d.h) parts.push(`${d.h}h`);
+  if (d.m) parts.push(`${d.m}m`);
+  if (d.s) parts.push(`${d.s}s`);
+  return parts.length ? parts.join(" ") : "0s";
 }
 
 export function summariseTimeOfDay(

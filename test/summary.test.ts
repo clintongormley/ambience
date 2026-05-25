@@ -6,6 +6,7 @@ import {
   summariseDay,
   summariseAction,
   summariseWeather,
+  summariseState,
 } from "../frontend/src/summary";
 import type {
   ActionInfo,
@@ -290,4 +291,70 @@ test("summariseMatcher delegates weather", () => {
   const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
   expect(summariseMatcher("weather", { groups: ["wet"], thresholds: [] }, ctx))
     .toBe("Wet");
+});
+
+test("summariseState renders a single atom", () => {
+  expect(summariseState({
+    kind: "is", entity_id: "person.bob", states: ["home", "work"],
+  }, {})).toBe("person.bob is home/work");
+});
+
+test("summariseState renders is_not", () => {
+  expect(summariseState({
+    kind: "is_not", entity_id: "binary_sensor.door", states: ["on"],
+  }, {})).toBe("binary_sensor.door is not on");
+});
+
+test("summariseState renders 'for' duration", () => {
+  expect(summariseState({
+    kind: "is", entity_id: "binary_sensor.door", states: ["on"],
+    for: { h: 0, m: 5, s: 0 },
+  }, {})).toBe("binary_sensor.door is on for ≥5m");
+});
+
+test("summariseState renders 'for' with multiple units", () => {
+  expect(summariseState({
+    kind: "is", entity_id: "x", states: ["on"], for: { h: 1, m: 30, s: 15 },
+  }, {})).toBe("x is on for ≥1h 30m 15s");
+});
+
+test("summariseState renders AND group", () => {
+  expect(summariseState({ kind: "and", items: [
+    { kind: "is", entity_id: "a", states: ["on"] },
+    { kind: "is", entity_id: "b", states: ["off"] },
+  ]}, {})).toBe("a is on AND b is off");
+});
+
+test("summariseState renders OR group", () => {
+  expect(summariseState({ kind: "or", items: [
+    { kind: "is", entity_id: "a", states: ["on"] },
+    { kind: "is", entity_id: "b", states: ["off"] },
+  ]}, {})).toBe("a is on OR b is off");
+});
+
+test("summariseState renders NOT", () => {
+  expect(summariseState({
+    kind: "not",
+    item: { kind: "is", entity_id: "a", states: ["on"] },
+  }, {})).toBe("NOT (a is on)");
+});
+
+test("summariseState renders nested groups with parens around inner groups", () => {
+  expect(summariseState({ kind: "or", items: [
+    { kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]},
+    { kind: "is_not", entity_id: "c", states: ["open"] },
+  ]}, {})).toBe("(a is on AND b is off) OR c is not open");
+});
+
+test("summariseState null is 'any'", () => {
+  expect(summariseState(null, {})).toBe("any");
+});
+
+test("summariseMatcher dispatches state", () => {
+  expect(summariseMatcher("state", {
+    kind: "is", entity_id: "a", states: ["on"],
+  }, {})).toBe("a is on");
 });

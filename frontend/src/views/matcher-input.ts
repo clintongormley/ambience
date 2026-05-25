@@ -8,6 +8,7 @@ import "./scene-combobox.js";
 import "./time-of-day-input.js";
 import "./day-predicate-input.js";
 import "./weather-predicate-input.js";
+import "./state-predicate-input.js";
 
 /**
  * Dispatcher element for one matcher's predicate input. Given a matcher's
@@ -117,6 +118,18 @@ export class AmbienceMatcherInput extends LitElement {
             this._emit(e.detail.value);
           }}
         ></ambience-weather-predicate-input>
+      `;
+    }
+    if (this.matcher.input === "state_predicate") {
+      return html`
+        <ambience-state-predicate-input
+          .hass=${this.hass}
+          .value=${this.value as any}
+          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
+            e.stopPropagation();
+            this._emit(e.detail.value);
+          }}
+        ></ambience-state-predicate-input>
       `;
     }
     return html`

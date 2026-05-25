@@ -149,3 +149,12 @@ export async function saveWeatherConfig(
     groups,
   });
 }
+
+/** Best-effort list of plausible states for an entity. Returns `[]` when
+ *  the backend has no domain map AND the entity has no current state. */
+export async function getKnownStates(
+  hass: HassConnection,
+  entity_id: string,
+): Promise<{ states: string[] }> {
+  return hass.callWS({ type: "ambience/state/known_states", entity_id });
+}

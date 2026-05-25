@@ -216,3 +216,22 @@ export function weatherAttrUnit(
   if (sysKey && sys && typeof sys[sysKey] === "string") return sys[sysKey] as string;
   return _DEFAULT_WEATHER_UNITS[attr] ?? "";
 }
+
+// --- state matcher --------------------------------------------------------
+
+const _STATE_OP_FALLBACKS: Record<string, string> = {
+  is: "is",
+  is_not: "is not",
+  and: "AND",
+  or: "OR",
+  not: "NOT",
+};
+
+/** Label for a state-matcher operator (`is`, `is_not`, `and`, `or`, `not`). */
+export function stateOpLabel(hass: HassLike | undefined, op: string): string {
+  return _resolve(
+    hass,
+    `component.ambience.state_op.${op}`,
+    _STATE_OP_FALLBACKS[op] ?? op,
+  );
+}

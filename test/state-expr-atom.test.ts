@@ -48,6 +48,42 @@ describe("ambience-state-expr-atom", () => {
     expect(sel.multiple).toBeFalsy();
   });
 
+  test("_attributeSchema is a combobox listing the entity's attributes (sorted)", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "media_player.x", states: [] };
+    el2.hass = {
+      states: {
+        "media_player.x": {
+          attributes: { source: "Spotify", volume_level: 0.5, friendly_name: "Living room" },
+        },
+      },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    const sel = el2._attributeSchema()[0].selector.select;
+    expect(sel.mode).toBe("dropdown");
+    expect(sel.custom_value).toBe(true);
+    expect(sel.options.map((o: { value: string }) => o.value)).toEqual([
+      "friendly_name", "source", "volume_level",
+    ]);
+    el2.remove();
+  });
+
+  test("_attributeSchema returns an empty option list when the entity is not in hass.states", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "media_player.does_not_exist", states: [] };
+    el2.hass = { states: {} };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    expect(el2._attributeSchema()[0].selector.select.options).toEqual([]);
+    el2.remove();
+  });
+
+  test("_attributeSchema falls back to empty options when entity_id is unset", async () => {
+    el = await mount({ kind: "is", entity_id: "", states: [] });
+    expect(el._attributeSchema()[0].selector.select.options).toEqual([]);
+  });
+
   test("emits value-changed when op flips", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;

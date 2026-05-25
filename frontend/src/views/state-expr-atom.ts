@@ -140,8 +140,29 @@ export class AmbienceStateExprAtom extends LitElement {
     return [{ name: "entity_id", required: true, selector: { entity: {} } }];
   }
 
+  /** Best-effort list of attributes for the chosen entity, read from
+   *  `hass.states[entity_id].attributes`. Returns [] when the entity is
+   *  unset or not in hass.states. */
+  private _knownAttributesFor(entity_id: string): string[] {
+    if (!entity_id) return [];
+    const states = (this.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
+    const attrs = states?.[entity_id]?.attributes;
+    if (!attrs) return [];
+    return Object.keys(attrs).sort();
+  }
+
   _attributeSchema(): HaFormSchema[] {
-    return [{ name: "attribute", selector: { text: {} } }];
+    const attrs = this._knownAttributesFor(this.value.entity_id);
+    return [{
+      name: "attribute",
+      selector: {
+        select: {
+          mode: "dropdown",
+          custom_value: true,
+          options: attrs.map((a) => ({ value: a, label: a })),
+        },
+      },
+    }];
   }
 
   _opSchema(): HaFormSchema[] {

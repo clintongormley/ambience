@@ -176,8 +176,11 @@ export class AmbienceStateExprAtom extends LitElement {
   /** ha-form select doesn't render value="" as a selectable item, so we
    *  use a non-empty sentinel for the "compare entity.state" option and
    *  translate it back to `null` on emit (and to the sentinel when
-   *  populating `data`). */
-  private static readonly _STATE_SENTINEL = "__state__";
+   *  populating `data`). With `custom_value: true`, ha-form displays the
+   *  raw value in the input box — so the sentinel is the literal word
+   *  "State" rather than a magic key, making the displayed text match
+   *  the user's expectation. */
+  private static readonly _STATE_SENTINEL = "State";
 
   /** Dropdown of "Where to look": first option is the State sentinel; the
    *  rest are the entity's known attributes. custom_value: true so the
@@ -190,10 +193,14 @@ export class AmbienceStateExprAtom extends LitElement {
         select: {
           mode: "dropdown",
           custom_value: true,
+          // Sentinel value and label are both the literal word 'State' so
+          // ha-form's custom_value combobox displays "State" rather than an
+          // internal key. Localizing the label would diverge value-from-text
+          // when custom_value is on, so we leave it untranslated here.
           options: [
             {
               value: AmbienceStateExprAtom._STATE_SENTINEL,
-              label: localize(this.hass, "ui.state_where_state", "State"),
+              label: AmbienceStateExprAtom._STATE_SENTINEL,
             },
             ...attrs.map((a) => ({ value: a, label: a })),
           ],

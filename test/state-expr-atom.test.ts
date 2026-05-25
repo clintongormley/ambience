@@ -22,11 +22,12 @@ describe("ambience-state-expr-atom", () => {
   let el: any;
   afterEach(() => el?.remove());
 
-  test("renders entity, op and states fields (native fallback)", async () => {
+  test("renders Entity / Attribute / Op / Values / For sections", async () => {
     el = await mount({ kind: "is", entity_id: "binary_sensor.x", states: ["on"] });
     expect(el.shadowRoot.querySelector("[data-field='entity']")).toBeTruthy();
+    expect(el.shadowRoot.querySelector("[data-field='attribute']")).toBeTruthy();
     expect(el.shadowRoot.querySelector("[data-field='op']")).toBeTruthy();
-    expect(el.shadowRoot.querySelector("[data-field='states']")).toBeTruthy();
+    expect(el.shadowRoot.querySelector("[data-field='for']")).toBeTruthy();
   });
 
   test("_opSchema is a required dropdown with is / is_not", async () => {
@@ -38,12 +39,13 @@ describe("ambience-state-expr-atom", () => {
     expect(opts).toEqual(["is", "is_not"]);
   });
 
-  test("_statesSchema is a multi-select with custom_value enabled", async () => {
+  test("_valueSchema is a single-value combobox with custom_value enabled", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
-    const schema = el._statesSchema();
+    const schema = el._valueSchema();
     const sel = schema[0].selector.select;
-    expect(sel.multiple).toBe(true);
+    expect(sel.mode).toBe("dropdown");
     expect(sel.custom_value).toBe(true);
+    expect(sel.multiple).toBeFalsy();
   });
 
   test("emits value-changed when op flips", async () => {
@@ -54,91 +56,57 @@ describe("ambience-state-expr-atom", () => {
     expect(captured.kind).toBe("is_not");
   });
 
-  test("emits value-changed when states change", async () => {
+  test("renders N value rows plus one trailing empty add-row", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on", "off"] });
+    const rows = el.shadowRoot.querySelectorAll(".value-row");
+    expect(rows.length).toBe(3); // 2 stored + 1 add-row
+    // Stored rows have data-row indices 0, 1; the add row uses -1.
+    expect(rows[0].getAttribute("data-row")).toBe("0");
+    expect(rows[1].getAttribute("data-row")).toBe("1");
+    expect(rows[2].getAttribute("data-row")).toBe("-1");
+  });
+
+  test("_addValue appends to the states list", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._setStates(["on", "off"]);
+    el._addValue("off");
     expect(captured.states).toEqual(["on", "off"]);
   });
 
-  test("setting an entity clears the previously-selected states (different domain)", async () => {
-    el = await mount({ kind: "is", entity_id: "binary_sensor.a", states: ["on"] });
-    let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._setEntity("person.bob");
-    expect(captured.entity_id).toBe("person.bob");
-    expect(captured.states).toEqual([]);
-  });
-
-  test("toggling 'for' duration on/off adds and clears the field", async () => {
+  test("_addValue ignores an empty string (don't add blank values)", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let fired = false;
+    el.addEventListener("value-changed", () => { fired = true; });
+    el._addValue("");
+    expect(fired).toBe(false);
+  });
+
+  test("_setValueAt replaces a value at an index", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on", "off"] });
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._setForEnabled(true);
-    expect(captured.for).toEqual({ h: 0, m: 0, s: 0 });
-    el._setForEnabled(false);
-    expect(captured.for).toBeNull();
+    el._setValueAt(1, "unavailable");
+    expect(captured.states).toEqual(["on", "unavailable"]);
   });
 
-  test("setting for duration updates the field", async () => {
-    el = await mount({
-      kind: "is", entity_id: "x", states: ["on"], for: { h: 0, m: 0, s: 0 },
-    });
+  test("_setValueAt with an empty string removes that row", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on", "off"] });
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._setForDuration({ h: 0, m: 5, s: 0 });
-    expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
+    el._setValueAt(0, "");
+    expect(captured.states).toEqual(["off"]);
   });
 
-  test("_forSchema is an ha-form duration selector (days disabled)", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"], for: { h: 0, m: 5, s: 0 } });
-    const schema = el._forSchema();
-    expect(schema).toHaveLength(1);
-    expect(schema[0].name).toBe("duration");
-    expect(schema[0].required).toBe(true);
-    expect(schema[0].selector.duration).toBeDefined();
-    expect(schema[0].selector.duration.enable_day).toBe(false);
-  });
-
-  test("_forData maps storage {h,m,s} to ha-form's {hours,minutes,seconds}", async () => {
-    el = await mount({
-      kind: "is", entity_id: "x", states: ["on"], for: { h: 1, m: 30, s: 15 },
-    });
-    expect(el._forData()).toEqual({ duration: { hours: 1, minutes: 30, seconds: 15 } });
-  });
-
-  test("_setForFromHaForm translates ha-form duration shape back to {h,m,s}", async () => {
-    el = await mount({
-      kind: "is", entity_id: "x", states: ["on"], for: { h: 0, m: 0, s: 0 },
-    });
+  test("_removeValueAt deletes the row", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on", "off", "unavailable"] });
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._setForFromHaForm({ hours: 2, minutes: 15, seconds: 30 });
-    expect(captured.for).toEqual({ h: 2, m: 15, s: 30 });
+    el._removeValueAt(1);
+    expect(captured.states).toEqual(["on", "unavailable"]);
   });
 
-  test("_setAttributeEnabled toggles the attribute field on/off", async () => {
-    el = await mount({ kind: "is", entity_id: "media_player.x", states: ["Spotify"] });
-    let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._setAttributeEnabled(true);
-    expect(captured.attribute).toBe("");
-    // Toggling off clears the field (back to comparing entity state).
-    el._setAttributeEnabled(false);
-    expect(captured.attribute).toBeNull();
-  });
-
-  test("_setAttribute updates the attribute name", async () => {
-    el = await mount({ kind: "is", entity_id: "media_player.x", attribute: "", states: [] });
-    let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._setAttribute("source");
-    expect(captured.attribute).toBe("source");
-    expect(captured.entity_id).toBe("media_player.x");
-  });
-
-  test("changing the entity_id clears a previously-set attribute (different domain)", async () => {
+  test("setting an entity_id clears both states and attribute", async () => {
     el = await mount({
       kind: "is", entity_id: "media_player.a", attribute: "source", states: ["Spotify"],
     });
@@ -146,8 +114,64 @@ describe("ambience-state-expr-atom", () => {
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
     el._setEntity("light.kitchen");
     expect(captured.entity_id).toBe("light.kitchen");
-    // Both states AND attribute reset — the new entity probably doesn't have the same attribute.
     expect(captured.states).toEqual([]);
     expect(captured.attribute).toBeNull();
+  });
+
+  test("_setAttribute('') normalises empty string to null on emit", async () => {
+    el = await mount({
+      kind: "is", entity_id: "x", attribute: "source", states: ["Spotify"],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setAttribute("");
+    expect(captured.attribute).toBeNull();
+  });
+
+  test("_setAttribute('source') stores the attribute name", async () => {
+    el = await mount({ kind: "is", entity_id: "media_player.x", states: [] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setAttribute("source");
+    expect(captured.attribute).toBe("source");
+  });
+
+  test("_forSchema is an ha-form duration selector (days disabled, not required)", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    const schema = el._forSchema();
+    expect(schema[0].name).toBe("duration");
+    // Optional → no `required: true` so the field is blank by default.
+    expect(schema[0].required).toBeFalsy();
+    expect(schema[0].selector.duration.enable_day).toBe(false);
+  });
+
+  test("_forData maps storage {h,m,s} to ha-form {hours,minutes,seconds}", async () => {
+    el = await mount({
+      kind: "is", entity_id: "x", states: ["on"], for: { h: 1, m: 30, s: 15 },
+    });
+    expect(el._forData()).toEqual({ duration: { hours: 1, minutes: 30, seconds: 15 } });
+  });
+
+  test("_forData with no `for` falls back to {0,0,0} (blank display)", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    expect(el._forData()).toEqual({ duration: { hours: 0, minutes: 0, seconds: 0 } });
+  });
+
+  test("setting duration to {0,0,0} normalises to null on emit", async () => {
+    el = await mount({
+      kind: "is", entity_id: "x", states: ["on"], for: { h: 0, m: 5, s: 0 },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setForFromHaForm({ hours: 0, minutes: 0, seconds: 0 });
+    expect(captured.for).toBeNull();
+  });
+
+  test("setting a non-zero duration stores it as {h,m,s}", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setForFromHaForm({ hours: 0, minutes: 5, seconds: 0 });
+    expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
   });
 });

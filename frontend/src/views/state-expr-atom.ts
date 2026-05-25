@@ -8,44 +8,49 @@ import type { StateAtom, StateForDuration } from "../types.js";
 type HaFormSchema = { name: string; required?: boolean; selector: Record<string, unknown> };
 
 /**
- * Single atom of a state-predicate tree: entity + is/is_not + states +
- * optional `for` duration. Emits `value-changed` with the full atom.
+ * Single atom of a state-predicate tree, laid out like HA's automation State
+ * condition: Entity / Attribute (optional) / Op + values / For (optional).
+ *
+ * Storage cleanup: emitted values are normalised so that
+ *  - `attribute === ""`  → `attribute: null` (compare entity state)
+ *  - `for === {h:0,m:0,s:0}` → `for: null` (no duration constraint)
+ *
+ * Values are stored as `string[]` and rendered one per row, with a trailing
+ * empty row that acts as the "add another" affordance.
  */
 @customElement("ambience-state-expr-atom")
 export class AmbienceStateExprAtom extends LitElement {
   static override styles = css`
     :host { display: block; }
-    .row { display: flex; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.4rem; }
-    .row ha-form { flex: 1; }
-    .row .entity-form { flex: 2; }
-    .row .op-form { flex: 0.7; }
-    .row .states-form { flex: 2; }
-    /* Match the dropdown alignment treatment used by weather-predicate-input.ts:
-       ha-form-select has a helper-text padding that ha-form-textfield doesn't,
-       so the bottom underlines diverge unless dropdowns get a margin-bottom. */
-    .row .entity-form,
-    .row .op-form,
-    .row .states-form { margin-bottom: 2rem; }
-    .for-row, .attribute-row {
-      display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem;
+    .field { margin-bottom: 0.6rem; }
+    .field-label {
+      display: block;
+      font-size: 0.85em;
+      color: var(--secondary-text-color, #888);
+      margin-bottom: 0.25rem;
     }
-    .attribute-row input[type="text"] { flex: 1; max-width: 16rem; }
-    .for-row label, .attribute-row label {
-      display: inline-flex; align-items: center; gap: 0.35rem;
-      font-size: 0.9em; color: var(--secondary-text-color, #888);
+    .field ha-form { width: 100%; }
+    .op-row { display: flex; gap: 0.5rem; align-items: flex-end; }
+    .op-row .op-form { flex: 0 0 auto; min-width: 8rem; }
+    .op-row .op-label { flex: 1; }
+    /* HA-form-select carries extra bottom padding (helper-text slot) that
+       smaller widgets lack. Lift the op so its underline matches. */
+    .op-row .op-form { margin-bottom: 2rem; }
+    .value-list { display: flex; flex-direction: column; gap: 0.4rem; }
+    .value-row { display: flex; gap: 0.5rem; align-items: center; }
+    .value-row ha-form { flex: 1; }
+    .value-row .remove {
+      background: none; border: none; color: var(--secondary-text-color, #888);
+      cursor: pointer; font-size: 1em; padding: 0 0.4rem;
     }
-    .for-row input[type='number'] {
-      width: 4rem; padding: 0.25rem;
-      border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
-      background: var(--card-background-color, #fff);
-      color: inherit; box-sizing: border-box;
-    }
-    /* jsdom-only native selects */
-    select, input[type="text"] {
+    /* jsdom-only native fallbacks */
+    select, input[type="text"], input[type="number"] {
       padding: 0.25rem; border: 1px solid var(--divider-color, #ccc);
       border-radius: 4px; background: var(--card-background-color, #fff);
       color: inherit;
     }
+    .for-row { display: flex; gap: 0.25rem; align-items: center; }
+    .for-row input[type='number'] { width: 3.5rem; }
   `;
 
   @property({ attribute: false }) hass?: HassConnection;
@@ -71,23 +76,28 @@ export class AmbienceStateExprAtom extends LitElement {
     }
   }
 
+  /** Tidy the atom shape before emitting so the wire format stays small. */
+  private _normalize(atom: StateAtom): StateAtom {
+    const out: StateAtom = { ...atom };
+    if (out.attribute === "") out.attribute = null;
+    if (out.for && out.for.h === 0 && out.for.m === 0 && out.for.s === 0) {
+      out.for = null;
+    }
+    return out;
+  }
+
   private _emit(next: StateAtom) {
-    this.value = next;
+    const normalized = this._normalize(next);
+    this.value = normalized;
     this.dispatchEvent(new CustomEvent("value-changed", {
-      detail: { value: next }, bubbles: true, composed: true,
+      detail: { value: normalized }, bubbles: true, composed: true,
     }));
   }
 
   _setEntity(entity_id: string) {
-    // Different entity → previously-selected states almost certainly don't
-    // apply, and any attribute name was tied to the old entity's shape.
+    // Different entity → previously-selected values almost certainly don't
+    // apply, and the attribute name was tied to the old entity's shape.
     this._emit({ ...this.value, entity_id, states: [], attribute: null });
-  }
-
-  _setAttributeEnabled(on: boolean) {
-    // Enabling sets an empty attribute name so the field appears. Disabling
-    // returns to comparing entity.state.
-    this._emit({ ...this.value, attribute: on ? "" : null, states: [] });
   }
 
   _setAttribute(name: string) {
@@ -102,18 +112,40 @@ export class AmbienceStateExprAtom extends LitElement {
     this._emit({ ...this.value, states });
   }
 
-  _setForEnabled(on: boolean) {
-    const next = { ...this.value };
-    next.for = on ? { h: 0, m: 0, s: 0 } : null;
-    this._emit(next);
+  /** Replace the value at `idx`. An empty string removes the row. */
+  _setValueAt(idx: number, v: string) {
+    const next = this.value.states.slice();
+    if (v === "") {
+      next.splice(idx, 1);
+    } else {
+      next[idx] = v;
+    }
+    this._setStates(next);
   }
 
-  _setForDuration(dur: StateForDuration) {
+  _addValue(v: string) {
+    if (!v) return;
+    this._setStates([...this.value.states, v]);
+  }
+
+  _removeValueAt(idx: number) {
+    const next = this.value.states.slice();
+    next.splice(idx, 1);
+    this._setStates(next);
+  }
+
+  _setForDuration(dur: StateForDuration | null) {
     this._emit({ ...this.value, for: dur });
   }
 
+  // --- schemas ----------------------------------------------------------
+
   _entitySchema(): HaFormSchema[] {
     return [{ name: "entity_id", required: true, selector: { entity: {} } }];
+  }
+
+  _attributeSchema(): HaFormSchema[] {
+    return [{ name: "attribute", selector: { text: {} } }];
   }
 
   _opSchema(): HaFormSchema[] {
@@ -132,24 +164,36 @@ export class AmbienceStateExprAtom extends LitElement {
     }];
   }
 
-  /** ha-form schema for the "for at least" duration field. HA's duration
-   *  selector emits `{hours, minutes, seconds}` (and optionally `days`,
-   *  which we disable). */
+  /** ha-form schema for a single state value row (combobox: known list +
+   *  custom_value). */
+  _valueSchema(): HaFormSchema[] {
+    return [{
+      name: "value",
+      selector: {
+        select: {
+          mode: "dropdown",
+          custom_value: true,
+          options: this._knownStates.map((s) => ({ value: s, label: s })),
+        },
+      },
+    }];
+  }
+
+  /** ha-form schema for the optional "for" duration. Blank by default; we
+   *  treat `{h:0,m:0,s:0}` as null on the way out via _normalize. */
   _forSchema(): HaFormSchema[] {
     return [{
       name: "duration",
-      required: true,
       selector: { duration: { enable_day: false } },
     }];
   }
 
-  /** Map our storage `{h,m,s}` shape to ha-form's `{hours,minutes,seconds}`. */
+  /** Storage `{h,m,s}` → ha-form `{hours,minutes,seconds}`. */
   _forData(): { duration: { hours: number; minutes: number; seconds: number } } {
     const d = this.value.for ?? { h: 0, m: 0, s: 0 };
     return { duration: { hours: d.h, minutes: d.m, seconds: d.s } };
   }
 
-  /** Translate ha-form's duration shape back into our storage shape. */
   _setForFromHaForm(d: { hours?: number; minutes?: number; seconds?: number } | undefined) {
     this._setForDuration({
       h: d?.hours ?? 0,
@@ -158,26 +202,12 @@ export class AmbienceStateExprAtom extends LitElement {
     });
   }
 
-  _statesSchema(): HaFormSchema[] {
-    return [{
-      name: "states",
-      required: true,
-      selector: {
-        select: {
-          multiple: true,
-          custom_value: true,
-          mode: "dropdown",
-          options: this._knownStates.map((s) => ({ value: s, label: s })),
-        },
-      },
-    }];
-  }
+  // --- render -----------------------------------------------------------
 
   private _renderEntity() {
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
       return html`<ha-form
-        class="entity-form"
         data-field="entity"
         .hass=${this.hass}
         .schema=${this._entitySchema()}
@@ -195,6 +225,32 @@ export class AmbienceStateExprAtom extends LitElement {
       type="text"
       .value=${this.value.entity_id}
       @change=${(e: Event) => this._setEntity((e.target as HTMLInputElement).value)}
+    />`;
+  }
+
+  private _renderAttribute() {
+    const attr = this.value.attribute ?? "";
+    /* v8 ignore start */
+    if (customElements.get("ha-form")) {
+      return html`<ha-form
+        data-field="attribute"
+        .hass=${this.hass}
+        .schema=${this._attributeSchema()}
+        .data=${{ attribute: attr }}
+        .computeLabel=${() => ""}
+        @value-changed=${(e: CustomEvent<{ value: { attribute?: string } }>) => {
+          e.stopPropagation();
+          this._setAttribute(e.detail.value.attribute ?? "");
+        }}
+      ></ha-form>`;
+    }
+    /* v8 ignore stop */
+    return html`<input
+      data-field="attribute"
+      type="text"
+      placeholder=${localize(this.hass, "ui.state_attribute_placeholder", "leave blank to compare state")}
+      .value=${attr}
+      @change=${(e: Event) => this._setAttribute((e.target as HTMLInputElement).value)}
     />`;
   }
 
@@ -224,55 +280,49 @@ export class AmbienceStateExprAtom extends LitElement {
     </select>`;
   }
 
-  private _renderStates() {
+  /** A single state-value row. Used both for stored values (idx ≥ 0, with X
+   *  to remove) and for the trailing empty "add" row (idx = -1, no X). */
+  private _renderValueRow(value: string, idx: number) {
+    const isAddRow = idx === -1;
+    const onChange = isAddRow
+      ? (v: string) => this._addValue(v)
+      : (v: string) => this._setValueAt(idx, v);
     /* v8 ignore start */
     if (customElements.get("ha-form")) {
-      return html`<ha-form
-        class="states-form"
-        data-field="states"
-        .hass=${this.hass}
-        .schema=${this._statesSchema()}
-        .data=${{ states: this.value.states }}
-        .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { states?: string[] } }>) => {
-          e.stopPropagation();
-          this._setStates(e.detail.value.states ?? []);
-        }}
-      ></ha-form>`;
+      return html`
+        <div class="value-row" data-row=${idx}>
+          <ha-form
+            .hass=${this.hass}
+            .schema=${this._valueSchema()}
+            .data=${{ value }}
+            .computeLabel=${() => ""}
+            @value-changed=${(e: CustomEvent<{ value: { value?: string } }>) => {
+              e.stopPropagation();
+              onChange(e.detail.value.value ?? "");
+            }}
+          ></ha-form>
+          ${isAddRow ? "" : html`<button class="remove"
+            title=${localize(this.hass, "ui.remove", "Remove")}
+            @click=${() => this._removeValueAt(idx)}>✕</button>`}
+        </div>
+      `;
     }
     /* v8 ignore stop */
-    return html`<select
-      data-field="states"
-      multiple
-      @change=${(e: Event) => {
-        const opts = (e.target as HTMLSelectElement).selectedOptions;
-        const next = Array.from(opts).map((o) => o.value);
-        this._setStates(next);
-      }}>
-      ${this._knownStates.map((s) => html`<option value=${s} ?selected=${this.value.states.includes(s)}>${s}</option>`)}
-    </select>`;
-  }
-
-  private _renderForRow() {
-    const d = this.value.for ?? null;
-    const on = d !== null;
     return html`
-      <div class="for-row">
-        <label>
-          <input type="checkbox" .checked=${on}
-            @change=${(e: Event) => this._setForEnabled((e.target as HTMLInputElement).checked)} />
-          ${localize(this.hass, "ui.for_at_least", "for at least")}
-        </label>
-        ${on ? this._renderForDuration(d!) : ""}
+      <div class="value-row" data-row=${idx}>
+        <input type="text" .value=${value}
+          placeholder=${isAddRow ? localize(this.hass, "ui.state_add_value", "+ Add state") : ""}
+          @change=${(e: Event) => onChange((e.target as HTMLInputElement).value)} />
+        ${isAddRow ? "" : html`<button class="remove"
+          @click=${() => this._removeValueAt(idx)}>✕</button>`}
       </div>
     `;
   }
 
-  private _renderForDuration(d: StateForDuration) {
+  private _renderForRow() {
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
       return html`<ha-form
-        class="for-form"
         data-field="for"
         .hass=${this.hass}
         .schema=${this._forSchema()}
@@ -285,52 +335,47 @@ export class AmbienceStateExprAtom extends LitElement {
       ></ha-form>`;
     }
     /* v8 ignore stop */
-    // jsdom fallback: three native number inputs (also useful for older HA).
+    const d = this.value.for ?? { h: 0, m: 0, s: 0 };
     return html`
-      <input type="number" min="0" .value=${String(d.h)}
-        @change=${(e: Event) => this._setForDuration({ ...d, h: Number((e.target as HTMLInputElement).value) || 0 })} />
-      <span>h</span>
-      <input type="number" min="0" .value=${String(d.m)}
-        @change=${(e: Event) => this._setForDuration({ ...d, m: Number((e.target as HTMLInputElement).value) || 0 })} />
-      <span>m</span>
-      <input type="number" min="0" .value=${String(d.s)}
-        @change=${(e: Event) => this._setForDuration({ ...d, s: Number((e.target as HTMLInputElement).value) || 0 })} />
-      <span>s</span>
-    `;
-  }
-
-  private _renderAttributeRow() {
-    const attr = this.value.attribute;
-    const on = attr !== null && attr !== undefined;
-    return html`
-      <div class="attribute-row">
-        <label>
-          <input type="checkbox" .checked=${on}
-            @change=${(e: Event) => this._setAttributeEnabled((e.target as HTMLInputElement).checked)} />
-          ${localize(this.hass, "ui.state_compare_attribute", "Compare attribute")}
-        </label>
-        ${on ? html`
-          <input
-            type="text"
-            data-field="attribute"
-            placeholder=${localize(this.hass, "ui.state_attribute_placeholder", "e.g. source, brightness")}
-            .value=${attr ?? ""}
-            @change=${(e: Event) => this._setAttribute((e.target as HTMLInputElement).value)}
-          />
-        ` : ""}
+      <div class="for-row" data-field="for">
+        <input type="number" min="0" .value=${String(d.h)}
+          @change=${(e: Event) => this._setForDuration({ ...d, h: Number((e.target as HTMLInputElement).value) || 0 })} />
+        <span>:</span>
+        <input type="number" min="0" .value=${String(d.m)}
+          @change=${(e: Event) => this._setForDuration({ ...d, m: Number((e.target as HTMLInputElement).value) || 0 })} />
+        <span>:</span>
+        <input type="number" min="0" .value=${String(d.s)}
+          @change=${(e: Event) => this._setForDuration({ ...d, s: Number((e.target as HTMLInputElement).value) || 0 })} />
       </div>
     `;
   }
 
   override render() {
     return html`
-      <div class="row">
+      <section class="field">
+        <label class="field-label">${localize(this.hass, "ui.state_entity", "Entity")}</label>
         ${this._renderEntity()}
-        ${this._renderOp()}
-        ${this._renderStates()}
-      </div>
-      ${this._renderAttributeRow()}
-      ${this._renderForRow()}
+      </section>
+      <section class="field">
+        <label class="field-label">
+          ${localize(this.hass, "ui.state_attribute_label", "Attribute (optional)")}
+        </label>
+        ${this._renderAttribute()}
+      </section>
+      <section class="field">
+        <div class="op-row">
+          ${this._renderOp()}
+        </div>
+        <label class="field-label">${localize(this.hass, "ui.state_label", "State")}</label>
+        <div class="value-list">
+          ${this.value.states.map((v, i) => this._renderValueRow(v, i))}
+          ${this._renderValueRow("", -1)}
+        </div>
+      </section>
+      <section class="field">
+        <label class="field-label">${localize(this.hass, "ui.state_for", "For (optional)")}</label>
+        ${this._renderForRow()}
+      </section>
     `;
   }
 }

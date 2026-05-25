@@ -487,3 +487,83 @@ def test_validate_atom_attribute_rejects_non_string() -> None:
         m.validate_predicate(
             {"kind": "is", "entity_id": "x", "attribute": "", "states": ["on"]}
         )
+
+
+# --- numeric comparison kinds ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "kind,value,threshold,expected",
+    [
+        (">", "10", "5", True),
+        (">", "5", "5", False),
+        (">", "3", "5", False),
+        (">=", "5", "5", True),
+        (">=", "4.9", "5", False),
+        ("<", "3", "5", True),
+        ("<", "5", "5", False),
+        ("<=", "5", "5", True),
+        ("<=", "5.1", "5", False),
+    ],
+)
+def test_matches_numeric_ops_on_state(kind, value, threshold, expected) -> None:
+    m = StateMatcher()
+    snap = _snap({"sensor.temp": (value, datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
+    pred = {"kind": kind, "entity_id": "sensor.temp", "states": [threshold]}
+    assert m.matches(pred, snap) is expected
+
+
+def test_matches_numeric_op_on_attribute() -> None:
+    m = StateMatcher()
+    snap = _snap(
+        {"light.x": ("on", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
+        attributes={"light.x": {"brightness": 200}},
+    )
+    pred = {
+        "kind": ">",
+        "entity_id": "light.x",
+        "attribute": "brightness",
+        "states": ["100"],
+    }
+    assert m.matches(pred, snap) is True
+
+
+def test_matches_numeric_op_unparseable_value_is_false() -> None:
+    """A non-numeric state can't satisfy a numeric comparison."""
+    m = StateMatcher()
+    snap = _snap({"sensor.x": ("foo", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
+    pred = {"kind": ">", "entity_id": "sensor.x", "states": ["5"]}
+    assert m.matches(pred, snap) is False
+
+
+def test_matches_numeric_op_missing_threshold_is_false() -> None:
+    m = StateMatcher()
+    snap = _snap({"sensor.x": ("10", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
+    pred = {"kind": ">", "entity_id": "sensor.x", "states": []}
+    assert m.matches(pred, snap) is False
+
+
+def test_validate_numeric_op_requires_one_numeric_value() -> None:
+    m = StateMatcher()
+    # Happy path
+    m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["10"]})
+    m.validate_predicate({"kind": "<=", "entity_id": "x", "states": ["3.14"]})
+    # Wrong shape: zero or multiple values
+    with pytest.raises(ValueError, match="exactly one"):
+        m.validate_predicate({"kind": ">", "entity_id": "x", "states": []})
+    with pytest.raises(ValueError, match="exactly one"):
+        m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["1", "2"]})
+    # Non-numeric value
+    with pytest.raises(ValueError, match="numeric"):
+        m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["foo"]})
+
+
+def test_validate_numeric_op_accepts_negative_and_decimals() -> None:
+    m = StateMatcher()
+    m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["-3.5"]})
+    m.validate_predicate({"kind": ">=", "entity_id": "x", "states": ["0"]})
+
+
+def test_order_key_supports_numeric_kinds() -> None:
+    m = StateMatcher()
+    assert m.order_key({"kind": ">", "entity_id": "x", "states": ["5"]}) == "x"

@@ -41,9 +41,11 @@ class StateMatcher:
     name = "state"
     description = "Matches a boolean expression over entity states with optional duration."
     predicate_help = (
-        "Expression tree: atoms {kind: 'is'|'is_not', entity_id, states, for}, "
-        "groups {kind: 'and'|'or', items: [...]}, negation {kind: 'not', item}. "
-        "None = match-anything."
+        "Expression tree: atoms {kind: 'is'|'is_not'|'>'|'>='|'<'|'<=', "
+        "entity_id, attribute?, states, for?}, groups {kind: 'and'|'or', "
+        "items: [...]}, negation {kind: 'not', item}. For numeric ops, "
+        "`states` carries a single numeric threshold as a string. None = "
+        "match-anything."
     )
     toggleable = True
     input = "state_predicate"
@@ -75,11 +77,14 @@ class StateMatcher:
 
     # --- evaluation -----------------------------------------------------
 
+    _ATOM_KINDS = ("is", "is_not", ">", ">=", "<", "<=")
+    _NUMERIC_KINDS = (">", ">=", "<", "<=")
+
     def _eval(self, expr: Any, snap: StateSnapshot) -> bool:
         if not isinstance(expr, dict):
             return False
         kind = expr.get("kind")
-        if kind in ("is", "is_not"):
+        if kind in self._ATOM_KINDS:
             return self._eval_atom(expr, snap)
         if kind == "and":
             items = expr.get("items") or []
@@ -111,12 +116,17 @@ class StateMatcher:
             value = str(attrs[attribute])
         else:
             value = state
-        allowed = atom.get("states") or []
-        in_set = value in allowed
-        if atom.get("kind") == "is_not":
-            in_set = not in_set
-        if not in_set:
-            return False
+        kind = atom.get("kind")
+        rhs = atom.get("states") or []
+        if kind in self._NUMERIC_KINDS:
+            if not self._numeric_op(kind, value, rhs):
+                return False
+        else:
+            in_set = value in rhs
+            if kind == "is_not":
+                in_set = not in_set
+            if not in_set:
+                return False
         dur = atom.get("for")
         if dur:
             seconds = self._dur_seconds(dur)
@@ -125,6 +135,28 @@ class StateMatcher:
                 if elapsed < seconds:
                     return False
         return True
+
+    @staticmethod
+    def _numeric_op(kind: str, value: str, rhs: list) -> bool:
+        """Parse both sides as float and apply the comparison. Returns
+        False on any parse failure or unexpected RHS shape (we don't fail
+        the predicate hard — the rule just doesn't match)."""
+        if len(rhs) != 1:
+            return False
+        try:
+            actual = float(value)
+            threshold = float(rhs[0])
+        except (ValueError, TypeError):
+            return False
+        if kind == ">":
+            return actual > threshold
+        if kind == ">=":
+            return actual >= threshold
+        if kind == "<":
+            return actual < threshold
+        if kind == "<=":
+            return actual <= threshold
+        return False
 
     @staticmethod
     def _dur_seconds(dur: Any) -> float:
@@ -137,7 +169,7 @@ class StateMatcher:
 
     # --- validation -----------------------------------------------------
 
-    _VALID_KINDS = ("is", "is_not", "and", "or", "not")
+    _VALID_KINDS = ("is", "is_not", ">", ">=", "<", "<=", "and", "or", "not")
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:
@@ -150,7 +182,7 @@ class StateMatcher:
         kind = expr.get("kind")
         if kind not in self._VALID_KINDS:
             raise ValueError(f"unknown kind: {kind!r}")
-        if kind in ("is", "is_not"):
+        if kind in self._ATOM_KINDS:
             self._validate_atom(expr)
         elif kind in ("and", "or"):
             items = expr.get("items")
@@ -168,11 +200,27 @@ class StateMatcher:
         entity_id = atom.get("entity_id")
         if not isinstance(entity_id, str) or not entity_id.strip():
             raise ValueError("state atom requires a non-empty entity_id")
+        kind = atom.get("kind")
         states = atom.get("states")
-        if not isinstance(states, list) or not states:
-            raise ValueError("state atom requires a non-empty states list")
-        if not all(isinstance(s, str) and s for s in states):
-            raise ValueError("state atom states must all be non-empty strings")
+        if not isinstance(states, list):
+            raise ValueError("state atom requires a states list")
+        # Numeric ops have stricter shape: exactly one numeric string.
+        if kind in self._NUMERIC_KINDS:
+            if len(states) != 1:
+                raise ValueError(f"{kind} atom requires exactly one threshold value")
+            if not isinstance(states[0], str) or not states[0]:
+                raise ValueError(f"{kind} atom threshold must be a non-empty string")
+            try:
+                float(states[0])
+            except ValueError:
+                raise ValueError(
+                    f"{kind} atom threshold must be a numeric string, got {states[0]!r}"
+                ) from None
+        else:
+            if not states:
+                raise ValueError("state atom requires a non-empty states list")
+            if not all(isinstance(s, str) and s for s in states):
+                raise ValueError("state atom states must all be non-empty strings")
         attribute = atom.get("attribute")
         if attribute is not None and (
             not isinstance(attribute, str) or not attribute.strip()
@@ -199,7 +247,7 @@ class StateMatcher:
         if not isinstance(expr, dict):
             return None
         kind = expr.get("kind")
-        if kind in ("is", "is_not"):
+        if kind in self._ATOM_KINDS:
             return expr
         if kind in ("and", "or"):
             for it in expr.get("items") or []:

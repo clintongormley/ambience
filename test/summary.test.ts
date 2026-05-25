@@ -408,3 +408,34 @@ test("summariseState appends 'for' clause to a numeric atom", () => {
     kind: ">", entity_id: "sensor.x", states: ["10"], for: { h: 0, m: 5, s: 0 },
   }, {})).toBe("sensor.x > 10 for ≥5m");
 });
+
+test("summariseState uses the entity's friendly_name when one is available", () => {
+  const hass = {
+    states: {
+      "binary_sensor.front_door": { attributes: { friendly_name: "Front door" } },
+    },
+  } as any;
+  expect(summariseState({
+    kind: "is", entity_id: "binary_sensor.front_door", states: ["on"],
+  }, { hass })).toBe("Front door is on");
+});
+
+test("summariseState combines friendly_name with the attribute name", () => {
+  const hass = {
+    states: {
+      "light.kitchen": { attributes: { friendly_name: "Kitchen light", brightness: 200 } },
+    },
+  } as any;
+  expect(summariseState({
+    kind: ">", entity_id: "light.kitchen", attribute: "brightness", states: ["100"],
+  }, { hass })).toBe("Kitchen light.brightness > 100");
+});
+
+test("summariseState falls back to entity_id when no friendly_name is set", () => {
+  const hass = {
+    states: { "sensor.x": { attributes: {} } },
+  } as any;
+  expect(summariseState({
+    kind: "is", entity_id: "sensor.x", states: ["on"],
+  }, { hass })).toBe("sensor.x is on");
+});

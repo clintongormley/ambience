@@ -131,6 +131,14 @@ export function summariseWeather(pred: WeatherPredicate, ctx: MatcherContext = {
   return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
 }
 
+/** Best-effort display name for an entity: friendly_name attribute when set,
+ *  otherwise the raw entity_id. */
+function _entityDisplayName(ctx: MatcherContext, entity_id: string): string {
+  const states = (ctx.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
+  const name = states?.[entity_id]?.attributes?.friendly_name;
+  return typeof name === "string" && name ? name : entity_id;
+}
+
 export function summariseState(pred: StatePredicate, ctx: MatcherContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
   return _renderStateExpr(pred, ctx);
@@ -147,11 +155,10 @@ function _renderStateExpr(expr: StateExpr, ctx: MatcherContext): string {
     // threshold value (states[0]).
     const isNumeric = expr.kind !== "is" && expr.kind !== "is_not";
     const rhs = isNumeric ? (expr.states[0] ?? "") : expr.states.join("/");
-    // Attribute-mode renders as `entity_id.attribute`; entity-state mode keeps
-    // the bare entity_id. Empty/null attribute → fall through to state mode.
-    const lhs = expr.attribute
-      ? `${expr.entity_id}.${expr.attribute}`
-      : expr.entity_id;
+    // Use the entity's friendly_name when available (falls back to the
+    // raw entity_id). Attribute-mode renders as `<name>.<attribute>`.
+    const name = _entityDisplayName(ctx, expr.entity_id);
+    const lhs = expr.attribute ? `${name}.${expr.attribute}` : name;
     const head = `${lhs} ${verb} ${rhs}`;
     if (expr.for && _hasStateDuration(expr.for)) {
       return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(expr.for)}`;

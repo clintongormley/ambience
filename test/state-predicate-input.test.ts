@@ -153,4 +153,86 @@ describe("ambience-state-predicate-input", () => {
     el._replaceAt([0, 1], { kind: "is_not", entity_id: "b", states: ["off"] });
     expect(captured.items[0].items[1].kind).toBe("is_not");
   });
+
+  // --- root-level toolbar + add-condition --------------------------------
+
+  test("a non-null root renders a root-level toolbar and Add button", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    expect(el.shadowRoot.querySelector(".root-toolbar")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".root-add")).toBeTruthy();
+  });
+
+  test("an empty (null) root renders neither root-toolbar nor root-add (only the initial empty-state Add)", async () => {
+    el = await mount(null);
+    expect(el.shadowRoot.querySelector(".root-toolbar")).toBeNull();
+    expect(el.shadowRoot.querySelector(".root-add")).toBeNull();
+  });
+
+  test("_addAtRoot on a lone atom wraps in AND with the atom + an empty sibling", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._addAtRoot();
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(2);
+    expect(captured.items[0].entity_id).toBe("x");
+    expect(captured.items[1].kind).toBe("is");
+    expect(captured.items[1].entity_id).toBe("");
+  });
+
+  test("_addAtRoot on a group appends a child (no re-wrap)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "x", states: ["on"] },
+    ]});
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._addAtRoot();
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(2);
+    expect(captured.items[0].entity_id).toBe("x");
+  });
+
+  test("_addAtRoot on a NOT-wrapped atom wraps the NOT in AND with an empty sibling", async () => {
+    el = await mount({
+      kind: "not",
+      item: { kind: "is", entity_id: "x", states: ["on"] },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._addAtRoot();
+    expect(captured.kind).toBe("and");
+    expect(captured.items[0].kind).toBe("not");
+    expect(captured.items[0].item.entity_id).toBe("x");
+    expect(captured.items[1].kind).toBe("is");
+  });
+
+  test("clicking root NOT toggle wraps the whole predicate in NOT", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    const notBtn = el.shadowRoot.querySelector(".root-toolbar .not-toggle") as HTMLButtonElement;
+    notBtn.click();
+    expect(captured.kind).toBe("not");
+    expect(captured.item.entity_id).toBe("x");
+  });
+
+  test("clicking root Clear/Remove sets the predicate to null", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    const removeBtn = el.shadowRoot.querySelector(".root-toolbar .remove") as HTMLButtonElement;
+    removeBtn.click();
+    expect(captured).toBeNull();
+  });
+
+  test("clicking root Wrap wraps the atom in a single-child AND group", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    const wrapBtn = el.shadowRoot.querySelector(".root-toolbar .wrap") as HTMLButtonElement;
+    wrapBtn.click();
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(1);
+    expect(captured.items[0].entity_id).toBe("x");
+  });
 });

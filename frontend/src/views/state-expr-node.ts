@@ -131,11 +131,17 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   override render() {
-    if (this.value.kind === "and" || this.value.kind === "or") {
-      return this._renderGroup(this.value);
+    // NOT wrappers may arrive here from the root (predicate-input passes the
+    // raw value, not the unwrapped inner). For child rows the parent
+    // already unwraps; this is just a safety net. Either way, render the
+    // inner content — the NOT-ness is shown by whichever toolbar surrounds
+    // this node (root toolbar or child-row toolbar).
+    const inner = this.value.kind === "not"
+      ? (this.value as StateNot).item
+      : this.value;
+    if (inner.kind === "and" || inner.kind === "or") {
+      return this._renderGroup(inner);
     }
-    // Atom (is / is_not) — `not` wrappers are unwrapped by the parent's
-    // _renderChildRow, so this branch only ever sees atoms.
-    return this._renderAtomCard(this.value as StateAtom);
+    return this._renderAtomCard(inner as StateAtom);
   }
 }

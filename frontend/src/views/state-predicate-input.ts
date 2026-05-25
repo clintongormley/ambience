@@ -28,6 +28,25 @@ export class AmbienceStatePredicateInput extends LitElement {
       border-radius: 4px; padding: 0.25rem 0.75rem; cursor: pointer;
       color: inherit;
     }
+    .root-toolbar {
+      display: flex; justify-content: flex-end; gap: 0.25rem;
+      margin-bottom: 0.25rem;
+    }
+    .root-toolbar button {
+      background: transparent; border: 1px solid var(--divider-color, #ccc);
+      border-radius: 4px; padding: 0.15rem 0.4rem; cursor: pointer;
+      font-size: 0.85em; color: inherit;
+    }
+    .root-toolbar .not-toggle.on {
+      background: var(--warning-color, #ffd);
+      border-color: var(--warning-color, #cc9);
+    }
+    .root-add {
+      display: block; margin-top: 0.5rem;
+      background: transparent; border: 1px dashed var(--divider-color, #ccc);
+      border-radius: 4px; padding: 0.25rem 0.75rem; cursor: pointer;
+      color: inherit; width: 100%; text-align: center;
+    }
   `;
 
   @property({ attribute: false }) hass?: HassConnection;
@@ -183,6 +202,42 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._setGroupOpAt(e.detail.path, e.detail.op);
   };
 
+  /** Add a sibling to the root expression.
+   *  - If root is a group: append an empty atom child.
+   *  - Otherwise: wrap the root in an AND group with [root, emptyAtom],
+   *    making the first composition discoverable from a lone atom or
+   *    NOT-wrapped atom. */
+  _addAtRoot() {
+    const value = this.value;
+    if (value == null) {
+      this._addFirstAtom();
+      return;
+    }
+    if (value.kind === "and" || value.kind === "or") {
+      this._addChildAt([], "is");
+      return;
+    }
+    // Atom or NOT-wrapped atom — wrap the whole thing in AND with a sibling.
+    this._emit({ kind: "and", items: [value, this._emptyAtom()] });
+  }
+
+  private _renderRootToolbar() {
+    const isNot = this.value?.kind === "not";
+    return html`
+      <div class="root-toolbar">
+        <button class="not-toggle ${isNot ? "on" : ""}"
+          title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
+          @click=${() => this._toggleNotAt([])}>${localize(this.hass, "ui.state_op_not", "NOT")}</button>
+        <button class="wrap"
+          title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
+          @click=${() => this._wrapAt([], "and")}>(…)</button>
+        <button class="remove"
+          title=${localize(this.hass, "ui.state_clear", "Clear")}
+          @click=${() => this._removeAt([])}>✕</button>
+      </div>
+    `;
+  }
+
   override render() {
     if (this.value == null) {
       return html`
@@ -194,11 +249,15 @@ export class AmbienceStatePredicateInput extends LitElement {
       `;
     }
     return html`
+      ${this._renderRootToolbar()}
       <ambience-state-expr-node
         .hass=${this.hass}
         .value=${this.value}
         .path=${[]}
       ></ambience-state-expr-node>
+      <button class="root-add" @click=${() => this._addAtRoot()}>
+        + ${localize(this.hass, "ui.state_add_condition", "Add condition")}
+      </button>
     `;
   }
 }

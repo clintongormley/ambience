@@ -1,0 +1,93 @@
+import { describe, test, expect, afterEach, vi } from "vitest";
+
+vi.mock("../frontend/src/api.js", () => ({
+  getKnownStates: vi.fn(async () => ({ states: ["on", "off"] })),
+}));
+
+import "../frontend/src/views/state-expr-atom";
+import type { StateAtom } from "../frontend/src/types";
+
+async function mount(atom: StateAtom): Promise<any> {
+  const el: any = document.createElement("ambience-state-expr-atom");
+  el.value = atom;
+  el.hass = {};
+  document.body.appendChild(el);
+  await el.updateComplete;
+  await new Promise((r) => setTimeout(r, 0));
+  await el.updateComplete;
+  return el;
+}
+
+describe("ambience-state-expr-atom", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("renders entity, op and states fields (native fallback)", async () => {
+    el = await mount({ kind: "is", entity_id: "binary_sensor.x", states: ["on"] });
+    expect(el.shadowRoot.querySelector("[data-field='entity']")).toBeTruthy();
+    expect(el.shadowRoot.querySelector("[data-field='op']")).toBeTruthy();
+    expect(el.shadowRoot.querySelector("[data-field='states']")).toBeTruthy();
+  });
+
+  test("_opSchema is a required dropdown with is / is_not", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    const schema = el._opSchema();
+    expect(schema[0].name).toBe("op");
+    expect(schema[0].required).toBe(true);
+    const opts = schema[0].selector.select.options.map((o: { value: string }) => o.value);
+    expect(opts).toEqual(["is", "is_not"]);
+  });
+
+  test("_statesSchema is a multi-select with custom_value enabled", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    const schema = el._statesSchema();
+    const sel = schema[0].selector.select;
+    expect(sel.multiple).toBe(true);
+    expect(sel.custom_value).toBe(true);
+  });
+
+  test("emits value-changed when op flips", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setOp("is_not");
+    expect(captured.kind).toBe("is_not");
+  });
+
+  test("emits value-changed when states change", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setStates(["on", "off"]);
+    expect(captured.states).toEqual(["on", "off"]);
+  });
+
+  test("setting an entity clears the previously-selected states (different domain)", async () => {
+    el = await mount({ kind: "is", entity_id: "binary_sensor.a", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setEntity("person.bob");
+    expect(captured.entity_id).toBe("person.bob");
+    expect(captured.states).toEqual([]);
+  });
+
+  test("toggling 'for' duration on/off adds and clears the field", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setForEnabled(true);
+    expect(captured.for).toEqual({ h: 0, m: 0, s: 0 });
+    el._setForEnabled(false);
+    expect(captured.for).toBeNull();
+  });
+
+  test("setting for duration updates the field", async () => {
+    el = await mount({
+      kind: "is", entity_id: "x", states: ["on"], for: { h: 0, m: 0, s: 0 },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setForDuration({ h: 0, m: 5, s: 0 });
+    expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
+  });
+});

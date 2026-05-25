@@ -147,9 +147,20 @@ export class AmbienceAreasList extends LitElement {
   private async _refreshAreas() {
     try {
       const areas = await listAreas(this.hass);
+      // Ambience configs only change when WE call saveArea — never via
+      // area_registry_updated events. So reuse existing config references
+      // verbatim and only fetch for newly-discovered areas. This keeps
+      // Rule object references stable across rename/add/remove events,
+      // which avoids needless re-renders in the rule editor + rules list.
+      const previous = this._configs;
       const configs = new Map<string, AreaConfig>();
       await Promise.all(
         areas.map(async (a) => {
+          const existing = previous.get(a.area_id);
+          if (existing) {
+            configs.set(a.area_id, existing);
+            return;
+          }
           configs.set(
             a.area_id,
             this._normalize(await getArea(this.hass, a.area_id)),

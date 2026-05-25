@@ -324,6 +324,36 @@ describe("ambience-areas-list", () => {
     );
   });
 
+  test("area_registry_updated update event preserves existing config references (no needless refetch)", async () => {
+    // Regression: refetching every area's config on every area_registry_updated
+    // event swapped Rule object references, which in turn triggered the rule
+    // editor's draft-clobber bug. Now _refreshAreas reuses existing config
+    // references and only fetches configs for newly-discovered areas.
+    const rule: Rule = {
+      name: "before", when: {},
+      actions: [{ action: "set_light", entity_ids: [], params: { brightness: 50 } }],
+    };
+    const cfg: AreaConfig = { rules: [rule], auto_sort: true };
+    el = await mount(baseAreas, { living_room: cfg });
+    const refBefore = el._configs.get("living_room");
+    expect(refBefore?.rules[0]).toBe(rule);
+
+    // Reset the getArea mock to detect if it gets called again.
+    vi.mocked(api.getArea).mockClear();
+
+    // Fire an unrelated area_registry_updated event.
+    const callback = vi.mocked(el.hass.connection.subscribeEvents).mock.calls[0]?.[0];
+    callback?.({ data: { action: "update", area_id: "living_room" } });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // getArea should NOT have been called — we reused the existing config.
+    expect(api.getArea).not.toHaveBeenCalled();
+    // And the AreaConfig (and its rule references) are exactly the same objects.
+    expect(el._configs.get("living_room")).toBe(refBefore);
+    expect(el._configs.get("living_room")?.rules[0]).toBe(rule);
+  });
+
   test("area_registry_updated remove event clears that area from expanded/editing", async () => {
     el = await mount();
     // Get the subscribeEvents callback

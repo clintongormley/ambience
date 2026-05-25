@@ -140,3 +140,21 @@ export type WeatherThreshold = {
 export type WeatherPredicate =
   | null
   | { groups: string[]; thresholds: WeatherThreshold[] };
+
+// --- state matcher --------------------------------------------------------
+
+export type StateForDuration = { h: number; m: number; s: number };
+
+export type StateAtom = {
+  kind: "is" | "is_not";
+  entity_id: string;
+  states: string[];
+  for?: StateForDuration | null;
+};
+
+export type StateGroup = { kind: "and" | "or"; items: StateExpr[] };
+export type StateNot = { kind: "not"; item: StateExpr };
+export type StateExpr = StateAtom | StateGroup | StateNot;
+
+/** Top-level state predicate. `null` = no constraint. */
+export type StatePredicate = StateExpr | null;

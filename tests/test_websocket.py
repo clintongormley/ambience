@@ -935,3 +935,84 @@ async def test_weather_config_save_rejects_duplicate_group_ids(
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
+
+
+async def test_state_known_states_for_binary_sensor(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    hass.states.async_set("binary_sensor.door", "on", {})
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/state/known_states",
+        entity_id="binary_sensor.door",
+    )
+    assert resp["success"] is True
+    states = resp["result"]["states"]
+    assert "on" in states
+    assert "off" in states
+
+
+async def test_state_known_states_for_input_select_reads_options(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    hass.states.async_set(
+        "input_select.mode",
+        "day",
+        {"options": ["day", "night", "away"]},
+    )
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/state/known_states",
+        entity_id="input_select.mode",
+    )
+    assert resp["success"] is True
+    states = resp["result"]["states"]
+    assert set(states) >= {"day", "night", "away"}
+
+
+async def test_state_known_states_for_person_includes_zones(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    hass.states.async_set("zone.work", "zoning", {"friendly_name": "Work"})
+    hass.states.async_set("zone.gym", "zoning", {"friendly_name": "Gym"})
+    hass.states.async_set("person.bob", "home", {})
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/state/known_states",
+        entity_id="person.bob",
+    )
+    assert resp["success"] is True
+    states = resp["result"]["states"]
+    assert "home" in states
+    assert "not_home" in states
+    # Zone friendly names included for person/device_tracker.
+    assert "Work" in states or "work" in states
+    assert "Gym" in states or "gym" in states
+
+
+async def test_state_known_states_for_unknown_domain_returns_current(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    hass.states.async_set("sensor.weird", "magical", {})
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/state/known_states",
+        entity_id="sensor.weird",
+    )
+    assert resp["success"] is True
+    states = resp["result"]["states"]
+    # No domain map for sensor — at minimum the current state is included.
+    assert "magical" in states
+
+
+async def test_state_known_states_missing_entity_returns_empty(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/state/known_states",
+        entity_id="sensor.does_not_exist",
+    )
+    assert resp["success"] is True
+    # No known sensor domain map + no current state → empty.
+    assert resp["result"]["states"] == []

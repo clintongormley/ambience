@@ -15,7 +15,9 @@ class StateSnapshot:
     """Frozen view of HA states at tick time."""
 
     now: datetime
-    # entity_id -> (state, last_changed). Captured up-front so matching is pure.
+    # entity_id -> (state, last_updated). Captured up-front so matching is
+    # pure. `last_updated` (not last_changed) so attribute-only updates also
+    # reset the 'for' clock — important when the atom's LHS is an attribute.
     states: dict[str, tuple[str, datetime]]
     # entity_id -> attribute dict. Populated alongside states for atoms that
     # compare an attribute instead of the state itself.
@@ -56,7 +58,7 @@ class StateMatcher:
         states: dict[str, tuple[str, datetime]] = {}
         attributes: dict[str, dict[str, Any]] = {}
         for s in hass.states.async_all():
-            states[s.entity_id] = (s.state, s.last_changed)
+            states[s.entity_id] = (s.state, s.last_updated)
             # `s.attributes` is a Mapping; copy into a plain dict so the
             # snapshot stays detached from HA's live state object.
             attributes[s.entity_id] = dict(s.attributes)
@@ -96,7 +98,7 @@ class StateMatcher:
         cur = snap.states.get(entity_id)
         if cur is None:
             return False
-        state, last_changed = cur
+        state, last_updated = cur
         if state in _UNAVAILABLE:
             return False
         # When `attribute` is set, swap the LHS from entity.state to
@@ -119,7 +121,7 @@ class StateMatcher:
         if dur:
             seconds = self._dur_seconds(dur)
             if seconds > 0:
-                elapsed = (snap.now - last_changed).total_seconds()
+                elapsed = (snap.now - last_updated).total_seconds()
                 if elapsed < seconds:
                     return False
         return True

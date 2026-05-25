@@ -445,6 +445,26 @@ async def test_snapshot_captures_entity_attributes(hass) -> None:
     assert snap.attributes["media_player.x"]["volume_level"] == 0.5
 
 
+async def test_snapshot_uses_last_updated_so_attribute_changes_reset_for_clock(hass) -> None:
+    """last_updated bumps on any change (state OR attribute), while
+    last_changed only bumps on state change. We want `for` to track both
+    so attribute-mode atoms work correctly."""
+    hass.states.async_set("media_player.x", "playing", {"source": "Spotify"})
+    s1 = hass.states.get("media_player.x")
+    ts1 = s1.last_updated
+
+    # Attribute-only change: state stays "playing", source flips to Radio.
+    hass.states.async_set("media_player.x", "playing", {"source": "Radio"})
+    s2 = hass.states.get("media_player.x")
+    # In HA: last_changed stays the same (state didn't change), last_updated advances.
+    assert s2.last_updated > ts1
+    assert s2.last_changed == s1.last_changed
+
+    snap = await StateMatcher().snapshot(hass)
+    captured_ts = snap.states["media_player.x"][1]
+    assert captured_ts == s2.last_updated, "snapshot must capture last_updated, not last_changed"
+
+
 def test_validate_atom_attribute_is_optional() -> None:
     m = StateMatcher()
     # Without attribute (existing behavior)

@@ -552,7 +552,7 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var d=(n,s,e
       padding: 0.4rem 0.75rem; border-radius: 4px; cursor: pointer;
       color: var(--primary-text-color, inherit);
     }
-  `,d([c({attribute:!1})],I.prototype,"hass",2),d([c({attribute:!1})],I.prototype,"value",2),d([c({attribute:!1})],I.prototype,"groups",2),d([c({attribute:!1})],I.prototype,"weatherEntity",2),I=d([g("ambience-weather-predicate-input")],I);var x=class extends f{constructor(){super(...arguments);this.value={kind:"is",entity_id:"",states:[]};this._knownStates=[]}async updated(e){if(e.has("value")){let r=e.get("value")?.entity_id,i=this.value.entity_id;if(i&&i!==r&&this.hass)try{let a=await xt(this.hass,i);this._knownStates=a.states}catch{this._knownStates=[]}}}_normalize(e){let t={...e};return t.attribute===""&&(t.attribute=null),t.for&&t.for.h===0&&t.for.m===0&&t.for.s===0&&(t.for=null),t}_emit(e){let t=this._normalize(e);this.value=t,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_autoFlipOp(e){let t=this._isNumericTargetFor(e),r=this._isNumericOp(e.kind);return t&&!r?{...e,kind:">"}:!t&&r?{...e,kind:"is"}:e}_setEntity(e){this._emit(this._autoFlipOp({...this.value,entity_id:e,states:[],attribute:null}))}_setAttribute(e){this._emit(this._autoFlipOp({...this.value,attribute:e}))}_setOp(e){this._emit({...this.value,kind:e})}_setStates(e){this._emit({...this.value,states:e})}_setValueAt(e,t){if(this._isNumericOp(this.value.kind)){this._setStates([t]);return}let r=this.value.states.slice();t===""?r.splice(e,1):r[e]=t,this._setStates(r)}_addValue(e){e&&this._setStates([...this.value.states,e])}_removeValueAt(e){let t=this.value.states.slice();t.splice(e,1),this._setStates(t)}_setForDuration(e){this._emit({...this.value,for:e})}_entitySchema(){return[{name:"entity_id",required:!0,selector:{entity:{}}}]}_knownAttributesFor(e){if(!e)return[];let r=this.hass?.states?.[e]?.attributes;return r?Object.keys(r).sort():[]}_attributeSchema(){return[{name:"attribute",selector:{select:{mode:"dropdown",custom_value:!0,options:this._knownAttributesFor(this.value.entity_id).map(t=>({value:t,label:t}))}}}]}_isNumericOp(e){return x._NUMERIC_OPS.includes(e)}_isNumericTargetFor(e){let r=this.hass?.states?.[e.entity_id];if(!r)return!1;if(e.attribute)return typeof r.attributes?.[e.attribute]=="number";let i=r.state;return typeof i!="string"||i===""||i==="unknown"||i==="unavailable"?!1:Number.isFinite(Number(i))}_opSchema(){let e=this._isNumericTargetFor(this.value)?[...x._NUMERIC_OPS]:["is","is_not"];return e.includes(this.value.kind)||e.push(this.value.kind),[{name:"op",required:!0,selector:{select:{mode:"dropdown",options:e.map(t=>({value:t,label:P(this.hass,t)}))}}}]}_valueSchema(){return this._isNumericOp(this.value.kind)?[{name:"value",selector:{number:{mode:"box",step:"any"}}}]:[{name:"value",selector:{select:{mode:"dropdown",custom_value:!0,options:this._knownStates.map(e=>({value:e,label:e}))}}}]}_forSchema(){return[{name:"duration",selector:{duration:{enable_day:!1}}}]}_forData(){let e=this.value.for??{h:0,m:0,s:0};return{duration:{hours:e.h,minutes:e.m,seconds:e.s}}}_setForFromHaForm(e){this._setForDuration({h:e?.hours??0,m:e?.minutes??0,s:e?.seconds??0})}_renderEntity(){return customElements.get("ha-form")?l`<ha-form
+  `,d([c({attribute:!1})],I.prototype,"hass",2),d([c({attribute:!1})],I.prototype,"value",2),d([c({attribute:!1})],I.prototype,"groups",2),d([c({attribute:!1})],I.prototype,"weatherEntity",2),I=d([g("ambience-weather-predicate-input")],I);var x=class extends f{constructor(){super(...arguments);this.value={kind:"is",entity_id:"",states:[]};this._knownStates=[]}async updated(e){if(e.has("value")){let r=e.get("value")?.entity_id,i=this.value.entity_id;if(i&&i!==r&&this.hass)try{let a=await xt(this.hass,i);this._knownStates=a.states}catch{this._knownStates=[]}}}_normalize(e){let t={...e};return t.attribute===""&&(t.attribute=null),t.for&&t.for.h===0&&t.for.m===0&&t.for.s===0&&(t.for=null),t}_emit(e){let t=this._normalize(e);this.value=t,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_autoFlipOp(e){let t=this._isNumericTargetFor(e),r=this._isNumericOp(e.kind);return t&&!r?{...e,kind:">"}:!t&&r?{...e,kind:"is"}:e}_setEntity(e){this._emit(this._autoFlipOp({...this.value,entity_id:e,states:[],attribute:null}))}_setAttribute(e){this._emit(this._autoFlipOp({...this.value,attribute:e}))}_setOp(e){this._emit({...this.value,kind:e})}_setStates(e){this._emit({...this.value,states:e})}_setValueAt(e,t){if(this._isNumericOp(this.value.kind)){this._setStates([t]);return}let r=this.value.states.slice();t===""?r.splice(e,1):r[e]=t,this._setStates(r)}_addValue(e){e&&this._setStates([...this.value.states,e])}_removeValueAt(e){let t=this.value.states.slice();t.splice(e,1),this._setStates(t)}_setForDuration(e){this._emit({...this.value,for:e})}_entitySchema(){return[{name:"entity_id",required:!0,selector:{entity:{}}}]}_knownAttributesFor(e){if(!e)return[];let r=this.hass?.states?.[e]?.attributes;return r?Object.keys(r).sort():[]}_attributeSchema(){let e=this._knownAttributesFor(this.value.entity_id);return[{name:"attribute",selector:{select:{mode:"dropdown",custom_value:!0,options:[{value:"",label:o(this.hass,"ui.state_where_state","State")},...e.map(t=>({value:t,label:t}))]}}}]}_isNumericOp(e){return x._NUMERIC_OPS.includes(e)}_isNumericTargetFor(e){let r=this.hass?.states?.[e.entity_id];if(!r)return!1;if(e.attribute)return typeof r.attributes?.[e.attribute]=="number";let i=r.state;return typeof i!="string"||i===""||i==="unknown"||i==="unavailable"?!1:Number.isFinite(Number(i))}_opSchema(){let e=this._isNumericTargetFor(this.value)?[...x._NUMERIC_OPS]:["is","is_not"];return e.includes(this.value.kind)||e.push(this.value.kind),[{name:"op",required:!0,selector:{select:{mode:"dropdown",options:e.map(t=>({value:t,label:P(this.hass,t)}))}}}]}_valueSchema(){return this._isNumericOp(this.value.kind)?[{name:"value",selector:{number:{mode:"box",step:"any"}}}]:[{name:"value",selector:{select:{mode:"dropdown",custom_value:!0,options:this._knownStates.map(e=>({value:e,label:e}))}}}]}_forSchema(){return[{name:"duration",selector:{duration:{enable_day:!1}}}]}_forData(){let e=this.value.for??{h:0,m:0,s:0};return{duration:{hours:e.h,minutes:e.m,seconds:e.s}}}_setForFromHaForm(e){this._setForDuration({h:e?.hours??0,m:e?.minutes??0,s:e?.seconds??0})}_renderEntity(){return customElements.get("ha-form")?l`<ha-form
         data-field="entity"
         .hass=${this.hass}
         .schema=${this._entitySchema()}
@@ -629,16 +629,17 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var d=(n,s,e
         <label class="field-label">${o(this.hass,"ui.state_entity","Entity")}</label>
         ${this._renderEntity()}
       </section>
-      <section class="field">
-        <label class="field-label">
-          ${o(this.hass,"ui.state_attribute_label","Attribute (optional)")}
-        </label>
-        ${this._renderAttribute()}
-      </section>
-      <section class="field">
-        <div class="op-row">
+      <section class="field where-op-row">
+        <div class="where-cell">
+          <label class="field-label">${o(this.hass,"ui.state_where","Where")}</label>
+          ${this._renderAttribute()}
+        </div>
+        <div class="op-cell">
+          <label class="field-label">${o(this.hass,"ui.state_op_header","Comparison")}</label>
           ${this._renderOp()}
         </div>
+      </section>
+      <section class="field">
         <label class="field-label">
           ${this._isNumericOp(this.value.kind)?o(this.hass,"ui.state_value_label","Value"):o(this.hass,"ui.state_label","State")}
         </label>
@@ -669,6 +670,11 @@ var Mt=Object.defineProperty;var Ot=Object.getOwnPropertyDescriptor;var d=(n,s,e
     /* HA-form-select carries extra bottom padding (helper-text slot) that
        smaller widgets lack. Lift the op so its underline matches. */
     .op-row .op-form { margin-bottom: 2rem; }
+    /* Where + Comparison on one line. Where takes the wider share since
+       it shows attribute names; Comparison is a short word/symbol. */
+    .where-op-row { display: flex; gap: 0.5rem; align-items: flex-start; }
+    .where-op-row .where-cell { flex: 2; min-width: 0; }
+    .where-op-row .op-cell { flex: 1; min-width: 0; }
     .value-list { display: flex; flex-direction: column; gap: 0.4rem; }
     .value-row { display: flex; gap: 0.5rem; align-items: center; }
     .value-row ha-form { flex: 1; }

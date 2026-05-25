@@ -36,6 +36,11 @@ export class AmbienceStateExprAtom extends LitElement {
     /* HA-form-select carries extra bottom padding (helper-text slot) that
        smaller widgets lack. Lift the op so its underline matches. */
     .op-row .op-form { margin-bottom: 2rem; }
+    /* Where + Comparison on one line. Where takes the wider share since
+       it shows attribute names; Comparison is a short word/symbol. */
+    .where-op-row { display: flex; gap: 0.5rem; align-items: flex-start; }
+    .where-op-row .where-cell { flex: 2; min-width: 0; }
+    .where-op-row .op-cell { flex: 1; min-width: 0; }
     .value-list { display: flex; flex-direction: column; gap: 0.4rem; }
     .value-row { display: flex; gap: 0.5rem; align-items: center; }
     .value-row ha-form { flex: 1; }
@@ -168,6 +173,10 @@ export class AmbienceStateExprAtom extends LitElement {
     return Object.keys(attrs).sort();
   }
 
+  /** Dropdown of "Where to look": the first option is the sentinel
+   *  representing the entity's primary state (storage attribute = null);
+   *  the rest are the entity's known attributes. custom_value: true so the
+   *  user can still type an attribute name we don't know about. */
   _attributeSchema(): HaFormSchema[] {
     const attrs = this._knownAttributesFor(this.value.entity_id);
     return [{
@@ -176,7 +185,10 @@ export class AmbienceStateExprAtom extends LitElement {
         select: {
           mode: "dropdown",
           custom_value: true,
-          options: attrs.map((a) => ({ value: a, label: a })),
+          options: [
+            { value: "", label: localize(this.hass, "ui.state_where_state", "State") },
+            ...attrs.map((a) => ({ value: a, label: a })),
+          ],
         },
       },
     }];
@@ -430,16 +442,17 @@ export class AmbienceStateExprAtom extends LitElement {
         <label class="field-label">${localize(this.hass, "ui.state_entity", "Entity")}</label>
         ${this._renderEntity()}
       </section>
-      <section class="field">
-        <label class="field-label">
-          ${localize(this.hass, "ui.state_attribute_label", "Attribute (optional)")}
-        </label>
-        ${this._renderAttribute()}
-      </section>
-      <section class="field">
-        <div class="op-row">
+      <section class="field where-op-row">
+        <div class="where-cell">
+          <label class="field-label">${localize(this.hass, "ui.state_where", "Where")}</label>
+          ${this._renderAttribute()}
+        </div>
+        <div class="op-cell">
+          <label class="field-label">${localize(this.hass, "ui.state_op_header", "Comparison")}</label>
           ${this._renderOp()}
         </div>
+      </section>
+      <section class="field">
         <label class="field-label">
           ${this._isNumericOp(this.value.kind)
             ? localize(this.hass, "ui.state_value_label", "Value")

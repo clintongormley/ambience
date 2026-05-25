@@ -48,7 +48,7 @@ describe("ambience-state-expr-atom", () => {
     expect(sel.multiple).toBeFalsy();
   });
 
-  test("_attributeSchema is a combobox listing the entity's attributes (sorted)", async () => {
+  test("_attributeSchema's first option is the 'State' sentinel (value = '')", async () => {
     const el2: any = document.createElement("ambience-state-expr-atom");
     el2.value = { kind: "is", entity_id: "media_player.x", states: [] };
     el2.hass = {
@@ -63,25 +63,38 @@ describe("ambience-state-expr-atom", () => {
     const sel = el2._attributeSchema()[0].selector.select;
     expect(sel.mode).toBe("dropdown");
     expect(sel.custom_value).toBe(true);
-    expect(sel.options.map((o: { value: string }) => o.value)).toEqual([
+    // First option represents "compare entity.state" (stored as null).
+    expect(sel.options[0]).toEqual({ value: "", label: "State" });
+    // Then the entity's known attributes, sorted.
+    expect(sel.options.slice(1).map((o: { value: string }) => o.value)).toEqual([
       "friendly_name", "source", "volume_level",
     ]);
     el2.remove();
   });
 
-  test("_attributeSchema returns an empty option list when the entity is not in hass.states", async () => {
+  test("the attribute field is labelled 'Where' (not 'Attribute')", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    expect(el.shadowRoot.textContent).toContain("Where");
+    expect(el.shadowRoot.textContent).not.toContain("Attribute (optional)");
+  });
+
+  test("_attributeSchema offers only the 'State' sentinel when the entity is not in hass.states", async () => {
     const el2: any = document.createElement("ambience-state-expr-atom");
     el2.value = { kind: "is", entity_id: "media_player.does_not_exist", states: [] };
     el2.hass = { states: {} };
     document.body.appendChild(el2);
     await el2.updateComplete;
-    expect(el2._attributeSchema()[0].selector.select.options).toEqual([]);
+    expect(el2._attributeSchema()[0].selector.select.options).toEqual([
+      { value: "", label: "State" },
+    ]);
     el2.remove();
   });
 
-  test("_attributeSchema falls back to empty options when entity_id is unset", async () => {
+  test("_attributeSchema offers only the 'State' sentinel when entity_id is unset", async () => {
     el = await mount({ kind: "is", entity_id: "", states: [] });
-    expect(el._attributeSchema()[0].selector.select.options).toEqual([]);
+    expect(el._attributeSchema()[0].selector.select.options).toEqual([
+      { value: "", label: "State" },
+    ]);
   });
 
   // --- op dropdown adapts to target type --------------------------------

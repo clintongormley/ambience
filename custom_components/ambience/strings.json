@@ -39,7 +39,8 @@
   },
   "matcher": {
     "scene": "Scene",
-    "time_of_day": "Time of day"
+    "time_of_day": "Time of day",
+    "state": "Entity state"
   },
   "action": {
     "set_light": "Set light"

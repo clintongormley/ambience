@@ -614,7 +614,7 @@ async def test_ws_periods_reset_clears_custom_and_hidden(
 async def test_enabled_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/matchers/enabled/list")
     assert resp["success"] is True
-    assert sorted(resp["result"]["enabled"]) == ["day", "time_of_day", "weather"]
+    assert sorted(resp["result"]["enabled"]) == ["day", "state", "time_of_day", "weather"]
 
 
 async def test_enabled_matchers_save_round_trips(
@@ -796,6 +796,18 @@ async def test_matchers_list_includes_weather(
     assert weather["toggleable"] is True
     assert weather["input"] == "weather_predicate"
     assert weather["priority"] == 300
+
+
+async def test_matchers_list_includes_state(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/matchers/list")
+    assert resp["success"] is True
+    by_name = {m["name"]: m for m in resp["result"]}
+    state = by_name["state"]
+    assert state["toggleable"] is True
+    assert state["input"] == "state_predicate"
+    assert state["priority"] == 50
+    assert state["description"].strip() != ""
+    assert state["predicate_help"].strip() != ""
 
 
 async def test_weather_config_list_default(hass, installed, hass_ws_client) -> None:

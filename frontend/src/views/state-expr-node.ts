@@ -213,11 +213,12 @@ export class AmbienceStateExprNode extends LitElement {
     `;
   }
 
-  /** Group header: AND/OR dropdown, NOT toggle (wraps the whole group in
-   *  NOT), wrap (…) (wraps this group inside another), and ✕ (unwrap —
-   *  promote children to parent level; hidden at root since there's no
-   *  parent to promote to). */
-  private _renderGroup(group: StateGroup, isNot: boolean) {
+  /** Group header: AND/OR dropdown + ✕ (unwrap — promote children to
+   *  parent level; hidden at root). Group-level NOT and group-level wrap
+   *  are intentionally NOT exposed here — per-atom NOT handles the common
+   *  negation case, and per-atom wrap (…) is enough to introduce new
+   *  sub-groups. */
+  private _renderGroup(group: StateGroup, _isNot: boolean) {
     const isRoot = this.path.length === 0;
     return html`
       <div class="group">
@@ -229,12 +230,6 @@ export class AmbienceStateExprNode extends LitElement {
             <option value="and" ?selected=${group.kind === "and"}>${stateOpLabel(this.hass, "and")}</option>
             <option value="or"  ?selected=${group.kind === "or"} >${stateOpLabel(this.hass, "or")}</option>
           </select>
-          <button class="not-toggle ${isNot ? "on" : ""}"
-            title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
-            @click=${() => this._emit("node-toggle-not")}>${stateOpLabel(this.hass, "not")}</button>
-          <button class="wrap"
-            title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
-            @click=${() => this._emit("node-wrap", { op: "and" })}>(…)</button>
           ${isRoot ? "" : html`<button class="unwrap"
             title=${localize(this.hass, "ui.state_unwrap_group", "Remove these parens (promote children to parent)")}
             @click=${() => this._emit("node-unwrap")}>✕</button>`}

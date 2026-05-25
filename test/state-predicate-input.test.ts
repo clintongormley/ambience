@@ -304,12 +304,35 @@ describe("ambience-state-predicate-input", () => {
     expect(card.querySelector("ambience-state-expr-atom")).toBeTruthy();
   });
 
-  test("an incomplete atom (no entity / no states) renders expanded with a placeholder summary", async () => {
+  test("a single root atom auto-opens regardless of completeness (so the form is visible)", async () => {
     el = await mount({ kind: "is", entity_id: "", states: [] });
     const card = _atomCards(el)[0];
     expect(card.classList.contains("expanded")).toBe(true);
     const summary = card.querySelector(".summary");
     expect(summary?.classList.contains("placeholder")).toBe(true);
+  });
+
+  test("regression: clicking one atom's summary collapses the previously-open atom (even when incomplete)", async () => {
+    // Bug report: two atoms with empty/incomplete content both rendered as
+    // force-expanded, so opening one didn't collapse the other. The fix
+    // respects _openPath strictly — incomplete atoms collapse when they're
+    // not the open one.
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "",        states: [] },  // incomplete
+      { kind: "is", entity_id: "person.b", states: ["home"] },
+    ]});
+    el._setOpen([1]);
+    await flush(el);
+    const cards = _atomCards(el);
+    expect(cards[0].classList.contains("collapsed")).toBe(true);
+    expect(cards[1].classList.contains("expanded")).toBe(true);
+
+    // Now click the (incomplete) [0] header — [1] must collapse, [0] open.
+    (cards[0].querySelector(".atom-header") as HTMLElement).click();
+    await flush(el);
+    const after = _atomCards(el);
+    expect(after[0].classList.contains("expanded")).toBe(true);
+    expect(after[1].classList.contains("collapsed")).toBe(true);
   });
 
   test("in a group, only the open atom is expanded; others render as summary only", async () => {

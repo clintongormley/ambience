@@ -110,8 +110,11 @@ export class AmbienceStateExprNode extends LitElement {
 
   private _renderAtomCard(atom: StateAtom) {
     const isComplete = this._atomIsComplete(atom);
-    // Incomplete atoms force-expand: their summary would be empty/useless.
-    const expanded = !isComplete || _samePath(this.path, this.openPath);
+    // Strict open/closed model: only the open atom expands. Incomplete
+    // atoms used to force-expand which broke collapse-others-on-open when
+    // both atoms were half-filled. The root component auto-opens a lone
+    // atom, so a freshly-added single condition still shows its form.
+    const expanded = _samePath(this.path, this.openPath);
     const summary = isComplete
       ? summariseState(atom, { hass: this.hass })
       : localize(this.hass, "ui.state_new_condition", "(new condition)");

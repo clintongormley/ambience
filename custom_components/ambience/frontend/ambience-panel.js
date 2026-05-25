@@ -678,7 +678,7 @@ var Rt=Object.defineProperty;var Mt=Object.getOwnPropertyDescriptor;var d=(n,s,e
     }
     .for-row { display: flex; gap: 0.25rem; align-items: center; }
     .for-row input[type='number'] { width: 3.5rem; }
-  `,x._NUMERIC_OPS=[">",">=","<","<="],d([c({attribute:!1})],x.prototype,"hass",2),d([c({attribute:!1})],x.prototype,"value",2),d([p()],x.prototype,"_knownStates",2),x=d([g("ambience-state-expr-atom")],x);function kr(n,s){return n===null||s===null||n.length!==s.length?!1:n.every((e,t)=>e===s[t])}var I=class extends m{constructor(){super(...arguments);this.path=[];this.openPath=null}_emit(e,t={}){this.dispatchEvent(new CustomEvent(e,{detail:{path:this.path,...t},bubbles:!0,composed:!0}))}_emitAt(e,t,r={}){this.dispatchEvent(new CustomEvent(t,{detail:{path:e,...r},bubbles:!0,composed:!0}))}_atomIsComplete(e){return!!e.entity_id&&e.states.some(t=>t!=="")}_renderAtomCard(e){let t=this._atomIsComplete(e),r=!t||kr(this.path,this.openPath),i=t?Ke(e,{hass:this.hass}):o(this.hass,"ui.state_new_condition","(new condition)");return l`
+  `,x._NUMERIC_OPS=[">",">=","<","<="],d([c({attribute:!1})],x.prototype,"hass",2),d([c({attribute:!1})],x.prototype,"value",2),d([p()],x.prototype,"_knownStates",2),x=d([g("ambience-state-expr-atom")],x);function kr(n,s){return n===null||s===null||n.length!==s.length?!1:n.every((e,t)=>e===s[t])}var I=class extends m{constructor(){super(...arguments);this.path=[];this.openPath=null}_emit(e,t={}){this.dispatchEvent(new CustomEvent(e,{detail:{path:this.path,...t},bubbles:!0,composed:!0}))}_emitAt(e,t,r={}){this.dispatchEvent(new CustomEvent(t,{detail:{path:e,...r},bubbles:!0,composed:!0}))}_atomIsComplete(e){return!!e.entity_id&&e.states.some(t=>t!=="")}_renderAtomCard(e){let t=this._atomIsComplete(e),r=kr(this.path,this.openPath),i=t?Ke(e,{hass:this.hass}):o(this.hass,"ui.state_new_condition","(new condition)");return l`
       <div class="atom-card ${r?"expanded":"collapsed"}">
         <div class="atom-header"
           @click=${()=>this._emit("node-open")}>
@@ -817,7 +817,7 @@ var Rt=Object.defineProperty;var Mt=Object.getOwnPropertyDescriptor;var d=(n,s,e
       <button class="root-add" @click=${()=>this._addAtRoot()}>
         + ${o(this.hass,"ui.state_add_condition","Add condition")}
       </button>
-    `}willUpdate(e){if(e.has("value")){let t=this.value;t&&this._openPath===null&&(t.kind==="is"||t.kind==="is_not")&&(this._openPath=[])}}};U.styles=_`
+    `}willUpdate(e){if(e.has("value")){let t=this.value;t&&this._openPath===null&&t.kind!=="and"&&t.kind!=="or"&&(this._openPath=[])}}};U.styles=_`
     :host { display: block; }
     .empty {
       border: 1px dashed var(--divider-color, #ccc);

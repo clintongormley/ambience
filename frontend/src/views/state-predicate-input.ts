@@ -307,14 +307,15 @@ export class AmbienceStatePredicateInput extends LitElement {
     `;
   }
 
-  /** When the predicate first becomes non-null and is a single atom, open
-   *  it automatically so the user sees the form (not just a placeholder
-   *  summary). Idempotent for subsequent updates. */
+  /** When the predicate first becomes non-null and isn't a group, open the
+   *  root atom automatically so the user sees the form (not just a
+   *  placeholder summary). Covers is/is_not, numeric ops, and legacy
+   *  NOT-wrapped atoms. */
   override willUpdate(changed: Map<string, unknown>) {
     if (changed.has("value")) {
       const v = this.value;
       if (v && this._openPath === null
-          && (v.kind === "is" || v.kind === "is_not")) {
+          && v.kind !== "and" && v.kind !== "or") {
         this._openPath = [];
       }
     }

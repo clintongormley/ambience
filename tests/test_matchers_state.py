@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.ambience.matchers.state import StateMatcher, StateSnapshot
@@ -180,3 +181,140 @@ async def test_snapshot_captures_all_states(hass: HomeAssistant) -> None:
 
 def test_describe_returns_none() -> None:
     assert StateMatcher().describe(_snap()) is None
+
+
+# --- validate_predicate ------------------------------------------------
+
+
+def test_validate_accepts_none() -> None:
+    StateMatcher().validate_predicate(None)
+
+
+def test_validate_rejects_non_dict() -> None:
+    with pytest.raises(ValueError):
+        StateMatcher().validate_predicate(42)
+
+
+def test_validate_atom_requires_entity_id() -> None:
+    m = StateMatcher()
+    with pytest.raises(ValueError, match="entity_id"):
+        m.validate_predicate({"kind": "is", "states": ["on"]})
+    with pytest.raises(ValueError, match="entity_id"):
+        m.validate_predicate({"kind": "is", "entity_id": "", "states": ["on"]})
+
+
+def test_validate_atom_requires_non_empty_states() -> None:
+    m = StateMatcher()
+    with pytest.raises(ValueError, match="states"):
+        m.validate_predicate({"kind": "is", "entity_id": "x", "states": []})
+    with pytest.raises(ValueError, match="states"):
+        m.validate_predicate({"kind": "is", "entity_id": "x", "states": "on"})
+    with pytest.raises(ValueError, match="states"):
+        m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on", 42]})
+
+
+def test_validate_atom_for_is_optional() -> None:
+    m = StateMatcher()
+    m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"]})
+    m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"], "for": None})
+    m.validate_predicate(
+        {"kind": "is", "entity_id": "x", "states": ["on"], "for": {"h": 0, "m": 5, "s": 0}}
+    )
+
+
+def test_validate_atom_for_rejects_negative_or_non_int() -> None:
+    m = StateMatcher()
+    with pytest.raises(ValueError, match="for"):
+        m.validate_predicate(
+            {"kind": "is", "entity_id": "x", "states": ["on"], "for": {"h": -1, "m": 0, "s": 0}}
+        )
+    with pytest.raises(ValueError, match="for"):
+        m.validate_predicate(
+            {"kind": "is", "entity_id": "x", "states": ["on"], "for": {"h": 0, "m": "five", "s": 0}}
+        )
+
+
+def test_validate_group_requires_non_empty_items() -> None:
+    m = StateMatcher()
+    with pytest.raises(ValueError, match="items"):
+        m.validate_predicate({"kind": "and", "items": []})
+    with pytest.raises(ValueError, match="items"):
+        m.validate_predicate({"kind": "or"})
+
+
+def test_validate_not_requires_item() -> None:
+    m = StateMatcher()
+    with pytest.raises(ValueError, match="item"):
+        m.validate_predicate({"kind": "not"})
+
+
+def test_validate_unknown_kind() -> None:
+    m = StateMatcher()
+    with pytest.raises(ValueError, match="kind"):
+        m.validate_predicate({"kind": "xor", "items": []})
+
+
+def test_validate_recurses_into_groups_and_not() -> None:
+    m = StateMatcher()
+    bad = {
+        "kind": "and",
+        "items": [
+            {"kind": "is", "entity_id": "x", "states": []},
+        ],
+    }
+    with pytest.raises(ValueError, match="states"):
+        m.validate_predicate(bad)
+
+
+def test_validate_accepts_realistic_nested() -> None:
+    m = StateMatcher()
+    pred = {
+        "kind": "or",
+        "items": [
+            {
+                "kind": "and",
+                "items": [
+                    {"kind": "is", "entity_id": "person.bob", "states": ["home", "work"]},
+                    {
+                        "kind": "is_not",
+                        "entity_id": "binary_sensor.d",
+                        "states": ["on"],
+                        "for": {"h": 0, "m": 5, "s": 0},
+                    },
+                ],
+            },
+            {"kind": "not", "item": {"kind": "is", "entity_id": "cover.c", "states": ["open"]}},
+        ],
+    }
+    m.validate_predicate(pred)
+
+
+# --- order_key ---------------------------------------------------------
+
+
+def test_order_key_uses_first_atom_entity_id() -> None:
+    m = StateMatcher()
+    assert m.order_key({"kind": "is", "entity_id": "x", "states": ["on"]}) == "x"
+    nested = {
+        "kind": "or",
+        "items": [
+            {
+                "kind": "and",
+                "items": [
+                    {"kind": "is", "entity_id": "person.bob", "states": ["home"]},
+                ],
+            },
+        ],
+    }
+    assert m.order_key(nested) == "person.bob"
+
+
+def test_order_key_handles_not_wrapper() -> None:
+    m = StateMatcher()
+    expr = {"kind": "not", "item": {"kind": "is", "entity_id": "cover.c", "states": ["open"]}}
+    assert m.order_key(expr) == "cover.c"
+
+
+def test_order_key_none_predicate_returns_string() -> None:
+    m = StateMatcher()
+    assert isinstance(m.order_key(None), str)

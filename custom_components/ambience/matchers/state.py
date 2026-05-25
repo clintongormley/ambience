@@ -115,3 +115,73 @@ class StateMatcher:
         m = dur.get("m") or 0
         s = dur.get("s") or 0
         return float(h) * 3600 + float(m) * 60 + float(s)
+
+    # --- validation -----------------------------------------------------
+
+    _VALID_KINDS = ("is", "is_not", "and", "or", "not")
+
+    def validate_predicate(self, predicate: Any) -> None:
+        if predicate is None:
+            return
+        self._validate_expr(predicate)
+
+    def _validate_expr(self, expr: Any) -> None:
+        if not isinstance(expr, dict):
+            raise ValueError("state expression must be a dict")
+        kind = expr.get("kind")
+        if kind not in self._VALID_KINDS:
+            raise ValueError(f"unknown kind: {kind!r}")
+        if kind in ("is", "is_not"):
+            self._validate_atom(expr)
+        elif kind in ("and", "or"):
+            items = expr.get("items")
+            if not isinstance(items, list) or not items:
+                raise ValueError(f"{kind} group requires a non-empty items list")
+            for it in items:
+                self._validate_expr(it)
+        else:  # "not"
+            item = expr.get("item")
+            if item is None:
+                raise ValueError("not requires an item")
+            self._validate_expr(item)
+
+    def _validate_atom(self, atom: dict) -> None:
+        entity_id = atom.get("entity_id")
+        if not isinstance(entity_id, str) or not entity_id.strip():
+            raise ValueError("state atom requires a non-empty entity_id")
+        states = atom.get("states")
+        if not isinstance(states, list) or not states:
+            raise ValueError("state atom requires a non-empty states list")
+        if not all(isinstance(s, str) and s for s in states):
+            raise ValueError("state atom states must all be non-empty strings")
+        dur = atom.get("for")
+        if dur is None:
+            return
+        if not isinstance(dur, dict):
+            raise ValueError("`for` must be a dict {h,m,s} or null")
+        for k in ("h", "m", "s"):
+            v = dur.get(k, 0)
+            if not isinstance(v, int) or isinstance(v, bool) or v < 0:
+                raise ValueError(f"`for.{k}` must be a non-negative int")
+
+    # --- linearisation --------------------------------------------------
+
+    def order_key(self, predicate: Any) -> str:
+        """First atom's entity_id, recursively. Empty string for `None`/no atoms."""
+        atom = self._first_atom(predicate)
+        return atom.get("entity_id", "") if atom else ""
+
+    def _first_atom(self, expr: Any) -> dict | None:
+        if not isinstance(expr, dict):
+            return None
+        kind = expr.get("kind")
+        if kind in ("is", "is_not"):
+            return expr
+        if kind in ("and", "or"):
+            for it in expr.get("items") or []:
+                a = self._first_atom(it)
+                if a is not None:
+                    return a
+        if kind == "not":
+            return self._first_atom(expr.get("item"))
+        return None

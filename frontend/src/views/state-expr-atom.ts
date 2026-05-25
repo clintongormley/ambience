@@ -90,12 +90,14 @@ export class AmbienceStateExprAtom extends LitElement {
     }));
   }
 
-  /** If the op is a numeric op but the new target isn't numeric, flip back
-   *  to `is` so the user doesn't end up with an invalid combination. */
+  /** Keep the op type in step with the target type: numeric targets use a
+   *  numeric op (>, ≥, <, ≤); non-numeric targets use is/is_not. Defaults
+   *  to `>` and `is` respectively. */
   private _autoFlipOp(next: StateAtom): StateAtom {
-    if (this._isNumericOp(next.kind) && !this._isNumericTargetFor(next)) {
-      return { ...next, kind: "is" };
-    }
+    const numericTarget = this._isNumericTargetFor(next);
+    const numericOp = this._isNumericOp(next.kind);
+    if (numericTarget && !numericOp) return { ...next, kind: ">" };
+    if (!numericTarget && numericOp) return { ...next, kind: "is" };
     return next;
   }
 
@@ -202,13 +204,14 @@ export class AmbienceStateExprAtom extends LitElement {
   }
 
   _opSchema(): HaFormSchema[] {
-    const ops: string[] = ["is", "is_not"];
-    if (this._isNumericTargetFor(this.value)) {
-      ops.push(...AmbienceStateExprAtom._NUMERIC_OPS);
-    }
+    // A numeric target only offers numeric ops — is/is_not don't compare
+    // ordered values cleanly. A non-numeric target only offers is/is_not.
+    const ops: string[] = this._isNumericTargetFor(this.value)
+      ? [...AmbienceStateExprAtom._NUMERIC_OPS]
+      : ["is", "is_not"];
     // Defensive: always include the currently-selected op so the dropdown
-    // never shows a blank value (e.g. after the user picked `>` on a
-    // numeric target and the entity later became unavailable).
+    // never shows a blank value (e.g. the entity is briefly unavailable
+    // and the inferred set excludes the current kind).
     if (!ops.includes(this.value.kind)) ops.push(this.value.kind);
     return [{
       name: "op",
@@ -225,9 +228,15 @@ export class AmbienceStateExprAtom extends LitElement {
     }];
   }
 
-  /** ha-form schema for a single state value row (combobox: known list +
-   *  custom_value). */
+  /** ha-form schema for a single value row. Numeric ops render a number
+   *  selector; is/is_not render a combobox of known states + custom values. */
   _valueSchema(): HaFormSchema[] {
+    if (this._isNumericOp(this.value.kind)) {
+      return [{
+        name: "value",
+        selector: { number: { mode: "box", step: "any" } },
+      }];
+    }
     return [{
       name: "value",
       selector: {
@@ -349,6 +358,13 @@ export class AmbienceStateExprAtom extends LitElement {
     const onChange = isAddRow
       ? (v: string) => this._addValue(v)
       : (v: string) => this._setValueAt(idx, v);
+    const isNumeric = this._isNumericOp(this.value.kind);
+    // ha-form's number selector wants a number in `data` and emits a number
+    // in the change event; we store the threshold as a string for wire-
+    // format consistency, so we coerce at the boundary.
+    const data: Record<string, unknown> = isNumeric
+      ? { value: value === "" ? undefined : Number(value) }
+      : { value };
     /* v8 ignore start */
     if (customElements.get("ha-form")) {
       return html`
@@ -356,11 +372,12 @@ export class AmbienceStateExprAtom extends LitElement {
           <ha-form
             .hass=${this.hass}
             .schema=${this._valueSchema()}
-            .data=${{ value }}
+            .data=${data}
             .computeLabel=${() => ""}
-            @value-changed=${(e: CustomEvent<{ value: { value?: string } }>) => {
+            @value-changed=${(e: CustomEvent<{ value: { value?: string | number } }>) => {
               e.stopPropagation();
-              onChange(e.detail.value.value ?? "");
+              const v = e.detail.value.value;
+              onChange(v === undefined || v === null ? "" : String(v));
             }}
           ></ha-form>
         </div>
@@ -369,7 +386,7 @@ export class AmbienceStateExprAtom extends LitElement {
     /* v8 ignore stop */
     return html`
       <div class="value-row" data-row=${idx}>
-        <input type="text" .value=${value}
+        <input type=${isNumeric ? "number" : "text"} .value=${value}
           placeholder=${isAddRow ? localize(this.hass, "ui.state_add_value", "+ Add state") : ""}
           @change=${(e: Event) => onChange((e.target as HTMLInputElement).value)} />
       </div>
@@ -423,7 +440,11 @@ export class AmbienceStateExprAtom extends LitElement {
         <div class="op-row">
           ${this._renderOp()}
         </div>
-        <label class="field-label">${localize(this.hass, "ui.state_label", "State")}</label>
+        <label class="field-label">
+          ${this._isNumericOp(this.value.kind)
+            ? localize(this.hass, "ui.state_value_label", "Value")
+            : localize(this.hass, "ui.state_label", "State")}
+        </label>
         <div class="value-list">
           ${this._isNumericOp(this.value.kind)
             ? this._renderValueRow(this.value.states[0] ?? "", 0)

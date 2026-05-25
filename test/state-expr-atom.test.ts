@@ -107,23 +107,24 @@ describe("ambience-state-expr-atom", () => {
     el2.remove();
   });
 
-  test("op dropdown also offers >, >=, <, <= when the state parses as a number", async () => {
+  test("op dropdown for a numeric state shows ONLY the numeric ops (no is/is_not)", async () => {
     const el2 = await mountWithHass(
-      { kind: "is", entity_id: "sensor.temp", states: [] },
+      // Pre-flip to a numeric op so the dropdown matches the kind.
+      { kind: ">", entity_id: "sensor.temp", states: ["10"] },
       { "sensor.temp": { state: "21.4", attributes: {} } },
     );
     const opts = el2._opSchema()[0].selector.select.options.map((o: any) => o.value);
-    expect(opts).toEqual(["is", "is_not", ">", ">=", "<", "<="]);
+    expect(opts).toEqual([">", ">=", "<", "<="]);
     el2.remove();
   });
 
-  test("attribute mode: numeric ops appear when the attribute is a number", async () => {
+  test("attribute mode: numeric ops only when the attribute is a number", async () => {
     const el2 = await mountWithHass(
-      { kind: "is", entity_id: "light.x", attribute: "brightness", states: [] },
+      { kind: ">", entity_id: "light.x", attribute: "brightness", states: ["100"] },
       { "light.x": { state: "on", attributes: { brightness: 200 } } },
     );
     const opts = el2._opSchema()[0].selector.select.options.map((o: any) => o.value);
-    expect(opts).toContain(">");
+    expect(opts).toEqual([">", ">=", "<", "<="]);
     el2.remove();
   });
 
@@ -164,6 +165,21 @@ describe("ambience-state-expr-atom", () => {
     el2.remove();
   });
 
+  test("changing the entity to a numeric target auto-flips is/is_not to '>'", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "person.bob", states: ["home"] },
+      {
+        "person.bob":  { state: "home",  attributes: {} },
+        "sensor.temp": { state: "21.4", attributes: {} },
+      },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el2._setEntity("sensor.temp");
+    expect(captured.kind).toBe(">");
+    el2.remove();
+  });
+
   test("changing the attribute to a non-numeric one auto-flips numeric op back to 'is'", async () => {
     const el2 = await mountWithHass(
       { kind: ">", entity_id: "light.x", attribute: "brightness", states: ["100"] },
@@ -174,6 +190,42 @@ describe("ambience-state-expr-atom", () => {
     el2._setAttribute("friendly_name");
     expect(captured.kind).toBe("is");
     el2.remove();
+  });
+
+  test("changing the attribute to a numeric one auto-flips is/is_not to '>'", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "light.x", attribute: "source", states: ["Spotify"] },
+      { "light.x": { state: "on", attributes: { source: "Spotify", brightness: 200 } } },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el2._setAttribute("brightness");
+    expect(captured.kind).toBe(">");
+    el2.remove();
+  });
+
+  test("numeric op: _valueSchema is a number selector (not a select combobox)", async () => {
+    el = await mount({ kind: ">", entity_id: "sensor.temp", states: ["10"] });
+    const schema = el._valueSchema();
+    expect(schema[0].name).toBe("value");
+    expect(schema[0].selector.number).toBeDefined();
+    expect(schema[0].selector.select).toBeUndefined();
+  });
+
+  test("non-numeric op: _valueSchema is still the combobox select with custom_value", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    const sel = el._valueSchema()[0].selector.select;
+    expect(sel.mode).toBe("dropdown");
+    expect(sel.custom_value).toBe(true);
+  });
+
+  test("value-row label is 'Value' for numeric ops and 'State' for is/is_not", async () => {
+    const el2 = await mount({ kind: ">", entity_id: "sensor.temp", states: ["10"] });
+    expect(el2.shadowRoot.textContent).toContain("Value");
+    expect(el2.shadowRoot.textContent).not.toContain("State\n");  // crude exclusion
+    el2.remove();
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    expect(el.shadowRoot.textContent).toContain("State");
   });
 
   // --- single value row for numeric ops ---------------------------------

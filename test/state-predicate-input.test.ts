@@ -271,4 +271,106 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.items).toHaveLength(1);
     expect(captured.items[0].entity_id).toBe("x");
   });
+
+  // --- collapse / expand ------------------------------------------------
+
+  // Atom cards live inside state-expr-node's shadow DOM, which may be
+  // nested when the predicate is a group. Walk down to collect them all.
+  function _atomCards(root: any): HTMLElement[] {
+    const out: HTMLElement[] = [];
+    const visit = (sr: ShadowRoot | null) => {
+      if (!sr) return;
+      sr.querySelectorAll(".atom-card").forEach((c) => out.push(c as HTMLElement));
+      sr.querySelectorAll("ambience-state-expr-node").forEach((n: Element) => {
+        visit((n as any).shadowRoot);
+      });
+    };
+    visit(root.shadowRoot);
+    return out;
+  }
+
+  /** Flush both the host's update and any pending nested updates so the
+   *  full descendant tree has re-rendered. */
+  async function flush(root: any): Promise<void> {
+    await root.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await root.updateComplete;
+  }
+
+  test("a single complete atom at root is expanded by default (form visible)", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    const card = _atomCards(el)[0];
+    expect(card.classList.contains("expanded")).toBe(true);
+    expect(card.querySelector("ambience-state-expr-atom")).toBeTruthy();
+  });
+
+  test("an incomplete atom (no entity / no states) renders expanded with a placeholder summary", async () => {
+    el = await mount({ kind: "is", entity_id: "", states: [] });
+    const card = _atomCards(el)[0];
+    expect(card.classList.contains("expanded")).toBe(true);
+    const summary = card.querySelector(".summary");
+    expect(summary?.classList.contains("placeholder")).toBe(true);
+  });
+
+  test("in a group, only the open atom is expanded; others render as summary only", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    el._setOpen([1]);
+    await flush(el);
+    const cards = _atomCards(el);
+    expect(cards).toHaveLength(2);
+    expect(cards[0].classList.contains("collapsed")).toBe(true);
+    expect(cards[1].classList.contains("expanded")).toBe(true);
+    // Collapsed card has no form body.
+    expect(cards[0].querySelector("ambience-state-expr-atom")).toBeNull();
+    expect(cards[1].querySelector("ambience-state-expr-atom")).toBeTruthy();
+  });
+
+  test("clicking a collapsed atom's summary opens it (collapsing the previously-open one)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    el._setOpen([1]);
+    await flush(el);
+    const cardA = _atomCards(el)[0];
+    (cardA.querySelector(".atom-header") as HTMLElement).click();
+    await flush(el);
+    const cards = _atomCards(el);
+    expect(cards[0].classList.contains("expanded")).toBe(true);
+    expect(cards[1].classList.contains("collapsed")).toBe(true);
+  });
+
+  test("clicking the X on a collapsed atom removes it (without opening)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    el._setOpen([1]);
+    await flush(el);
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    const cardA = _atomCards(el)[0];
+    (cardA.querySelector(".remove") as HTMLButtonElement).click();
+    await flush(el);
+    // The 2-item group collapses to the lone remaining atom (b).
+    expect(captured.kind).toBe("is");
+    expect(captured.entity_id).toBe("b");
+  });
+
+  test("adding a condition via + Add opens the new (empty) atom", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    // Starts as a lone atom; openPath = []. Click +Add to wrap in AND.
+    const addBtn = el.shadowRoot.querySelector(".root-add") as HTMLButtonElement;
+    addBtn.click();
+    await flush(el);
+    expect(el._openPath).toEqual([1]);
+    const cards = _atomCards(el);
+    // The original atom (path [0]) is complete → collapses.
+    expect(cards[0].classList.contains("collapsed")).toBe(true);
+    // The new empty atom (path [1]) is incomplete → expanded.
+    expect(cards[1].classList.contains("expanded")).toBe(true);
+  });
 });

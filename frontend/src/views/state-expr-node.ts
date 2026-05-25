@@ -4,7 +4,14 @@ import { customElement, property } from "lit/decorators.js";
 import "./state-expr-atom.js";
 import type { HassConnection } from "../api.js";
 import { localize, stateOpLabel } from "../i18n.js";
+import { summariseState } from "../summary.js";
 import type { StateAtom, StateExpr, StateGroup, StateNot } from "../types.js";
+
+function _samePath(a: number[] | null, b: number[] | null): boolean {
+  if (a === null || b === null) return false;
+  if (a.length !== b.length) return false;
+  return a.every((v, i) => v === b[i]);
+}
 
 /**
  * Recursive node renderer. Atoms render as <ambience-state-expr-atom>; groups
@@ -46,12 +53,42 @@ export class AmbienceStateExprNode extends LitElement {
       border-color: var(--warning-color, #cc9);
     }
     .actions { display: flex; gap: 0.25rem; margin-top: 0.5rem; }
+
+    .atom-card {
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 4px;
+      background: var(--card-background-color, #fff);
+    }
+    .atom-header {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.4rem 0.6rem; cursor: pointer; user-select: none;
+    }
+    .atom-card.expanded .atom-header { border-bottom: 1px solid var(--divider-color, #eee); }
+    .atom-card.collapsed .atom-header:hover {
+      background: var(--secondary-background-color, #f5f5f5);
+    }
+    .atom-header .summary {
+      flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .atom-header .summary.placeholder {
+      color: var(--secondary-text-color, #888); font-style: italic;
+    }
+    .atom-header .remove {
+      background: none; border: none; color: var(--secondary-text-color, #888);
+      cursor: pointer; font-size: 1em; padding: 0 0.25rem;
+    }
+    .atom-body { padding: 0.5rem 0.75rem; }
   `;
 
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) value!: StateExpr;
   /** Path of this node from the root. The root passes []. */
   @property({ attribute: false }) path: number[] = [];
+  /** Path of the currently-open atom (set by the root). When this node is
+   *  an atom and its path matches, it renders expanded. Incomplete atoms
+   *  render expanded regardless. */
+  @property({ attribute: false }) openPath: number[] | null = null;
 
   private _emit(name: string, detail: Record<string, unknown> = {}) {
     this.dispatchEvent(new CustomEvent(name, {
@@ -67,16 +104,42 @@ export class AmbienceStateExprNode extends LitElement {
     }));
   }
 
+  private _atomIsComplete(atom: StateAtom): boolean {
+    return Boolean(atom.entity_id) && atom.states.length > 0;
+  }
+
   private _renderAtomCard(atom: StateAtom) {
+    const isComplete = this._atomIsComplete(atom);
+    // Incomplete atoms force-expand: their summary would be empty/useless.
+    const expanded = !isComplete || _samePath(this.path, this.openPath);
+    const summary = isComplete
+      ? summariseState(atom, { hass: this.hass })
+      : localize(this.hass, "ui.state_new_condition", "(new condition)");
     return html`
-      <ambience-state-expr-atom
-        .hass=${this.hass}
-        .value=${atom}
-        @value-changed=${(e: CustomEvent<{ value: StateAtom }>) => {
-          e.stopPropagation();
-          this._emit("node-change", { value: e.detail.value });
-        }}
-      ></ambience-state-expr-atom>
+      <div class="atom-card ${expanded ? "expanded" : "collapsed"}">
+        <div class="atom-header"
+          @click=${() => this._emit("node-open")}>
+          <span class="summary ${isComplete ? "" : "placeholder"}">${summary}</span>
+          <button class="remove"
+            title=${localize(this.hass, "ui.remove", "Remove")}
+            @click=${(e: Event) => {
+              e.stopPropagation();
+              this._emit("node-remove");
+            }}>✕</button>
+        </div>
+        ${expanded ? html`
+          <div class="atom-body">
+            <ambience-state-expr-atom
+              .hass=${this.hass}
+              .value=${atom}
+              @value-changed=${(e: CustomEvent<{ value: StateAtom }>) => {
+                e.stopPropagation();
+                this._emit("node-change", { value: e.detail.value });
+              }}
+            ></ambience-state-expr-atom>
+          </div>
+        ` : ""}
+      </div>
     `;
   }
 
@@ -99,6 +162,7 @@ export class AmbienceStateExprNode extends LitElement {
             .hass=${this.hass}
             .value=${inner}
             .path=${childPath}
+            .openPath=${this.openPath}
           ></ambience-state-expr-node>
         </div>
       </div>

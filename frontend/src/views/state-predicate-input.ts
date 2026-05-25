@@ -1,5 +1,5 @@
 import { LitElement, html, css } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { customElement, property, state } from "lit/decorators.js";
 
 import "./state-expr-node.js";
 import type { HassConnection } from "../api.js";
@@ -51,6 +51,10 @@ export class AmbienceStatePredicateInput extends LitElement {
 
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) value: StatePredicate = null;
+  /** Path of the currently-expanded atom. `null` = none. Only one atom is
+   *  expanded at a time; the form below the matching summary shows the
+   *  editor, others render as summary + X. */
+  @state() private _openPath: number[] | null = null;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -60,6 +64,7 @@ export class AmbienceStatePredicateInput extends LitElement {
     this.addEventListener("node-add-child", this._onNodeAddChild as EventListener);
     this.addEventListener("node-toggle-not", this._onNodeToggleNot as EventListener);
     this.addEventListener("node-set-op", this._onNodeSetOp as EventListener);
+    this.addEventListener("node-open", this._onNodeOpen as EventListener);
   }
 
   private _emit(value: StatePredicate) {
@@ -76,6 +81,8 @@ export class AmbienceStatePredicateInput extends LitElement {
   }
 
   _addFirstAtom() {
+    // The new atom is the only one — open it so the form is visible.
+    this._openPath = [];
     this._emit(this._emptyAtom());
   }
 
@@ -105,12 +112,17 @@ export class AmbienceStatePredicateInput extends LitElement {
   }
 
   _addChildAt(path: number[], _kind: "is") {
+    // Capture the new child's path so we can open it after the patch lands.
+    let newChildPath: number[] | null = null;
     const next = this._patch(this.value, path, (node) => {
       if (node && (node.kind === "and" || node.kind === "or")) {
-        return { ...node, items: [...node.items, this._emptyAtom()] };
+        const items = [...node.items, this._emptyAtom()];
+        newChildPath = [...path, items.length - 1];
+        return { ...node, items };
       }
       return node;
     });
+    if (newChildPath !== null) this._openPath = newChildPath;
     this._emit(next);
   }
 
@@ -225,6 +237,11 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._setGroupOpAt(e.detail.path, e.detail.op);
   };
 
+  private _onNodeOpen = (e: CustomEvent<{ path: number[] }>) => {
+    e.stopPropagation();
+    this._openPath = e.detail.path;
+  };
+
   /** Add a sibling to the root expression.
    *  - If root is a group: append an empty atom child.
    *  - Otherwise: wrap the root in an AND group with [root, emptyAtom],
@@ -241,7 +258,14 @@ export class AmbienceStatePredicateInput extends LitElement {
       return;
     }
     // Atom or NOT-wrapped atom — wrap the whole thing in AND with a sibling.
+    // The new (empty) atom is at index 1; open it.
+    this._openPath = [1];
     this._emit({ kind: "and", items: [value, this._emptyAtom()] });
+  }
+
+  /** Set the currently-expanded atom by path. */
+  _setOpen(path: number[] | null) {
+    this._openPath = path;
   }
 
   private _renderRootToolbar() {
@@ -275,10 +299,24 @@ export class AmbienceStatePredicateInput extends LitElement {
         .hass=${this.hass}
         .value=${this.value}
         .path=${[]}
+        .openPath=${this._openPath}
       ></ambience-state-expr-node>
       <button class="root-add" @click=${() => this._addAtRoot()}>
         + ${localize(this.hass, "ui.state_add_condition", "Add condition")}
       </button>
     `;
+  }
+
+  /** When the predicate first becomes non-null and is a single atom, open
+   *  it automatically so the user sees the form (not just a placeholder
+   *  summary). Idempotent for subsequent updates. */
+  override willUpdate(changed: Map<string, unknown>) {
+    if (changed.has("value")) {
+      const v = this.value;
+      if (v && this._openPath === null
+          && (v.kind === "is" || v.kind === "is_not")) {
+        this._openPath = [];
+      }
+    }
   }
 }

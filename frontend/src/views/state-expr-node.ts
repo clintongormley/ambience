@@ -190,7 +190,7 @@ export class AmbienceStateExprNode extends LitElement {
             title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
             @click=${(e: Event) => {
               e.stopPropagation();
-              this._emit("node-wrap", { op: "and" });
+              this._emit("node-wrap");
             }}>(…)</button>
           <button class="remove"
             title=${localize(this.hass, "ui.remove", "Remove")}

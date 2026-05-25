@@ -114,12 +114,41 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._emit(next);
   }
 
-  _wrapAt(path: number[], op: "and" | "or") {
+  /** Wrap the node at `path` in a new single-child group whose op is the
+   *  OPPOSITE of the parent's op (AND inside OR → wrap in OR; OR inside
+   *  AND → wrap in AND). Wrapping in the same op as the parent would be a
+   *  no-op semantically, so flipping is the only useful choice. At the
+   *  root there is no parent — default to AND. */
+  _wrapAt(path: number[]) {
+    let parentKind: "and" | "or" | null = null;
+    if (path.length > 0) {
+      const parent = this._nodeAt(path.slice(0, -1));
+      if (parent && (parent.kind === "and" || parent.kind === "or")) {
+        parentKind = parent.kind;
+      }
+    }
+    const op: "and" | "or" = parentKind === "and" ? "or" : "and";
     const next = this._patch(this.value, path, (node) => {
       if (!node) return node;
       return { kind: op, items: [node] } as StateGroup;
     });
     this._emit(next);
+  }
+
+  /** Walk to a node at `path`. Paths index into group items; NOT
+   *  wrappers are transparent (consume no index). */
+  private _nodeAt(path: number[]): StateExpr | null {
+    return this._walkNode(this.value, path);
+  }
+
+  private _walkNode(tree: StateExpr | null, path: number[]): StateExpr | null {
+    if (!tree) return null;
+    if (tree.kind === "not") return this._walkNode((tree as StateNot).item, path);
+    if (path.length === 0) return tree;
+    if (tree.kind === "and" || tree.kind === "or") {
+      return this._walkNode(tree.items[path[0]] ?? null, path.slice(1));
+    }
+    return null;
   }
 
   _addChildAt(path: number[], _kind: "is") {
@@ -216,9 +245,9 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._removeAt(e.detail.path);
   };
 
-  private _onNodeWrap = (e: CustomEvent<{ path: number[]; op: "and" | "or" }>) => {
+  private _onNodeWrap = (e: CustomEvent<{ path: number[] }>) => {
     e.stopPropagation();
-    this._wrapAt(e.detail.path, e.detail.op);
+    this._wrapAt(e.detail.path);
   };
 
   private _onNodeAddChild = (e: CustomEvent<{ path: number[] }>) => {
@@ -381,7 +410,7 @@ export class AmbienceStatePredicateInput extends LitElement {
       <div class="root-toolbar">
         <button class="wrap"
           title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
-          @click=${() => this._wrapAt([], "and")}>(…)</button>
+          @click=${() => this._wrapAt([])}>(…)</button>
         <button class="remove"
           title=${localize(this.hass, "ui.state_clear", "Clear")}
           @click=${() => this._removeAt([])}>✕</button>

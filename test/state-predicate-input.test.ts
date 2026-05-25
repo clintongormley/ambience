@@ -46,11 +46,35 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.entity_id).toBe("y");
   });
 
-  test("_wrapAt at root converts an atom into a single-child group", async () => {
+  test("_wrapAt on a child of an AND group creates an OR sub-group (flip parent's op)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._wrapAt([1]);
+    expect(captured.items[1].kind).toBe("or");
+    expect(captured.items[1].items[0].entity_id).toBe("b");
+  });
+
+  test("_wrapAt on a child of an OR group creates an AND sub-group (flip parent's op)", async () => {
+    el = await mount({ kind: "or", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._wrapAt([0]);
+    expect(captured.items[0].kind).toBe("and");
+    expect(captured.items[0].items[0].entity_id).toBe("a");
+  });
+
+  test("_wrapAt at root has no parent → defaults to AND", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    el._wrapAt([], "and");
+    el._wrapAt([]);
     expect(captured.kind).toBe("and");
     expect(captured.items).toHaveLength(1);
     expect(captured.items[0].entity_id).toBe("x");

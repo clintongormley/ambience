@@ -48,7 +48,7 @@ describe("ambience-state-expr-atom", () => {
     expect(sel.multiple).toBeFalsy();
   });
 
-  test("_attributeSchema's first option is the 'State' sentinel (value = '')", async () => {
+  test("_attributeSchema's first option is the 'State' sentinel (non-empty value)", async () => {
     const el2: any = document.createElement("ambience-state-expr-atom");
     el2.value = { kind: "is", entity_id: "media_player.x", states: [] };
     el2.hass = {
@@ -63,13 +63,45 @@ describe("ambience-state-expr-atom", () => {
     const sel = el2._attributeSchema()[0].selector.select;
     expect(sel.mode).toBe("dropdown");
     expect(sel.custom_value).toBe(true);
-    // First option represents "compare entity.state" (stored as null).
-    expect(sel.options[0]).toEqual({ value: "", label: "State" });
+    // First option represents "compare entity.state". ha-form's select
+    // doesn't render value: "" as a selectable item, so we use a sentinel
+    // value and translate at the boundary.
+    expect(sel.options[0].label).toBe("State");
+    expect(sel.options[0].value).not.toBe("");
     // Then the entity's known attributes, sorted.
     expect(sel.options.slice(1).map((o: { value: string }) => o.value)).toEqual([
       "friendly_name", "source", "volume_level",
     ]);
     el2.remove();
+  });
+
+  test("when attribute is null, _attributeData carries the State-sentinel so the dropdown renders 'State'", async () => {
+    el = await mount({ kind: "is", entity_id: "x", attribute: null, states: ["on"] });
+    const data = el._attributeData();
+    const sentinel = el._attributeSchema()[0].selector.select.options[0].value;
+    expect(data.attribute).toBe(sentinel);
+  });
+
+  test("when attribute is 'source', _attributeData carries 'source'", async () => {
+    el = await mount({ kind: "is", entity_id: "x", attribute: "source", states: [] });
+    expect(el._attributeData().attribute).toBe("source");
+  });
+
+  test("selecting the State sentinel via _setAttributeFromHaForm clears the attribute (null)", async () => {
+    el = await mount({ kind: "is", entity_id: "x", attribute: "source", states: ["Spotify"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    const sentinel = el._attributeSchema()[0].selector.select.options[0].value;
+    el._setAttributeFromHaForm(sentinel);
+    expect(captured.attribute).toBeNull();
+  });
+
+  test("selecting a real attribute value via _setAttributeFromHaForm stores it as-is", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: [] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setAttributeFromHaForm("brightness");
+    expect(captured.attribute).toBe("brightness");
   });
 
   test("the attribute field is labelled 'Where' (not 'Attribute')", async () => {
@@ -84,17 +116,17 @@ describe("ambience-state-expr-atom", () => {
     el2.hass = { states: {} };
     document.body.appendChild(el2);
     await el2.updateComplete;
-    expect(el2._attributeSchema()[0].selector.select.options).toEqual([
-      { value: "", label: "State" },
-    ]);
+    const opts = el2._attributeSchema()[0].selector.select.options;
+    expect(opts).toHaveLength(1);
+    expect(opts[0].label).toBe("State");
     el2.remove();
   });
 
   test("_attributeSchema offers only the 'State' sentinel when entity_id is unset", async () => {
     el = await mount({ kind: "is", entity_id: "", states: [] });
-    expect(el._attributeSchema()[0].selector.select.options).toEqual([
-      { value: "", label: "State" },
-    ]);
+    const opts = el._attributeSchema()[0].selector.select.options;
+    expect(opts).toHaveLength(1);
+    expect(opts[0].label).toBe("State");
   });
 
   // --- op dropdown adapts to target type --------------------------------

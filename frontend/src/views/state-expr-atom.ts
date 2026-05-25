@@ -173,9 +173,14 @@ export class AmbienceStateExprAtom extends LitElement {
     return Object.keys(attrs).sort();
   }
 
-  /** Dropdown of "Where to look": the first option is the sentinel
-   *  representing the entity's primary state (storage attribute = null);
-   *  the rest are the entity's known attributes. custom_value: true so the
+  /** ha-form select doesn't render value="" as a selectable item, so we
+   *  use a non-empty sentinel for the "compare entity.state" option and
+   *  translate it back to `null` on emit (and to the sentinel when
+   *  populating `data`). */
+  private static readonly _STATE_SENTINEL = "__state__";
+
+  /** Dropdown of "Where to look": first option is the State sentinel; the
+   *  rest are the entity's known attributes. custom_value: true so the
    *  user can still type an attribute name we don't know about. */
   _attributeSchema(): HaFormSchema[] {
     const attrs = this._knownAttributesFor(this.value.entity_id);
@@ -186,12 +191,34 @@ export class AmbienceStateExprAtom extends LitElement {
           mode: "dropdown",
           custom_value: true,
           options: [
-            { value: "", label: localize(this.hass, "ui.state_where_state", "State") },
+            {
+              value: AmbienceStateExprAtom._STATE_SENTINEL,
+              label: localize(this.hass, "ui.state_where_state", "State"),
+            },
             ...attrs.map((a) => ({ value: a, label: a })),
           ],
         },
       },
     }];
+  }
+
+  /** Translate storage (`attribute: null | ""` or string) to the ha-form
+   *  dropdown's data shape (sentinel for state-mode, otherwise the
+   *  attribute name verbatim). */
+  _attributeData(): { attribute: string } {
+    const attr = this.value.attribute;
+    if (!attr) return { attribute: AmbienceStateExprAtom._STATE_SENTINEL };
+    return { attribute: attr };
+  }
+
+  /** Inverse of `_attributeData`: ha-form emits the sentinel for the
+   *  State option; we translate back to "" so `_normalize` stores null. */
+  _setAttributeFromHaForm(v: string) {
+    if (v === AmbienceStateExprAtom._STATE_SENTINEL) {
+      this._setAttribute("");
+    } else {
+      this._setAttribute(v);
+    }
   }
 
   private static readonly _NUMERIC_OPS = [">", ">=", "<", "<="] as const;
@@ -318,11 +345,11 @@ export class AmbienceStateExprAtom extends LitElement {
         data-field="attribute"
         .hass=${this.hass}
         .schema=${this._attributeSchema()}
-        .data=${{ attribute: attr }}
+        .data=${this._attributeData()}
         .computeLabel=${() => ""}
         @value-changed=${(e: CustomEvent<{ value: { attribute?: string } }>) => {
           e.stopPropagation();
-          this._setAttribute(e.detail.value.attribute ?? "");
+          this._setAttributeFromHaForm(e.detail.value.attribute ?? "");
         }}
       ></ha-form>`;
     }

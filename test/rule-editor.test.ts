@@ -562,4 +562,53 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(units).toContain("%");
     expect(units).toContain("s");
   });
+
+  test("re-passing the rule prop while the editor is open does NOT clobber the in-progress draft", async () => {
+    // Regression: when HA fires area_registry_updated (e.g. an unrelated
+    // device was added), the parent refetches all area configs, which
+    // produces fresh rule objects. The editor used to deep-clone any new
+    // `rule` reference, wiping the user's unsaved edits. The fix: only
+    // initialize the draft when the editor *opens*; ignore prop changes
+    // while open.
+    el = await mount({ name: "original", when: {}, actions: [] });
+    // User types a new name into the draft (we just set it via the
+    // public setter so we don't depend on input wiring here).
+    el._setName("user-edited name");
+    await el.updateComplete;
+
+    // Simulate the upstream refetch: a fresh Rule object with the same
+    // *original* contents (as it would be after a no-op refresh).
+    el.rule = { name: "original", when: {}, actions: [] };
+    await el.updateComplete;
+
+    // The user's edit must still be in the draft.
+    expect((el as any)._draft.name).toBe("user-edited name");
+
+    // Sanity: saving should emit the edited name, not the refetched one.
+    let saved: Rule | undefined;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
+      (b: any) => b.textContent.trim() === "Save rule"
+    ) as HTMLButtonElement;
+    saveBtn.click();
+    expect(saved?.name).toBe("user-edited name");
+  });
+
+  test("re-opening the editor on a different rule re-initializes the draft", async () => {
+    // The flip side of the previous test: closing and re-opening on a new
+    // rule should pick up the new rule.
+    el = await mount({ name: "first", when: {}, actions: [] });
+    el._setName("first-edited");
+    await el.updateComplete;
+    expect((el as any)._draft.name).toBe("first-edited");
+
+    // Close, then re-open with a different rule.
+    el.open = false;
+    await el.updateComplete;
+    el.rule = { name: "second", when: {}, actions: [] };
+    el.open = true;
+    await el.updateComplete;
+
+    expect((el as any)._draft.name).toBe("second");
+  });
 });

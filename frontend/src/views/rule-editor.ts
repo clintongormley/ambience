@@ -135,7 +135,13 @@ export class AmbienceRuleEditor extends LitElement {
   }
 
   override willUpdate(changed: Map<string, unknown>) {
-    if (changed.has("rule")) {
+    // Initialise the draft ONLY when the editor opens. Once open, ignore
+    // subsequent `rule` prop changes — the parent re-derives `rule` from a
+    // possibly-refreshed config every time `area_registry_updated` fires,
+    // and we don't want an unrelated refetch to clobber the user's
+    // in-progress edits.
+    const isOpening = changed.has("open") && this.open;
+    if (isOpening) {
       this._draft = this.rule ? JSON.parse(JSON.stringify(this.rule)) : null;
       this._open = null;  // new rule loaded → everything collapsed
       this._showError = false;

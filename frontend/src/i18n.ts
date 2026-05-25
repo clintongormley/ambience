@@ -222,6 +222,10 @@ export function weatherAttrUnit(
 const _STATE_OP_FALLBACKS: Record<string, string> = {
   is: "is",
   is_not: "is not",
+  ">": ">",
+  ">=": "≥",
+  "<": "<",
+  "<=": "≤",
   and: "AND",
   or: "OR",
   and_not: "AND NOT",

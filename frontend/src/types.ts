@@ -146,7 +146,10 @@ export type WeatherPredicate =
 export type StateForDuration = { h: number; m: number; s: number };
 
 export type StateAtom = {
-  kind: "is" | "is_not";
+  /** Comparison operator. For is/is_not, `states` is a list of values
+   *  (membership check). For `>`, `>=`, `<`, `<=`, `states` is a single
+   *  numeric threshold (as a string). */
+  kind: "is" | "is_not" | ">" | ">=" | "<" | "<=";
   entity_id: string;
   /** When set, compare entity.attributes[attribute] (stringified) instead of
    *  entity.state. Leave null/undefined to compare the state itself. */

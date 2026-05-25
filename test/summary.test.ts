@@ -381,3 +381,30 @@ test("summariseState falls back to entity-state when attribute is null/empty", (
     kind: "is", entity_id: "a", attribute: "", states: ["on"],
   }, {})).toBe("a is on");
 });
+
+test("summariseState renders numeric ops without slashes", () => {
+  expect(summariseState({
+    kind: ">", entity_id: "sensor.temp", states: ["21"],
+  }, {})).toBe("sensor.temp > 21");
+  expect(summariseState({
+    kind: ">=", entity_id: "sensor.temp", states: ["21"],
+  }, {})).toBe("sensor.temp ≥ 21");
+  expect(summariseState({
+    kind: "<", entity_id: "sensor.temp", states: ["5"],
+  }, {})).toBe("sensor.temp < 5");
+  expect(summariseState({
+    kind: "<=", entity_id: "sensor.temp", states: ["5"],
+  }, {})).toBe("sensor.temp ≤ 5");
+});
+
+test("summariseState renders numeric ops on attributes as 'entity.attr op N'", () => {
+  expect(summariseState({
+    kind: ">", entity_id: "light.x", attribute: "brightness", states: ["100"],
+  }, {})).toBe("light.x.brightness > 100");
+});
+
+test("summariseState appends 'for' clause to a numeric atom", () => {
+  expect(summariseState({
+    kind: ">", entity_id: "sensor.x", states: ["10"], for: { h: 0, m: 5, s: 0 },
+  }, {})).toBe("sensor.x > 10 for ≥5m");
+});

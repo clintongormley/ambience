@@ -90,14 +90,23 @@ export class AmbienceStateExprAtom extends LitElement {
     }));
   }
 
+  /** If the op is a numeric op but the new target isn't numeric, flip back
+   *  to `is` so the user doesn't end up with an invalid combination. */
+  private _autoFlipOp(next: StateAtom): StateAtom {
+    if (this._isNumericOp(next.kind) && !this._isNumericTargetFor(next)) {
+      return { ...next, kind: "is" };
+    }
+    return next;
+  }
+
   _setEntity(entity_id: string) {
     // Different entity → previously-selected values almost certainly don't
     // apply, and the attribute name was tied to the old entity's shape.
-    this._emit({ ...this.value, entity_id, states: [], attribute: null });
+    this._emit(this._autoFlipOp({ ...this.value, entity_id, states: [], attribute: null }));
   }
 
   _setAttribute(name: string) {
-    this._emit({ ...this.value, attribute: name });
+    this._emit(this._autoFlipOp({ ...this.value, attribute: name }));
   }
 
   _setOp(op: "is" | "is_not") {
@@ -108,8 +117,14 @@ export class AmbienceStateExprAtom extends LitElement {
     this._emit({ ...this.value, states });
   }
 
-  /** Replace the value at `idx`. An empty string removes the row. */
+  /** Replace the value at `idx`. For is/is_not, an empty string removes the
+   *  row (the user cleared the input). For numeric ops, there's always
+   *  exactly one slot, so clearing just empties it. */
   _setValueAt(idx: number, v: string) {
+    if (this._isNumericOp(this.value.kind)) {
+      this._setStates([v]);
+      return;
+    }
     const next = this.value.states.slice();
     if (v === "") {
       next.splice(idx, 1);
@@ -165,17 +180,46 @@ export class AmbienceStateExprAtom extends LitElement {
     }];
   }
 
+  private static readonly _NUMERIC_OPS = [">", ">=", "<", "<="] as const;
+
+  private _isNumericOp(kind: string): boolean {
+    return (AmbienceStateExprAtom._NUMERIC_OPS as readonly string[]).includes(kind);
+  }
+
+  /** Does the current target (entity.state or entity.attributes[x]) hold
+   *  a value we'd compare numerically? */
+  private _isNumericTargetFor(atom: StateAtom): boolean {
+    const states = (this.hass as { states?: Record<string, { state?: unknown; attributes?: Record<string, unknown> }> } | undefined)?.states;
+    const entity = states?.[atom.entity_id];
+    if (!entity) return false;
+    if (atom.attribute) {
+      return typeof entity.attributes?.[atom.attribute] === "number";
+    }
+    const s = entity.state;
+    if (typeof s !== "string") return false;
+    if (s === "" || s === "unknown" || s === "unavailable") return false;
+    return Number.isFinite(Number(s));
+  }
+
   _opSchema(): HaFormSchema[] {
+    const ops: string[] = ["is", "is_not"];
+    if (this._isNumericTargetFor(this.value)) {
+      ops.push(...AmbienceStateExprAtom._NUMERIC_OPS);
+    }
+    // Defensive: always include the currently-selected op so the dropdown
+    // never shows a blank value (e.g. after the user picked `>` on a
+    // numeric target and the entity later became unavailable).
+    if (!ops.includes(this.value.kind)) ops.push(this.value.kind);
     return [{
       name: "op",
       required: true,
       selector: {
         select: {
           mode: "dropdown",
-          options: [
-            { value: "is", label: stateOpLabel(this.hass, "is") },
-            { value: "is_not", label: stateOpLabel(this.hass, "is_not") },
-          ],
+          options: ops.map((op) => ({
+            value: op,
+            label: stateOpLabel(this.hass, op),
+          })),
         },
       },
     }];
@@ -381,8 +425,12 @@ export class AmbienceStateExprAtom extends LitElement {
         </div>
         <label class="field-label">${localize(this.hass, "ui.state_label", "State")}</label>
         <div class="value-list">
-          ${this.value.states.map((v, i) => this._renderValueRow(v, i))}
-          ${this._renderValueRow("", -1)}
+          ${this._isNumericOp(this.value.kind)
+            ? this._renderValueRow(this.value.states[0] ?? "", 0)
+            : html`
+                ${this.value.states.map((v, i) => this._renderValueRow(v, i))}
+                ${this._renderValueRow("", -1)}
+              `}
         </div>
       </section>
       <section class="field">

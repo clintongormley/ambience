@@ -84,6 +84,115 @@ describe("ambience-state-expr-atom", () => {
     expect(el._attributeSchema()[0].selector.select.options).toEqual([]);
   });
 
+  // --- op dropdown adapts to target type --------------------------------
+
+  async function mountWithHass(atom: StateAtom, hassStates: any): Promise<any> {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = atom;
+    el2.hass = { states: hassStates };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    return el2;
+  }
+
+  test("op dropdown shows only is/is_not when the state is non-numeric", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "person.bob", states: [] },
+      { "person.bob": { state: "home", attributes: {} } },
+    );
+    const opts = el2._opSchema()[0].selector.select.options.map((o: any) => o.value);
+    expect(opts).toEqual(["is", "is_not"]);
+    el2.remove();
+  });
+
+  test("op dropdown also offers >, >=, <, <= when the state parses as a number", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "sensor.temp", states: [] },
+      { "sensor.temp": { state: "21.4", attributes: {} } },
+    );
+    const opts = el2._opSchema()[0].selector.select.options.map((o: any) => o.value);
+    expect(opts).toEqual(["is", "is_not", ">", ">=", "<", "<="]);
+    el2.remove();
+  });
+
+  test("attribute mode: numeric ops appear when the attribute is a number", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "light.x", attribute: "brightness", states: [] },
+      { "light.x": { state: "on", attributes: { brightness: 200 } } },
+    );
+    const opts = el2._opSchema()[0].selector.select.options.map((o: any) => o.value);
+    expect(opts).toContain(">");
+    el2.remove();
+  });
+
+  test("attribute mode: numeric ops do NOT appear when the attribute is a string", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "media_player.x", attribute: "source", states: [] },
+      { "media_player.x": { state: "playing", attributes: { source: "Spotify" } } },
+    );
+    const opts = el2._opSchema()[0].selector.select.options.map((o: any) => o.value);
+    expect(opts).toEqual(["is", "is_not"]);
+    el2.remove();
+  });
+
+  test("the currently-selected op is always present in the dropdown (even if target isn't numeric)", async () => {
+    const el2 = await mountWithHass(
+      // kind is ">" but target is non-numeric — guard against blank dropdown.
+      { kind: ">", entity_id: "person.bob", states: ["10"] },
+      { "person.bob": { state: "home", attributes: {} } },
+    );
+    const opts = el2._opSchema()[0].selector.select.options.map((o: any) => o.value);
+    expect(opts).toContain(">");
+    el2.remove();
+  });
+
+  test("changing the entity to a non-numeric target auto-flips a numeric op back to 'is'", async () => {
+    const el2 = await mountWithHass(
+      { kind: ">", entity_id: "sensor.temp", states: ["10"] },
+      {
+        "sensor.temp": { state: "21.4", attributes: {} },
+        "person.bob":  { state: "home",  attributes: {} },
+      },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el2._setEntity("person.bob");
+    expect(captured.entity_id).toBe("person.bob");
+    expect(captured.kind).toBe("is");
+    el2.remove();
+  });
+
+  test("changing the attribute to a non-numeric one auto-flips numeric op back to 'is'", async () => {
+    const el2 = await mountWithHass(
+      { kind: ">", entity_id: "light.x", attribute: "brightness", states: ["100"] },
+      { "light.x": { state: "on", attributes: { brightness: 200, friendly_name: "Lamp" } } },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el2._setAttribute("friendly_name");
+    expect(captured.kind).toBe("is");
+    el2.remove();
+  });
+
+  // --- single value row for numeric ops ---------------------------------
+
+  test("numeric op renders a single value row (no trailing add-row)", async () => {
+    el = await mount({ kind: ">", entity_id: "sensor.temp", states: ["10"] });
+    const rows = el.shadowRoot.querySelectorAll(".value-row");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].getAttribute("data-row")).toBe("0");
+  });
+
+  test("setting the value to empty for a numeric op keeps the row (states=[''])", async () => {
+    el = await mount({ kind: ">", entity_id: "sensor.temp", states: ["10"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setValueAt(0, "");
+    expect(captured.states).toEqual([""]);
+  });
+
   test("emits value-changed when op flips", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;

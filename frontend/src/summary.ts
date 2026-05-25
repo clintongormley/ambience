@@ -137,17 +137,22 @@ export function summariseState(pred: StatePredicate, ctx: MatcherContext = {}): 
 }
 
 function _renderStateExpr(expr: StateExpr, ctx: MatcherContext): string {
-  if (expr.kind === "is" || expr.kind === "is_not") {
-    const verb = expr.kind === "is"
-      ? stateOpLabel(ctx.hass, "is")
-      : stateOpLabel(ctx.hass, "is_not");
-    const states = expr.states.join("/");
+  if (
+    expr.kind === "is" || expr.kind === "is_not"
+    || expr.kind === ">" || expr.kind === ">="
+    || expr.kind === "<" || expr.kind === "<="
+  ) {
+    const verb = stateOpLabel(ctx.hass, expr.kind);
+    // For is/is_not: multi-value list joined with "/". For numeric: a single
+    // threshold value (states[0]).
+    const isNumeric = expr.kind !== "is" && expr.kind !== "is_not";
+    const rhs = isNumeric ? (expr.states[0] ?? "") : expr.states.join("/");
     // Attribute-mode renders as `entity_id.attribute`; entity-state mode keeps
     // the bare entity_id. Empty/null attribute → fall through to state mode.
     const lhs = expr.attribute
       ? `${expr.entity_id}.${expr.attribute}`
       : expr.entity_id;
-    const head = `${lhs} ${verb} ${states}`;
+    const head = `${lhs} ${verb} ${rhs}`;
     if (expr.for && _hasStateDuration(expr.for)) {
       return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(expr.for)}`;
     }

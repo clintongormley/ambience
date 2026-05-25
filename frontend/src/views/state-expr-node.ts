@@ -105,7 +105,7 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   private _atomIsComplete(atom: StateAtom): boolean {
-    return Boolean(atom.entity_id) && atom.states.length > 0;
+    return Boolean(atom.entity_id) && atom.states.some((s) => s !== "");
   }
 
   private _renderAtomCard(atom: StateAtom) {

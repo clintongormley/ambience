@@ -123,12 +123,33 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._emit(next);
   }
 
-  _setGroupOpAt(path: number[], op: "and" | "or") {
+  /** Group operator includes the negated variants. AND/OR set the bare
+   *  group kind; AND_NOT/OR_NOT wrap the group in a NOT. Storage stays
+   *  the same wire-format set (and|or|not) — the UI just exposes the
+   *  combination as a single dropdown choice. */
+  _setGroupOpAt(
+    path: number[],
+    op: "and" | "or" | "and_not" | "or_not",
+  ) {
+    const wantNot = op === "and_not" || op === "or_not";
+    const innerKind: "and" | "or" =
+      op === "and" || op === "and_not" ? "and" : "or";
     const next = this._patch(this.value, path, (node) => {
-      if (node && (node.kind === "and" || node.kind === "or")) {
-        return { ...node, kind: op } as StateGroup;
+      if (!node) return node;
+      // Extract the underlying items list, whether the current node is a
+      // bare group or a NOT-wrapped group.
+      let bareGroup: StateGroup | null = null;
+      if (node.kind === "and" || node.kind === "or") {
+        bareGroup = node as StateGroup;
+      } else if (node.kind === "not") {
+        const inner = (node as StateNot).item;
+        if (inner.kind === "and" || inner.kind === "or") {
+          bareGroup = inner as StateGroup;
+        }
       }
-      return node;
+      if (!bareGroup) return node;
+      const replaced: StateGroup = { kind: innerKind, items: bareGroup.items };
+      return wantNot ? ({ kind: "not", item: replaced } as StateNot) : replaced;
     });
     this._emit(next);
   }
@@ -197,7 +218,9 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._toggleNotAt(e.detail.path);
   };
 
-  private _onNodeSetOp = (e: CustomEvent<{ path: number[]; op: "and" | "or" }>) => {
+  private _onNodeSetOp = (
+    e: CustomEvent<{ path: number[]; op: "and" | "or" | "and_not" | "or_not" }>,
+  ) => {
     e.stopPropagation();
     this._setGroupOpAt(e.detail.path, e.detail.op);
   };
@@ -222,12 +245,10 @@ export class AmbienceStatePredicateInput extends LitElement {
   }
 
   private _renderRootToolbar() {
-    const isNot = this.value?.kind === "not";
+    // Negation lives on the atom (`is_not`) or the group (`and_not` /
+    // `or_not` in the group dropdown) — no NOT button here.
     return html`
       <div class="root-toolbar">
-        <button class="not-toggle ${isNot ? "on" : ""}"
-          title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
-          @click=${() => this._toggleNotAt([])}>${localize(this.hass, "ui.state_op_not", "NOT")}</button>
         <button class="wrap"
           title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
           @click=${() => this._wrapAt([], "and")}>(…)</button>

@@ -206,14 +206,50 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.items[1].kind).toBe("is");
   });
 
-  test("clicking root NOT toggle wraps the whole predicate in NOT", async () => {
+  test("root toolbar has no NOT button (negation lives on atoms and groups)", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    const notBtn = el.shadowRoot.querySelector(".root-toolbar .not-toggle");
+    expect(notBtn).toBeNull();
+    // Wrap and Clear are still there.
+    expect(el.shadowRoot.querySelector(".root-toolbar .wrap")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".root-toolbar .remove")).toBeTruthy();
+  });
+
+  test("_setGroupOpAt to 'and_not' wraps the group in NOT", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    const notBtn = el.shadowRoot.querySelector(".root-toolbar .not-toggle") as HTMLButtonElement;
-    notBtn.click();
+    el._setGroupOpAt([], "and_not");
     expect(captured.kind).toBe("not");
-    expect(captured.item.entity_id).toBe("x");
+    expect(captured.item.kind).toBe("and");
+    expect(captured.item.items).toHaveLength(2);
+  });
+
+  test("_setGroupOpAt to 'or_not' wraps the group in NOT (with kind=or)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setGroupOpAt([], "or_not");
+    expect(captured.kind).toBe("not");
+    expect(captured.item.kind).toBe("or");
+  });
+
+  test("_setGroupOpAt to 'and' strips an outer NOT from a NOT-wrapped group", async () => {
+    el = await mount({ kind: "not", item: { kind: "or", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]}});
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setGroupOpAt([], "and");
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(2);
   });
 
   test("clicking root Clear/Remove sets the predicate to null", async () => {

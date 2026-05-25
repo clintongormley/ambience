@@ -224,6 +224,8 @@ const _STATE_OP_FALLBACKS: Record<string, string> = {
   is_not: "is not",
   and: "AND",
   or: "OR",
+  and_not: "AND NOT",
+  or_not: "OR NOT",
   not: "NOT",
 };
 

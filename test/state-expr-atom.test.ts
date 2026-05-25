@@ -264,13 +264,35 @@ describe("ambience-state-expr-atom", () => {
     expect(sel.custom_value).toBe(true);
   });
 
-  test("value-row label is 'Value' for numeric ops and 'State' for is/is_not", async () => {
-    const el2 = await mount({ kind: ">", entity_id: "sensor.temp", states: ["10"] });
-    expect(el2.shadowRoot.textContent).toContain("Value");
-    expect(el2.shadowRoot.textContent).not.toContain("State\n");  // crude exclusion
+  test("attribute mode: value dropdown options come from the attribute's current value", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "media_player.x", attribute: "source", states: [] };
+    el2.hass = {
+      states: { "media_player.x": { attributes: { source: "Spotify" } } },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    const sel = el2._valueSchema()[0].selector.select;
+    expect(sel.options).toEqual([{ value: "Spotify", label: "Spotify" }]);
     el2.remove();
+  });
+
+  test("attribute mode: value options are empty if the attribute has no current value", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "x", attribute: "missing_attr", states: [] };
+    el2.hass = { states: { "x": { attributes: {} } } };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    expect(el2._valueSchema()[0].selector.select.options).toEqual([]);
+    el2.remove();
+  });
+
+  test("the value section label is always 'Value' (regardless of op or mode)", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
-    expect(el.shadowRoot.textContent).toContain("State");
+    expect(el.shadowRoot.textContent).toContain("Value");
+    el.remove();
+    el = await mount({ kind: ">", entity_id: "sensor.temp", states: ["10"] });
+    expect(el.shadowRoot.textContent).toContain("Value");
   });
 
   // --- single value row for numeric ops ---------------------------------

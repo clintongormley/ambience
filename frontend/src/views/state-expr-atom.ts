@@ -267,8 +267,22 @@ export class AmbienceStateExprAtom extends LitElement {
     }];
   }
 
-  /** ha-form schema for a single value row. Numeric ops render a number
-   *  selector; is/is_not render a combobox of known states + custom values. */
+  /** Current value of the configured target — entity.attributes[attribute]
+   *  when in attribute mode, undefined otherwise (state mode uses the
+   *  fetched _knownStates list instead). */
+  private _currentAttributeValue(): unknown {
+    if (!this.value.attribute) return undefined;
+    const states = (this.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
+    return states?.[this.value.entity_id]?.attributes?.[this.value.attribute];
+  }
+
+  /** ha-form schema for a single value row.
+   *    Numeric ops      → number selector.
+   *    Attribute mode   → combobox seeded with the attribute's current
+   *                       value (one option); custom_value lets the user
+   *                       type others. Empty list when the attribute is
+   *                       unavailable.
+   *    State mode       → combobox seeded with the entity's known states. */
   _valueSchema(): HaFormSchema[] {
     if (this._isNumericOp(this.value.kind)) {
       return [{
@@ -276,13 +290,20 @@ export class AmbienceStateExprAtom extends LitElement {
         selector: { number: { mode: "box", step: "any" } },
       }];
     }
+    let options: string[];
+    if (this.value.attribute) {
+      const v = this._currentAttributeValue();
+      options = v === undefined || v === null ? [] : [String(v)];
+    } else {
+      options = this._knownStates;
+    }
     return [{
       name: "value",
       selector: {
         select: {
           mode: "dropdown",
           custom_value: true,
-          options: this._knownStates.map((s) => ({ value: s, label: s })),
+          options: options.map((s) => ({ value: s, label: s })),
         },
       },
     }];
@@ -481,9 +502,7 @@ export class AmbienceStateExprAtom extends LitElement {
       </section>
       <section class="field">
         <label class="field-label">
-          ${this._isNumericOp(this.value.kind)
-            ? localize(this.hass, "ui.state_value_label", "Value")
-            : localize(this.hass, "ui.state_label", "State")}
+          ${localize(this.hass, "ui.state_value_label", "Value")}
         </label>
         <div class="value-list">
           ${this._isNumericOp(this.value.kind)

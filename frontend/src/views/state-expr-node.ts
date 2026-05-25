@@ -79,6 +79,11 @@ export class AmbienceStateExprNode extends LitElement {
       cursor: pointer; font-size: 1em; padding: 0 0.25rem;
     }
     .atom-body { padding: 0.5rem 0.75rem; }
+    .atom-error {
+      margin-top: 0.5rem;
+      color: var(--error-color, #b71c1c);
+      font-size: 0.9em;
+    }
   `;
 
   @property({ attribute: false }) hass?: HassConnection;
@@ -89,6 +94,10 @@ export class AmbienceStateExprNode extends LitElement {
    *  an atom and its path matches, it renders expanded. Incomplete atoms
    *  render expanded regardless. */
   @property({ attribute: false }) openPath: number[] | null = null;
+  /** Path of an atom that currently has a surfaced validation error.
+   *  Combined with `errorMessage`, this drives the inline error display. */
+  @property({ attribute: false }) errorPath: number[] | null = null;
+  @property({ attribute: false }) errorMessage: string | null = null;
 
   private _emit(name: string, detail: Record<string, unknown> = {}) {
     this.dispatchEvent(new CustomEvent(name, {
@@ -106,6 +115,10 @@ export class AmbienceStateExprNode extends LitElement {
 
   private _atomIsComplete(atom: StateAtom): boolean {
     return Boolean(atom.entity_id) && atom.states.some((s) => s !== "");
+  }
+
+  private _isErrorTarget(): boolean {
+    return _samePath(this.path, this.errorPath);
   }
 
   private _renderAtomCard(atom: StateAtom) {
@@ -140,6 +153,9 @@ export class AmbienceStateExprNode extends LitElement {
                 this._emit("node-change", { value: e.detail.value });
               }}
             ></ambience-state-expr-atom>
+            ${this._isErrorTarget() && this.errorMessage
+              ? html`<div class="atom-error">${this.errorMessage}</div>`
+              : ""}
           </div>
         ` : ""}
       </div>
@@ -166,6 +182,8 @@ export class AmbienceStateExprNode extends LitElement {
             .value=${inner}
             .path=${childPath}
             .openPath=${this.openPath}
+            .errorPath=${this.errorPath}
+            .errorMessage=${this.errorMessage}
           ></ambience-state-expr-node>
         </div>
       </div>

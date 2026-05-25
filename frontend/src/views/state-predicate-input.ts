@@ -55,6 +55,10 @@ export class AmbienceStatePredicateInput extends LitElement {
    *  expanded at a time; the form below the matching summary shows the
    *  editor, others render as summary + X. */
   @state() private _openPath: number[] | null = null;
+  /** Set to true when the user tried to navigate away from an invalid atom.
+   *  Mirrors the rule-editor pattern: errors only surface after a switch
+   *  attempt, not from the start. Reset when the open atom becomes valid. */
+  @state() private _showError = false;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -237,10 +241,77 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._setGroupOpAt(e.detail.path, e.detail.op);
   };
 
+  /** Locate the atom at a given path. Skips NOT wrappers transparently
+   *  (they don't consume a path index). Returns null if the path lands on
+   *  a group node or runs off the end. */
+  _atomAt(path: number[]): StateAtom | null {
+    return this._walk(this.value, path);
+  }
+
+  private _walk(tree: StateExpr | null, path: number[]): StateAtom | null {
+    if (!tree) return null;
+    if (tree.kind === "not") return this._walk((tree as StateNot).item, path);
+    if (path.length === 0) {
+      if (tree.kind === "and" || tree.kind === "or") return null;
+      return tree as StateAtom;
+    }
+    if (tree.kind === "and" || tree.kind === "or") {
+      return this._walk(tree.items[path[0]] ?? null, path.slice(1));
+    }
+    return null;
+  }
+
+  /** Return a localized validation message for an atom, or null if valid. */
+  _atomError(atom: StateAtom): string | null {
+    if (!atom.entity_id) {
+      return localize(this.hass, "ui.state_err_entity", "Entity is required");
+    }
+    const isNumeric =
+      atom.kind !== "is" && atom.kind !== "is_not";
+    if (isNumeric) {
+      const v = atom.states[0];
+      if (!v) return localize(this.hass, "ui.state_err_value", "Value is required");
+      if (!Number.isFinite(Number(v))) {
+        return localize(this.hass, "ui.state_err_numeric", "Value must be a number");
+      }
+    } else if (!atom.states.some((s) => s !== "")) {
+      return localize(this.hass, "ui.state_err_state", "State is required");
+    }
+    return null;
+  }
+
   private _onNodeOpen = (e: CustomEvent<{ path: number[] }>) => {
     e.stopPropagation();
+    // Refuse to switch away from an invalid open atom — surface the error
+    // instead so the user sees what needs fixing.
+    if (this._openPath !== null) {
+      const current = this._atomAt(this._openPath);
+      if (current && this._atomError(current) !== null) {
+        this._showError = true;
+        return;
+      }
+    }
     this._openPath = e.detail.path;
+    this._showError = false;
   };
+
+  /** Clear `_showError` once the open atom is valid again. */
+  override willUpdate(changed: Map<string, unknown>) {
+    if (changed.has("value")) {
+      const v = this.value;
+      if (v && this._openPath === null
+          && v.kind !== "and" && v.kind !== "or") {
+        this._openPath = [];
+      }
+      // If we're showing an error and the open atom became valid, drop it.
+      if (this._showError && this._openPath !== null) {
+        const current = this._atomAt(this._openPath);
+        if (!current || this._atomError(current) === null) {
+          this._showError = false;
+        }
+      }
+    }
+  }
 
   /** Add a sibling to the root expression.
    *  - If root is a group: append an empty atom child.
@@ -293,6 +364,14 @@ export class AmbienceStatePredicateInput extends LitElement {
         </div>
       `;
     }
+    // Error message for the currently-open atom, only visible after the user
+    // tried to navigate away while it was invalid.
+    const errorMessage = this._showError && this._openPath !== null
+      ? (() => {
+          const atom = this._atomAt(this._openPath!);
+          return atom ? this._atomError(atom) : null;
+        })()
+      : null;
     return html`
       ${this._renderRootToolbar()}
       <ambience-state-expr-node
@@ -300,6 +379,8 @@ export class AmbienceStatePredicateInput extends LitElement {
         .value=${this.value}
         .path=${[]}
         .openPath=${this._openPath}
+        .errorPath=${errorMessage ? this._openPath : null}
+        .errorMessage=${errorMessage}
       ></ambience-state-expr-node>
       <button class="root-add" @click=${() => this._addAtRoot()}>
         + ${localize(this.hass, "ui.state_add_condition", "Add condition")}
@@ -307,17 +388,4 @@ export class AmbienceStatePredicateInput extends LitElement {
     `;
   }
 
-  /** When the predicate first becomes non-null and isn't a group, open the
-   *  root atom automatically so the user sees the form (not just a
-   *  placeholder summary). Covers is/is_not, numeric ops, and legacy
-   *  NOT-wrapped atoms. */
-  override willUpdate(changed: Map<string, unknown>) {
-    if (changed.has("value")) {
-      const v = this.value;
-      if (v && this._openPath === null
-          && v.kind !== "and" && v.kind !== "or") {
-        this._openPath = [];
-      }
-    }
-  }
 }

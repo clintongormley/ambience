@@ -383,6 +383,70 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.entity_id).toBe("b");
   });
 
+  test("clicking another atom while the open one is invalid keeps the open one expanded and shows an error", async () => {
+    // The first atom is incomplete (no entity_id). The second is valid.
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "",     states: [] },   // invalid (open)
+      { kind: "is", entity_id: "person.b", states: ["home"] },
+    ]});
+    el._setOpen([0]);
+    await flush(el);
+
+    let cards = _atomCards(el);
+    (cards[1].querySelector(".atom-header") as HTMLElement).click();
+    await flush(el);
+
+    // Refused to switch: atom [0] is still expanded.
+    cards = _atomCards(el);
+    expect(cards[0].classList.contains("expanded")).toBe(true);
+    expect(cards[1].classList.contains("collapsed")).toBe(true);
+    expect(el._openPath).toEqual([0]);
+
+    // And an error message is visible inside the open atom.
+    expect(cards[0].textContent).toMatch(/entity is required|required/i);
+  });
+
+  test("once the invalid atom becomes valid, the user CAN switch to another", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "",     states: [] },
+      { kind: "is", entity_id: "person.b", states: ["home"] },
+    ]});
+    el._setOpen([0]);
+    await flush(el);
+
+    // Fix [0]: replace it with a complete atom.
+    el._replaceAt([0], { kind: "is", entity_id: "person.a", states: ["home"] });
+    await flush(el);
+
+    // Now click [1]'s summary — should switch.
+    const cards = _atomCards(el);
+    (cards[1].querySelector(".atom-header") as HTMLElement).click();
+    await flush(el);
+    expect(el._openPath).toEqual([1]);
+  });
+
+  test("error is cleared once the open atom is valid (no longer shows after fixing)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "",     states: [] },
+      { kind: "is", entity_id: "person.b", states: ["home"] },
+    ]});
+    el._setOpen([0]);
+    await flush(el);
+
+    // Trigger the error by trying to switch.
+    let cards = _atomCards(el);
+    (cards[1].querySelector(".atom-header") as HTMLElement).click();
+    await flush(el);
+    cards = _atomCards(el);
+    expect(cards[0].textContent).toMatch(/required/i);
+
+    // Fix the atom — error should clear.
+    el._replaceAt([0], { kind: "is", entity_id: "person.a", states: ["home"] });
+    await flush(el);
+    cards = _atomCards(el);
+    expect(cards[0].textContent).not.toMatch(/required/i);
+  });
+
   test("adding a condition via + Add opens the new (empty) atom", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     // Starts as a lone atom; openPath = []. Click +Add to wrap in AND.

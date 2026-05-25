@@ -24,6 +24,28 @@ function _samePath(a: number[] | null, b: number[] | null): boolean {
 export class AmbienceStateExprNode extends LitElement {
   static override styles = css`
     :host { display: block; }
+    .group-wrap {
+      display: flex; align-items: flex-start; gap: 0.4rem;
+      margin: 0.25rem 0;
+    }
+    .group-wrap > .group { flex: 1; min-width: 0; margin: 0; }
+    /* External NOT on a group sits next to the card, scoping visually to
+       the whole group. Tone-down when off (same treatment as the in-atom
+       NOT toggle); loud when on. */
+    .group-wrap > .not-toggle.external {
+      background: transparent; border: 1px solid transparent;
+      border-radius: 4px; padding: 0.1rem 0.35rem; margin-top: 0.4rem;
+      cursor: pointer; font-size: 0.85em;
+      color: var(--secondary-text-color, #888); opacity: 0.6;
+    }
+    .group-wrap > .not-toggle.external:hover {
+      opacity: 1; border-color: var(--divider-color, #ccc);
+    }
+    .group-wrap > .not-toggle.external.on {
+      background: var(--warning-color, #ffd);
+      border-color: var(--warning-color, #cc9);
+      color: inherit; opacity: 1; font-weight: 600;
+    }
     .group {
       border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 4px;
@@ -214,11 +236,11 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   /** Group header: AND/OR dropdown + ✕ (unwrap — promote children to
-   *  parent level; hidden at root). Group-level NOT and group-level wrap
-   *  are intentionally NOT exposed here — per-atom NOT handles the common
-   *  negation case, and per-atom wrap (…) is enough to introduce new
-   *  sub-groups. */
-  private _renderGroup(group: StateGroup, _isNot: boolean) {
+   *  parent level; hidden at root). Group-level NOT lives OUTSIDE the
+   *  card in `_renderGroupWithExternalNot` — sitting next to the group
+   *  rather than inside the header reads more naturally as "this NOT
+   *  applies to the whole group". */
+  private _renderGroup(group: StateGroup) {
     const isRoot = this.path.length === 0;
     return html`
       <div class="group">
@@ -247,14 +269,27 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   override render() {
-    // Each node owns its own NOT-toggle visual state via the card header,
-    // so we unwrap NOT here but pass the isNot flag down to the renderer
-    // for the toggle's 'on' class.
+    // Atoms own their NOT toggle in the card header. Groups put NOT
+    // outside the card (to the left), where it visually scopes to the
+    // whole group. Both unwrap the {kind:'not'} envelope before rendering
+    // the inner content; the isNot flag drives the toggle's 'on' class.
     const isNot = this.value.kind === "not";
     const inner = isNot ? (this.value as StateNot).item : this.value;
     if (inner.kind === "and" || inner.kind === "or") {
-      return this._renderGroup(inner, isNot);
+      return this._renderGroupWithExternalNot(inner as StateGroup, isNot);
     }
     return this._renderAtomCard(inner as StateAtom, isNot);
+  }
+
+  private _renderGroupWithExternalNot(group: StateGroup, isNot: boolean) {
+    const isRoot = this.path.length === 0;
+    return html`
+      <div class="group-wrap">
+        ${isRoot ? "" : html`<button class="not-toggle external ${isNot ? "on" : ""}"
+          title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
+          @click=${() => this._emit("node-toggle-not")}>${stateOpLabel(this.hass, "not")}</button>`}
+        ${this._renderGroup(group)}
+      </div>
+    `;
   }
 }

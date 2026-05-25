@@ -599,17 +599,12 @@ var Nt=Object.defineProperty;var Rt=Object.getOwnPropertyDescriptor;var d=(n,s,e
             .computeLabel=${()=>""}
             @value-changed=${a=>{a.stopPropagation(),i(a.detail.value.value??"")}}
           ></ha-form>
-          ${r?"":l`<button class="remove"
-            title=${o(this.hass,"ui.remove","Remove")}
-            @click=${()=>this._removeValueAt(t)}>✕</button>`}
         </div>
       `:l`
       <div class="value-row" data-row=${t}>
         <input type="text" .value=${e}
           placeholder=${r?o(this.hass,"ui.state_add_value","+ Add state"):""}
           @change=${a=>i(a.target.value)} />
-        ${r?"":l`<button class="remove"
-          @click=${()=>this._removeValueAt(t)}>✕</button>`}
       </div>
     `}_renderForRow(){if(customElements.get("ha-form"))return l`<ha-form
         data-field="for"
@@ -673,10 +668,6 @@ var Nt=Object.defineProperty;var Rt=Object.getOwnPropertyDescriptor;var d=(n,s,e
     .value-list { display: flex; flex-direction: column; gap: 0.4rem; }
     .value-row { display: flex; gap: 0.5rem; align-items: center; }
     .value-row ha-form { flex: 1; }
-    .value-row .remove {
-      background: none; border: none; color: var(--secondary-text-color, #888);
-      cursor: pointer; font-size: 1em; padding: 0 0.4rem;
-    }
     /* jsdom-only native fallbacks */
     select, input[type="text"], input[type="number"] {
       padding: 0.25rem; border: 1px solid var(--divider-color, #ccc);

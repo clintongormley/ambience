@@ -39,10 +39,6 @@ export class AmbienceStateExprAtom extends LitElement {
     .value-list { display: flex; flex-direction: column; gap: 0.4rem; }
     .value-row { display: flex; gap: 0.5rem; align-items: center; }
     .value-row ha-form { flex: 1; }
-    .value-row .remove {
-      background: none; border: none; color: var(--secondary-text-color, #888);
-      cursor: pointer; font-size: 1em; padding: 0 0.4rem;
-    }
     /* jsdom-only native fallbacks */
     select, input[type="text"], input[type="number"] {
       padding: 0.25rem; border: 1px solid var(--divider-color, #ccc);
@@ -280,8 +276,9 @@ export class AmbienceStateExprAtom extends LitElement {
     </select>`;
   }
 
-  /** A single state-value row. Used both for stored values (idx ≥ 0, with X
-   *  to remove) and for the trailing empty "add" row (idx = -1, no X). */
+  /** A single state-value row. Clearing the ha-form select to empty (its
+   *  built-in X button) triggers `_setValueAt(idx, "")`, which removes the
+   *  row — so no wrapper ✕ is needed. */
   private _renderValueRow(value: string, idx: number) {
     const isAddRow = idx === -1;
     const onChange = isAddRow
@@ -301,9 +298,6 @@ export class AmbienceStateExprAtom extends LitElement {
               onChange(e.detail.value.value ?? "");
             }}
           ></ha-form>
-          ${isAddRow ? "" : html`<button class="remove"
-            title=${localize(this.hass, "ui.remove", "Remove")}
-            @click=${() => this._removeValueAt(idx)}>✕</button>`}
         </div>
       `;
     }
@@ -313,8 +307,6 @@ export class AmbienceStateExprAtom extends LitElement {
         <input type="text" .value=${value}
           placeholder=${isAddRow ? localize(this.hass, "ui.state_add_value", "+ Add state") : ""}
           @change=${(e: Event) => onChange((e.target as HTMLInputElement).value)} />
-        ${isAddRow ? "" : html`<button class="remove"
-          @click=${() => this._removeValueAt(idx)}>✕</button>`}
       </div>
     `;
   }

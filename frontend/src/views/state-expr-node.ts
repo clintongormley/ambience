@@ -27,36 +27,25 @@ export class AmbienceStateExprNode extends LitElement {
     .group {
       border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 4px;
-      padding: 0.5rem; margin: 0.25rem 0;
+      padding: 0.4rem; margin: 0.25rem 0;
       background: var(--secondary-background-color, transparent);
     }
     .group-header {
       display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;
       font-weight: 500;
     }
-    .group-header .remove {
-      margin-left: auto;
-      background: none; border: none; color: var(--secondary-text-color, #888);
-      cursor: pointer; font-size: 1em; padding: 0 0.25rem;
-    }
     .group-op {
       padding: 0.15rem 0.5rem; border: 1px solid var(--divider-color, #ccc);
       border-radius: 4px; background: var(--card-background-color, #fff);
       color: inherit;
     }
-    .group-children { display: flex; flex-direction: column; gap: 0.25rem; padding-left: 1rem; }
-    .child-row { display: flex; gap: 0.5rem; align-items: flex-start; }
-    .child-body { flex: 1; min-width: 0; }
-    .child-actions { display: flex; gap: 0.25rem; padding-top: 0.25rem; }
-    .child-actions button, .actions button {
+    /* Nested groups no longer indent — the bordered card already conveys
+       hierarchy. This keeps the form full-width regardless of depth. */
+    .group-children { display: flex; flex-direction: column; gap: 0.25rem; }
+    .actions button {
       background: transparent; border: 1px solid var(--divider-color, #ccc);
       border-radius: 4px; padding: 0.15rem 0.4rem; cursor: pointer;
       font-size: 0.85em; color: inherit;
-    }
-    .child-actions .not-toggle.on {
-      background: var(--warning-color, #ffd);
-      border-color: var(--warning-color, #cc9);
-      font-weight: 600;
     }
     .actions { display: flex; gap: 0.25rem; margin-top: 0.5rem; }
 
@@ -83,6 +72,26 @@ export class AmbienceStateExprNode extends LitElement {
     .atom-header .remove {
       background: none; border: none; color: var(--secondary-text-color, #888);
       cursor: pointer; font-size: 1em; padding: 0 0.25rem;
+    }
+    .atom-header .not-toggle,
+    .atom-header .wrap,
+    .group-header .not-toggle,
+    .group-header .wrap,
+    .group-header .unwrap {
+      background: transparent; border: 1px solid var(--divider-color, #ccc);
+      border-radius: 4px; padding: 0.1rem 0.35rem; cursor: pointer;
+      font-size: 0.85em; color: inherit;
+    }
+    .atom-header .not-toggle.on,
+    .group-header .not-toggle.on {
+      background: var(--warning-color, #ffd);
+      border-color: var(--warning-color, #cc9);
+      font-weight: 600;
+    }
+    .group-header .unwrap {
+      margin-left: auto;
+      border: none; background: none; padding: 0 0.25rem;
+      color: var(--secondary-text-color, #888); font-size: 1em;
     }
     .atom-body { padding: 0.5rem 0.75rem; }
     .atom-error {
@@ -112,13 +121,6 @@ export class AmbienceStateExprNode extends LitElement {
     }));
   }
 
-  private _emitAt(path: number[], name: string, detail: Record<string, unknown> = {}) {
-    this.dispatchEvent(new CustomEvent(name, {
-      detail: { path, ...detail },
-      bubbles: true, composed: true,
-    }));
-  }
-
   private _atomIsComplete(atom: StateAtom): boolean {
     return Boolean(atom.entity_id) && atom.states.some((s) => s !== "");
   }
@@ -127,12 +129,8 @@ export class AmbienceStateExprNode extends LitElement {
     return _samePath(this.path, this.errorPath);
   }
 
-  private _renderAtomCard(atom: StateAtom) {
+  private _renderAtomCard(atom: StateAtom, isNot: boolean) {
     const isComplete = this._atomIsComplete(atom);
-    // Strict open/closed model: only the open atom expands. Incomplete
-    // atoms used to force-expand which broke collapse-others-on-open when
-    // both atoms were half-filled. The root component auto-opens a lone
-    // atom, so a freshly-added single condition still shows its form.
     const expanded = _samePath(this.path, this.openPath);
     const summary = isComplete
       ? summariseState(atom, { hass: this.hass })
@@ -141,7 +139,19 @@ export class AmbienceStateExprNode extends LitElement {
       <div class="atom-card ${expanded ? "expanded" : "collapsed"}">
         <div class="atom-header"
           @click=${() => this._emit("node-open")}>
+          <button class="not-toggle ${isNot ? "on" : ""}"
+            title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
+            @click=${(e: Event) => {
+              e.stopPropagation();
+              this._emit("node-toggle-not");
+            }}>${stateOpLabel(this.hass, "not")}</button>
           <span class="summary ${isComplete ? "" : "placeholder"}">${summary}</span>
+          <button class="wrap"
+            title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
+            @click=${(e: Event) => {
+              e.stopPropagation();
+              this._emit("node-wrap", { op: "and" });
+            }}>(…)</button>
           <button class="remove"
             title=${localize(this.hass, "ui.remove", "Remove")}
             @click=${(e: Event) => {
@@ -169,39 +179,28 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   private _renderChildRow(child: StateExpr, index: number) {
-    // Per-child NOT: each row can be wrapped in {kind:"not", item:...}. The
-    // toggle reflects the wrap state; clicking it dispatches node-toggle-not
-    // which the root handles via _toggleNotAt(path).
-    const isNot = child.kind === "not";
-    const inner: StateExpr = isNot ? (child as StateNot).item : child;
+    // No external toolbar — the child node owns its own NOT/wrap/remove
+    // controls in its card header. Pass the wrapped value (with NOT, if
+    // any) through so the child can render the toggle state itself.
     const childPath = [...this.path, index];
     return html`
-      <div class="child-row">
-        <div class="child-actions">
-          <button class="not-toggle ${isNot ? "on" : ""}"
-            title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
-            @click=${() => this._emitAt(childPath, "node-toggle-not")}>${stateOpLabel(this.hass, "not")}</button>
-          <button class="wrap"
-            title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
-            @click=${() => this._emitAt(childPath, "node-wrap", { op: "and" })}>(…)</button>
-        </div>
-        <div class="child-body">
-          <ambience-state-expr-node
-            .hass=${this.hass}
-            .value=${inner}
-            .path=${childPath}
-            .openPath=${this.openPath}
-            .errorPath=${this.errorPath}
-            .errorMessage=${this.errorMessage}
-          ></ambience-state-expr-node>
-        </div>
-      </div>
+      <ambience-state-expr-node
+        .hass=${this.hass}
+        .value=${child}
+        .path=${childPath}
+        .openPath=${this.openPath}
+        .errorPath=${this.errorPath}
+        .errorMessage=${this.errorMessage}
+      ></ambience-state-expr-node>
     `;
   }
 
-  /** Group dropdown is AND or OR — whole-group negation is gone; per-child
-   *  NOT lives on each row instead. */
-  private _renderGroup(group: StateGroup) {
+  /** Group header: AND/OR dropdown, NOT toggle (wraps the whole group in
+   *  NOT), wrap (…) (wraps this group inside another), and ✕ (unwrap —
+   *  promote children to parent level; hidden at root since there's no
+   *  parent to promote to). */
+  private _renderGroup(group: StateGroup, isNot: boolean) {
+    const isRoot = this.path.length === 0;
     return html`
       <div class="group">
         <div class="group-header">
@@ -212,9 +211,15 @@ export class AmbienceStateExprNode extends LitElement {
             <option value="and" ?selected=${group.kind === "and"}>${stateOpLabel(this.hass, "and")}</option>
             <option value="or"  ?selected=${group.kind === "or"} >${stateOpLabel(this.hass, "or")}</option>
           </select>
-          <button class="remove"
-            title=${localize(this.hass, "ui.state_remove_group", "Remove group")}
-            @click=${() => this._emit("node-remove")}>✕</button>
+          <button class="not-toggle ${isNot ? "on" : ""}"
+            title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
+            @click=${() => this._emit("node-toggle-not")}>${stateOpLabel(this.hass, "not")}</button>
+          <button class="wrap"
+            title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
+            @click=${() => this._emit("node-wrap", { op: "and" })}>(…)</button>
+          ${isRoot ? "" : html`<button class="unwrap"
+            title=${localize(this.hass, "ui.state_unwrap_group", "Remove these parens (promote children to parent)")}
+            @click=${() => this._emit("node-unwrap")}>✕</button>`}
         </div>
         <div class="group-children">
           ${group.items.map((child, i) => this._renderChildRow(child, i))}
@@ -229,17 +234,14 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   override render() {
-    // NOT wrappers are now expressed per-child via the row toolbar, not as
-    // a group-level wrap. We still unwrap defensively in case the root
-    // happens to be a NOT-wrapped group (legacy data); the outer NOT is
-    // silently ignored visually — backend eval keeps the right semantics
-    // until the user re-saves through a dropdown change.
-    const inner = this.value.kind === "not"
-      ? (this.value as StateNot).item
-      : this.value;
+    // Each node owns its own NOT-toggle visual state via the card header,
+    // so we unwrap NOT here but pass the isNot flag down to the renderer
+    // for the toggle's 'on' class.
+    const isNot = this.value.kind === "not";
+    const inner = isNot ? (this.value as StateNot).item : this.value;
     if (inner.kind === "and" || inner.kind === "or") {
-      return this._renderGroup(inner);
+      return this._renderGroup(inner, isNot);
     }
-    return this._renderAtomCard(inner as StateAtom);
+    return this._renderAtomCard(inner as StateAtom, isNot);
   }
 }

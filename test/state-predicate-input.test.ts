@@ -236,28 +236,22 @@ describe("ambience-state-predicate-input", () => {
     expect(opts).toEqual(["and", "or"]);
   });
 
-  test("group child-rows have a NOT toggle that reflects {kind:'not'} wrap state", async () => {
+  test("atom card header contains the NOT toggle (reflecting {kind:'not'} wrap state)", async () => {
     el = await mount({ kind: "and", items: [
       { kind: "not", item: { kind: "is", entity_id: "a", states: ["on"] } },
       { kind: "is", entity_id: "b", states: ["off"] },
     ]});
     await flush(el);
-    const visit = (sr: ShadowRoot | null): HTMLElement[] => {
-      if (!sr) return [];
-      const found = Array.from(sr.querySelectorAll(".child-actions")) as HTMLElement[];
-      for (const n of Array.from(sr.querySelectorAll("ambience-state-expr-node"))) {
-        found.push(...visit((n as any).shadowRoot));
-      }
-      return found;
-    };
-    const actions = visit(el.shadowRoot);
-    // Both child rows have a NOT toggle; the first one is 'on' (NOT-wrapped),
-    // the second is 'off'.
-    expect(actions[0].querySelector("button.not-toggle")?.classList.contains("on")).toBe(true);
-    expect(actions[1].querySelector("button.not-toggle")?.classList.contains("on")).toBe(false);
+    // Each atom card now owns its own NOT toggle in the header.
+    const cards = _atomCards(el);
+    expect(cards[0].querySelector(".atom-header .not-toggle")?.classList.contains("on")).toBe(true);
+    expect(cards[1].querySelector(".atom-header .not-toggle")?.classList.contains("on")).toBe(false);
+    // The external child-actions toolbar is gone.
+    const childActions = el.shadowRoot.querySelectorAll(".child-actions");
+    expect(childActions.length).toBe(0);
   });
 
-  test("clicking a child's NOT toggle wraps that child in {kind:'not'}", async () => {
+  test("clicking a child atom's NOT toggle (inside the header) wraps it in {kind:'not'}", async () => {
     el = await mount({ kind: "and", items: [
       { kind: "is", entity_id: "a", states: ["on"] },
       { kind: "is", entity_id: "b", states: ["off"] },
@@ -265,27 +259,29 @@ describe("ambience-state-predicate-input", () => {
     await flush(el);
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    const visit = (sr: ShadowRoot | null): HTMLElement[] => {
-      if (!sr) return [];
-      const found = Array.from(sr.querySelectorAll(".child-actions")) as HTMLElement[];
-      for (const n of Array.from(sr.querySelectorAll("ambience-state-expr-node"))) {
-        found.push(...visit((n as any).shadowRoot));
-      }
-      return found;
-    };
-    const toggle = visit(el.shadowRoot)[0].querySelector("button.not-toggle") as HTMLButtonElement;
+    const cards = _atomCards(el);
+    const toggle = cards[0].querySelector(".atom-header .not-toggle") as HTMLButtonElement;
     toggle.click();
     await flush(el);
     expect(captured.items[0].kind).toBe("not");
     expect(captured.items[0].item.entity_id).toBe("a");
-    // Toggling again unwraps.
-    el.value = captured;
+  });
+
+  test("clicking the NOT toggle does NOT also expand/collapse the atom (click is consumed)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    el._setOpen([1]);
     await flush(el);
-    const toggle2 = visit(el.shadowRoot)[0].querySelector("button.not-toggle") as HTMLButtonElement;
-    toggle2.click();
+    let cards = _atomCards(el);
+    const toggle = cards[0].querySelector(".atom-header .not-toggle") as HTMLButtonElement;
+    toggle.click();
     await flush(el);
-    expect(captured.items[0].kind).toBe("is");
-    expect(captured.items[0].entity_id).toBe("a");
+    // openPath unchanged; atom [0] remains collapsed.
+    expect(el._openPath).toEqual([1]);
+    cards = _atomCards(el);
+    expect(cards[0].classList.contains("collapsed")).toBe(true);
   });
 
   test("clicking root Clear/Remove sets the predicate to null", async () => {
@@ -520,58 +516,67 @@ describe("ambience-state-predicate-input", () => {
     expect(cards[0].textContent).not.toMatch(/required/i);
   });
 
-  test("group child-rows no longer carry an external ✕ (atoms keep their own header X)", async () => {
+  test("group child-rows have no external toolbar — each child is rendered directly", async () => {
     el = await mount({ kind: "and", items: [
       { kind: "is", entity_id: "a", states: ["on"] },
       { kind: "is", entity_id: "b", states: ["off"] },
     ]});
     await flush(el);
-    // Walk into the root state-expr-node and find its .child-actions blocks.
-    const visit = (sr: ShadowRoot | null): HTMLElement[] => {
-      if (!sr) return [];
-      const found = Array.from(sr.querySelectorAll(".child-actions")) as HTMLElement[];
-      for (const n of Array.from(sr.querySelectorAll("ambience-state-expr-node"))) {
-        found.push(...visit((n as any).shadowRoot));
-      }
-      return found;
-    };
-    const actions = visit(el.shadowRoot);
-    expect(actions.length).toBeGreaterThan(0);
-    for (const a of actions) {
-      // No external ✕ next to each condition any more.
-      expect(a.querySelector("button.remove")).toBeNull();
-      // The (…) wrap button stays.
-      expect(a.querySelector("button.wrap")).toBeTruthy();
-    }
+    // child-actions div is removed entirely.
+    const childActions = el.shadowRoot.querySelectorAll(".child-actions");
+    expect(childActions.length).toBe(0);
   });
 
-  test("group header has an ✕ that removes the whole group", async () => {
+  test("the X on a NESTED group header unwraps (promotes children to parent), it doesn't delete them", async () => {
     el = await mount({ kind: "and", items: [
       { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
+      { kind: "or", items: [
+        { kind: "is", entity_id: "b", states: ["off"] },
+        { kind: "is", entity_id: "c", states: ["open"] },
+      ]},
     ]});
     await flush(el);
-    // Find the root group-header inside the root state-expr-node.
-    const visit = (sr: ShadowRoot | null): HTMLElement | null => {
-      if (!sr) return null;
-      const h = sr.querySelector(".group-header");
-      if (h) return h as HTMLElement;
-      for (const n of Array.from(sr.querySelectorAll("ambience-state-expr-node"))) {
-        const r = visit((n as any).shadowRoot);
-        if (r) return r;
-      }
-      return null;
+
+    // Collect every .group-header in the tree (root first, then nested).
+    const allHeaders: HTMLElement[] = [];
+    const visit = (sr: ShadowRoot | null) => {
+      if (!sr) return;
+      sr.querySelectorAll(".group-header").forEach((h) => allHeaders.push(h as HTMLElement));
+      sr.querySelectorAll("ambience-state-expr-node").forEach((n) => visit((n as any).shadowRoot));
     };
-    const header = visit(el.shadowRoot);
-    expect(header).toBeTruthy();
-    const x = header!.querySelector("button.remove") as HTMLButtonElement;
+    visit(el.shadowRoot);
+    const innerHeader = allHeaders[1];  // [0] = root group, [1] = nested OR
+    expect(innerHeader).toBeTruthy();
+    const x = innerHeader!.querySelector("button.unwrap") as HTMLButtonElement;
     expect(x).toBeTruthy();
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
     x.click();
     await flush(el);
-    // Root group removed → predicate clears.
-    expect(captured).toBeNull();
+    // After unwrap: outer AND group has 3 items (a, b, c). Note that the
+    // unwrap loses the inner OR semantics — the children become siblings of
+    // the outer AND. Power-user feature; explicit user action.
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(3);
+    expect(captured.items.map((i: any) => i.entity_id)).toEqual(["a", "b", "c"]);
+  });
+
+  test("the root group header has NO X — root-level 'clear' lives in the root toolbar", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    await flush(el);
+    // The ROOT group's header (first .group-header inside the root node)
+    // should not have an unwrap X — at root there's nothing to promote to.
+    const visit = (sr: ShadowRoot | null): HTMLElement | null => {
+      if (!sr) return null;
+      const h = sr.querySelector(".group-header");
+      return h as HTMLElement | null;
+    };
+    const rootHeader = visit(el.shadowRoot.querySelector("ambience-state-expr-node")?.shadowRoot);
+    expect(rootHeader).toBeTruthy();
+    expect(rootHeader!.querySelector("button.unwrap")).toBeNull();
   });
 
   test("adding a condition via + Add opens the new (empty) atom", async () => {

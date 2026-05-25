@@ -75,6 +75,7 @@ export class AmbienceStatePredicateInput extends LitElement {
     this.addEventListener("node-toggle-not", this._onNodeToggleNot as EventListener);
     this.addEventListener("node-set-op", this._onNodeSetOp as EventListener);
     this.addEventListener("node-open", this._onNodeOpen as EventListener);
+    this.addEventListener("node-unwrap", this._onNodeUnwrap as EventListener);
   }
 
   private _emit(value: StatePredicate) {
@@ -275,6 +276,39 @@ export class AmbienceStatePredicateInput extends LitElement {
     }
     return null;
   }
+
+  /** Replace the group at `path` with its children, spliced into the
+   *  parent's items list. The X button on a nested group header maps to
+   *  this — "remove the parens, keep the clauses". No-op at the root
+   *  (the button isn't shown there). */
+  _unwrapAt(path: number[]) {
+    if (path.length === 0) return;
+    const parentPath = path.slice(0, -1);
+    const idx = path[path.length - 1];
+    const next = this._patch(this.value, parentPath, (parent) => {
+      if (!parent) return parent;
+      if (parent.kind !== "and" && parent.kind !== "or") return parent;
+      const items = parent.items.slice();
+      const target = items[idx];
+      // Locate the underlying group (strip any NOT wrap on the target).
+      let group: StateGroup | null = null;
+      if (target.kind === "and" || target.kind === "or") {
+        group = target as StateGroup;
+      } else if (target.kind === "not") {
+        const inner = (target as StateNot).item;
+        if (inner.kind === "and" || inner.kind === "or") group = inner as StateGroup;
+      }
+      if (!group) return parent;
+      items.splice(idx, 1, ...group.items);
+      return { ...parent, items };
+    });
+    this._emit(next);
+  }
+
+  private _onNodeUnwrap = (e: CustomEvent<{ path: number[] }>) => {
+    e.stopPropagation();
+    this._unwrapAt(e.detail.path);
+  };
 
   private _onNodeOpen = (e: CustomEvent<{ path: number[] }>) => {
     e.stopPropagation();

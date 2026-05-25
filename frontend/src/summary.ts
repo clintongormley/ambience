@@ -142,7 +142,12 @@ function _renderStateExpr(expr: StateExpr, ctx: MatcherContext): string {
       ? stateOpLabel(ctx.hass, "is")
       : stateOpLabel(ctx.hass, "is_not");
     const states = expr.states.join("/");
-    const head = `${expr.entity_id} ${verb} ${states}`;
+    // Attribute-mode renders as `entity_id.attribute`; entity-state mode keeps
+    // the bare entity_id. Empty/null attribute → fall through to state mode.
+    const lhs = expr.attribute
+      ? `${expr.entity_id}.${expr.attribute}`
+      : expr.entity_id;
+    const head = `${lhs} ${verb} ${states}`;
     if (expr.for && _hasStateDuration(expr.for)) {
       return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(expr.for)}`;
     }

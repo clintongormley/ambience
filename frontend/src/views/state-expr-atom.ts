@@ -26,8 +26,11 @@ export class AmbienceStateExprAtom extends LitElement {
     .row .entity-form,
     .row .op-form,
     .row .states-form { margin-bottom: 2rem; }
-    .for-row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem; }
-    .for-row label {
+    .for-row, .attribute-row {
+      display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem;
+    }
+    .attribute-row input[type="text"] { flex: 1; max-width: 16rem; }
+    .for-row label, .attribute-row label {
       display: inline-flex; align-items: center; gap: 0.35rem;
       font-size: 0.9em; color: var(--secondary-text-color, #888);
     }
@@ -76,8 +79,19 @@ export class AmbienceStateExprAtom extends LitElement {
   }
 
   _setEntity(entity_id: string) {
-    // Different entity → previously-selected states almost certainly don't apply.
-    this._emit({ ...this.value, entity_id, states: [] });
+    // Different entity → previously-selected states almost certainly don't
+    // apply, and any attribute name was tied to the old entity's shape.
+    this._emit({ ...this.value, entity_id, states: [], attribute: null });
+  }
+
+  _setAttributeEnabled(on: boolean) {
+    // Enabling sets an empty attribute name so the field appears. Disabling
+    // returns to comparing entity.state.
+    this._emit({ ...this.value, attribute: on ? "" : null, states: [] });
+  }
+
+  _setAttribute(name: string) {
+    this._emit({ ...this.value, attribute: name });
   }
 
   _setOp(op: "is" | "is_not") {
@@ -285,6 +299,29 @@ export class AmbienceStateExprAtom extends LitElement {
     `;
   }
 
+  private _renderAttributeRow() {
+    const attr = this.value.attribute;
+    const on = attr !== null && attr !== undefined;
+    return html`
+      <div class="attribute-row">
+        <label>
+          <input type="checkbox" .checked=${on}
+            @change=${(e: Event) => this._setAttributeEnabled((e.target as HTMLInputElement).checked)} />
+          ${localize(this.hass, "ui.state_compare_attribute", "Compare attribute")}
+        </label>
+        ${on ? html`
+          <input
+            type="text"
+            data-field="attribute"
+            placeholder=${localize(this.hass, "ui.state_attribute_placeholder", "e.g. source, brightness")}
+            .value=${attr ?? ""}
+            @change=${(e: Event) => this._setAttribute((e.target as HTMLInputElement).value)}
+          />
+        ` : ""}
+      </div>
+    `;
+  }
+
   override render() {
     return html`
       <div class="row">
@@ -292,6 +329,7 @@ export class AmbienceStateExprAtom extends LitElement {
         ${this._renderOp()}
         ${this._renderStates()}
       </div>
+      ${this._renderAttributeRow()}
       ${this._renderForRow()}
     `;
   }

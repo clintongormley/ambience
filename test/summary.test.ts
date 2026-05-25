@@ -358,3 +358,26 @@ test("summariseMatcher dispatches state", () => {
     kind: "is", entity_id: "a", states: ["on"],
   }, {})).toBe("a is on");
 });
+
+test("summariseState renders an atom with an attribute as entity.attr", () => {
+  expect(summariseState({
+    kind: "is", entity_id: "media_player.x", attribute: "source",
+    states: ["Spotify", "Tidal"],
+  }, {})).toBe("media_player.x.source is Spotify/Tidal");
+});
+
+test("summariseState renders attribute-mode is_not", () => {
+  expect(summariseState({
+    kind: "is_not", entity_id: "light.x", attribute: "brightness",
+    states: ["255"],
+  }, {})).toBe("light.x.brightness is not 255");
+});
+
+test("summariseState falls back to entity-state when attribute is null/empty", () => {
+  expect(summariseState({
+    kind: "is", entity_id: "a", attribute: null, states: ["on"],
+  }, {})).toBe("a is on");
+  expect(summariseState({
+    kind: "is", entity_id: "a", attribute: "", states: ["on"],
+  }, {})).toBe("a is on");
+});

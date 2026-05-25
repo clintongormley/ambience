@@ -117,4 +117,37 @@ describe("ambience-state-expr-atom", () => {
     el._setForFromHaForm({ hours: 2, minutes: 15, seconds: 30 });
     expect(captured.for).toEqual({ h: 2, m: 15, s: 30 });
   });
+
+  test("_setAttributeEnabled toggles the attribute field on/off", async () => {
+    el = await mount({ kind: "is", entity_id: "media_player.x", states: ["Spotify"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setAttributeEnabled(true);
+    expect(captured.attribute).toBe("");
+    // Toggling off clears the field (back to comparing entity state).
+    el._setAttributeEnabled(false);
+    expect(captured.attribute).toBeNull();
+  });
+
+  test("_setAttribute updates the attribute name", async () => {
+    el = await mount({ kind: "is", entity_id: "media_player.x", attribute: "", states: [] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setAttribute("source");
+    expect(captured.attribute).toBe("source");
+    expect(captured.entity_id).toBe("media_player.x");
+  });
+
+  test("changing the entity_id clears a previously-set attribute (different domain)", async () => {
+    el = await mount({
+      kind: "is", entity_id: "media_player.a", attribute: "source", states: ["Spotify"],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setEntity("light.kitchen");
+    expect(captured.entity_id).toBe("light.kitchen");
+    // Both states AND attribute reset — the new entity probably doesn't have the same attribute.
+    expect(captured.states).toEqual([]);
+    expect(captured.attribute).toBeNull();
+  });
 });

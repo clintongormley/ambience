@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -17,6 +17,9 @@ class StateSnapshot:
     now: datetime
     # entity_id -> (state, last_changed). Captured up-front so matching is pure.
     states: dict[str, tuple[str, datetime]]
+    # entity_id -> attribute dict. Populated alongside states for atoms that
+    # compare an attribute instead of the state itself.
+    attributes: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 _UNAVAILABLE = {"unavailable", "unknown"}
@@ -50,10 +53,14 @@ class StateMatcher:
         self._hass = hass
 
     async def snapshot(self, hass: HomeAssistant) -> StateSnapshot:
-        states: dict[str, tuple[str, datetime]] = {
-            s.entity_id: (s.state, s.last_changed) for s in hass.states.async_all()
-        }
-        return StateSnapshot(now=dt_util.utcnow(), states=states)
+        states: dict[str, tuple[str, datetime]] = {}
+        attributes: dict[str, dict[str, Any]] = {}
+        for s in hass.states.async_all():
+            states[s.entity_id] = (s.state, s.last_changed)
+            # `s.attributes` is a Mapping; copy into a plain dict so the
+            # snapshot stays detached from HA's live state object.
+            attributes[s.entity_id] = dict(s.attributes)
+        return StateSnapshot(now=dt_util.utcnow(), states=states, attributes=attributes)
 
     def matches(self, predicate: Any, snapshot: StateSnapshot) -> bool:
         if predicate is None:
@@ -92,8 +99,18 @@ class StateMatcher:
         state, last_changed = cur
         if state in _UNAVAILABLE:
             return False
+        # When `attribute` is set, swap the LHS from entity.state to
+        # entity.attributes[attribute]. Missing attribute → no match.
+        attribute = atom.get("attribute")
+        if attribute:
+            attrs = snap.attributes.get(entity_id) or {}
+            if attribute not in attrs:
+                return False
+            value = str(attrs[attribute])
+        else:
+            value = state
         allowed = atom.get("states") or []
-        in_set = state in allowed
+        in_set = value in allowed
         if atom.get("kind") == "is_not":
             in_set = not in_set
         if not in_set:
@@ -154,6 +171,11 @@ class StateMatcher:
             raise ValueError("state atom requires a non-empty states list")
         if not all(isinstance(s, str) and s for s in states):
             raise ValueError("state atom states must all be non-empty strings")
+        attribute = atom.get("attribute")
+        if attribute is not None and (
+            not isinstance(attribute, str) or not attribute.strip()
+        ):
+            raise ValueError("`attribute` must be a non-empty string or null")
         dur = atom.get("for")
         if dur is None:
             return

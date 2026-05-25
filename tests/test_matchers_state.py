@@ -11,11 +11,14 @@ from custom_components.ambience.matchers.state import StateMatcher, StateSnapsho
 
 
 def _snap(
-    states: dict[str, tuple[str, datetime]] | None = None, now: datetime | None = None
+    states: dict[str, tuple[str, datetime]] | None = None,
+    now: datetime | None = None,
+    attributes: dict[str, dict[str, object]] | None = None,
 ) -> StateSnapshot:
     return StateSnapshot(
         now=now or datetime(2026, 5, 25, 12, 0, tzinfo=UTC),
         states=states or {},
+        attributes=attributes or {},
     )
 
 
@@ -318,3 +321,149 @@ def test_order_key_handles_not_wrapper() -> None:
 def test_order_key_none_predicate_returns_string() -> None:
     m = StateMatcher()
     assert isinstance(m.order_key(None), str)
+
+
+# --- attribute comparison ----------------------------------------------
+
+
+def test_matches_atom_compares_attribute_when_set() -> None:
+    """`attribute` swaps the LHS from entity.state to entity.attributes[attr]."""
+    m = StateMatcher()
+    snap = _snap(
+        {"media_player.x": ("playing", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
+        attributes={"media_player.x": {"source": "Spotify"}},
+    )
+    # State is 'playing', but we're checking attribute 'source' against ['Spotify'].
+    pred = {
+        "kind": "is",
+        "entity_id": "media_player.x",
+        "attribute": "source",
+        "states": ["Spotify", "Tidal"],
+    }
+    assert m.matches(pred, snap) is True
+
+
+def test_matches_atom_attribute_not_matching() -> None:
+    m = StateMatcher()
+    snap = _snap(
+        {"media_player.x": ("playing", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
+        attributes={"media_player.x": {"source": "Radio"}},
+    )
+    pred = {
+        "kind": "is",
+        "entity_id": "media_player.x",
+        "attribute": "source",
+        "states": ["Spotify"],
+    }
+    assert m.matches(pred, snap) is False
+
+
+def test_matches_atom_attribute_is_not_negates() -> None:
+    m = StateMatcher()
+    snap = _snap(
+        {"media_player.x": ("playing", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
+        attributes={"media_player.x": {"source": "Radio"}},
+    )
+    pred = {
+        "kind": "is_not",
+        "entity_id": "media_player.x",
+        "attribute": "source",
+        "states": ["Spotify"],
+    }
+    assert m.matches(pred, snap) is True
+
+
+def test_matches_atom_attribute_missing_returns_false() -> None:
+    """An entity that doesn't expose the requested attribute can't match."""
+    m = StateMatcher()
+    snap = _snap(
+        {"media_player.x": ("playing", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
+        attributes={"media_player.x": {"source": "Spotify"}},
+    )
+    pred = {
+        "kind": "is",
+        "entity_id": "media_player.x",
+        "attribute": "nonexistent",
+        "states": ["anything"],
+    }
+    assert m.matches(pred, snap) is False
+    # is_not on a missing attribute is also false (we can't prove the negation).
+    pred2 = {**pred, "kind": "is_not"}
+    assert m.matches(pred2, snap) is False
+
+
+def test_matches_atom_attribute_string_coerced() -> None:
+    """Numeric / bool attribute values get stringified before comparison."""
+    m = StateMatcher()
+    snap = _snap(
+        {"light.x": ("on", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
+        attributes={"light.x": {"brightness": 255, "is_dimmable": True}},
+    )
+    # 255 stringified is "255" — user types it as a string in the states list.
+    assert (
+        m.matches(
+            {"kind": "is", "entity_id": "light.x", "attribute": "brightness", "states": ["255"]},
+            snap,
+        )
+        is True
+    )
+    assert (
+        m.matches(
+            {
+                "kind": "is",
+                "entity_id": "light.x",
+                "attribute": "is_dimmable",
+                "states": ["True"],
+            },
+            snap,
+        )
+        is True
+    )
+
+
+def test_matches_atom_attribute_ignores_unavailable_state() -> None:
+    """If the entity's state is unavailable, attribute comparison still fails
+    — we treat the whole entity as unobservable."""
+    m = StateMatcher()
+    snap = _snap(
+        {"sensor.x": ("unavailable", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
+        attributes={"sensor.x": {"source": "Spotify"}},
+    )
+    pred = {
+        "kind": "is",
+        "entity_id": "sensor.x",
+        "attribute": "source",
+        "states": ["Spotify"],
+    }
+    assert m.matches(pred, snap) is False
+
+
+async def test_snapshot_captures_entity_attributes(hass) -> None:
+    hass.states.async_set("media_player.x", "playing", {"source": "Spotify", "volume_level": 0.5})
+    snap = await StateMatcher().snapshot(hass)
+    assert snap.attributes["media_player.x"]["source"] == "Spotify"
+    assert snap.attributes["media_player.x"]["volume_level"] == 0.5
+
+
+def test_validate_atom_attribute_is_optional() -> None:
+    m = StateMatcher()
+    # Without attribute (existing behavior)
+    m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"]})
+    # With attribute = None (explicit)
+    m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"], "attribute": None})
+    # With a string attribute
+    m.validate_predicate(
+        {"kind": "is", "entity_id": "x", "attribute": "source", "states": ["Spotify"]}
+    )
+
+
+def test_validate_atom_attribute_rejects_non_string() -> None:
+    m = StateMatcher()
+    with pytest.raises(ValueError, match="attribute"):
+        m.validate_predicate(
+            {"kind": "is", "entity_id": "x", "attribute": 42, "states": ["on"]}
+        )
+    with pytest.raises(ValueError, match="attribute"):
+        m.validate_predicate(
+            {"kind": "is", "entity_id": "x", "attribute": "", "states": ["on"]}
+        )

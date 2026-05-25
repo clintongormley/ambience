@@ -148,6 +148,9 @@ export type StateForDuration = { h: number; m: number; s: number };
 export type StateAtom = {
   kind: "is" | "is_not";
   entity_id: string;
+  /** When set, compare entity.attributes[attribute] (stringified) instead of
+   *  entity.state. Leave null/undefined to compare the state itself. */
+  attribute?: string | null;
   states: string[];
   for?: StateForDuration | null;
 };

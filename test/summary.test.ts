@@ -336,7 +336,17 @@ test("summariseState renders NOT", () => {
   expect(summariseState({
     kind: "not",
     item: { kind: "is", entity_id: "a", states: ["on"] },
-  }, {})).toBe("NOT (a is on)");
+  }, {})).toBe("NOT a is on");
+});
+
+test("summariseState still parenthesises NOT around a group (so the scope is unambiguous)", () => {
+  expect(summariseState({
+    kind: "not",
+    item: { kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]},
+  }, {})).toBe("NOT (a is on AND b is off)");
 });
 
 test("summariseState renders nested groups with parens around inner groups", () => {

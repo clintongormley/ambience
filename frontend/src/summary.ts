@@ -170,7 +170,9 @@ function _renderStateExpr(expr: StateExpr, ctx: MatcherContext): string {
     return expr.items.map((it) => _wrapStateIfGroup(it, ctx)).join(sep);
   }
   if (expr.kind === "not") {
-    return `${stateOpLabel(ctx.hass, "not")} (${_renderStateExpr(expr.item, ctx)})`;
+    // For an atom-as-item, no parens — "NOT a is on" reads cleanly. For a
+    // group-as-item, keep parens so the scope of the NOT is unambiguous.
+    return `${stateOpLabel(ctx.hass, "not")} ${_wrapStateIfGroup(expr.item, ctx)}`;
   }
   return "";
 }

@@ -90,4 +90,31 @@ describe("ambience-state-expr-atom", () => {
     el._setForDuration({ h: 0, m: 5, s: 0 });
     expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
   });
+
+  test("_forSchema is an ha-form duration selector (days disabled)", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"], for: { h: 0, m: 5, s: 0 } });
+    const schema = el._forSchema();
+    expect(schema).toHaveLength(1);
+    expect(schema[0].name).toBe("duration");
+    expect(schema[0].required).toBe(true);
+    expect(schema[0].selector.duration).toBeDefined();
+    expect(schema[0].selector.duration.enable_day).toBe(false);
+  });
+
+  test("_forData maps storage {h,m,s} to ha-form's {hours,minutes,seconds}", async () => {
+    el = await mount({
+      kind: "is", entity_id: "x", states: ["on"], for: { h: 1, m: 30, s: 15 },
+    });
+    expect(el._forData()).toEqual({ duration: { hours: 1, minutes: 30, seconds: 15 } });
+  });
+
+  test("_setForFromHaForm translates ha-form duration shape back to {h,m,s}", async () => {
+    el = await mount({
+      kind: "is", entity_id: "x", states: ["on"], for: { h: 0, m: 0, s: 0 },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._setForFromHaForm({ hours: 2, minutes: 15, seconds: 30 });
+    expect(captured.for).toEqual({ h: 2, m: 15, s: 30 });
+  });
 });

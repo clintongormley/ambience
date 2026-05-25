@@ -118,6 +118,32 @@ export class AmbienceStateExprAtom extends LitElement {
     }];
   }
 
+  /** ha-form schema for the "for at least" duration field. HA's duration
+   *  selector emits `{hours, minutes, seconds}` (and optionally `days`,
+   *  which we disable). */
+  _forSchema(): HaFormSchema[] {
+    return [{
+      name: "duration",
+      required: true,
+      selector: { duration: { enable_day: false } },
+    }];
+  }
+
+  /** Map our storage `{h,m,s}` shape to ha-form's `{hours,minutes,seconds}`. */
+  _forData(): { duration: { hours: number; minutes: number; seconds: number } } {
+    const d = this.value.for ?? { h: 0, m: 0, s: 0 };
+    return { duration: { hours: d.h, minutes: d.m, seconds: d.s } };
+  }
+
+  /** Translate ha-form's duration shape back into our storage shape. */
+  _setForFromHaForm(d: { hours?: number; minutes?: number; seconds?: number } | undefined) {
+    this._setForDuration({
+      h: d?.hours ?? 0,
+      m: d?.minutes ?? 0,
+      s: d?.seconds ?? 0,
+    });
+  }
+
   _statesSchema(): HaFormSchema[] {
     return [{
       name: "states",
@@ -223,18 +249,39 @@ export class AmbienceStateExprAtom extends LitElement {
             @change=${(e: Event) => this._setForEnabled((e.target as HTMLInputElement).checked)} />
           ${localize(this.hass, "ui.for_at_least", "for at least")}
         </label>
-        ${on ? html`
-          <input type="number" min="0" .value=${String(d!.h)}
-            @change=${(e: Event) => this._setForDuration({ ...d!, h: Number((e.target as HTMLInputElement).value) || 0 })} />
-          <span>h</span>
-          <input type="number" min="0" .value=${String(d!.m)}
-            @change=${(e: Event) => this._setForDuration({ ...d!, m: Number((e.target as HTMLInputElement).value) || 0 })} />
-          <span>m</span>
-          <input type="number" min="0" .value=${String(d!.s)}
-            @change=${(e: Event) => this._setForDuration({ ...d!, s: Number((e.target as HTMLInputElement).value) || 0 })} />
-          <span>s</span>
-        ` : ""}
+        ${on ? this._renderForDuration(d!) : ""}
       </div>
+    `;
+  }
+
+  private _renderForDuration(d: StateForDuration) {
+    /* v8 ignore start -- ha-form path (real HA only) */
+    if (customElements.get("ha-form")) {
+      return html`<ha-form
+        class="for-form"
+        data-field="for"
+        .hass=${this.hass}
+        .schema=${this._forSchema()}
+        .data=${this._forData()}
+        .computeLabel=${() => ""}
+        @value-changed=${(e: CustomEvent<{ value: { duration?: { hours?: number; minutes?: number; seconds?: number } } }>) => {
+          e.stopPropagation();
+          this._setForFromHaForm(e.detail.value.duration);
+        }}
+      ></ha-form>`;
+    }
+    /* v8 ignore stop */
+    // jsdom fallback: three native number inputs (also useful for older HA).
+    return html`
+      <input type="number" min="0" .value=${String(d.h)}
+        @change=${(e: Event) => this._setForDuration({ ...d, h: Number((e.target as HTMLInputElement).value) || 0 })} />
+      <span>h</span>
+      <input type="number" min="0" .value=${String(d.m)}
+        @change=${(e: Event) => this._setForDuration({ ...d, m: Number((e.target as HTMLInputElement).value) || 0 })} />
+      <span>m</span>
+      <input type="number" min="0" .value=${String(d.s)}
+        @change=${(e: Event) => this._setForDuration({ ...d, s: Number((e.target as HTMLInputElement).value) || 0 })} />
+      <span>s</span>
     `;
   }
 

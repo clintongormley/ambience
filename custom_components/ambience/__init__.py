@@ -84,9 +84,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     register_matcher(hass, StateMatcher(hass=hass))
     register_action(hass, SetLightAction())
 
-    # Seed enabled matchers from the (now-populated) registry on a fresh install.
-    await store.async_seed_enabled_matchers_if_absent()
-
     async def _handle_apply_scene(call: ServiceCall) -> None:
         await async_apply_scene(hass, call.data["area"], call.data["scene"])
 

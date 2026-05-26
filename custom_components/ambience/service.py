@@ -28,16 +28,18 @@ async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> d
     if area is None:
         raise ServiceValidationError(f"unknown_area: {area_id!r}")
 
-    active_matcher_names = list(store.enabled_matchers())
-    active_matchers = {
-        name: matchers_registry[name] for name in active_matcher_names if name in matchers_registry
+    # Snapshot every matcher whose snapshot can be derived from `hass`.
+    # `scene`'s snapshot is injected from the service call below, so we
+    # skip it here (its `.snapshot()` is a no-op anyway).
+    snapshottable = {
+        name: m for name, m in matchers_registry.items() if name != "scene"
     }
     snapshot_results = await asyncio.gather(
-        *[m.snapshot(hass) for m in active_matchers.values()],
+        *[m.snapshot(hass) for m in snapshottable.values()],
         return_exceptions=True,
     )
     snapshots: dict[str, Any] = {}
-    for name, result in zip(active_matchers.keys(), snapshot_results, strict=True):
+    for name, result in zip(snapshottable.keys(), snapshot_results, strict=True):
         if isinstance(result, BaseException):
             _LOGGER.warning("ambience: matcher %r snapshot failed: %s", name, result)
             snapshots[name] = None
@@ -46,11 +48,7 @@ async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> d
 
     # `scene` is an always-on matcher; its snapshot is the activating scene,
     # injected here rather than captured from hass.
-    # Copy so we can add `scene` without mutating active_matchers.
-    engine_matchers = dict(active_matchers)
-    scene_matcher = matchers_registry.get("scene")
-    if scene_matcher is not None:
-        engine_matchers["scene"] = scene_matcher
+    engine_matchers = dict(matchers_registry)
     snapshots["scene"] = scene
 
     described = {
@@ -59,9 +57,11 @@ async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> d
         if name in engine_matchers
     }
 
-    # Predicates for globally-disabled matchers are dormant: drop them from each
-    # rule's `when` before resolving so they're ignored (the rule fires as if the
-    # condition were absent) rather than failing the rule. Storage is untouched.
+    # Predicates for matchers absent from `engine_matchers` are dormant:
+    # drop them from each rule's `when` before resolving so they're ignored
+    # rather than failing the rule. Storage is untouched. (Today this strip
+    # is a no-op because all registered matchers are in `engine_matchers`;
+    # Task C2 will exercise it when scene becomes optional.)
     active_keys = set(engine_matchers)
     rules = [
         {**rule, "when": {k: v for k, v in rule.get("when", {}).items() if k in active_keys}}

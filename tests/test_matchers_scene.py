@@ -12,7 +12,7 @@ def test_attributes() -> None:
     assert m.name == "scene"
     assert m.description.strip() != ""
     assert m.predicate_help.strip() != ""
-    assert m.toggleable is False
+    assert m.toggleable is True
     assert m.input == "scene_combobox"
     assert m.priority == 0
 
@@ -47,7 +47,6 @@ def test_validate_predicate_rejects_bad_values(bad: object) -> None:
         SceneMatcher().validate_predicate(bad)
 
 
-async def test_snapshot_is_not_implemented() -> None:
-    """`scene`'s snapshot is injected by the service handler, never captured here."""
-    with pytest.raises(NotImplementedError):
-        await SceneMatcher().snapshot(None)
+async def test_scene_matcher_snapshot_returns_none() -> None:
+    """`scene`'s snapshot is injected by the service handler; snapshot() returns None."""
+    assert await SceneMatcher().snapshot(None) is None

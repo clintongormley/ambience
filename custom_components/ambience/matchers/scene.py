@@ -1,9 +1,9 @@
 """Built-in scene matcher.
 
-`scene` is an always-on matcher: its predicate is a scene name and its
-"snapshot" is the scene that triggered apply_scene. The snapshot cannot be
-captured from `hass` alone, so the service handler injects it directly
-(see service.py); `snapshot()` here is never called.
+`scene` matches the activating scene by exact name. Its snapshot is supplied
+by the service handler (it cannot be captured from `hass` alone), so the
+service-handler injection is authoritative. `snapshot()` returns None as a
+safe no-op for callers that iterate the registry uniformly.
 """
 
 from __future__ import annotations
@@ -14,17 +14,17 @@ from homeassistant.core import HomeAssistant
 
 
 class SceneMatcher:
-    """Matches the activating scene by exact name. Always-on, not toggleable."""
+    """Matches the activating scene by exact name."""
 
     name = "scene"
     description = "Matches the scene that triggered apply_scene."
     predicate_help = "A scene name, e.g. 'movie_night'."
-    toggleable = False
+    toggleable = True
     input = "scene_combobox"
     priority = 0
 
     async def snapshot(self, hass: HomeAssistant) -> Any:
-        raise NotImplementedError("scene snapshot is injected by the service handler")
+        return None
 
     def matches(self, predicate: Any, snapshot: Any) -> bool:
         return predicate == snapshot
@@ -37,6 +37,4 @@ class SceneMatcher:
             raise ValueError(f"invalid scene predicate: {predicate!r}")
 
     def order_key(self, predicate: Any) -> str:
-        """Linearisation key — the lowercased scene name. This is what makes the
-        rule sort cluster rules by scene."""
         return predicate.lower()

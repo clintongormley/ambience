@@ -62,8 +62,8 @@ async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> 
     assert resp["success"] is True
     by_name = {m["name"]: m for m in resp["result"]}
 
-    # scene is always-on, not toggleable, has its own input widget, priority 0
-    assert by_name["scene"]["toggleable"] is False
+    # scene matches the activating scene, has its own input widget, priority 0
+    assert by_name["scene"]["toggleable"] is True
     assert by_name["scene"]["input"] == "scene_combobox"
     assert by_name["scene"]["priority"] == 0
 

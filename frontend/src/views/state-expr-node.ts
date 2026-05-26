@@ -142,10 +142,11 @@ export class AmbienceStateExprNode extends LitElement {
       outline: 2px solid var(--primary-color, #03a9f4);
       outline-offset: -2px;
     }
-    /* Hint that the surface is grabbable. Buttons inside keep their own
-       cursor via the default cascade. */
-    .atom-card[draggable="true"],
-    .group[draggable="true"] { cursor: grab; }
+    /* Hint that the header — and only the header — is grabbable. The
+       summary text and empty padding inside the header pick up grab; the
+       buttons keep their own cursor via the default cascade. */
+    .atom-header[draggable="true"],
+    .group-header[draggable="true"] { cursor: grab; }
     .atom-error {
       margin-top: 0.5rem;
       color: var(--error-color, #b71c1c);
@@ -245,12 +246,12 @@ export class AmbienceStateExprNode extends LitElement {
       : localize(this.hass, "ui.state_new_condition", "(new condition)");
     return html`
       <div class="atom-card ${expanded ? "expanded" : "collapsed"} ${this._dragOver ? "drag-over" : ""}"
-        draggable=${this.path.length > 0}
-        @dragstart=${this._onDragStart}
         @dragover=${this._onDragOver}
         @dragleave=${this._onDragLeave}
         @drop=${this._onDrop}>
         <div class="atom-header"
+          draggable=${this.path.length > 0}
+          @dragstart=${this._onDragStart}
           @click=${() => this._emit("node-open")}>
           <button class="not-toggle ${isNot ? "on" : ""}"
             title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
@@ -318,12 +319,12 @@ export class AmbienceStateExprNode extends LitElement {
   private _renderGroup(group: StateGroup) {
     return html`
       <div class="group ${this._dragOver ? "drag-over" : ""}"
-        draggable=${this.path.length > 0}
-        @dragstart=${this._onDragStart}
         @dragover=${this._onDragOver}
         @dragleave=${this._onDragLeave}
         @drop=${this._onDrop}>
-        <div class="group-header">
+        <div class="group-header"
+          draggable=${this.path.length > 0}
+          @dragstart=${this._onDragStart}>
           <select class="group-op"
             @change=${(e: Event) => this._emit("node-set-op", {
               op: (e.target as HTMLSelectElement).value,

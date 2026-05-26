@@ -235,13 +235,14 @@ export class AmbienceStateExprNode extends LitElement {
     `;
   }
 
-  /** Group header: AND/OR dropdown + ✕ (unwrap — promote children to
-   *  parent level; hidden at root). Group-level NOT lives OUTSIDE the
-   *  card in `_renderGroupWithExternalNot` — sitting next to the group
-   *  rather than inside the header reads more naturally as "this NOT
-   *  applies to the whole group". */
+  /** Group header: AND/OR dropdown + ✕ (unwrap). Behaviour of X:
+   *  - Nested: promote children to parent's items list.
+   *  - Root with 1 child: become that child (undoes a wrap).
+   *  - Root with 2+ children: clear the predicate (set to null).
+   *  Group-level NOT lives OUTSIDE the card in
+   *  `_renderGroupWithExternalNot`, reading naturally as "NOT applies to
+   *  the whole group". */
   private _renderGroup(group: StateGroup) {
-    const isRoot = this.path.length === 0;
     return html`
       <div class="group">
         <div class="group-header">
@@ -252,9 +253,9 @@ export class AmbienceStateExprNode extends LitElement {
             <option value="and" ?selected=${group.kind === "and"}>${stateOpLabel(this.hass, "and")}</option>
             <option value="or"  ?selected=${group.kind === "or"} >${stateOpLabel(this.hass, "or")}</option>
           </select>
-          ${isRoot ? "" : html`<button class="unwrap"
+          <button class="unwrap"
             title=${localize(this.hass, "ui.state_unwrap_group", "Remove these parens (promote children to parent)")}
-            @click=${() => this._emit("node-unwrap")}>✕</button>`}
+            @click=${() => this._emit("node-unwrap")}>✕</button>
         </div>
         <div class="group-children">
           ${group.items.map((child, i) => this._renderChildRow(child, i))}

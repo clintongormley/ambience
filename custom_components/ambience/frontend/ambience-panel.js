@@ -721,20 +721,20 @@ var Ot=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
         .errorPath=${this.errorPath}
         .errorMessage=${this.errorMessage}
       ></ambience-state-expr-node>
-    `}_renderGroup(e){let t=this.path.length===0;return l`
+    `}_renderGroup(e){return l`
       <div class="group">
         <div class="group-header">
           <select class="group-op"
-            @change=${r=>this._emit("node-set-op",{op:r.target.value})}>
+            @change=${t=>this._emit("node-set-op",{op:t.target.value})}>
             <option value="and" ?selected=${e.kind==="and"}>${P(this.hass,"and")}</option>
             <option value="or"  ?selected=${e.kind==="or"} >${P(this.hass,"or")}</option>
           </select>
-          ${t?"":l`<button class="unwrap"
+          <button class="unwrap"
             title=${o(this.hass,"ui.state_unwrap_group","Remove these parens (promote children to parent)")}
-            @click=${()=>this._emit("node-unwrap")}>✕</button>`}
+            @click=${()=>this._emit("node-unwrap")}>✕</button>
         </div>
         <div class="group-children">
-          ${e.items.map((r,i)=>this._renderChildRow(r,i))}
+          ${e.items.map((t,r)=>this._renderChildRow(t,r))}
         </div>
         <div class="actions">
           <button @click=${()=>this._emit("node-add-child")}>
@@ -866,23 +866,13 @@ var Ot=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       color: var(--error-color, #b71c1c);
       font-size: 0.9em;
     }
-  `,d([c({attribute:!1})],T.prototype,"hass",2),d([c({attribute:!1})],T.prototype,"value",2),d([c({attribute:!1})],T.prototype,"path",2),d([c({attribute:!1})],T.prototype,"openPath",2),d([c({attribute:!1})],T.prototype,"errorPath",2),d([c({attribute:!1})],T.prototype,"errorMessage",2),T=d([_("ambience-state-expr-node")],T);function Er(n,s){return n===null||s===null||n.length!==s.length?!1:n.every((e,t)=>e===s[t])}var R=class extends f{constructor(){super(...arguments);this.value=null;this._openPath=null;this._showError=!1;this._onNodeChange=e=>{e.stopPropagation(),this._replaceAt(e.detail.path,e.detail.value)};this._onNodeRemove=e=>{e.stopPropagation(),this._removeAt(e.detail.path)};this._onNodeWrap=e=>{e.stopPropagation(),this._wrapAt(e.detail.path)};this._onNodeAddChild=e=>{e.stopPropagation(),this._addChildAt(e.detail.path,"is")};this._onNodeToggleNot=e=>{e.stopPropagation(),this._toggleNotAt(e.detail.path)};this._onNodeSetOp=e=>{e.stopPropagation(),this._setGroupOpAt(e.detail.path,e.detail.op)};this._onNodeUnwrap=e=>{e.stopPropagation(),this._unwrapAt(e.detail.path)};this._onNodeOpen=e=>{if(e.stopPropagation(),this._openPath!==null){let t=this._atomAt(this._openPath);if(t&&this._atomError(t)!==null){this._showError=!0;return}}this._openPath!==null&&Er(this._openPath,e.detail.path)?this._openPath=null:this._openPath=e.detail.path,this._showError=!1}}connectedCallback(){super.connectedCallback(),this.addEventListener("node-change",this._onNodeChange),this.addEventListener("node-remove",this._onNodeRemove),this.addEventListener("node-wrap",this._onNodeWrap),this.addEventListener("node-add-child",this._onNodeAddChild),this.addEventListener("node-toggle-not",this._onNodeToggleNot),this.addEventListener("node-set-op",this._onNodeSetOp),this.addEventListener("node-open",this._onNodeOpen),this.addEventListener("node-unwrap",this._onNodeUnwrap)}_emit(e){this.value=e,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_emptyAtom(){return{kind:"is",entity_id:"",states:[]}}_addFirstAtom(){this._openPath=[],this._emit(this._emptyAtom())}_replaceAt(e,t){let r=this._patch(this.value,e,()=>t);this._emit(r)}_removeAt(e){if(e.length===0){this._emit(null);return}let t=this._patch(this.value,e,()=>null);this._emit(t)}_wrapAt(e){let t=null;if(e.length>0){let a=this._nodeAt(e.slice(0,-1));a&&(a.kind==="and"||a.kind==="or")&&(t=a.kind)}let r=t==="and"?"or":"and",i=this._patch(this.value,e,a=>a&&{kind:r,items:[a]});this._emit(i)}_nodeAt(e){return this._walkNode(this.value,e)}_walkNode(e,t){return e?e.kind==="not"?this._walkNode(e.item,t):t.length===0?e:e.kind==="and"||e.kind==="or"?this._walkNode(e.items[t[0]]??null,t.slice(1)):null:null}_addChildAt(e,t){let r=null,i=this._patch(this.value,e,a=>{if(a&&(a.kind==="and"||a.kind==="or")){let u=[...a.items,this._emptyAtom()];return r=[...e,u.length-1],{...a,items:u}}return a});r!==null&&(this._openPath=r),this._emit(i)}_toggleNotAt(e){let t=this._patch(this.value,e,r=>r&&(r.kind==="not"?r.item:{kind:"not",item:r}));this._emit(t)}_setGroupOpAt(e,t){let r=this._patch(this.value,e,i=>{if(!i)return i;let a=null;if(i.kind==="and"||i.kind==="or")a=i;else if(i.kind==="not"){let u=i.item;(u.kind==="and"||u.kind==="or")&&(a=u)}return a?{kind:t,items:a.items}:i});this._emit(r)}_patch(e,t,r){if(t.length===0)return r(e);if(e==null)return e;let[i,...a]=t;if(e.kind==="and"||e.kind==="or"){let u=e.items.slice(),h=this._patch(u[i],a,r);return h===null?u.splice(i,1):u[i]=h,u.length===0?null:u.length===1?u[0]:{...e,items:u}}if(e.kind==="not"){let u=this._patch(e.item,t,r);return u==null?null:{kind:"not",item:u}}return e}_atomAt(e){return this._walk(this.value,e)}_walk(e,t){return e?e.kind==="not"?this._walk(e.item,t):t.length===0?e.kind==="and"||e.kind==="or"?null:e:e.kind==="and"||e.kind==="or"?this._walk(e.items[t[0]]??null,t.slice(1)):null:null}_atomError(e){if(!e.entity_id)return o(this.hass,"ui.state_err_entity","Entity is required");if(e.kind!=="is"&&e.kind!=="is_not"){let r=e.states[0];if(!r)return o(this.hass,"ui.state_err_value","Value is required");if(!Number.isFinite(Number(r)))return o(this.hass,"ui.state_err_numeric","Value must be a number")}else if(!e.states.some(r=>r!==""))return o(this.hass,"ui.state_err_state","State is required");return null}_unwrapAt(e){if(e.length===0)return;let t=e.slice(0,-1),r=e[e.length-1],i=this._patch(this.value,t,a=>{if(!a||a.kind!=="and"&&a.kind!=="or")return a;let u=a.items.slice(),h=u[r],m=null;if(h.kind==="and"||h.kind==="or")m=h;else if(h.kind==="not"){let v=h.item;(v.kind==="and"||v.kind==="or")&&(m=v)}return m?(u.splice(r,1,...m.items),{...a,items:u}):a});this._emit(i)}willUpdate(e){if(e.has("value")){let t=this.value;if(t&&this._openPath===null&&t.kind!=="and"&&t.kind!=="or"&&(this._openPath=[]),this._showError&&this._openPath!==null){let r=this._atomAt(this._openPath);(!r||this._atomError(r)===null)&&(this._showError=!1)}}}_addAtRoot(){let e=this.value;if(e==null){this._addFirstAtom();return}if(e.kind==="and"||e.kind==="or"){this._addChildAt([],"is");return}this._openPath=[1],this._emit({kind:"and",items:[e,this._emptyAtom()]})}_setOpen(e){this._openPath=e}_renderRootToolbar(){return l`
-      <div class="root-toolbar">
-        <button class="wrap"
-          title=${o(this.hass,"ui.state_wrap","Wrap in group")}
-          @click=${()=>this._wrapAt([])}>(…)</button>
-        <button class="remove"
-          title=${o(this.hass,"ui.state_clear","Clear")}
-          @click=${()=>this._removeAt([])}>✕</button>
-      </div>
-    `}render(){if(this.value==null)return l`
+  `,d([c({attribute:!1})],T.prototype,"hass",2),d([c({attribute:!1})],T.prototype,"value",2),d([c({attribute:!1})],T.prototype,"path",2),d([c({attribute:!1})],T.prototype,"openPath",2),d([c({attribute:!1})],T.prototype,"errorPath",2),d([c({attribute:!1})],T.prototype,"errorMessage",2),T=d([_("ambience-state-expr-node")],T);function Er(n,s){return n===null||s===null||n.length!==s.length?!1:n.every((e,t)=>e===s[t])}var R=class extends f{constructor(){super(...arguments);this.value=null;this._openPath=null;this._showError=!1;this._onNodeChange=e=>{e.stopPropagation(),this._replaceAt(e.detail.path,e.detail.value)};this._onNodeRemove=e=>{e.stopPropagation(),this._removeAt(e.detail.path)};this._onNodeWrap=e=>{e.stopPropagation(),this._wrapAt(e.detail.path)};this._onNodeAddChild=e=>{e.stopPropagation(),this._addChildAt(e.detail.path,"is")};this._onNodeToggleNot=e=>{e.stopPropagation(),this._toggleNotAt(e.detail.path)};this._onNodeSetOp=e=>{e.stopPropagation(),this._setGroupOpAt(e.detail.path,e.detail.op)};this._onNodeUnwrap=e=>{e.stopPropagation(),this._unwrapAt(e.detail.path)};this._onNodeOpen=e=>{if(e.stopPropagation(),this._openPath!==null){let t=this._atomAt(this._openPath);if(t&&this._atomError(t)!==null){this._showError=!0;return}}this._openPath!==null&&Er(this._openPath,e.detail.path)?this._openPath=null:this._openPath=e.detail.path,this._showError=!1}}connectedCallback(){super.connectedCallback(),this.addEventListener("node-change",this._onNodeChange),this.addEventListener("node-remove",this._onNodeRemove),this.addEventListener("node-wrap",this._onNodeWrap),this.addEventListener("node-add-child",this._onNodeAddChild),this.addEventListener("node-toggle-not",this._onNodeToggleNot),this.addEventListener("node-set-op",this._onNodeSetOp),this.addEventListener("node-open",this._onNodeOpen),this.addEventListener("node-unwrap",this._onNodeUnwrap)}_emit(e){this.value=e,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_emptyAtom(){return{kind:"is",entity_id:"",states:[]}}_addFirstAtom(){this._openPath=[],this._emit(this._emptyAtom())}_replaceAt(e,t){let r=this._patch(this.value,e,()=>t);this._emit(r)}_removeAt(e){if(e.length===0){this._emit(null);return}let t=this._patch(this.value,e,()=>null);this._emit(t)}_wrapAt(e){let t=null;if(e.length>0){let a=this._nodeAt(e.slice(0,-1));a&&(a.kind==="and"||a.kind==="or")&&(t=a.kind)}let r=t==="and"?"or":"and",i=this._patch(this.value,e,a=>a&&{kind:r,items:[a]});this._emit(i)}_nodeAt(e){return this._walkNode(this.value,e)}_walkNode(e,t){return e?e.kind==="not"?this._walkNode(e.item,t):t.length===0?e:e.kind==="and"||e.kind==="or"?this._walkNode(e.items[t[0]]??null,t.slice(1)):null:null}_addChildAt(e,t){let r=null,i=this._patch(this.value,e,a=>{if(a&&(a.kind==="and"||a.kind==="or")){let u=[...a.items,this._emptyAtom()];return r=[...e,u.length-1],{...a,items:u}}return a});r!==null&&(this._openPath=r),this._emit(i)}_toggleNotAt(e){let t=this._patch(this.value,e,r=>r&&(r.kind==="not"?r.item:{kind:"not",item:r}));this._emit(t)}_setGroupOpAt(e,t){let r=this._patch(this.value,e,i=>{if(!i)return i;let a=null;if(i.kind==="and"||i.kind==="or")a=i;else if(i.kind==="not"){let u=i.item;(u.kind==="and"||u.kind==="or")&&(a=u)}return a?{kind:t,items:a.items}:i});this._emit(r)}_patch(e,t,r){if(t.length===0)return r(e);if(e==null)return e;let[i,...a]=t;if(e.kind==="and"||e.kind==="or"){let u=e.items.slice(),h=this._patch(u[i],a,r);return h===null?u.splice(i,1):u[i]=h,u.length===0?null:u.length===1?u[0]:{...e,items:u}}if(e.kind==="not"){let u=this._patch(e.item,t,r);return u==null?null:{kind:"not",item:u}}return e}_atomAt(e){return this._walk(this.value,e)}_walk(e,t){return e?e.kind==="not"?this._walk(e.item,t):t.length===0?e.kind==="and"||e.kind==="or"?null:e:e.kind==="and"||e.kind==="or"?this._walk(e.items[t[0]]??null,t.slice(1)):null:null}_atomError(e){if(!e.entity_id)return o(this.hass,"ui.state_err_entity","Entity is required");if(e.kind!=="is"&&e.kind!=="is_not"){let r=e.states[0];if(!r)return o(this.hass,"ui.state_err_value","Value is required");if(!Number.isFinite(Number(r)))return o(this.hass,"ui.state_err_numeric","Value must be a number")}else if(!e.states.some(r=>r!==""))return o(this.hass,"ui.state_err_state","State is required");return null}_unwrapAt(e){if(e.length===0){let a=this.value;if(!a)return;let u=a.kind==="not"?a.item:a;(u.kind==="and"||u.kind==="or")&&(u.items.length===1?this._emit(u.items[0]):this._emit(null));return}let t=e.slice(0,-1),r=e[e.length-1],i=this._patch(this.value,t,a=>{if(!a||a.kind!=="and"&&a.kind!=="or")return a;let u=a.items.slice(),h=u[r],m=null;if(h.kind==="and"||h.kind==="or")m=h;else if(h.kind==="not"){let v=h.item;(v.kind==="and"||v.kind==="or")&&(m=v)}return m?(u.splice(r,1,...m.items),{...a,items:u}):a});this._emit(i)}willUpdate(e){if(e.has("value")){let t=this.value;if(t&&this._openPath===null&&t.kind!=="and"&&t.kind!=="or"&&(this._openPath=[]),this._showError&&this._openPath!==null){let r=this._atomAt(this._openPath);(!r||this._atomError(r)===null)&&(this._showError=!1)}}}_addAtRoot(){let e=this.value;if(e==null){this._addFirstAtom();return}if(e.kind==="and"||e.kind==="or"){this._addChildAt([],"is");return}this._openPath=[1],this._emit({kind:"and",items:[e,this._emptyAtom()]})}_setOpen(e){this._openPath=e}render(){if(this.value==null)return l`
         <div class="empty">
           <button @click=${()=>this._addFirstAtom()}>
             + ${o(this.hass,"ui.state_add_first","Add condition")}
           </button>
         </div>
-      `;let e=this._showError&&this._openPath!==null?(()=>{let t=this._atomAt(this._openPath);return t?this._atomError(t):null})():null;return l`
-      ${this._renderRootToolbar()}
+      `;let e=this._showError&&this._openPath!==null?(()=>{let i=this._atomAt(this._openPath);return i?this._atomError(i):null})():null,t=this.value.kind==="not"?this.value.item:this.value,r=t.kind!=="and"&&t.kind!=="or";return l`
       <ambience-state-expr-node
         .hass=${this.hass}
         .value=${this.value}
@@ -891,9 +881,11 @@ var Ot=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
         .errorPath=${e?this._openPath:null}
         .errorMessage=${e}
       ></ambience-state-expr-node>
-      <button class="root-add" @click=${()=>this._addAtRoot()}>
-        + ${o(this.hass,"ui.state_add_condition","Add condition")}
-      </button>
+      ${r?l`
+        <button class="root-add" @click=${()=>this._addAtRoot()}>
+          + ${o(this.hass,"ui.state_add_condition","Add condition")}
+        </button>
+      `:""}
     `}};R.styles=g`
     :host { display: block; }
     .empty {
@@ -905,19 +897,6 @@ var Ot=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       background: transparent; border: 1px solid var(--divider-color, #ccc);
       border-radius: 4px; padding: 0.25rem 0.75rem; cursor: pointer;
       color: inherit;
-    }
-    .root-toolbar {
-      display: flex; justify-content: flex-end; gap: 0.25rem;
-      margin-bottom: 0.25rem;
-    }
-    .root-toolbar button {
-      background: transparent; border: 1px solid var(--divider-color, #ccc);
-      border-radius: 4px; padding: 0.15rem 0.4rem; cursor: pointer;
-      font-size: 0.85em; color: inherit;
-    }
-    .root-toolbar .not-toggle.on {
-      background: var(--warning-color, #ffd);
-      border-color: var(--warning-color, #cc9);
     }
     .root-add {
       display: block; margin-top: 0.5rem;

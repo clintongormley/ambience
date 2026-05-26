@@ -34,19 +34,6 @@ export class AmbienceStatePredicateInput extends LitElement {
       border-radius: 4px; padding: 0.25rem 0.75rem; cursor: pointer;
       color: inherit;
     }
-    .root-toolbar {
-      display: flex; justify-content: flex-end; gap: 0.25rem;
-      margin-bottom: 0.25rem;
-    }
-    .root-toolbar button {
-      background: transparent; border: 1px solid var(--divider-color, #ccc);
-      border-radius: 4px; padding: 0.15rem 0.4rem; cursor: pointer;
-      font-size: 0.85em; color: inherit;
-    }
-    .root-toolbar .not-toggle.on {
-      background: var(--warning-color, #ffd);
-      border-color: var(--warning-color, #cc9);
-    }
     .root-add {
       display: block; margin-top: 0.5rem;
       background: transparent; border: 1px dashed var(--divider-color, #ccc);
@@ -306,12 +293,25 @@ export class AmbienceStatePredicateInput extends LitElement {
     return null;
   }
 
-  /** Replace the group at `path` with its children, spliced into the
-   *  parent's items list. The X button on a nested group header maps to
-   *  this — "remove the parens, keep the clauses". No-op at the root
-   *  (the button isn't shown there). */
+  /** The X button on a group header maps to this. Behaviour:
+   *  - At root: 1 child → become that child (undoes a wrap); 2+ → clear.
+   *  - Nested: splice the group's children into the parent's items list
+   *    ("remove the parens, keep the clauses"). */
   _unwrapAt(path: number[]) {
-    if (path.length === 0) return;
+    if (path.length === 0) {
+      // Root case: peel the group, keep a single child or clear entirely.
+      const root = this.value;
+      if (!root) return;
+      const inner = root.kind === "not" ? (root as StateNot).item : root;
+      if (inner.kind === "and" || inner.kind === "or") {
+        if (inner.items.length === 1) {
+          this._emit(inner.items[0]);
+        } else {
+          this._emit(null);
+        }
+      }
+      return;
+    }
     const parentPath = path.slice(0, -1);
     const idx = path[path.length - 1];
     const next = this._patch(this.value, parentPath, (parent) => {
@@ -403,21 +403,6 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._openPath = path;
   }
 
-  private _renderRootToolbar() {
-    // Negation lives on the atom (`is_not`) or the group (`and_not` /
-    // `or_not` in the group dropdown) — no NOT button here.
-    return html`
-      <div class="root-toolbar">
-        <button class="wrap"
-          title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
-          @click=${() => this._wrapAt([])}>(…)</button>
-        <button class="remove"
-          title=${localize(this.hass, "ui.state_clear", "Clear")}
-          @click=${() => this._removeAt([])}>✕</button>
-      </div>
-    `;
-  }
-
   override render() {
     if (this.value == null) {
       return html`
@@ -436,8 +421,14 @@ export class AmbienceStatePredicateInput extends LitElement {
           return atom ? this._atomError(atom) : null;
         })()
       : null;
+    // Section-level + Add condition is needed only when the root doesn't
+    // already provide one. A group root has its own + Add inside the card.
+    // An atom root (or NOT-wrapped atom) doesn't, so we show it here.
+    const inner = this.value.kind === "not"
+      ? (this.value as StateNot).item
+      : this.value;
+    const showSectionAdd = inner.kind !== "and" && inner.kind !== "or";
     return html`
-      ${this._renderRootToolbar()}
       <ambience-state-expr-node
         .hass=${this.hass}
         .value=${this.value}
@@ -446,9 +437,11 @@ export class AmbienceStatePredicateInput extends LitElement {
         .errorPath=${errorMessage ? this._openPath : null}
         .errorMessage=${errorMessage}
       ></ambience-state-expr-node>
-      <button class="root-add" @click=${() => this._addAtRoot()}>
-        + ${localize(this.hass, "ui.state_add_condition", "Add condition")}
-      </button>
+      ${showSectionAdd ? html`
+        <button class="root-add" @click=${() => this._addAtRoot()}>
+          + ${localize(this.hass, "ui.state_add_condition", "Add condition")}
+        </button>
+      ` : ""}
     `;
   }
 

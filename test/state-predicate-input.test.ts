@@ -180,13 +180,25 @@ describe("ambience-state-predicate-input", () => {
 
   // --- root-level toolbar + add-condition --------------------------------
 
-  test("a non-null root renders a root-level toolbar and Add button", async () => {
+  test("there's no root-toolbar — wrap/clear live on each atom card / group header", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
-    expect(el.shadowRoot.querySelector(".root-toolbar")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".root-toolbar")).toBeNull();
+  });
+
+  test("atom root shows a section-level '+ Add condition' (only way to add a sibling)", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     expect(el.shadowRoot.querySelector(".root-add")).toBeTruthy();
   });
 
-  test("an empty (null) root renders neither root-toolbar nor root-add (only the initial empty-state Add)", async () => {
+  test("group root hides the section-level '+ Add condition' (the group already has one inside)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+    ]});
+    expect(el.shadowRoot.querySelector(".root-add")).toBeNull();
+  });
+
+  test("an empty (null) root has the empty-state Add only — no root-toolbar/root-add", async () => {
     el = await mount(null);
     expect(el.shadowRoot.querySelector(".root-toolbar")).toBeNull();
     expect(el.shadowRoot.querySelector(".root-add")).toBeNull();
@@ -230,13 +242,9 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.items[1].kind).toBe("is");
   });
 
-  test("root toolbar has no NOT button (negation lives on atoms and groups)", async () => {
+  test("root toolbar is gone entirely", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
-    const notBtn = el.shadowRoot.querySelector(".root-toolbar .not-toggle");
-    expect(notBtn).toBeNull();
-    // Wrap and Clear are still there.
-    expect(el.shadowRoot.querySelector(".root-toolbar .wrap")).toBeTruthy();
-    expect(el.shadowRoot.querySelector(".root-toolbar .remove")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".root-toolbar")).toBeNull();
   });
 
   test("group dropdown has only AND and OR options (no AND_NOT / OR_NOT)", async () => {
@@ -308,24 +316,14 @@ describe("ambience-state-predicate-input", () => {
     expect(cards[0].classList.contains("collapsed")).toBe(true);
   });
 
-  test("clicking root Clear/Remove sets the predicate to null", async () => {
+  test("clearing the predicate happens via the atom card's X (root toolbar is gone)", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    const removeBtn = el.shadowRoot.querySelector(".root-toolbar .remove") as HTMLButtonElement;
-    removeBtn.click();
+    const cards = _atomCards(el);
+    (cards[0].querySelector(".atom-header .remove") as HTMLButtonElement).click();
+    await flush(el);
     expect(captured).toBeNull();
-  });
-
-  test("clicking root Wrap wraps the atom in a single-child AND group", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
-    let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
-    const wrapBtn = el.shadowRoot.querySelector(".root-toolbar .wrap") as HTMLButtonElement;
-    wrapBtn.click();
-    expect(captured.kind).toBe("and");
-    expect(captured.items).toHaveLength(1);
-    expect(captured.items[0].entity_id).toBe("x");
   });
 
   // --- collapse / expand ------------------------------------------------
@@ -585,22 +583,47 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.items.map((i: any) => i.entity_id)).toEqual(["a", "b", "c"]);
   });
 
-  test("the root group header has NO X — root-level 'clear' lives in the root toolbar", async () => {
+  test("the root group header HAS an X — click it to undo a wrap or clear the predicate", async () => {
+    // After the root toolbar was dropped, the group's header X is the only
+    // way to clear a root group. Semantics: 1 child → promote to root;
+    // 2+ children → clear (set to null).
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+    ]});
+    await flush(el);
+    const visit = (sr: ShadowRoot | null): HTMLElement | null => {
+      if (!sr) return null;
+      return sr.querySelector(".group-header") as HTMLElement | null;
+    };
+    const rootHeader = visit(el.shadowRoot.querySelector("ambience-state-expr-node")?.shadowRoot);
+    const x = rootHeader!.querySelector("button.unwrap") as HTMLButtonElement;
+    expect(x).toBeTruthy();
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    x.click();
+    await flush(el);
+    // Single child → the root becomes that child (undoes the wrap).
+    expect(captured.kind).toBe("is");
+    expect(captured.entity_id).toBe("a");
+  });
+
+  test("the root group header X clears the predicate when the group has 2+ items", async () => {
     el = await mount({ kind: "and", items: [
       { kind: "is", entity_id: "a", states: ["on"] },
       { kind: "is", entity_id: "b", states: ["off"] },
     ]});
     await flush(el);
-    // The ROOT group's header (first .group-header inside the root node)
-    // should not have an unwrap X — at root there's nothing to promote to.
     const visit = (sr: ShadowRoot | null): HTMLElement | null => {
       if (!sr) return null;
-      const h = sr.querySelector(".group-header");
-      return h as HTMLElement | null;
+      return sr.querySelector(".group-header") as HTMLElement | null;
     };
     const rootHeader = visit(el.shadowRoot.querySelector("ambience-state-expr-node")?.shadowRoot);
-    expect(rootHeader).toBeTruthy();
-    expect(rootHeader!.querySelector("button.unwrap")).toBeNull();
+    const x = rootHeader!.querySelector("button.unwrap") as HTMLButtonElement;
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    x.click();
+    await flush(el);
+    expect(captured).toBeNull();
   });
 
   test("adding a condition via + Add opens the new (empty) atom", async () => {

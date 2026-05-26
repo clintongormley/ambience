@@ -15,11 +15,16 @@ from .engine import resolve
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> dict[str, Any]:
+async def async_resolve_only(
+    hass: HomeAssistant, area_id: str, scene: str | None = None
+) -> dict[str, Any]:
     """Like apply_scene, but does not execute actions.
 
     Returns: {matched_rule_index, rule_name, actions, snapshots_described}.
     If no rule matched, matched_rule_index/rule_name are None and actions=[].
+
+    `scene` is optional. When omitted, the scene matcher is excluded from the
+    resolve — scene predicates on rules are stripped (treated as wildcards).
     """
     store = hass.data[DOMAIN][DATA_STORE]
     matchers_registry: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
@@ -46,10 +51,15 @@ async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> d
         else:
             snapshots[name] = result
 
-    # `scene` is an always-on matcher; its snapshot is the activating scene,
-    # injected here rather than captured from hass.
-    engine_matchers = dict(matchers_registry)
-    snapshots["scene"] = scene
+    if scene is not None:
+        # Scene supplied → include the scene matcher and inject the snapshot.
+        engine_matchers = dict(matchers_registry)
+        snapshots["scene"] = scene
+    else:
+        # Scene omitted → exclude scene matcher; the active_keys filter below
+        # then strips `when.scene` predicates from each rule, so they no longer
+        # constrain matching.
+        engine_matchers = {k: v for k, v in matchers_registry.items() if k != "scene"}
 
     described = {
         name: engine_matchers[name].describe(snap) if snap is not None else None
@@ -84,8 +94,14 @@ async def async_resolve_only(hass: HomeAssistant, area_id: str, scene: str) -> d
     }
 
 
-async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str) -> None:
-    """Apply a scene in an area according to configured rules."""
+async def async_apply_scene(
+    hass: HomeAssistant, area_id: str, scene: str | None = None
+) -> None:
+    """Apply a scene in an area according to configured rules.
+
+    `scene` is optional; when omitted, scene predicates on rules are treated
+    as wildcards.
+    """
     actions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_ACTIONS]
 
     plan = await async_resolve_only(hass, area_id, scene)

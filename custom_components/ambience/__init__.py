@@ -48,7 +48,7 @@ _PANEL_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-panel.js"
 _APPLY_SCENE_SCHEMA = vol.Schema(
     {
         vol.Required("area"): cv.string,
-        vol.Required("scene"): cv.string,
+        vol.Optional("scene"): cv.string,
     }
 )
 
@@ -85,7 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     register_action(hass, SetLightAction())
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
-        await async_apply_scene(hass, call.data["area"], call.data["scene"])
+        await async_apply_scene(hass, call.data["area"], call.data.get("scene"))
 
     hass.services.async_register(
         DOMAIN,

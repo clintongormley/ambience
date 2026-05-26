@@ -292,7 +292,7 @@ async def _ws_validate(
     {
         vol.Required("type"): "ambience/dry_run",
         vol.Required("area_id"): str,
-        vol.Required("scene"): str,
+        vol.Optional("scene"): str,
     }
 )
 @websocket_api.async_response
@@ -302,7 +302,7 @@ async def _ws_dry_run(
     msg: dict[str, Any],
 ) -> None:
     try:
-        result = await async_resolve_only(hass, msg["area_id"], msg["scene"])
+        result = await async_resolve_only(hass, msg["area_id"], msg.get("scene"))
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return

@@ -294,6 +294,47 @@ async def test_dry_run_no_match(hass: HomeAssistant, installed, area_id, hass_ws
     assert resp["result"]["actions"] == []
 
 
+async def test_dry_run_accepts_missing_scene(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """The dry_run WS command should accept a payload without `scene`."""
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={
+            "matchers": [],
+            "rules": [
+                {
+                    "name": "scene-constrained rule",
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        {
+                            "action": "set_light",
+                            "entity_ids": ["light.lamp"],
+                            "params": {"brightness": 50},
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    assert save["success"] is True
+    # Omitting `scene` from the payload — no validation_error, scene predicate stripped.
+    resp = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/dry_run",
+        area_id=area_id,
+    )
+    assert resp["success"] is True
+    assert resp["result"]["matched_rule_index"] == 0
+    assert resp["result"]["rule_name"] == "scene-constrained rule"
+    assert "matched_rule_index" in resp["result"]
+    assert "actions" in resp["result"]
+    assert "snapshots_described" in resp["result"]
+
+
 async def test_area_save_sorts_rules_when_auto_sort_on(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:

@@ -322,3 +322,36 @@ async def test_resolve_only_describes_activating_scene(hass: HomeAssistant) -> N
 
     assert result["snapshots_described"]["scene"] == "movie"
     assert result["matched_rule_index"] == 0
+
+
+async def test_apply_scene_without_scene_treats_scene_predicates_as_wildcard(
+    hass: HomeAssistant,
+) -> None:
+    """Calling apply_scene without scene should match rules whose scene
+    predicate would otherwise constrain them — i.e. the scene predicate
+    is stripped (treated as wildcard) for this resolve."""
+    action = RecordingAction()
+    matchers = {"tod": FixedMatcher("evening")}
+    areas = {
+        "lr": {
+            "matchers": ["tod"],
+            "rules": [
+                {
+                    "name": "always-on rule",
+                    "when": {"scene": "movie_night", "tod": "evening"},
+                    "actions": [
+                        {
+                            "action": "record",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness": 42},
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    _install(hass, areas=areas, matchers=matchers, actions={"record": action})
+
+    await async_apply_scene(hass, "lr", None)
+
+    assert action.executions == [(["light.a"], {"brightness": 42})]

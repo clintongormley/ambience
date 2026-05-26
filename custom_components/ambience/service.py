@@ -36,9 +36,7 @@ async def async_resolve_only(
     # Snapshot every matcher whose snapshot can be derived from `hass`.
     # `scene`'s snapshot is injected from the service call below, so we
     # skip it here (its `.snapshot()` is a no-op anyway).
-    snapshottable = {
-        name: m for name, m in matchers_registry.items() if name != "scene"
-    }
+    snapshottable = {name: m for name, m in matchers_registry.items() if name != "scene"}
     snapshot_results = await asyncio.gather(
         *[m.snapshot(hass) for m in snapshottable.values()],
         return_exceptions=True,
@@ -92,9 +90,7 @@ async def async_resolve_only(
     }
 
 
-async def async_apply_scene(
-    hass: HomeAssistant, area_id: str, scene: str | None = None
-) -> None:
+async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str | None = None) -> None:
     """Apply a scene in an area according to configured rules.
 
     `scene` is optional; when omitted, scene predicates on rules are treated

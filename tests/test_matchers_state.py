@@ -480,13 +480,9 @@ def test_validate_atom_attribute_is_optional() -> None:
 def test_validate_atom_attribute_rejects_non_string() -> None:
     m = StateMatcher()
     with pytest.raises(ValueError, match="attribute"):
-        m.validate_predicate(
-            {"kind": "is", "entity_id": "x", "attribute": 42, "states": ["on"]}
-        )
+        m.validate_predicate({"kind": "is", "entity_id": "x", "attribute": 42, "states": ["on"]})
     with pytest.raises(ValueError, match="attribute"):
-        m.validate_predicate(
-            {"kind": "is", "entity_id": "x", "attribute": "", "states": ["on"]}
-        )
+        m.validate_predicate({"kind": "is", "entity_id": "x", "attribute": "", "states": ["on"]})
 
 
 # --- numeric comparison kinds ------------------------------------------

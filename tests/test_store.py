@@ -337,8 +337,6 @@ async def test_migration_relocates_periods(hass: HomeAssistant) -> None:
     }
 
 
-
-
 async def test_empty_store_has_weather_default(hass: HomeAssistant) -> None:
     from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
 

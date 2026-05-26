@@ -221,9 +221,7 @@ class StateMatcher:
             if not all(isinstance(s, str) and s for s in states):
                 raise ValueError("state atom states must all be non-empty strings")
         attribute = atom.get("attribute")
-        if attribute is not None and (
-            not isinstance(attribute, str) or not attribute.strip()
-        ):
+        if attribute is not None and (not isinstance(attribute, str) or not attribute.strip()):
             raise ValueError("`attribute` must be a non-empty string or null")
         dur = atom.get("for")
         if dur is None:

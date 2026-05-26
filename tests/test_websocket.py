@@ -607,81 +607,7 @@ async def test_ws_periods_reset_clears_custom_and_hidden(
 
 
 # ---------------------------------------------------------------------------
-# C1: ambience/matchers/enabled/list + save
-# ---------------------------------------------------------------------------
-
-
-async def test_enabled_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
-    resp = await _ws_send(hass_ws_client, type="ambience/matchers/enabled/list")
-    assert resp["success"] is True
-    assert sorted(resp["result"]["enabled"]) == ["day", "state", "time_of_day", "weather"]
-
-
-async def test_enabled_matchers_save_round_trips(
-    hass: HomeAssistant, installed, hass_ws_client
-) -> None:
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/matchers/enabled/save",
-        enabled=["time_of_day"],
-    )
-    assert resp["success"] is True
-    assert resp["result"]["ok"] is True
-    assert resp["result"]["warnings"] == []
-    resp2 = await _ws_send(hass_ws_client, type="ambience/matchers/enabled/list")
-    assert resp2["result"]["enabled"] == ["time_of_day"]
-
-
-async def test_enabled_matchers_save_rejects_unknown(
-    hass: HomeAssistant, installed, hass_ws_client
-) -> None:
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/matchers/enabled/save",
-        enabled=["bogus"],
-    )
-    assert resp["success"] is False
-    assert resp["error"]["code"] == "validation_error"
-
-
-async def test_enabled_matchers_save_emits_warnings_for_dangling_predicates(
-    hass: HomeAssistant, installed, hass_ws_client, area_id
-) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(
-        area_id,
-        {
-            "rules": [
-                {
-                    "name": "Movie night",
-                    "when": {
-                        "scene": "movie",
-                        "day": {
-                            "include": [{"kind": "weekday", "days": [5, 6]}],
-                            "exclude": [],
-                        },
-                    },
-                    "actions": [],
-                }
-            ],
-            "auto_sort": True,
-        },
-    )
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/matchers/enabled/save",
-        enabled=["time_of_day"],
-    )
-    assert resp["success"] is True
-    warnings = resp["result"]["warnings"]
-    assert len(warnings) == 1
-    assert warnings[0]["area_id"] == area_id
-    assert warnings[0]["rule_name"] == "Movie night"
-    assert "day" in warnings[0]["reason"]
-
-
-# ---------------------------------------------------------------------------
-# C2: ambience/matchers/day/config/list + save
+# C1: ambience/matchers/day/config/list + save
 # ---------------------------------------------------------------------------
 
 
@@ -743,32 +669,8 @@ async def test_day_config_save_emits_warnings_when_clearing_sensor(
 
 
 # ---------------------------------------------------------------------------
-# C3: _validate_area_config uses global enabled matchers
+# C2: Scene as regular matcher + other validation
 # ---------------------------------------------------------------------------
-
-
-async def test_area_save_rejects_predicate_for_disabled_matcher(
-    hass, installed, hass_ws_client, area_id
-) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_enabled_matchers(["time_of_day"])  # day disabled
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/area/save",
-        area_id=area_id,
-        config={
-            "rules": [
-                {
-                    "when": {"day": {"include": [{"kind": "weekday", "days": [0]}], "exclude": []}},
-                    "actions": [],
-                }
-            ],
-            "auto_sort": True,
-        },
-    )
-    assert resp["success"] is False
-    assert resp["error"]["code"] == "validation_error"
-    assert "day" in resp["error"]["message"]
 
 
 async def test_area_save_ignores_legacy_matchers_field(

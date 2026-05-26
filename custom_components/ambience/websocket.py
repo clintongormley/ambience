@@ -26,8 +26,6 @@ _WS_COMMANDS = (
     "ambience/time_of_day_periods/list",
     "ambience/time_of_day_periods/save",
     "ambience/time_of_day_periods/reset",
-    "ambience/matchers/enabled/list",
-    "ambience/matchers/enabled/save",
     "ambience/matchers/day/config/list",
     "ambience/matchers/day/config/save",
     "ambience/matchers/weather/config/list",
@@ -114,8 +112,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_periods_list)
     websocket_api.async_register_command(hass, _ws_periods_save)
     websocket_api.async_register_command(hass, _ws_periods_reset)
-    websocket_api.async_register_command(hass, _ws_enabled_matchers_list)
-    websocket_api.async_register_command(hass, _ws_enabled_matchers_save)
     websocket_api.async_register_command(hass, _ws_day_config_list)
     websocket_api.async_register_command(hass, _ws_day_config_save)
     websocket_api.async_register_command(hass, _ws_weather_config_list)
@@ -127,8 +123,6 @@ def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, A
     if not isinstance(config, dict):
         raise ValueError("config must be an object")
     config.pop("matchers", None)  # legacy field; dropped silently
-    store = hass.data[DOMAIN][DATA_STORE]
-    enabled = set(store.enabled_matchers())
     matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
     actions_registry = hass.data[DOMAIN][DATA_ACTIONS]
     for rule_idx, rule in enumerate(config.get("rules", [])):
@@ -136,13 +130,8 @@ def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, A
         for key, predicate in when.items():
             if predicate is None:
                 continue
-            if key == "scene":
-                matchers_registry["scene"].validate_predicate(predicate)
-                continue
             if key not in matchers_registry:
                 raise ValueError(f"rule {rule_idx}: unknown matcher {key}")
-            if key not in enabled:
-                raise ValueError(f"rule {rule_idx}: predicate references disabled matcher {key}")
             matchers_registry[key].validate_predicate(predicate)
         for action_idx, action_spec in enumerate(rule.get("actions", [])):
             action_name = action_spec.get("action")
@@ -399,77 +388,6 @@ async def _ws_periods_reset(
     period_store = hass.data[DOMAIN][DATA_PERIODS]
     await period_store.reset()
     connection.send_result(msg["id"], {"ok": True})
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/matchers/enabled/list"})
-@websocket_api.async_response
-async def _ws_enabled_matchers_list(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    connection.send_result(msg["id"], {"enabled": store.enabled_matchers()})
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/matchers/enabled/save",
-        vol.Required("enabled"): list,
-    }
-)
-@websocket_api.async_response
-async def _ws_enabled_matchers_save(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    registry = hass.data[DOMAIN][DATA_MATCHERS]
-    enabled = msg["enabled"]
-    for name in enabled:
-        if name == "scene":
-            connection.send_error(
-                msg["id"],
-                "validation_error",
-                "`scene` is always on; do not list it",
-            )
-            return
-        matcher = registry.get(name)
-        if matcher is None:
-            connection.send_error(msg["id"], "validation_error", f"unknown matcher: {name}")
-            return
-        if not getattr(matcher, "toggleable", True):
-            connection.send_error(
-                msg["id"],
-                "validation_error",
-                f"matcher is not toggleable: {name}",
-            )
-            return
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_enabled_matchers(list(enabled))
-    warnings = _dangling_matcher_warnings(hass, set(enabled))
-    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
-
-
-def _dangling_matcher_warnings(hass: HomeAssistant, enabled: set[str]) -> list[dict[str, Any]]:
-    store = hass.data[DOMAIN][DATA_STORE]
-    warnings: list[dict[str, Any]] = []
-    for area_id, cfg in store.areas().items():
-        for rule in cfg.get("rules", []):
-            for matcher_name, pred in rule.get("when", {}).items():
-                if matcher_name == "scene" or pred is None:
-                    continue
-                if matcher_name not in enabled:
-                    warnings.append(
-                        {
-                            "area_id": area_id,
-                            "rule_name": rule.get("name", ""),
-                            "reason": f"references disabled matcher `{matcher_name}`",
-                        }
-                    )
-    return warnings
 
 
 @websocket_api.require_admin

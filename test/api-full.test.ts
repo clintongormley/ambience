@@ -22,7 +22,7 @@ function makeFakeHass() {
       return [{ area_id: "living_room", name: "Living Room" }];
     }
     if (msg.type === "ambience/area/get") {
-      return { matchers: [], rules: [], auto_sort: true };
+      return { rules: [], auto_sort: true };
     }
     if (msg.type === "ambience/area/save") {
       return { ok: true, config: msg.config };
@@ -57,14 +57,14 @@ describe("API: getArea", () => {
     const { callWS, sent } = makeFakeHass();
     const res = await getArea({ callWS } as any, "living_room");
     expect(sent[0]).toEqual({ type: "ambience/area/get", area_id: "living_room" });
-    expect(res).toEqual({ matchers: [], rules: [], auto_sort: true });
+    expect(res).toEqual({ rules: [], auto_sort: true });
   });
 });
 
 describe("API: saveArea", () => {
   test("sends area config via WS and returns result", async () => {
     const { callWS, sent } = makeFakeHass();
-    const config: AreaConfig = { matchers: [], rules: [], auto_sort: true };
+    const config: AreaConfig = { rules: [], auto_sort: true };
     const res = await saveArea({ callWS } as any, "living_room", config);
     expect(sent[0]).toMatchObject({
       type: "ambience/area/save",
@@ -96,7 +96,7 @@ describe("API: listActions", () => {
 describe("API: validateConfig", () => {
   test("sends config to validate endpoint", async () => {
     const { callWS, sent } = makeFakeHass();
-    const config: AreaConfig = { matchers: [], rules: [], auto_sort: true };
+    const config: AreaConfig = { rules: [], auto_sort: true };
     const res = await validateConfig({ callWS } as any, config);
     expect(sent[0]).toEqual({ type: "ambience/validate", config });
     expect(res.ok).toBe(true);

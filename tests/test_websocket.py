@@ -107,7 +107,7 @@ async def test_area_get_unconfigured_returns_empty_config(
     """Opening a real HA area with no stored Ambience config yields a blank config."""
     resp = await _ws_send(hass_ws_client, type="ambience/area/get", area_id=area_id)
     assert resp["success"] is True
-    assert resp["result"] == {"matchers": [], "rules": [], "auto_sort": True}
+    assert resp["result"] == {"rules": [], "auto_sort": True}
 
 
 async def test_area_save_then_get(hass: HomeAssistant, installed, area_id, hass_ws_client) -> None:

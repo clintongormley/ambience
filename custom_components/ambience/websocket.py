@@ -222,7 +222,7 @@ async def _ws_area_get(
         connection.send_error(msg["id"], "unknown_area", "area not found")
         return
     store = hass.data[DOMAIN][DATA_STORE]
-    area = store.get_area(area_id) or {"matchers": [], "rules": [], "auto_sort": True}
+    area = store.get_area(area_id) or {"rules": [], "auto_sort": True}
     connection.send_result(msg["id"], area)
 
 

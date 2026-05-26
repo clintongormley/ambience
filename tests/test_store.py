@@ -337,6 +337,23 @@ async def test_migration_relocates_periods(hass: HomeAssistant) -> None:
     }
 
 
+async def test_load_ignores_legacy_enabled_matchers(hass: HomeAssistant) -> None:
+    """Old `enabled_matchers` field on disk must be silently ignored after removal."""
+    from homeassistant.helpers.storage import Store
+
+    raw = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+    await raw.async_save(
+        {
+            "version": STORAGE_VERSION,
+            "areas": {},
+            "enabled_matchers": ["time_of_day", "day"],  # legacy field; must not crash
+        }
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()  # must not raise
+    assert store.areas() == {}
+
+
 async def test_empty_store_has_weather_default(hass: HomeAssistant) -> None:
     from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
 

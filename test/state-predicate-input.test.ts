@@ -46,6 +46,22 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.entity_id).toBe("y");
   });
 
+  test("wrapping the only child of a group still creates a sub-group (no collapse)", async () => {
+    // Regression: _patch's collapse-when-single-child fired even on
+    // replacements (like wrap), making the wrap appear as just an op flip.
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+    ]});
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._wrapAt([0]);
+    // Outer AND survives; new inner OR (flipped from AND) wraps `a`.
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(1);
+    expect(captured.items[0].kind).toBe("or");
+    expect(captured.items[0].items[0].entity_id).toBe("a");
+  });
+
   test("_wrapAt on a child of an AND group creates an OR sub-group (flip parent's op)", async () => {
     el = await mount({ kind: "and", items: [
       { kind: "is", entity_id: "a", states: ["on"] },

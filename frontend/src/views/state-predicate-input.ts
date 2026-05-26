@@ -200,6 +200,7 @@ export class AmbienceStatePredicateInput extends LitElement {
     if (tree == null) return tree;
     const [idx, ...rest] = path;
     if (tree.kind === "and" || tree.kind === "or") {
+      const originalLength = tree.items.length;
       const items = tree.items.slice();
       const replaced = this._patch(items[idx], rest, fn);
       if (replaced === null) {
@@ -207,8 +208,14 @@ export class AmbienceStatePredicateInput extends LitElement {
       } else {
         items[idx] = replaced as StateExpr;
       }
-      if (items.length === 0) return null;
-      if (items.length === 1) return items[0];
+      // Collapse only when items actually SHRUNK (i.e. a removal). Pure
+      // replacements (like wrapping a child) preserve the parent group
+      // even if it has a single child — otherwise the wrap is invisible
+      // and looks like the parent's op just flipped.
+      if (items.length < originalLength) {
+        if (items.length === 0) return null;
+        if (items.length === 1) return items[0];
+      }
       return { ...tree, items };
     }
     if (tree.kind === "not") {

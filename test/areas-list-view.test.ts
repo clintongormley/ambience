@@ -14,7 +14,6 @@ vi.mock("../frontend/src/api", () => ({
   getArea: vi.fn(),
   saveArea: vi.fn(),
   listMatchers: vi.fn(),
-  listEnabledMatchers: vi.fn(async () => ({ enabled: ["time_of_day", "day"] })),
   listActions: vi.fn(),
   listPeriods: vi.fn(),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
@@ -31,8 +30,8 @@ const baseAreas: AreaListItem[] = [
 const baseConfig: AreaConfig = { rules: [], auto_sort: true };
 
 const matchers: MatcherInfo[] = [
-  { name: "scene", description: "", predicate_help: "", toggleable: false, input: "scene_combobox", priority: 0 },
-  { name: "time_of_day", description: "", predicate_help: "", toggleable: true, input: "time_of_day", priority: 200 },
+  { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
+  { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day", priority: 200 },
 ];
 
 const actions: ActionInfo[] = [
@@ -58,7 +57,6 @@ async function mount(
     configs[areaId] ?? structuredClone(baseConfig),
   );
   vi.mocked(api.listMatchers).mockResolvedValue(matchers);
-  vi.mocked(api.listEnabledMatchers).mockResolvedValue({ enabled: ["time_of_day"] });
   vi.mocked(api.listActions).mockResolvedValue(actions);
   vi.mocked(api.listPeriods).mockResolvedValue(periods);
   vi.mocked(api.saveArea).mockResolvedValue({ ok: true, config: baseConfig });
@@ -554,20 +552,16 @@ describe("ambience-areas-list", () => {
     // Override the default mocks with the full matcher set in deliberate
     // registration-order (NOT priority order) — we expect the getter to sort.
     const allMatchers: MatcherInfo[] = [
-      { name: "scene",       description: "", predicate_help: "", toggleable: false, input: "scene_combobox",     priority: 0 },
-      { name: "time_of_day", description: "", predicate_help: "", toggleable: true,  input: "time_of_day",        priority: 200 },
-      { name: "day",         description: "", predicate_help: "", toggleable: true,  input: "day_predicate",      priority: 100 },
-      { name: "weather",     description: "", predicate_help: "", toggleable: true,  input: "weather_predicate",  priority: 300 },
+      { name: "scene",       description: "", predicate_help: "", input: "scene_combobox",     priority: 0 },
+      { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day",        priority: 200 },
+      { name: "day",         description: "", predicate_help: "", input: "day_predicate",      priority: 100 },
+      { name: "weather",     description: "", predicate_help: "", input: "weather_predicate",  priority: 300 },
     ];
     el = await mount(baseAreas, { living_room: { rules: [], auto_sort: true } });
     // mount() reset the matchers mock to the 2-item default; re-override and
     // re-trigger a load by reassigning the element's internal state directly.
     vi.mocked(api.listMatchers).mockResolvedValue(allMatchers);
-    vi.mocked(api.listEnabledMatchers).mockResolvedValue({
-      enabled: ["time_of_day", "day", "weather"],
-    });
     el._matchers = allMatchers;
-    el._enabledMatchers = new Set(["time_of_day", "day", "weather"]);
     await el.updateComplete;
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;

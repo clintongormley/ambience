@@ -9,7 +9,6 @@ import {
   getWeatherConfig,
   listActions,
   listAreas,
-  listEnabledMatchers,
   listMatchers,
   listPeriods,
   saveArea,
@@ -106,7 +105,6 @@ export class AmbienceAreasList extends LitElement {
   @state() private _expanded = new Set<string>();
   @state() private _error = "";
   @state() private _editing: EditingState | null = null;
-  @state() private _enabledMatchers = new Set<string>();
   private _unsub?: () => void;
 
   override async connectedCallback() {
@@ -124,11 +122,10 @@ export class AmbienceAreasList extends LitElement {
 
   private async _loadStatic() {
     try {
-      const [matchers, actions, periods, enabled, dayConfig, weatherConfig] = await Promise.all([
+      const [matchers, actions, periods, dayConfig, weatherConfig] = await Promise.all([
         listMatchers(this.hass),
         listActions(this.hass),
         listPeriods(this.hass),
-        listEnabledMatchers(this.hass),
         getDayConfig(this.hass),
         getWeatherConfig(this.hass),
       ]);
@@ -136,7 +133,6 @@ export class AmbienceAreasList extends LitElement {
       this._matchers = matchers;
       this._actions = actions;
       this._periods = periods;
-      this._enabledMatchers = new Set(enabled.enabled);
       this._dayConfig = dayConfig;
       this._weatherConfig = weatherConfig;
     } catch (e) {
@@ -341,7 +337,6 @@ export class AmbienceAreasList extends LitElement {
   private get _editorMatchers(): MatcherInfo[] {
     if (!this._editing) return [];
     return this._matchers
-      .filter((m) => m.name === "scene" || (m.toggleable && this._enabledMatchers.has(m.name)))
       .slice()
       .sort((a, b) => a.priority - b.priority);
   }
@@ -418,7 +413,6 @@ export class AmbienceAreasList extends LitElement {
                   .autoSort=${cfg.auto_sort}
                   .periods=${this._periods}
                   .weatherConfig=${this._weatherConfig}
-                  .enabledMatchers=${[...this._enabledMatchers]}
                   .matchers=${this._matchers}
                   .hass=${this.hass}
                   @add-rule=${() => this._addRule(a.area_id)}

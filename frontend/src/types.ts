@@ -98,8 +98,6 @@ export type PeriodStoreView = {
   hidden: string[];
 };
 
-export type EnabledMatchers = { enabled: string[] };
-
 export type DayConfig = {
   workday_sensor: string | null;
   workday_calendar: string | null;

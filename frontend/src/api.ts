@@ -105,19 +105,6 @@ export async function resetPeriods(hass: HassConnection): Promise<{ ok: true }> 
   return hass.callWS({ type: "ambience/time_of_day_periods/reset" });
 }
 
-export async function listEnabledMatchers(
-  hass: HassConnection,
-): Promise<{ enabled: string[] }> {
-  return hass.callWS({ type: "ambience/matchers/enabled/list" });
-}
-
-export async function saveEnabledMatchers(
-  hass: HassConnection,
-  enabled: string[],
-): Promise<{ ok: true; warnings: Array<{ area_id: string; rule_name: string; reason: string }> }> {
-  return hass.callWS({ type: "ambience/matchers/enabled/save", enabled });
-}
-
 export async function getDayConfig(hass: HassConnection): Promise<DayConfig> {
   return hass.callWS({ type: "ambience/matchers/day/config/list" });
 }

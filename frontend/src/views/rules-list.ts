@@ -85,10 +85,6 @@ export class AmbienceRulesList extends LitElement {
   @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
-  // Names of globally-enabled matchers. When set, predicates for disabled
-  // matchers are hidden from the summary (`scene` is always shown). Undefined
-  // means "show all" (e.g. standalone tests that don't supply it).
-  @property({ attribute: false }) enabledMatchers?: string[];
   // Matcher registry — used to sort `when` keys by `priority` in the summary
   // so it reads in the same order as the linearisation tiebreaker (lower
   // priority first). Undefined → falls back to `when`-dict insertion order.
@@ -109,11 +105,7 @@ export class AmbienceRulesList extends LitElement {
   private _summary(rule: Rule): string {
     const priorityOf = new Map((this.matchers ?? []).map((m) => [m.name, m.priority]));
     const keys = Object.keys(rule.when)
-      .filter(
-        (k) =>
-          rule.when[k] != null &&
-          (k === "scene" || !this.enabledMatchers || this.enabledMatchers.includes(k)),
-      )
+      .filter((k) => rule.when[k] != null)
       // Stable sort by matcher priority (lower first); unknown matchers go last.
       .sort((a, b) => (priorityOf.get(a) ?? Infinity) - (priorityOf.get(b) ?? Infinity));
     const when =

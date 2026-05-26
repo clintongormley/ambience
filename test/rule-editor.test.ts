@@ -3,7 +3,7 @@ import "../frontend/src/views/rule-editor";
 import type { ActionInfo, MatcherInfo, Rule } from "../frontend/src/types";
 
 const matchers: MatcherInfo[] = [
-  { name: "scene", description: "", predicate_help: "", toggleable: false, input: "scene_combobox", priority: 0 },
+  { name: "scene", description: "", predicate_help: "", toggleable: true, input: "scene_combobox", priority: 0 },
   { name: "time_of_day", description: "", predicate_help: "", toggleable: true, input: "time_of_day", priority: 200 },
 ];
 
@@ -55,13 +55,19 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   afterEach(() => { el?.remove(); });
 
   test("matcher rows render as collapsed summaries by default", async () => {
-    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
+    // Seed both matchers in `when` so both are rendered as rows (toggleable
+    // matchers without a value are now hidden behind the add-condition dropdown).
+    el = await mount({
+      name: "test",
+      when: { scene: "movie", time_of_day: { period: "afternoon" } },
+      actions: [],
+    });
     const rows = el.shadowRoot.querySelectorAll(".slot.collapsed");
     expect(rows.length).toBe(3);  // name + scene + time_of_day
   });
 
   test("clicking a collapsed matcher summary expands it", async () => {
-    el = await mount({ name: "test", when: {}, actions: [] });
+    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
     const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
     sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
@@ -71,7 +77,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   });
 
   test("opening a second matcher collapses the first", async () => {
-    el = await mount({ name: "test", when: {}, actions: [] });
+    el = await mount({
+      name: "test",
+      when: { scene: "movie", time_of_day: { period: "afternoon" } },  // seed so both rows exist
+      actions: [],
+    });
     const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
     scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
@@ -89,7 +99,13 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   test("clicking an already-expanded summary collapses it", async () => {
     // Use time_of_day (non-combobox) for this test: it keeps its .summary when expanded
     // so the second click can target it. Scene (combobox) drops chrome when expanded.
-    el = await mount({ name: "test", when: {}, actions: [] });
+    // Seed time_of_day in `when` so the row is rendered (toggleable matchers
+    // without a value now appear only behind the add-condition dropdown).
+    el = await mount({
+      name: "test",
+      when: { time_of_day: { period: "afternoon" } },
+      actions: [],
+    });
     const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
     tod.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
@@ -340,7 +356,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   });
 
   test("matcher input value-changed event calls _setPredicate", async () => {
-    el = await mount({ name: "test", when: {}, actions: [] });
+    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
     // Expand the scene matcher
     const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
     sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -431,7 +447,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   });
 
   test("clicking outside an open slot collapses it when valid", async () => {
-    el = await mount({ name: "test", when: {}, actions: [] });
+    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
     const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
     // Open scene slot
     sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -469,7 +485,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("clicking another slot's summary while current is invalid keeps current open", async () => {
     el = await mount({
-      name: "test", when: {},
+      name: "test", when: { scene: "movie" },
       actions: [{ action: "set_light", entity_ids: [], params: { brightness: 80 } }],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
@@ -610,5 +626,161 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
 
     expect((el as any)._draft.name).toBe("second");
+  });
+});
+
+describe("ambience-rule-editor — matcher dropdown + full-height layout", () => {
+  let el: any;
+  afterEach(() => { el?.remove(); });
+
+  test("does not render a row for a toggleable matcher that is not used in the rule", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    // scene is toggleable and not in `when` → no row
+    expect(el.shadowRoot.querySelector('.slot[data-slot-id="scene"]')).toBeNull();
+    // time_of_day is toggleable and not in `when` → no row
+    expect(el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]')).toBeNull();
+  });
+
+  test("renders a row for a toggleable matcher that IS used in the rule", async () => {
+    el = await mount({ name: "test", when: { time_of_day: { period: "afternoon" } }, actions: [] });
+    expect(el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]')).toBeTruthy();
+  });
+
+  test("renders an add-matcher dropdown listing unused toggleable matchers", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
+    expect(values).toContain("time_of_day");
+    // scene is now toggleable → also in the dropdown when not used
+    expect(values).toContain("scene");
+  });
+
+  test("the add-matcher dropdown excludes matchers that are already used", async () => {
+    el = await mount({ name: "test", when: { time_of_day: { period: "afternoon" } }, actions: [] });
+    const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement | null;
+    if (select) {
+      const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
+      expect(values).not.toContain("time_of_day");
+    }
+    // Either no dropdown (all used) or dropdown without time_of_day — both acceptable.
+  });
+
+  test("selecting a matcher from the dropdown adds it as an open row", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;
+    select.value = "time_of_day";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    expect(tod).toBeTruthy();
+    expect(tod.classList.contains("expanded")).toBe(true);
+  });
+
+  test("clicking on the dropdown does NOT collapse the just-added matcher slot", async () => {
+    // Regression: in the real browser, picking a <select> option fires a
+    // `change` followed by a `click` that bubbles to .modal. _onModalClick
+    // would then call _tryCloseCurrent() and close the slot we just opened.
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;
+    select.value = "time_of_day";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    // Simulate the trailing click that comes from selecting an option.
+    select.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    expect(tod).toBeTruthy();
+    expect(tod.classList.contains("expanded")).toBe(true);
+  });
+
+  test("after adding a matcher via the dropdown, it disappears from the dropdown options", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;
+    select.value = "time_of_day";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    const select2 = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement | null;
+    if (select2) {
+      const values = Array.from(select2.querySelectorAll("option")).map((o: any) => o.value);
+      expect(values).not.toContain("time_of_day");
+    }
+  });
+
+  test("toggleable matcher row has a remove button that drops it from the rule", async () => {
+    el = await mount({ name: "test", when: { time_of_day: { period: "afternoon" } }, actions: [] });
+    const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    const remove = tod.querySelector(".remove") as HTMLButtonElement;
+    expect(remove).toBeTruthy();
+    remove.click();
+    await el.updateComplete;
+    // Row is gone …
+    expect(el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]')).toBeNull();
+    // … and it reappears as an unused option in the dropdown.
+    const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;
+    const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
+    expect(values).toContain("time_of_day");
+  });
+
+  test("removing a matcher also clears its predicate from the saved rule", async () => {
+    el = await mount({ name: "test", when: { time_of_day: { period: "afternoon" } }, actions: [] });
+    const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    (tod.querySelector(".remove") as HTMLButtonElement).click();
+    await el.updateComplete;
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    (Array.from(el.shadowRoot.querySelectorAll("button.primary")) as HTMLButtonElement[])
+      .find((b) => b.textContent?.trim() === "Save rule")!
+      .click();
+    expect("time_of_day" in saved.when).toBe(false);
+  });
+
+  test("scene appears in the +Add condition dropdown when not used in the rule", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;
+    const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
+    expect(values).toContain("scene");   // scene is now toggleable like the others
+    expect(values).toContain("time_of_day");
+  });
+
+  test("scene row has a remove button now that it's toggleable", async () => {
+    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
+    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    // The matcher row keeps its summary chrome when toggleable (.summary is dropped
+    // only in the expanded-combobox special case).
+    expect(scene.querySelector(".remove")).toBeTruthy();
+  });
+
+  test("a matcher with a null (any) predicate is hidden — appears in the dropdown instead of as a row", async () => {
+    // Stored `when: { time_of_day: null }` should render exactly like an absent key.
+    el = await mount({ name: "test", when: { time_of_day: null }, actions: [] });
+    expect(el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]')).toBeNull();
+    const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;
+    const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
+    expect(values).toContain("time_of_day");
+  });
+
+  test("save strips null predicates from `when`", async () => {
+    el = await mount({ name: "test", when: { time_of_day: null, scene: "movie" }, actions: [] });
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
+      (b: any) => b.textContent.trim() === "Save rule"
+    ) as HTMLButtonElement;
+    saveBtn.click();
+    expect("time_of_day" in saved.when).toBe(false);
+    expect(saved.when.scene).toBe("movie");
+  });
+
+  test("modal has a separate scrollable content area and a non-scrolling actions-bar", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const modal = el.shadowRoot.querySelector(".modal") as HTMLElement;
+    // .content (scrollable) and .actions-bar (sticky footer) are direct children of .modal.
+    const directChildren = Array.from(modal.children) as HTMLElement[];
+    const content = directChildren.find((c) => c.classList.contains("content"));
+    const actionsBar = directChildren.find((c) => c.classList.contains("actions-bar"));
+    expect(content).toBeTruthy();
+    expect(actionsBar).toBeTruthy();
+    // The actions-bar lives outside the scrollable content so it stays anchored.
+    expect(content!.querySelector(".actions-bar")).toBeNull();
   });
 });

@@ -30,13 +30,19 @@ export class AmbienceRuleEditor extends LitElement {
     :host {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.4); z-index: 100;
-      align-items: center; justify-content: center;
+      align-items: stretch; justify-content: center;
     }
     :host([open]) { display: flex; }
     .modal {
       background: var(--card-background-color, #fff); color: inherit;
-      border-radius: 8px; padding: 1.5rem;
-      width: 90%; max-width: 40rem; max-height: 90vh; overflow-y: auto;
+      width: 90%; max-width: 40rem;
+      height: 100vh; max-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+    .content {
+      flex: 1; min-height: 0;
+      overflow-y: auto;
+      padding: 1.5rem;
     }
     h3 {
       margin: 1.5rem 0 0.5rem 0;
@@ -78,7 +84,14 @@ export class AmbienceRuleEditor extends LitElement {
       border-top: 1px solid var(--divider-color, #e0e0e0);
     }
     .actions-bar {
-      display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;
+      display: flex; justify-content: flex-end; gap: 0.5rem;
+      padding: 1rem 1.5rem;
+      border-top: 1px solid var(--divider-color, #e0e0e0);
+      background: var(--card-background-color, #fff);
+      flex-shrink: 0;
+    }
+    select.add-matcher {
+      margin-top: 0.5rem;
     }
     button {
       padding: 0.5rem 1rem; border: 0; border-radius: 4px; cursor: pointer;
@@ -279,6 +292,10 @@ export class AmbienceRuleEditor extends LitElement {
       if (!(node instanceof Element)) continue;
       if (node.classList.contains("slot")) return;
       if (node.classList.contains("actions-bar")) return;
+      // The add-condition dropdown fires `change` followed by a bubbling
+      // `click` from the selected option. Without this skip, that click
+      // would collapse the matcher slot the change handler just opened.
+      if (node.classList.contains("add-matcher")) return;
     }
     this._tryCloseCurrent();
   }
@@ -321,6 +338,11 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id=${m.name}>
         <div class="summary" @click=${() => this._toggleSlot({ kind: "matcher", id: m.name })}>
           <span class="summary-label"><strong>${matcherLabel(this.hass as any, m.name)}:</strong> ${summary}</span>
+          ${m.toggleable ? html`<button
+            class="remove"
+            @click=${(e: Event) => { e.stopPropagation(); this._removeMatcher(m.name); }}
+            title=${localize(this.hass, "ui.remove_condition", "Remove condition")}
+          >✕</button>` : ""}
         </div>
         ${open ? html`
           <div class="body">
@@ -339,6 +361,115 @@ export class AmbienceRuleEditor extends LitElement {
       </div>
     `;
   }
+
+  // --- Matcher visibility / add+remove ---
+
+  /**
+   * Matchers shown as rows. A matcher is visible only if it has a non-null
+   * value in `when`, OR if it's the currently-open slot (just-added via
+   * dropdown, no predicate set yet). A stored null predicate is treated as
+   * "not in the rule" — same as an absent key.
+   */
+  private _visibleMatchers(): MatcherInfo[] {
+    if (!this._draft) return [];
+    const when = this._draft.when;
+    return this.matchers.filter((m) =>
+      (m.name in when && when[m.name] != null) ||
+      (this._open?.kind === "matcher" && this._open.id === m.name),
+    );
+  }
+
+  private _unusedMatchers(): MatcherInfo[] {
+    const visible = new Set(this._visibleMatchers().map((m) => m.name));
+    return this.matchers.filter((m) => !visible.has(m.name));
+  }
+
+  private _onAddMatcher = (e: Event) => {
+    const select = e.target as HTMLSelectElement;
+    const name = select.value;
+    select.value = "";  // reset placeholder regardless of branch
+    this._addMatcher(name);
+  };
+
+  // Sentinel value for the ha-form select's placeholder option. ha-form's
+  // dropdown won't render an option whose value is the empty string, so we
+  // use a non-colliding literal and translate it back to "no selection" on
+  // emit. (Same pattern as state-expr-atom's "State" sentinel.)
+  private static readonly _ADD_MATCHER_PLACEHOLDER = "__add_matcher__";
+
+  /* v8 ignore start -- ha-form not registered in jsdom */
+  private _onAddMatcherHaForm = (e: CustomEvent<{ value: { add: string } }>) => {
+    e.stopPropagation();
+    const name = e.detail.value.add;
+    if (name === AmbienceRuleEditor._ADD_MATCHER_PLACEHOLDER) return;
+    this._addMatcher(name);
+  };
+  /* v8 ignore stop */
+
+  private _addMatcher(name: string) {
+    if (!name) return;
+    // If a different slot is open and invalid, refuse to switch.
+    if (this._open !== null && !this._tryCloseCurrent()) return;
+    this._open = { kind: "matcher", id: name };
+    this._showError = false;
+  }
+
+  private _removeMatcher(name: string) {
+    if (!this._draft) return;
+    const when = { ...this._draft.when };
+    delete when[name];
+    this._draft = { ...this._draft, when };
+    if (this._open?.kind === "matcher" && this._open.id === name) {
+      this._open = null;
+      this._showError = false;
+    }
+  }
+
+  private _renderAddMatcher() {
+    const unused = this._unusedMatchers();
+    if (unused.length === 0) return "";
+    /* v8 ignore next 4 -- ha-form not registered in jsdom; jsdom tests hit the fallback below */
+    if (customElements.get("ha-form")) {
+      return this._renderAddMatcherHaForm(unused);
+    }
+    return html`
+      <div class="add-matcher">
+        <select class="add-matcher" @change=${this._onAddMatcher}>
+          <option value="">${localize(this.hass, "ui.add_condition", "+ Add condition…")}</option>
+          ${unused.map((m) => html`<option value=${m.name}>${matcherLabel(this.hass as any, m.name)}</option>`)}
+        </select>
+      </div>
+    `;
+  }
+
+  /* v8 ignore start -- ha-form path (real HA only) */
+  private _renderAddMatcherHaForm(unused: MatcherInfo[]) {
+    const placeholderLabel = localize(this.hass, "ui.add_condition", "+ Add condition…");
+    const schema = [{
+      name: "add",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: AmbienceRuleEditor._ADD_MATCHER_PLACEHOLDER, label: placeholderLabel },
+            ...unused.map((m) => ({ value: m.name, label: matcherLabel(this.hass as any, m.name) })),
+          ],
+        },
+      },
+    }];
+    return html`
+      <div class="add-matcher">
+        <ha-form
+          .hass=${this.hass}
+          .schema=${schema}
+          .data=${{ add: AmbienceRuleEditor._ADD_MATCHER_PLACEHOLDER }}
+          .computeLabel=${() => ""}
+          @value-changed=${this._onAddMatcherHaForm}
+        ></ha-form>
+      </div>
+    `;
+  }
+  /* v8 ignore stop */
 
   // --- Action row ---
 
@@ -457,8 +588,14 @@ export class AmbienceRuleEditor extends LitElement {
 
   private _save() {
     if (!this._draft) return;
+    // Defense in depth: a matcher set to "any" should not persist as a null
+    // predicate in storage. _setPredicate already deletes on null for live
+    // user input, but older storage / hand-edited JSON might still carry one.
+    const when = Object.fromEntries(
+      Object.entries(this._draft.when).filter(([, v]) => v != null),
+    );
     this.dispatchEvent(new CustomEvent("save-rule", {
-      detail: this._draft, bubbles: true, composed: true,
+      detail: { ...this._draft, when }, bubbles: true, composed: true,
     }));
   }
 
@@ -468,16 +605,20 @@ export class AmbienceRuleEditor extends LitElement {
 
   override render() {
     if (!this._draft) return html``;
+    const visibleMatchers = this._visibleMatchers();
     return html`
       <div class="modal" @click=${this._onModalClick}>
-        ${this._renderNameSlot()}
+        <div class="content">
+          ${this._renderNameSlot()}
 
-        <h3>${localize(this.hass, "ui.when_heading", "When")}</h3>
-        ${this.matchers.map((m) => this._renderMatcherRow(m))}
+          <h3>${localize(this.hass, "ui.when_heading", "When")}</h3>
+          ${visibleMatchers.map((m) => this._renderMatcherRow(m))}
+          ${this._renderAddMatcher()}
 
-        <h3>${localize(this.hass, "ui.actions_heading", "Actions")}</h3>
-        ${this._draft.actions.map((a, i) => this._renderActionRow(a, i))}
-        <button class="secondary add-action" @click=${this._addActionSlot}>${localize(this.hass, "ui.add_action", "+ Add action")}</button>
+          <h3>${localize(this.hass, "ui.actions_heading", "Actions")}</h3>
+          ${this._draft.actions.map((a, i) => this._renderActionRow(a, i))}
+          <button class="secondary add-action" @click=${this._addActionSlot}>${localize(this.hass, "ui.add_action", "+ Add action")}</button>
+        </div>
 
         <div class="actions-bar">
           <button class="secondary" @click=${this._cancel}>${localize(this.hass, "ui.cancel", "Cancel")}</button>

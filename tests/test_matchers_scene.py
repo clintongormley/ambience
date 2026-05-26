@@ -12,7 +12,7 @@ def test_attributes() -> None:
     assert m.name == "scene"
     assert m.description.strip() != ""
     assert m.predicate_help.strip() != ""
-    assert m.toggleable is True
+    assert not hasattr(m, "toggleable")
     assert m.input == "scene_combobox"
     assert m.priority == 0
 

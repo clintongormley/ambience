@@ -28,7 +28,7 @@ def _snap(today: date, **overrides) -> DaySnapshot:
 def test_matcher_protocol_fields() -> None:
     m = DayMatcher()
     assert m.name == "day"
-    assert m.toggleable is True
+    assert not hasattr(m, "toggleable")
     assert m.input == "day_predicate"
     assert m.priority == 100
     assert m.description.strip() != ""

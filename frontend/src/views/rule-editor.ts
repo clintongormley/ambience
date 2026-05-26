@@ -338,11 +338,11 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id=${m.name}>
         <div class="summary" @click=${() => this._toggleSlot({ kind: "matcher", id: m.name })}>
           <span class="summary-label"><strong>${matcherLabel(this.hass as any, m.name)}:</strong> ${summary}</span>
-          ${m.toggleable ? html`<button
+          <button
             class="remove"
             @click=${(e: Event) => { e.stopPropagation(); this._removeMatcher(m.name); }}
             title=${localize(this.hass, "ui.remove_condition", "Remove condition")}
-          >✕</button>` : ""}
+          >✕</button>
         </div>
         ${open ? html`
           <div class="body">

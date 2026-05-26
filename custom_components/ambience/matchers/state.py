@@ -47,7 +47,6 @@ class StateMatcher:
         "`states` carries a single numeric threshold as a string. None = "
         "match-anything."
     )
-    toggleable = True
     input = "state_predicate"
     # Between scene (0) and day (100): state is the most specific world-fact
     # a rule can name, so it fires earliest in the linearisation tiebreaker.

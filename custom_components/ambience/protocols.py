@@ -32,8 +32,6 @@ class Matcher(Protocol):
       - ``order_key(predicate)``: a sortable linearisation key for the
         predicate (e.g. start-minute-of-day). Absent => the slot sorts last.
       - ``priority: int``: linearisation-slot order, lower first. Default 1000.
-      - ``toggleable: bool``: False for always-on matchers (``scene``).
-        Default True.
       - ``input: str``: rule-editor widget hint. Default "text".
     """
 

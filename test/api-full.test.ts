@@ -28,7 +28,7 @@ function makeFakeHass() {
       return { ok: true, config: msg.config };
     }
     if (msg.type === "ambience/matchers/list") {
-      return [{ name: "scene", toggleable: false }];
+      return [{ name: "scene" }];
     }
     if (msg.type === "ambience/actions/list") {
       return [{ name: "set_light", domains: ["light"] }];
@@ -80,7 +80,7 @@ describe("API: listMatchers", () => {
     const { callWS, sent } = makeFakeHass();
     const res = await listMatchers({ callWS } as any);
     expect(sent[0]).toEqual({ type: "ambience/matchers/list" });
-    expect(res).toEqual([{ name: "scene", toggleable: false }]);
+    expect(res).toEqual([{ name: "scene" }]);
   });
 });
 

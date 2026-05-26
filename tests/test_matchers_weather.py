@@ -45,7 +45,7 @@ def _snap(condition: str | None = "sunny", **attrs: float) -> WeatherSnapshot:
 def test_protocol_fields() -> None:
     m = WeatherMatcher()
     assert m.name == "weather"
-    assert m.toggleable is True
+    assert not hasattr(m, "toggleable")
     assert m.input == "weather_predicate"
     assert m.priority == 300
     assert m.description.strip() != ""

@@ -34,9 +34,6 @@ export type MatcherInfo = {
   name: string;
   description: string;
   predicate_help: string;
-  // False for always-on matchers (`scene`); such matchers are hidden from
-  // the matchers modal but still rendered as a rule-editor row.
-  toggleable: boolean;
   // Widget hint for the rule editor: "scene_combobox" | "text" | ...
   input: string;
   // Linearisation-slot order; lower sorts earlier. Default 1000, `scene` is 0.

@@ -79,7 +79,6 @@ class DayMatcher:
         "{kind: 'last_day'}, {kind: 'workday'}, {kind: 'holiday'}, "
         "{kind: 'first_workday'}, {kind: 'last_workday'}."
     )
-    toggleable = True
     input = "day_predicate"
     # Lower than time_of_day: day fires first as a linearisation tiebreaker
     # (which date the rule's about disambiguates before which hour).

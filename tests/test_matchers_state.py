@@ -25,7 +25,7 @@ def _snap(
 def test_protocol_fields() -> None:
     m = StateMatcher()
     assert m.name == "state"
-    assert m.toggleable is True
+    assert not hasattr(m, "toggleable")
     assert m.input == "state_predicate"
     assert m.priority == 50
     assert m.description.strip() != ""

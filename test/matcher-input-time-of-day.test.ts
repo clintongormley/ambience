@@ -18,7 +18,6 @@ const baseMatcher = {
   name: "time_of_day",
   description: "",
   predicate_help: "",
-  toggleable: true,
   input: "time_of_day",
   priority: 200,
 } satisfies MatcherInfo;

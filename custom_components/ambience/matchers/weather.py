@@ -100,7 +100,6 @@ class WeatherMatcher:
         "Matches when the condition is in `conditions` (empty = any) and every "
         "threshold holds. Operators: < <= > >=."
     )
-    toggleable = True
     input = "weather_predicate"
     priority = 300
 

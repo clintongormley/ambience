@@ -15,10 +15,10 @@ import "../frontend/src/views/rules-list";
 import type { MatcherInfo, Rule, PeriodStoreView } from "../frontend/src/types";
 
 const matchers: MatcherInfo[] = [
-  { name: "scene",       description: "", predicate_help: "", toggleable: false, input: "scene_combobox", priority: 0 },
-  { name: "day",         description: "", predicate_help: "", toggleable: true,  input: "day_predicate",      priority: 100 },
-  { name: "time_of_day", description: "", predicate_help: "", toggleable: true,  input: "time_of_day",        priority: 200 },
-  { name: "weather",     description: "", predicate_help: "", toggleable: true,  input: "weather_predicate",  priority: 300 },
+  { name: "scene",       description: "", predicate_help: "", input: "scene_combobox",    priority: 0 },
+  { name: "day",         description: "", predicate_help: "", input: "day_predicate",     priority: 100 },
+  { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day",       priority: 200 },
+  { name: "weather",     description: "", predicate_help: "", input: "weather_predicate", priority: 300 },
 ];
 
 const periods: PeriodStoreView = {

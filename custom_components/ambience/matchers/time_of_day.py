@@ -46,7 +46,6 @@ class TimeOfDayMatcher:
         "Structured JSON predicate: {period: id} | {from, to} | [..., ...]. "
         "Endpoints are {kind: 'time', hh, mm} or {kind: 'sun', anchor, offset_min}."
     )
-    toggleable = True
     input = "time_of_day"
     priority = 200
 

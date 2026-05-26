@@ -9,7 +9,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import DATA_MATCHERS, DOMAIN, STORAGE_KEY, STORAGE_VERSION
+from .const import DOMAIN, STORAGE_KEY, STORAGE_VERSION
 from .matchers.weather import DEFAULT_WEATHER_GROUPS
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,14 +22,12 @@ class AmbienceStore:
         self._hass = hass
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data: dict[str, Any] = self._empty()
-        self._enabled_matchers_persisted = False
 
     @staticmethod
     def _empty() -> dict[str, Any]:
         return {
             "version": STORAGE_VERSION,
             "areas": {},
-            "enabled_matchers": [],
             "matchers": {
                 "time_of_day": {"custom": {}, "hidden": []},
                 "day": {"workday_sensor": None, "workday_calendar": None},
@@ -126,18 +124,6 @@ class AmbienceStore:
             return
         self._data.setdefault("matchers", {})["time_of_day"] = self._data.pop("time_of_day_periods")
 
-    def _migrate_seed_enabled_matchers(self) -> None:
-        """Seed `enabled_matchers` from the live matcher registry if the field is
-        absent. Fallback to a hardcoded list when the registry isn't yet populated
-        (typical in unit tests for the store in isolation)."""
-        if "enabled_matchers" in self._data:
-            return
-        registry = self._hass.data.get(DOMAIN, {}).get(DATA_MATCHERS, {})
-        toggleable = [name for name, m in registry.items() if getattr(m, "toggleable", True)]
-        if not toggleable:
-            toggleable = ["time_of_day", "day"]
-        self._data["enabled_matchers"] = sorted(toggleable)
-
     def _ensure_matchers_namespace(self) -> None:
         """Make sure `matchers.day` (and any future per-matcher key) has a default."""
         namespace = self._data.setdefault("matchers", {})
@@ -157,29 +143,11 @@ class AmbienceStore:
             self._data = self._empty()
             return
         self._data = raw
-        self._enabled_matchers_persisted = "enabled_matchers" in raw
         self._migrate_actions()
         self._migrate_periods()
         self._migrate_drop_area_matchers()
         self._migrate_relocate_periods()
-        self._migrate_seed_enabled_matchers()
         self._ensure_matchers_namespace()
-
-    async def async_seed_enabled_matchers_if_absent(self) -> None:
-        """Seed `enabled_matchers` from the live matcher registry on a fresh install.
-
-        Called from setup after the matcher registry is populated. Only seeds when
-        the field was never persisted, so an explicitly-empty selection is preserved.
-        """
-        if self._enabled_matchers_persisted or self._data.get("enabled_matchers"):
-            return
-        registry = self._hass.data.get(DOMAIN, {}).get(DATA_MATCHERS, {})
-        toggleable = sorted(name for name, m in registry.items() if getattr(m, "toggleable", True))
-        if not toggleable:
-            return
-        self._data["enabled_matchers"] = toggleable
-        self._enabled_matchers_persisted = True
-        await self._store.async_save(self._data)
 
     def areas(self) -> dict[str, dict[str, Any]]:
         return dict(self._data["areas"])
@@ -195,14 +163,6 @@ class AmbienceStore:
         if area_id in self._data["areas"]:
             del self._data["areas"][area_id]
             await self._store.async_save(self._data)
-
-    def enabled_matchers(self) -> list[str]:
-        return list(self._data.get("enabled_matchers", []))
-
-    async def async_save_enabled_matchers(self, names: list[str]) -> None:
-        self._data["enabled_matchers"] = list(names)
-        self._enabled_matchers_persisted = True
-        await self._store.async_save(self._data)
 
     def get_matcher_config(self, name: str) -> dict[str, Any]:
         """Return per-matcher config dict, with defaults applied for missing keys."""

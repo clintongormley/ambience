@@ -1,5 +1,5 @@
 import { LitElement, html, css } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { customElement, property, state } from "lit/decorators.js";
 
 import "./state-expr-atom.js";
 import type { HassConnection } from "../api.js";
@@ -134,6 +134,18 @@ export class AmbienceStateExprNode extends LitElement {
       color: var(--secondary-text-color, #888); font-size: 1em;
     }
     .atom-body { padding: 0.5rem 0.75rem; }
+    /* Drag-over highlight — applied to either an atom card or a group
+       card. The active outline overrides the default border so the drop
+       target is unmistakable. */
+    .atom-card.drag-over,
+    .group.drag-over {
+      outline: 2px solid var(--primary-color, #03a9f4);
+      outline-offset: -2px;
+    }
+    /* Hint that the surface is grabbable. Buttons inside keep their own
+       cursor via the default cascade. */
+    .atom-card[draggable="true"],
+    .group[draggable="true"] { cursor: grab; }
     .atom-error {
       margin-top: 0.5rem;
       color: var(--error-color, #b71c1c);
@@ -145,6 +157,9 @@ export class AmbienceStateExprNode extends LitElement {
   @property({ attribute: false }) value!: StateExpr;
   /** Path of this node from the root. The root passes []. */
   @property({ attribute: false }) path: number[] = [];
+  /** Whether THIS card is currently the hovered drop target during a drag.
+   *  Drives the .drag-over visual state. */
+  @state() private _dragOver = false;
   /** Path of the currently-open atom (set by the root). When this node is
    *  an atom and its path matches, it renders expanded. Incomplete atoms
    *  render expanded regardless. */
@@ -169,6 +184,59 @@ export class AmbienceStateExprNode extends LitElement {
     return _samePath(this.path, this.errorPath);
   }
 
+  // --- drag-and-drop ----------------------------------------------------
+
+  /** Skip dragstart when the user grabbed an interactive element (button,
+   *  dropdown, ha-form). Cards stay draggable from any other point. */
+  private _onDragStart(e: DragEvent) {
+    if (this.path.length === 0) {
+      // Root can't be dragged — there's no parent to move it to.
+      e.preventDefault();
+      return;
+    }
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest("button, select, input, textarea, ha-form")) {
+      e.preventDefault();
+      return;
+    }
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("application/x-ambience-path", JSON.stringify(this.path));
+    }
+  }
+
+  private _onDragOver(e: DragEvent) {
+    if (this.path.length === 0) return;            // root not a drop target
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    this._dragOver = true;
+  }
+
+  private _onDragLeave(e: DragEvent) {
+    e.stopPropagation();
+    this._dragOver = false;
+  }
+
+  private _onDrop(e: DragEvent) {
+    if (this.path.length === 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    this._dragOver = false;
+    if (!e.dataTransfer) return;
+    const raw = e.dataTransfer.getData("application/x-ambience-path");
+    if (!raw) return;
+    let from: number[];
+    try { from = JSON.parse(raw); } catch { return; }
+    if (!Array.isArray(from) || from.every((v) => typeof v === "number") === false) return;
+    if (_samePath(from, this.path)) return;        // no-op drop on self
+    this.dispatchEvent(new CustomEvent("node-move", {
+      detail: { from, to: this.path },
+      bubbles: true, composed: true,
+    }));
+  }
+
   private _renderAtomCard(atom: StateAtom, isNot: boolean) {
     const isComplete = this._atomIsComplete(atom);
     const expanded = _samePath(this.path, this.openPath);
@@ -176,7 +244,12 @@ export class AmbienceStateExprNode extends LitElement {
       ? summariseState(atom, { hass: this.hass })
       : localize(this.hass, "ui.state_new_condition", "(new condition)");
     return html`
-      <div class="atom-card ${expanded ? "expanded" : "collapsed"}">
+      <div class="atom-card ${expanded ? "expanded" : "collapsed"} ${this._dragOver ? "drag-over" : ""}"
+        draggable=${this.path.length > 0}
+        @dragstart=${this._onDragStart}
+        @dragover=${this._onDragOver}
+        @dragleave=${this._onDragLeave}
+        @drop=${this._onDrop}>
         <div class="atom-header"
           @click=${() => this._emit("node-open")}>
           <button class="not-toggle ${isNot ? "on" : ""}"
@@ -244,7 +317,12 @@ export class AmbienceStateExprNode extends LitElement {
    *  the whole group". */
   private _renderGroup(group: StateGroup) {
     return html`
-      <div class="group">
+      <div class="group ${this._dragOver ? "drag-over" : ""}"
+        draggable=${this.path.length > 0}
+        @dragstart=${this._onDragStart}
+        @dragover=${this._onDragOver}
+        @dragleave=${this._onDragLeave}
+        @drop=${this._onDrop}>
         <div class="group-header">
           <select class="group-op"
             @change=${(e: Event) => this._emit("node-set-op", {

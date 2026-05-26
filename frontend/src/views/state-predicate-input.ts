@@ -63,6 +63,7 @@ export class AmbienceStatePredicateInput extends LitElement {
     this.addEventListener("node-set-op", this._onNodeSetOp as EventListener);
     this.addEventListener("node-open", this._onNodeOpen as EventListener);
     this.addEventListener("node-unwrap", this._onNodeUnwrap as EventListener);
+    this.addEventListener("node-move", this._onNodeMove as EventListener);
   }
 
   private _emit(value: StatePredicate) {
@@ -127,6 +128,86 @@ export class AmbienceStatePredicateInput extends LitElement {
   private _nodeAt(path: number[]): StateExpr | null {
     return this._walkNode(this.value, path);
   }
+
+  /** Move the node at `fromPath` to the position currently held by the
+   *  node at `toPath`. Used by drag-and-drop. Cross-group moves work
+   *  naturally; same-parent moves adjust the destination index for the
+   *  source's removal so the source lands where the target visually was.
+   *
+   *  Refuses to move a node into its own descendants (you can't drop a
+   *  group inside itself). */
+  _moveAt(fromPath: number[], toPath: number[]) {
+    if (this._isPrefix(fromPath, toPath)) return;
+    if (fromPath.length === 0) return;            // can't drag the root
+    if (toPath.length === 0) return;              // can't drop on the root
+    const source = this._nodeAt(fromPath);
+    if (!source) return;
+    const next = this._rewriteForMove(this.value, [], fromPath, toPath, source);
+    this._emit(next);
+  }
+
+  private _isPrefix(prefix: number[], path: number[]): boolean {
+    if (prefix.length > path.length) return false;
+    return prefix.every((v, i) => v === path[i]);
+  }
+
+  /** Single-pass tree rewriter: drops the source from its old position
+   *  AND inserts it at the destination position. Doesn't collapse single-
+   *  child groups (collapses ONLY 0-child groups so an empty parent after
+   *  the move disappears). */
+  private _rewriteForMove(
+    node: StatePredicate,
+    nodePath: number[],
+    fromPath: number[],
+    toPath: number[],
+    source: StateExpr,
+  ): StatePredicate {
+    if (!node) return node;
+    if (node.kind === "not") {
+      const inner = this._rewriteForMove(
+        (node as StateNot).item, nodePath, fromPath, toPath, source,
+      );
+      if (inner == null) return null;
+      return { kind: "not", item: inner as StateExpr };
+    }
+    if (node.kind !== "and" && node.kind !== "or") return node;
+
+    const fromParent = fromPath.slice(0, -1);
+    const toParent = toPath.slice(0, -1);
+    const isFromParent = _samePath(nodePath, fromParent);
+    const isToParent = _samePath(nodePath, toParent);
+
+    // First, build the items list with the source removed (if this is its
+    // parent). Other items rewrite recursively; any child that collapses
+    // to null after the move (e.g. its only child WAS the source) is
+    // dropped from the new list.
+    const out: StateExpr[] = [];
+    node.items.forEach((child, i) => {
+      const childPath = [...nodePath, i];
+      if (isFromParent && i === fromPath[fromPath.length - 1]) return;
+      const rewritten = this._rewriteForMove(
+        child, childPath, fromPath, toPath, source,
+      );
+      if (rewritten !== null) out.push(rewritten as StateExpr);
+    });
+
+    // Insert the source at the target's ORIGINAL index in the post-
+    // removal list. No adjustment needed — typical drag semantics:
+    // "drop on B → source ends up where B was; B (and later items)
+    // shift to make room."
+    if (isToParent) {
+      const insertIdx = toPath[toPath.length - 1];
+      out.splice(insertIdx, 0, source);
+    }
+
+    if (out.length === 0) return null;
+    return { ...node, items: out };
+  }
+
+  private _onNodeMove = (e: CustomEvent<{ from: number[]; to: number[] }>) => {
+    e.stopPropagation();
+    this._moveAt(e.detail.from, e.detail.to);
+  };
 
   private _walkNode(tree: StateExpr | null, path: number[]): StateExpr | null {
     if (!tree) return null;

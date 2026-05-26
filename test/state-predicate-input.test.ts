@@ -642,6 +642,76 @@ describe("ambience-state-predicate-input", () => {
     expect(captured).toBeNull();
   });
 
+  // --- drag-to-regroup --------------------------------------------------
+
+  test("_moveAt reorders within the same group (move [0] to position 1)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+      { kind: "is", entity_id: "c", states: ["open"] },
+    ]});
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._moveAt([0], [1]);
+    // a moved to where b was → [b, a, c]
+    expect(captured.items.map((i: any) => i.entity_id)).toEqual(["b", "a", "c"]);
+  });
+
+  test("_moveAt across groups: source removed from one, inserted into the other", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "or", items: [
+        { kind: "is", entity_id: "b", states: ["off"] },
+        { kind: "is", entity_id: "c", states: ["open"] },
+      ]},
+    ]});
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    // Move b (path [1, 0]) onto a (path [0]).
+    el._moveAt([1, 0], [0]);
+    // b lands at index 0 of the AND group; the OR group keeps c.
+    expect(captured.kind).toBe("and");
+    expect(captured.items[0].entity_id).toBe("b");
+    expect(captured.items[1].entity_id).toBe("a");
+    expect(captured.items[2].kind).toBe("or");
+    expect(captured.items[2].items[0].entity_id).toBe("c");
+  });
+
+  test("_moveAt where source's parent becomes empty: parent group is removed", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "or", items: [
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ]},
+    ]});
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el._moveAt([1, 0], [0]);
+    // After move: a's group keeps b; the OR group, now empty, is gone.
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(2);
+    expect(captured.items[0].entity_id).toBe("b");
+    expect(captured.items[1].entity_id).toBe("a");
+  });
+
+  test("_moveAt rejects a move into the source's own descendants (can't drop into yourself)", async () => {
+    el = await mount({ kind: "and", items: [
+      { kind: "or", items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+      ]},
+    ]});
+    let captured: any;
+    let fired = false;
+    el.addEventListener("value-changed", (e: Event) => {
+      fired = true;
+      captured = (e as CustomEvent).detail.value;
+    });
+    // Try moving [0] (the OR group) onto [0, 0] (its own child a).
+    el._moveAt([0], [0, 0]);
+    expect(fired).toBe(false);
+    void captured;
+  });
+
   test("adding a condition via + Add opens the new (empty) atom", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     // Starts as a lone atom; openPath = []. Click +Add to wrap in AND.

@@ -76,13 +76,14 @@ export async function validateConfig(
 export async function dryRun(
   hass: HassConnection,
   areaId: string,
-  scene: string,
+  scene?: string,
 ): Promise<DryRunResult> {
-  return hass.callWS({
+  const msg: Record<string, unknown> = {
     type: "ambience/dry_run",
     area_id: areaId,
-    scene,
-  });
+  };
+  if (scene !== undefined) msg.scene = scene;
+  return hass.callWS(msg);
 }
 
 export async function listPeriods(hass: HassConnection): Promise<PeriodStoreView> {

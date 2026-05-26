@@ -114,4 +114,25 @@ describe("API: dryRun", () => {
     });
     expect(res).toEqual({ matched_rule_index: null, rule_name: null, actions: [] });
   });
+
+  test("dryRun omits the scene field when called without one", async () => {
+    const { callWS, sent } = makeFakeHass();
+    const res = await dryRun({ callWS } as any, "living_room");
+    expect(sent[0]).toEqual({
+      type: "ambience/dry_run",
+      area_id: "living_room",
+    });
+    expect(res).toEqual({ matched_rule_index: null, rule_name: null, actions: [] });
+  });
+
+  test("dryRun includes the scene field when given", async () => {
+    const { callWS, sent } = makeFakeHass();
+    const res = await dryRun({ callWS } as any, "living_room", "movie_night");
+    expect(sent[0]).toEqual({
+      type: "ambience/dry_run",
+      area_id: "living_room",
+      scene: "movie_night",
+    });
+    expect(res).toEqual({ matched_rule_index: null, rule_name: null, actions: [] });
+  });
 });

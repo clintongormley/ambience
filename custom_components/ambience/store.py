@@ -9,7 +9,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, STORAGE_KEY, STORAGE_VERSION
+from .const import STORAGE_KEY, STORAGE_VERSION
 from .matchers.weather import DEFAULT_WEATHER_GROUPS
 
 _LOGGER = logging.getLogger(__name__)

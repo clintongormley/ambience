@@ -45,15 +45,8 @@ export class AmbienceMatcherCard extends LitElement {
       color: var(--secondary-text-color, #888);
       font-size: 0.9em;
     }
-    .enable {
-      flex: 0 0 auto;
-    }
     .body {
       padding: 1rem;
-    }
-    .body.disabled {
-      opacity: 0.5;
-      pointer-events: none;
     }
     .body.collapsed {
       display: none;
@@ -63,24 +56,11 @@ export class AmbienceMatcherCard extends LitElement {
   @property({ attribute: false }) hass?: HassConnection;
   @property() matcherName = "";
   @property() matcherDescription = "";
-  @property({ type: Boolean }) enabled = false;
 
   @state() private _expanded = false;
 
   private _toggleExpand() {
     this._expanded = !this._expanded;
-  }
-
-  private _onToggle(e: Event) {
-    e.stopPropagation();
-    const enabled = (e.target as HTMLInputElement).checked;
-    this.dispatchEvent(
-      new CustomEvent("enable-changed", {
-        detail: { enabled },
-        bubbles: true,
-        composed: true,
-      }),
-    );
   }
 
   override render() {
@@ -93,17 +73,8 @@ export class AmbienceMatcherCard extends LitElement {
             <div class="name">${label}</div>
             <div class="description">${this.matcherDescription}</div>
           </label>
-          <input
-            class="enable"
-            type="checkbox"
-            .checked=${this.enabled}
-            @click=${(e: Event) => e.stopPropagation()}
-            @change=${this._onToggle}
-          />
         </header>
-        <div
-          class="body ${this.enabled ? "" : "disabled"} ${this._expanded ? "" : "collapsed"}"
-        >
+        <div class="body ${this._expanded ? "" : "collapsed"}">
           <slot></slot>
         </div>
       </div>

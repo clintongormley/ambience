@@ -2,9 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import {
-  listEnabledMatchers,
   listMatchers,
-  saveEnabledMatchers,
   type HassConnection,
 } from "../api.js";
 import type { MatcherInfo } from "../types.js";
@@ -12,6 +10,10 @@ import "./matcher-card.js";
 import "./time-of-day-config.js";
 import "./day-config.js";
 import "./weather-config.js";
+
+// Matchers with a per-matcher config widget rendered into the card body.
+// Add a new entry here whenever a new matcher ships a configuration form.
+const CONFIGURABLE_MATCHERS = new Set(["time_of_day", "day", "weather"]);
 
 @customElement("ambience-configuration-view")
 export class AmbienceConfigurationView extends LitElement {
@@ -23,33 +25,12 @@ export class AmbienceConfigurationView extends LitElement {
   @property({ attribute: false }) hass!: HassConnection;
 
   @state() private _matchers: MatcherInfo[] = [];
-  @state() private _enabled = new Set<string>();
   @state() private _error = "";
 
   override async connectedCallback() {
     super.connectedCallback();
     try {
-      const [matchers, enabled] = await Promise.all([
-        listMatchers(this.hass),
-        listEnabledMatchers(this.hass),
-      ]);
-      this._matchers = matchers;
-      this._enabled = new Set(enabled.enabled);
-    } catch (e) {
-      this._error = (e as Error).message || String(e);
-    }
-  }
-
-  private async _onToggle(name: string, on: boolean) {
-    const next = new Set(this._enabled);
-    if (on) next.add(name);
-    else next.delete(name);
-    this._enabled = next;
-    try {
-      const list = this._matchers
-        .filter((m) => m.toggleable && next.has(m.name))
-        .map((m) => m.name);
-      await saveEnabledMatchers(this.hass, list);
+      this._matchers = await listMatchers(this.hass);
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
@@ -57,24 +38,18 @@ export class AmbienceConfigurationView extends LitElement {
 
   override render() {
     // Show cards in linearisation-priority order (lower first) so the
-    // Configuration tab matches the order used by rule summaries and the
-    // rule editor's matcher rows.
-    const toggleable = this._matchers
-      .filter((m) => m.toggleable)
+    // Configuration tab matches the order used by rule summaries.
+    const configurable = this._matchers
+      .filter((m) => CONFIGURABLE_MATCHERS.has(m.name))
       .slice()
       .sort((a, b) => a.priority - b.priority);
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
-      ${toggleable.map((m) => html`
+      ${configurable.map((m) => html`
         <ambience-matcher-card
           .hass=${this.hass}
           .matcherName=${m.name}
           .matcherDescription=${m.description}
-          .enabled=${this._enabled.has(m.name)}
-          @enable-changed=${(e: CustomEvent<{ enabled: boolean }>) => {
-            e.stopPropagation();
-            void this._onToggle(m.name, e.detail.enabled);
-          }}
         >
           ${m.name === "time_of_day"
             ? html`<ambience-time-of-day-config .hass=${this.hass}></ambience-time-of-day-config>`

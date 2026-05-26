@@ -33,12 +33,7 @@ describe("ruleDisplayName", () => {
     expect(ruleDisplayName({ name: "My rule", when: {}, actions: [] })).toBe("My rule");
   });
 
-  test("falls back to scene when name is empty", () => {
-    expect(ruleDisplayName({ name: "", when: { scene: "movie" }, actions: [] }))
-      .toBe("movie");
-  });
-
-  test("falls back to default when neither is set", () => {
+  test("falls back to the default when name is empty", () => {
     expect(ruleDisplayName({ name: "", when: {}, actions: [] })).toBe("New rule");
   });
 
@@ -48,13 +43,11 @@ describe("ruleDisplayName", () => {
   });
 
   test("treats whitespace-only name as empty", () => {
-    expect(ruleDisplayName({ name: "   ", when: { scene: "movie" }, actions: [] }))
-      .toBe("movie");
+    expect(ruleDisplayName({ name: "   ", when: {}, actions: [] })).toBe("New rule");
   });
 
-  test("treats non-string scene as no scene", () => {
-    // scene predicate could be null (wildcard) — fall through to default
-    expect(ruleDisplayName({ name: "", when: { scene: null as any }, actions: [] }))
+  test("ignores a scene predicate — name is the only identifier", () => {
+    expect(ruleDisplayName({ name: "", when: { scene: "movie" }, actions: [] }))
       .toBe("New rule");
   });
 });

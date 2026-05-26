@@ -39,13 +39,10 @@ interface ActionContext {
 }
 
 /**
- * Display name for a rule: explicit `name` first, then scene predicate as
- * a fallback, then a default placeholder.
+ * Display name for a rule: explicit `name`, or a default placeholder.
  */
 export function ruleDisplayName(rule: Rule, defaultPlaceholder = "New rule"): string {
   if (rule.name && rule.name.trim()) return rule.name;
-  const scene = rule.when?.scene;
-  if (typeof scene === "string" && scene.trim()) return scene;
   return defaultPlaceholder;
 }
 

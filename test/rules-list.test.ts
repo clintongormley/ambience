@@ -297,12 +297,12 @@ describe("ambience-rules-list", () => {
     expect(summary).toContain("Sunrise");
   });
 
-  test("rules-list shows scene name when rule name is empty", async () => {
+  test("rules-list shows 'Rule 1' when rule name is empty, even if scene is set", async () => {
     el = await mount([
       { name: "", when: { scene: "Cozy evening" }, actions: [] },
     ]);
     const name = el.shadowRoot.querySelector(".name")?.textContent?.trim();
-    expect(name).toBe("Cozy evening");
+    expect(name).toBe("Rule 1");
   });
 
   test("rules-list shows default Rule N when both name and scene are empty", async () => {

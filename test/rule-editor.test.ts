@@ -313,10 +313,10 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(nameRow.textContent).toContain("New rule");
   });
 
-  test("name slot shows scene as fallback when rule name is empty", async () => {
+  test("name slot ignores scene — shows 'New rule' when rule name is empty", async () => {
     el = await mount({ name: "", when: { scene: "Cozy evening" }, actions: [] });
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
-    expect(nameRow.textContent).toContain("Cozy evening");
+    expect(nameRow.textContent).toContain("New rule");
   });
 
   test("name slot prefers explicit name over scene", async () => {

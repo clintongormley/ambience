@@ -330,7 +330,6 @@ async def test_dry_run_accepts_missing_scene(
     assert resp["success"] is True
     assert resp["result"]["matched_rule_index"] == 0
     assert resp["result"]["rule_name"] == "scene-constrained rule"
-    assert "matched_rule_index" in resp["result"]
     assert "actions" in resp["result"]
     assert "snapshots_described" in resp["result"]
 

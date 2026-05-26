@@ -69,9 +69,7 @@ async def async_resolve_only(
 
     # Predicates for matchers absent from `engine_matchers` are dormant:
     # drop them from each rule's `when` before resolving so they're ignored
-    # rather than failing the rule. Storage is untouched. (Today this strip
-    # is a no-op because all registered matchers are in `engine_matchers`;
-    # Task C2 will exercise it when scene becomes optional.)
+    # rather than failing the rule. Storage is untouched.
     active_keys = set(engine_matchers)
     rules = [
         {**rule, "when": {k: v for k, v in rule.get("when", {}).items() if k in active_keys}}

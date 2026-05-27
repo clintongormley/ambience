@@ -30,7 +30,7 @@ class ExposedActionsStore:
     def get(self, service_id: str) -> dict[str, Any] | None:
         for entry in self._storage.get_exposed_actions():
             if entry.get("id") == service_id:
-                return entry
+                return dict(entry)
         return None
 
     def validate_shape(self, actions: list[dict[str, Any]]) -> None:
@@ -43,6 +43,9 @@ class ExposedActionsStore:
                 raise ValueError(f"entry must be an object: {entry!r}")
             sid = entry.get("id")
             if not isinstance(sid, str) or "." not in sid:
+                raise ValueError(f"invalid service id: {sid!r}")
+            domain, _, name = sid.partition(".")
+            if not domain or not name:
                 raise ValueError(f"invalid service id: {sid!r}")
             if sid in seen:
                 raise ValueError(f"duplicate service id: {sid!r}")

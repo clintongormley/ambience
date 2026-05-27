@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
-
 import pytest
 
 from custom_components.ambience.exposed_actions import ExposedActionsStore
@@ -12,22 +10,21 @@ from custom_components.ambience.exposed_actions import ExposedActionsStore
 class _FakeStorage:
     def __init__(self, initial: list[dict] | None = None) -> None:
         self._actions = list(initial or [])
-        self.async_save_exposed_actions = AsyncMock(side_effect=self._save)
+        self.saved: list[list[dict]] = []
 
     def get_exposed_actions(self) -> list[dict]:
         return list(self._actions)
 
-    async def _save(self, actions: list[dict]) -> None:
+    async def async_save_exposed_actions(self, actions: list[dict]) -> None:
         self._actions = list(actions)
+        self.saved.append(list(actions))
 
 
-@pytest.mark.asyncio
 async def test_list_returns_empty_initially() -> None:
     store = ExposedActionsStore(_FakeStorage())
     assert store.list() == []
 
 
-@pytest.mark.asyncio
 async def test_save_persists_and_list_returns_saved() -> None:
     storage = _FakeStorage()
     store = ExposedActionsStore(storage)
@@ -51,9 +48,18 @@ async def test_save_persists_and_list_returns_saved() -> None:
             "locked_values": {"transition": 1},
         },
     ]
+    assert storage.saved == [
+        [
+            {
+                "id": "light.turn_on",
+                "label": "Set lights on",
+                "visible_fields": ["brightness_pct"],
+                "locked_values": {"transition": 1},
+            },
+        ]
+    ]
 
 
-@pytest.mark.asyncio
 async def test_get_returns_entry_by_id() -> None:
     storage = _FakeStorage(
         [
@@ -66,9 +72,9 @@ async def test_get_returns_entry_by_id() -> None:
     assert store.get("light.turn_off") is None
 
 
-@pytest.mark.asyncio
 async def test_save_rejects_duplicate_ids() -> None:
-    store = ExposedActionsStore(_FakeStorage())
+    storage = _FakeStorage()
+    store = ExposedActionsStore(storage)
     with pytest.raises(ValueError, match="duplicate"):
         await store.save(
             [
@@ -76,11 +82,12 @@ async def test_save_rejects_duplicate_ids() -> None:
                 {"id": "light.turn_on", "label": "", "visible_fields": [], "locked_values": {}},
             ]
         )
+    assert storage.saved == []
 
 
-@pytest.mark.asyncio
 async def test_save_rejects_field_in_both_visible_and_locked() -> None:
-    store = ExposedActionsStore(_FakeStorage())
+    storage = _FakeStorage()
+    store = ExposedActionsStore(storage)
     with pytest.raises(ValueError, match="cannot be both"):
         await store.save(
             [
@@ -92,14 +99,16 @@ async def test_save_rejects_field_in_both_visible_and_locked() -> None:
                 },
             ]
         )
+    assert storage.saved == []
 
 
-@pytest.mark.asyncio
 async def test_save_rejects_malformed_id() -> None:
-    store = ExposedActionsStore(_FakeStorage())
+    storage = _FakeStorage()
+    store = ExposedActionsStore(storage)
     with pytest.raises(ValueError, match="service id"):
         await store.save(
             [
                 {"id": "no_dot", "label": "", "visible_fields": [], "locked_values": {}},
             ]
         )
+    assert storage.saved == []

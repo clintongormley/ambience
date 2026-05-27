@@ -11,11 +11,15 @@ containing `match: true|false`. Anything else => no match.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _cache_key(script: str, args: dict[str, Any] | None) -> str:
@@ -129,3 +133,52 @@ class ScriptMatcher:
                 seen.add(key)
                 pairs.append(key)
         return pairs
+
+    # Per-call timeout for script invocations. Tests may override.
+    _timeout_seconds: float = 5.0
+
+    async def snapshot(self, hass: HomeAssistant) -> ScriptSnapshot:
+        pairs = self._collect_pairs()
+        if not pairs:
+            return ScriptSnapshot(results={})
+        results = await asyncio.gather(
+            *[self._call_one(hass, script, args_json) for script, args_json in pairs],
+            return_exceptions=False,
+        )
+        return ScriptSnapshot(
+            results={
+                _cache_key(script, json.loads(args_json)): r
+                for (script, args_json), r in zip(pairs, results, strict=True)
+            }
+        )
+
+    async def _call_one(self, hass: HomeAssistant, script: str, args_json: str) -> bool:
+        """Call one script.* service; return True iff response is `{"match": True}`.
+
+        Errors / timeouts / non-dict responses / missing key / non-True value all
+        return False. Warnings are logged for genuine failures (not for the
+        normal "match: false" case)."""
+        service = script.removeprefix("script.")
+        args = json.loads(args_json)
+        try:
+            response = await asyncio.wait_for(
+                hass.services.async_call(
+                    "script",
+                    service,
+                    args,
+                    blocking=True,
+                    return_response=True,
+                ),
+                timeout=self._timeout_seconds,
+            )
+        except TimeoutError:
+            _LOGGER.warning(
+                "ambience: script %s timeout after %.1fs", script, self._timeout_seconds
+            )
+            return False
+        except Exception as exc:  # noqa: BLE001  (catch-all: any HA error => no match)
+            _LOGGER.warning("ambience: script %s call failed: %s", script, exc)
+            return False
+        if not isinstance(response, dict):
+            return False
+        return response.get("match") is True

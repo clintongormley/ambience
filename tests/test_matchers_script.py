@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+from unittest.mock import AsyncMock
+
 import pytest
 from homeassistant.core import HomeAssistant
 
@@ -160,3 +163,114 @@ def test_collect_pairs_skips_malformed_predicates(hass: HomeAssistant) -> None:
     )
     pairs = ScriptMatcher(hass=hass)._collect_pairs()
     assert pairs == [("script.ok", "{}")]
+
+
+def _install_service(
+    hass: HomeAssistant,
+    domain: str,
+    name: str,
+    *,
+    response: object = None,
+    raises: Exception | None = None,
+    delay: float = 0.0,
+) -> AsyncMock:
+    """Register a mock script.<name> service via hass.services.async_register.
+
+    Returns the mock so the test can assert call args.
+    """
+    mock = AsyncMock()
+
+    async def handler(call):
+        if delay:
+            await asyncio.sleep(delay)
+        if raises is not None:
+            raise raises
+        mock(call.data)
+        return response
+
+    from homeassistant.core import SupportsResponse
+
+    hass.services.async_register(
+        domain,
+        name,
+        handler,
+        supports_response=SupportsResponse.ONLY,
+    )
+    return mock
+
+
+async def test_snapshot_calls_each_script_once_and_records_match(hass: HomeAssistant) -> None:
+    _install_store(
+        hass,
+        {
+            "a": {
+                "rules": [
+                    {"when": {"script": {"script": "script.true_one", "args": {"x": 1}}}},
+                    {"when": {"script": {"script": "script.false_one"}}},
+                ],
+            },
+        },
+    )
+    _install_service(hass, "script", "true_one", response={"match": True})
+    _install_service(hass, "script", "false_one", response={"match": False})
+
+    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    assert snap.results[_cache_key("script.true_one", {"x": 1})] is True
+    assert snap.results[_cache_key("script.false_one", {})] is False
+
+
+async def test_snapshot_no_match_when_match_key_absent(hass: HomeAssistant) -> None:
+    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.no_key"}}}]}})
+    _install_service(hass, "script", "no_key", response={"other": True})
+    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    assert snap.results[_cache_key("script.no_key", {})] is False
+
+
+async def test_snapshot_no_match_when_match_is_not_bool_true(hass: HomeAssistant) -> None:
+    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.truthy"}}}]}})
+    _install_service(hass, "script", "truthy", response={"match": "yes"})  # truthy but not True
+    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    assert snap.results[_cache_key("script.truthy", {})] is False
+
+
+async def test_snapshot_missing_script_records_false(hass: HomeAssistant, caplog) -> None:
+    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.gone"}}}]}})
+    # No service registered.
+    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    assert snap.results[_cache_key("script.gone", {})] is False
+    assert "script.gone" in caplog.text
+
+
+async def test_snapshot_script_raises_records_false(hass: HomeAssistant, caplog) -> None:
+    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.boom"}}}]}})
+    _install_service(hass, "script", "boom", raises=RuntimeError("kaboom"))
+    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    assert snap.results[_cache_key("script.boom", {})] is False
+    assert "script.boom" in caplog.text
+
+
+async def test_snapshot_timeout_records_false(hass: HomeAssistant, caplog) -> None:
+    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.slow"}}}]}})
+    # Delay longer than the override timeout.
+    _install_service(hass, "script", "slow", response={"match": True}, delay=0.2)
+    m = ScriptMatcher(hass=hass)
+    m._timeout_seconds = 0.05
+    snap = await m.snapshot(hass)
+    assert snap.results[_cache_key("script.slow", {})] is False
+    assert "timeout" in caplog.text.lower()
+
+
+async def test_snapshot_passes_args_to_service_call(hass: HomeAssistant) -> None:
+    _install_store(
+        hass,
+        {"a": {"rules": [{"when": {"script": {"script": "script.echo", "args": {"k": 7}}}}]}},
+    )
+    spy = _install_service(hass, "script", "echo", response={"match": True})
+    await ScriptMatcher(hass=hass).snapshot(hass)
+    spy.assert_called_once_with({"k": 7})
+
+
+async def test_snapshot_empty_when_no_script_predicates(hass: HomeAssistant) -> None:
+    _install_store(hass, {"a": {"rules": [{"when": {"state": {"x": 1}}}]}})
+    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    assert snap.results == {}

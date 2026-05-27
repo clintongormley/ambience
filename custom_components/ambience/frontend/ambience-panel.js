@@ -1,42 +1,42 @@
 /* Ambience panel — bundled output. Do not edit by hand. */
-var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e,t)=>{for(var r=t>1?void 0:t?Ft(s,e):s,i=n.length-1,a;i>=0;i--)(a=n[i])&&(r=(t?a(s,e,r):a(r))||r);return t&&r&&Rt(s,e,r),r};var ge=globalThis,_e=ge.ShadowRoot&&(ge.ShadyCSS===void 0||ge.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,He=Symbol(),Qe=new WeakMap,ne=class{constructor(s,e,t){if(this._$cssResult$=!0,t!==He)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=s,this.t=e}get styleSheet(){let s=this.o,e=this.t;if(_e&&s===void 0){let t=e!==void 0&&e.length===1;t&&(s=Qe.get(e)),s===void 0&&((this.o=s=new CSSStyleSheet).replaceSync(this.cssText),t&&Qe.set(e,s))}return s}toString(){return this.cssText}},et=n=>new ne(typeof n=="string"?n:n+"",void 0,He),g=(n,...s)=>{let e=n.length===1?n[0]:s.reduce((t,r,i)=>t+(a=>{if(a._$cssResult$===!0)return a.cssText;if(typeof a=="number")return a;throw Error("Value passed to 'css' function must be a 'css' function result: "+a+". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.")})(r)+n[i+1],n[0]);return new ne(e,n,He)},tt=(n,s)=>{if(_e)n.adoptedStyleSheets=s.map(e=>e instanceof CSSStyleSheet?e:e.styleSheet);else for(let e of s){let t=document.createElement("style"),r=ge.litNonce;r!==void 0&&t.setAttribute("nonce",r),t.textContent=e.cssText,n.appendChild(t)}},Ne=_e?n=>n:n=>n instanceof CSSStyleSheet?(s=>{let e="";for(let t of s.cssRules)e+=t.cssText;return et(e)})(n):n;var{is:zt,defineProperty:jt,getOwnPropertyDescriptor:Wt,getOwnPropertyNames:Ut,getOwnPropertySymbols:Gt,getPrototypeOf:qt}=Object,ve=globalThis,rt=ve.trustedTypes,Vt=rt?rt.emptyScript:"",Bt=ve.reactiveElementPolyfillSupport,ae=(n,s)=>n,oe={toAttribute(n,s){switch(s){case Boolean:n=n?Vt:null;break;case Object:case Array:n=n==null?n:JSON.stringify(n)}return n},fromAttribute(n,s){let e=n;switch(s){case Boolean:e=n!==null;break;case Number:e=n===null?null:Number(n);break;case Object:case Array:try{e=JSON.parse(n)}catch{e=null}}return e}},ye=(n,s)=>!zt(n,s),st={attribute:!0,type:String,converter:oe,reflect:!1,useDefault:!1,hasChanged:ye};Symbol.metadata??=Symbol("metadata"),ve.litPropertyMetadata??=new WeakMap;var A=class extends HTMLElement{static addInitializer(s){this._$Ei(),(this.l??=[]).push(s)}static get observedAttributes(){return this.finalize(),this._$Eh&&[...this._$Eh.keys()]}static createProperty(s,e=st){if(e.state&&(e.attribute=!1),this._$Ei(),this.prototype.hasOwnProperty(s)&&((e=Object.create(e)).wrapped=!0),this.elementProperties.set(s,e),!e.noAccessor){let t=Symbol(),r=this.getPropertyDescriptor(s,t,e);r!==void 0&&jt(this.prototype,s,r)}}static getPropertyDescriptor(s,e,t){let{get:r,set:i}=Wt(this.prototype,s)??{get(){return this[e]},set(a){this[e]=a}};return{get:r,set(a){let h=r?.call(this);i?.call(this,a),this.requestUpdate(s,h,t)},configurable:!0,enumerable:!0}}static getPropertyOptions(s){return this.elementProperties.get(s)??st}static _$Ei(){if(this.hasOwnProperty(ae("elementProperties")))return;let s=qt(this);s.finalize(),s.l!==void 0&&(this.l=[...s.l]),this.elementProperties=new Map(s.elementProperties)}static finalize(){if(this.hasOwnProperty(ae("finalized")))return;if(this.finalized=!0,this._$Ei(),this.hasOwnProperty(ae("properties"))){let e=this.properties,t=[...Ut(e),...Gt(e)];for(let r of t)this.createProperty(r,e[r])}let s=this[Symbol.metadata];if(s!==null){let e=litPropertyMetadata.get(s);if(e!==void 0)for(let[t,r]of e)this.elementProperties.set(t,r)}this._$Eh=new Map;for(let[e,t]of this.elementProperties){let r=this._$Eu(e,t);r!==void 0&&this._$Eh.set(r,e)}this.elementStyles=this.finalizeStyles(this.styles)}static finalizeStyles(s){let e=[];if(Array.isArray(s)){let t=new Set(s.flat(1/0).reverse());for(let r of t)e.unshift(Ne(r))}else s!==void 0&&e.push(Ne(s));return e}static _$Eu(s,e){let t=e.attribute;return t===!1?void 0:typeof t=="string"?t:typeof s=="string"?s.toLowerCase():void 0}constructor(){super(),this._$Ep=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this._$Em=null,this._$Ev()}_$Ev(){this._$ES=new Promise(s=>this.enableUpdating=s),this._$AL=new Map,this._$E_(),this.requestUpdate(),this.constructor.l?.forEach(s=>s(this))}addController(s){(this._$EO??=new Set).add(s),this.renderRoot!==void 0&&this.isConnected&&s.hostConnected?.()}removeController(s){this._$EO?.delete(s)}_$E_(){let s=new Map,e=this.constructor.elementProperties;for(let t of e.keys())this.hasOwnProperty(t)&&(s.set(t,this[t]),delete this[t]);s.size>0&&(this._$Ep=s)}createRenderRoot(){let s=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return tt(s,this.constructor.elementStyles),s}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this._$EO?.forEach(s=>s.hostConnected?.())}enableUpdating(s){}disconnectedCallback(){this._$EO?.forEach(s=>s.hostDisconnected?.())}attributeChangedCallback(s,e,t){this._$AK(s,t)}_$ET(s,e){let t=this.constructor.elementProperties.get(s),r=this.constructor._$Eu(s,t);if(r!==void 0&&t.reflect===!0){let i=(t.converter?.toAttribute!==void 0?t.converter:oe).toAttribute(e,t.type);this._$Em=s,i==null?this.removeAttribute(r):this.setAttribute(r,i),this._$Em=null}}_$AK(s,e){let t=this.constructor,r=t._$Eh.get(s);if(r!==void 0&&this._$Em!==r){let i=t.getPropertyOptions(r),a=typeof i.converter=="function"?{fromAttribute:i.converter}:i.converter?.fromAttribute!==void 0?i.converter:oe;this._$Em=r;let h=a.fromAttribute(e,i.type);this[r]=h??this._$Ej?.get(r)??h,this._$Em=null}}requestUpdate(s,e,t,r=!1,i){if(s!==void 0){let a=this.constructor;if(r===!1&&(i=this[s]),t??=a.getPropertyOptions(s),!((t.hasChanged??ye)(i,e)||t.useDefault&&t.reflect&&i===this._$Ej?.get(s)&&!this.hasAttribute(a._$Eu(s,t))))return;this.C(s,e,t)}this.isUpdatePending===!1&&(this._$ES=this._$EP())}C(s,e,{useDefault:t,reflect:r,wrapped:i},a){t&&!(this._$Ej??=new Map).has(s)&&(this._$Ej.set(s,a??e??this[s]),i!==!0||a!==void 0)||(this._$AL.has(s)||(this.hasUpdated||t||(e=void 0),this._$AL.set(s,e)),r===!0&&this._$Em!==s&&(this._$Eq??=new Set).add(s))}async _$EP(){this.isUpdatePending=!0;try{await this._$ES}catch(e){Promise.reject(e)}let s=this.scheduleUpdate();return s!=null&&await s,!this.isUpdatePending}scheduleUpdate(){return this.performUpdate()}performUpdate(){if(!this.isUpdatePending)return;if(!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),this._$Ep){for(let[r,i]of this._$Ep)this[r]=i;this._$Ep=void 0}let t=this.constructor.elementProperties;if(t.size>0)for(let[r,i]of t){let{wrapped:a}=i,h=this[r];a!==!0||this._$AL.has(r)||h===void 0||this.C(r,void 0,i,h)}}let s=!1,e=this._$AL;try{s=this.shouldUpdate(e),s?(this.willUpdate(e),this._$EO?.forEach(t=>t.hostUpdate?.()),this.update(e)):this._$EM()}catch(t){throw s=!1,this._$EM(),t}s&&this._$AE(e)}willUpdate(s){}_$AE(s){this._$EO?.forEach(e=>e.hostUpdated?.()),this.hasUpdated||(this.hasUpdated=!0,this.firstUpdated(s)),this.updated(s)}_$EM(){this._$AL=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this._$ES}shouldUpdate(s){return!0}update(s){this._$Eq&&=this._$Eq.forEach(e=>this._$ET(e,this[e])),this._$EM()}updated(s){}firstUpdated(s){}};A.elementStyles=[],A.shadowRootOptions={mode:"open"},A[ae("elementProperties")]=new Map,A[ae("finalized")]=new Map,Bt?.({ReactiveElement:A}),(ve.reactiveElementVersions??=[]).push("2.1.2");var ze=globalThis,it=n=>n,be=ze.trustedTypes,nt=be?be.createPolicy("lit-html",{createHTML:n=>n}):void 0,ut="$lit$",z=`lit$${Math.random().toFixed(9).slice(2)}$`,ct="?"+z,Kt=`<${ct}>`,J=document,de=()=>J.createComment(""),he=n=>n===null||typeof n!="object"&&typeof n!="function",je=Array.isArray,Jt=n=>je(n)||typeof n?.[Symbol.iterator]=="function",Ae=`[ 	
-\f\r]`,le=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,at=/-->/g,ot=/>/g,B=RegExp(`>|${Ae}(?:([^\\s"'>=/]+)(${Ae}*=${Ae}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`,"g"),lt=/'/g,dt=/"/g,pt=/^(?:script|style|textarea|title)$/i,We=n=>(s,...e)=>({_$litType$:n,strings:s,values:e}),l=We(1),Ar=We(2),Mr=We(3),Y=Symbol.for("lit-noChange"),$=Symbol.for("lit-nothing"),ht=new WeakMap,K=J.createTreeWalker(J,129);function mt(n,s){if(!je(n)||!n.hasOwnProperty("raw"))throw Error("invalid template strings array");return nt!==void 0?nt.createHTML(s):s}var Yt=(n,s)=>{let e=n.length-1,t=[],r,i=s===2?"<svg>":s===3?"<math>":"",a=le;for(let h=0;h<e;h++){let u=n[h],p,v,y=-1,k=0;for(;k<u.length&&(a.lastIndex=k,v=a.exec(u),v!==null);)k=a.lastIndex,a===le?v[1]==="!--"?a=at:v[1]!==void 0?a=ot:v[2]!==void 0?(pt.test(v[2])&&(r=RegExp("</"+v[2],"g")),a=B):v[3]!==void 0&&(a=B):a===B?v[0]===">"?(a=r??le,y=-1):v[1]===void 0?y=-2:(y=a.lastIndex-v[2].length,p=v[1],a=v[3]===void 0?B:v[3]==='"'?dt:lt):a===dt||a===lt?a=B:a===at||a===ot?a=le:(a=B,r=void 0);let L=a===B&&n[h+1].startsWith("/>")?" ":"";i+=a===le?u+Kt:y>=0?(t.push(p),u.slice(0,y)+ut+u.slice(y)+z+L):u+z+(y===-2?h:L)}return[mt(n,i+(n[e]||"<?>")+(s===2?"</svg>":s===3?"</math>":"")),t]},ue=class n{constructor({strings:s,_$litType$:e},t){let r;this.parts=[];let i=0,a=0,h=s.length-1,u=this.parts,[p,v]=Yt(s,e);if(this.el=n.createElement(p,t),K.currentNode=this.el.content,e===2||e===3){let y=this.el.content.firstChild;y.replaceWith(...y.childNodes)}for(;(r=K.nextNode())!==null&&u.length<h;){if(r.nodeType===1){if(r.hasAttributes())for(let y of r.getAttributeNames())if(y.endsWith(ut)){let k=v[a++],L=r.getAttribute(y).split(z),ee=/([.?@])?(.*)/.exec(k);u.push({type:1,index:i,name:ee[2],strings:L,ctor:ee[1]==="."?Ie:ee[1]==="?"?Oe:ee[1]==="@"?Re:re}),r.removeAttribute(y)}else y.startsWith(z)&&(u.push({type:6,index:i}),r.removeAttribute(y));if(pt.test(r.tagName)){let y=r.textContent.split(z),k=y.length-1;if(k>0){r.textContent=be?be.emptyScript:"";for(let L=0;L<k;L++)r.append(y[L],de()),K.nextNode(),u.push({type:2,index:++i});r.append(y[k],de())}}}else if(r.nodeType===8)if(r.data===ct)u.push({type:2,index:i});else{let y=-1;for(;(y=r.data.indexOf(z,y+1))!==-1;)u.push({type:7,index:i}),y+=z.length-1}i++}}static createElement(s,e){let t=J.createElement("template");return t.innerHTML=s,t}};function te(n,s,e=n,t){if(s===Y)return s;let r=t!==void 0?e._$Co?.[t]:e._$Cl,i=he(s)?void 0:s._$litDirective$;return r?.constructor!==i&&(r?._$AO?.(!1),i===void 0?r=void 0:(r=new i(n),r._$AT(n,e,t)),t!==void 0?(e._$Co??=[])[t]=r:e._$Cl=r),r!==void 0&&(s=te(n,r._$AS(n,s.values),r,t)),s}var Me=class{constructor(s,e){this._$AV=[],this._$AN=void 0,this._$AD=s,this._$AM=e}get parentNode(){return this._$AM.parentNode}get _$AU(){return this._$AM._$AU}u(s){let{el:{content:e},parts:t}=this._$AD,r=(s?.creationScope??J).importNode(e,!0);K.currentNode=r;let i=K.nextNode(),a=0,h=0,u=t[0];for(;u!==void 0;){if(a===u.index){let p;u.type===2?p=new ce(i,i.nextSibling,this,s):u.type===1?p=new u.ctor(i,u.name,u.strings,this,s):u.type===6&&(p=new Fe(i,this,s)),this._$AV.push(p),u=t[++h]}a!==u?.index&&(i=K.nextNode(),a++)}return K.currentNode=J,r}p(s){let e=0;for(let t of this._$AV)t!==void 0&&(t.strings!==void 0?(t._$AI(s,t,e),e+=t.strings.length-2):t._$AI(s[e])),e++}},ce=class n{get _$AU(){return this._$AM?._$AU??this._$Cv}constructor(s,e,t,r){this.type=2,this._$AH=$,this._$AN=void 0,this._$AA=s,this._$AB=e,this._$AM=t,this.options=r,this._$Cv=r?.isConnected??!0}get parentNode(){let s=this._$AA.parentNode,e=this._$AM;return e!==void 0&&s?.nodeType===11&&(s=e.parentNode),s}get startNode(){return this._$AA}get endNode(){return this._$AB}_$AI(s,e=this){s=te(this,s,e),he(s)?s===$||s==null||s===""?(this._$AH!==$&&this._$AR(),this._$AH=$):s!==this._$AH&&s!==Y&&this._(s):s._$litType$!==void 0?this.$(s):s.nodeType!==void 0?this.T(s):Jt(s)?this.k(s):this._(s)}O(s){return this._$AA.parentNode.insertBefore(s,this._$AB)}T(s){this._$AH!==s&&(this._$AR(),this._$AH=this.O(s))}_(s){this._$AH!==$&&he(this._$AH)?this._$AA.nextSibling.data=s:this.T(J.createTextNode(s)),this._$AH=s}$(s){let{values:e,_$litType$:t}=s,r=typeof t=="number"?this._$AC(s):(t.el===void 0&&(t.el=ue.createElement(mt(t.h,t.h[0]),this.options)),t);if(this._$AH?._$AD===r)this._$AH.p(e);else{let i=new Me(r,this),a=i.u(this.options);i.p(e),this.T(a),this._$AH=i}}_$AC(s){let e=ht.get(s.strings);return e===void 0&&ht.set(s.strings,e=new ue(s)),e}k(s){je(this._$AH)||(this._$AH=[],this._$AR());let e=this._$AH,t,r=0;for(let i of s)r===e.length?e.push(t=new n(this.O(de()),this.O(de()),this,this.options)):t=e[r],t._$AI(i),r++;r<e.length&&(this._$AR(t&&t._$AB.nextSibling,r),e.length=r)}_$AR(s=this._$AA.nextSibling,e){for(this._$AP?.(!1,!0,e);s!==this._$AB;){let t=it(s).nextSibling;it(s).remove(),s=t}}setConnected(s){this._$AM===void 0&&(this._$Cv=s,this._$AP?.(s))}},re=class{get tagName(){return this.element.tagName}get _$AU(){return this._$AM._$AU}constructor(s,e,t,r,i){this.type=1,this._$AH=$,this._$AN=void 0,this.element=s,this.name=e,this._$AM=r,this.options=i,t.length>2||t[0]!==""||t[1]!==""?(this._$AH=Array(t.length-1).fill(new String),this.strings=t):this._$AH=$}_$AI(s,e=this,t,r){let i=this.strings,a=!1;if(i===void 0)s=te(this,s,e,0),a=!he(s)||s!==this._$AH&&s!==Y,a&&(this._$AH=s);else{let h=s,u,p;for(s=i[0],u=0;u<i.length-1;u++)p=te(this,h[t+u],e,u),p===Y&&(p=this._$AH[u]),a||=!he(p)||p!==this._$AH[u],p===$?s=$:s!==$&&(s+=(p??"")+i[u+1]),this._$AH[u]=p}a&&!r&&this.j(s)}j(s){s===$?this.element.removeAttribute(this.name):this.element.setAttribute(this.name,s??"")}},Ie=class extends re{constructor(){super(...arguments),this.type=3}j(s){this.element[this.name]=s===$?void 0:s}},Oe=class extends re{constructor(){super(...arguments),this.type=4}j(s){this.element.toggleAttribute(this.name,!!s&&s!==$)}},Re=class extends re{constructor(s,e,t,r,i){super(s,e,t,r,i),this.type=5}_$AI(s,e=this){if((s=te(this,s,e,0)??$)===Y)return;let t=this._$AH,r=s===$&&t!==$||s.capture!==t.capture||s.once!==t.once||s.passive!==t.passive,i=s!==$&&(t===$||r);r&&this.element.removeEventListener(this.name,this,t),i&&this.element.addEventListener(this.name,this,s),this._$AH=s}handleEvent(s){typeof this._$AH=="function"?this._$AH.call(this.options?.host??this.element,s):this._$AH.handleEvent(s)}},Fe=class{constructor(s,e,t){this.element=s,this.type=6,this._$AN=void 0,this._$AM=e,this.options=t}get _$AU(){return this._$AM._$AU}_$AI(s){te(this,s)}};var Xt=ze.litHtmlPolyfillSupport;Xt?.(ue,ce),(ze.litHtmlVersions??=[]).push("3.3.2");var ft=(n,s,e)=>{let t=e?.renderBefore??s,r=t._$litPart$;if(r===void 0){let i=e?.renderBefore??null;t._$litPart$=r=new ce(s.insertBefore(de(),i),i,void 0,e??{})}return r._$AI(n),r};var Ue=globalThis,f=class extends A{constructor(){super(...arguments),this.renderOptions={host:this},this._$Do=void 0}createRenderRoot(){let s=super.createRenderRoot();return this.renderOptions.renderBefore??=s.firstChild,s}update(s){let e=this.render();this.hasUpdated||(this.renderOptions.isConnected=this.isConnected),super.update(s),this._$Do=ft(e,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this._$Do?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this._$Do?.setConnected(!1)}render(){return Y}};f._$litElement$=!0,f.finalized=!0,Ue.litElementHydrateSupport?.({LitElement:f});var Zt=Ue.litElementPolyfillSupport;Zt?.({LitElement:f});(Ue.litElementVersions??=[]).push("4.2.2");var _=n=>(s,e)=>{e!==void 0?e.addInitializer(()=>{customElements.define(n,s)}):customElements.define(n,s)};var Qt={attribute:!0,type:String,converter:oe,reflect:!1,hasChanged:ye},er=(n=Qt,s,e)=>{let{kind:t,metadata:r}=e,i=globalThis.litPropertyMetadata.get(r);if(i===void 0&&globalThis.litPropertyMetadata.set(r,i=new Map),t==="setter"&&((n=Object.create(n)).wrapped=!0),i.set(e.name,n),t==="accessor"){let{name:a}=e;return{set(h){let u=s.get.call(this);s.set.call(this,h),this.requestUpdate(a,u,n,!0,h)},init(h){return h!==void 0&&this.C(a,void 0,n,h),h}}}if(t==="setter"){let{name:a}=e;return function(h){let u=this[a];s.call(this,h),this.requestUpdate(a,u,n,!0,h)}}throw Error("Unsupported decorator location: "+t)};function c(n){return(s,e)=>typeof e=="object"?er(n,s,e):((t,r,i)=>{let a=r.hasOwnProperty(i);return r.constructor.createProperty(i,t),a?Object.getOwnPropertyDescriptor(r,i):void 0})(n,s,e)}function m(n){return c({...n,state:!0,attribute:!1})}function T(n,s,e){let t=n?.localize?.(s);return t&&t!==s?t:e}function Ge(n){let s=n.replaceAll("_"," ").toLowerCase();return s.charAt(0).toUpperCase()+s.slice(1)}function j(n,s){return T(n,`component.ambience.matcher.${s}`,Ge(s))}function gt(n,s){return T(n,`component.ambience.action.${s}`,Ge(s))}function se(n,s){return T(n,`component.ambience.anchor.${s}`,Ge(s))}function X(n,s,e){let t=e[s]?.label;if(t)return t;let r=s.charAt(0).toUpperCase()+s.slice(1);return T(n,`component.ambience.time_of_day_period.${s}`,r)}function o(n,s,e){return T(n,`component.ambience.${s}`,e)}var tr=["mon","tue","wed","thu","fri","sat","sun"],rr=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];function we(n,s){return T(n,`component.ambience.weekday.${tr[s]}`,rr[s]??String(s))}var sr={weekday:"Day of week",day_of_month:"Day of month",date:"Date (annual)",date_range:"Date range (annual)",last_day:"Last day of month",workday:"Workday",holiday:"Holiday",first_workday:"First workday of month",last_workday:"Last workday of month"};function ke(n,s){return T(n,`component.ambience.day_item.${s}`,sr[s]??s)}var ir=["January","February","March","April","May","June","July","August","September","October","November","December"];function ie(n,s){return T(n,`component.ambience.month.${s}`,ir[s-1]??String(s))}var nr={"clear-night":"Clear (night)",cloudy:"Cloudy",fog:"Fog",hail:"Hail",lightning:"Lightning","lightning-rainy":"Lightning-rainy",partlycloudy:"Partly cloudy",pouring:"Pouring",rainy:"Rainy",snowy:"Snowy","snowy-rainy":"Snowy-rainy",sunny:"Sunny",windy:"Windy","windy-variant":"Windy (variant)",exceptional:"Exceptional"};function xe(n,s){return T(n,`component.ambience.weather_condition.${s}`,nr[s]??s)}var ar={temperature:"Temperature",apparent_temperature:"Apparent temperature",humidity:"Humidity",wind_speed:"Wind speed",pressure:"Pressure"};function pe(n,s){return T(n,`component.ambience.weather_attr.${s}`,ar[s]??s)}var or={temperature:"\xB0C",apparent_temperature:"\xB0C",humidity:"%",wind_speed:"m/s",pressure:"hPa"},lr={temperature:"temperature",apparent_temperature:"temperature",wind_speed:"wind_speed",pressure:"pressure"},dr={temperature:"temperature_unit",apparent_temperature:"temperature_unit",wind_speed:"wind_speed_unit",pressure:"pressure_unit"};function qe(n,s,e){if(s==="humidity")return"%";let t=dr[s];if(t){let a=e?.attributes?.[t];if(typeof a=="string"&&a)return a}let r=lr[s],i=n?.config?.unit_system;return r&&i&&typeof i[r]=="string"?i[r]:or[s]??""}var hr={is:"is",is_not:"is not",">":">",">=":"\u2265","<":"<","<=":"\u2264",and:"AND",or:"OR",and_not:"AND NOT",or_not:"OR NOT",not:"NOT"};function D(n,s){return T(n,`component.ambience.state_op.${s}`,hr[s]??s)}var ur=["ha-input","ha-textfield","ha-form"],cr=["ha-input","ha-textfield"];function _t(){for(let n of cr)if(customElements.get(n))return n;return null}function W(n,s){for(let e of ur)customElements.get(e)||customElements.whenDefined(e).then(()=>n.requestUpdate())}async function vt(n){return n.callWS({type:"ambience/areas/list"})}async function yt(n,s){return n.callWS({type:"ambience/area/get",area_id:s})}async function bt(n,s,e){return n.callWS({type:"ambience/area/save",area_id:s,config:e})}async function Ee(n){return n.callWS({type:"ambience/matchers/list"})}async function $t(n){return n.callWS({type:"ambience/actions/list"})}async function Se(n){return n.callWS({type:"ambience/time_of_day_periods/list"})}async function wt(n,s,e){return n.callWS({type:"ambience/time_of_day_periods/save",custom:s,hidden:e})}async function Ce(n){return n.callWS({type:"ambience/matchers/day/config/list"})}async function kt(n,s,e){return n.callWS({type:"ambience/matchers/day/config/save",workday_sensor:s,workday_calendar:e})}async function Pe(n){return n.callWS({type:"ambience/matchers/weather/config/list"})}async function xt(n,s,e){return n.callWS({type:"ambience/matchers/weather/config/save",entity:s,groups:e})}async function Et(n,s){return n.callWS({type:"ambience/state/known_states",entity_id:s})}function Le(n,s="New rule"){return n.name&&n.name.trim()?n.name:s}function Te(n,s,e){return s==null?o(e.hass,"ui.summary_any_paren","(any)"):n==="time_of_day"?De(s,e):n==="day"?pr(s,e):n==="weather"?gr(s,e):n==="state"?Be(s,e):String(s)}function pr(n,s={}){if(n===null)return o(s.hass,"day_summary.any","any");let e=n.include??[],t=n.exclude??[],r=e.length===0?o(s.hass,"day_summary.any_day","any day"):e.map(a=>St(a,s)).join(", ");if(t.length===0)return r;let i=o(s.hass,"day_summary.except","except");return`${r} (${i} ${t.map(a=>St(a,s)).join(", ")})`}function St(n,s){switch(n.kind){case"weekday":return n.days.map(e=>we(s.hass,e)).join("/");case"day_of_month":return`${o(s.hass,"day_summary.day_prefix","day")} ${n.days}`;case"date":return`${ie(s.hass,n.month)} ${n.day}`;case"date_range":return`${ie(s.hass,n.from.month)} ${n.from.day} \u2192 ${ie(s.hass,n.to.month)} ${n.to.day}`;case"last_day":return o(s.hass,"day_summary.last_day","last day");case"workday":return o(s.hass,"day_summary.workday","workday");case"holiday":return o(s.hass,"day_summary.holiday","holiday");case"first_workday":return o(s.hass,"day_summary.first_workday","first workday");case"last_workday":return o(s.hass,"day_summary.last_workday","last workday")}}var mr={"<":"<","<=":"\u2264",">":">",">=":"\u2265"};function fr(n){return n.split(/[\s_-]+/).filter(s=>s!=="").map(s=>s.charAt(0).toUpperCase()+s.slice(1).toLowerCase()).join(" ")}function gr(n,s={}){if(n===null)return o(s.hass,"ui.summary_any","any");let e=new Map((s.weatherGroups??[]).map(a=>[a.id,a.label])),t=(n.groups??[]).map(a=>e.get(a)??fr(a)).join("/"),r=(n.thresholds??[]).map(a=>`${pe(s.hass,a.attribute)} ${mr[a.op]??a.op} ${a.value}`).join(", "),i=[t,r].filter(a=>a!=="");return i.length===0?o(s.hass,"ui.summary_any","any"):i.join(", ")}function _r(n,s){let t=n.hass?.states?.[s]?.attributes?.friendly_name;return typeof t=="string"&&t?t:s}function Be(n,s={}){return n==null?o(s.hass,"ui.summary_any","any"):Ve(n,s)}function Ve(n,s){if(n.kind==="is"||n.kind==="is_not"||n.kind===">"||n.kind===">="||n.kind==="<"||n.kind==="<="){let e=D(s.hass,n.kind),r=n.kind!=="is"&&n.kind!=="is_not"?n.states[0]??"":n.states.join("/"),i=_r(s,n.entity_id),h=`${n.attribute?`${i}.${n.attribute}`:i} ${e} ${r}`;return n.for&&vr(n.for)?`${h} ${o(s.hass,"ui.for_prefix","for")} \u2265${yr(n.for)}`:h}if(n.kind==="and"||n.kind==="or"){let e=` ${D(s.hass,n.kind)} `;return n.items.map(t=>Ct(t,s)).join(e)}return n.kind==="not"?`${D(s.hass,"not")} ${Ct(n.item,s)}`:""}function Ct(n,s){return n.kind==="and"||n.kind==="or"?`(${Ve(n,s)})`:Ve(n,s)}function vr(n){return n.h>0||n.m>0||n.s>0}function yr(n){let s=[];return n.h&&s.push(`${n.h}h`),n.m&&s.push(`${n.m}m`),n.s&&s.push(`${n.s}s`),s.length?s.join(" "):"0s"}function De(n,s){if(n===null)return o(s.hass,"ui.summary_any","any");let e=Array.isArray(n)?n:[n],t=s.periods?.custom??{};return e.map(r=>"period"in r?X(s.hass,r.period,t):`${Pt(r.from,s)} \u2192 ${Pt(r.to,s)}`).join(", ")}function Pt(n,s){if(n.kind==="time")return`${String(n.hh).padStart(2,"0")}:${String(n.mm).padStart(2,"0")}`;let e=se(s.hass,n.anchor);if(n.offset_min===0)return e;let t=Math.abs(n.offset_min),r=t%60===0?`${t/60}${o(s.hass,"ui.unit_hour_abbr","h")}`:`${t}${o(s.hass,"ui.unit_min_abbr","m")}`;return`${e}${n.offset_min<0?"-":"+"}${r}`}function Lt(n,s,e){let t=gt(e.hass,n.action),r=s?.domains?.[0]??o(e.hass,"ui.target_noun","target"),i=n.entity_ids.length,a;i===0?a=o(e.hass,"ui.no_targets","(no targets)"):i===1?a=`1 ${r}`:a=`${i} ${r}s`;let h={};for(let p of s?.target_params??[])p.unit&&(h[p.name]=p.unit);let u=Object.entries(n.params).filter(([,p])=>p!=null&&p!=="").map(([p,v])=>`${p} ${v}${h[p]??""}`).join(", ");return u?`${t}: ${a}, ${u}`:`${t}: ${a}`}var E=class extends f{constructor(){super(...arguments);this.rules=[];this.autoSort=!0;this._dragFrom=null;this._dragOver=null}_emit(e,t){this.dispatchEvent(new CustomEvent(e,{detail:t,bubbles:!0,composed:!0}))}_summary(e){let t=new Map((this.matchers??[]).map(u=>[u.name,u.priority])),r=Object.keys(e.when).filter(u=>e.when[u]!=null).sort((u,p)=>(t.get(u)??1/0)-(t.get(p)??1/0)),i=r.length===0?o(this.hass,"ui.summary_any","any"):r.map(u=>`${j(this.hass,u)}: ${Te(u,e.when[u],{hass:this.hass,periods:this.periods,weatherGroups:this.weatherConfig?.groups})}`).join(", "),a=e.actions.length,h=a===1?o(this.hass,"ui.action_singular","action"):o(this.hass,"ui.action_plural","actions");return`${i} \xB7 ${a} ${h}`}_onDragStart(e){this._dragFrom=e}_onDragOver(e,t){this._dragFrom===null||t===this._dragFrom||(e.preventDefault(),this._dragOver=t)}_onDrop(e){let t=this._dragFrom;this._dragFrom=null,this._dragOver=null,!(t===null||t===e)&&this._emit("reorder-rules",{from:t,to:e})}_onDragEnd(){this._dragFrom=null,this._dragOver=null}_confirmDelete(e,t){let r=t.name||o(this.hass,"ui.rule_n","Rule {n}").replace("{n}",String(e+1));window.confirm(o(this.hass,"ui.confirm_delete",'Delete "{name}"?').replace("{name}",r))&&this._emit("delete-rule",{index:e})}render(){return this.rules.length===0?l`
-        <p class="empty">${o(this.hass,"ui.no_rules_yet","No rules yet.")}</p>
+var vi=Object.defineProperty;var yi=Object.getOwnPropertyDescriptor;var c=(e,i,t,r)=>{for(var n=r>1?void 0:r?yi(i,t):i,s=e.length-1,a;s>=0;s--)(a=e[s])&&(n=(r?a(i,t,n):a(n))||n);return r&&n&&vi(i,t,n),n};var We=globalThis,Be=We.ShadowRoot&&(We.ShadyCSS===void 0||We.ShadyCSS.nativeShadow)&&"adoptedStyleSheets"in Document.prototype&&"replace"in CSSStyleSheet.prototype,ht=Symbol(),Gt=new WeakMap,Se=class{constructor(i,t,r){if(this._$cssResult$=!0,r!==ht)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=i,this.t=t}get styleSheet(){let i=this.o,t=this.t;if(Be&&i===void 0){let r=t!==void 0&&t.length===1;r&&(i=Gt.get(t)),i===void 0&&((this.o=i=new CSSStyleSheet).replaceSync(this.cssText),r&&Gt.set(t,i))}return i}toString(){return this.cssText}},Yt=e=>new Se(typeof e=="string"?e:e+"",void 0,ht),$=(e,...i)=>{let t=e.length===1?e[0]:i.reduce((r,n,s)=>r+(a=>{if(a._$cssResult$===!0)return a.cssText;if(typeof a=="number")return a;throw Error("Value passed to 'css' function must be a 'css' function result: "+a+". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.")})(n)+e[s+1],e[0]);return new Se(t,e,ht)},qt=(e,i)=>{if(Be)e.adoptedStyleSheets=i.map(t=>t instanceof CSSStyleSheet?t:t.styleSheet);else for(let t of i){let r=document.createElement("style"),n=We.litNonce;n!==void 0&&r.setAttribute("nonce",n),r.textContent=t.cssText,e.appendChild(r)}},pt=Be?e=>e:e=>e instanceof CSSStyleSheet?(i=>{let t="";for(let r of i.cssRules)t+=r.cssText;return Yt(t)})(e):e;var{is:bi,defineProperty:$i,getOwnPropertyDescriptor:xi,getOwnPropertyNames:wi,getOwnPropertySymbols:ki,getPrototypeOf:Ei}=Object,Ge=globalThis,Kt=Ge.trustedTypes,Ci=Kt?Kt.emptyScript:"",Si=Ge.reactiveElementPolyfillSupport,Ae=(e,i)=>e,Te={toAttribute(e,i){switch(i){case Boolean:e=e?Ci:null;break;case Object:case Array:e=e==null?e:JSON.stringify(e)}return e},fromAttribute(e,i){let t=e;switch(i){case Boolean:t=e!==null;break;case Number:t=e===null?null:Number(e);break;case Object:case Array:try{t=JSON.parse(e)}catch{t=null}}return t}},Ye=(e,i)=>!bi(e,i),Vt={attribute:!0,type:String,converter:Te,reflect:!1,useDefault:!1,hasChanged:Ye};Symbol.metadata??=Symbol("metadata"),Ge.litPropertyMetadata??=new WeakMap;var K=class extends HTMLElement{static addInitializer(i){this._$Ei(),(this.l??=[]).push(i)}static get observedAttributes(){return this.finalize(),this._$Eh&&[...this._$Eh.keys()]}static createProperty(i,t=Vt){if(t.state&&(t.attribute=!1),this._$Ei(),this.prototype.hasOwnProperty(i)&&((t=Object.create(t)).wrapped=!0),this.elementProperties.set(i,t),!t.noAccessor){let r=Symbol(),n=this.getPropertyDescriptor(i,r,t);n!==void 0&&$i(this.prototype,i,n)}}static getPropertyDescriptor(i,t,r){let{get:n,set:s}=xi(this.prototype,i)??{get(){return this[t]},set(a){this[t]=a}};return{get:n,set(a){let o=n?.call(this);s?.call(this,a),this.requestUpdate(i,o,r)},configurable:!0,enumerable:!0}}static getPropertyOptions(i){return this.elementProperties.get(i)??Vt}static _$Ei(){if(this.hasOwnProperty(Ae("elementProperties")))return;let i=Ei(this);i.finalize(),i.l!==void 0&&(this.l=[...i.l]),this.elementProperties=new Map(i.elementProperties)}static finalize(){if(this.hasOwnProperty(Ae("finalized")))return;if(this.finalized=!0,this._$Ei(),this.hasOwnProperty(Ae("properties"))){let t=this.properties,r=[...wi(t),...ki(t)];for(let n of r)this.createProperty(n,t[n])}let i=this[Symbol.metadata];if(i!==null){let t=litPropertyMetadata.get(i);if(t!==void 0)for(let[r,n]of t)this.elementProperties.set(r,n)}this._$Eh=new Map;for(let[t,r]of this.elementProperties){let n=this._$Eu(t,r);n!==void 0&&this._$Eh.set(n,t)}this.elementStyles=this.finalizeStyles(this.styles)}static finalizeStyles(i){let t=[];if(Array.isArray(i)){let r=new Set(i.flat(1/0).reverse());for(let n of r)t.unshift(pt(n))}else i!==void 0&&t.push(pt(i));return t}static _$Eu(i,t){let r=t.attribute;return r===!1?void 0:typeof r=="string"?r:typeof i=="string"?i.toLowerCase():void 0}constructor(){super(),this._$Ep=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this._$Em=null,this._$Ev()}_$Ev(){this._$ES=new Promise(i=>this.enableUpdating=i),this._$AL=new Map,this._$E_(),this.requestUpdate(),this.constructor.l?.forEach(i=>i(this))}addController(i){(this._$EO??=new Set).add(i),this.renderRoot!==void 0&&this.isConnected&&i.hostConnected?.()}removeController(i){this._$EO?.delete(i)}_$E_(){let i=new Map,t=this.constructor.elementProperties;for(let r of t.keys())this.hasOwnProperty(r)&&(i.set(r,this[r]),delete this[r]);i.size>0&&(this._$Ep=i)}createRenderRoot(){let i=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return qt(i,this.constructor.elementStyles),i}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this._$EO?.forEach(i=>i.hostConnected?.())}enableUpdating(i){}disconnectedCallback(){this._$EO?.forEach(i=>i.hostDisconnected?.())}attributeChangedCallback(i,t,r){this._$AK(i,r)}_$ET(i,t){let r=this.constructor.elementProperties.get(i),n=this.constructor._$Eu(i,r);if(n!==void 0&&r.reflect===!0){let s=(r.converter?.toAttribute!==void 0?r.converter:Te).toAttribute(t,r.type);this._$Em=i,s==null?this.removeAttribute(n):this.setAttribute(n,s),this._$Em=null}}_$AK(i,t){let r=this.constructor,n=r._$Eh.get(i);if(n!==void 0&&this._$Em!==n){let s=r.getPropertyOptions(n),a=typeof s.converter=="function"?{fromAttribute:s.converter}:s.converter?.fromAttribute!==void 0?s.converter:Te;this._$Em=n;let o=a.fromAttribute(t,s.type);this[n]=o??this._$Ej?.get(n)??o,this._$Em=null}}requestUpdate(i,t,r,n=!1,s){if(i!==void 0){let a=this.constructor;if(n===!1&&(s=this[i]),r??=a.getPropertyOptions(i),!((r.hasChanged??Ye)(s,t)||r.useDefault&&r.reflect&&s===this._$Ej?.get(i)&&!this.hasAttribute(a._$Eu(i,r))))return;this.C(i,t,r)}this.isUpdatePending===!1&&(this._$ES=this._$EP())}C(i,t,{useDefault:r,reflect:n,wrapped:s},a){r&&!(this._$Ej??=new Map).has(i)&&(this._$Ej.set(i,a??t??this[i]),s!==!0||a!==void 0)||(this._$AL.has(i)||(this.hasUpdated||r||(t=void 0),this._$AL.set(i,t)),n===!0&&this._$Em!==i&&(this._$Eq??=new Set).add(i))}async _$EP(){this.isUpdatePending=!0;try{await this._$ES}catch(t){Promise.reject(t)}let i=this.scheduleUpdate();return i!=null&&await i,!this.isUpdatePending}scheduleUpdate(){return this.performUpdate()}performUpdate(){if(!this.isUpdatePending)return;if(!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),this._$Ep){for(let[n,s]of this._$Ep)this[n]=s;this._$Ep=void 0}let r=this.constructor.elementProperties;if(r.size>0)for(let[n,s]of r){let{wrapped:a}=s,o=this[n];a!==!0||this._$AL.has(n)||o===void 0||this.C(n,void 0,s,o)}}let i=!1,t=this._$AL;try{i=this.shouldUpdate(t),i?(this.willUpdate(t),this._$EO?.forEach(r=>r.hostUpdate?.()),this.update(t)):this._$EM()}catch(r){throw i=!1,this._$EM(),r}i&&this._$AE(t)}willUpdate(i){}_$AE(i){this._$EO?.forEach(t=>t.hostUpdated?.()),this.hasUpdated||(this.hasUpdated=!0,this.firstUpdated(i)),this.updated(i)}_$EM(){this._$AL=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this._$ES}shouldUpdate(i){return!0}update(i){this._$Eq&&=this._$Eq.forEach(t=>this._$ET(t,this[t])),this._$EM()}updated(i){}firstUpdated(i){}};K.elementStyles=[],K.shadowRootOptions={mode:"open"},K[Ae("elementProperties")]=new Map,K[Ae("finalized")]=new Map,Si?.({ReactiveElement:K}),(Ge.reactiveElementVersions??=[]).push("2.1.2");var bt=globalThis,Jt=e=>e,qe=bt.trustedTypes,Qt=qe?qe.createPolicy("lit-html",{createHTML:e=>e}):void 0,ir="$lit$",te=`lit$${Math.random().toFixed(9).slice(2)}$`,nr="?"+te,Ai=`<${nr}>`,he=document,Ne=()=>he.createComment(""),De=e=>e===null||typeof e!="object"&&typeof e!="function",$t=Array.isArray,Ti=e=>$t(e)||typeof e?.[Symbol.iterator]=="function",mt=`[ 	
+\f\r]`,Le=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,Xt=/-->/g,Zt=/>/g,de=RegExp(`>|${mt}(?:([^\\s"'>=/]+)(${mt}*=${mt}*(?:[^ 	
+\f\r"'\`<>=]|("|')|))|$)`,"g"),er=/'/g,tr=/"/g,sr=/^(?:script|style|textarea|title)$/i,xt=e=>(i,...t)=>({_$litType$:e,strings:i,values:t}),u=xt(1),Ha=xt(2),Ma=xt(3),pe=Symbol.for("lit-noChange"),L=Symbol.for("lit-nothing"),rr=new WeakMap,ce=he.createTreeWalker(he,129);function ar(e,i){if(!$t(e)||!e.hasOwnProperty("raw"))throw Error("invalid template strings array");return Qt!==void 0?Qt.createHTML(i):i}var Li=(e,i)=>{let t=e.length-1,r=[],n,s=i===2?"<svg>":i===3?"<math>":"",a=Le;for(let o=0;o<t;o++){let l=e[o],h,m,p=-1,g=0;for(;g<l.length&&(a.lastIndex=g,m=a.exec(l),m!==null);)g=a.lastIndex,a===Le?m[1]==="!--"?a=Xt:m[1]!==void 0?a=Zt:m[2]!==void 0?(sr.test(m[2])&&(n=RegExp("</"+m[2],"g")),a=de):m[3]!==void 0&&(a=de):a===de?m[0]===">"?(a=n??Le,p=-1):m[1]===void 0?p=-2:(p=a.lastIndex-m[2].length,h=m[1],a=m[3]===void 0?de:m[3]==='"'?tr:er):a===tr||a===er?a=de:a===Xt||a===Zt?a=Le:(a=de,n=void 0);let _=a===de&&e[o+1].startsWith("/>")?" ":"";s+=a===Le?l+Ai:p>=0?(r.push(h),l.slice(0,p)+ir+l.slice(p)+te+_):l+te+(p===-2?o:_)}return[ar(e,s+(e[t]||"<?>")+(i===2?"</svg>":i===3?"</math>":"")),r]},Oe=class e{constructor({strings:i,_$litType$:t},r){let n;this.parts=[];let s=0,a=0,o=i.length-1,l=this.parts,[h,m]=Li(i,t);if(this.el=e.createElement(h,r),ce.currentNode=this.el.content,t===2||t===3){let p=this.el.content.firstChild;p.replaceWith(...p.childNodes)}for(;(n=ce.nextNode())!==null&&l.length<o;){if(n.nodeType===1){if(n.hasAttributes())for(let p of n.getAttributeNames())if(p.endsWith(ir)){let g=m[a++],_=n.getAttribute(p).split(te),w=/([.?@])?(.*)/.exec(g);l.push({type:1,index:s,name:w[2],strings:_,ctor:w[1]==="."?gt:w[1]==="?"?_t:w[1]==="@"?vt:be}),n.removeAttribute(p)}else p.startsWith(te)&&(l.push({type:6,index:s}),n.removeAttribute(p));if(sr.test(n.tagName)){let p=n.textContent.split(te),g=p.length-1;if(g>0){n.textContent=qe?qe.emptyScript:"";for(let _=0;_<g;_++)n.append(p[_],Ne()),ce.nextNode(),l.push({type:2,index:++s});n.append(p[g],Ne())}}}else if(n.nodeType===8)if(n.data===nr)l.push({type:2,index:s});else{let p=-1;for(;(p=n.data.indexOf(te,p+1))!==-1;)l.push({type:7,index:s}),p+=te.length-1}s++}}static createElement(i,t){let r=he.createElement("template");return r.innerHTML=i,r}};function ye(e,i,t=e,r){if(i===pe)return i;let n=r!==void 0?t._$Co?.[r]:t._$Cl,s=De(i)?void 0:i._$litDirective$;return n?.constructor!==s&&(n?._$AO?.(!1),s===void 0?n=void 0:(n=new s(e),n._$AT(e,t,r)),r!==void 0?(t._$Co??=[])[r]=n:t._$Cl=n),n!==void 0&&(i=ye(e,n._$AS(e,i.values),n,r)),i}var ft=class{constructor(i,t){this._$AV=[],this._$AN=void 0,this._$AD=i,this._$AM=t}get parentNode(){return this._$AM.parentNode}get _$AU(){return this._$AM._$AU}u(i){let{el:{content:t},parts:r}=this._$AD,n=(i?.creationScope??he).importNode(t,!0);ce.currentNode=n;let s=ce.nextNode(),a=0,o=0,l=r[0];for(;l!==void 0;){if(a===l.index){let h;l.type===2?h=new Fe(s,s.nextSibling,this,i):l.type===1?h=new l.ctor(s,l.name,l.strings,this,i):l.type===6&&(h=new yt(s,this,i)),this._$AV.push(h),l=r[++o]}a!==l?.index&&(s=ce.nextNode(),a++)}return ce.currentNode=he,n}p(i){let t=0;for(let r of this._$AV)r!==void 0&&(r.strings!==void 0?(r._$AI(i,r,t),t+=r.strings.length-2):r._$AI(i[t])),t++}},Fe=class e{get _$AU(){return this._$AM?._$AU??this._$Cv}constructor(i,t,r,n){this.type=2,this._$AH=L,this._$AN=void 0,this._$AA=i,this._$AB=t,this._$AM=r,this.options=n,this._$Cv=n?.isConnected??!0}get parentNode(){let i=this._$AA.parentNode,t=this._$AM;return t!==void 0&&i?.nodeType===11&&(i=t.parentNode),i}get startNode(){return this._$AA}get endNode(){return this._$AB}_$AI(i,t=this){i=ye(this,i,t),De(i)?i===L||i==null||i===""?(this._$AH!==L&&this._$AR(),this._$AH=L):i!==this._$AH&&i!==pe&&this._(i):i._$litType$!==void 0?this.$(i):i.nodeType!==void 0?this.T(i):Ti(i)?this.k(i):this._(i)}O(i){return this._$AA.parentNode.insertBefore(i,this._$AB)}T(i){this._$AH!==i&&(this._$AR(),this._$AH=this.O(i))}_(i){this._$AH!==L&&De(this._$AH)?this._$AA.nextSibling.data=i:this.T(he.createTextNode(i)),this._$AH=i}$(i){let{values:t,_$litType$:r}=i,n=typeof r=="number"?this._$AC(i):(r.el===void 0&&(r.el=Oe.createElement(ar(r.h,r.h[0]),this.options)),r);if(this._$AH?._$AD===n)this._$AH.p(t);else{let s=new ft(n,this),a=s.u(this.options);s.p(t),this.T(a),this._$AH=s}}_$AC(i){let t=rr.get(i.strings);return t===void 0&&rr.set(i.strings,t=new Oe(i)),t}k(i){$t(this._$AH)||(this._$AH=[],this._$AR());let t=this._$AH,r,n=0;for(let s of i)n===t.length?t.push(r=new e(this.O(Ne()),this.O(Ne()),this,this.options)):r=t[n],r._$AI(s),n++;n<t.length&&(this._$AR(r&&r._$AB.nextSibling,n),t.length=n)}_$AR(i=this._$AA.nextSibling,t){for(this._$AP?.(!1,!0,t);i!==this._$AB;){let r=Jt(i).nextSibling;Jt(i).remove(),i=r}}setConnected(i){this._$AM===void 0&&(this._$Cv=i,this._$AP?.(i))}},be=class{get tagName(){return this.element.tagName}get _$AU(){return this._$AM._$AU}constructor(i,t,r,n,s){this.type=1,this._$AH=L,this._$AN=void 0,this.element=i,this.name=t,this._$AM=n,this.options=s,r.length>2||r[0]!==""||r[1]!==""?(this._$AH=Array(r.length-1).fill(new String),this.strings=r):this._$AH=L}_$AI(i,t=this,r,n){let s=this.strings,a=!1;if(s===void 0)i=ye(this,i,t,0),a=!De(i)||i!==this._$AH&&i!==pe,a&&(this._$AH=i);else{let o=i,l,h;for(i=s[0],l=0;l<s.length-1;l++)h=ye(this,o[r+l],t,l),h===pe&&(h=this._$AH[l]),a||=!De(h)||h!==this._$AH[l],h===L?i=L:i!==L&&(i+=(h??"")+s[l+1]),this._$AH[l]=h}a&&!n&&this.j(i)}j(i){i===L?this.element.removeAttribute(this.name):this.element.setAttribute(this.name,i??"")}},gt=class extends be{constructor(){super(...arguments),this.type=3}j(i){this.element[this.name]=i===L?void 0:i}},_t=class extends be{constructor(){super(...arguments),this.type=4}j(i){this.element.toggleAttribute(this.name,!!i&&i!==L)}},vt=class extends be{constructor(i,t,r,n,s){super(i,t,r,n,s),this.type=5}_$AI(i,t=this){if((i=ye(this,i,t,0)??L)===pe)return;let r=this._$AH,n=i===L&&r!==L||i.capture!==r.capture||i.once!==r.once||i.passive!==r.passive,s=i!==L&&(r===L||n);n&&this.element.removeEventListener(this.name,this,r),s&&this.element.addEventListener(this.name,this,i),this._$AH=i}handleEvent(i){typeof this._$AH=="function"?this._$AH.call(this.options?.host??this.element,i):this._$AH.handleEvent(i)}},yt=class{constructor(i,t,r){this.element=i,this.type=6,this._$AN=void 0,this._$AM=t,this.options=r}get _$AU(){return this._$AM._$AU}_$AI(i){ye(this,i)}};var Ni=bt.litHtmlPolyfillSupport;Ni?.(Oe,Fe),(bt.litHtmlVersions??=[]).push("3.3.2");var or=(e,i,t)=>{let r=t?.renderBefore??i,n=r._$litPart$;if(n===void 0){let s=t?.renderBefore??null;r._$litPart$=n=new Fe(i.insertBefore(Ne(),s),s,void 0,t??{})}return n._$AI(e),n};var wt=globalThis,b=class extends K{constructor(){super(...arguments),this.renderOptions={host:this},this._$Do=void 0}createRenderRoot(){let i=super.createRenderRoot();return this.renderOptions.renderBefore??=i.firstChild,i}update(i){let t=this.render();this.hasUpdated||(this.renderOptions.isConnected=this.isConnected),super.update(i),this._$Do=or(t,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this._$Do?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this._$Do?.setConnected(!1)}render(){return pe}};b._$litElement$=!0,b.finalized=!0,wt.litElementHydrateSupport?.({LitElement:b});var Di=wt.litElementPolyfillSupport;Di?.({LitElement:b});(wt.litElementVersions??=[]).push("4.2.2");var x=e=>(i,t)=>{t!==void 0?t.addInitializer(()=>{customElements.define(e,i)}):customElements.define(e,i)};var Oi={attribute:!0,type:String,converter:Te,reflect:!1,hasChanged:Ye},Fi=(e=Oi,i,t)=>{let{kind:r,metadata:n}=t,s=globalThis.litPropertyMetadata.get(n);if(s===void 0&&globalThis.litPropertyMetadata.set(n,s=new Map),r==="setter"&&((e=Object.create(e)).wrapped=!0),s.set(t.name,e),r==="accessor"){let{name:a}=t;return{set(o){let l=i.get.call(this);i.set.call(this,o),this.requestUpdate(a,l,e,!0,o)},init(o){return o!==void 0&&this.C(a,void 0,e,o),o}}}if(r==="setter"){let{name:a}=t;return function(o){let l=this[a];i.call(this,o),this.requestUpdate(a,l,e,!0,o)}}throw Error("Unsupported decorator location: "+r)};function f(e){return(i,t)=>typeof t=="object"?Fi(e,i,t):((r,n,s)=>{let a=n.hasOwnProperty(s);return n.constructor.createProperty(s,r),a?Object.getOwnPropertyDescriptor(n,s):void 0})(e,i,t)}function v(e){return f({...e,state:!0,attribute:!1})}function z(e,i,t){let r=e?.localize?.(i);return r&&r!==i?r:t}function kt(e){let i=e.replaceAll("_"," ").toLowerCase();return i.charAt(0).toUpperCase()+i.slice(1)}function re(e,i){return z(e,`component.ambience.matcher.${i}`,kt(i))}function lr(e,i){return z(e,`component.ambience.action.${i}`,kt(i))}function $e(e,i){return z(e,`component.ambience.anchor.${i}`,kt(i))}function me(e,i,t){let r=t[i]?.label;if(r)return r;let n=i.charAt(0).toUpperCase()+i.slice(1);return z(e,`component.ambience.time_of_day_period.${i}`,n)}function d(e,i,t){return z(e,`component.ambience.${i}`,t)}var Ii=["mon","tue","wed","thu","fri","sat","sun"],Pi=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];function Ve(e,i){return z(e,`component.ambience.weekday.${Ii[i]}`,Pi[i]??String(i))}var Hi={weekday:"Day of week",day_of_month:"Day of month",date:"Date (annual)",date_range:"Date range (annual)",last_day:"Last day of month",workday:"Workday",holiday:"Holiday",first_workday:"First workday of month",last_workday:"Last workday of month"};function Je(e,i){return z(e,`component.ambience.day_item.${i}`,Hi[i]??i)}var Mi=["January","February","March","April","May","June","July","August","September","October","November","December"];function xe(e,i){return z(e,`component.ambience.month.${i}`,Mi[i-1]??String(i))}var Ri={"clear-night":"Clear (night)",cloudy:"Cloudy",fog:"Fog",hail:"Hail",lightning:"Lightning","lightning-rainy":"Lightning-rainy",partlycloudy:"Partly cloudy",pouring:"Pouring",rainy:"Rainy",snowy:"Snowy","snowy-rainy":"Snowy-rainy",sunny:"Sunny",windy:"Windy","windy-variant":"Windy (variant)",exceptional:"Exceptional"};function Qe(e,i){return z(e,`component.ambience.weather_condition.${i}`,Ri[i]??i)}var ji={temperature:"Temperature",apparent_temperature:"Apparent temperature",humidity:"Humidity",wind_speed:"Wind speed",pressure:"Pressure"};function Ie(e,i){return z(e,`component.ambience.weather_attr.${i}`,ji[i]??i)}var Ui={temperature:"\xB0C",apparent_temperature:"\xB0C",humidity:"%",wind_speed:"m/s",pressure:"hPa"},zi={temperature:"temperature",apparent_temperature:"temperature",wind_speed:"wind_speed",pressure:"pressure"},Wi={temperature:"temperature_unit",apparent_temperature:"temperature_unit",wind_speed:"wind_speed_unit",pressure:"pressure_unit"};function Et(e,i,t){if(i==="humidity")return"%";let r=Wi[i];if(r){let a=t?.attributes?.[r];if(typeof a=="string"&&a)return a}let n=zi[i],s=e?.config?.unit_system;return n&&s&&typeof s[n]=="string"?s[n]:Ui[i]??""}var Bi={is:"is",is_not:"is not",">":">",">=":"\u2265","<":"<","<=":"\u2264",and:"AND",or:"OR",and_not:"AND NOT",or_not:"OR NOT",not:"NOT"};function W(e,i){return z(e,`component.ambience.state_op.${i}`,Bi[i]??i)}var Gi=["ha-input","ha-textfield","ha-form"],Yi=["ha-input","ha-textfield"];function ur(){for(let e of Yi)if(customElements.get(e))return e;return null}function ie(e,i){for(let t of Gi)customElements.get(t)||customElements.whenDefined(t).then(()=>e.requestUpdate())}async function dr(e){return e.callWS({type:"ambience/areas/list"})}async function cr(e,i){return e.callWS({type:"ambience/area/get",area_id:i})}async function hr(e,i,t){return e.callWS({type:"ambience/area/save",area_id:i,config:t})}async function Xe(e){return e.callWS({type:"ambience/matchers/list"})}async function pr(e){return e.callWS({type:"ambience/actions/list"})}async function Ze(e){return e.callWS({type:"ambience/time_of_day_periods/list"})}async function mr(e,i,t){return e.callWS({type:"ambience/time_of_day_periods/save",custom:i,hidden:t})}async function et(e){return e.callWS({type:"ambience/matchers/day/config/list"})}async function fr(e,i,t){return e.callWS({type:"ambience/matchers/day/config/save",workday_sensor:i,workday_calendar:t})}async function tt(e){return e.callWS({type:"ambience/matchers/weather/config/list"})}async function gr(e,i,t){return e.callWS({type:"ambience/matchers/weather/config/save",entity:i,groups:t})}async function _r(e,i){return e.callWS({type:"ambience/state/known_states",entity_id:i})}function rt(e,i="New rule"){return e.name&&e.name.trim()?e.name:i}function it(e,i,t){return i==null?d(t.hass,"ui.summary_any_paren","(any)"):e==="time_of_day"?nt(i,t):e==="day"?qi(i,t):e==="weather"?Ji(i,t):e==="state"?St(i,t):String(i)}function qi(e,i={}){if(e===null)return d(i.hass,"day_summary.any","any");let t=e.include??[],r=e.exclude??[],n=t.length===0?d(i.hass,"day_summary.any_day","any day"):t.map(a=>vr(a,i)).join(", ");if(r.length===0)return n;let s=d(i.hass,"day_summary.except","except");return`${n} (${s} ${r.map(a=>vr(a,i)).join(", ")})`}function vr(e,i){switch(e.kind){case"weekday":return e.days.map(t=>Ve(i.hass,t)).join("/");case"day_of_month":return`${d(i.hass,"day_summary.day_prefix","day")} ${e.days}`;case"date":return`${xe(i.hass,e.month)} ${e.day}`;case"date_range":return`${xe(i.hass,e.from.month)} ${e.from.day} \u2192 ${xe(i.hass,e.to.month)} ${e.to.day}`;case"last_day":return d(i.hass,"day_summary.last_day","last day");case"workday":return d(i.hass,"day_summary.workday","workday");case"holiday":return d(i.hass,"day_summary.holiday","holiday");case"first_workday":return d(i.hass,"day_summary.first_workday","first workday");case"last_workday":return d(i.hass,"day_summary.last_workday","last workday")}}var Ki={"<":"<","<=":"\u2264",">":">",">=":"\u2265"};function Vi(e){return e.split(/[\s_-]+/).filter(i=>i!=="").map(i=>i.charAt(0).toUpperCase()+i.slice(1).toLowerCase()).join(" ")}function Ji(e,i={}){if(e===null)return d(i.hass,"ui.summary_any","any");let t=new Map((i.weatherGroups??[]).map(a=>[a.id,a.label])),r=(e.groups??[]).map(a=>t.get(a)??Vi(a)).join("/"),n=(e.thresholds??[]).map(a=>`${Ie(i.hass,a.attribute)} ${Ki[a.op]??a.op} ${a.value}`).join(", "),s=[r,n].filter(a=>a!=="");return s.length===0?d(i.hass,"ui.summary_any","any"):s.join(", ")}function Qi(e,i){let r=e.hass?.states?.[i]?.attributes?.friendly_name;return typeof r=="string"&&r?r:i}function St(e,i={}){return e==null?d(i.hass,"ui.summary_any","any"):Ct(e,i)}function Ct(e,i){if(e.kind==="is"||e.kind==="is_not"||e.kind===">"||e.kind===">="||e.kind==="<"||e.kind==="<="){let t=W(i.hass,e.kind),n=e.kind!=="is"&&e.kind!=="is_not"?e.states[0]??"":e.states.join("/"),s=Qi(i,e.entity_id),o=`${e.attribute?`${s}.${e.attribute}`:s} ${t} ${n}`;return e.for&&Xi(e.for)?`${o} ${d(i.hass,"ui.for_prefix","for")} \u2265${Zi(e.for)}`:o}if(e.kind==="and"||e.kind==="or"){let t=` ${W(i.hass,e.kind)} `;return e.items.map(r=>yr(r,i)).join(t)}return e.kind==="not"?`${W(i.hass,"not")} ${yr(e.item,i)}`:""}function yr(e,i){return e.kind==="and"||e.kind==="or"?`(${Ct(e,i)})`:Ct(e,i)}function Xi(e){return e.h>0||e.m>0||e.s>0}function Zi(e){let i=[];return e.h&&i.push(`${e.h}h`),e.m&&i.push(`${e.m}m`),e.s&&i.push(`${e.s}s`),i.length?i.join(" "):"0s"}function nt(e,i){if(e===null)return d(i.hass,"ui.summary_any","any");let t=Array.isArray(e)?e:[e],r=i.periods?.custom??{};return t.map(n=>"period"in n?me(i.hass,n.period,r):`${br(n.from,i)} \u2192 ${br(n.to,i)}`).join(", ")}function br(e,i){if(e.kind==="time")return`${String(e.hh).padStart(2,"0")}:${String(e.mm).padStart(2,"0")}`;let t=$e(i.hass,e.anchor);if(e.offset_min===0)return t;let r=Math.abs(e.offset_min),n=r%60===0?`${r/60}${d(i.hass,"ui.unit_hour_abbr","h")}`:`${r}${d(i.hass,"ui.unit_min_abbr","m")}`;return`${t}${e.offset_min<0?"-":"+"}${n}`}function $r(e,i,t){let r=lr(t.hass,e.action),n=i?.domains?.[0]??d(t.hass,"ui.target_noun","target"),s=e.entity_ids.length,a;s===0?a=d(t.hass,"ui.no_targets","(no targets)"):s===1?a=`1 ${n}`:a=`${s} ${n}s`;let o={};for(let h of i?.target_params??[])h.unit&&(o[h.name]=h.unit);let l=Object.entries(e.params).filter(([,h])=>h!=null&&h!=="").map(([h,m])=>`${h} ${m}${o[h]??""}`).join(", ");return l?`${r}: ${a}, ${l}`:`${r}: ${a}`}var H=class extends b{constructor(){super(...arguments);this.rules=[];this.autoSort=!0;this._dragFrom=null;this._dragOver=null}_emit(t,r){this.dispatchEvent(new CustomEvent(t,{detail:r,bubbles:!0,composed:!0}))}_summary(t){let r=new Map((this.matchers??[]).map(l=>[l.name,l.priority])),n=Object.keys(t.when).filter(l=>t.when[l]!=null).sort((l,h)=>(r.get(l)??1/0)-(r.get(h)??1/0)),s=n.length===0?d(this.hass,"ui.summary_any","any"):n.map(l=>`${re(this.hass,l)}: ${it(l,t.when[l],{hass:this.hass,periods:this.periods,weatherGroups:this.weatherConfig?.groups})}`).join(", "),a=t.actions.length,o=a===1?d(this.hass,"ui.action_singular","action"):d(this.hass,"ui.action_plural","actions");return`${s} \xB7 ${a} ${o}`}_onDragStart(t){this._dragFrom=t}_onDragOver(t,r){this._dragFrom===null||r===this._dragFrom||(t.preventDefault(),this._dragOver=r)}_onDrop(t){let r=this._dragFrom;this._dragFrom=null,this._dragOver=null,!(r===null||r===t)&&this._emit("reorder-rules",{from:r,to:t})}_onDragEnd(){this._dragFrom=null,this._dragOver=null}_confirmDelete(t,r){let n=r.name||d(this.hass,"ui.rule_n","Rule {n}").replace("{n}",String(t+1));window.confirm(d(this.hass,"ui.confirm_delete",'Delete "{name}"?').replace("{name}",n))&&this._emit("delete-rule",{index:t})}render(){return this.rules.length===0?u`
+        <p class="empty">${d(this.hass,"ui.no_rules_yet","No rules yet.")}</p>
         <button class="add" @click=${()=>this._emit("add-rule",{})}>
-          ${o(this.hass,"ui.add_rule","+ Add rule")}
+          ${d(this.hass,"ui.add_rule","+ Add rule")}
         </button>
-      `:l`
+      `:u`
       <ul>
-        ${this.rules.map((e,t)=>l`
+        ${this.rules.map((t,r)=>u`
             <li
-              class=${this._dragOver===t?"drag-over":""}
+              class=${this._dragOver===r?"drag-over":""}
               draggable=${!this.autoSort}
-              @dragstart=${()=>this._onDragStart(t)}
-              @dragover=${r=>this._onDragOver(r,t)}
-              @drop=${()=>this._onDrop(t)}
+              @dragstart=${()=>this._onDragStart(r)}
+              @dragover=${n=>this._onDragOver(n,r)}
+              @drop=${()=>this._onDrop(r)}
               @dragend=${this._onDragEnd}
             >
-              ${this.autoSort?"":l`<span class="handle" title=${o(this.hass,"ui.drag_to_reorder","Drag to reorder")}>⠿</span>`}
-              <span class="idx">${t+1}</span>
+              ${this.autoSort?"":u`<span class="handle" title=${d(this.hass,"ui.drag_to_reorder","Drag to reorder")}>⠿</span>`}
+              <span class="idx">${r+1}</span>
               <div class="body">
                 <div
                   class="name"
-                  @click=${()=>this._emit("edit-rule",{index:t})}
+                  @click=${()=>this._emit("edit-rule",{index:r})}
                 >
-                  ${Le(e,o(this.hass,"ui.rule_n","Rule {n}").replace("{n}",String(t+1)))}
+                  ${rt(t,d(this.hass,"ui.rule_n","Rule {n}").replace("{n}",String(r+1)))}
                 </div>
-                <div class="summary">${this._summary(e)}</div>
+                <div class="summary">${this._summary(t)}</div>
               </div>
               <button
-                @click=${()=>this._emit("duplicate-rule",{index:t})}
-                title=${o(this.hass,"ui.duplicate","Duplicate")}
+                @click=${()=>this._emit("duplicate-rule",{index:r})}
+                title=${d(this.hass,"ui.duplicate","Duplicate")}
               >
                 ⧉
               </button>
               <button
-                @click=${()=>this._confirmDelete(t,e)}
-                title=${o(this.hass,"ui.title_delete","Delete")}
+                @click=${()=>this._confirmDelete(r,t)}
+                title=${d(this.hass,"ui.title_delete","Delete")}
               >
                 🗑
               </button>
@@ -44,9 +44,9 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
           `)}
       </ul>
       <button class="add" @click=${()=>this._emit("add-rule",{})}>
-        ${o(this.hass,"ui.add_rule","+ Add rule")}
+        ${d(this.hass,"ui.add_rule","+ Add rule")}
       </button>
-    `}};E.styles=g`
+    `}};H.styles=$`
     :host {
       display: block;
     }
@@ -113,19 +113,19 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       border-radius: 4px;
       margin-top: 0.5rem;
     }
-  `,d([c({attribute:!1})],E.prototype,"rules",2),d([c({type:Boolean})],E.prototype,"autoSort",2),d([c({attribute:!1})],E.prototype,"periods",2),d([c({attribute:!1})],E.prototype,"weatherConfig",2),d([c({attribute:!1})],E.prototype,"hass",2),d([c({attribute:!1})],E.prototype,"matchers",2),d([m()],E.prototype,"_dragFrom",2),d([m()],E.prototype,"_dragOver",2),E=d([_("ambience-rules-list")],E);function Tt(n,s,e){if(!n||!n.entities||!s)return[];let t=n.entities,r=n.devices??{};return Object.values(t).filter(i=>!!(i.area_id===s||i.device_id&&r[i.device_id]?.area_id===s)).filter(i=>e.includes(i.entity_id.split(".")[0])).map(i=>i.entity_id).sort()}var H=class extends f{constructor(){super(...arguments);this.value=null;this.suggestions=[];this._schema=[];this._open=!1;this._onDocMousedown=e=>{this._open&&(e.composedPath().includes(this)||(this._open=!1))};this._onHaFormValueChanged=e=>{e.stopPropagation();let t=e.detail.value?.scene??"";this._emit(t.trim()===""?null:t)};this._sceneComputeLabel=e=>e.name==="scene"?o(this.hass,"ui.scene_name","Scene name"):e.name}connectedCallback(){super.connectedCallback(),W(this,this.hass),document.addEventListener("mousedown",this._onDocMousedown)}disconnectedCallback(){super.disconnectedCallback(),document.removeEventListener("mousedown",this._onDocMousedown)}willUpdate(e){e.has("suggestions")&&(this._schema=[{name:"scene",selector:{select:{options:this.suggestions.map(t=>({value:t,label:t})),custom_value:!0,mode:"dropdown"}}}])}_emit(e){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_onInput(e){let t=e.target.value;this._emit(t.trim()===""?null:t),this._open=!0}_onFocus(){this._open=!0}_onKeyDown(e){e.key==="Escape"&&this._open&&(this._open=!1,e.stopPropagation())}_toggle(e){e.preventDefault(),this._open=!this._open}_select(e,t){t.preventDefault(),this._emit(e),this._open=!1}render(){if(customElements.get("ha-form")){let e={scene:this.value??""};return l`
+  `,c([f({attribute:!1})],H.prototype,"rules",2),c([f({type:Boolean})],H.prototype,"autoSort",2),c([f({attribute:!1})],H.prototype,"periods",2),c([f({attribute:!1})],H.prototype,"weatherConfig",2),c([f({attribute:!1})],H.prototype,"hass",2),c([f({attribute:!1})],H.prototype,"matchers",2),c([v()],H.prototype,"_dragFrom",2),c([v()],H.prototype,"_dragOver",2),H=c([x("ambience-rules-list")],H);function xr(e,i,t){if(!e||!e.entities||!i)return[];let r=e.entities,n=e.devices??{};return Object.values(r).filter(s=>!!(s.area_id===i||s.device_id&&n[s.device_id]?.area_id===i)).filter(s=>t.includes(s.entity_id.split(".")[0])).map(s=>s.entity_id).sort()}var B=class extends b{constructor(){super(...arguments);this.value=null;this.suggestions=[];this._schema=[];this._open=!1;this._onDocMousedown=t=>{this._open&&(t.composedPath().includes(this)||(this._open=!1))};this._onHaFormValueChanged=t=>{t.stopPropagation();let r=t.detail.value?.scene??"";this._emit(r.trim()===""?null:r)};this._sceneComputeLabel=t=>t.name==="scene"?d(this.hass,"ui.scene_name","Scene name"):t.name}connectedCallback(){super.connectedCallback(),ie(this,this.hass),document.addEventListener("mousedown",this._onDocMousedown)}disconnectedCallback(){super.disconnectedCallback(),document.removeEventListener("mousedown",this._onDocMousedown)}willUpdate(t){t.has("suggestions")&&(this._schema=[{name:"scene",selector:{select:{options:this.suggestions.map(r=>({value:r,label:r})),custom_value:!0,mode:"dropdown"}}}])}_emit(t){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_onInput(t){let r=t.target.value;this._emit(r.trim()===""?null:r),this._open=!0}_onFocus(){this._open=!0}_onKeyDown(t){t.key==="Escape"&&this._open&&(this._open=!1,t.stopPropagation())}_toggle(t){t.preventDefault(),this._open=!this._open}_select(t,r){r.preventDefault(),this._emit(t),this._open=!1}render(){if(customElements.get("ha-form")){let t={scene:this.value??""};return u`
         <ha-form
           .hass=${this.hass}
           .schema=${this._schema}
-          .data=${e}
+          .data=${t}
           .computeLabel=${this._sceneComputeLabel}
           @value-changed=${this._onHaFormValueChanged}
         ></ha-form>
-      `}return l`
+      `}return u`
       <div class="control">
         <input
           type="text"
-          placeholder=${o(this.hass,"ui.scene_name","Scene name")}
+          placeholder=${d(this.hass,"ui.scene_name","Scene name")}
           .value=${this.value??""}
           @input=${this._onInput}
           @focus=${this._onFocus}
@@ -135,28 +135,28 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
           class="toggle"
           type="button"
           tabindex="-1"
-          aria-label=${o(this.hass,"ui.show_scene_suggestions","Show scene suggestions")}
+          aria-label=${d(this.hass,"ui.show_scene_suggestions","Show scene suggestions")}
           @mousedown=${this._toggle}
         >
           ▼
         </button>
       </div>
-      ${this._open?l`
+      ${this._open?u`
             <div class="menu" role="listbox">
-              ${this.suggestions.length===0?l`<div class="empty">
-                    ${o(this.hass,"ui.no_scenes_yet","No scenes yet \u2014 type to create one")}
-                  </div>`:this.suggestions.map(e=>l`
+              ${this.suggestions.length===0?u`<div class="empty">
+                    ${d(this.hass,"ui.no_scenes_yet","No scenes yet \u2014 type to create one")}
+                  </div>`:this.suggestions.map(t=>u`
                       <div
-                        class="item ${e===this.value?"selected":""}"
+                        class="item ${t===this.value?"selected":""}"
                         role="option"
-                        @mousedown=${t=>this._select(e,t)}
+                        @mousedown=${r=>this._select(t,r)}
                       >
-                        ${e}
+                        ${t}
                       </div>
                     `)}
             </div>
           `:""}
-    `}};H.styles=g`
+    `}};B.styles=$`
     :host {
       display: block;
       position: relative;
@@ -220,25 +220,143 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       color: var(--secondary-text-color, #888);
       font-style: italic;
     }
-  `,d([c({attribute:!1})],H.prototype,"hass",2),d([c()],H.prototype,"value",2),d([c({attribute:!1})],H.prototype,"suggestions",2),d([m()],H.prototype,"_schema",2),d([m()],H.prototype,"_open",2),H=d([_("ambience-scene-combobox")],H);var br=["dawn","sunrise","noon","sunset","dusk","midnight"],Z=class extends f{constructor(){super(...arguments);this.value={kind:"time",hh:12,mm:0}}_emit(e){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_onKindChange(e){let t=e.target.value;t!==this.value.kind&&(t==="time"?this._emit({kind:"time",hh:12,mm:0}):this._emit({kind:"sun",anchor:"sunset",offset_min:0}))}_onTimeChange(e){if(this.value.kind!=="time")return;let t=e.target.value,[r,i]=t.split(":").map(a=>parseInt(a,10));Number.isNaN(r)||Number.isNaN(i)||this._emit({kind:"time",hh:r,mm:i})}_onAnchorChange(e){if(this.value.kind!=="sun")return;let t=e.target.value;this._emit({kind:"sun",anchor:t,offset_min:this.value.offset_min})}_onOffsetChange(e){if(this.value.kind!=="sun")return;let t=parseInt(e.target.value,10);Number.isNaN(t)||this._emit({kind:"sun",anchor:this.value.anchor,offset_min:t})}_renderTime(e){let t=`${String(e.hh).padStart(2,"0")}:${String(e.mm).padStart(2,"0")}`;return l`<input type="time" .value=${t} @input=${this._onTimeChange} />`}_renderSun(e){let t=$r(e.offset_min,this.hass);return l`
+  `,c([f({attribute:!1})],B.prototype,"hass",2),c([f()],B.prototype,"value",2),c([f({attribute:!1})],B.prototype,"suggestions",2),c([v()],B.prototype,"_schema",2),c([v()],B.prototype,"_open",2),B=c([x("ambience-scene-combobox")],B);function Mr(e){return typeof e>"u"||e===null}function en(e){return typeof e=="object"&&e!==null}function tn(e){return Array.isArray(e)?e:Mr(e)?[]:[e]}function rn(e,i){var t,r,n,s;if(i)for(s=Object.keys(i),t=0,r=s.length;t<r;t+=1)n=s[t],e[n]=i[n];return e}function nn(e,i){var t="",r;for(r=0;r<i;r+=1)t+=e;return t}function sn(e){return e===0&&Number.NEGATIVE_INFINITY===1/e}var an=Mr,on=en,ln=tn,un=nn,dn=sn,cn=rn,T={isNothing:an,isObject:on,toArray:ln,repeat:un,isNegativeZero:dn,extend:cn};function Rr(e,i){var t="",r=e.reason||"(unknown reason)";return e.mark?(e.mark.name&&(t+='in "'+e.mark.name+'" '),t+="("+(e.mark.line+1)+":"+(e.mark.column+1)+")",!i&&e.mark.snippet&&(t+=`
+
+`+e.mark.snippet),r+" "+t):r}function He(e,i){Error.call(this),this.name="YAMLException",this.reason=e,this.mark=i,this.message=Rr(this,!1),Error.captureStackTrace?Error.captureStackTrace(this,this.constructor):this.stack=new Error().stack||""}He.prototype=Object.create(Error.prototype);He.prototype.constructor=He;He.prototype.toString=function(i){return this.name+": "+Rr(this,i)};var I=He;function At(e,i,t,r,n){var s="",a="",o=Math.floor(n/2)-1;return r-i>o&&(s=" ... ",i=r-o+s.length),t-r>o&&(a=" ...",t=r+o-a.length),{str:s+e.slice(i,t).replace(/\t/g,"\u2192")+a,pos:r-i+s.length}}function Tt(e,i){return T.repeat(" ",i-e.length)+e}function hn(e,i){if(i=Object.create(i||null),!e.buffer)return null;i.maxLength||(i.maxLength=79),typeof i.indent!="number"&&(i.indent=1),typeof i.linesBefore!="number"&&(i.linesBefore=3),typeof i.linesAfter!="number"&&(i.linesAfter=2);for(var t=/\r?\n|\r|\0/g,r=[0],n=[],s,a=-1;s=t.exec(e.buffer);)n.push(s.index),r.push(s.index+s[0].length),e.position<=s.index&&a<0&&(a=r.length-2);a<0&&(a=r.length-1);var o="",l,h,m=Math.min(e.line+i.linesAfter,n.length).toString().length,p=i.maxLength-(i.indent+m+3);for(l=1;l<=i.linesBefore&&!(a-l<0);l++)h=At(e.buffer,r[a-l],n[a-l],e.position-(r[a]-r[a-l]),p),o=T.repeat(" ",i.indent)+Tt((e.line-l+1).toString(),m)+" | "+h.str+`
+`+o;for(h=At(e.buffer,r[a],n[a],e.position,p),o+=T.repeat(" ",i.indent)+Tt((e.line+1).toString(),m)+" | "+h.str+`
+`,o+=T.repeat("-",i.indent+m+3+h.pos)+`^
+`,l=1;l<=i.linesAfter&&!(a+l>=n.length);l++)h=At(e.buffer,r[a+l],n[a+l],e.position-(r[a]-r[a+l]),p),o+=T.repeat(" ",i.indent)+Tt((e.line+l+1).toString(),m)+" | "+h.str+`
+`;return o.replace(/\n$/,"")}var pn=hn,mn=["kind","multi","resolve","construct","instanceOf","predicate","represent","representName","defaultStyle","styleAliases"],fn=["scalar","sequence","mapping"];function gn(e){var i={};return e!==null&&Object.keys(e).forEach(function(t){e[t].forEach(function(r){i[String(r)]=t})}),i}function _n(e,i){if(i=i||{},Object.keys(i).forEach(function(t){if(mn.indexOf(t)===-1)throw new I('Unknown option "'+t+'" is met in definition of "'+e+'" YAML type.')}),this.options=i,this.tag=e,this.kind=i.kind||null,this.resolve=i.resolve||function(){return!0},this.construct=i.construct||function(t){return t},this.instanceOf=i.instanceOf||null,this.predicate=i.predicate||null,this.represent=i.represent||null,this.representName=i.representName||null,this.defaultStyle=i.defaultStyle||null,this.multi=i.multi||!1,this.styleAliases=gn(i.styleAliases||null),fn.indexOf(this.kind)===-1)throw new I('Unknown kind "'+this.kind+'" is specified for "'+e+'" YAML type.')}var D=_n;function wr(e,i){var t=[];return e[i].forEach(function(r){var n=t.length;t.forEach(function(s,a){s.tag===r.tag&&s.kind===r.kind&&s.multi===r.multi&&(n=a)}),t[n]=r}),t}function vn(){var e={scalar:{},sequence:{},mapping:{},fallback:{},multi:{scalar:[],sequence:[],mapping:[],fallback:[]}},i,t;function r(n){n.multi?(e.multi[n.kind].push(n),e.multi.fallback.push(n)):e[n.kind][n.tag]=e.fallback[n.tag]=n}for(i=0,t=arguments.length;i<t;i+=1)arguments[i].forEach(r);return e}function Nt(e){return this.extend(e)}Nt.prototype.extend=function(i){var t=[],r=[];if(i instanceof D)r.push(i);else if(Array.isArray(i))r=r.concat(i);else if(i&&(Array.isArray(i.implicit)||Array.isArray(i.explicit)))i.implicit&&(t=t.concat(i.implicit)),i.explicit&&(r=r.concat(i.explicit));else throw new I("Schema.extend argument should be a Type, [ Type ], or a schema definition ({ implicit: [...], explicit: [...] })");t.forEach(function(s){if(!(s instanceof D))throw new I("Specified list of YAML types (or a single Type object) contains a non-Type object.");if(s.loadKind&&s.loadKind!=="scalar")throw new I("There is a non-scalar type in the implicit list of a schema. Implicit resolving of such types is not supported.");if(s.multi)throw new I("There is a multi type in the implicit list of a schema. Multi tags can only be listed as explicit.")}),r.forEach(function(s){if(!(s instanceof D))throw new I("Specified list of YAML types (or a single Type object) contains a non-Type object.")});var n=Object.create(Nt.prototype);return n.implicit=(this.implicit||[]).concat(t),n.explicit=(this.explicit||[]).concat(r),n.compiledImplicit=wr(n,"implicit"),n.compiledExplicit=wr(n,"explicit"),n.compiledTypeMap=vn(n.compiledImplicit,n.compiledExplicit),n};var yn=Nt,bn=new D("tag:yaml.org,2002:str",{kind:"scalar",construct:function(e){return e!==null?e:""}}),$n=new D("tag:yaml.org,2002:seq",{kind:"sequence",construct:function(e){return e!==null?e:[]}}),xn=new D("tag:yaml.org,2002:map",{kind:"mapping",construct:function(e){return e!==null?e:{}}}),wn=new yn({explicit:[bn,$n,xn]});function kn(e){if(e===null)return!0;var i=e.length;return i===1&&e==="~"||i===4&&(e==="null"||e==="Null"||e==="NULL")}function En(){return null}function Cn(e){return e===null}var Sn=new D("tag:yaml.org,2002:null",{kind:"scalar",resolve:kn,construct:En,predicate:Cn,represent:{canonical:function(){return"~"},lowercase:function(){return"null"},uppercase:function(){return"NULL"},camelcase:function(){return"Null"},empty:function(){return""}},defaultStyle:"lowercase"});function An(e){if(e===null)return!1;var i=e.length;return i===4&&(e==="true"||e==="True"||e==="TRUE")||i===5&&(e==="false"||e==="False"||e==="FALSE")}function Tn(e){return e==="true"||e==="True"||e==="TRUE"}function Ln(e){return Object.prototype.toString.call(e)==="[object Boolean]"}var Nn=new D("tag:yaml.org,2002:bool",{kind:"scalar",resolve:An,construct:Tn,predicate:Ln,represent:{lowercase:function(e){return e?"true":"false"},uppercase:function(e){return e?"TRUE":"FALSE"},camelcase:function(e){return e?"True":"False"}},defaultStyle:"lowercase"});function Dn(e){return 48<=e&&e<=57||65<=e&&e<=70||97<=e&&e<=102}function On(e){return 48<=e&&e<=55}function Fn(e){return 48<=e&&e<=57}function In(e){if(e===null)return!1;var i=e.length,t=0,r=!1,n;if(!i)return!1;if(n=e[t],(n==="-"||n==="+")&&(n=e[++t]),n==="0"){if(t+1===i)return!0;if(n=e[++t],n==="b"){for(t++;t<i;t++)if(n=e[t],n!=="_"){if(n!=="0"&&n!=="1")return!1;r=!0}return r&&n!=="_"}if(n==="x"){for(t++;t<i;t++)if(n=e[t],n!=="_"){if(!Dn(e.charCodeAt(t)))return!1;r=!0}return r&&n!=="_"}if(n==="o"){for(t++;t<i;t++)if(n=e[t],n!=="_"){if(!On(e.charCodeAt(t)))return!1;r=!0}return r&&n!=="_"}}if(n==="_")return!1;for(;t<i;t++)if(n=e[t],n!=="_"){if(!Fn(e.charCodeAt(t)))return!1;r=!0}return!(!r||n==="_")}function Pn(e){var i=e,t=1,r;if(i.indexOf("_")!==-1&&(i=i.replace(/_/g,"")),r=i[0],(r==="-"||r==="+")&&(r==="-"&&(t=-1),i=i.slice(1),r=i[0]),i==="0")return 0;if(r==="0"){if(i[1]==="b")return t*parseInt(i.slice(2),2);if(i[1]==="x")return t*parseInt(i.slice(2),16);if(i[1]==="o")return t*parseInt(i.slice(2),8)}return t*parseInt(i,10)}function Hn(e){return Object.prototype.toString.call(e)==="[object Number]"&&e%1===0&&!T.isNegativeZero(e)}var Mn=new D("tag:yaml.org,2002:int",{kind:"scalar",resolve:In,construct:Pn,predicate:Hn,represent:{binary:function(e){return e>=0?"0b"+e.toString(2):"-0b"+e.toString(2).slice(1)},octal:function(e){return e>=0?"0o"+e.toString(8):"-0o"+e.toString(8).slice(1)},decimal:function(e){return e.toString(10)},hexadecimal:function(e){return e>=0?"0x"+e.toString(16).toUpperCase():"-0x"+e.toString(16).toUpperCase().slice(1)}},defaultStyle:"decimal",styleAliases:{binary:[2,"bin"],octal:[8,"oct"],decimal:[10,"dec"],hexadecimal:[16,"hex"]}}),Rn=new RegExp("^(?:[-+]?(?:[0-9][0-9_]*)(?:\\.[0-9_]*)?(?:[eE][-+]?[0-9]+)?|\\.[0-9_]+(?:[eE][-+]?[0-9]+)?|[-+]?\\.(?:inf|Inf|INF)|\\.(?:nan|NaN|NAN))$");function jn(e){return!(e===null||!Rn.test(e)||e[e.length-1]==="_")}function Un(e){var i,t;return i=e.replace(/_/g,"").toLowerCase(),t=i[0]==="-"?-1:1,"+-".indexOf(i[0])>=0&&(i=i.slice(1)),i===".inf"?t===1?Number.POSITIVE_INFINITY:Number.NEGATIVE_INFINITY:i===".nan"?NaN:t*parseFloat(i,10)}var zn=/^[-+]?[0-9]+e/;function Wn(e,i){var t;if(isNaN(e))switch(i){case"lowercase":return".nan";case"uppercase":return".NAN";case"camelcase":return".NaN"}else if(Number.POSITIVE_INFINITY===e)switch(i){case"lowercase":return".inf";case"uppercase":return".INF";case"camelcase":return".Inf"}else if(Number.NEGATIVE_INFINITY===e)switch(i){case"lowercase":return"-.inf";case"uppercase":return"-.INF";case"camelcase":return"-.Inf"}else if(T.isNegativeZero(e))return"-0.0";return t=e.toString(10),zn.test(t)?t.replace("e",".e"):t}function Bn(e){return Object.prototype.toString.call(e)==="[object Number]"&&(e%1!==0||T.isNegativeZero(e))}var Gn=new D("tag:yaml.org,2002:float",{kind:"scalar",resolve:jn,construct:Un,predicate:Bn,represent:Wn,defaultStyle:"lowercase"}),Yn=wn.extend({implicit:[Sn,Nn,Mn,Gn]}),qn=Yn,jr=new RegExp("^([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])$"),Ur=new RegExp("^([0-9][0-9][0-9][0-9])-([0-9][0-9]?)-([0-9][0-9]?)(?:[Tt]|[ \\t]+)([0-9][0-9]?):([0-9][0-9]):([0-9][0-9])(?:\\.([0-9]*))?(?:[ \\t]*(Z|([-+])([0-9][0-9]?)(?::([0-9][0-9]))?))?$");function Kn(e){return e===null?!1:jr.exec(e)!==null||Ur.exec(e)!==null}function Vn(e){var i,t,r,n,s,a,o,l=0,h=null,m,p,g;if(i=jr.exec(e),i===null&&(i=Ur.exec(e)),i===null)throw new Error("Date resolve error");if(t=+i[1],r=+i[2]-1,n=+i[3],!i[4])return new Date(Date.UTC(t,r,n));if(s=+i[4],a=+i[5],o=+i[6],i[7]){for(l=i[7].slice(0,3);l.length<3;)l+="0";l=+l}return i[9]&&(m=+i[10],p=+(i[11]||0),h=(m*60+p)*6e4,i[9]==="-"&&(h=-h)),g=new Date(Date.UTC(t,r,n,s,a,o,l)),h&&g.setTime(g.getTime()-h),g}function Jn(e){return e.toISOString()}var Qn=new D("tag:yaml.org,2002:timestamp",{kind:"scalar",resolve:Kn,construct:Vn,instanceOf:Date,represent:Jn});function Xn(e){return e==="<<"||e===null}var Zn=new D("tag:yaml.org,2002:merge",{kind:"scalar",resolve:Xn}),Pt=`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=
+\r`;function es(e){if(e===null)return!1;var i,t,r=0,n=e.length,s=Pt;for(t=0;t<n;t++)if(i=s.indexOf(e.charAt(t)),!(i>64)){if(i<0)return!1;r+=6}return r%8===0}function ts(e){var i,t,r=e.replace(/[\r\n=]/g,""),n=r.length,s=Pt,a=0,o=[];for(i=0;i<n;i++)i%4===0&&i&&(o.push(a>>16&255),o.push(a>>8&255),o.push(a&255)),a=a<<6|s.indexOf(r.charAt(i));return t=n%4*6,t===0?(o.push(a>>16&255),o.push(a>>8&255),o.push(a&255)):t===18?(o.push(a>>10&255),o.push(a>>2&255)):t===12&&o.push(a>>4&255),new Uint8Array(o)}function rs(e){var i="",t=0,r,n,s=e.length,a=Pt;for(r=0;r<s;r++)r%3===0&&r&&(i+=a[t>>18&63],i+=a[t>>12&63],i+=a[t>>6&63],i+=a[t&63]),t=(t<<8)+e[r];return n=s%3,n===0?(i+=a[t>>18&63],i+=a[t>>12&63],i+=a[t>>6&63],i+=a[t&63]):n===2?(i+=a[t>>10&63],i+=a[t>>4&63],i+=a[t<<2&63],i+=a[64]):n===1&&(i+=a[t>>2&63],i+=a[t<<4&63],i+=a[64],i+=a[64]),i}function is(e){return Object.prototype.toString.call(e)==="[object Uint8Array]"}var ns=new D("tag:yaml.org,2002:binary",{kind:"scalar",resolve:es,construct:ts,predicate:is,represent:rs}),ss=Object.prototype.hasOwnProperty,as=Object.prototype.toString;function os(e){if(e===null)return!0;var i=[],t,r,n,s,a,o=e;for(t=0,r=o.length;t<r;t+=1){if(n=o[t],a=!1,as.call(n)!=="[object Object]")return!1;for(s in n)if(ss.call(n,s))if(!a)a=!0;else return!1;if(!a)return!1;if(i.indexOf(s)===-1)i.push(s);else return!1}return!0}function ls(e){return e!==null?e:[]}var us=new D("tag:yaml.org,2002:omap",{kind:"sequence",resolve:os,construct:ls}),ds=Object.prototype.toString;function cs(e){if(e===null)return!0;var i,t,r,n,s,a=e;for(s=new Array(a.length),i=0,t=a.length;i<t;i+=1){if(r=a[i],ds.call(r)!=="[object Object]"||(n=Object.keys(r),n.length!==1))return!1;s[i]=[n[0],r[n[0]]]}return!0}function hs(e){if(e===null)return[];var i,t,r,n,s,a=e;for(s=new Array(a.length),i=0,t=a.length;i<t;i+=1)r=a[i],n=Object.keys(r),s[i]=[n[0],r[n[0]]];return s}var ps=new D("tag:yaml.org,2002:pairs",{kind:"sequence",resolve:cs,construct:hs}),ms=Object.prototype.hasOwnProperty;function fs(e){if(e===null)return!0;var i,t=e;for(i in t)if(ms.call(t,i)&&t[i]!==null)return!1;return!0}function gs(e){return e!==null?e:{}}var _s=new D("tag:yaml.org,2002:set",{kind:"mapping",resolve:fs,construct:gs}),zr=qn.extend({implicit:[Qn,Zn],explicit:[ns,us,ps,_s]}),se=Object.prototype.hasOwnProperty,st=1,Wr=2,Br=3,at=4,Lt=1,vs=2,kr=3,ys=/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x84\x86-\x9F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/,bs=/[\x85\u2028\u2029]/,$s=/[,\[\]\{\}]/,Gr=/^(?:!|!!|![a-z\-]+!)$/i,Yr=/^(?:!|[^,\[\]\{\}])(?:%[0-9a-f]{2}|[0-9a-z\-#;\/\?:@&=\+\$,_\.!~\*'\(\)\[\]])*$/i;function Er(e){return Object.prototype.toString.call(e)}function G(e){return e===10||e===13}function ge(e){return e===9||e===32}function P(e){return e===9||e===32||e===10||e===13}function ke(e){return e===44||e===91||e===93||e===123||e===125}function xs(e){var i;return 48<=e&&e<=57?e-48:(i=e|32,97<=i&&i<=102?i-97+10:-1)}function ws(e){return e===120?2:e===117?4:e===85?8:0}function ks(e){return 48<=e&&e<=57?e-48:-1}function Cr(e){return e===48?"\0":e===97?"\x07":e===98?"\b":e===116||e===9?"	":e===110?`
+`:e===118?"\v":e===102?"\f":e===114?"\r":e===101?"\x1B":e===32?" ":e===34?'"':e===47?"/":e===92?"\\":e===78?"\x85":e===95?"\xA0":e===76?"\u2028":e===80?"\u2029":""}function Es(e){return e<=65535?String.fromCharCode(e):String.fromCharCode((e-65536>>10)+55296,(e-65536&1023)+56320)}function qr(e,i,t){i==="__proto__"?Object.defineProperty(e,i,{configurable:!0,enumerable:!0,writable:!0,value:t}):e[i]=t}var Kr=new Array(256),Vr=new Array(256);for(fe=0;fe<256;fe++)Kr[fe]=Cr(fe)?1:0,Vr[fe]=Cr(fe);var fe;function Cs(e,i){this.input=e,this.filename=i.filename||null,this.schema=i.schema||zr,this.onWarning=i.onWarning||null,this.legacy=i.legacy||!1,this.json=i.json||!1,this.listener=i.listener||null,this.implicitTypes=this.schema.compiledImplicit,this.typeMap=this.schema.compiledTypeMap,this.length=e.length,this.position=0,this.line=0,this.lineStart=0,this.lineIndent=0,this.firstTabInLine=-1,this.documents=[]}function Jr(e,i){var t={name:e.filename,buffer:e.input.slice(0,-1),position:e.position,line:e.line,column:e.position-e.lineStart};return t.snippet=pn(t),new I(i,t)}function y(e,i){throw Jr(e,i)}function ot(e,i){e.onWarning&&e.onWarning.call(null,Jr(e,i))}var Sr={YAML:function(i,t,r){var n,s,a;i.version!==null&&y(i,"duplication of %YAML directive"),r.length!==1&&y(i,"YAML directive accepts exactly one argument"),n=/^([0-9]+)\.([0-9]+)$/.exec(r[0]),n===null&&y(i,"ill-formed argument of the YAML directive"),s=parseInt(n[1],10),a=parseInt(n[2],10),s!==1&&y(i,"unacceptable YAML version of the document"),i.version=r[0],i.checkLineBreaks=a<2,a!==1&&a!==2&&ot(i,"unsupported YAML version of the document")},TAG:function(i,t,r){var n,s;r.length!==2&&y(i,"TAG directive accepts exactly two arguments"),n=r[0],s=r[1],Gr.test(n)||y(i,"ill-formed tag handle (first argument) of the TAG directive"),se.call(i.tagMap,n)&&y(i,'there is a previously declared suffix for "'+n+'" tag handle'),Yr.test(s)||y(i,"ill-formed tag prefix (second argument) of the TAG directive");try{s=decodeURIComponent(s)}catch{y(i,"tag prefix is malformed: "+s)}i.tagMap[n]=s}};function ne(e,i,t,r){var n,s,a,o;if(i<t){if(o=e.input.slice(i,t),r)for(n=0,s=o.length;n<s;n+=1)a=o.charCodeAt(n),a===9||32<=a&&a<=1114111||y(e,"expected valid JSON character");else ys.test(o)&&y(e,"the stream contains non-printable characters");e.result+=o}}function Ar(e,i,t,r){var n,s,a,o;for(T.isObject(t)||y(e,"cannot merge mappings; the provided source object is unacceptable"),n=Object.keys(t),a=0,o=n.length;a<o;a+=1)s=n[a],se.call(i,s)||(qr(i,s,t[s]),r[s]=!0)}function Ee(e,i,t,r,n,s,a,o,l){var h,m;if(Array.isArray(n))for(n=Array.prototype.slice.call(n),h=0,m=n.length;h<m;h+=1)Array.isArray(n[h])&&y(e,"nested arrays are not supported inside keys"),typeof n=="object"&&Er(n[h])==="[object Object]"&&(n[h]="[object Object]");if(typeof n=="object"&&Er(n)==="[object Object]"&&(n="[object Object]"),n=String(n),i===null&&(i={}),r==="tag:yaml.org,2002:merge")if(Array.isArray(s))for(h=0,m=s.length;h<m;h+=1)Ar(e,i,s[h],t);else Ar(e,i,s,t);else!e.json&&!se.call(t,n)&&se.call(i,n)&&(e.line=a||e.line,e.lineStart=o||e.lineStart,e.position=l||e.position,y(e,"duplicated mapping key")),qr(i,n,s),delete t[n];return i}function Ht(e){var i;i=e.input.charCodeAt(e.position),i===10?e.position++:i===13?(e.position++,e.input.charCodeAt(e.position)===10&&e.position++):y(e,"a line break is expected"),e.line+=1,e.lineStart=e.position,e.firstTabInLine=-1}function A(e,i,t){for(var r=0,n=e.input.charCodeAt(e.position);n!==0;){for(;ge(n);)n===9&&e.firstTabInLine===-1&&(e.firstTabInLine=e.position),n=e.input.charCodeAt(++e.position);if(i&&n===35)do n=e.input.charCodeAt(++e.position);while(n!==10&&n!==13&&n!==0);if(G(n))for(Ht(e),n=e.input.charCodeAt(e.position),r++,e.lineIndent=0;n===32;)e.lineIndent++,n=e.input.charCodeAt(++e.position);else break}return t!==-1&&r!==0&&e.lineIndent<t&&ot(e,"deficient indentation"),r}function dt(e){var i=e.position,t;return t=e.input.charCodeAt(i),!!((t===45||t===46)&&t===e.input.charCodeAt(i+1)&&t===e.input.charCodeAt(i+2)&&(i+=3,t=e.input.charCodeAt(i),t===0||P(t)))}function Mt(e,i){i===1?e.result+=" ":i>1&&(e.result+=T.repeat(`
+`,i-1))}function Ss(e,i,t){var r,n,s,a,o,l,h,m,p=e.kind,g=e.result,_;if(_=e.input.charCodeAt(e.position),P(_)||ke(_)||_===35||_===38||_===42||_===33||_===124||_===62||_===39||_===34||_===37||_===64||_===96||(_===63||_===45)&&(n=e.input.charCodeAt(e.position+1),P(n)||t&&ke(n)))return!1;for(e.kind="scalar",e.result="",s=a=e.position,o=!1;_!==0;){if(_===58){if(n=e.input.charCodeAt(e.position+1),P(n)||t&&ke(n))break}else if(_===35){if(r=e.input.charCodeAt(e.position-1),P(r))break}else{if(e.position===e.lineStart&&dt(e)||t&&ke(_))break;if(G(_))if(l=e.line,h=e.lineStart,m=e.lineIndent,A(e,!1,-1),e.lineIndent>=i){o=!0,_=e.input.charCodeAt(e.position);continue}else{e.position=a,e.line=l,e.lineStart=h,e.lineIndent=m;break}}o&&(ne(e,s,a,!1),Mt(e,e.line-l),s=a=e.position,o=!1),ge(_)||(a=e.position+1),_=e.input.charCodeAt(++e.position)}return ne(e,s,a,!1),e.result?!0:(e.kind=p,e.result=g,!1)}function As(e,i){var t,r,n;if(t=e.input.charCodeAt(e.position),t!==39)return!1;for(e.kind="scalar",e.result="",e.position++,r=n=e.position;(t=e.input.charCodeAt(e.position))!==0;)if(t===39)if(ne(e,r,e.position,!0),t=e.input.charCodeAt(++e.position),t===39)r=e.position,e.position++,n=e.position;else return!0;else G(t)?(ne(e,r,n,!0),Mt(e,A(e,!1,i)),r=n=e.position):e.position===e.lineStart&&dt(e)?y(e,"unexpected end of the document within a single quoted scalar"):(e.position++,n=e.position);y(e,"unexpected end of the stream within a single quoted scalar")}function Ts(e,i){var t,r,n,s,a,o;if(o=e.input.charCodeAt(e.position),o!==34)return!1;for(e.kind="scalar",e.result="",e.position++,t=r=e.position;(o=e.input.charCodeAt(e.position))!==0;){if(o===34)return ne(e,t,e.position,!0),e.position++,!0;if(o===92){if(ne(e,t,e.position,!0),o=e.input.charCodeAt(++e.position),G(o))A(e,!1,i);else if(o<256&&Kr[o])e.result+=Vr[o],e.position++;else if((a=ws(o))>0){for(n=a,s=0;n>0;n--)o=e.input.charCodeAt(++e.position),(a=xs(o))>=0?s=(s<<4)+a:y(e,"expected hexadecimal character");e.result+=Es(s),e.position++}else y(e,"unknown escape sequence");t=r=e.position}else G(o)?(ne(e,t,r,!0),Mt(e,A(e,!1,i)),t=r=e.position):e.position===e.lineStart&&dt(e)?y(e,"unexpected end of the document within a double quoted scalar"):(e.position++,r=e.position)}y(e,"unexpected end of the stream within a double quoted scalar")}function Ls(e,i){var t=!0,r,n,s,a=e.tag,o,l=e.anchor,h,m,p,g,_,w=Object.create(null),E,S,U,k;if(k=e.input.charCodeAt(e.position),k===91)m=93,_=!1,o=[];else if(k===123)m=125,_=!0,o={};else return!1;for(e.anchor!==null&&(e.anchorMap[e.anchor]=o),k=e.input.charCodeAt(++e.position);k!==0;){if(A(e,!0,i),k=e.input.charCodeAt(e.position),k===m)return e.position++,e.tag=a,e.anchor=l,e.kind=_?"mapping":"sequence",e.result=o,!0;t?k===44&&y(e,"expected the node content, but found ','"):y(e,"missed comma between flow collection entries"),S=E=U=null,p=g=!1,k===63&&(h=e.input.charCodeAt(e.position+1),P(h)&&(p=g=!0,e.position++,A(e,!0,i))),r=e.line,n=e.lineStart,s=e.position,Ce(e,i,st,!1,!0),S=e.tag,E=e.result,A(e,!0,i),k=e.input.charCodeAt(e.position),(g||e.line===r)&&k===58&&(p=!0,k=e.input.charCodeAt(++e.position),A(e,!0,i),Ce(e,i,st,!1,!0),U=e.result),_?Ee(e,o,w,S,E,U,r,n,s):p?o.push(Ee(e,null,w,S,E,U,r,n,s)):o.push(E),A(e,!0,i),k=e.input.charCodeAt(e.position),k===44?(t=!0,k=e.input.charCodeAt(++e.position)):t=!1}y(e,"unexpected end of the stream within a flow collection")}function Ns(e,i){var t,r,n=Lt,s=!1,a=!1,o=i,l=0,h=!1,m,p;if(p=e.input.charCodeAt(e.position),p===124)r=!1;else if(p===62)r=!0;else return!1;for(e.kind="scalar",e.result="";p!==0;)if(p=e.input.charCodeAt(++e.position),p===43||p===45)Lt===n?n=p===43?kr:vs:y(e,"repeat of a chomping mode identifier");else if((m=ks(p))>=0)m===0?y(e,"bad explicit indentation width of a block scalar; it cannot be less than one"):a?y(e,"repeat of an indentation width identifier"):(o=i+m-1,a=!0);else break;if(ge(p)){do p=e.input.charCodeAt(++e.position);while(ge(p));if(p===35)do p=e.input.charCodeAt(++e.position);while(!G(p)&&p!==0)}for(;p!==0;){for(Ht(e),e.lineIndent=0,p=e.input.charCodeAt(e.position);(!a||e.lineIndent<o)&&p===32;)e.lineIndent++,p=e.input.charCodeAt(++e.position);if(!a&&e.lineIndent>o&&(o=e.lineIndent),G(p)){l++;continue}if(e.lineIndent<o){n===kr?e.result+=T.repeat(`
+`,s?1+l:l):n===Lt&&s&&(e.result+=`
+`);break}for(r?ge(p)?(h=!0,e.result+=T.repeat(`
+`,s?1+l:l)):h?(h=!1,e.result+=T.repeat(`
+`,l+1)):l===0?s&&(e.result+=" "):e.result+=T.repeat(`
+`,l):e.result+=T.repeat(`
+`,s?1+l:l),s=!0,a=!0,l=0,t=e.position;!G(p)&&p!==0;)p=e.input.charCodeAt(++e.position);ne(e,t,e.position,!1)}return!0}function Tr(e,i){var t,r=e.tag,n=e.anchor,s=[],a,o=!1,l;if(e.firstTabInLine!==-1)return!1;for(e.anchor!==null&&(e.anchorMap[e.anchor]=s),l=e.input.charCodeAt(e.position);l!==0&&(e.firstTabInLine!==-1&&(e.position=e.firstTabInLine,y(e,"tab characters must not be used in indentation")),!(l!==45||(a=e.input.charCodeAt(e.position+1),!P(a))));){if(o=!0,e.position++,A(e,!0,-1)&&e.lineIndent<=i){s.push(null),l=e.input.charCodeAt(e.position);continue}if(t=e.line,Ce(e,i,Br,!1,!0),s.push(e.result),A(e,!0,-1),l=e.input.charCodeAt(e.position),(e.line===t||e.lineIndent>i)&&l!==0)y(e,"bad indentation of a sequence entry");else if(e.lineIndent<i)break}return o?(e.tag=r,e.anchor=n,e.kind="sequence",e.result=s,!0):!1}function Ds(e,i,t){var r,n,s,a,o,l,h=e.tag,m=e.anchor,p={},g=Object.create(null),_=null,w=null,E=null,S=!1,U=!1,k;if(e.firstTabInLine!==-1)return!1;for(e.anchor!==null&&(e.anchorMap[e.anchor]=p),k=e.input.charCodeAt(e.position);k!==0;){if(!S&&e.firstTabInLine!==-1&&(e.position=e.firstTabInLine,y(e,"tab characters must not be used in indentation")),r=e.input.charCodeAt(e.position+1),s=e.line,(k===63||k===58)&&P(r))k===63?(S&&(Ee(e,p,g,_,w,null,a,o,l),_=w=E=null),U=!0,S=!0,n=!0):S?(S=!1,n=!0):y(e,"incomplete explicit mapping pair; a key node is missed; or followed by a non-tabulated empty line"),e.position+=1,k=r;else{if(a=e.line,o=e.lineStart,l=e.position,!Ce(e,t,Wr,!1,!0))break;if(e.line===s){for(k=e.input.charCodeAt(e.position);ge(k);)k=e.input.charCodeAt(++e.position);if(k===58)k=e.input.charCodeAt(++e.position),P(k)||y(e,"a whitespace character is expected after the key-value separator within a block mapping"),S&&(Ee(e,p,g,_,w,null,a,o,l),_=w=E=null),U=!0,S=!1,n=!1,_=e.tag,w=e.result;else if(U)y(e,"can not read an implicit mapping pair; a colon is missed");else return e.tag=h,e.anchor=m,!0}else if(U)y(e,"can not read a block mapping entry; a multiline key may not be an implicit key");else return e.tag=h,e.anchor=m,!0}if((e.line===s||e.lineIndent>i)&&(S&&(a=e.line,o=e.lineStart,l=e.position),Ce(e,i,at,!0,n)&&(S?w=e.result:E=e.result),S||(Ee(e,p,g,_,w,E,a,o,l),_=w=E=null),A(e,!0,-1),k=e.input.charCodeAt(e.position)),(e.line===s||e.lineIndent>i)&&k!==0)y(e,"bad indentation of a mapping entry");else if(e.lineIndent<i)break}return S&&Ee(e,p,g,_,w,null,a,o,l),U&&(e.tag=h,e.anchor=m,e.kind="mapping",e.result=p),U}function Os(e){var i,t=!1,r=!1,n,s,a;if(a=e.input.charCodeAt(e.position),a!==33)return!1;if(e.tag!==null&&y(e,"duplication of a tag property"),a=e.input.charCodeAt(++e.position),a===60?(t=!0,a=e.input.charCodeAt(++e.position)):a===33?(r=!0,n="!!",a=e.input.charCodeAt(++e.position)):n="!",i=e.position,t){do a=e.input.charCodeAt(++e.position);while(a!==0&&a!==62);e.position<e.length?(s=e.input.slice(i,e.position),a=e.input.charCodeAt(++e.position)):y(e,"unexpected end of the stream within a verbatim tag")}else{for(;a!==0&&!P(a);)a===33&&(r?y(e,"tag suffix cannot contain exclamation marks"):(n=e.input.slice(i-1,e.position+1),Gr.test(n)||y(e,"named tag handle cannot contain such characters"),r=!0,i=e.position+1)),a=e.input.charCodeAt(++e.position);s=e.input.slice(i,e.position),$s.test(s)&&y(e,"tag suffix cannot contain flow indicator characters")}s&&!Yr.test(s)&&y(e,"tag name cannot contain such characters: "+s);try{s=decodeURIComponent(s)}catch{y(e,"tag name is malformed: "+s)}return t?e.tag=s:se.call(e.tagMap,n)?e.tag=e.tagMap[n]+s:n==="!"?e.tag="!"+s:n==="!!"?e.tag="tag:yaml.org,2002:"+s:y(e,'undeclared tag handle "'+n+'"'),!0}function Fs(e){var i,t;if(t=e.input.charCodeAt(e.position),t!==38)return!1;for(e.anchor!==null&&y(e,"duplication of an anchor property"),t=e.input.charCodeAt(++e.position),i=e.position;t!==0&&!P(t)&&!ke(t);)t=e.input.charCodeAt(++e.position);return e.position===i&&y(e,"name of an anchor node must contain at least one character"),e.anchor=e.input.slice(i,e.position),!0}function Is(e){var i,t,r;if(r=e.input.charCodeAt(e.position),r!==42)return!1;for(r=e.input.charCodeAt(++e.position),i=e.position;r!==0&&!P(r)&&!ke(r);)r=e.input.charCodeAt(++e.position);return e.position===i&&y(e,"name of an alias node must contain at least one character"),t=e.input.slice(i,e.position),se.call(e.anchorMap,t)||y(e,'unidentified alias "'+t+'"'),e.result=e.anchorMap[t],A(e,!0,-1),!0}function Ce(e,i,t,r,n){var s,a,o,l=1,h=!1,m=!1,p,g,_,w,E,S;if(e.listener!==null&&e.listener("open",e),e.tag=null,e.anchor=null,e.kind=null,e.result=null,s=a=o=at===t||Br===t,r&&A(e,!0,-1)&&(h=!0,e.lineIndent>i?l=1:e.lineIndent===i?l=0:e.lineIndent<i&&(l=-1)),l===1)for(;Os(e)||Fs(e);)A(e,!0,-1)?(h=!0,o=s,e.lineIndent>i?l=1:e.lineIndent===i?l=0:e.lineIndent<i&&(l=-1)):o=!1;if(o&&(o=h||n),(l===1||at===t)&&(st===t||Wr===t?E=i:E=i+1,S=e.position-e.lineStart,l===1?o&&(Tr(e,S)||Ds(e,S,E))||Ls(e,E)?m=!0:(a&&Ns(e,E)||As(e,E)||Ts(e,E)?m=!0:Is(e)?(m=!0,(e.tag!==null||e.anchor!==null)&&y(e,"alias node should not have any properties")):Ss(e,E,st===t)&&(m=!0,e.tag===null&&(e.tag="?")),e.anchor!==null&&(e.anchorMap[e.anchor]=e.result)):l===0&&(m=o&&Tr(e,S))),e.tag===null)e.anchor!==null&&(e.anchorMap[e.anchor]=e.result);else if(e.tag==="?"){for(e.result!==null&&e.kind!=="scalar"&&y(e,'unacceptable node kind for !<?> tag; it should be "scalar", not "'+e.kind+'"'),p=0,g=e.implicitTypes.length;p<g;p+=1)if(w=e.implicitTypes[p],w.resolve(e.result)){e.result=w.construct(e.result),e.tag=w.tag,e.anchor!==null&&(e.anchorMap[e.anchor]=e.result);break}}else if(e.tag!=="!"){if(se.call(e.typeMap[e.kind||"fallback"],e.tag))w=e.typeMap[e.kind||"fallback"][e.tag];else for(w=null,_=e.typeMap.multi[e.kind||"fallback"],p=0,g=_.length;p<g;p+=1)if(e.tag.slice(0,_[p].tag.length)===_[p].tag){w=_[p];break}w||y(e,"unknown tag !<"+e.tag+">"),e.result!==null&&w.kind!==e.kind&&y(e,"unacceptable node kind for !<"+e.tag+'> tag; it should be "'+w.kind+'", not "'+e.kind+'"'),w.resolve(e.result,e.tag)?(e.result=w.construct(e.result,e.tag),e.anchor!==null&&(e.anchorMap[e.anchor]=e.result)):y(e,"cannot resolve a node with !<"+e.tag+"> explicit tag")}return e.listener!==null&&e.listener("close",e),e.tag!==null||e.anchor!==null||m}function Ps(e){var i=e.position,t,r,n,s=!1,a;for(e.version=null,e.checkLineBreaks=e.legacy,e.tagMap=Object.create(null),e.anchorMap=Object.create(null);(a=e.input.charCodeAt(e.position))!==0&&(A(e,!0,-1),a=e.input.charCodeAt(e.position),!(e.lineIndent>0||a!==37));){for(s=!0,a=e.input.charCodeAt(++e.position),t=e.position;a!==0&&!P(a);)a=e.input.charCodeAt(++e.position);for(r=e.input.slice(t,e.position),n=[],r.length<1&&y(e,"directive name must not be less than one character in length");a!==0;){for(;ge(a);)a=e.input.charCodeAt(++e.position);if(a===35){do a=e.input.charCodeAt(++e.position);while(a!==0&&!G(a));break}if(G(a))break;for(t=e.position;a!==0&&!P(a);)a=e.input.charCodeAt(++e.position);n.push(e.input.slice(t,e.position))}a!==0&&Ht(e),se.call(Sr,r)?Sr[r](e,r,n):ot(e,'unknown document directive "'+r+'"')}if(A(e,!0,-1),e.lineIndent===0&&e.input.charCodeAt(e.position)===45&&e.input.charCodeAt(e.position+1)===45&&e.input.charCodeAt(e.position+2)===45?(e.position+=3,A(e,!0,-1)):s&&y(e,"directives end mark is expected"),Ce(e,e.lineIndent-1,at,!1,!0),A(e,!0,-1),e.checkLineBreaks&&bs.test(e.input.slice(i,e.position))&&ot(e,"non-ASCII line breaks are interpreted as content"),e.documents.push(e.result),e.position===e.lineStart&&dt(e)){e.input.charCodeAt(e.position)===46&&(e.position+=3,A(e,!0,-1));return}if(e.position<e.length-1)y(e,"end of the stream or a document separator is expected");else return}function Qr(e,i){e=String(e),i=i||{},e.length!==0&&(e.charCodeAt(e.length-1)!==10&&e.charCodeAt(e.length-1)!==13&&(e+=`
+`),e.charCodeAt(0)===65279&&(e=e.slice(1)));var t=new Cs(e,i),r=e.indexOf("\0");for(r!==-1&&(t.position=r,y(t,"null byte is not allowed in input")),t.input+="\0";t.input.charCodeAt(t.position)===32;)t.lineIndent+=1,t.position+=1;for(;t.position<t.length-1;)Ps(t);return t.documents}function Hs(e,i,t){i!==null&&typeof i=="object"&&typeof t>"u"&&(t=i,i=null);var r=Qr(e,t);if(typeof i!="function")return r;for(var n=0,s=r.length;n<s;n+=1)i(r[n])}function Ms(e,i){var t=Qr(e,i);if(t.length!==0){if(t.length===1)return t[0];throw new I("expected a single document in the stream, but found more")}}var Rs=Hs,js=Ms,Xr={loadAll:Rs,load:js},Zr=Object.prototype.toString,ei=Object.prototype.hasOwnProperty,Rt=65279,Us=9,Me=10,zs=13,Ws=32,Bs=33,Gs=34,Dt=35,Ys=37,qs=38,Ks=39,Vs=42,ti=44,Js=45,lt=58,Qs=61,Xs=62,Zs=63,ea=64,ri=91,ii=93,ta=96,ni=123,ra=124,si=125,O={};O[0]="\\0";O[7]="\\a";O[8]="\\b";O[9]="\\t";O[10]="\\n";O[11]="\\v";O[12]="\\f";O[13]="\\r";O[27]="\\e";O[34]='\\"';O[92]="\\\\";O[133]="\\N";O[160]="\\_";O[8232]="\\L";O[8233]="\\P";var ia=["y","Y","yes","Yes","YES","on","On","ON","n","N","no","No","NO","off","Off","OFF"],na=/^[-+]?[0-9_]+(?::[0-9_]+)+(?:\.[0-9_]*)?$/;function sa(e,i){var t,r,n,s,a,o,l;if(i===null)return{};for(t={},r=Object.keys(i),n=0,s=r.length;n<s;n+=1)a=r[n],o=String(i[a]),a.slice(0,2)==="!!"&&(a="tag:yaml.org,2002:"+a.slice(2)),l=e.compiledTypeMap.fallback[a],l&&ei.call(l.styleAliases,o)&&(o=l.styleAliases[o]),t[a]=o;return t}function aa(e){var i,t,r;if(i=e.toString(16).toUpperCase(),e<=255)t="x",r=2;else if(e<=65535)t="u",r=4;else if(e<=4294967295)t="U",r=8;else throw new I("code point within a string may not be greater than 0xFFFFFFFF");return"\\"+t+T.repeat("0",r-i.length)+i}var oa=1,Re=2;function la(e){this.schema=e.schema||zr,this.indent=Math.max(1,e.indent||2),this.noArrayIndent=e.noArrayIndent||!1,this.skipInvalid=e.skipInvalid||!1,this.flowLevel=T.isNothing(e.flowLevel)?-1:e.flowLevel,this.styleMap=sa(this.schema,e.styles||null),this.sortKeys=e.sortKeys||!1,this.lineWidth=e.lineWidth||80,this.noRefs=e.noRefs||!1,this.noCompatMode=e.noCompatMode||!1,this.condenseFlow=e.condenseFlow||!1,this.quotingType=e.quotingType==='"'?Re:oa,this.forceQuotes=e.forceQuotes||!1,this.replacer=typeof e.replacer=="function"?e.replacer:null,this.implicitTypes=this.schema.compiledImplicit,this.explicitTypes=this.schema.compiledExplicit,this.tag=null,this.result="",this.duplicates=[],this.usedDuplicates=null}function Lr(e,i){for(var t=T.repeat(" ",i),r=0,n=-1,s="",a,o=e.length;r<o;)n=e.indexOf(`
+`,r),n===-1?(a=e.slice(r),r=o):(a=e.slice(r,n+1),r=n+1),a.length&&a!==`
+`&&(s+=t),s+=a;return s}function Ot(e,i){return`
+`+T.repeat(" ",e.indent*i)}function ua(e,i){var t,r,n;for(t=0,r=e.implicitTypes.length;t<r;t+=1)if(n=e.implicitTypes[t],n.resolve(i))return!0;return!1}function ut(e){return e===Ws||e===Us}function je(e){return 32<=e&&e<=126||161<=e&&e<=55295&&e!==8232&&e!==8233||57344<=e&&e<=65533&&e!==Rt||65536<=e&&e<=1114111}function Nr(e){return je(e)&&e!==Rt&&e!==zs&&e!==Me}function Dr(e,i,t){var r=Nr(e),n=r&&!ut(e);return(t?r:r&&e!==ti&&e!==ri&&e!==ii&&e!==ni&&e!==si)&&e!==Dt&&!(i===lt&&!n)||Nr(i)&&!ut(i)&&e===Dt||i===lt&&n}function da(e){return je(e)&&e!==Rt&&!ut(e)&&e!==Js&&e!==Zs&&e!==lt&&e!==ti&&e!==ri&&e!==ii&&e!==ni&&e!==si&&e!==Dt&&e!==qs&&e!==Vs&&e!==Bs&&e!==ra&&e!==Qs&&e!==Xs&&e!==Ks&&e!==Gs&&e!==Ys&&e!==ea&&e!==ta}function ca(e){return!ut(e)&&e!==lt}function Pe(e,i){var t=e.charCodeAt(i),r;return t>=55296&&t<=56319&&i+1<e.length&&(r=e.charCodeAt(i+1),r>=56320&&r<=57343)?(t-55296)*1024+r-56320+65536:t}function ai(e){var i=/^\n* /;return i.test(e)}var oi=1,Ft=2,li=3,ui=4,we=5;function ha(e,i,t,r,n,s,a,o){var l,h=0,m=null,p=!1,g=!1,_=r!==-1,w=-1,E=da(Pe(e,0))&&ca(Pe(e,e.length-1));if(i||a)for(l=0;l<e.length;h>=65536?l+=2:l++){if(h=Pe(e,l),!je(h))return we;E=E&&Dr(h,m,o),m=h}else{for(l=0;l<e.length;h>=65536?l+=2:l++){if(h=Pe(e,l),h===Me)p=!0,_&&(g=g||l-w-1>r&&e[w+1]!==" ",w=l);else if(!je(h))return we;E=E&&Dr(h,m,o),m=h}g=g||_&&l-w-1>r&&e[w+1]!==" "}return!p&&!g?E&&!a&&!n(e)?oi:s===Re?we:Ft:t>9&&ai(e)?we:a?s===Re?we:Ft:g?ui:li}function pa(e,i,t,r,n){e.dump=(function(){if(i.length===0)return e.quotingType===Re?'""':"''";if(!e.noCompatMode&&(ia.indexOf(i)!==-1||na.test(i)))return e.quotingType===Re?'"'+i+'"':"'"+i+"'";var s=e.indent*Math.max(1,t),a=e.lineWidth===-1?-1:Math.max(Math.min(e.lineWidth,40),e.lineWidth-s),o=r||e.flowLevel>-1&&t>=e.flowLevel;function l(h){return ua(e,h)}switch(ha(i,o,e.indent,a,l,e.quotingType,e.forceQuotes&&!r,n)){case oi:return i;case Ft:return"'"+i.replace(/'/g,"''")+"'";case li:return"|"+Or(i,e.indent)+Fr(Lr(i,s));case ui:return">"+Or(i,e.indent)+Fr(Lr(ma(i,a),s));case we:return'"'+fa(i)+'"';default:throw new I("impossible error: invalid scalar style")}})()}function Or(e,i){var t=ai(e)?String(i):"",r=e[e.length-1]===`
+`,n=r&&(e[e.length-2]===`
+`||e===`
+`),s=n?"+":r?"":"-";return t+s+`
+`}function Fr(e){return e[e.length-1]===`
+`?e.slice(0,-1):e}function ma(e,i){for(var t=/(\n+)([^\n]*)/g,r=(function(){var h=e.indexOf(`
+`);return h=h!==-1?h:e.length,t.lastIndex=h,Ir(e.slice(0,h),i)})(),n=e[0]===`
+`||e[0]===" ",s,a;a=t.exec(e);){var o=a[1],l=a[2];s=l[0]===" ",r+=o+(!n&&!s&&l!==""?`
+`:"")+Ir(l,i),n=s}return r}function Ir(e,i){if(e===""||e[0]===" ")return e;for(var t=/ [^ ]/g,r,n=0,s,a=0,o=0,l="";r=t.exec(e);)o=r.index,o-n>i&&(s=a>n?a:o,l+=`
+`+e.slice(n,s),n=s+1),a=o;return l+=`
+`,e.length-n>i&&a>n?l+=e.slice(n,a)+`
+`+e.slice(a+1):l+=e.slice(n),l.slice(1)}function fa(e){for(var i="",t=0,r,n=0;n<e.length;t>=65536?n+=2:n++)t=Pe(e,n),r=O[t],!r&&je(t)?(i+=e[n],t>=65536&&(i+=e[n+1])):i+=r||aa(t);return i}function ga(e,i,t){var r="",n=e.tag,s,a,o;for(s=0,a=t.length;s<a;s+=1)o=t[s],e.replacer&&(o=e.replacer.call(t,String(s),o)),(V(e,i,o,!1,!1)||typeof o>"u"&&V(e,i,null,!1,!1))&&(r!==""&&(r+=","+(e.condenseFlow?"":" ")),r+=e.dump);e.tag=n,e.dump="["+r+"]"}function Pr(e,i,t,r){var n="",s=e.tag,a,o,l;for(a=0,o=t.length;a<o;a+=1)l=t[a],e.replacer&&(l=e.replacer.call(t,String(a),l)),(V(e,i+1,l,!0,!0,!1,!0)||typeof l>"u"&&V(e,i+1,null,!0,!0,!1,!0))&&((!r||n!=="")&&(n+=Ot(e,i)),e.dump&&Me===e.dump.charCodeAt(0)?n+="-":n+="- ",n+=e.dump);e.tag=s,e.dump=n||"[]"}function _a(e,i,t){var r="",n=e.tag,s=Object.keys(t),a,o,l,h,m;for(a=0,o=s.length;a<o;a+=1)m="",r!==""&&(m+=", "),e.condenseFlow&&(m+='"'),l=s[a],h=t[l],e.replacer&&(h=e.replacer.call(t,l,h)),V(e,i,l,!1,!1)&&(e.dump.length>1024&&(m+="? "),m+=e.dump+(e.condenseFlow?'"':"")+":"+(e.condenseFlow?"":" "),V(e,i,h,!1,!1)&&(m+=e.dump,r+=m));e.tag=n,e.dump="{"+r+"}"}function va(e,i,t,r){var n="",s=e.tag,a=Object.keys(t),o,l,h,m,p,g;if(e.sortKeys===!0)a.sort();else if(typeof e.sortKeys=="function")a.sort(e.sortKeys);else if(e.sortKeys)throw new I("sortKeys must be a boolean or a function");for(o=0,l=a.length;o<l;o+=1)g="",(!r||n!=="")&&(g+=Ot(e,i)),h=a[o],m=t[h],e.replacer&&(m=e.replacer.call(t,h,m)),V(e,i+1,h,!0,!0,!0)&&(p=e.tag!==null&&e.tag!=="?"||e.dump&&e.dump.length>1024,p&&(e.dump&&Me===e.dump.charCodeAt(0)?g+="?":g+="? "),g+=e.dump,p&&(g+=Ot(e,i)),V(e,i+1,m,!0,p)&&(e.dump&&Me===e.dump.charCodeAt(0)?g+=":":g+=": ",g+=e.dump,n+=g));e.tag=s,e.dump=n||"{}"}function Hr(e,i,t){var r,n,s,a,o,l;for(n=t?e.explicitTypes:e.implicitTypes,s=0,a=n.length;s<a;s+=1)if(o=n[s],(o.instanceOf||o.predicate)&&(!o.instanceOf||typeof i=="object"&&i instanceof o.instanceOf)&&(!o.predicate||o.predicate(i))){if(t?o.multi&&o.representName?e.tag=o.representName(i):e.tag=o.tag:e.tag="?",o.represent){if(l=e.styleMap[o.tag]||o.defaultStyle,Zr.call(o.represent)==="[object Function]")r=o.represent(i,l);else if(ei.call(o.represent,l))r=o.represent[l](i,l);else throw new I("!<"+o.tag+'> tag resolver accepts not "'+l+'" style');e.dump=r}return!0}return!1}function V(e,i,t,r,n,s,a){e.tag=null,e.dump=t,Hr(e,t,!1)||Hr(e,t,!0);var o=Zr.call(e.dump),l=r,h;r&&(r=e.flowLevel<0||e.flowLevel>i);var m=o==="[object Object]"||o==="[object Array]",p,g;if(m&&(p=e.duplicates.indexOf(t),g=p!==-1),(e.tag!==null&&e.tag!=="?"||g||e.indent!==2&&i>0)&&(n=!1),g&&e.usedDuplicates[p])e.dump="*ref_"+p;else{if(m&&g&&!e.usedDuplicates[p]&&(e.usedDuplicates[p]=!0),o==="[object Object]")r&&Object.keys(e.dump).length!==0?(va(e,i,e.dump,n),g&&(e.dump="&ref_"+p+e.dump)):(_a(e,i,e.dump),g&&(e.dump="&ref_"+p+" "+e.dump));else if(o==="[object Array]")r&&e.dump.length!==0?(e.noArrayIndent&&!a&&i>0?Pr(e,i-1,e.dump,n):Pr(e,i,e.dump,n),g&&(e.dump="&ref_"+p+e.dump)):(ga(e,i,e.dump),g&&(e.dump="&ref_"+p+" "+e.dump));else if(o==="[object String]")e.tag!=="?"&&pa(e,e.dump,i,s,l);else{if(o==="[object Undefined]")return!1;if(e.skipInvalid)return!1;throw new I("unacceptable kind of an object to dump "+o)}e.tag!==null&&e.tag!=="?"&&(h=encodeURI(e.tag[0]==="!"?e.tag.slice(1):e.tag).replace(/!/g,"%21"),e.tag[0]==="!"?h="!"+h:h.slice(0,18)==="tag:yaml.org,2002:"?h="!!"+h.slice(18):h="!<"+h+">",e.dump=h+" "+e.dump)}return!0}function ya(e,i){var t=[],r=[],n,s;for(It(e,t,r),n=0,s=r.length;n<s;n+=1)i.duplicates.push(t[r[n]]);i.usedDuplicates=new Array(s)}function It(e,i,t){var r,n,s;if(e!==null&&typeof e=="object")if(n=i.indexOf(e),n!==-1)t.indexOf(n)===-1&&t.push(n);else if(i.push(e),Array.isArray(e))for(n=0,s=e.length;n<s;n+=1)It(e[n],i,t);else for(r=Object.keys(e),n=0,s=r.length;n<s;n+=1)It(e[r[n]],i,t)}function ba(e,i){i=i||{};var t=new la(i);t.noRefs||ya(e,t);var r=e;return t.replacer&&(r=t.replacer.call({"":r},"",r)),V(t,0,r,!0,!0)?t.dump+`
+`:""}var $a=ba,xa={dump:$a};function jt(e,i){return function(){throw new Error("Function yaml."+e+" is removed in js-yaml 4. Use yaml."+i+" instead, which is now safe by default.")}}var di=Xr.load,Wo=Xr.loadAll,ct=xa.dump;var Bo=jt("safeLoad","load"),Go=jt("safeLoadAll","loadAll"),Yo=jt("safeDump","dump");var Y=class extends b{constructor(){super(...arguments);this.value=null;this._mode="form";this._yamlText="";this._yamlError=null}willUpdate(t){super.willUpdate?.(t),t.has("value")&&this._mode==="form"&&(this._yamlText=ct(this.value??{}))}connectedCallback(){super.connectedCallback(),this._yamlText=ct(this.value??{});let t=this.value&&typeof this.value=="object"?this.value.script:null,r=this._fieldsFor(t);t&&(!r||Object.keys(r).length===0)&&(this._mode="yaml")}_setMode(t){t==="form"&&this._yamlError!==null||(t==="yaml"&&(this._yamlText=ct(this.value??{})),this._mode=t)}_onYamlInput(t){this._yamlText=t;let r;try{r=di(t)}catch(o){this._yamlError=o.message;return}if(r==null){this._yamlError=null,this._emit(null);return}if(typeof r!="object"||Array.isArray(r)){this._yamlError="Expected an object";return}let n=r,s=n.script;if(typeof s!="string"||!s.startsWith("script.")){this._yamlError="`script` must be a 'script.<name>' string";return}let a=n.args;if(a!==void 0&&(typeof a!="object"||Array.isArray(a)||a===null)){this._yamlError="`args` must be an object if present";return}this._yamlError=null,this._emit({script:s,args:a??{}})}_emit(t){this.value=t,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:this.value},bubbles:!0,composed:!0}))}_scriptIds(){let t=this.hass?.services;return Object.keys(t?.script??{}).sort().map(n=>`script.${n}`)}_label(t){let n=this.hass?.states?.[t]?.attributes?.friendly_name;return typeof n=="string"&&n?n:t}_fieldsFor(t){if(!t)return;let r=t.replace(/^script\./,"");return this.hass?.services?.script?.[r]?.fields}_defaultArgs(t){let r=this._fieldsFor(t)??{},n={};for(let[s,a]of Object.entries(r))a&&Object.prototype.hasOwnProperty.call(a,"default")&&(n[s]=a.default);return n}_pickerSchema(){return[{name:"script",selector:{select:{mode:"dropdown",options:this._scriptIds().map(t=>({value:t,label:this._label(t)}))}}}]}_pickScript(t){if(!t){this._emit(null);return}this._emit({script:t,args:this._defaultArgs(t)})}_argsSchema(){let t=this._fieldsFor(this.value&&typeof this.value=="object"?this.value.script:null);return t?Object.entries(t).map(([r,n])=>({name:r,required:n.required,description:n.description?{suffix:n.description}:void 0,selector:n.selector??{text:{}}})):[]}_updateArgs(t){!this.value||typeof this.value!="object"||this._emit({script:this.value.script,args:t})}render(){let t=this.value&&typeof this.value=="object"?this.value.script:null,r=this._argsSchema(),n=(this.value&&typeof this.value=="object"?this.value.args:{})??{},s=r.length>0;return u`
+      <div class="section">
+        <h4>${d(this.hass,"ui.script","Script")}</h4>
+        ${this._renderPicker(t)}
+      </div>
+      ${t?u`
+        <div class="tabs">
+          <button
+            type="button"
+            ?disabled=${!s||this._yamlError!==null}
+            title=${this._yamlError??""}
+            class=${this._mode==="form"?"active":""}
+            @click=${()=>this._setMode("form")}
+          >${d(this.hass,"ui.form","Form")}</button>
+          <button
+            type="button"
+            class=${this._mode==="yaml"?"active":""}
+            @click=${()=>this._setMode("yaml")}
+          >${d(this.hass,"ui.yaml","YAML")}</button>
+        </div>
+      `:""}
+      ${t&&this._mode==="form"&&s?u`
+        <div class="section args">
+          <h4>${d(this.hass,"ui.arguments","Arguments")}</h4>
+          ${this._renderArgs(r,n)}
+        </div>
+      `:""}
+      ${t&&this._mode==="yaml"?this._renderYaml():""}
+    `}_renderYaml(){let t=r=>{let n=r.target.value??r.detail?.value??"";this._onYamlInput(n)};return customElements.get("ha-code-editor")?u`
+        <ha-code-editor mode="yaml" .value=${this._yamlText} @value-changed=${t}></ha-code-editor>
+        ${this._yamlError?u`<div class="error">${this._yamlError}</div>`:""}
+      `:u`
+      <textarea
+        rows="6"
+        style="width:100%;font-family:monospace;"
+        .value=${this._yamlText}
+        @input=${t}
+      ></textarea>
+      ${this._yamlError?u`<div class="error">${this._yamlError}</div>`:""}
+    `}_renderArgs(t,r){return customElements.get("ha-form")?u`<ha-form
+        .hass=${this.hass}
+        .schema=${t}
+        .data=${r}
+        @value-changed=${n=>{n.stopPropagation(),this._updateArgs(n.detail.value)}}
+      ></ha-form>`:u`${t.map(n=>{let s=r[n.name];return u`
+        <label style="display:block;margin-bottom:0.4rem;">
+          <span style="display:inline-block;min-width:8em;">${n.name}</span>
+          <input
+            .value=${s==null?"":String(s)}
+            @change=${a=>{let o=a.target.value,l={...r,[n.name]:o};this._updateArgs(l)}}
+          />
+        </label>
+      `})}`}_renderPicker(t){return customElements.get("ha-form")?u`<ha-form
+        .hass=${this.hass}
+        .schema=${this._pickerSchema()}
+        .data=${{script:t??""}}
+        .computeLabel=${()=>""}
+        @value-changed=${r=>{r.stopPropagation(),this._pickScript(r.detail.value.script||null)}}
+      ></ha-form>`:u`<select
+      @change=${r=>this._pickScript(r.target.value||null)}>
+      <option value="" ?selected=${!t}>(none)</option>
+      ${this._scriptIds().map(r=>u`<option value=${r} ?selected=${r===t}>${this._label(r)}</option>`)}
+    </select>`}};Y.styles=$`
+    :host { display: block; }
+    .section { margin-bottom: 1rem; }
+    .section h4 { margin: 0 0 0.5rem 0; font-size: 0.95em; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .tabs button {
+      background: transparent;
+      border: 1px solid var(--divider-color, #ccc);
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--primary-text-color, inherit);
+    }
+    .tabs button.active {
+      background: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+      border-color: transparent;
+    }
+    .tabs button[disabled] { opacity: 0.4; cursor: not-allowed; }
+    .error {
+      color: var(--error-color, #d32f2f);
+      font-size: 0.85em;
+      margin-top: 0.25rem;
+      white-space: pre-wrap;
+    }
+  `,c([f({attribute:!1})],Y.prototype,"hass",2),c([f({attribute:!1})],Y.prototype,"value",2),c([v()],Y.prototype,"_mode",2),c([v()],Y.prototype,"_yamlText",2),c([v()],Y.prototype,"_yamlError",2),Y=c([x("ambience-script-predicate-input")],Y);var wa=["dawn","sunrise","noon","sunset","dusk","midnight"],_e=class extends b{constructor(){super(...arguments);this.value={kind:"time",hh:12,mm:0}}_emit(t){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_onKindChange(t){let r=t.target.value;r!==this.value.kind&&(r==="time"?this._emit({kind:"time",hh:12,mm:0}):this._emit({kind:"sun",anchor:"sunset",offset_min:0}))}_onTimeChange(t){if(this.value.kind!=="time")return;let r=t.target.value,[n,s]=r.split(":").map(a=>parseInt(a,10));Number.isNaN(n)||Number.isNaN(s)||this._emit({kind:"time",hh:n,mm:s})}_onAnchorChange(t){if(this.value.kind!=="sun")return;let r=t.target.value;this._emit({kind:"sun",anchor:r,offset_min:this.value.offset_min})}_onOffsetChange(t){if(this.value.kind!=="sun")return;let r=parseInt(t.target.value,10);Number.isNaN(r)||this._emit({kind:"sun",anchor:this.value.anchor,offset_min:r})}_renderTime(t){let r=`${String(t.hh).padStart(2,"0")}:${String(t.mm).padStart(2,"0")}`;return u`<input type="time" .value=${r} @input=${this._onTimeChange} />`}_renderSun(t){let r=ka(t.offset_min,this.hass);return u`
       <select @change=${this._onAnchorChange}>
-        ${br.map(r=>l`<option value=${r} ?selected=${r===e.anchor}>${se(this.hass,r)}</option>`)}
+        ${wa.map(n=>u`<option value=${n} ?selected=${n===t.anchor}>${$e(this.hass,n)}</option>`)}
       </select>
       <input
         type="number"
         step="1"
-        placeholder=${o(this.hass,"ui.offset_placeholder","\xB1min, e.g. -30")}
-        .value=${String(e.offset_min)}
+        placeholder=${d(this.hass,"ui.offset_placeholder","\xB1min, e.g. -30")}
+        .value=${String(t.offset_min)}
         @input=${this._onOffsetChange}
       />
-      <span class="offset-hint">${t}</span>
-    `}render(){return l`
+      <span class="offset-hint">${r}</span>
+    `}render(){return u`
       <select @change=${this._onKindChange}>
-        <option value="time" ?selected=${this.value.kind==="time"}>${o(this.hass,"ui.endpoint_time","Time")}</option>
-        <option value="sun" ?selected=${this.value.kind==="sun"}>${o(this.hass,"ui.endpoint_sun","Sun")}</option>
+        <option value="time" ?selected=${this.value.kind==="time"}>${d(this.hass,"ui.endpoint_time","Time")}</option>
+        <option value="sun" ?selected=${this.value.kind==="sun"}>${d(this.hass,"ui.endpoint_sun","Sun")}</option>
       </select>
       ${this.value.kind==="time"?this._renderTime(this.value):this._renderSun(this.value)}
-    `}};Z.styles=g`
+    `}};_e.styles=$`
     :host {
       display: inline-flex;
       gap: 0.5rem;
@@ -257,46 +375,46 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       font-size: 0.85em;
       min-width: 3em;
     }
-  `,d([c({attribute:!1})],Z.prototype,"hass",2),d([c({attribute:!1})],Z.prototype,"value",2),Z=d([_("ambience-time-endpoint")],Z);function $r(n,s){if(n===0)return"";let e=Math.abs(n),t=n<0?"\u2212":"+";if(e%60===0){let r=e/60,i=r===1?o(s,"ui.unit_hour","hour"):o(s,"ui.unit_hours","hours");return`${t}${r} ${i}`}return`${t}${e} ${o(s,"ui.unit_min","min")}`}var me={kind:"any"},Dt={from:{kind:"time",hh:9,mm:0},to:{kind:"time",hh:17,mm:0}},N=class extends f{constructor(){super(...arguments);this.value=null;this._entries=[me];this._openIdx=0}willUpdate(e){e.has("value")&&(this._entries=this._predicateToEntries(this.value),this._entries.length===0&&(this._entries=[me]),this._openIdx=Math.max(0,this._entries.length-1)),this._openIdx>=this._entries.length&&(this._openIdx=Math.max(0,this._entries.length-1))}updated(){this.shadowRoot?.querySelectorAll(".entry select")?.forEach(t=>{let r=this._entries[this._openIdx];if(!r)return;let i=r.kind==="any"?"__any__":r.kind==="range"?"__custom__":r.period;t.value!==i&&(t.value=i)})}_predicateToEntries(e){return e===null?[me]:(Array.isArray(e)?e:[e]).map(r=>"period"in r?{kind:"period",period:r.period}:{kind:"range",from:r.from,to:r.to})}_emit(e){let t=e.filter(i=>i.kind!=="any").map(i=>i.kind==="period"?{period:i.period}:{from:i.from,to:i.to}),r=t.length===0?null:t.length===1?t[0]:t;this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:r},bubbles:!0,composed:!0}))}_effectiveIds(){if(!this.periods)return[];let e=Object.keys(this.periods.builtins),t=Object.keys(this.periods.custom).filter(i=>!(i in this.periods.builtins)),r=new Set(this.periods.hidden);return[...e.filter(i=>!r.has(i)),...t]}_onSelectChange(e,t){let r=t.target.value,i=[...this._entries];r==="__any__"?i[e]=me:r==="__custom__"?i[e]={kind:"range",...Dt}:i[e]={kind:"period",period:r},this._entries=i,this._emit(i)}_onRangeChange(e,t,r){r.stopPropagation();let i=this._entries[e];if(!i||i.kind!=="range")return;let a=[...this._entries];a[e]={...i,[t]:r.detail.value},this._entries=a,this._emit(a)}_onRemove(e){let t=this._entries.filter((r,i)=>i!==e);this._entries=t.length===0?[me]:t,this._openIdx>=this._entries.length?this._openIdx=Math.max(0,this._entries.length-1):e<this._openIdx&&(this._openIdx-=1),this._emit(this._entries)}_onAdd(){let e=[...this._entries,{kind:"range",...Dt}];this._entries=e,this._openIdx=e.length-1,this._emit(e)}_onChipClick(e){this._openIdx=e}_renderChip(e,t){let r;return e.kind==="any"?r=o(this.hass,"ui.any_placeholder","(any)"):e.kind==="period"?r=De({period:e.period},{hass:this.hass,periods:this.periods}):r=De({from:e.from,to:e.to},{hass:this.hass,periods:this.periods}),l`
-      <div class="summary-chip" @click=${()=>this._onChipClick(t)}>
-        <span class="chip-label">${r}</span>
-        ${this._entries.length>1?l`<button class="remove" @click=${i=>{i.stopPropagation(),this._onRemove(t)}} title=${o(this.hass,"ui.remove","Remove")}>✕</button>`:""}
+  `,c([f({attribute:!1})],_e.prototype,"hass",2),c([f({attribute:!1})],_e.prototype,"value",2),_e=c([x("ambience-time-endpoint")],_e);function ka(e,i){if(e===0)return"";let t=Math.abs(e),r=e<0?"\u2212":"+";if(t%60===0){let n=t/60,s=n===1?d(i,"ui.unit_hour","hour"):d(i,"ui.unit_hours","hours");return`${r}${n} ${s}`}return`${r}${t} ${d(i,"ui.unit_min","min")}`}var Ue={kind:"any"},ci={from:{kind:"time",hh:9,mm:0},to:{kind:"time",hh:17,mm:0}},q=class extends b{constructor(){super(...arguments);this.value=null;this._entries=[Ue];this._openIdx=0}willUpdate(t){t.has("value")&&(this._entries=this._predicateToEntries(this.value),this._entries.length===0&&(this._entries=[Ue]),this._openIdx=Math.max(0,this._entries.length-1)),this._openIdx>=this._entries.length&&(this._openIdx=Math.max(0,this._entries.length-1))}updated(){this.shadowRoot?.querySelectorAll(".entry select")?.forEach(r=>{let n=this._entries[this._openIdx];if(!n)return;let s=n.kind==="any"?"__any__":n.kind==="range"?"__custom__":n.period;r.value!==s&&(r.value=s)})}_predicateToEntries(t){return t===null?[Ue]:(Array.isArray(t)?t:[t]).map(n=>"period"in n?{kind:"period",period:n.period}:{kind:"range",from:n.from,to:n.to})}_emit(t){let r=t.filter(s=>s.kind!=="any").map(s=>s.kind==="period"?{period:s.period}:{from:s.from,to:s.to}),n=r.length===0?null:r.length===1?r[0]:r;this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:n},bubbles:!0,composed:!0}))}_effectiveIds(){if(!this.periods)return[];let t=Object.keys(this.periods.builtins),r=Object.keys(this.periods.custom).filter(s=>!(s in this.periods.builtins)),n=new Set(this.periods.hidden);return[...t.filter(s=>!n.has(s)),...r]}_onSelectChange(t,r){let n=r.target.value,s=[...this._entries];n==="__any__"?s[t]=Ue:n==="__custom__"?s[t]={kind:"range",...ci}:s[t]={kind:"period",period:n},this._entries=s,this._emit(s)}_onRangeChange(t,r,n){n.stopPropagation();let s=this._entries[t];if(!s||s.kind!=="range")return;let a=[...this._entries];a[t]={...s,[r]:n.detail.value},this._entries=a,this._emit(a)}_onRemove(t){let r=this._entries.filter((n,s)=>s!==t);this._entries=r.length===0?[Ue]:r,this._openIdx>=this._entries.length?this._openIdx=Math.max(0,this._entries.length-1):t<this._openIdx&&(this._openIdx-=1),this._emit(this._entries)}_onAdd(){let t=[...this._entries,{kind:"range",...ci}];this._entries=t,this._openIdx=t.length-1,this._emit(t)}_onChipClick(t){this._openIdx=t}_renderChip(t,r){let n;return t.kind==="any"?n=d(this.hass,"ui.any_placeholder","(any)"):t.kind==="period"?n=nt({period:t.period},{hass:this.hass,periods:this.periods}):n=nt({from:t.from,to:t.to},{hass:this.hass,periods:this.periods}),u`
+      <div class="summary-chip" @click=${()=>this._onChipClick(r)}>
+        <span class="chip-label">${n}</span>
+        ${this._entries.length>1?u`<button class="remove" @click=${s=>{s.stopPropagation(),this._onRemove(r)}} title=${d(this.hass,"ui.remove","Remove")}>✕</button>`:""}
       </div>
-    `}_renderEntry(e,t,r){let i=this._effectiveIds(),a=this.periods?.custom??{};return l`
+    `}_renderEntry(t,r,n){let s=this._effectiveIds(),a=this.periods?.custom??{};return u`
       <div class="entry">
         <div class="entry-header">
-          <select @change=${h=>this._onSelectChange(t,h)}>
-            ${r?l`<option value="__any__">${o(this.hass,"ui.any_time","Any time")}</option>`:""}
-            <option value="__custom__">${o(this.hass,"ui.custom_range","Custom range")}</option>
+          <select @change=${o=>this._onSelectChange(r,o)}>
+            ${n?u`<option value="__any__">${d(this.hass,"ui.any_time","Any time")}</option>`:""}
+            <option value="__custom__">${d(this.hass,"ui.custom_range","Custom range")}</option>
             <option disabled>──────</option>
-            ${i.map(h=>l`<option value=${h}>
-                ${X(this.hass,h,a)}${a[h]&&!this.periods?.builtins[h]?o(this.hass,"ui.custom_suffix"," (custom)"):""}
+            ${s.map(o=>u`<option value=${o}>
+                ${me(this.hass,o,a)}${a[o]&&!this.periods?.builtins[o]?d(this.hass,"ui.custom_suffix"," (custom)"):""}
               </option>`)}
           </select>
-          ${this._entries.length>1?l`<button class="remove" @click=${()=>this._onRemove(t)} title=${o(this.hass,"ui.remove","Remove")}>✕</button>`:""}
+          ${this._entries.length>1?u`<button class="remove" @click=${()=>this._onRemove(r)} title=${d(this.hass,"ui.remove","Remove")}>✕</button>`:""}
         </div>
-        ${e.kind==="range"?l`
+        ${t.kind==="range"?u`
               <div class="range-row">
-                <label>${o(this.hass,"ui.from_label","From")}</label>
+                <label>${d(this.hass,"ui.from_label","From")}</label>
                 <ambience-time-endpoint
                   .hass=${this.hass}
-                  .value=${e.from}
-                  @value-changed=${h=>this._onRangeChange(t,"from",h)}
+                  .value=${t.from}
+                  @value-changed=${o=>this._onRangeChange(r,"from",o)}
                 ></ambience-time-endpoint>
               </div>
               <div class="range-row">
-                <label>${o(this.hass,"ui.to_label","To")}</label>
+                <label>${d(this.hass,"ui.to_label","To")}</label>
                 <ambience-time-endpoint
                   .hass=${this.hass}
-                  .value=${e.to}
-                  @value-changed=${h=>this._onRangeChange(t,"to",h)}
+                  .value=${t.to}
+                  @value-changed=${o=>this._onRangeChange(r,"to",o)}
                 ></ambience-time-endpoint>
               </div>`:""}
       </div>
-    `}render(){let e=this._entries.some(r=>r.kind!=="any"),t=this._entries.length>1;return l`
-      ${this._entries.map((r,i)=>t&&i!==this._openIdx?this._renderChip(r,i):this._renderEntry(r,i,i===0))}
-      ${e?l`<button class="add-btn" @click=${this._onAdd}>${o(this.hass,"ui.add_time_range","+ add another time range")}</button>`:""}
-    `}};N.styles=g`
+    `}render(){let t=this._entries.some(n=>n.kind!=="any"),r=this._entries.length>1;return u`
+      ${this._entries.map((n,s)=>r&&s!==this._openIdx?this._renderChip(n,s):this._renderEntry(n,s,s===0))}
+      ${t?u`<button class="add-btn" @click=${this._onAdd}>${d(this.hass,"ui.add_time_range","+ add another time range")}</button>`:""}
+    `}};q.styles=$`
     :host { display: block; }
     .entry {
       display: flex; flex-direction: column; gap: 0.5rem;
@@ -325,103 +443,103 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
     }
     .summary-chip:hover { border-color: var(--primary-color, #03a9f4); }
     .chip-label { flex: 1; }
-  `,d([c({attribute:!1})],N.prototype,"value",2),d([c({attribute:!1})],N.prototype,"periods",2),d([c({attribute:!1})],N.prototype,"hass",2),d([m()],N.prototype,"_entries",2),d([m()],N.prototype,"_openIdx",2),N=d([_("ambience-time-of-day-input")],N);function Ht(n){if(typeof n!="string")return!1;let s=n.split(",").map(e=>e.trim()).filter(e=>e!=="");if(s.length===0)return!1;for(let e of s)if(e.includes("-")){let t=e.split("-").map(a=>a.trim());if(t.length!==2||!/^\d+$/.test(t[0])||!/^\d+$/.test(t[1]))return!1;let r=Number(t[0]),i=Number(t[1]);if(!(r>=1&&r<=i&&i<=31))return!1}else{if(!/^\d+$/.test(e))return!1;let t=Number(e);if(!(t>=1&&t<=31))return!1}return!0}var Ke=["weekday","day_of_month","date","date_range","last_day","workday","holiday","first_workday","last_workday"],wr=new Set(["workday","holiday"]),kr=new Set(["first_workday","last_workday"]),xr=[31,29,31,30,31,30,31,31,30,31,30,31];function fe(n){return xr[n-1]??31}function Je(n){switch(n){case"weekday":return{kind:n,days:[]};case"day_of_month":return{kind:n,days:""};case"date":return{kind:n,month:1,day:1};case"date_range":return{kind:n,from:{month:1,day:1},to:{month:12,day:31}};default:return{kind:n}}}var U=class extends f{constructor(){super(...arguments);this.value=null;this.dayConfig={workday_sensor:null,workday_calendar:null};this._computeFieldHelper=e=>e.name==="days"?o(this.hass,"ui.day_of_month_placeholder","e.g. 1-10, 15"):"";this._computeFieldLabel=e=>{switch(e.name){case"kind":return o(this.hass,"ui.field_kind","Kind");case"days":return o(this.hass,"ui.field_days_of_month","Days of month");case"month":return o(this.hass,"ui.field_month","Month");case"day":return o(this.hass,"ui.field_day","Day");case"from_month":return o(this.hass,"ui.field_from_month","From month");case"from_day":return o(this.hass,"ui.field_from_day","From day");case"to_month":return o(this.hass,"ui.field_to_month","To month");case"to_day":return o(this.hass,"ui.field_to_day","To day");default:return e.name}}}_current(){return this.value===null?{include:[],exclude:[]}:{include:[...this.value.include],exclude:[...this.value.exclude]}}_emit(e){let t=e.include.length===0&&e.exclude.length===0;this.value=t?null:e,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:this.value},bubbles:!0,composed:!0}))}_addItem(e,t){let r=this._current();r[e]=[...r[e],Je(t)],this._emit(r)}_removeItem(e,t){let r=this._current();r[e]=r[e].filter((i,a)=>a!==t),this._emit(r)}_updateItem(e,t,r){let i=this._current();i[e]=i[e].map((a,h)=>h===t?r:a),this._emit(i)}_kindDisabled(e){return!!(wr.has(e)&&!this.dayConfig.workday_sensor||kr.has(e)&&!this.dayConfig.workday_calendar)}_kindSchema(){return[{name:"kind",selector:{select:{mode:"dropdown",options:Ke.map(e=>({value:e,label:ke(this.hass,e),disabled:this._kindDisabled(e)}))}}}]}_monthSelector(){return{select:{mode:"dropdown",options:[1,2,3,4,5,6,7,8,9,10,11,12].map(e=>({value:String(e),label:ie(this.hass,e)}))}}}_daySelector(e){return{number:{min:1,max:fe(e),mode:"box"}}}_bodySchema(e){return e.kind==="day_of_month"?[{name:"days",selector:{text:{}}}]:null}_bodyData(e){return e.kind==="day_of_month"?{days:e.days}:{}}_bodyPatch(e,t){return e.kind==="day_of_month"?{kind:"day_of_month",days:String(t.days??"")}:e}_setDatePart(e,t,r){let i=Number(r);if(!Number.isFinite(i)||i<1)return e;if(e.kind==="date"){let{month:a,day:h}=e;return t==="month"&&(a=i),t==="day"&&(h=i),{kind:"date",month:a,day:Math.min(h,fe(a))}}if(e.kind==="date_range"){let a={...e.from},h={...e.to};return t==="from_month"&&(a.month=i),t==="from_day"&&(a.day=i),t==="to_month"&&(h.month=i),t==="to_day"&&(h.day=i),a.day=Math.min(a.day,fe(a.month)),h.day=Math.min(h.day,fe(h.month)),{kind:"date_range",from:a,to:h}}return e}_onKindForm(e,t,r){let i=r.kind;if(!i){this._removeItem(e,t);return}if(this._kindDisabled(i))return;let a=this._current()[e][t];a&&a.kind===i||this._updateItem(e,t,Je(i))}_dayOfMonthError(e){return e.trim()===""||Ht(e)?null:o(this.hass,"ui.day_spec_error","Use days 1\u201331 and ranges like 1-10, separated by commas")}_onBodyForm(e,t,r,i){this._updateItem(e,t,this._bodyPatch(r,i))}_renderWeekday(e,t,r){return l`${[0,1,2,3,4,5,6].map(i=>l`
+  `,c([f({attribute:!1})],q.prototype,"value",2),c([f({attribute:!1})],q.prototype,"periods",2),c([f({attribute:!1})],q.prototype,"hass",2),c([v()],q.prototype,"_entries",2),c([v()],q.prototype,"_openIdx",2),q=c([x("ambience-time-of-day-input")],q);function hi(e){if(typeof e!="string")return!1;let i=e.split(",").map(t=>t.trim()).filter(t=>t!=="");if(i.length===0)return!1;for(let t of i)if(t.includes("-")){let r=t.split("-").map(a=>a.trim());if(r.length!==2||!/^\d+$/.test(r[0])||!/^\d+$/.test(r[1]))return!1;let n=Number(r[0]),s=Number(r[1]);if(!(n>=1&&n<=s&&s<=31))return!1}else{if(!/^\d+$/.test(t))return!1;let r=Number(t);if(!(r>=1&&r<=31))return!1}return!0}var Ut=["weekday","day_of_month","date","date_range","last_day","workday","holiday","first_workday","last_workday"],Ea=new Set(["workday","holiday"]),Ca=new Set(["first_workday","last_workday"]),Sa=[31,29,31,30,31,30,31,31,30,31,30,31];function ze(e){return Sa[e-1]??31}function zt(e){switch(e){case"weekday":return{kind:e,days:[]};case"day_of_month":return{kind:e,days:""};case"date":return{kind:e,month:1,day:1};case"date_range":return{kind:e,from:{month:1,day:1},to:{month:12,day:31}};default:return{kind:e}}}var ae=class extends b{constructor(){super(...arguments);this.value=null;this.dayConfig={workday_sensor:null,workday_calendar:null};this._computeFieldHelper=t=>t.name==="days"?d(this.hass,"ui.day_of_month_placeholder","e.g. 1-10, 15"):"";this._computeFieldLabel=t=>{switch(t.name){case"kind":return d(this.hass,"ui.field_kind","Kind");case"days":return d(this.hass,"ui.field_days_of_month","Days of month");case"month":return d(this.hass,"ui.field_month","Month");case"day":return d(this.hass,"ui.field_day","Day");case"from_month":return d(this.hass,"ui.field_from_month","From month");case"from_day":return d(this.hass,"ui.field_from_day","From day");case"to_month":return d(this.hass,"ui.field_to_month","To month");case"to_day":return d(this.hass,"ui.field_to_day","To day");default:return t.name}}}_current(){return this.value===null?{include:[],exclude:[]}:{include:[...this.value.include],exclude:[...this.value.exclude]}}_emit(t){let r=t.include.length===0&&t.exclude.length===0;this.value=r?null:t,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:this.value},bubbles:!0,composed:!0}))}_addItem(t,r){let n=this._current();n[t]=[...n[t],zt(r)],this._emit(n)}_removeItem(t,r){let n=this._current();n[t]=n[t].filter((s,a)=>a!==r),this._emit(n)}_updateItem(t,r,n){let s=this._current();s[t]=s[t].map((a,o)=>o===r?n:a),this._emit(s)}_kindDisabled(t){return!!(Ea.has(t)&&!this.dayConfig.workday_sensor||Ca.has(t)&&!this.dayConfig.workday_calendar)}_kindSchema(){return[{name:"kind",selector:{select:{mode:"dropdown",options:Ut.map(t=>({value:t,label:Je(this.hass,t),disabled:this._kindDisabled(t)}))}}}]}_monthSelector(){return{select:{mode:"dropdown",options:[1,2,3,4,5,6,7,8,9,10,11,12].map(t=>({value:String(t),label:xe(this.hass,t)}))}}}_daySelector(t){return{number:{min:1,max:ze(t),mode:"box"}}}_bodySchema(t){return t.kind==="day_of_month"?[{name:"days",selector:{text:{}}}]:null}_bodyData(t){return t.kind==="day_of_month"?{days:t.days}:{}}_bodyPatch(t,r){return t.kind==="day_of_month"?{kind:"day_of_month",days:String(r.days??"")}:t}_setDatePart(t,r,n){let s=Number(n);if(!Number.isFinite(s)||s<1)return t;if(t.kind==="date"){let{month:a,day:o}=t;return r==="month"&&(a=s),r==="day"&&(o=s),{kind:"date",month:a,day:Math.min(o,ze(a))}}if(t.kind==="date_range"){let a={...t.from},o={...t.to};return r==="from_month"&&(a.month=s),r==="from_day"&&(a.day=s),r==="to_month"&&(o.month=s),r==="to_day"&&(o.day=s),a.day=Math.min(a.day,ze(a.month)),o.day=Math.min(o.day,ze(o.month)),{kind:"date_range",from:a,to:o}}return t}_onKindForm(t,r,n){let s=n.kind;if(!s){this._removeItem(t,r);return}if(this._kindDisabled(s))return;let a=this._current()[t][r];a&&a.kind===s||this._updateItem(t,r,zt(s))}_dayOfMonthError(t){return t.trim()===""||hi(t)?null:d(this.hass,"ui.day_spec_error","Use days 1\u201331 and ranges like 1-10, separated by commas")}_onBodyForm(t,r,n,s){this._updateItem(t,r,this._bodyPatch(n,s))}_renderWeekday(t,r,n){return u`${[0,1,2,3,4,5,6].map(s=>u`
       <label class="day-pill">
         <input
           type="checkbox"
-          .checked=${r.days.includes(i)}
-          @change=${a=>{let u=a.target.checked?[...r.days,i].sort((p,v)=>p-v):r.days.filter(p=>p!==i);this._updateItem(e,t,{kind:"weekday",days:u})}}
-        />${we(this.hass,i)}
+          .checked=${n.days.includes(s)}
+          @change=${a=>{let l=a.target.checked?[...n.days,s].sort((h,m)=>h-m):n.days.filter(h=>h!==s);this._updateItem(t,r,{kind:"weekday",days:l})}}
+        />${Ve(this.hass,s)}
       </label>
-    `)}`}_renderKindPicker(e,t,r){return customElements.get("ha-form")?l`<ha-form
+    `)}`}_renderKindPicker(t,r,n){return customElements.get("ha-form")?u`<ha-form
         class="kind"
         .hass=${this.hass}
         .schema=${this._kindSchema()}
-        .data=${{kind:r.kind}}
+        .data=${{kind:n.kind}}
         .computeLabel=${this._computeFieldLabel}
-        @value-changed=${i=>{i.stopPropagation(),this._onKindForm(e,t,i.detail.value)}}
-      ></ha-form>`:l`
+        @value-changed=${s=>{s.stopPropagation(),this._onKindForm(t,r,s.detail.value)}}
+      ></ha-form>`:u`
       <select
         class="kind"
-        .value=${r.kind}
-        @change=${i=>{let a=i.target.value;this._kindDisabled(a)||a===r.kind||this._updateItem(e,t,Je(a))}}
+        .value=${n.kind}
+        @change=${s=>{let a=s.target.value;this._kindDisabled(a)||a===n.kind||this._updateItem(t,r,zt(a))}}
       >
-        ${Ke.map(i=>l`<option value=${i} ?disabled=${this._kindDisabled(i)}>${ke(this.hass,i)}</option>`)}
+        ${Ut.map(s=>u`<option value=${s} ?disabled=${this._kindDisabled(s)}>${Je(this.hass,s)}</option>`)}
       </select>
-    `}_renderItemBody(e,t,r){if(r.kind==="weekday")return this._renderWeekday(e,t,r);if(customElements.get("ha-form")){if(r.kind==="date")return this._renderDateRow(e,t,r,"month","day",r.month,r.day);if(r.kind==="date_range")return l`
-          ${this._renderDateRow(e,t,r,"from_month","from_day",r.from.month,r.from.day)}
-          ${this._renderDateRow(e,t,r,"to_month","to_day",r.to.month,r.to.day)}
-        `;let i=this._bodySchema(r);if(!i)return l``;let a=r.kind==="day_of_month"?this._dayOfMonthError(r.days):null;return l`<ha-form
+    `}_renderItemBody(t,r,n){if(n.kind==="weekday")return this._renderWeekday(t,r,n);if(customElements.get("ha-form")){if(n.kind==="date")return this._renderDateRow(t,r,n,"month","day",n.month,n.day);if(n.kind==="date_range")return u`
+          ${this._renderDateRow(t,r,n,"from_month","from_day",n.from.month,n.from.day)}
+          ${this._renderDateRow(t,r,n,"to_month","to_day",n.to.month,n.to.day)}
+        `;let s=this._bodySchema(n);if(!s)return u``;let a=n.kind==="day_of_month"?this._dayOfMonthError(n.days):null;return u`<ha-form
         .hass=${this.hass}
-        .schema=${i}
-        .data=${this._bodyData(r)}
+        .schema=${s}
+        .data=${this._bodyData(n)}
         .error=${a?{days:a}:void 0}
         .computeLabel=${this._computeFieldLabel}
         .computeHelper=${this._computeFieldHelper}
-        @value-changed=${h=>{h.stopPropagation(),this._onBodyForm(e,t,r,h.detail.value)}}
-      ></ha-form>`}return this._renderNativeBody(e,t,r)}_renderDateRow(e,t,r,i,a,h,u){let p=(v,y)=>{this._updateItem(e,t,this._setDatePart(r,v,y[v]))};return l`
+        @value-changed=${o=>{o.stopPropagation(),this._onBodyForm(t,r,n,o.detail.value)}}
+      ></ha-form>`}return this._renderNativeBody(t,r,n)}_renderDateRow(t,r,n,s,a,o,l){let h=(m,p)=>{this._updateItem(t,r,this._setDatePart(n,m,p[m]))};return u`
       <div class="date-row">
         <ha-form
           .hass=${this.hass}
-          .schema=${[{name:i,required:!0,selector:this._monthSelector()}]}
-          .data=${{[i]:String(h)}}
+          .schema=${[{name:s,required:!0,selector:this._monthSelector()}]}
+          .data=${{[s]:String(o)}}
           .computeLabel=${this._computeFieldLabel}
-          @value-changed=${v=>{v.stopPropagation(),p(i,v.detail.value)}}
+          @value-changed=${m=>{m.stopPropagation(),h(s,m.detail.value)}}
         ></ha-form>
         <ha-form
           .hass=${this.hass}
-          .schema=${[{name:a,required:!0,selector:this._daySelector(h)}]}
-          .data=${{[a]:u}}
+          .schema=${[{name:a,required:!0,selector:this._daySelector(o)}]}
+          .data=${{[a]:l}}
           .computeLabel=${this._computeFieldLabel}
-          @value-changed=${v=>{v.stopPropagation(),p(a,v.detail.value)}}
+          @value-changed=${m=>{m.stopPropagation(),h(a,m.detail.value)}}
         ></ha-form>
       </div>
-    `}_renderNativeBody(e,t,r){if(r.kind==="day_of_month"){let h=this._dayOfMonthError(r.days);return l`<input
-        type="text" placeholder=${o(this.hass,"ui.day_of_month_placeholder","e.g. 1-10, 15")}
-        .value=${r.days}
-        @change=${u=>this._updateItem(e,t,this._bodyPatch(r,{days:u.target.value}))}
-      />${h?l`<div class="field-error">${h}</div>`:""}`}let i=(h,u)=>l`
-      <input type="number" min="1" max="12" .value=${String(u)}
-        @change=${p=>this._updateItem(e,t,this._setDatePart(r,h,p.target.value))} />
-    `,a=(h,u,p)=>l`
-      <input type="number" min="1" max=${String(fe(u))} .value=${String(p)}
-        @change=${v=>this._updateItem(e,t,this._setDatePart(r,h,v.target.value))} />
-    `;return r.kind==="date"?l`${i("month",r.month)} / ${a("day",r.month,r.day)}`:r.kind==="date_range"?l`
-        <span>${o(this.hass,"ui.from","from")}</span>
-        ${i("from_month",r.from.month)} / ${a("from_day",r.from.month,r.from.day)}
-        <span>${o(this.hass,"ui.to","to")}</span>
-        ${i("to_month",r.to.month)} / ${a("to_day",r.to.month,r.to.day)}
-      `:l``}_renderAddPicker(e){let t=e==="include"?o(this.hass,"ui.add_include_item","+ Add include item"):o(this.hass,"ui.add_exclude_item","+ Add exclude item");if(customElements.get("ha-form")){let r=()=>t;return l`<ha-form
+    `}_renderNativeBody(t,r,n){if(n.kind==="day_of_month"){let o=this._dayOfMonthError(n.days);return u`<input
+        type="text" placeholder=${d(this.hass,"ui.day_of_month_placeholder","e.g. 1-10, 15")}
+        .value=${n.days}
+        @change=${l=>this._updateItem(t,r,this._bodyPatch(n,{days:l.target.value}))}
+      />${o?u`<div class="field-error">${o}</div>`:""}`}let s=(o,l)=>u`
+      <input type="number" min="1" max="12" .value=${String(l)}
+        @change=${h=>this._updateItem(t,r,this._setDatePart(n,o,h.target.value))} />
+    `,a=(o,l,h)=>u`
+      <input type="number" min="1" max=${String(ze(l))} .value=${String(h)}
+        @change=${m=>this._updateItem(t,r,this._setDatePart(n,o,m.target.value))} />
+    `;return n.kind==="date"?u`${s("month",n.month)} / ${a("day",n.month,n.day)}`:n.kind==="date_range"?u`
+        <span>${d(this.hass,"ui.from","from")}</span>
+        ${s("from_month",n.from.month)} / ${a("from_day",n.from.month,n.from.day)}
+        <span>${d(this.hass,"ui.to","to")}</span>
+        ${s("to_month",n.to.month)} / ${a("to_day",n.to.month,n.to.day)}
+      `:u``}_renderAddPicker(t){let r=t==="include"?d(this.hass,"ui.add_include_item","+ Add include item"):d(this.hass,"ui.add_exclude_item","+ Add exclude item");if(customElements.get("ha-form")){let n=()=>r;return u`<ha-form
         .hass=${this.hass}
         .schema=${this._kindSchema()}
         .data=${{kind:""}}
-        .computeLabel=${r}
-        @value-changed=${i=>{i.stopPropagation();let a=i.detail.value.kind;a&&!this._kindDisabled(a)&&this._addItem(e,a)}}
-      ></ha-form>`}return l`
+        .computeLabel=${n}
+        @value-changed=${s=>{s.stopPropagation();let a=s.detail.value.kind;a&&!this._kindDisabled(a)&&this._addItem(t,a)}}
+      ></ha-form>`}return u`
       <select
         .value=${""}
-        @change=${r=>{let i=r.target.value;i&&(this._addItem(e,i),r.target.value="")}}
+        @change=${n=>{let s=n.target.value;s&&(this._addItem(t,s),n.target.value="")}}
       >
-        <option value="">${t}</option>
-        ${Ke.map(r=>l`<option value=${r} ?disabled=${this._kindDisabled(r)}>${ke(this.hass,r)}</option>`)}
+        <option value="">${r}</option>
+        ${Ut.map(n=>u`<option value=${n} ?disabled=${this._kindDisabled(n)}>${Je(this.hass,n)}</option>`)}
       </select>
-    `}_renderItem(e,t,r){return l`
+    `}_renderItem(t,r,n){return u`
       <div class="item">
-        ${this._renderKindPicker(e,t,r)}
-        <div class="body">${this._renderItemBody(e,t,r)}</div>
-        <button class="remove" title=${o(this.hass,"ui.remove","Remove")} @click=${()=>this._removeItem(e,t)}>✕</button>
+        ${this._renderKindPicker(t,r,n)}
+        <div class="body">${this._renderItemBody(t,r,n)}</div>
+        <button class="remove" title=${d(this.hass,"ui.remove","Remove")} @click=${()=>this._removeItem(t,r)}>✕</button>
       </div>
-    `}_renderSection(e,t){return l`
+    `}_renderSection(t,r){return u`
       <div class="section">
-        <h4>${e==="include"?o(this.hass,"ui.include","Include"):o(this.hass,"ui.exclude","Exclude")}</h4>
-        ${t.length===0&&e==="include"?l`<div class="hint">${o(this.hass,"ui.empty_all_days","(empty \u2192 all days)")}</div>`:""}
-        ${t.map((r,i)=>this._renderItem(e,i,r))}
-        ${this._renderAddPicker(e)}
+        <h4>${t==="include"?d(this.hass,"ui.include","Include"):d(this.hass,"ui.exclude","Exclude")}</h4>
+        ${r.length===0&&t==="include"?u`<div class="hint">${d(this.hass,"ui.empty_all_days","(empty \u2192 all days)")}</div>`:""}
+        ${r.map((n,s)=>this._renderItem(t,s,n))}
+        ${this._renderAddPicker(t)}
       </div>
-    `}render(){let{include:e,exclude:t}=this._current();return l`
-      ${this._renderSection("include",e)}
-      ${this._renderSection("exclude",t)}
-    `}};U.styles=g`
+    `}render(){let{include:t,exclude:r}=this._current();return u`
+      ${this._renderSection("include",t)}
+      ${this._renderSection("exclude",r)}
+    `}};ae.styles=$`
     :host { display: block; }
     .section { margin-bottom: 1rem; }
     .section h4 { margin: 0 0 0.5rem 0; font-size: 0.95em; }
@@ -453,64 +571,64 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       background: var(--secondary-background-color, #f5f5f5);
       cursor: pointer;
     }
-  `,d([c({attribute:!1})],U.prototype,"hass",2),d([c({attribute:!1})],U.prototype,"value",2),d([c({attribute:!1})],U.prototype,"dayConfig",2),U=d([_("ambience-day-predicate-input")],U);var Nt=["temperature","apparent_temperature","humidity","wind_speed","pressure"],At=["<","<=",">",">="],Mt={"<":"<","<=":"\u2264",">":">",">=":"\u2265"},M=class extends f{constructor(){super(...arguments);this.value=null;this.groups=[]}_current(){return this.value===null?{groups:[],thresholds:[]}:{groups:[...this.value.groups],thresholds:[...this.value.thresholds]}}_emit(e){let t=e.groups.length===0&&e.thresholds.length===0;this.value=t?null:e,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:this.value},bubbles:!0,composed:!0}))}_setGroups(e){this._emit({...this._current(),groups:e})}_addThreshold(){let e=this._current();e.thresholds=[...e.thresholds,{attribute:"temperature",op:"<",value:0}],this._emit(e)}_updateThreshold(e,t){let r=this._current();r.thresholds=r.thresholds.map((i,a)=>a===e?t:i),this._emit(r)}_removeThreshold(e){let t=this._current();t.thresholds=t.thresholds.filter((r,i)=>i!==e),this._emit(t)}_attributeSchema(e){return[{name:"attribute",required:!0,selector:{select:{mode:"dropdown",options:Nt.map(t=>({value:t,label:pe(this.hass,t)}))}}}]}_opSchema(e){return[{name:"op",required:!0,selector:{select:{mode:"dropdown",options:At.map(t=>({value:t,label:Mt[t]}))}}}]}_entityState(){let e=this.weatherEntity;return e?this.hass?.states?.[e]:void 0}_valueSchema(e,t){return[{name:"value",required:!0,selector:{number:{mode:"box",unit_of_measurement:qe(this.hass,t,this._entityState())}}}]}_groupsSchema(){return[{name:"groups",selector:{select:{multiple:!0,mode:"list",options:this.groups.map(e=>({value:e.id,label:e.label}))}}}]}_renderGroups(e){return customElements.get("ha-form")?l`<ha-form
+  `,c([f({attribute:!1})],ae.prototype,"hass",2),c([f({attribute:!1})],ae.prototype,"value",2),c([f({attribute:!1})],ae.prototype,"dayConfig",2),ae=c([x("ambience-day-predicate-input")],ae);var pi=["temperature","apparent_temperature","humidity","wind_speed","pressure"],mi=["<","<=",">",">="],fi={"<":"<","<=":"\u2264",">":">",">=":"\u2265"},J=class extends b{constructor(){super(...arguments);this.value=null;this.groups=[]}_current(){return this.value===null?{groups:[],thresholds:[]}:{groups:[...this.value.groups],thresholds:[...this.value.thresholds]}}_emit(t){let r=t.groups.length===0&&t.thresholds.length===0;this.value=r?null:t,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:this.value},bubbles:!0,composed:!0}))}_setGroups(t){this._emit({...this._current(),groups:t})}_addThreshold(){let t=this._current();t.thresholds=[...t.thresholds,{attribute:"temperature",op:"<",value:0}],this._emit(t)}_updateThreshold(t,r){let n=this._current();n.thresholds=n.thresholds.map((s,a)=>a===t?r:s),this._emit(n)}_removeThreshold(t){let r=this._current();r.thresholds=r.thresholds.filter((n,s)=>s!==t),this._emit(r)}_attributeSchema(t){return[{name:"attribute",required:!0,selector:{select:{mode:"dropdown",options:pi.map(r=>({value:r,label:Ie(this.hass,r)}))}}}]}_opSchema(t){return[{name:"op",required:!0,selector:{select:{mode:"dropdown",options:mi.map(r=>({value:r,label:fi[r]}))}}}]}_entityState(){let t=this.weatherEntity;return t?this.hass?.states?.[t]:void 0}_valueSchema(t,r){return[{name:"value",required:!0,selector:{number:{mode:"box",unit_of_measurement:Et(this.hass,r,this._entityState())}}}]}_groupsSchema(){return[{name:"groups",selector:{select:{multiple:!0,mode:"list",options:this.groups.map(t=>({value:t.id,label:t.label}))}}}]}_renderGroups(t){return customElements.get("ha-form")?u`<ha-form
         .hass=${this.hass}
         .schema=${this._groupsSchema()}
-        .data=${{groups:e}}
+        .data=${{groups:t}}
         .computeLabel=${()=>""}
-        @value-changed=${t=>{t.stopPropagation(),this._setGroups(t.detail.value.groups??[])}}
-      ></ha-form>`:l`${this.groups.map(t=>l`
+        @value-changed=${r=>{r.stopPropagation(),this._setGroups(r.detail.value.groups??[])}}
+      ></ha-form>`:u`${this.groups.map(r=>u`
       <label style="display:inline-flex;gap:0.25rem;margin:0 0.5rem 0.25rem 0;">
-        <input type="checkbox" .checked=${e.includes(t.id)}
-          @change=${r=>{let i=r.target.checked;this._setGroups(i?[...e,t.id]:e.filter(a=>a!==t.id))}} />${t.label}
-      </label>`)}`}_renderAttributeSelect(e,t){return customElements.get("ha-form")?l`<ha-form
+        <input type="checkbox" .checked=${t.includes(r.id)}
+          @change=${n=>{let s=n.target.checked;this._setGroups(s?[...t,r.id]:t.filter(a=>a!==r.id))}} />${r.label}
+      </label>`)}`}_renderAttributeSelect(t,r){return customElements.get("ha-form")?u`<ha-form
         class="attr-form"
         .hass=${this.hass}
-        .schema=${this._attributeSchema(e)}
-        .data=${{attribute:t.attribute}}
+        .schema=${this._attributeSchema(t)}
+        .data=${{attribute:r.attribute}}
         .computeLabel=${()=>""}
-        @value-changed=${r=>{r.stopPropagation();let i=r.detail.value.attribute;i&&this._updateThreshold(e,{...t,attribute:i})}}
-      ></ha-form>`:l`<select
-      @change=${r=>this._updateThreshold(e,{...t,attribute:r.target.value})}>
-      ${Nt.map(r=>l`<option value=${r} ?selected=${r===t.attribute}>${pe(this.hass,r)}</option>`)}
-    </select>`}_renderOpSelect(e,t){return customElements.get("ha-form")?l`<ha-form
+        @value-changed=${n=>{n.stopPropagation();let s=n.detail.value.attribute;s&&this._updateThreshold(t,{...r,attribute:s})}}
+      ></ha-form>`:u`<select
+      @change=${n=>this._updateThreshold(t,{...r,attribute:n.target.value})}>
+      ${pi.map(n=>u`<option value=${n} ?selected=${n===r.attribute}>${Ie(this.hass,n)}</option>`)}
+    </select>`}_renderOpSelect(t,r){return customElements.get("ha-form")?u`<ha-form
         class="op-form"
         .hass=${this.hass}
-        .schema=${this._opSchema(e)}
-        .data=${{op:t.op}}
+        .schema=${this._opSchema(t)}
+        .data=${{op:r.op}}
         .computeLabel=${()=>""}
-        @value-changed=${r=>{r.stopPropagation();let i=r.detail.value.op;i&&this._updateThreshold(e,{...t,op:i})}}
-      ></ha-form>`:l`<select
-      @change=${r=>this._updateThreshold(e,{...t,op:r.target.value})}>
-      ${At.map(r=>l`<option value=${r} ?selected=${r===t.op}>${Mt[r]}</option>`)}
-    </select>`}_renderValueInput(e,t){if(customElements.get("ha-form"))return l`<ha-form
+        @value-changed=${n=>{n.stopPropagation();let s=n.detail.value.op;s&&this._updateThreshold(t,{...r,op:s})}}
+      ></ha-form>`:u`<select
+      @change=${n=>this._updateThreshold(t,{...r,op:n.target.value})}>
+      ${mi.map(n=>u`<option value=${n} ?selected=${n===r.op}>${fi[n]}</option>`)}
+    </select>`}_renderValueInput(t,r){if(customElements.get("ha-form"))return u`<ha-form
         .hass=${this.hass}
-        .schema=${this._valueSchema(e,t.attribute)}
-        .data=${{value:t.value}}
+        .schema=${this._valueSchema(t,r.attribute)}
+        .data=${{value:r.value}}
         .computeLabel=${()=>""}
-        @value-changed=${i=>{i.stopPropagation();let a=i.detail.value.value;typeof a=="number"&&Number.isFinite(a)&&this._updateThreshold(e,{...t,value:a})}}
-      ></ha-form>`;let r=qe(this.hass,t.attribute,this._entityState());return l`<span class="value-wrap">
-      <input type="number" .value=${String(t.value)}
-        @change=${i=>{let a=Number(i.target.value);Number.isFinite(a)&&this._updateThreshold(e,{...t,value:a})}} />
-      <span class="unit">${r}</span>
-    </span>`}_renderThreshold(e,t){return l`
+        @value-changed=${s=>{s.stopPropagation();let a=s.detail.value.value;typeof a=="number"&&Number.isFinite(a)&&this._updateThreshold(t,{...r,value:a})}}
+      ></ha-form>`;let n=Et(this.hass,r.attribute,this._entityState());return u`<span class="value-wrap">
+      <input type="number" .value=${String(r.value)}
+        @change=${s=>{let a=Number(s.target.value);Number.isFinite(a)&&this._updateThreshold(t,{...r,value:a})}} />
+      <span class="unit">${n}</span>
+    </span>`}_renderThreshold(t,r){return u`
       <div class="threshold">
-        ${this._renderAttributeSelect(e,t)}
-        ${this._renderOpSelect(e,t)}
-        ${this._renderValueInput(e,t)}
-        <button class="remove" title=${o(this.hass,"ui.remove","Remove")} @click=${()=>this._removeThreshold(e)}>✕</button>
+        ${this._renderAttributeSelect(t,r)}
+        ${this._renderOpSelect(t,r)}
+        ${this._renderValueInput(t,r)}
+        <button class="remove" title=${d(this.hass,"ui.remove","Remove")} @click=${()=>this._removeThreshold(t)}>✕</button>
       </div>
-    `}render(){let{groups:e,thresholds:t}=this._current();return l`
+    `}render(){let{groups:t,thresholds:r}=this._current();return u`
       <div class="section">
-        <h4>${o(this.hass,"ui.groups","Groups")}</h4>
-        ${this._renderGroups(e)}
+        <h4>${d(this.hass,"ui.groups","Groups")}</h4>
+        ${this._renderGroups(t)}
       </div>
       <div class="section">
-        <h4>${o(this.hass,"ui.thresholds","Thresholds")}</h4>
-        ${t.map((r,i)=>this._renderThreshold(i,r))}
-        <button class="add" @click=${()=>this._addThreshold()}>${o(this.hass,"ui.add_threshold","+ Add threshold")}</button>
+        <h4>${d(this.hass,"ui.thresholds","Thresholds")}</h4>
+        ${r.map((n,s)=>this._renderThreshold(s,n))}
+        <button class="add" @click=${()=>this._addThreshold()}>${d(this.hass,"ui.add_threshold","+ Add threshold")}</button>
       </div>
-    `}};M.styles=g`
+    `}};J.styles=$`
     :host { display: block; }
     .section { margin-bottom: 1rem; }
     .section h4 { margin: 0 0 0.5rem 0; font-size: 0.95em; }
@@ -552,109 +670,109 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       padding: 0.4rem 0.75rem; border-radius: 4px; cursor: pointer;
       color: var(--primary-text-color, inherit);
     }
-  `,d([c({attribute:!1})],M.prototype,"hass",2),d([c({attribute:!1})],M.prototype,"value",2),d([c({attribute:!1})],M.prototype,"groups",2),d([c({attribute:!1})],M.prototype,"weatherEntity",2),M=d([_("ambience-weather-predicate-input")],M);var w=class extends f{constructor(){super(...arguments);this.value={kind:"is",entity_id:"",states:[]};this._knownStates=[]}async updated(e){if(e.has("value")){let r=e.get("value")?.entity_id,i=this.value.entity_id;if(i&&i!==r&&this.hass)try{let a=await Et(this.hass,i);this._knownStates=a.states}catch{this._knownStates=[]}}}_normalize(e){let t={...e};return t.attribute===""&&(t.attribute=null),t.for&&t.for.h===0&&t.for.m===0&&t.for.s===0&&(t.for=null),t}_emit(e){let t=this._normalize(e);this.value=t,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_autoFlipOp(e){let t=this._isNumericTargetFor(e),r=this._isNumericOp(e.kind);return t&&!r?{...e,kind:">"}:!t&&r?{...e,kind:"is"}:e}_setEntity(e){this._emit(this._autoFlipOp({...this.value,entity_id:e,states:[],attribute:null}))}_setAttribute(e){this._emit(this._autoFlipOp({...this.value,attribute:e}))}_setOp(e){this._emit({...this.value,kind:e})}_setStates(e){this._emit({...this.value,states:e})}_setValueAt(e,t){if(this._isNumericOp(this.value.kind)){this._setStates([t]);return}let r=this.value.states.slice();t===""?r.splice(e,1):r[e]=t,this._setStates(r)}_addValue(e){e&&this._setStates([...this.value.states,e])}_removeValueAt(e){let t=this.value.states.slice();t.splice(e,1),this._setStates(t)}_setForDuration(e){this._emit({...this.value,for:e})}_entitySchema(){return[{name:"entity_id",required:!0,selector:{entity:{}}}]}_knownAttributesFor(e){if(!e)return[];let r=this.hass?.states?.[e]?.attributes;return r?Object.keys(r).sort():[]}_attributeSchema(){let e=this._knownAttributesFor(this.value.entity_id);return[{name:"attribute",selector:{select:{mode:"dropdown",custom_value:!0,options:[{value:w._STATE_SENTINEL,label:w._STATE_SENTINEL},...e.map(t=>({value:t,label:t}))]}}}]}_attributeData(){let e=this.value.attribute;return e?{attribute:e}:{attribute:w._STATE_SENTINEL}}_setAttributeFromHaForm(e){e===w._STATE_SENTINEL?this._setAttribute(""):this._setAttribute(e)}_isNumericOp(e){return w._NUMERIC_OPS.includes(e)}_isNumericTargetFor(e){let r=this.hass?.states?.[e.entity_id];if(!r)return!1;if(e.attribute)return typeof r.attributes?.[e.attribute]=="number";let i=r.state;return typeof i!="string"||i===""||i==="unknown"||i==="unavailable"?!1:Number.isFinite(Number(i))}_opSchema(){let e=this._isNumericTargetFor(this.value)?[...w._NUMERIC_OPS]:["is","is_not"];return e.includes(this.value.kind)||e.push(this.value.kind),[{name:"op",required:!0,selector:{select:{mode:"dropdown",options:e.map(t=>({value:t,label:D(this.hass,t)}))}}}]}_currentAttributeValue(){return this.value.attribute?this.hass?.states?.[this.value.entity_id]?.attributes?.[this.value.attribute]:void 0}_valueSchema(){if(this._isNumericOp(this.value.kind))return[{name:"value",selector:{number:{mode:"box",step:"any"}}}];let e;if(this.value.attribute){let t=this._currentAttributeValue();e=t==null?[]:[String(t)]}else e=this._knownStates;return[{name:"value",selector:{select:{mode:"dropdown",custom_value:!0,options:e.map(t=>({value:t,label:t}))}}}]}_forSchema(){return[{name:"duration",selector:{duration:{enable_day:!1}}}]}_forData(){let e=this.value.for??{h:0,m:0,s:0};return{duration:{hours:e.h,minutes:e.m,seconds:e.s}}}_setForFromHaForm(e){this._setForDuration({h:e?.hours??0,m:e?.minutes??0,s:e?.seconds??0})}_renderEntity(){return customElements.get("ha-form")?l`<ha-form
+  `,c([f({attribute:!1})],J.prototype,"hass",2),c([f({attribute:!1})],J.prototype,"value",2),c([f({attribute:!1})],J.prototype,"groups",2),c([f({attribute:!1})],J.prototype,"weatherEntity",2),J=c([x("ambience-weather-predicate-input")],J);var N=class extends b{constructor(){super(...arguments);this.value={kind:"is",entity_id:"",states:[]};this._knownStates=[]}async updated(t){if(t.has("value")){let n=t.get("value")?.entity_id,s=this.value.entity_id;if(s&&s!==n&&this.hass)try{let a=await _r(this.hass,s);this._knownStates=a.states}catch{this._knownStates=[]}}}_normalize(t){let r={...t};return r.attribute===""&&(r.attribute=null),r.for&&r.for.h===0&&r.for.m===0&&r.for.s===0&&(r.for=null),r}_emit(t){let r=this._normalize(t);this.value=r,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:r},bubbles:!0,composed:!0}))}_autoFlipOp(t){let r=this._isNumericTargetFor(t),n=this._isNumericOp(t.kind);return r&&!n?{...t,kind:">"}:!r&&n?{...t,kind:"is"}:t}_setEntity(t){this._emit(this._autoFlipOp({...this.value,entity_id:t,states:[],attribute:null}))}_setAttribute(t){this._emit(this._autoFlipOp({...this.value,attribute:t}))}_setOp(t){this._emit({...this.value,kind:t})}_setStates(t){this._emit({...this.value,states:t})}_setValueAt(t,r){if(this._isNumericOp(this.value.kind)){this._setStates([r]);return}let n=this.value.states.slice();r===""?n.splice(t,1):n[t]=r,this._setStates(n)}_addValue(t){t&&this._setStates([...this.value.states,t])}_removeValueAt(t){let r=this.value.states.slice();r.splice(t,1),this._setStates(r)}_setForDuration(t){this._emit({...this.value,for:t})}_entitySchema(){return[{name:"entity_id",required:!0,selector:{entity:{}}}]}_knownAttributesFor(t){if(!t)return[];let n=this.hass?.states?.[t]?.attributes;return n?Object.keys(n).sort():[]}_attributeSchema(){let t=this._knownAttributesFor(this.value.entity_id);return[{name:"attribute",selector:{select:{mode:"dropdown",custom_value:!0,options:[{value:N._STATE_SENTINEL,label:N._STATE_SENTINEL},...t.map(r=>({value:r,label:r}))]}}}]}_attributeData(){let t=this.value.attribute;return t?{attribute:t}:{attribute:N._STATE_SENTINEL}}_setAttributeFromHaForm(t){t===N._STATE_SENTINEL?this._setAttribute(""):this._setAttribute(t)}_isNumericOp(t){return N._NUMERIC_OPS.includes(t)}_isNumericTargetFor(t){let n=this.hass?.states?.[t.entity_id];if(!n)return!1;if(t.attribute)return typeof n.attributes?.[t.attribute]=="number";let s=n.state;return typeof s!="string"||s===""||s==="unknown"||s==="unavailable"?!1:Number.isFinite(Number(s))}_opSchema(){let t=this._isNumericTargetFor(this.value)?[...N._NUMERIC_OPS]:["is","is_not"];return t.includes(this.value.kind)||t.push(this.value.kind),[{name:"op",required:!0,selector:{select:{mode:"dropdown",options:t.map(r=>({value:r,label:W(this.hass,r)}))}}}]}_currentAttributeValue(){return this.value.attribute?this.hass?.states?.[this.value.entity_id]?.attributes?.[this.value.attribute]:void 0}_valueSchema(){if(this._isNumericOp(this.value.kind))return[{name:"value",selector:{number:{mode:"box",step:"any"}}}];let t;if(this.value.attribute){let r=this._currentAttributeValue();t=r==null?[]:[String(r)]}else t=this._knownStates;return[{name:"value",selector:{select:{mode:"dropdown",custom_value:!0,options:t.map(r=>({value:r,label:r}))}}}]}_forSchema(){return[{name:"duration",selector:{duration:{enable_day:!1}}}]}_forData(){let t=this.value.for??{h:0,m:0,s:0};return{duration:{hours:t.h,minutes:t.m,seconds:t.s}}}_setForFromHaForm(t){this._setForDuration({h:t?.hours??0,m:t?.minutes??0,s:t?.seconds??0})}_renderEntity(){return customElements.get("ha-form")?u`<ha-form
         data-field="entity"
         .hass=${this.hass}
         .schema=${this._entitySchema()}
         .data=${{entity_id:this.value.entity_id}}
         .computeLabel=${()=>""}
-        @value-changed=${e=>{e.stopPropagation(),this._setEntity(e.detail.value.entity_id??"")}}
-      ></ha-form>`:l`<input
+        @value-changed=${t=>{t.stopPropagation(),this._setEntity(t.detail.value.entity_id??"")}}
+      ></ha-form>`:u`<input
       data-field="entity"
       type="text"
       .value=${this.value.entity_id}
-      @change=${e=>this._setEntity(e.target.value)}
-    />`}_renderAttribute(){let e=this.value.attribute??"";return customElements.get("ha-form")?l`<ha-form
+      @change=${t=>this._setEntity(t.target.value)}
+    />`}_renderAttribute(){let t=this.value.attribute??"";return customElements.get("ha-form")?u`<ha-form
         data-field="attribute"
         .hass=${this.hass}
         .schema=${this._attributeSchema()}
         .data=${this._attributeData()}
         .computeLabel=${()=>""}
-        @value-changed=${t=>{t.stopPropagation(),this._setAttributeFromHaForm(t.detail.value.attribute??"")}}
-      ></ha-form>`:l`<input
+        @value-changed=${r=>{r.stopPropagation(),this._setAttributeFromHaForm(r.detail.value.attribute??"")}}
+      ></ha-form>`:u`<input
       data-field="attribute"
       type="text"
-      placeholder=${o(this.hass,"ui.state_attribute_placeholder","leave blank to compare state")}
-      .value=${e}
-      @change=${t=>this._setAttribute(t.target.value)}
-    />`}_renderOp(){return customElements.get("ha-form")?l`<ha-form
+      placeholder=${d(this.hass,"ui.state_attribute_placeholder","leave blank to compare state")}
+      .value=${t}
+      @change=${r=>this._setAttribute(r.target.value)}
+    />`}_renderOp(){return customElements.get("ha-form")?u`<ha-form
         class="op-form"
         data-field="op"
         .hass=${this.hass}
         .schema=${this._opSchema()}
         .data=${{op:this.value.kind}}
         .computeLabel=${()=>""}
-        @value-changed=${e=>{e.stopPropagation();let t=e.detail.value.op;t&&this._setOp(t)}}
-      ></ha-form>`:l`<select
+        @value-changed=${t=>{t.stopPropagation();let r=t.detail.value.op;r&&this._setOp(r)}}
+      ></ha-form>`:u`<select
       data-field="op"
-      @change=${e=>this._setOp(e.target.value)}>
+      @change=${t=>this._setOp(t.target.value)}>
       <option value="is" ?selected=${this.value.kind==="is"}>is</option>
       <option value="is_not" ?selected=${this.value.kind==="is_not"}>is not</option>
-    </select>`}_renderValueRow(e,t){let r=t===-1,i=r?u=>this._addValue(u):u=>this._setValueAt(t,u),a=this._isNumericOp(this.value.kind),h=a?{value:e===""?void 0:Number(e)}:{value:e};return customElements.get("ha-form")?l`
-        <div class="value-row" data-row=${t}>
+    </select>`}_renderValueRow(t,r){let n=r===-1,s=n?l=>this._addValue(l):l=>this._setValueAt(r,l),a=this._isNumericOp(this.value.kind),o=a?{value:t===""?void 0:Number(t)}:{value:t};return customElements.get("ha-form")?u`
+        <div class="value-row" data-row=${r}>
           <ha-form
             .hass=${this.hass}
             .schema=${this._valueSchema()}
-            .data=${h}
+            .data=${o}
             .computeLabel=${()=>""}
-            @value-changed=${u=>{u.stopPropagation();let p=u.detail.value.value;i(p==null?"":String(p))}}
+            @value-changed=${l=>{l.stopPropagation();let h=l.detail.value.value;s(h==null?"":String(h))}}
           ></ha-form>
         </div>
-      `:l`
-      <div class="value-row" data-row=${t}>
-        <input type=${a?"number":"text"} .value=${e}
-          placeholder=${r?o(this.hass,"ui.state_add_value","+ Add state"):""}
-          @change=${u=>i(u.target.value)} />
+      `:u`
+      <div class="value-row" data-row=${r}>
+        <input type=${a?"number":"text"} .value=${t}
+          placeholder=${n?d(this.hass,"ui.state_add_value","+ Add state"):""}
+          @change=${l=>s(l.target.value)} />
       </div>
-    `}_renderForRow(){if(customElements.get("ha-form"))return l`<ha-form
+    `}_renderForRow(){if(customElements.get("ha-form"))return u`<ha-form
         data-field="for"
         .hass=${this.hass}
         .schema=${this._forSchema()}
         .data=${this._forData()}
         .computeLabel=${()=>""}
-        @value-changed=${t=>{t.stopPropagation(),this._setForFromHaForm(t.detail.value.duration)}}
-      ></ha-form>`;let e=this.value.for??{h:0,m:0,s:0};return l`
+        @value-changed=${r=>{r.stopPropagation(),this._setForFromHaForm(r.detail.value.duration)}}
+      ></ha-form>`;let t=this.value.for??{h:0,m:0,s:0};return u`
       <div class="for-row" data-field="for">
-        <input type="number" min="0" .value=${String(e.h)}
-          @change=${t=>this._setForDuration({...e,h:Number(t.target.value)||0})} />
+        <input type="number" min="0" .value=${String(t.h)}
+          @change=${r=>this._setForDuration({...t,h:Number(r.target.value)||0})} />
         <span>:</span>
-        <input type="number" min="0" .value=${String(e.m)}
-          @change=${t=>this._setForDuration({...e,m:Number(t.target.value)||0})} />
+        <input type="number" min="0" .value=${String(t.m)}
+          @change=${r=>this._setForDuration({...t,m:Number(r.target.value)||0})} />
         <span>:</span>
-        <input type="number" min="0" .value=${String(e.s)}
-          @change=${t=>this._setForDuration({...e,s:Number(t.target.value)||0})} />
+        <input type="number" min="0" .value=${String(t.s)}
+          @change=${r=>this._setForDuration({...t,s:Number(r.target.value)||0})} />
       </div>
-    `}render(){return l`
+    `}render(){return u`
       <section class="field">
-        <label class="field-label">${o(this.hass,"ui.state_entity","Entity")}</label>
+        <label class="field-label">${d(this.hass,"ui.state_entity","Entity")}</label>
         ${this._renderEntity()}
       </section>
       <section class="field where-op-row">
         <div class="where-cell">
-          <label class="field-label">${o(this.hass,"ui.state_where","Where")}</label>
+          <label class="field-label">${d(this.hass,"ui.state_where","Where")}</label>
           ${this._renderAttribute()}
         </div>
         <div class="op-cell">
-          <label class="field-label">${o(this.hass,"ui.state_op_header","Comparison")}</label>
+          <label class="field-label">${d(this.hass,"ui.state_op_header","Comparison")}</label>
           ${this._renderOp()}
         </div>
       </section>
       <section class="field">
         <label class="field-label">
-          ${o(this.hass,"ui.state_value_label","Value")}
+          ${d(this.hass,"ui.state_value_label","Value")}
         </label>
         <div class="value-list">
-          ${this._isNumericOp(this.value.kind)?this._renderValueRow(this.value.states[0]??"",0):l`
-                ${this.value.states.map((e,t)=>this._renderValueRow(e,t))}
+          ${this._isNumericOp(this.value.kind)?this._renderValueRow(this.value.states[0]??"",0):u`
+                ${this.value.states.map((t,r)=>this._renderValueRow(t,r))}
                 ${this._renderValueRow("",-1)}
               `}
         </div>
       </section>
       <section class="field">
-        <label class="field-label">${o(this.hass,"ui.state_for","For (optional)")}</label>
+        <label class="field-label">${d(this.hass,"ui.state_for","For (optional)")}</label>
         ${this._renderForRow()}
       </section>
-    `}};w.styles=g`
+    `}};N.styles=$`
     :host { display: block; }
     .field { margin-bottom: 0.6rem; }
     .field-label {
@@ -686,8 +804,8 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
     }
     .for-row { display: flex; gap: 0.25rem; align-items: center; }
     .for-row input[type='number'] { width: 3.5rem; }
-  `,w._STATE_SENTINEL="State",w._NUMERIC_OPS=[">",">=","<","<="],d([c({attribute:!1})],w.prototype,"hass",2),d([c({attribute:!1})],w.prototype,"value",2),d([m()],w.prototype,"_knownStates",2),w=d([_("ambience-state-expr-atom")],w);function Ye(n,s){return n===null||s===null||n.length!==s.length?!1:n.every((e,t)=>e===s[t])}var S=class extends f{constructor(){super(...arguments);this.path=[];this._dragOver=!1;this.openPath=null;this.errorPath=null;this.errorMessage=null}_emit(e,t={}){this.dispatchEvent(new CustomEvent(e,{detail:{path:this.path,...t},bubbles:!0,composed:!0}))}_atomIsComplete(e){return!!e.entity_id&&e.states.some(t=>t!=="")}_isErrorTarget(){return Ye(this.path,this.errorPath)}_onDragStart(e){if(this.path.length===0){e.preventDefault();return}let t=e.target;if(t&&t.closest("button, select, input, textarea, ha-form")){e.preventDefault();return}e.stopPropagation(),e.dataTransfer&&(e.dataTransfer.effectAllowed="move",e.dataTransfer.setData("application/x-ambience-path",JSON.stringify(this.path)))}_onDragOver(e){this.path.length!==0&&(e.preventDefault(),e.stopPropagation(),e.dataTransfer&&(e.dataTransfer.dropEffect="move"),this._dragOver=!0)}_onDragLeave(e){e.stopPropagation(),this._dragOver=!1}_onDrop(e){if(this.path.length===0||(e.preventDefault(),e.stopPropagation(),this._dragOver=!1,!e.dataTransfer))return;let t=e.dataTransfer.getData("application/x-ambience-path");if(!t)return;let r;try{r=JSON.parse(t)}catch{return}!Array.isArray(r)||r.every(i=>typeof i=="number")===!1||Ye(r,this.path)||this.dispatchEvent(new CustomEvent("node-move",{detail:{from:r,to:this.path},bubbles:!0,composed:!0}))}_renderAtomCard(e,t){let r=this._atomIsComplete(e),i=Ye(this.path,this.openPath),a=r?Be(e,{hass:this.hass}):o(this.hass,"ui.state_new_condition","(new condition)");return l`
-      <div class="atom-card ${i?"expanded":"collapsed"} ${this._dragOver?"drag-over":""}"
+  `,N._STATE_SENTINEL="State",N._NUMERIC_OPS=[">",">=","<","<="],c([f({attribute:!1})],N.prototype,"hass",2),c([f({attribute:!1})],N.prototype,"value",2),c([v()],N.prototype,"_knownStates",2),N=c([x("ambience-state-expr-atom")],N);function Wt(e,i){return e===null||i===null||e.length!==i.length?!1:e.every((t,r)=>t===i[r])}var M=class extends b{constructor(){super(...arguments);this.path=[];this._dragOver=!1;this.openPath=null;this.errorPath=null;this.errorMessage=null}_emit(t,r={}){this.dispatchEvent(new CustomEvent(t,{detail:{path:this.path,...r},bubbles:!0,composed:!0}))}_atomIsComplete(t){return!!t.entity_id&&t.states.some(r=>r!=="")}_isErrorTarget(){return Wt(this.path,this.errorPath)}_onDragStart(t){if(this.path.length===0){t.preventDefault();return}let r=t.target;if(r&&r.closest("button, select, input, textarea, ha-form")){t.preventDefault();return}t.stopPropagation(),t.dataTransfer&&(t.dataTransfer.effectAllowed="move",t.dataTransfer.setData("application/x-ambience-path",JSON.stringify(this.path)))}_onDragOver(t){this.path.length!==0&&(t.preventDefault(),t.stopPropagation(),t.dataTransfer&&(t.dataTransfer.dropEffect="move"),this._dragOver=!0)}_onDragLeave(t){t.stopPropagation(),this._dragOver=!1}_onDrop(t){if(this.path.length===0||(t.preventDefault(),t.stopPropagation(),this._dragOver=!1,!t.dataTransfer))return;let r=t.dataTransfer.getData("application/x-ambience-path");if(!r)return;let n;try{n=JSON.parse(r)}catch{return}!Array.isArray(n)||n.every(s=>typeof s=="number")===!1||Wt(n,this.path)||this.dispatchEvent(new CustomEvent("node-move",{detail:{from:n,to:this.path},bubbles:!0,composed:!0}))}_renderAtomCard(t,r){let n=this._atomIsComplete(t),s=Wt(this.path,this.openPath),a=n?St(t,{hass:this.hass}):d(this.hass,"ui.state_new_condition","(new condition)");return u`
+      <div class="atom-card ${s?"expanded":"collapsed"} ${this._dragOver?"drag-over":""}"
         @dragover=${this._onDragOver}
         @dragleave=${this._onDragLeave}
         @drop=${this._onDrop}>
@@ -695,38 +813,38 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
           draggable=${this.path.length>0}
           @dragstart=${this._onDragStart}
           @click=${()=>this._emit("node-open")}>
-          <button class="not-toggle ${t?"on":""}"
-            title=${o(this.hass,"ui.state_not_toggle","Negate (NOT)")}
-            @click=${h=>{h.stopPropagation(),this._emit("node-toggle-not")}}>${D(this.hass,"not")}</button>
-          <span class="summary ${r?"":"placeholder"}">${a}</span>
+          <button class="not-toggle ${r?"on":""}"
+            title=${d(this.hass,"ui.state_not_toggle","Negate (NOT)")}
+            @click=${o=>{o.stopPropagation(),this._emit("node-toggle-not")}}>${W(this.hass,"not")}</button>
+          <span class="summary ${n?"":"placeholder"}">${a}</span>
           <button class="wrap"
-            title=${o(this.hass,"ui.state_wrap","Wrap in group")}
-            @click=${h=>{h.stopPropagation(),this._emit("node-wrap")}}>(…)</button>
+            title=${d(this.hass,"ui.state_wrap","Wrap in group")}
+            @click=${o=>{o.stopPropagation(),this._emit("node-wrap")}}>(…)</button>
           <button class="remove"
-            title=${o(this.hass,"ui.remove","Remove")}
-            @click=${h=>{h.stopPropagation(),this._emit("node-remove")}}>✕</button>
+            title=${d(this.hass,"ui.remove","Remove")}
+            @click=${o=>{o.stopPropagation(),this._emit("node-remove")}}>✕</button>
         </div>
-        ${i?l`
+        ${s?u`
           <div class="atom-body">
             <ambience-state-expr-atom
               .hass=${this.hass}
-              .value=${e}
-              @value-changed=${h=>{h.stopPropagation(),this._emit("node-change",{value:h.detail.value})}}
+              .value=${t}
+              @value-changed=${o=>{o.stopPropagation(),this._emit("node-change",{value:o.detail.value})}}
             ></ambience-state-expr-atom>
-            ${this._isErrorTarget()&&this.errorMessage?l`<div class="atom-error">${this.errorMessage}</div>`:""}
+            ${this._isErrorTarget()&&this.errorMessage?u`<div class="atom-error">${this.errorMessage}</div>`:""}
           </div>
         `:""}
       </div>
-    `}_renderChildRow(e,t){let r=[...this.path,t];return l`
+    `}_renderChildRow(t,r){let n=[...this.path,r];return u`
       <ambience-state-expr-node
         .hass=${this.hass}
-        .value=${e}
-        .path=${r}
+        .value=${t}
+        .path=${n}
         .openPath=${this.openPath}
         .errorPath=${this.errorPath}
         .errorMessage=${this.errorMessage}
       ></ambience-state-expr-node>
-    `}_renderGroup(e){return l`
+    `}_renderGroup(t){return u`
       <div class="group ${this._dragOver?"drag-over":""}"
         @dragover=${this._onDragOver}
         @dragleave=${this._onDragLeave}
@@ -735,31 +853,31 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
           draggable=${this.path.length>0}
           @dragstart=${this._onDragStart}>
           <select class="group-op"
-            @change=${t=>this._emit("node-set-op",{op:t.target.value})}>
-            <option value="and" ?selected=${e.kind==="and"}>${D(this.hass,"and")}</option>
-            <option value="or"  ?selected=${e.kind==="or"} >${D(this.hass,"or")}</option>
+            @change=${r=>this._emit("node-set-op",{op:r.target.value})}>
+            <option value="and" ?selected=${t.kind==="and"}>${W(this.hass,"and")}</option>
+            <option value="or"  ?selected=${t.kind==="or"} >${W(this.hass,"or")}</option>
           </select>
           <button class="unwrap"
-            title=${o(this.hass,"ui.state_unwrap_group","Remove these parens (promote children to parent)")}
+            title=${d(this.hass,"ui.state_unwrap_group","Remove these parens (promote children to parent)")}
             @click=${()=>this._emit("node-unwrap")}>✕</button>
         </div>
         <div class="group-children">
-          ${e.items.map((t,r)=>this._renderChildRow(t,r))}
+          ${t.items.map((r,n)=>this._renderChildRow(r,n))}
         </div>
         <div class="actions">
           <button @click=${()=>this._emit("node-add-child")}>
-            + ${o(this.hass,"ui.state_add_condition","Add condition")}
+            + ${d(this.hass,"ui.state_add_condition","Add condition")}
           </button>
         </div>
       </div>
-    `}render(){let e=this.value.kind==="not",t=e?this.value.item:this.value;return t.kind==="and"||t.kind==="or"?this._renderGroupWithExternalNot(t,e):this._renderAtomCard(t,e)}_renderGroupWithExternalNot(e,t){let r=this.path.length===0;return l`
+    `}render(){let t=this.value.kind==="not",r=t?this.value.item:this.value;return r.kind==="and"||r.kind==="or"?this._renderGroupWithExternalNot(r,t):this._renderAtomCard(r,t)}_renderGroupWithExternalNot(t,r){let n=this.path.length===0;return u`
       <div class="group-wrap">
-        ${r?"":l`<button class="not-toggle external ${t?"on":""}"
-          title=${o(this.hass,"ui.state_not_toggle","Negate (NOT)")}
-          @click=${()=>this._emit("node-toggle-not")}>${D(this.hass,"not")}</button>`}
-        ${this._renderGroup(e)}
+        ${n?"":u`<button class="not-toggle external ${r?"on":""}"
+          title=${d(this.hass,"ui.state_not_toggle","Negate (NOT)")}
+          @click=${()=>this._emit("node-toggle-not")}>${W(this.hass,"not")}</button>`}
+        ${this._renderGroup(t)}
       </div>
-    `}};S.styles=g`
+    `}};M.styles=$`
     :host { display: block; }
     .group-wrap {
       display: flex; align-items: flex-start; gap: 0.4rem;
@@ -889,27 +1007,27 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       color: var(--error-color, #b71c1c);
       font-size: 0.9em;
     }
-  `,d([c({attribute:!1})],S.prototype,"hass",2),d([c({attribute:!1})],S.prototype,"value",2),d([c({attribute:!1})],S.prototype,"path",2),d([m()],S.prototype,"_dragOver",2),d([c({attribute:!1})],S.prototype,"openPath",2),d([c({attribute:!1})],S.prototype,"errorPath",2),d([c({attribute:!1})],S.prototype,"errorMessage",2),S=d([_("ambience-state-expr-node")],S);function Xe(n,s){return n===null||s===null||n.length!==s.length?!1:n.every((e,t)=>e===s[t])}var I=class extends f{constructor(){super(...arguments);this.value=null;this._openPath=null;this._showError=!1;this._onNodeMove=e=>{e.stopPropagation(),this._moveAt(e.detail.from,e.detail.to)};this._onNodeChange=e=>{e.stopPropagation(),this._replaceAt(e.detail.path,e.detail.value)};this._onNodeRemove=e=>{e.stopPropagation(),this._removeAt(e.detail.path)};this._onNodeWrap=e=>{e.stopPropagation(),this._wrapAt(e.detail.path)};this._onNodeAddChild=e=>{e.stopPropagation(),this._addChildAt(e.detail.path,"is")};this._onNodeToggleNot=e=>{e.stopPropagation(),this._toggleNotAt(e.detail.path)};this._onNodeSetOp=e=>{e.stopPropagation(),this._setGroupOpAt(e.detail.path,e.detail.op)};this._onNodeUnwrap=e=>{e.stopPropagation(),this._unwrapAt(e.detail.path)};this._onNodeOpen=e=>{if(e.stopPropagation(),this._openPath!==null){let t=this._atomAt(this._openPath);if(t&&this._atomError(t)!==null){this._showError=!0;return}}this._openPath!==null&&Xe(this._openPath,e.detail.path)?this._openPath=null:this._openPath=e.detail.path,this._showError=!1}}connectedCallback(){super.connectedCallback(),this.addEventListener("node-change",this._onNodeChange),this.addEventListener("node-remove",this._onNodeRemove),this.addEventListener("node-wrap",this._onNodeWrap),this.addEventListener("node-add-child",this._onNodeAddChild),this.addEventListener("node-toggle-not",this._onNodeToggleNot),this.addEventListener("node-set-op",this._onNodeSetOp),this.addEventListener("node-open",this._onNodeOpen),this.addEventListener("node-unwrap",this._onNodeUnwrap),this.addEventListener("node-move",this._onNodeMove)}_emit(e){this.value=e,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_emptyAtom(){return{kind:"is",entity_id:"",states:[]}}_addFirstAtom(){this._openPath=[],this._emit(this._emptyAtom())}_replaceAt(e,t){let r=this._patch(this.value,e,()=>t);this._emit(r)}_removeAt(e){if(e.length===0){this._emit(null);return}let t=this._patch(this.value,e,()=>null);this._emit(t)}_wrapAt(e){let t=null;if(e.length>0){let a=this._nodeAt(e.slice(0,-1));a&&(a.kind==="and"||a.kind==="or")&&(t=a.kind)}let r=t==="and"?"or":"and",i=this._patch(this.value,e,a=>a&&{kind:r,items:[a]});this._emit(i)}_nodeAt(e){return this._walkNode(this.value,e)}_moveAt(e,t){if(this._isPrefix(e,t)||e.length===0||t.length===0)return;let r=this._nodeAt(e);if(!r)return;let i=this._rewriteForMove(this.value,[],e,t,r);this._emit(i)}_isPrefix(e,t){return e.length>t.length?!1:e.every((r,i)=>r===t[i])}_rewriteForMove(e,t,r,i,a){if(!e)return e;if(e.kind==="not"){let k=this._rewriteForMove(e.item,t,r,i,a);return k==null?null:{kind:"not",item:k}}if(e.kind!=="and"&&e.kind!=="or")return e;let h=r.slice(0,-1),u=i.slice(0,-1),p=Xe(t,h),v=Xe(t,u),y=[];if(e.items.forEach((k,L)=>{let ee=[...t,L];if(p&&L===r[r.length-1])return;let Ze=this._rewriteForMove(k,ee,r,i,a);Ze!==null&&y.push(Ze)}),v){let k=i[i.length-1];y.splice(k,0,a)}return y.length===0?null:{...e,items:y}}_walkNode(e,t){return e?e.kind==="not"?this._walkNode(e.item,t):t.length===0?e:e.kind==="and"||e.kind==="or"?this._walkNode(e.items[t[0]]??null,t.slice(1)):null:null}_addChildAt(e,t){let r=null,i=this._patch(this.value,e,a=>{if(a&&(a.kind==="and"||a.kind==="or")){let h=[...a.items,this._emptyAtom()];return r=[...e,h.length-1],{...a,items:h}}return a});r!==null&&(this._openPath=r),this._emit(i)}_toggleNotAt(e){let t=this._patch(this.value,e,r=>r&&(r.kind==="not"?r.item:{kind:"not",item:r}));this._emit(t)}_setGroupOpAt(e,t){let r=this._patch(this.value,e,i=>{if(!i)return i;let a=null;if(i.kind==="and"||i.kind==="or")a=i;else if(i.kind==="not"){let h=i.item;(h.kind==="and"||h.kind==="or")&&(a=h)}return a?{kind:t,items:a.items}:i});this._emit(r)}_patch(e,t,r){if(t.length===0)return r(e);if(e==null)return e;let[i,...a]=t;if(e.kind==="and"||e.kind==="or"){let h=e.items.length,u=e.items.slice(),p=this._patch(u[i],a,r);if(p===null?u.splice(i,1):u[i]=p,u.length<h){if(u.length===0)return null;if(u.length===1)return u[0]}return{...e,items:u}}if(e.kind==="not"){let h=this._patch(e.item,t,r);return h==null?null:{kind:"not",item:h}}return e}_atomAt(e){return this._walk(this.value,e)}_walk(e,t){return e?e.kind==="not"?this._walk(e.item,t):t.length===0?e.kind==="and"||e.kind==="or"?null:e:e.kind==="and"||e.kind==="or"?this._walk(e.items[t[0]]??null,t.slice(1)):null:null}_atomError(e){if(!e.entity_id)return o(this.hass,"ui.state_err_entity","Entity is required");if(e.kind!=="is"&&e.kind!=="is_not"){let r=e.states[0];if(!r)return o(this.hass,"ui.state_err_value","Value is required");if(!Number.isFinite(Number(r)))return o(this.hass,"ui.state_err_numeric","Value must be a number")}else if(!e.states.some(r=>r!==""))return o(this.hass,"ui.state_err_state","State is required");return null}_unwrapAt(e){if(e.length===0){let a=this.value;if(!a)return;let h=a.kind==="not"?a.item:a;(h.kind==="and"||h.kind==="or")&&(h.items.length===1?this._emit(h.items[0]):this._emit(null));return}let t=e.slice(0,-1),r=e[e.length-1],i=this._patch(this.value,t,a=>{if(!a||a.kind!=="and"&&a.kind!=="or")return a;let h=a.items.slice(),u=h[r],p=null;if(u.kind==="and"||u.kind==="or")p=u;else if(u.kind==="not"){let v=u.item;(v.kind==="and"||v.kind==="or")&&(p=v)}return p?(h.splice(r,1,...p.items),{...a,items:h}):a});this._emit(i)}willUpdate(e){if(e.has("value")){let t=this.value;if(t&&this._openPath===null&&t.kind!=="and"&&t.kind!=="or"&&(this._openPath=[]),this._showError&&this._openPath!==null){let r=this._atomAt(this._openPath);(!r||this._atomError(r)===null)&&(this._showError=!1)}}}_addAtRoot(){let e=this.value;if(e==null){this._addFirstAtom();return}if(e.kind==="and"||e.kind==="or"){this._addChildAt([],"is");return}this._openPath=[1],this._emit({kind:"and",items:[e,this._emptyAtom()]})}_setOpen(e){this._openPath=e}render(){if(this.value==null)return l`
+  `,c([f({attribute:!1})],M.prototype,"hass",2),c([f({attribute:!1})],M.prototype,"value",2),c([f({attribute:!1})],M.prototype,"path",2),c([v()],M.prototype,"_dragOver",2),c([f({attribute:!1})],M.prototype,"openPath",2),c([f({attribute:!1})],M.prototype,"errorPath",2),c([f({attribute:!1})],M.prototype,"errorMessage",2),M=c([x("ambience-state-expr-node")],M);function Bt(e,i){return e===null||i===null||e.length!==i.length?!1:e.every((t,r)=>t===i[r])}var Q=class extends b{constructor(){super(...arguments);this.value=null;this._openPath=null;this._showError=!1;this._onNodeMove=t=>{t.stopPropagation(),this._moveAt(t.detail.from,t.detail.to)};this._onNodeChange=t=>{t.stopPropagation(),this._replaceAt(t.detail.path,t.detail.value)};this._onNodeRemove=t=>{t.stopPropagation(),this._removeAt(t.detail.path)};this._onNodeWrap=t=>{t.stopPropagation(),this._wrapAt(t.detail.path)};this._onNodeAddChild=t=>{t.stopPropagation(),this._addChildAt(t.detail.path,"is")};this._onNodeToggleNot=t=>{t.stopPropagation(),this._toggleNotAt(t.detail.path)};this._onNodeSetOp=t=>{t.stopPropagation(),this._setGroupOpAt(t.detail.path,t.detail.op)};this._onNodeUnwrap=t=>{t.stopPropagation(),this._unwrapAt(t.detail.path)};this._onNodeOpen=t=>{if(t.stopPropagation(),this._openPath!==null){let r=this._atomAt(this._openPath);if(r&&this._atomError(r)!==null){this._showError=!0;return}}this._openPath!==null&&Bt(this._openPath,t.detail.path)?this._openPath=null:this._openPath=t.detail.path,this._showError=!1}}connectedCallback(){super.connectedCallback(),this.addEventListener("node-change",this._onNodeChange),this.addEventListener("node-remove",this._onNodeRemove),this.addEventListener("node-wrap",this._onNodeWrap),this.addEventListener("node-add-child",this._onNodeAddChild),this.addEventListener("node-toggle-not",this._onNodeToggleNot),this.addEventListener("node-set-op",this._onNodeSetOp),this.addEventListener("node-open",this._onNodeOpen),this.addEventListener("node-unwrap",this._onNodeUnwrap),this.addEventListener("node-move",this._onNodeMove)}_emit(t){this.value=t,this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_emptyAtom(){return{kind:"is",entity_id:"",states:[]}}_addFirstAtom(){this._openPath=[],this._emit(this._emptyAtom())}_replaceAt(t,r){let n=this._patch(this.value,t,()=>r);this._emit(n)}_removeAt(t){if(t.length===0){this._emit(null);return}let r=this._patch(this.value,t,()=>null);this._emit(r)}_wrapAt(t){let r=null;if(t.length>0){let a=this._nodeAt(t.slice(0,-1));a&&(a.kind==="and"||a.kind==="or")&&(r=a.kind)}let n=r==="and"?"or":"and",s=this._patch(this.value,t,a=>a&&{kind:n,items:[a]});this._emit(s)}_nodeAt(t){return this._walkNode(this.value,t)}_moveAt(t,r){if(this._isPrefix(t,r)||t.length===0||r.length===0)return;let n=this._nodeAt(t);if(!n)return;let s=this._rewriteForMove(this.value,[],t,r,n);this._emit(s)}_isPrefix(t,r){return t.length>r.length?!1:t.every((n,s)=>n===r[s])}_rewriteForMove(t,r,n,s,a){if(!t)return t;if(t.kind==="not"){let g=this._rewriteForMove(t.item,r,n,s,a);return g==null?null:{kind:"not",item:g}}if(t.kind!=="and"&&t.kind!=="or")return t;let o=n.slice(0,-1),l=s.slice(0,-1),h=Bt(r,o),m=Bt(r,l),p=[];if(t.items.forEach((g,_)=>{let w=[...r,_];if(h&&_===n[n.length-1])return;let E=this._rewriteForMove(g,w,n,s,a);E!==null&&p.push(E)}),m){let g=s[s.length-1];p.splice(g,0,a)}return p.length===0?null:{...t,items:p}}_walkNode(t,r){return t?t.kind==="not"?this._walkNode(t.item,r):r.length===0?t:t.kind==="and"||t.kind==="or"?this._walkNode(t.items[r[0]]??null,r.slice(1)):null:null}_addChildAt(t,r){let n=null,s=this._patch(this.value,t,a=>{if(a&&(a.kind==="and"||a.kind==="or")){let o=[...a.items,this._emptyAtom()];return n=[...t,o.length-1],{...a,items:o}}return a});n!==null&&(this._openPath=n),this._emit(s)}_toggleNotAt(t){let r=this._patch(this.value,t,n=>n&&(n.kind==="not"?n.item:{kind:"not",item:n}));this._emit(r)}_setGroupOpAt(t,r){let n=this._patch(this.value,t,s=>{if(!s)return s;let a=null;if(s.kind==="and"||s.kind==="or")a=s;else if(s.kind==="not"){let o=s.item;(o.kind==="and"||o.kind==="or")&&(a=o)}return a?{kind:r,items:a.items}:s});this._emit(n)}_patch(t,r,n){if(r.length===0)return n(t);if(t==null)return t;let[s,...a]=r;if(t.kind==="and"||t.kind==="or"){let o=t.items.length,l=t.items.slice(),h=this._patch(l[s],a,n);if(h===null?l.splice(s,1):l[s]=h,l.length<o){if(l.length===0)return null;if(l.length===1)return l[0]}return{...t,items:l}}if(t.kind==="not"){let o=this._patch(t.item,r,n);return o==null?null:{kind:"not",item:o}}return t}_atomAt(t){return this._walk(this.value,t)}_walk(t,r){return t?t.kind==="not"?this._walk(t.item,r):r.length===0?t.kind==="and"||t.kind==="or"?null:t:t.kind==="and"||t.kind==="or"?this._walk(t.items[r[0]]??null,r.slice(1)):null:null}_atomError(t){if(!t.entity_id)return d(this.hass,"ui.state_err_entity","Entity is required");if(t.kind!=="is"&&t.kind!=="is_not"){let n=t.states[0];if(!n)return d(this.hass,"ui.state_err_value","Value is required");if(!Number.isFinite(Number(n)))return d(this.hass,"ui.state_err_numeric","Value must be a number")}else if(!t.states.some(n=>n!==""))return d(this.hass,"ui.state_err_state","State is required");return null}_unwrapAt(t){if(t.length===0){let a=this.value;if(!a)return;let o=a.kind==="not"?a.item:a;(o.kind==="and"||o.kind==="or")&&(o.items.length===1?this._emit(o.items[0]):this._emit(null));return}let r=t.slice(0,-1),n=t[t.length-1],s=this._patch(this.value,r,a=>{if(!a||a.kind!=="and"&&a.kind!=="or")return a;let o=a.items.slice(),l=o[n],h=null;if(l.kind==="and"||l.kind==="or")h=l;else if(l.kind==="not"){let m=l.item;(m.kind==="and"||m.kind==="or")&&(h=m)}return h?(o.splice(n,1,...h.items),{...a,items:o}):a});this._emit(s)}willUpdate(t){if(t.has("value")){let r=this.value;if(r&&this._openPath===null&&r.kind!=="and"&&r.kind!=="or"&&(this._openPath=[]),this._showError&&this._openPath!==null){let n=this._atomAt(this._openPath);(!n||this._atomError(n)===null)&&(this._showError=!1)}}}_addAtRoot(){let t=this.value;if(t==null){this._addFirstAtom();return}if(t.kind==="and"||t.kind==="or"){this._addChildAt([],"is");return}this._openPath=[1],this._emit({kind:"and",items:[t,this._emptyAtom()]})}_setOpen(t){this._openPath=t}render(){if(this.value==null)return u`
         <div class="empty">
           <button @click=${()=>this._addFirstAtom()}>
-            + ${o(this.hass,"ui.state_add_first","Add condition")}
+            + ${d(this.hass,"ui.state_add_first","Add condition")}
           </button>
         </div>
-      `;let e=this._showError&&this._openPath!==null?(()=>{let i=this._atomAt(this._openPath);return i?this._atomError(i):null})():null,t=this.value.kind==="not"?this.value.item:this.value,r=t.kind!=="and"&&t.kind!=="or";return l`
+      `;let t=this._showError&&this._openPath!==null?(()=>{let s=this._atomAt(this._openPath);return s?this._atomError(s):null})():null,r=this.value.kind==="not"?this.value.item:this.value,n=r.kind!=="and"&&r.kind!=="or";return u`
       <ambience-state-expr-node
         .hass=${this.hass}
         .value=${this.value}
         .path=${[]}
         .openPath=${this._openPath}
-        .errorPath=${e?this._openPath:null}
-        .errorMessage=${e}
+        .errorPath=${t?this._openPath:null}
+        .errorMessage=${t}
       ></ambience-state-expr-node>
-      ${r?l`
+      ${n?u`
         <button class="root-add" @click=${()=>this._addAtRoot()}>
-          + ${o(this.hass,"ui.state_add_condition","Add condition")}
+          + ${d(this.hass,"ui.state_add_condition","Add condition")}
         </button>
       `:""}
-    `}};I.styles=g`
+    `}};Q.styles=$`
     :host { display: block; }
     .empty {
       border: 1px dashed var(--divider-color, #ccc);
@@ -927,50 +1045,56 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       border-radius: 4px; padding: 0.25rem 0.75rem; cursor: pointer;
       color: inherit; width: 100%; text-align: center;
     }
-  `,d([c({attribute:!1})],I.prototype,"hass",2),d([c({attribute:!1})],I.prototype,"value",2),d([m()],I.prototype,"_openPath",2),d([m()],I.prototype,"_showError",2),I=d([_("ambience-state-predicate-input")],I);var C=class extends f{constructor(){super(...arguments);this.value=null;this.sceneSuggestions=[]}_emit(e){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_onText(e){let t=e.target.value;this._emit(t.trim()===""?null:t)}render(){return this.matcher.input==="time_of_day"?l`
+  `,c([f({attribute:!1})],Q.prototype,"hass",2),c([f({attribute:!1})],Q.prototype,"value",2),c([v()],Q.prototype,"_openPath",2),c([v()],Q.prototype,"_showError",2),Q=c([x("ambience-state-predicate-input")],Q);var R=class extends b{constructor(){super(...arguments);this.value=null;this.sceneSuggestions=[]}_emit(t){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_onText(t){let r=t.target.value;this._emit(r.trim()===""?null:r)}render(){return this.matcher.input==="time_of_day"?u`
         <ambience-time-of-day-input
           .value=${this.value}
           .periods=${this.periods}
           .hass=${this.hass}
-          @value-changed=${e=>{e.stopPropagation(),this._emit(e.detail.value)}}
+          @value-changed=${t=>{t.stopPropagation(),this._emit(t.detail.value)}}
         ></ambience-time-of-day-input>
-      `:this.matcher.input==="scene_combobox"?l`
+      `:this.matcher.input==="scene_combobox"?u`
         <ambience-scene-combobox
           .hass=${this.hass}
           .value=${this.value??null}
           .suggestions=${this.sceneSuggestions}
-          @value-changed=${e=>{e.stopPropagation(),this._emit(e.detail.value)}}
+          @value-changed=${t=>{t.stopPropagation(),this._emit(t.detail.value)}}
         ></ambience-scene-combobox>
-      `:this.matcher.input==="day_predicate"?l`
+      `:this.matcher.input==="script_predicate"?u`
+        <ambience-script-predicate-input
+          .hass=${this.hass}
+          .value=${this.value}
+          @value-changed=${t=>{t.stopPropagation(),this._emit(t.detail.value)}}
+        ></ambience-script-predicate-input>
+      `:this.matcher.input==="day_predicate"?u`
         <ambience-day-predicate-input
           .hass=${this.hass}
           .value=${this.value}
           .dayConfig=${this.dayConfig??{workday_sensor:null,workday_calendar:null}}
-          @value-changed=${e=>{e.stopPropagation(),this._emit(e.detail.value)}}
+          @value-changed=${t=>{t.stopPropagation(),this._emit(t.detail.value)}}
         ></ambience-day-predicate-input>
-      `:this.matcher.input==="weather_predicate"?l`
+      `:this.matcher.input==="weather_predicate"?u`
         <ambience-weather-predicate-input
           .hass=${this.hass}
           .value=${this.value}
           .groups=${this.weatherConfig?.groups??[]}
           .weatherEntity=${this.weatherConfig?.entity??void 0}
-          @value-changed=${e=>{e.stopPropagation(),this._emit(e.detail.value)}}
+          @value-changed=${t=>{t.stopPropagation(),this._emit(t.detail.value)}}
         ></ambience-weather-predicate-input>
-      `:this.matcher.input==="state_predicate"?l`
+      `:this.matcher.input==="state_predicate"?u`
         <ambience-state-predicate-input
           .hass=${this.hass}
           .value=${this.value}
-          @value-changed=${e=>{e.stopPropagation(),this._emit(e.detail.value)}}
+          @value-changed=${t=>{t.stopPropagation(),this._emit(t.detail.value)}}
         ></ambience-state-predicate-input>
-      `:l`
+      `:u`
       <input
         type="text"
-        placeholder=${o(this.hass,"ui.any_placeholder","(any)")}
+        placeholder=${d(this.hass,"ui.any_placeholder","(any)")}
         .value=${this.value==null?"":String(this.value)}
         @input=${this._onText}
       />
       <div class="help">${this.matcher.predicate_help}</div>
-    `}};C.styles=g`
+    `}};R.styles=$`
     :host {
       display: block;
     }
@@ -989,28 +1113,28 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       white-space: pre-wrap;
       margin-top: 0.25rem;
     }
-  `,d([c({attribute:!1})],C.prototype,"matcher",2),d([c({attribute:!1})],C.prototype,"value",2),d([c({attribute:!1})],C.prototype,"sceneSuggestions",2),d([c({attribute:!1})],C.prototype,"periods",2),d([c({attribute:!1})],C.prototype,"dayConfig",2),d([c({attribute:!1})],C.prototype,"weatherConfig",2),d([c({attribute:!1})],C.prototype,"hass",2),C=d([_("ambience-matcher-input")],C);var G=class extends f{constructor(){super(...arguments);this.entities=[];this.value=[]}connectedCallback(){super.connectedCallback(),W(this,this.hass)}_emit(e){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_onHaFormChange(e){e.stopPropagation(),this._emit(e.detail.value.entity_ids??[])}_renderHaForm(){let e=[{name:"entity_ids",selector:{entity:{multiple:!0,include_entities:this.entities}}}];return l`
+  `,c([f({attribute:!1})],R.prototype,"matcher",2),c([f({attribute:!1})],R.prototype,"value",2),c([f({attribute:!1})],R.prototype,"sceneSuggestions",2),c([f({attribute:!1})],R.prototype,"periods",2),c([f({attribute:!1})],R.prototype,"dayConfig",2),c([f({attribute:!1})],R.prototype,"weatherConfig",2),c([f({attribute:!1})],R.prototype,"hass",2),R=c([x("ambience-matcher-input")],R);var oe=class extends b{constructor(){super(...arguments);this.entities=[];this.value=[]}connectedCallback(){super.connectedCallback(),ie(this,this.hass)}_emit(t){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:t},bubbles:!0,composed:!0}))}_onHaFormChange(t){t.stopPropagation(),this._emit(t.detail.value.entity_ids??[])}_renderHaForm(){let t=[{name:"entity_ids",selector:{entity:{multiple:!0,include_entities:this.entities}}}];return u`
       <ha-form
         .hass=${this.hass}
-        .schema=${e}
+        .schema=${t}
         .data=${{entity_ids:this.value}}
         .computeLabel=${()=>""}
         @value-changed=${this._onHaFormChange}
       ></ha-form>
-    `}_toggle(e,t){let r=new Set(this.value);t?r.add(e):r.delete(e),this._emit(this.entities.filter(i=>r.has(i)))}_renderFallback(){return this.entities.length===0?l`<p class="empty">${o(this.hass,"ui.no_matching_entities","No matching entities in this area.")}</p>`:l`
+    `}_toggle(t,r){let n=new Set(this.value);r?n.add(t):n.delete(t),this._emit(this.entities.filter(s=>n.has(s)))}_renderFallback(){return this.entities.length===0?u`<p class="empty">${d(this.hass,"ui.no_matching_entities","No matching entities in this area.")}</p>`:u`
       <div class="checkboxes">
-        ${this.entities.map(e=>l`
+        ${this.entities.map(t=>u`
             <label>
               <input
                 type="checkbox"
-                .checked=${this.value.includes(e)}
-                @change=${t=>this._toggle(e,t.target.checked)}
+                .checked=${this.value.includes(t)}
+                @change=${r=>this._toggle(t,r.target.checked)}
               />
-              ${e}
+              ${t}
             </label>
           `)}
       </div>
-    `}render(){return customElements.get("ha-form")?this._renderHaForm():this._renderFallback()}};G.styles=g`
+    `}render(){return customElements.get("ha-form")?this._renderHaForm():this._renderFallback()}};oe.styles=$`
     :host { display: block; }
     .empty {
       color: var(--secondary-text-color, #888);
@@ -1030,132 +1154,132 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       padding: 0.25rem;
     }
     label:hover { background: var(--secondary-background-color, #f5f5f5); }
-  `,d([c({attribute:!1})],G.prototype,"hass",2),d([c({attribute:!1})],G.prototype,"entities",2),d([c({attribute:!1})],G.prototype,"value",2),G=d([_("ambience-target-picker")],G);var b=class extends f{constructor(){super(...arguments);this.open=!1;this.rule=null;this.matchers=[];this.sceneSuggestions=[];this.availableActions=[];this._draft=null;this._open=null;this._showError=!1;this._onNameInput=e=>{this._setName(e.target.value)};this._onAddMatcher=e=>{let t=e.target,r=t.value;t.value="",this._addMatcher(r)};this._onAddMatcherHaForm=e=>{e.stopPropagation();let t=e.detail.value.add;t!==b._ADD_MATCHER_PLACEHOLDER&&this._addMatcher(t)}}connectedCallback(){super.connectedCallback(),W(this,this.hass)}willUpdate(e){e.has("open")&&this.open&&(this._draft=this.rule?JSON.parse(JSON.stringify(this.rule)):null,this._open=null,this._showError=!1)}_setName(e){this._draft&&(this._draft={...this._draft,name:e||void 0})}_renderNameSlot(){let e=this._draft.name??"";if(this._isOpen({kind:"name"}))return l`
+  `,c([f({attribute:!1})],oe.prototype,"hass",2),c([f({attribute:!1})],oe.prototype,"entities",2),c([f({attribute:!1})],oe.prototype,"value",2),oe=c([x("ambience-target-picker")],oe);var C=class extends b{constructor(){super(...arguments);this.open=!1;this.rule=null;this.matchers=[];this.sceneSuggestions=[];this.availableActions=[];this._draft=null;this._open=null;this._showError=!1;this._onNameInput=t=>{this._setName(t.target.value)};this._onAddMatcher=t=>{let r=t.target,n=r.value;r.value="",this._addMatcher(n)};this._onAddMatcherHaForm=t=>{t.stopPropagation();let r=t.detail.value.add;r!==C._ADD_MATCHER_PLACEHOLDER&&this._addMatcher(r)}}connectedCallback(){super.connectedCallback(),ie(this,this.hass)}willUpdate(t){t.has("open")&&this.open&&(this._draft=this.rule?JSON.parse(JSON.stringify(this.rule)):null,this._open=null,this._showError=!1)}_setName(t){this._draft&&(this._draft={...this._draft,name:t||void 0})}_renderNameSlot(){let t=this._draft.name??"";if(this._isOpen({kind:"name"}))return u`
         <div class="slot name-slot expanded" data-slot-id="name">
-          ${this._renderNameInputControl(e)}
+          ${this._renderNameInputControl(t)}
         </div>
-      `;let r=Le(this._draft,o(this.hass,"ui.new_rule","New rule"));return l`
+      `;let n=rt(this._draft,d(this.hass,"ui.new_rule","New rule"));return u`
       <div class="slot collapsed" data-slot-id="name">
         <div class="summary" @click=${()=>this._toggleSlot({kind:"name"})}>
-          <span class="summary-label"><strong>${r}</strong></span>
+          <span class="summary-label"><strong>${n}</strong></span>
         </div>
       </div>
-    `}_renderNameInputControl(e){let t=_t();return t==="ha-input"?l`<ha-input label=${o(this.hass,"ui.name_optional","Name (optional)")} .value=${e} @input=${this._onNameInput}></ha-input>`:t==="ha-textfield"?l`<ha-textfield label=${o(this.hass,"ui.name_optional","Name (optional)")} .value=${e} @input=${this._onNameInput}></ha-textfield>`:l`<input type="text" .value=${e} @input=${this._onNameInput} />`}_isOpen(e){return this._open===null?!1:e.kind==="name"&&this._open.kind==="name"?!0:e.kind==="matcher"&&this._open.kind==="matcher"?e.id===this._open.id:e.kind==="action"&&this._open.kind==="action"?e.idx===this._open.idx:!1}_validationError(e){if(e===null||e.kind==="name"||e.kind==="matcher")return null;let t=this._draft?.actions[e.idx];if(!t)return null;if(t.entity_ids.length===0)return o(this.hass,"ui.at_least_one_target","At least one target is required.");let r=this.availableActions.find(i=>i.name===t.action);if(!r)return null;for(let i of r.target_params){if(!i.required)continue;let a=t.params[i.name];if(a==null||a==="")return o(this.hass,"ui.param_required","{param} is required.").replace("{param}",this._paramLabel(i.name))}return null}_tryCloseCurrent(){return this._open===null?!0:this._validationError(this._open)!==null?(this._showError=!0,!1):(this._open=null,this._showError=!1,!0)}_toggleSlot(e){if(this._isOpen(e)){this._tryCloseCurrent();return}this._open!==null&&!this._tryCloseCurrent()||(this._open=e,this._showError=!1)}_onModalClick(e){for(let t of e.composedPath())if(t instanceof Element&&(t.classList.contains("slot")||t.classList.contains("actions-bar")||t.classList.contains("add-matcher")))return;this._tryCloseCurrent()}_setPredicate(e,t){if(!this._draft)return;let r={...this._draft.when};t==null?delete r[e]:r[e]=t,this._draft={...this._draft,when:r}}_renderMatcherRow(e){let t=this._draft.when[e.name]??null,r=this._isOpen({kind:"matcher",id:e.name}),i=e.input==="scene_combobox";if(r&&i)return l`
-        <div class="slot combobox-slot expanded" data-slot-id=${e.name}>
+    `}_renderNameInputControl(t){let r=ur();return r==="ha-input"?u`<ha-input label=${d(this.hass,"ui.name_optional","Name (optional)")} .value=${t} @input=${this._onNameInput}></ha-input>`:r==="ha-textfield"?u`<ha-textfield label=${d(this.hass,"ui.name_optional","Name (optional)")} .value=${t} @input=${this._onNameInput}></ha-textfield>`:u`<input type="text" .value=${t} @input=${this._onNameInput} />`}_isOpen(t){return this._open===null?!1:t.kind==="name"&&this._open.kind==="name"?!0:t.kind==="matcher"&&this._open.kind==="matcher"?t.id===this._open.id:t.kind==="action"&&this._open.kind==="action"?t.idx===this._open.idx:!1}_validationError(t){if(t===null||t.kind==="name"||t.kind==="matcher")return null;let r=this._draft?.actions[t.idx];if(!r)return null;if(r.entity_ids.length===0)return d(this.hass,"ui.at_least_one_target","At least one target is required.");let n=this.availableActions.find(s=>s.name===r.action);if(!n)return null;for(let s of n.target_params){if(!s.required)continue;let a=r.params[s.name];if(a==null||a==="")return d(this.hass,"ui.param_required","{param} is required.").replace("{param}",this._paramLabel(s.name))}return null}_tryCloseCurrent(){return this._open===null?!0:this._validationError(this._open)!==null?(this._showError=!0,!1):(this._open=null,this._showError=!1,!0)}_toggleSlot(t){if(this._isOpen(t)){this._tryCloseCurrent();return}this._open!==null&&!this._tryCloseCurrent()||(this._open=t,this._showError=!1)}_onModalClick(t){for(let r of t.composedPath())if(r instanceof Element&&(r.classList.contains("slot")||r.classList.contains("actions-bar")||r.classList.contains("add-matcher")))return;this._tryCloseCurrent()}_setPredicate(t,r){if(!this._draft)return;let n={...this._draft.when};r==null?delete n[t]:n[t]=r,this._draft={...this._draft,when:n}}_renderMatcherRow(t){let r=this._draft.when[t.name]??null,n=this._isOpen({kind:"matcher",id:t.name}),s=t.input==="scene_combobox";if(n&&s)return u`
+        <div class="slot combobox-slot expanded" data-slot-id=${t.name}>
           <ambience-matcher-input
             .hass=${this.hass}
-            .matcher=${e}
-            .value=${t}
+            .matcher=${t}
+            .value=${r}
             .sceneSuggestions=${this.sceneSuggestions}
             .periods=${this.periods}
             .dayConfig=${this.dayConfig}
             .weatherConfig=${this.weatherConfig}
-            @value-changed=${h=>this._setPredicate(e.name,h.detail.value)}
+            @value-changed=${o=>this._setPredicate(t.name,o.detail.value)}
           ></ambience-matcher-input>
         </div>
-      `;let a=Te(e.name,t,{hass:this.hass,periods:this.periods});return l`
-      <div class="slot ${r?"expanded":"collapsed"}" data-slot-id=${e.name}>
-        <div class="summary" @click=${()=>this._toggleSlot({kind:"matcher",id:e.name})}>
-          <span class="summary-label"><strong>${j(this.hass,e.name)}:</strong> ${a}</span>
+      `;let a=it(t.name,r,{hass:this.hass,periods:this.periods});return u`
+      <div class="slot ${n?"expanded":"collapsed"}" data-slot-id=${t.name}>
+        <div class="summary" @click=${()=>this._toggleSlot({kind:"matcher",id:t.name})}>
+          <span class="summary-label"><strong>${re(this.hass,t.name)}:</strong> ${a}</span>
           <button
             class="remove"
-            @click=${h=>{h.stopPropagation(),this._removeMatcher(e.name)}}
-            title=${o(this.hass,"ui.remove_condition","Remove condition")}
+            @click=${o=>{o.stopPropagation(),this._removeMatcher(t.name)}}
+            title=${d(this.hass,"ui.remove_condition","Remove condition")}
           >✕</button>
         </div>
-        ${r?l`
+        ${n?u`
           <div class="body">
             <ambience-matcher-input
               .hass=${this.hass}
-              .matcher=${e}
-              .value=${t}
+              .matcher=${t}
+              .value=${r}
               .sceneSuggestions=${this.sceneSuggestions}
               .periods=${this.periods}
               .dayConfig=${this.dayConfig}
               .weatherConfig=${this.weatherConfig}
-              @value-changed=${h=>this._setPredicate(e.name,h.detail.value)}
+              @value-changed=${o=>this._setPredicate(t.name,o.detail.value)}
             ></ambience-matcher-input>
           </div>
         `:""}
       </div>
-    `}_visibleMatchers(){if(!this._draft)return[];let e=this._draft.when;return this.matchers.filter(t=>t.name in e&&e[t.name]!=null||this._open?.kind==="matcher"&&this._open.id===t.name)}_unusedMatchers(){let e=new Set(this._visibleMatchers().map(t=>t.name));return this.matchers.filter(t=>!e.has(t.name))}_addMatcher(e){e&&(this._open!==null&&!this._tryCloseCurrent()||(this._open={kind:"matcher",id:e},this._showError=!1))}_removeMatcher(e){if(!this._draft)return;let t={...this._draft.when};delete t[e],this._draft={...this._draft,when:t},this._open?.kind==="matcher"&&this._open.id===e&&(this._open=null,this._showError=!1)}_renderAddMatcher(){let e=this._unusedMatchers();return e.length===0?"":customElements.get("ha-form")?this._renderAddMatcherHaForm(e):l`
+    `}_visibleMatchers(){if(!this._draft)return[];let t=this._draft.when;return this.matchers.filter(r=>r.name in t&&t[r.name]!=null||this._open?.kind==="matcher"&&this._open.id===r.name)}_unusedMatchers(){let t=new Set(this._visibleMatchers().map(r=>r.name));return this.matchers.filter(r=>!t.has(r.name))}_addMatcher(t){t&&(this._open!==null&&!this._tryCloseCurrent()||(this._open={kind:"matcher",id:t},this._showError=!1))}_removeMatcher(t){if(!this._draft)return;let r={...this._draft.when};delete r[t],this._draft={...this._draft,when:r},this._open?.kind==="matcher"&&this._open.id===t&&(this._open=null,this._showError=!1)}_renderAddMatcher(){let t=this._unusedMatchers();return t.length===0?"":customElements.get("ha-form")?this._renderAddMatcherHaForm(t):u`
       <div class="add-matcher">
         <select class="add-matcher" @change=${this._onAddMatcher}>
-          <option value="">${o(this.hass,"ui.add_condition","+ Add condition\u2026")}</option>
-          ${e.map(t=>l`<option value=${t.name}>${j(this.hass,t.name)}</option>`)}
+          <option value="">${d(this.hass,"ui.add_condition","+ Add condition\u2026")}</option>
+          ${t.map(r=>u`<option value=${r.name}>${re(this.hass,r.name)}</option>`)}
         </select>
       </div>
-    `}_renderAddMatcherHaForm(e){let t=o(this.hass,"ui.add_condition","+ Add condition\u2026"),r=[{name:"add",selector:{select:{mode:"dropdown",options:[{value:b._ADD_MATCHER_PLACEHOLDER,label:t},...e.map(i=>({value:i.name,label:j(this.hass,i.name)}))]}}}];return l`
+    `}_renderAddMatcherHaForm(t){let r=d(this.hass,"ui.add_condition","+ Add condition\u2026"),n=[{name:"add",selector:{select:{mode:"dropdown",options:[{value:C._ADD_MATCHER_PLACEHOLDER,label:r},...t.map(s=>({value:s.name,label:re(this.hass,s.name)}))]}}}];return u`
       <div class="add-matcher">
         <ha-form
           .hass=${this.hass}
-          .schema=${r}
-          .data=${{add:b._ADD_MATCHER_PLACEHOLDER}}
+          .schema=${n}
+          .data=${{add:C._ADD_MATCHER_PLACEHOLDER}}
           .computeLabel=${()=>""}
           @value-changed=${this._onAddMatcherHaForm}
         ></ha-form>
       </div>
-    `}_addActionSlot(){if(!this._draft)return;let e={action:"set_light",entity_ids:[],params:{}},t=this._draft.actions.length;this._draft={...this._draft,actions:[...this._draft.actions,e]},this._open={kind:"action",idx:t}}_updateActionAt(e,t){if(!this._draft)return;let r=this._draft.actions.map((i,a)=>a===e?t(i):i);this._draft={...this._draft,actions:r}}_deleteAction(e){this._draft&&(this._draft={...this._draft,actions:this._draft.actions.filter((t,r)=>r!==e)},this._open?.kind==="action"&&this._open.idx===e&&(this._open=null))}_setActionTargets(e,t){this._updateActionAt(e,r=>({...r,entity_ids:t}))}_paramLabel(e){let t=e.replaceAll("_"," ").toLowerCase();return t.charAt(0).toUpperCase()+t.slice(1)}_updateActionParam(e,t,r){this._updateActionAt(e,i=>{let a={...i.params},h=r;if(t.type==="int"?h=r===""?void 0:parseInt(r,10):t.type==="number"?h=r===""?void 0:parseFloat(r):t.type==="boolean"&&(h=r==="true"),typeof h=="number"&&Number.isFinite(h)){let u=h;typeof t.min=="number"&&u<t.min&&(u=t.min),typeof t.max=="number"&&u>t.max&&(u=t.max),h=u}return h===void 0?delete a[t.name]:a[t.name]=h,{...i,params:a}})}_renderActionParams(e,t,r){let i=r?.target_params??[];return l`
-      ${i.map(a=>l`
+    `}_addActionSlot(){if(!this._draft)return;let t={action:"set_light",entity_ids:[],params:{}},r=this._draft.actions.length;this._draft={...this._draft,actions:[...this._draft.actions,t]},this._open={kind:"action",idx:r}}_updateActionAt(t,r){if(!this._draft)return;let n=this._draft.actions.map((s,a)=>a===t?r(s):s);this._draft={...this._draft,actions:n}}_deleteAction(t){this._draft&&(this._draft={...this._draft,actions:this._draft.actions.filter((r,n)=>n!==t)},this._open?.kind==="action"&&this._open.idx===t&&(this._open=null))}_setActionTargets(t,r){this._updateActionAt(t,n=>({...n,entity_ids:r}))}_paramLabel(t){let r=t.replaceAll("_"," ").toLowerCase();return r.charAt(0).toUpperCase()+r.slice(1)}_updateActionParam(t,r,n){this._updateActionAt(t,s=>{let a={...s.params},o=n;if(r.type==="int"?o=n===""?void 0:parseInt(n,10):r.type==="number"?o=n===""?void 0:parseFloat(n):r.type==="boolean"&&(o=n==="true"),typeof o=="number"&&Number.isFinite(o)){let l=o;typeof r.min=="number"&&l<r.min&&(l=r.min),typeof r.max=="number"&&l>r.max&&(l=r.max),o=l}return o===void 0?delete a[r.name]:a[r.name]=o,{...s,params:a}})}_renderActionParams(t,r,n){let s=n?.target_params??[];return u`
+      ${s.map(a=>u`
         <div class="param-row">
           <label>${this._paramLabel(a.name)}${a.required?" *":""}</label>
           <div class="param-input">
             <input
               type=${a.type==="int"||a.type==="number"?"number":"text"}
               placeholder=${a.description??""}
-              .value=${String(t.params[a.name]??"")}
+              .value=${String(r.params[a.name]??"")}
               min=${a.min??""}
               max=${a.max??""}
-              @input=${h=>this._updateActionParam(e,a,h.target.value)}
+              @input=${o=>this._updateActionParam(t,a,o.target.value)}
             />
-            ${a.unit?l`<span class="param-unit">${a.unit}</span>`:""}
+            ${a.unit?u`<span class="param-unit">${a.unit}</span>`:""}
           </div>
         </div>
       `)}
-    `}_renderActionRow(e,t){let r=this.availableActions.find(u=>u.name===e.action),i=this._isOpen({kind:"action",idx:t}),a=Lt(e,r,{hass:this.hass}),h=Tt(this.hass,this.areaId,r?.domains??[]);return l`
-      <div class="slot ${i?"expanded":"collapsed"}" data-slot-id="action-${t}">
-        <div class="summary" @click=${()=>this._toggleSlot({kind:"action",idx:t})}>
+    `}_renderActionRow(t,r){let n=this.availableActions.find(l=>l.name===t.action),s=this._isOpen({kind:"action",idx:r}),a=$r(t,n,{hass:this.hass}),o=xr(this.hass,this.areaId,n?.domains??[]);return u`
+      <div class="slot ${s?"expanded":"collapsed"}" data-slot-id="action-${r}">
+        <div class="summary" @click=${()=>this._toggleSlot({kind:"action",idx:r})}>
           <span class="summary-label">${a}</span>
-          <button class="remove" @click=${u=>{u.stopPropagation(),this._deleteAction(t)}} title=${o(this.hass,"ui.remove_action","Remove action")}>✕</button>
+          <button class="remove" @click=${l=>{l.stopPropagation(),this._deleteAction(r)}} title=${d(this.hass,"ui.remove_action","Remove action")}>✕</button>
         </div>
-        ${i?l`
+        ${s?u`
           <div class="body">
-            <label>${o(this.hass,"ui.target","Target")}</label>
+            <label>${d(this.hass,"ui.target","Target")}</label>
             <ambience-target-picker
               .hass=${this.hass}
-              .entities=${h}
-              .value=${e.entity_ids}
-              @value-changed=${u=>{u.stopPropagation(),this._setActionTargets(t,u.detail.value)}}
+              .entities=${o}
+              .value=${t.entity_ids}
+              @value-changed=${l=>{l.stopPropagation(),this._setActionTargets(r,l.detail.value)}}
             ></ambience-target-picker>
 
-            ${this._renderActionParams(t,e,r)}
+            ${this._renderActionParams(r,t,n)}
 
-            ${this._showError&&this._validationError({kind:"action",idx:t})?l`
-              <div class="error">${this._validationError({kind:"action",idx:t})}</div>
+            ${this._showError&&this._validationError({kind:"action",idx:r})?u`
+              <div class="error">${this._validationError({kind:"action",idx:r})}</div>
             `:""}
           </div>
         `:""}
       </div>
-    `}_save(){if(!this._draft)return;let e=Object.fromEntries(Object.entries(this._draft.when).filter(([,t])=>t!=null));this.dispatchEvent(new CustomEvent("save-rule",{detail:{...this._draft,when:e},bubbles:!0,composed:!0}))}_cancel(){this.dispatchEvent(new CustomEvent("cancel-rule",{bubbles:!0,composed:!0}))}render(){if(!this._draft)return l``;let e=this._visibleMatchers();return l`
+    `}_save(){if(!this._draft)return;let t=Object.fromEntries(Object.entries(this._draft.when).filter(([,r])=>r!=null));this.dispatchEvent(new CustomEvent("save-rule",{detail:{...this._draft,when:t},bubbles:!0,composed:!0}))}_cancel(){this.dispatchEvent(new CustomEvent("cancel-rule",{bubbles:!0,composed:!0}))}render(){if(!this._draft)return u``;let t=this._visibleMatchers();return u`
       <div class="modal" @click=${this._onModalClick}>
         <div class="content">
           ${this._renderNameSlot()}
 
-          <h3>${o(this.hass,"ui.when_heading","When")}</h3>
-          ${e.map(t=>this._renderMatcherRow(t))}
+          <h3>${d(this.hass,"ui.when_heading","When")}</h3>
+          ${t.map(r=>this._renderMatcherRow(r))}
           ${this._renderAddMatcher()}
 
-          <h3>${o(this.hass,"ui.actions_heading","Actions")}</h3>
-          ${this._draft.actions.map((t,r)=>this._renderActionRow(t,r))}
-          <button class="secondary add-action" @click=${this._addActionSlot}>${o(this.hass,"ui.add_action","+ Add action")}</button>
+          <h3>${d(this.hass,"ui.actions_heading","Actions")}</h3>
+          ${this._draft.actions.map((r,n)=>this._renderActionRow(r,n))}
+          <button class="secondary add-action" @click=${this._addActionSlot}>${d(this.hass,"ui.add_action","+ Add action")}</button>
         </div>
 
         <div class="actions-bar">
-          <button class="secondary" @click=${this._cancel}>${o(this.hass,"ui.cancel","Cancel")}</button>
-          <button class="primary" @click=${this._save}>${o(this.hass,"ui.save_rule","Save rule")}</button>
+          <button class="secondary" @click=${this._cancel}>${d(this.hass,"ui.cancel","Cancel")}</button>
+          <button class="primary" @click=${this._save}>${d(this.hass,"ui.save_rule","Save rule")}</button>
         </div>
       </div>
-    `}};b.styles=g`
+    `}};C.styles=$`
     :host {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.4); z-index: 100;
@@ -1254,10 +1378,10 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       margin-top: 0.5rem;
       padding: 0.3rem 0;
     }
-  `,b._ADD_MATCHER_PLACEHOLDER="__add_matcher__",d([c({type:Boolean,reflect:!0})],b.prototype,"open",2),d([c({attribute:!1})],b.prototype,"rule",2),d([c({attribute:!1})],b.prototype,"matchers",2),d([c({attribute:!1})],b.prototype,"sceneSuggestions",2),d([c({attribute:!1})],b.prototype,"periods",2),d([c({attribute:!1})],b.prototype,"dayConfig",2),d([c({attribute:!1})],b.prototype,"weatherConfig",2),d([c({attribute:!1})],b.prototype,"availableActions",2),d([c({attribute:!1})],b.prototype,"hass",2),d([c({attribute:!1})],b.prototype,"areaId",2),d([m()],b.prototype,"_draft",2),d([m()],b.prototype,"_open",2),d([m()],b.prototype,"_showError",2),b=d([_("ambience-rule-editor")],b);var x=class extends f{constructor(){super(...arguments);this._areas=[];this._matchers=[];this._actions=[];this._configs=new Map;this._expanded=new Set;this._error="";this._editing=null}async connectedCallback(){super.connectedCallback(),await this._loadStatic(),await this._refreshAreas(),await this._subscribe()}disconnectedCallback(){super.disconnectedCallback(),this._unsub?.(),this._unsub=void 0}async _loadStatic(){try{let[e,t,r,i,a]=await Promise.all([Ee(this.hass),$t(this.hass),Se(this.hass),Ce(this.hass),Pe(this.hass)]);if(!this.isConnected)return;this._matchers=e,this._actions=t,this._periods=r,this._dayConfig=i,this._weatherConfig=a}catch(e){this._error=e.message||String(e)}}async _refreshAreas(){try{let e=await vt(this.hass),t=this._configs,r=new Map;if(await Promise.all(e.map(async i=>{let a=t.get(i.area_id);if(a){r.set(i.area_id,a);return}r.set(i.area_id,this._normalize(await yt(this.hass,i.area_id)))})),!this.isConnected)return;this._areas=e,this._configs=r}catch(e){this._error=e.message||String(e)}}_normalize(e){return{rules:e.rules??[],auto_sort:e.auto_sort??!0}}async _subscribe(){let e=await this.hass.connection.subscribeEvents(t=>{if(t.data.action==="remove"){let r=t.data.area_id,i=new Set(this._expanded);i.delete(r),this._expanded=i,this._editing?.areaId===r&&(this._editing=null)}this._refreshAreas()},"area_registry_updated");this.isConnected?this._unsub=e:e()}_setConfig(e,t){let r=new Map(this._configs);r.set(e,t),this._configs=r}async _mutate(e,t){let r=this._configs.get(e);this._setConfig(e,t),this._error="";try{let{config:i}=await bt(this.hass,e,t);this._setConfig(e,this._normalize(i))}catch(i){r&&this._setConfig(e,r),this._error=i.message||String(i)}}_toggleExpand(e){let t=new Set(this._expanded);t.has(e)?t.delete(e):t.add(e),this._expanded=t}_toggleAutoSort(e,t){let r=this._configs.get(e);r&&this._mutate(e,{...r,auto_sort:t})}_addRule(e){let t=this._configs.get(e);t&&(this._editing={areaId:e,index:t.rules.length,isNew:!0})}_editRule(e,t){this._editing={areaId:e,index:t.detail.index,isNew:!1}}_duplicateRule(e,t){let r=this._configs.get(e);if(!r)return;let i=r.rules[t.detail.index];if(!i)return;let a=JSON.parse(JSON.stringify(i)),h=[...r.rules];h.splice(t.detail.index+1,0,a),this._mutate(e,{...r,rules:h})}_deleteRule(e,t){let r=this._configs.get(e);if(!r)return;let i=r.rules.filter((a,h)=>h!==t.detail.index);this._mutate(e,{...r,rules:i})}_reorderRules(e,t){let r=this._configs.get(e);if(!r)return;let{from:i,to:a}=t.detail,h=[...r.rules],[u]=h.splice(i,1);h.splice(a,0,u),this._mutate(e,{...r,rules:h})}_saveRule(e){let t=this._editing;if(this._editing=null,!t)return;let r=this._configs.get(t.areaId);if(!r)return;let i=[...r.rules];t.isNew?i.push(e.detail):i[t.index]=e.detail,this._mutate(t.areaId,{...r,rules:i})}_cancelRule(){this._editing=null}get _editingRule(){return this._editing?this._editing.isNew?{when:{},actions:[]}:this._configs.get(this._editing.areaId)?.rules[this._editing.index]??null:null}get _sceneSuggestions(){if(!this._editing)return[];let e=this._configs.get(this._editing.areaId);if(!e)return[];let t=new Set;for(let r of e.rules){let i=r.when.scene;typeof i=="string"&&i&&t.add(i)}return[...t].sort((r,i)=>r.toLowerCase().localeCompare(i.toLowerCase()))}get _editorMatchers(){return this._editing?this._matchers.slice().sort((e,t)=>e.priority-t.priority):[]}_summary(e){let t=e.rules.length;if(t===0)return o(this.hass,"ui.not_configured","not configured");let r=t===1?o(this.hass,"ui.rule_singular","rule"):o(this.hass,"ui.rule_plural","rules");return`${t} ${r}`}render(){return l`
-      ${this._error?l`<p class="error">${this._error}</p>`:""}
-      ${this._areas.length===0?l`<p class="empty">${o(this.hass,"ui.no_areas","No areas found in Home Assistant.")}</p>`:l`<ul>
-            ${this._areas.map(e=>this._renderArea(e))}
+  `,C._ADD_MATCHER_PLACEHOLDER="__add_matcher__",c([f({type:Boolean,reflect:!0})],C.prototype,"open",2),c([f({attribute:!1})],C.prototype,"rule",2),c([f({attribute:!1})],C.prototype,"matchers",2),c([f({attribute:!1})],C.prototype,"sceneSuggestions",2),c([f({attribute:!1})],C.prototype,"periods",2),c([f({attribute:!1})],C.prototype,"dayConfig",2),c([f({attribute:!1})],C.prototype,"weatherConfig",2),c([f({attribute:!1})],C.prototype,"availableActions",2),c([f({attribute:!1})],C.prototype,"hass",2),c([f({attribute:!1})],C.prototype,"areaId",2),c([v()],C.prototype,"_draft",2),c([v()],C.prototype,"_open",2),c([v()],C.prototype,"_showError",2),C=c([x("ambience-rule-editor")],C);var F=class extends b{constructor(){super(...arguments);this._areas=[];this._matchers=[];this._actions=[];this._configs=new Map;this._expanded=new Set;this._error="";this._editing=null}async connectedCallback(){super.connectedCallback(),await this._loadStatic(),await this._refreshAreas(),await this._subscribe()}disconnectedCallback(){super.disconnectedCallback(),this._unsub?.(),this._unsub=void 0}async _loadStatic(){try{let[t,r,n,s,a]=await Promise.all([Xe(this.hass),pr(this.hass),Ze(this.hass),et(this.hass),tt(this.hass)]);if(!this.isConnected)return;this._matchers=t,this._actions=r,this._periods=n,this._dayConfig=s,this._weatherConfig=a}catch(t){this._error=t.message||String(t)}}async _refreshAreas(){try{let t=await dr(this.hass),r=this._configs,n=new Map;if(await Promise.all(t.map(async s=>{let a=r.get(s.area_id);if(a){n.set(s.area_id,a);return}n.set(s.area_id,this._normalize(await cr(this.hass,s.area_id)))})),!this.isConnected)return;this._areas=t,this._configs=n}catch(t){this._error=t.message||String(t)}}_normalize(t){return{rules:t.rules??[],auto_sort:t.auto_sort??!0}}async _subscribe(){let t=await this.hass.connection.subscribeEvents(r=>{if(r.data.action==="remove"){let n=r.data.area_id,s=new Set(this._expanded);s.delete(n),this._expanded=s,this._editing?.areaId===n&&(this._editing=null)}this._refreshAreas()},"area_registry_updated");this.isConnected?this._unsub=t:t()}_setConfig(t,r){let n=new Map(this._configs);n.set(t,r),this._configs=n}async _mutate(t,r){let n=this._configs.get(t);this._setConfig(t,r),this._error="";try{let{config:s}=await hr(this.hass,t,r);this._setConfig(t,this._normalize(s))}catch(s){n&&this._setConfig(t,n),this._error=s.message||String(s)}}_toggleExpand(t){let r=new Set(this._expanded);r.has(t)?r.delete(t):r.add(t),this._expanded=r}_toggleAutoSort(t,r){let n=this._configs.get(t);n&&this._mutate(t,{...n,auto_sort:r})}_addRule(t){let r=this._configs.get(t);r&&(this._editing={areaId:t,index:r.rules.length,isNew:!0})}_editRule(t,r){this._editing={areaId:t,index:r.detail.index,isNew:!1}}_duplicateRule(t,r){let n=this._configs.get(t);if(!n)return;let s=n.rules[r.detail.index];if(!s)return;let a=JSON.parse(JSON.stringify(s)),o=[...n.rules];o.splice(r.detail.index+1,0,a),this._mutate(t,{...n,rules:o})}_deleteRule(t,r){let n=this._configs.get(t);if(!n)return;let s=n.rules.filter((a,o)=>o!==r.detail.index);this._mutate(t,{...n,rules:s})}_reorderRules(t,r){let n=this._configs.get(t);if(!n)return;let{from:s,to:a}=r.detail,o=[...n.rules],[l]=o.splice(s,1);o.splice(a,0,l),this._mutate(t,{...n,rules:o})}_saveRule(t){let r=this._editing;if(this._editing=null,!r)return;let n=this._configs.get(r.areaId);if(!n)return;let s=[...n.rules];r.isNew?s.push(t.detail):s[r.index]=t.detail,this._mutate(r.areaId,{...n,rules:s})}_cancelRule(){this._editing=null}get _editingRule(){return this._editing?this._editing.isNew?{when:{},actions:[]}:this._configs.get(this._editing.areaId)?.rules[this._editing.index]??null:null}get _sceneSuggestions(){if(!this._editing)return[];let t=this._configs.get(this._editing.areaId);if(!t)return[];let r=new Set;for(let n of t.rules){let s=n.when.scene;typeof s=="string"&&s&&r.add(s)}return[...r].sort((n,s)=>n.toLowerCase().localeCompare(s.toLowerCase()))}get _editorMatchers(){return this._editing?this._matchers.slice().sort((t,r)=>t.priority-r.priority):[]}_summary(t){let r=t.rules.length;if(r===0)return d(this.hass,"ui.not_configured","not configured");let n=r===1?d(this.hass,"ui.rule_singular","rule"):d(this.hass,"ui.rule_plural","rules");return`${r} ${n}`}render(){return u`
+      ${this._error?u`<p class="error">${this._error}</p>`:""}
+      ${this._areas.length===0?u`<p class="empty">${d(this.hass,"ui.no_areas","No areas found in Home Assistant.")}</p>`:u`<ul>
+            ${this._areas.map(t=>this._renderArea(t))}
           </ul>`}
 
       <ambience-rule-editor
@@ -1274,43 +1398,43 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}
       ></ambience-rule-editor>
-    `}_renderArea(e){let t=this._configs.get(e.area_id);if(!t)return l``;let r=this._expanded.has(e.area_id);return l`
+    `}_renderArea(t){let r=this._configs.get(t.area_id);if(!r)return u``;let n=this._expanded.has(t.area_id);return u`
       <li>
         <div
           class="area-header"
-          @click=${()=>this._toggleExpand(e.area_id)}
+          @click=${()=>this._toggleExpand(t.area_id)}
         >
-          <span class="chevron ${r?"open":""}">▶</span>
-          <span class="area-name">${e.name}</span>
-          <span class="area-summary">${this._summary(t)}</span>
+          <span class="chevron ${n?"open":""}">▶</span>
+          <span class="area-name">${t.name}</span>
+          <span class="area-summary">${this._summary(r)}</span>
         </div>
-        ${r?l`
+        ${n?u`
               <div class="area-body">
                 <label class="autosort">
                   <input
                     type="checkbox"
-                    .checked=${!t.auto_sort}
-                    @change=${i=>this._toggleAutoSort(e.area_id,!i.target.checked)}
+                    .checked=${!r.auto_sort}
+                    @change=${s=>this._toggleAutoSort(t.area_id,!s.target.checked)}
                   />
-                  ${o(this.hass,"ui.order_rules_manually","Order rules manually")}
+                  ${d(this.hass,"ui.order_rules_manually","Order rules manually")}
                 </label>
                 <ambience-rules-list
-                  .rules=${t.rules}
-                  .autoSort=${t.auto_sort}
+                  .rules=${r.rules}
+                  .autoSort=${r.auto_sort}
                   .periods=${this._periods}
                   .weatherConfig=${this._weatherConfig}
                   .matchers=${this._matchers}
                   .hass=${this.hass}
-                  @add-rule=${()=>this._addRule(e.area_id)}
-                  @edit-rule=${i=>this._editRule(e.area_id,i)}
-                  @duplicate-rule=${i=>this._duplicateRule(e.area_id,i)}
-                  @delete-rule=${i=>this._deleteRule(e.area_id,i)}
-                  @reorder-rules=${i=>this._reorderRules(e.area_id,i)}
+                  @add-rule=${()=>this._addRule(t.area_id)}
+                  @edit-rule=${s=>this._editRule(t.area_id,s)}
+                  @duplicate-rule=${s=>this._duplicateRule(t.area_id,s)}
+                  @delete-rule=${s=>this._deleteRule(t.area_id,s)}
+                  @reorder-rules=${s=>this._reorderRules(t.area_id,s)}
                 ></ambience-rules-list>
               </div>
             `:""}
       </li>
-    `}};x.styles=g`
+    `}};F.styles=$`
     :host {
       display: block;
       padding: 1rem;
@@ -1371,12 +1495,12 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       margin: 0.5rem 0 1rem 0;
       font-size: 0.9em;
     }
-  `,d([c({attribute:!1})],x.prototype,"hass",2),d([m()],x.prototype,"_areas",2),d([m()],x.prototype,"_matchers",2),d([m()],x.prototype,"_actions",2),d([m()],x.prototype,"_periods",2),d([m()],x.prototype,"_dayConfig",2),d([m()],x.prototype,"_weatherConfig",2),d([m()],x.prototype,"_configs",2),d([m()],x.prototype,"_expanded",2),d([m()],x.prototype,"_error",2),d([m()],x.prototype,"_editing",2),x=d([_("ambience-areas-list")],x);var O=class extends f{constructor(){super(...arguments);this.matcherName="";this.matcherDescription="";this._expanded=!1}_toggleExpand(){this._expanded=!this._expanded}render(){let e=j(this.hass,this.matcherName);return l`
+  `,c([f({attribute:!1})],F.prototype,"hass",2),c([v()],F.prototype,"_areas",2),c([v()],F.prototype,"_matchers",2),c([v()],F.prototype,"_actions",2),c([v()],F.prototype,"_periods",2),c([v()],F.prototype,"_dayConfig",2),c([v()],F.prototype,"_weatherConfig",2),c([v()],F.prototype,"_configs",2),c([v()],F.prototype,"_expanded",2),c([v()],F.prototype,"_error",2),c([v()],F.prototype,"_editing",2),F=c([x("ambience-areas-list")],F);var X=class extends b{constructor(){super(...arguments);this.matcherName="";this.matcherDescription="";this._expanded=!1}_toggleExpand(){this._expanded=!this._expanded}render(){let t=re(this.hass,this.matcherName);return u`
       <div class="card">
         <header @click=${this._toggleExpand}>
           <span class="chevron ${this._expanded?"open":""}">▶</span>
           <label>
-            <div class="name">${e}</div>
+            <div class="name">${t}</div>
             <div class="description">${this.matcherDescription}</div>
           </label>
         </header>
@@ -1384,7 +1508,7 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
           <slot></slot>
         </div>
       </div>
-    `}};O.styles=g`
+    `}};X.styles=$`
     :host {
       display: block;
     }
@@ -1429,28 +1553,28 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
     .body.collapsed {
       display: none;
     }
-  `,d([c({attribute:!1})],O.prototype,"hass",2),d([c()],O.prototype,"matcherName",2),d([c()],O.prototype,"matcherDescription",2),d([m()],O.prototype,"_expanded",2),O=d([_("ambience-matcher-card")],O);var Er=/^[a-z][a-z0-9_]*$/;function Sr(n){return n.toLowerCase().trim().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")}var P=class extends f{constructor(){super(...arguments);this.initial={from:{kind:"time",hh:9,mm:0},to:{kind:"time",hh:17,mm:0},label:null};this.takenIds=new Set;this._label="";this._def=this.initial;this._error=""}connectedCallback(){super.connectedCallback(),this._label=this.initial.label??"",this._def=this.initial}_onLabelInput(e){this._label=e.target.value}_onFromChange(e){e.stopPropagation(),this._def={...this._def,from:e.detail.value}}_onToChange(e){e.stopPropagation(),this._def={...this._def,to:e.detail.value}}_validate(e){if(!this.existingId){if(!this._label.trim())return o(this.hass,"ui.error_enter_name","Please enter a name.");if(!e)return o(this.hass,"ui.error_start_letter","Name must start with a letter.");if(!Er.test(e))return o(this.hass,"ui.error_start_letter","Name must start with a letter.");if(this.takenIds.has(e))return o(this.hass,"ui.error_name_exists","A period with this name already exists. Choose a different name.")}return""}_onSave(){let e=this.existingId??Sr(this._label),t=this._validate(e);if(t){this._error=t,this.performUpdate();return}let r={from:this._def.from,to:this._def.to,label:this._label.trim()||null};this.dispatchEvent(new CustomEvent("period-save",{detail:{id:e,definition:r},bubbles:!0,composed:!0}))}_onCancel(){this.dispatchEvent(new CustomEvent("period-cancel",{bubbles:!0,composed:!0}))}render(){let e=this.existingId?o(this.hass,"ui.period_modal_edit_title",'Edit "{name}"').replace("{name}",this.initial?.label??this.existingId):o(this.hass,"ui.period_modal_add_title","Add custom period");return l`
+  `,c([f({attribute:!1})],X.prototype,"hass",2),c([f()],X.prototype,"matcherName",2),c([f()],X.prototype,"matcherDescription",2),c([v()],X.prototype,"_expanded",2),X=c([x("ambience-matcher-card")],X);var Aa=/^[a-z][a-z0-9_]*$/;function Ta(e){return e.toLowerCase().trim().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")}var j=class extends b{constructor(){super(...arguments);this.initial={from:{kind:"time",hh:9,mm:0},to:{kind:"time",hh:17,mm:0},label:null};this.takenIds=new Set;this._label="";this._def=this.initial;this._error=""}connectedCallback(){super.connectedCallback(),this._label=this.initial.label??"",this._def=this.initial}_onLabelInput(t){this._label=t.target.value}_onFromChange(t){t.stopPropagation(),this._def={...this._def,from:t.detail.value}}_onToChange(t){t.stopPropagation(),this._def={...this._def,to:t.detail.value}}_validate(t){if(!this.existingId){if(!this._label.trim())return d(this.hass,"ui.error_enter_name","Please enter a name.");if(!t)return d(this.hass,"ui.error_start_letter","Name must start with a letter.");if(!Aa.test(t))return d(this.hass,"ui.error_start_letter","Name must start with a letter.");if(this.takenIds.has(t))return d(this.hass,"ui.error_name_exists","A period with this name already exists. Choose a different name.")}return""}_onSave(){let t=this.existingId??Ta(this._label),r=this._validate(t);if(r){this._error=r,this.performUpdate();return}let n={from:this._def.from,to:this._def.to,label:this._label.trim()||null};this.dispatchEvent(new CustomEvent("period-save",{detail:{id:t,definition:n},bubbles:!0,composed:!0}))}_onCancel(){this.dispatchEvent(new CustomEvent("period-cancel",{bubbles:!0,composed:!0}))}render(){let t=this.existingId?d(this.hass,"ui.period_modal_edit_title",'Edit "{name}"').replace("{name}",this.initial?.label??this.existingId):d(this.hass,"ui.period_modal_add_title","Add custom period");return u`
       <div class="modal" role="dialog" aria-modal="true">
-        <h3>${e}</h3>
+        <h3>${t}</h3>
         <div class="field">
-          <label for="label">${o(this.hass,"ui.name","Name")}</label>
-          <input id="label" type="text" .value=${this._label} @input=${this._onLabelInput} placeholder=${o(this.hass,"ui.name_placeholder","e.g. Wind down")} />
+          <label for="label">${d(this.hass,"ui.name","Name")}</label>
+          <input id="label" type="text" .value=${this._label} @input=${this._onLabelInput} placeholder=${d(this.hass,"ui.name_placeholder","e.g. Wind down")} />
         </div>
         <div class="row">
-          <label style="min-width: 3em;">${o(this.hass,"ui.from_label","From")}</label>
+          <label style="min-width: 3em;">${d(this.hass,"ui.from_label","From")}</label>
           <ambience-time-endpoint .hass=${this.hass} .value=${this._def.from} @value-changed=${this._onFromChange}></ambience-time-endpoint>
         </div>
         <div class="row">
-          <label style="min-width: 3em;">${o(this.hass,"ui.to_label","To")}</label>
+          <label style="min-width: 3em;">${d(this.hass,"ui.to_label","To")}</label>
           <ambience-time-endpoint .hass=${this.hass} .value=${this._def.to} @value-changed=${this._onToChange}></ambience-time-endpoint>
         </div>
         <div class="error">${this._error}</div>
         <div class="actions">
-          <button @click=${this._onCancel}>${o(this.hass,"ui.cancel","Cancel")}</button>
-          <button @click=${this._onSave}>${o(this.hass,"ui.save","Save")}</button>
+          <button @click=${this._onCancel}>${d(this.hass,"ui.cancel","Cancel")}</button>
+          <button @click=${this._onSave}>${d(this.hass,"ui.save","Save")}</button>
         </div>
       </div>
-    `}};P.styles=g`
+    `}};j.styles=$`
     :host {
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
@@ -1473,55 +1597,55 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
     .error { color: var(--error-color, #c00); font-size: 0.85em; min-height: 1em; }
     .actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem; }
     button { padding: 0.5rem 1rem; cursor: pointer; }
-  `,d([c({attribute:!1})],P.prototype,"hass",2),d([c({attribute:!1})],P.prototype,"existingId",2),d([c({attribute:!1})],P.prototype,"initial",2),d([c({attribute:!1})],P.prototype,"takenIds",2),d([m()],P.prototype,"_label",2),d([m()],P.prototype,"_def",2),d([m()],P.prototype,"_error",2),P=d([_("ambience-period-edit-modal")],P);function It(n,s){if(n.kind==="time")return`${String(n.hh).padStart(2,"0")}:${String(n.mm).padStart(2,"0")}`;let e=se(s,n.anchor);if(n.offset_min===0)return e;let t=Math.abs(n.offset_min),r=t%60===0?`${t/60}${o(s,"ui.unit_hour_abbr","h")}`:`${t}${o(s,"ui.unit_min_abbr","m")}`;return`${e}${n.offset_min<0?"-":"+"}${r}`}function Ot(n,s){return`${It(n.from,s)} \u2192 ${It(n.to,s)}`}var R=class extends f{constructor(){super(...arguments);this._view={builtins:{},custom:{},hidden:[]};this._modal={mode:"closed"};this._warnings=[]}async connectedCallback(){super.connectedCallback(),await this._reload()}async _reload(){this._view=await Se(this.hass)}async _saveState(e){let t=await wt(this.hass,e,this._view.hidden);this._warnings=t.warnings,await this._reload()}_onEdit(e,t){this._modal={mode:"edit",id:e,initial:t}}async _onDelete(e){let t={...this._view.custom};delete t[e],await this._saveState(t)}_onAdd(){this._modal={mode:"add"}}async _onModalSave(e){e.stopPropagation();let{id:t,definition:r}=e.detail,i={...this._view.custom,[t]:r};this._modal={mode:"closed"},await this._saveState(i)}_onModalCancel(){this._modal={mode:"closed"}}_renderBuiltinRow(e,t,r){return l`
-      <div class="row ${r?"overridden":""}">
-        <span class="name">${X(this.hass,e,{})}</span>
-        <span class="def">${Ot(t,this.hass)}</span>
-        <span class="badge">${o(this.hass,"ui.badge_builtin","builtin")}</span>
+  `,c([f({attribute:!1})],j.prototype,"hass",2),c([f({attribute:!1})],j.prototype,"existingId",2),c([f({attribute:!1})],j.prototype,"initial",2),c([f({attribute:!1})],j.prototype,"takenIds",2),c([v()],j.prototype,"_label",2),c([v()],j.prototype,"_def",2),c([v()],j.prototype,"_error",2),j=c([x("ambience-period-edit-modal")],j);function gi(e,i){if(e.kind==="time")return`${String(e.hh).padStart(2,"0")}:${String(e.mm).padStart(2,"0")}`;let t=$e(i,e.anchor);if(e.offset_min===0)return t;let r=Math.abs(e.offset_min),n=r%60===0?`${r/60}${d(i,"ui.unit_hour_abbr","h")}`:`${r}${d(i,"ui.unit_min_abbr","m")}`;return`${t}${e.offset_min<0?"-":"+"}${n}`}function _i(e,i){return`${gi(e.from,i)} \u2192 ${gi(e.to,i)}`}var Z=class extends b{constructor(){super(...arguments);this._view={builtins:{},custom:{},hidden:[]};this._modal={mode:"closed"};this._warnings=[]}async connectedCallback(){super.connectedCallback(),await this._reload()}async _reload(){this._view=await Ze(this.hass)}async _saveState(t){let r=await mr(this.hass,t,this._view.hidden);this._warnings=r.warnings,await this._reload()}_onEdit(t,r){this._modal={mode:"edit",id:t,initial:r}}async _onDelete(t){let r={...this._view.custom};delete r[t],await this._saveState(r)}_onAdd(){this._modal={mode:"add"}}async _onModalSave(t){t.stopPropagation();let{id:r,definition:n}=t.detail,s={...this._view.custom,[r]:n};this._modal={mode:"closed"},await this._saveState(s)}_onModalCancel(){this._modal={mode:"closed"}}_renderBuiltinRow(t,r,n){return u`
+      <div class="row ${n?"overridden":""}">
+        <span class="name">${me(this.hass,t,{})}</span>
+        <span class="def">${_i(r,this.hass)}</span>
+        <span class="badge">${d(this.hass,"ui.badge_builtin","builtin")}</span>
         <span class="actions">
-          ${r?"":l`<button class="icon" title=${o(this.hass,"ui.title_override","Override")} @click=${()=>this._onEdit(e,t)}>✎</button>`}
+          ${n?"":u`<button class="icon" title=${d(this.hass,"ui.title_override","Override")} @click=${()=>this._onEdit(t,r)}>✎</button>`}
         </span>
       </div>
-    `}_renderCustomRow(e,t){return l`
+    `}_renderCustomRow(t,r){return u`
       <div class="row custom">
-        <span class="name">${X(this.hass,e,this._view.custom)}</span>
-        <span class="def">${Ot(t,this.hass)}</span>
-        <span class="badge">${o(this.hass,"ui.badge_custom","custom")}</span>
+        <span class="name">${me(this.hass,t,this._view.custom)}</span>
+        <span class="def">${_i(r,this.hass)}</span>
+        <span class="badge">${d(this.hass,"ui.badge_custom","custom")}</span>
         <span class="actions">
-          <button class="icon" title=${o(this.hass,"ui.title_edit","Edit")} @click=${()=>this._onEdit(e,t)}>✎</button>
-          <button class="icon" title=${o(this.hass,"ui.title_delete","Delete")} @click=${()=>this._onDelete(e)}>✕</button>
+          <button class="icon" title=${d(this.hass,"ui.title_edit","Edit")} @click=${()=>this._onEdit(t,r)}>✎</button>
+          <button class="icon" title=${d(this.hass,"ui.title_delete","Delete")} @click=${()=>this._onDelete(t)}>✕</button>
         </span>
       </div>
-    `}render(){let e=this._view.custom;return l`
+    `}render(){let t=this._view.custom;return u`
       <header>
-        <h2>${o(this.hass,"ui.periods_heading","Periods")}</h2>
+        <h2>${d(this.hass,"ui.periods_heading","Periods")}</h2>
       </header>
-      ${this._warnings.length?l`<div class="warnings">
-            <strong>${o(this.hass,"ui.period_warning_prefix","Warning:")}</strong> ${o(this.hass,"ui.period_warning_text","some rules now reference missing periods:")}
+      ${this._warnings.length?u`<div class="warnings">
+            <strong>${d(this.hass,"ui.period_warning_prefix","Warning:")}</strong> ${d(this.hass,"ui.period_warning_text","some rules now reference missing periods:")}
             <ul>
-              ${this._warnings.map(t=>l`<li>${t.area_id} / "${t.rule_name}" → ${t.missing_period}</li>`)}
+              ${this._warnings.map(r=>u`<li>${r.area_id} / "${r.rule_name}" → ${r.missing_period}</li>`)}
             </ul>
           </div>`:""}
-      ${Object.entries(this._view.builtins).map(([t,r])=>{let i=e[t];return l`
-          ${this._renderBuiltinRow(t,r,i!=null)}
-          ${i!=null?this._renderCustomRow(t,i):""}
+      ${Object.entries(this._view.builtins).map(([r,n])=>{let s=t[r];return u`
+          ${this._renderBuiltinRow(r,n,s!=null)}
+          ${s!=null?this._renderCustomRow(r,s):""}
         `})}
-      ${Object.entries(e).filter(([t])=>!(t in this._view.builtins)).map(([t,r])=>this._renderCustomRow(t,r))}
-      <button class="add" @click=${this._onAdd}>${o(this.hass,"ui.add_custom_period","+ Add custom period")}</button>
-      ${this._modal.mode==="edit"?l`<ambience-period-edit-modal
+      ${Object.entries(t).filter(([r])=>!(r in this._view.builtins)).map(([r,n])=>this._renderCustomRow(r,n))}
+      <button class="add" @click=${this._onAdd}>${d(this.hass,"ui.add_custom_period","+ Add custom period")}</button>
+      ${this._modal.mode==="edit"?u`<ambience-period-edit-modal
             .hass=${this.hass}
             .existingId=${this._modal.id}
             .initial=${this._modal.initial}
             .takenIds=${new Set([...Object.keys(this._view.builtins),...Object.keys(this._view.custom)])}
             @period-save=${this._onModalSave}
             @period-cancel=${this._onModalCancel}
-          ></ambience-period-edit-modal>`:this._modal.mode==="add"?l`<ambience-period-edit-modal
+          ></ambience-period-edit-modal>`:this._modal.mode==="add"?u`<ambience-period-edit-modal
             .hass=${this.hass}
             .takenIds=${new Set([...Object.keys(this._view.builtins),...Object.keys(this._view.custom)])}
             @period-save=${this._onModalSave}
             @period-cancel=${this._onModalCancel}
           ></ambience-period-edit-modal>`:""}
-    `}};R.styles=g`
+    `}};Z.styles=$`
     :host { display: block; }
     header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
     h2 { margin: 0; font-size: 1rem; font-weight: 600; }
@@ -1554,36 +1678,36 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       padding: 0.5rem 1rem; border-radius: 4px; margin-bottom: 1rem;
     }
     .warnings ul { margin: 0.3rem 0 0 0; padding-left: 1.2rem; }
-  `,d([c({attribute:!1})],R.prototype,"hass",2),d([m()],R.prototype,"_view",2),d([m()],R.prototype,"_modal",2),d([m()],R.prototype,"_warnings",2),R=d([_("ambience-time-of-day-config")],R);var q=class extends f{constructor(){super(...arguments);this._config={workday_sensor:null,workday_calendar:null};this._warnings=[]}async connectedCallback(){super.connectedCallback(),this._config=await Ce(this.hass)}async _save(e){this._config=e;let t=await kt(this.hass,e.workday_sensor,e.workday_calendar);this._warnings=t.warnings??[]}_onSensorChange(e){this._save({...this._config,workday_sensor:e.detail.value||null})}_onCalendarChange(e){this._save({...this._config,workday_calendar:e.detail.value||null})}render(){let e=[{name:"workday_sensor",selector:{entity:{integration:"workday",domain:"binary_sensor"}}}],t=[{name:"workday_calendar",selector:{entity:{integration:"workday",domain:"calendar"}}}];return l`
+  `,c([f({attribute:!1})],Z.prototype,"hass",2),c([v()],Z.prototype,"_view",2),c([v()],Z.prototype,"_modal",2),c([v()],Z.prototype,"_warnings",2),Z=c([x("ambience-time-of-day-config")],Z);var le=class extends b{constructor(){super(...arguments);this._config={workday_sensor:null,workday_calendar:null};this._warnings=[]}async connectedCallback(){super.connectedCallback(),this._config=await et(this.hass)}async _save(t){this._config=t;let r=await fr(this.hass,t.workday_sensor,t.workday_calendar);this._warnings=r.warnings??[]}_onSensorChange(t){this._save({...this._config,workday_sensor:t.detail.value||null})}_onCalendarChange(t){this._save({...this._config,workday_calendar:t.detail.value||null})}render(){let t=[{name:"workday_sensor",selector:{entity:{integration:"workday",domain:"binary_sensor"}}}],r=[{name:"workday_calendar",selector:{entity:{integration:"workday",domain:"calendar"}}}];return u`
       <div class="row">
-        <label>${o(this.hass,"ui.workday_sensor","Workday sensor")}</label>
-        <ha-form
-          .hass=${this.hass}
-          .schema=${e}
-          .data=${{workday_sensor:this._config.workday_sensor??""}}
-          .computeLabel=${()=>""}
-          @value-changed=${r=>{r.stopPropagation(),this._onSensorChange({detail:{value:r.detail.value?.workday_sensor||null}})}}
-        ></ha-form>
-      </div>
-      <div class="row">
-        <label>${o(this.hass,"ui.workday_calendar","Workday calendar")}</label>
+        <label>${d(this.hass,"ui.workday_sensor","Workday sensor")}</label>
         <ha-form
           .hass=${this.hass}
           .schema=${t}
-          .data=${{workday_calendar:this._config.workday_calendar??""}}
+          .data=${{workday_sensor:this._config.workday_sensor??""}}
           .computeLabel=${()=>""}
-          @value-changed=${r=>{r.stopPropagation(),this._onCalendarChange({detail:{value:r.detail.value?.workday_calendar||null}})}}
+          @value-changed=${n=>{n.stopPropagation(),this._onSensorChange({detail:{value:n.detail.value?.workday_sensor||null}})}}
         ></ha-form>
       </div>
-      ${this._warnings.length?l`
+      <div class="row">
+        <label>${d(this.hass,"ui.workday_calendar","Workday calendar")}</label>
+        <ha-form
+          .hass=${this.hass}
+          .schema=${r}
+          .data=${{workday_calendar:this._config.workday_calendar??""}}
+          .computeLabel=${()=>""}
+          @value-changed=${n=>{n.stopPropagation(),this._onCalendarChange({detail:{value:n.detail.value?.workday_calendar||null}})}}
+        ></ha-form>
+      </div>
+      ${this._warnings.length?u`
         <div class="warnings">
-          <strong>${o(this.hass,"ui.day_warning_prefix","Warning:")}</strong> ${o(this.hass,"ui.day_warning_text","rules now reference unconfigured entities:")}
+          <strong>${d(this.hass,"ui.day_warning_prefix","Warning:")}</strong> ${d(this.hass,"ui.day_warning_text","rules now reference unconfigured entities:")}
           <ul>
-            ${this._warnings.map(r=>l`<li>${r.area_id} / "${r.rule_name}" → ${r.reason}</li>`)}
+            ${this._warnings.map(n=>u`<li>${n.area_id} / "${n.rule_name}" → ${n.reason}</li>`)}
           </ul>
         </div>
       `:""}
-    `}};q.styles=g`
+    `}};le.styles=$`
     :host { display: block; }
     .row { margin-bottom: 0.75rem; }
     label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
@@ -1593,59 +1717,59 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       padding: 0.5rem 1rem; border-radius: 4px; margin-top: 0.5rem;
     }
     .warnings ul { margin: 0.3rem 0 0 0; padding-left: 1.2rem; }
-  `,d([c({attribute:!1})],q.prototype,"hass",2),d([m()],q.prototype,"_config",2),d([m()],q.prototype,"_warnings",2),q=d([_("ambience-day-config")],q);var Cr=["clear-night","cloudy","fog","hail","lightning","lightning-rainy","partlycloudy","pouring","rainy","snowy","snowy-rainy","sunny","windy","windy-variant","exceptional"],F=class extends f{constructor(){super(...arguments);this._config={entity:null,groups:[]};this._warnings=[];this._expanded=new Set}async connectedCallback(){super.connectedCallback(),this._config=await Pe(this.hass)}async _persist(){let e=await xt(this.hass,this._config.entity,this._config.groups);this._warnings=e.warnings??[]}_onEntityChange(e){this._config={...this._config,entity:e.detail.value||null},this._persist()}_nextGroupId(e){let t=new Set(e.map(r=>r.id));for(let r=1;r<=e.length+1;r++){let i=`group_${r}`;if(!t.has(i))return i}return`group_${e.length+1}`}_addGroup(){let e=this._nextGroupId(this._config.groups);this._config={...this._config,groups:[...this._config.groups,{id:e,label:"",conditions:[]}]},this._expanded=new Set([...this._expanded,e]),this._persist()}_toggleExpand(e){let t=new Set(this._expanded);t.has(e)?t.delete(e):t.add(e),this._expanded=t}_updateGroup(e,t){this._config={...this._config,groups:this._config.groups.map((r,i)=>i===e?{...r,...t}:r)},this._persist()}_removeGroup(e){let t=this._config.groups[e];if(this._config={...this._config,groups:this._config.groups.filter((r,i)=>i!==e)},t){let r=new Set(this._expanded);r.delete(t.id),this._expanded=r}this._persist()}_conditionsSchema(){return[{name:"conditions",selector:{select:{multiple:!0,mode:"dropdown",options:Cr.map(e=>({value:e,label:xe(this.hass,e)}))}}}]}_renderConditions(e,t){if(customElements.get("ha-form"))return l`<ha-form
+  `,c([f({attribute:!1})],le.prototype,"hass",2),c([v()],le.prototype,"_config",2),c([v()],le.prototype,"_warnings",2),le=c([x("ambience-day-config")],le);var La=["clear-night","cloudy","fog","hail","lightning","lightning-rainy","partlycloudy","pouring","rainy","snowy","snowy-rainy","sunny","windy","windy-variant","exceptional"],ee=class extends b{constructor(){super(...arguments);this._config={entity:null,groups:[]};this._warnings=[];this._expanded=new Set}async connectedCallback(){super.connectedCallback(),this._config=await tt(this.hass)}async _persist(){let t=await gr(this.hass,this._config.entity,this._config.groups);this._warnings=t.warnings??[]}_onEntityChange(t){this._config={...this._config,entity:t.detail.value||null},this._persist()}_nextGroupId(t){let r=new Set(t.map(n=>n.id));for(let n=1;n<=t.length+1;n++){let s=`group_${n}`;if(!r.has(s))return s}return`group_${t.length+1}`}_addGroup(){let t=this._nextGroupId(this._config.groups);this._config={...this._config,groups:[...this._config.groups,{id:t,label:"",conditions:[]}]},this._expanded=new Set([...this._expanded,t]),this._persist()}_toggleExpand(t){let r=new Set(this._expanded);r.has(t)?r.delete(t):r.add(t),this._expanded=r}_updateGroup(t,r){this._config={...this._config,groups:this._config.groups.map((n,s)=>s===t?{...n,...r}:n)},this._persist()}_removeGroup(t){let r=this._config.groups[t];if(this._config={...this._config,groups:this._config.groups.filter((n,s)=>s!==t)},r){let n=new Set(this._expanded);n.delete(r.id),this._expanded=n}this._persist()}_conditionsSchema(){return[{name:"conditions",selector:{select:{multiple:!0,mode:"dropdown",options:La.map(t=>({value:t,label:Qe(this.hass,t)}))}}}]}_renderConditions(t,r){if(customElements.get("ha-form"))return u`<ha-form
         .hass=${this.hass}
         .schema=${this._conditionsSchema()}
-        .data=${{conditions:t.conditions}}
+        .data=${{conditions:r.conditions}}
         .computeLabel=${()=>""}
-        @value-changed=${i=>{i.stopPropagation(),this._updateGroup(e,{conditions:i.detail.value.conditions??[]})}}
-      ></ha-form>`;let r=t.conditions.map(i=>xe(this.hass,i));return l`<span class="conditions-list">${r.join(", ")}</span>`}_renderGroup(e,t){let r=this._expanded.has(t.id),i=t.conditions.map(a=>xe(this.hass,a)).join(", ");return l`
+        @value-changed=${s=>{s.stopPropagation(),this._updateGroup(t,{conditions:s.detail.value.conditions??[]})}}
+      ></ha-form>`;let n=r.conditions.map(s=>Qe(this.hass,s));return u`<span class="conditions-list">${n.join(", ")}</span>`}_renderGroup(t,r){let n=this._expanded.has(r.id),s=r.conditions.map(a=>Qe(this.hass,a)).join(", ");return u`
       <div class="group">
-        <div class="group-header" @click=${()=>this._toggleExpand(t.id)}>
-          <span class="chevron ${r?"open":""}">▶</span>
-          <span class="label">${t.label}</span>
-          <span class="codes">${i}</span>
+        <div class="group-header" @click=${()=>this._toggleExpand(r.id)}>
+          <span class="chevron ${n?"open":""}">▶</span>
+          <span class="label">${r.label}</span>
+          <span class="codes">${s}</span>
           <button
             class="icon"
-            title=${o(this.hass,"ui.title_delete","Delete")}
-            @click=${a=>{a.stopPropagation(),this._removeGroup(e)}}
+            title=${d(this.hass,"ui.title_delete","Delete")}
+            @click=${a=>{a.stopPropagation(),this._removeGroup(t)}}
           >✕</button>
         </div>
-        ${r?l`<div class="body" @click=${a=>a.stopPropagation()}>
+        ${n?u`<div class="body" @click=${a=>a.stopPropagation()}>
               <input
-                .value=${t.label}
-                aria-label=${t.label}
-                @change=${a=>this._updateGroup(e,{label:a.target.value})}
+                .value=${r.label}
+                aria-label=${r.label}
+                @change=${a=>this._updateGroup(t,{label:a.target.value})}
               />
-              ${this._renderConditions(e,t)}
+              ${this._renderConditions(t,r)}
             </div>`:""}
       </div>
-    `}render(){let e=[{name:"entity",selector:{entity:{domain:"weather"}}}];return l`
+    `}render(){let t=[{name:"entity",selector:{entity:{domain:"weather"}}}];return u`
       <div class="row">
-        <label class="section">${o(this.hass,"ui.weather_entity","Weather entity")}</label>
+        <label class="section">${d(this.hass,"ui.weather_entity","Weather entity")}</label>
         <ha-form
           .hass=${this.hass}
-          .schema=${e}
+          .schema=${t}
           .data=${{entity:this._config.entity??""}}
           .computeLabel=${()=>""}
-          @value-changed=${t=>{t.stopPropagation(),this._onEntityChange({detail:{value:t.detail.value?.entity||null}})}}
+          @value-changed=${r=>{r.stopPropagation(),this._onEntityChange({detail:{value:r.detail.value?.entity||null}})}}
         ></ha-form>
       </div>
 
-      <h4>${o(this.hass,"ui.groups","Groups")}</h4>
-      ${this._config.groups.map((t,r)=>this._renderGroup(r,t))}
+      <h4>${d(this.hass,"ui.groups","Groups")}</h4>
+      ${this._config.groups.map((r,n)=>this._renderGroup(n,r))}
       <button class="add" @click=${()=>this._addGroup()}>
-        ${o(this.hass,"ui.add_group","+ Add group")}
+        ${d(this.hass,"ui.add_group","+ Add group")}
       </button>
 
-      ${this._warnings.length?l`
+      ${this._warnings.length?u`
         <div class="warnings">
-          <strong>${o(this.hass,"ui.day_warning_prefix","Warning:")}</strong>
-          ${o(this.hass,"ui.weather_warning_text","rules now reference an unconfigured weather entity:")}
-          <ul>${this._warnings.map(t=>l`<li>${t.area_id} / "${t.rule_name}" → ${t.reason}</li>`)}</ul>
+          <strong>${d(this.hass,"ui.day_warning_prefix","Warning:")}</strong>
+          ${d(this.hass,"ui.weather_warning_text","rules now reference an unconfigured weather entity:")}
+          <ul>${this._warnings.map(r=>u`<li>${r.area_id} / "${r.rule_name}" → ${r.reason}</li>`)}</ul>
         </div>
       `:""}
-    `}};F.styles=g`
+    `}};ee.styles=$`
     :host { display: block; }
     .row { margin-bottom: 0.75rem; }
     label.section { display: block; font-weight: 600; margin-bottom: 0.25rem; }
@@ -1698,36 +1822,36 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       padding: 0.5rem 1rem; border-radius: 4px; margin-top: 0.5rem;
     }
     .warnings ul { margin: 0.3rem 0 0 0; padding-left: 1.2rem; }
-  `,d([c({attribute:!1})],F.prototype,"hass",2),d([m()],F.prototype,"_config",2),d([m()],F.prototype,"_warnings",2),d([m()],F.prototype,"_expanded",2),F=d([_("ambience-weather-config")],F);var Pr=new Set(["time_of_day","day","weather"]),V=class extends f{constructor(){super(...arguments);this._matchers=[];this._error=""}async connectedCallback(){super.connectedCallback();try{this._matchers=await Ee(this.hass)}catch(e){this._error=e.message||String(e)}}render(){let e=this._matchers.filter(t=>Pr.has(t.name)).slice().sort((t,r)=>t.priority-r.priority);return l`
-      ${this._error?l`<p class="error">${this._error}</p>`:""}
-      ${e.map(t=>l`
+  `,c([f({attribute:!1})],ee.prototype,"hass",2),c([v()],ee.prototype,"_config",2),c([v()],ee.prototype,"_warnings",2),c([v()],ee.prototype,"_expanded",2),ee=c([x("ambience-weather-config")],ee);var Na=new Set(["time_of_day","day","weather"]),ue=class extends b{constructor(){super(...arguments);this._matchers=[];this._error=""}async connectedCallback(){super.connectedCallback();try{this._matchers=await Xe(this.hass)}catch(t){this._error=t.message||String(t)}}render(){let t=this._matchers.filter(r=>Na.has(r.name)).slice().sort((r,n)=>r.priority-n.priority);return u`
+      ${this._error?u`<p class="error">${this._error}</p>`:""}
+      ${t.map(r=>u`
         <ambience-matcher-card
           .hass=${this.hass}
-          .matcherName=${t.name}
-          .matcherDescription=${t.description}
+          .matcherName=${r.name}
+          .matcherDescription=${r.description}
         >
-          ${t.name==="time_of_day"?l`<ambience-time-of-day-config .hass=${this.hass}></ambience-time-of-day-config>`:t.name==="day"?l`<ambience-day-config .hass=${this.hass}></ambience-day-config>`:t.name==="weather"?l`<ambience-weather-config .hass=${this.hass}></ambience-weather-config>`:l``}
+          ${r.name==="time_of_day"?u`<ambience-time-of-day-config .hass=${this.hass}></ambience-time-of-day-config>`:r.name==="day"?u`<ambience-day-config .hass=${this.hass}></ambience-day-config>`:r.name==="weather"?u`<ambience-weather-config .hass=${this.hass}></ambience-weather-config>`:u``}
         </ambience-matcher-card>
       `)}
-    `}};V.styles=g`
+    `}};ue.styles=$`
     :host { display: block; padding: 1rem; max-width: 60rem; margin: 0 auto; }
     .error { color: var(--error-color, #d32f2f); }
-  `,d([c({attribute:!1})],V.prototype,"hass",2),d([m()],V.prototype,"_matchers",2),d([m()],V.prototype,"_error",2),V=d([_("ambience-configuration-view")],V);var Q=class extends f{constructor(){super(...arguments);this._view="areas"}connectedCallback(){super.connectedCallback(),W(this)}render(){return l`
+  `,c([f({attribute:!1})],ue.prototype,"hass",2),c([v()],ue.prototype,"_matchers",2),c([v()],ue.prototype,"_error",2),ue=c([x("ambience-configuration-view")],ue);var ve=class extends b{constructor(){super(...arguments);this._view="areas"}connectedCallback(){super.connectedCallback(),ie(this)}render(){return u`
       <header>
-        <h1>${o(this.hass,"ui.panel_title","Ambience")}</h1>
+        <h1>${d(this.hass,"ui.panel_title","Ambience")}</h1>
         <nav>
           <button
             class=${this._view==="areas"?"active":""}
             @click=${()=>{this._view="areas"}}
-          >${o(this.hass,"ui.tab_areas","Areas")}</button>
+          >${d(this.hass,"ui.tab_areas","Areas")}</button>
           <button
             class=${this._view==="configuration"?"active":""}
             @click=${()=>{this._view="configuration"}}
-          >${o(this.hass,"ui.tab_configuration","Configuration")}</button>
+          >${d(this.hass,"ui.tab_configuration","Configuration")}</button>
         </nav>
       </header>
-      ${this._view==="areas"?l`<ambience-areas-list .hass=${this.hass}></ambience-areas-list>`:l`<ambience-configuration-view .hass=${this.hass}></ambience-configuration-view>`}
-    `}};Q.styles=g`
+      ${this._view==="areas"?u`<ambience-areas-list .hass=${this.hass}></ambience-areas-list>`:u`<ambience-configuration-view .hass=${this.hass}></ambience-configuration-view>`}
+    `}};ve.styles=$`
     :host {
       display: block;
       height: 100vh;
@@ -1765,4 +1889,4 @@ var Rt=Object.defineProperty;var Ft=Object.getOwnPropertyDescriptor;var d=(n,s,e
       color: var(--text-primary-color, #fff);
       border-color: var(--primary-color, #03a9f4);
     }
-  `,d([c({attribute:!1})],Q.prototype,"hass",2),d([m()],Q.prototype,"_view",2),Q=d([_("ambience-panel")],Q);export{Q as AmbiencePanel};
+  `,c([f({attribute:!1})],ve.prototype,"hass",2),c([v()],ve.prototype,"_view",2),ve=c([x("ambience-panel")],ve);export{ve as AmbiencePanel};

@@ -10,9 +10,9 @@ import type { HassConnection } from "./api.js";
 import { localize } from "./i18n.js";
 import { watchHaComponents } from "./ha-components.js";
 import "./views/scopes-view.js";
-import "./views/configuration-view.js";
+import "./views/settings-view.js";
 
-type PanelView = "areas" | "configuration";
+type PanelView = "areas" | "settings";
 
 @customElement("ambience-panel")
 export class AmbiencePanel extends LitElement {
@@ -77,14 +77,14 @@ export class AmbiencePanel extends LitElement {
             @click=${() => { this._view = "areas"; }}
           >${localize(this.hass, "ui.tab_areas", "Areas")}</button>
           <button
-            class=${this._view === "configuration" ? "active" : ""}
-            @click=${() => { this._view = "configuration"; }}
-          >${localize(this.hass, "ui.tab_configuration", "Configuration")}</button>
+            class=${this._view === "settings" ? "active" : ""}
+            @click=${() => { this._view = "settings"; }}
+          >${localize(this.hass, "ui.tab_settings", "Settings")}</button>
         </nav>
       </header>
       ${this._view === "areas"
         ? html`<ambience-scopes-view .hass=${this.hass}></ambience-scopes-view>`
-        : html`<ambience-configuration-view .hass=${this.hass}></ambience-configuration-view>`}
+        : html`<ambience-settings-view .hass=${this.hass}></ambience-settings-view>`}
     `;
   }
 }

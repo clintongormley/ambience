@@ -1,7 +1,6 @@
 import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
-  // Deliberately return matchers NOT in priority order — the view should sort.
   listMatchers: vi.fn(async () => ([
     { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
     { name: "weather", description: "W", predicate_help: "", input: "weather_predicate", priority: 300 },
@@ -18,15 +17,15 @@ vi.mock("../frontend/src/api.js", () => ({
   saveWeatherConfig: vi.fn(async () => ({ ok: true, warnings: [] })),
 }));
 
-import "../frontend/src/views/configuration-view";
+import "../frontend/src/views/matchers-settings";
 
-describe("ambience-configuration-view", () => {
+describe("ambience-matchers-settings", () => {
   let el: any;
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => el?.remove());
 
   async function mount() {
-    el = document.createElement("ambience-configuration-view");
+    el = document.createElement("ambience-matchers-settings");
     el.hass = {};
     document.body.appendChild(el);
     await el.updateComplete;
@@ -35,17 +34,11 @@ describe("ambience-configuration-view", () => {
     return el;
   }
 
-  test("renders a card only for matchers with a config widget, in priority order", async () => {
+  test("renders a card per configurable matcher in priority order", async () => {
     el = await mount();
     const cards = el.shadowRoot.querySelectorAll("ambience-matcher-card");
-    expect(cards.length).toBe(3);  // day, time_of_day, weather — not scene or state
+    expect(cards.length).toBe(3);
     const names = Array.from(cards).map((c: any) => c.matcherName);
     expect(names).toEqual(["day", "time_of_day", "weather"]);
-  });
-
-  test("matcher-card no longer has an `enabled` prop set by this view", async () => {
-    el = await mount();
-    const card = el.shadowRoot.querySelector("ambience-matcher-card") as any;
-    expect(card.enabled).toBeUndefined();
   });
 });

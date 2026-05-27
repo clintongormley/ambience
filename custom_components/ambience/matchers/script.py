@@ -11,10 +11,17 @@ containing `match: true|false`. Anything else => no match.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+
+
+def _cache_key(script: str, args: dict[str, Any] | None) -> str:
+    """Stable cache key from (script, args). Args sorted so dict ordering doesn't matter."""
+    payload = args or {}
+    return f"{script}|{json.dumps(payload, sort_keys=True, separators=(',', ':'))}"
 
 
 @dataclass(frozen=True)
@@ -72,3 +79,18 @@ class ScriptMatcher:
         args = predicate.get("args")
         if args is not None and not isinstance(args, dict):
             raise ValueError(f"script predicate `args` must be a dict or absent: {args!r}")
+
+    # --- evaluation --------------------------------------------------------
+
+    def matches(self, predicate: Any, snapshot: ScriptSnapshot) -> bool:
+        if predicate is None:
+            return True
+        if not isinstance(predicate, dict):
+            return False
+        script = predicate.get("script")
+        if not isinstance(script, str):
+            return False
+        args = predicate.get("args") or {}
+        if not isinstance(args, dict):
+            return False
+        return snapshot.results.get(_cache_key(script, args), False) is True

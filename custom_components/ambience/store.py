@@ -9,7 +9,12 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
-from .const import STORAGE_KEY, STORAGE_VERSION
+from .const import (
+    DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
+    DEFAULT_SWITCH_NAME,
+    STORAGE_KEY,
+    STORAGE_VERSION,
+)
 from .matchers.weather import DEFAULT_WEATHER_GROUPS
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,6 +39,10 @@ class AmbienceStore:
                 "time_of_day": {"custom": {}, "hidden": []},
                 "day": {"workday_sensor": None, "workday_calendar": None},
                 "weather": {"entity": None, "groups": list(DEFAULT_WEATHER_GROUPS)},
+            },
+            "switch_defaults": {
+                "name": DEFAULT_SWITCH_NAME,
+                "auto_on_delay_seconds": DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
             },
         }
 
@@ -140,6 +149,11 @@ class AmbienceStore:
         self._data.setdefault("floors", {})
         self._data.setdefault("house", {"rules": [], "auto_sort": True})
 
+    def _ensure_switch_defaults(self) -> None:
+        sd = self._data.setdefault("switch_defaults", {})
+        sd.setdefault("name", DEFAULT_SWITCH_NAME)
+        sd.setdefault("auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS)
+
     async def async_load(self) -> None:
         raw = await self._store.async_load()
         if raw is None:
@@ -156,6 +170,7 @@ class AmbienceStore:
         self._migrate_relocate_periods()
         self._ensure_matchers_namespace()
         self._ensure_scope_buckets()
+        self._ensure_switch_defaults()
 
     def areas(self) -> dict[str, dict[str, Any]]:
         return dict(self._data["areas"])
@@ -164,7 +179,11 @@ class AmbienceStore:
         return self._data["areas"].get(area_id)
 
     async def async_save_area(self, area_id: str, config: dict[str, Any]) -> None:
-        self._data["areas"][area_id] = config
+        existing = self._data["areas"].get(area_id, {})
+        merged = {**existing, **config}
+        if "switch" in existing and "switch" not in config:
+            merged["switch"] = existing["switch"]
+        self._data["areas"][area_id] = merged
         await self._store.async_save(self._data)
 
     async def async_delete_area(self, area_id: str) -> None:
@@ -179,7 +198,11 @@ class AmbienceStore:
         return self._data["floors"].get(floor_id)
 
     async def async_save_floor(self, floor_id: str, config: dict[str, Any]) -> None:
-        self._data["floors"][floor_id] = config
+        existing = self._data["floors"].get(floor_id, {})
+        merged = {**existing, **config}
+        if "switch" in existing and "switch" not in config:
+            merged["switch"] = existing["switch"]
+        self._data["floors"][floor_id] = merged
         await self._store.async_save(self._data)
 
     async def async_delete_floor(self, floor_id: str) -> None:
@@ -191,7 +214,11 @@ class AmbienceStore:
         return dict(self._data["house"])
 
     async def async_save_house(self, config: dict[str, Any]) -> None:
-        self._data["house"] = config
+        existing = self._data.get("house", {})
+        merged = {**existing, **config}
+        if "switch" in existing and "switch" not in config:
+            merged["switch"] = existing["switch"]
+        self._data["house"] = merged
         await self._store.async_save(self._data)
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict[str, Any]]]:
@@ -237,3 +264,119 @@ class AmbienceStore:
 
     async def async_save_periods(self, payload: dict[str, Any]) -> None:
         await self.async_save_matcher_config("time_of_day", payload)
+
+    # -------------------------------------------------------------------------
+    # Switch defaults + per-scope overrides
+    # -------------------------------------------------------------------------
+
+    _SCOPE_KINDS = ("house", "floor", "area")
+
+    def _scope_container(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
+        """Return the per-scope config dict (creating a bare shell if needed).
+
+        Used internally by switch helpers so they can read/write the `switch`
+        sub-dict regardless of whether rules have been saved for the scope.
+        """
+        if scope_kind == "house":
+            self._data.setdefault("house", {"rules": [], "auto_sort": True})
+            return self._data["house"]
+        if scope_kind == "floor":
+            return self._data["floors"].setdefault(scope_id, {"rules": [], "auto_sort": True})
+        if scope_kind == "area":
+            return self._data["areas"].setdefault(scope_id, {"rules": [], "auto_sort": True})
+        raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+
+    @staticmethod
+    def _validate_switch_defaults(payload: dict[str, Any]) -> None:
+        name = payload.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"switch defaults `name` must be a non-empty string: {name!r}")
+        delay = payload.get("auto_on_delay_seconds")
+        if not isinstance(delay, int) or isinstance(delay, bool) or delay < 0:
+            raise ValueError(
+                f"switch defaults `auto_on_delay_seconds` must be a non-negative int: {delay!r}"
+            )
+
+    @staticmethod
+    def _validate_scope_switch(payload: dict[str, Any]) -> None:
+        name = payload.get("name")
+        if name is not None and (not isinstance(name, str) or not name.strip()):
+            raise ValueError(f"scope switch `name` must be a non-empty string or null: {name!r}")
+        delay = payload.get("auto_on_delay_seconds")
+        if delay is not None and (
+            not isinstance(delay, int) or isinstance(delay, bool) or delay < 0
+        ):
+            raise ValueError(
+                "scope switch `auto_on_delay_seconds` must be a non-negative int"
+                f" or null: {delay!r}"
+            )
+
+    def get_switch_defaults(self) -> dict[str, Any]:
+        sd = self._data.get("switch_defaults", {})
+        return {
+            "name": sd.get("name", DEFAULT_SWITCH_NAME),
+            "auto_on_delay_seconds": sd.get(
+                "auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS
+            ),
+        }
+
+    async def async_save_switch_defaults(self, payload: dict[str, Any]) -> None:
+        self._validate_switch_defaults(payload)
+        self._data["switch_defaults"] = {
+            "name": payload["name"],
+            "auto_on_delay_seconds": payload["auto_on_delay_seconds"],
+        }
+        await self._store.async_save(self._data)
+
+    def get_scope_switch_config(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
+        """Raw per-scope override; missing → all-inherit."""
+        if scope_kind not in self._SCOPE_KINDS:
+            raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+        if scope_kind == "house":
+            cfg = self._data.get("house", {})
+        elif scope_kind == "floor":
+            cfg = self._data.get("floors", {}).get(scope_id, {})
+        else:
+            cfg = self._data.get("areas", {}).get(scope_id, {})
+        sw = cfg.get("switch", {})
+        return {
+            "name": sw.get("name"),
+            "auto_on_delay_seconds": sw.get("auto_on_delay_seconds"),
+            "off_at": sw.get("off_at"),
+        }
+
+    async def async_save_scope_switch(
+        self, scope_kind: str, scope_id: str | None, payload: dict[str, Any]
+    ) -> None:
+        if scope_kind not in self._SCOPE_KINDS:
+            raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+        self._validate_scope_switch(payload)
+        container = self._scope_container(scope_kind, scope_id)
+        sw = container.setdefault("switch", {})
+        sw["name"] = payload.get("name")
+        sw["auto_on_delay_seconds"] = payload.get("auto_on_delay_seconds")
+        # off_at is owned by the entity; never written via this method.
+        await self._store.async_save(self._data)
+
+    def resolved_scope_switch_config(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
+        defaults = self.get_switch_defaults()
+        override = self.get_scope_switch_config(scope_kind, scope_id)
+        return {
+            "name": override["name"] if override["name"] is not None else defaults["name"],
+            "auto_on_delay_seconds": (
+                override["auto_on_delay_seconds"]
+                if override["auto_on_delay_seconds"] is not None
+                else defaults["auto_on_delay_seconds"]
+            ),
+            "off_at": override["off_at"],
+        }
+
+    async def async_set_scope_switch_off_at(
+        self, scope_kind: str, scope_id: str | None, off_at: str | None
+    ) -> None:
+        if scope_kind not in self._SCOPE_KINDS:
+            raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+        container = self._scope_container(scope_kind, scope_id)
+        sw = container.setdefault("switch", {})
+        sw["off_at"] = off_at
+        await self._store.async_save(self._data)

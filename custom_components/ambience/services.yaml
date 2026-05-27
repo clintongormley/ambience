@@ -1,0 +1,16 @@
+apply_scene:
+  name: Apply scene
+  description: Resolve the area's rules and apply the matching scene's actions.
+  fields:
+    area:
+      name: Area
+      description: The HA area id to apply the scene in.
+      required: true
+      selector:
+        area: {}
+    scene:
+      name: Scene
+      description: Optional scene name. When omitted, scene predicates in rules are treated as wildcards.
+      required: false
+      selector:
+        text: {}

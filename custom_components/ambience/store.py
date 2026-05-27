@@ -44,6 +44,7 @@ class AmbienceStore:
                 "name": DEFAULT_SWITCH_NAME,
                 "auto_on_delay_seconds": DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
             },
+            "exposed_actions": [],
         }
 
     @staticmethod
@@ -256,6 +257,7 @@ class AmbienceStore:
     async def async_save_periods(self, payload: dict[str, Any]) -> None:
         await self.async_save_matcher_config("time_of_day", payload)
 
+<<<<<<< HEAD
     # -------------------------------------------------------------------------
     # Switch defaults + per-scope overrides
     # -------------------------------------------------------------------------
@@ -370,4 +372,13 @@ class AmbienceStore:
         container = self._scope_container(scope_kind, scope_id)
         sw = container.setdefault("switch", {})
         sw["off_at"] = off_at
+        await self._store.async_save(self._data)
+
+    def get_exposed_actions(self) -> list[dict[str, Any]]:
+        """Persisted list of ExposedAction entries (may be empty)."""
+        actions = self._data.get("exposed_actions")
+        return list(actions) if isinstance(actions, list) else []
+
+    async def async_save_exposed_actions(self, actions: list[dict[str, Any]]) -> None:
+        self._data["exposed_actions"] = list(actions)
         await self._store.async_save(self._data)

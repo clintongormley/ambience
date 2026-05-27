@@ -221,5 +221,12 @@
     "humidity": "Humidity",
     "wind_speed": "Wind speed",
     "pressure": "Pressure"
+  },
+  "entity": {
+    "switch": {
+      "ambience": {
+        "name": "Ambience"
+      }
+    }
   }
 }

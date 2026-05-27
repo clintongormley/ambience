@@ -58,10 +58,22 @@
   "ui": {
     "panel_title": "Ambience",
     "tab_areas": "Areas",
-    "tab_configuration": "Configuration",
-    "scope_global": "Global",
-    "scope_floor_prefix": "Floor: ",
-    "scope_area_prefix": "Area: ",
+    "tab_settings": "Settings",
+    "settings_tab_ambience": "Ambience",
+    "settings_tab_matchers": "Matchers",
+    "settings_tab_actions": "Actions",
+    "settings_ambience_defaults_card": "Defaults",
+    "settings_ambience_overrides_card": "Per-scope overrides",
+    "settings_ambience_field_name": "Switch name",
+    "settings_ambience_field_delay": "Auto-on delay (seconds)",
+    "settings_ambience_delay_help": "0 = never auto-on",
+    "settings_ambience_using_defaults": "Using defaults",
+    "settings_ambience_overridden": "Overridden",
+    "settings_ambience_reset_to_defaults": "Reset to defaults",
+    "settings_ambience_actions_placeholder": "No action settings yet",
+    "settings_ambience_house_row": "Global",
+    "settings_ambience_floor_prefix": "Floor: ",
+    "settings_ambience_area_prefix": "Area: ",
     "no_areas": "No areas found in Home Assistant.",
     "not_configured": "not configured",
     "rule_singular": "rule",
@@ -224,5 +236,12 @@
     "humidity": "Humidity",
     "wind_speed": "Wind speed",
     "pressure": "Pressure"
+  },
+  "entity": {
+    "switch": {
+      "ambience": {
+        "name": "Ambience"
+      }
+    }
   }
 }

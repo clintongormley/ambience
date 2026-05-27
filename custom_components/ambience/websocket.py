@@ -10,8 +10,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_PERIODS, DATA_STORE, DOMAIN
+from .const import (
+    DATA_ACTIONS,
+    DATA_MATCHERS,
+    DATA_PERIODS,
+    DATA_STORE,
+    DOMAIN,
+    SIGNAL_SWITCH_CONFIG_UPDATED,
+)
 from .matchers.weather import WEATHER_CONDITIONS
 from .service import async_resolve_only
 from .sorting import sort_rules
@@ -37,6 +45,11 @@ _WS_COMMANDS = (
     "ambience/matchers/weather/config/list",
     "ambience/matchers/weather/config/save",
     "ambience/state/known_states",
+    "ambience/switch_defaults/list",
+    "ambience/switch_defaults/save",
+    "ambience/house/switch/save",
+    "ambience/floor/switch/save",
+    "ambience/area/switch/save",
 )
 
 
@@ -128,6 +141,11 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_weather_config_list)
     websocket_api.async_register_command(hass, _ws_weather_config_save)
     websocket_api.async_register_command(hass, _ws_state_known_states)
+    websocket_api.async_register_command(hass, _ws_switch_defaults_list)
+    websocket_api.async_register_command(hass, _ws_switch_defaults_save)
+    websocket_api.async_register_command(hass, _ws_house_switch_save)
+    websocket_api.async_register_command(hass, _ws_floor_switch_save)
+    websocket_api.async_register_command(hass, _ws_area_switch_save)
 
 
 def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
@@ -743,6 +761,125 @@ async def _ws_state_known_states(
 ) -> None:
     states = _known_states_for(hass, msg["entity_id"])
     connection.send_result(msg["id"], {"states": states})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/switch_defaults/list"})
+@websocket_api.async_response
+async def _ws_switch_defaults_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    connection.send_result(msg["id"], hass.data[DOMAIN][DATA_STORE].get_switch_defaults())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/switch_defaults/save",
+        vol.Required("name"): str,
+        vol.Required("auto_on_delay_seconds"): int,
+    }
+)
+@websocket_api.async_response
+async def _ws_switch_defaults_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    try:
+        await store.async_save_switch_defaults(
+            {"name": msg["name"], "auto_on_delay_seconds": msg["auto_on_delay_seconds"]}
+        )
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
+    connection.send_result(msg["id"], {"ok": True})
+
+
+async def _save_scope_switch(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    scope_kind: str,
+    scope_id: str | None,
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    try:
+        await store.async_save_scope_switch(
+            scope_kind,
+            scope_id,
+            {"name": msg["name"], "auto_on_delay_seconds": msg["auto_on_delay_seconds"]},
+        )
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, (scope_kind, scope_id))
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/house/switch/save",
+        vol.Required("name"): vol.Any(str, None),
+        vol.Required("auto_on_delay_seconds"): vol.Any(int, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_house_switch_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _save_scope_switch(hass, connection, msg, "house", None)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/floor/switch/save",
+        vol.Required("floor_id"): str,
+        vol.Required("name"): vol.Any(str, None),
+        vol.Required("auto_on_delay_seconds"): vol.Any(int, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_floor_switch_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    floor_id = msg["floor_id"]
+    if fr.async_get(hass).async_get_floor(floor_id) is None:
+        connection.send_error(msg["id"], "validation_error", f"unknown floor: {floor_id}")
+        return
+    await _save_scope_switch(hass, connection, msg, "floor", floor_id)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/area/switch/save",
+        vol.Required("area_id"): str,
+        vol.Required("name"): vol.Any(str, None),
+        vol.Required("auto_on_delay_seconds"): vol.Any(int, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_area_switch_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    area_id = msg["area_id"]
+    if ar.async_get(hass).async_get_area(area_id) is None:
+        connection.send_error(msg["id"], "validation_error", f"unknown area: {area_id}")
+        return
+    await _save_scope_switch(hass, connection, msg, "area", area_id)
 
 
 def async_unregister_commands(hass: HomeAssistant) -> None:

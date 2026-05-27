@@ -17,6 +17,7 @@ from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant, ServiceCall
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.typing import ConfigType
 
@@ -27,6 +28,7 @@ from .const import (
     DATA_MATCHERS,
     DATA_PERIODS,
     DATA_STORE,
+    DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
     DOMAIN,
 )
@@ -149,20 +151,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
 
     async def _handle_area_registry_update(event: Event) -> None:
-        """Drop an area's config when the HA area is deleted from the registry."""
-        if event.data["action"] != "remove":
+        action = event.data["action"]
+        area_id = event.data["area_id"]
+        if action == "create":
+            from .switch import AmbienceScopeSwitch
+
+            add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
+            area = area_reg.async_get_area(area_id)
+            if add_entities is not None and area is not None:
+                add_entities([AmbienceScopeSwitch("area", area_id, area.name)])
             return
-        await store.async_delete_area(event.data["area_id"])
+        if action == "remove":
+            await store.async_delete_area(area_id)
+            domain_data.get(DATA_SWITCHES, {}).pop(("area", area_id), None)
+            ent_reg = er.async_get(hass)
+            ent_id = ent_reg.async_get_entity_id(
+                "switch", DOMAIN, f"ambience_switch_area_{area_id}"
+            )
+            if ent_id is not None:
+                ent_reg.async_remove(ent_id)
 
     entry.async_on_unload(
         hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _handle_area_registry_update)
     )
 
     async def _handle_floor_registry_update(event: Event) -> None:
-        """Drop a floor's config when the HA floor is deleted from the registry."""
-        if event.data["action"] != "remove":
+        action = event.data["action"]
+        floor_id = event.data["floor_id"]
+        if action == "create":
+            from .switch import AmbienceScopeSwitch
+
+            add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
+            floor = floor_reg.async_get_floor(floor_id)
+            if add_entities is not None and floor is not None:
+                add_entities([AmbienceScopeSwitch("floor", floor_id, floor.name)])
             return
-        await store.async_delete_floor(event.data["floor_id"])
+        if action == "remove":
+            await store.async_delete_floor(floor_id)
+            domain_data.get(DATA_SWITCHES, {}).pop(("floor", floor_id), None)
+            ent_reg = er.async_get(hass)
+            ent_id = ent_reg.async_get_entity_id(
+                "switch", DOMAIN, f"ambience_switch_floor_{floor_id}"
+            )
+            if ent_id is not None:
+                ent_reg.async_remove(ent_id)
 
     entry.async_on_unload(
         hass.bus.async_listen(fr.EVENT_FLOOR_REGISTRY_UPDATED, _handle_floor_registry_update)

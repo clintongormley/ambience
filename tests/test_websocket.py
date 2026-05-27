@@ -981,3 +981,57 @@ async def test_floors_list_returns_ha_floors(
         {"floor_id": down.floor_id, "name": "Downstairs"},
         {"floor_id": up.floor_id, "name": "Upstairs"},
     ]
+
+
+@pytest.fixture
+def floor_id(hass: HomeAssistant) -> str:
+    """Register an HA floor; returns its registry id."""
+    from homeassistant.helpers import floor_registry as fr
+
+    return fr.async_get(hass).async_create("Upstairs").floor_id
+
+
+async def test_floor_get_returns_default_when_no_config(
+    hass: HomeAssistant, installed, hass_ws_client, floor_id
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/floor/get", floor_id=floor_id)
+    assert resp["success"] is True
+    assert resp["result"] == {"rules": [], "auto_sort": True}
+
+
+async def test_floor_get_unknown_returns_error(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/floor/get", floor_id="nope")
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "unknown_floor"
+
+
+async def test_floor_save_round_trip(
+    hass: HomeAssistant, installed, hass_ws_client, floor_id
+) -> None:
+    config = {
+        "rules": [{"name": "movie", "when": {}, "actions": []}],
+        "auto_sort": False,
+    }
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/floor/save", floor_id=floor_id, config=config
+    )
+    assert resp["success"] is True
+    assert resp["result"]["ok"] is True
+
+    resp2 = await _ws_send(hass_ws_client, type="ambience/floor/get", floor_id=floor_id)
+    assert resp2["result"]["rules"][0]["name"] == "movie"
+
+
+async def test_floor_save_unknown_floor_is_validation_error(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/floor/save",
+        floor_id="nope",
+        config={"rules": [], "auto_sort": True},
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"

@@ -87,7 +87,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     register_action(hass, SetLightAction())
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
-        await async_apply_scene(hass, call.data["area"], call.data.get("scene"))
+        await async_apply_scene(hass, "area", call.data["area"], call.data.get("scene"))
 
     hass.services.async_register(
         DOMAIN,

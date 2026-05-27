@@ -114,19 +114,27 @@ async def async_resolve_only(
     }
 
 
-async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str | None = None) -> None:
-    """Apply a scene in an area according to configured rules.
+async def async_apply_scene(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    scene: str | None = None,
+) -> None:
+    """Apply a scene at the given scope according to configured rules.
 
+    `scope_kind` is one of "area", "floor", "house". For "house", scope_id is
+    None.
     `scene` is optional; when omitted, scene predicates on rules are treated
     as wildcards.
     """
     actions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_ACTIONS]
 
-    plan = await async_resolve_only(hass, "area", area_id, scene)
+    plan = await async_resolve_only(hass, scope_kind, scope_id, scene)
     if plan["matched_rule_index"] is None:
         _LOGGER.info(
-            "ambience: no rule matched for area=%s scene=%s snapshots=%s",
-            area_id,
+            "ambience: no rule matched for scope=%s/%s scene=%s snapshots=%s",
+            scope_kind,
+            scope_id,
             scene,
             plan["snapshots_described"],
         )
@@ -138,10 +146,11 @@ async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str | None
         action = actions_registry.get(action_name)
         if action is None:
             _LOGGER.warning(
-                "ambience: unknown action %r in rule %d (area=%s); skipping",
+                "ambience: unknown action %r in rule %d (scope=%s/%s); skipping",
                 action_name,
                 plan["matched_rule_index"],
-                area_id,
+                scope_kind,
+                scope_id,
             )
             continue
         entity_ids = action_spec.get("entity_ids", [])

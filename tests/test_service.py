@@ -85,7 +85,7 @@ def _install(hass: HomeAssistant, *, areas: dict, matchers: dict, actions: dict)
 async def test_unknown_area_raises(hass: HomeAssistant) -> None:
     _install(hass, areas={}, matchers={}, actions={})
     with pytest.raises(ServiceValidationError, match="unknown_area"):
-        await async_apply_scene(hass, "missing", "movie")
+        await async_apply_scene(hass, "area", "missing", "movie")
 
 
 async def test_happy_path_executes_matching_rule(hass: HomeAssistant) -> None:
@@ -120,7 +120,7 @@ async def test_happy_path_executes_matching_rule(hass: HomeAssistant) -> None:
     }
     _install(hass, areas=areas, matchers=matchers, actions={"record": action})
 
-    await async_apply_scene(hass, "lr", "movie")
+    await async_apply_scene(hass, "area", "lr", "movie")
 
     assert action.executions == [(["light.b"], {"brightness": 30})]
 
@@ -137,7 +137,7 @@ async def test_no_match_is_silent_noop(hass: HomeAssistant) -> None:
         }
     }
     _install(hass, areas=areas, matchers=matchers, actions={"record": action})
-    await async_apply_scene(hass, "lr", "movie")
+    await async_apply_scene(hass, "area", "lr", "movie")
     assert action.executions == []
 
 
@@ -175,7 +175,7 @@ async def test_snapshot_failure_treats_matcher_as_unresolved(
     }
     _install(hass, areas=areas, matchers=matchers, actions={"record": action})
 
-    await async_apply_scene(hass, "lr", "movie")
+    await async_apply_scene(hass, "area", "lr", "movie")
 
     assert action.executions == [(["light.b"], {"brightness": 20})]
 
@@ -205,7 +205,7 @@ async def test_unknown_action_skipped_other_actions_run(
     }
     _install(hass, areas=areas, matchers=matchers, actions={"record": recorded})
 
-    await async_apply_scene(hass, "lr", "movie")
+    await async_apply_scene(hass, "area", "lr", "movie")
 
     assert recorded.executions == [(["light.a"], {"brightness": 50})]
 
@@ -250,7 +250,7 @@ async def test_action_failure_does_not_block_other_actions(
         actions={"record": recorded, "fail": FailingAction()},
     )
 
-    await async_apply_scene(hass, "lr", "movie")
+    await async_apply_scene(hass, "area", "lr", "movie")
 
     assert recorded.executions == [(["light.a"], {"brightness": 50})]
 
@@ -302,7 +302,7 @@ async def test_cancellation_treated_as_failure_isolation(
         actions={"record": action},
     )
 
-    await async_apply_scene(hass, "lr", "movie")
+    await async_apply_scene(hass, "area", "lr", "movie")
 
     # Wildcard rule should still match (cancelled snapshot becomes None).
     assert action.executions == [(["light.a"], {"brightness": 10})]
@@ -352,7 +352,7 @@ async def test_apply_scene_without_scene_treats_scene_predicates_as_wildcard(
     }
     _install(hass, areas=areas, matchers=matchers, actions={"record": action})
 
-    await async_apply_scene(hass, "lr", None)
+    await async_apply_scene(hass, "area", "lr", None)
 
     assert action.executions == [(["light.a"], {"brightness": 42})]
 
@@ -426,3 +426,29 @@ async def test_async_resolve_only_unknown_floor_raises(hass: HomeAssistant) -> N
 
     with pytest.raises(ServiceValidationError, match="unknown_floor"):
         await async_resolve_only(hass, "floor", "nonexistent", None)
+
+
+async def test_async_apply_scene_floor_runs_floor_actions(hass: HomeAssistant) -> None:
+    """apply_scene with scope_kind='floor' executes the matched floor rule's actions."""
+    recording = RecordingAction()
+    floors = {
+        "upstairs": {
+            "rules": [
+                {
+                    "name": "movie",
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        {"action": "record", "entity_ids": ["light.up_a"], "params": {"x": 1}}
+                    ],
+                }
+            ],
+            "auto_sort": True,
+        }
+    }
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][DATA_STORE] = FakeScopeStore(floors=floors)
+    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher()}
+    hass.data[DOMAIN][DATA_ACTIONS] = {"record": recording}
+
+    await async_apply_scene(hass, "floor", "upstairs", "movie")
+    assert recording.executions == [(["light.up_a"], {"x": 1})]

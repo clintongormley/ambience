@@ -180,10 +180,7 @@ class AmbienceStore:
 
     async def async_save_area(self, area_id: str, config: dict[str, Any]) -> None:
         existing = self._data["areas"].get(area_id, {})
-        merged = {**existing, **config}
-        if "switch" in existing and "switch" not in config:
-            merged["switch"] = existing["switch"]
-        self._data["areas"][area_id] = merged
+        self._data["areas"][area_id] = {**existing, **config}
         await self._store.async_save(self._data)
 
     async def async_delete_area(self, area_id: str) -> None:
@@ -199,10 +196,7 @@ class AmbienceStore:
 
     async def async_save_floor(self, floor_id: str, config: dict[str, Any]) -> None:
         existing = self._data["floors"].get(floor_id, {})
-        merged = {**existing, **config}
-        if "switch" in existing and "switch" not in config:
-            merged["switch"] = existing["switch"]
-        self._data["floors"][floor_id] = merged
+        self._data["floors"][floor_id] = {**existing, **config}
         await self._store.async_save(self._data)
 
     async def async_delete_floor(self, floor_id: str) -> None:
@@ -215,10 +209,7 @@ class AmbienceStore:
 
     async def async_save_house(self, config: dict[str, Any]) -> None:
         existing = self._data.get("house", {})
-        merged = {**existing, **config}
-        if "switch" in existing and "switch" not in config:
-            merged["switch"] = existing["switch"]
-        self._data["house"] = merged
+        self._data["house"] = {**existing, **config}
         await self._store.async_save(self._data)
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict[str, Any]]]:

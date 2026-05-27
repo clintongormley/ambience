@@ -175,3 +175,76 @@ describe("ambience-script-predicate-input — auto-form", () => {
     expect(el.shadowRoot.querySelector(".args")).not.toBeNull();
   });
 });
+
+describe("ambience-script-predicate-input — YAML mode", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("starts in Form mode and toggles to YAML", async () => {
+    el = await mount(
+      { script: "script.foo", args: { x: 1 } },
+      { services: { script: { foo: { fields: { x: { selector: { number: {} } } } } } } },
+    );
+    expect(el._mode).toBe("form");
+    el._setMode("yaml");
+    await el.updateComplete;
+    expect(el._mode).toBe("yaml");
+    // YAML pane shows the dump of the current predicate.
+    const ta = el.shadowRoot.querySelector("textarea, ha-code-editor");
+    expect(ta).not.toBeNull();
+    expect((ta as HTMLTextAreaElement).value ?? (ta as any).value).toContain("script: script.foo");
+  });
+
+  test("editing YAML emits value-changed when parseable + valid", async () => {
+    el = await mount(
+      { script: "script.foo", args: {} },
+      { services: { script: { foo: {} } } },
+    );
+    el._setMode("yaml");
+    await el.updateComplete;
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el._onYamlInput("script: script.foo\nargs:\n  k: 7\n");
+    expect(detail.value).toEqual({ script: "script.foo", args: { k: 7 } });
+    expect(el._yamlError).toBeNull();
+  });
+
+  test("invalid YAML sets _yamlError and does not emit", async () => {
+    el = await mount({ script: "script.foo", args: {} }, { services: { script: { foo: {} } } });
+    el._setMode("yaml");
+    await el.updateComplete;
+    let emitted = false;
+    el.addEventListener("value-changed", () => { emitted = true; });
+    el._onYamlInput("script: [unclosed");
+    expect(emitted).toBe(false);
+    expect(el._yamlError).not.toBeNull();
+  });
+
+  test("YAML missing 'script.' prefix sets _yamlError and does not emit", async () => {
+    el = await mount({ script: "script.foo", args: {} }, { services: { script: { foo: {} } } });
+    el._setMode("yaml");
+    await el.updateComplete;
+    let emitted = false;
+    el.addEventListener("value-changed", () => { emitted = true; });
+    el._onYamlInput("script: foo\n");
+    expect(emitted).toBe(false);
+    expect(el._yamlError).toMatch(/script\./);
+  });
+
+  test("scripts without fields default to YAML mode", async () => {
+    el = await mount({ script: "script.bare", args: {} }, { services: { script: { bare: {} } } });
+    expect(el._mode).toBe("yaml");
+  });
+
+  test("Form tab is disabled while YAML is invalid", async () => {
+    el = await mount(
+      { script: "script.foo", args: {} },
+      { services: { script: { foo: { fields: { x: { selector: { number: {} } } } } } } },
+    );
+    el._setMode("yaml");
+    await el.updateComplete;
+    el._onYamlInput("not: a script");
+    el._setMode("form");                    // attempt
+    expect(el._mode).toBe("yaml");          // refused
+  });
+});

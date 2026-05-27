@@ -1,5 +1,6 @@
 import { LitElement, html, css } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { customElement, property, state } from "lit/decorators.js";
+import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
@@ -27,10 +28,94 @@ export class AmbienceScriptPredicateInput extends LitElement {
     :host { display: block; }
     .section { margin-bottom: 1rem; }
     .section h4 { margin: 0 0 0.5rem 0; font-size: 0.95em; }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .tabs button {
+      background: transparent;
+      border: 1px solid var(--divider-color, #ccc);
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--primary-text-color, inherit);
+    }
+    .tabs button.active {
+      background: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+      border-color: transparent;
+    }
+    .tabs button[disabled] { opacity: 0.4; cursor: not-allowed; }
+    .error {
+      color: var(--error-color, #d32f2f);
+      font-size: 0.85em;
+      margin-top: 0.25rem;
+      white-space: pre-wrap;
+    }
   `;
 
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) value: ScriptPredicate = null;
+
+  @state() private _mode: "form" | "yaml" = "form";
+  @state() private _yamlText = "";
+  @state() private _yamlError: string | null = null;
+
+  override willUpdate(changed: Map<string, unknown>) {
+    super.willUpdate?.(changed);
+    if (changed.has("value")) {
+      // Keep the YAML buffer in sync with externally-driven value changes
+      // (e.g. picker change while in form mode).
+      if (this._mode === "form") this._yamlText = yamlDump(this.value ?? {});
+    }
+  }
+
+  override connectedCallback() {
+    super.connectedCallback();
+    this._yamlText = yamlDump(this.value ?? {});
+    // Scripts with no fields can only be edited as YAML.
+    const picked = this.value && typeof this.value === "object" ? this.value.script : null;
+    const fields = this._fieldsFor(picked);
+    if (picked && (!fields || Object.keys(fields).length === 0)) {
+      this._mode = "yaml";
+    }
+  }
+
+  _setMode(mode: "form" | "yaml") {
+    if (mode === "form" && this._yamlError !== null) return;   // blocked while invalid
+    if (mode === "yaml") this._yamlText = yamlDump(this.value ?? {});
+    this._mode = mode;
+  }
+
+  _onYamlInput(text: string) {
+    this._yamlText = text;
+    let parsed: unknown;
+    try {
+      parsed = yamlLoad(text);
+    } catch (e) {
+      this._yamlError = (e as Error).message;
+      return;
+    }
+    if (parsed === null || parsed === undefined) {
+      this._yamlError = null;
+      this._emit(null);
+      return;
+    }
+    if (typeof parsed !== "object" || Array.isArray(parsed)) {
+      this._yamlError = "Expected an object";
+      return;
+    }
+    const obj = parsed as Record<string, unknown>;
+    const script = obj.script;
+    if (typeof script !== "string" || !script.startsWith("script.")) {
+      this._yamlError = "`script` must be a 'script.<name>' string";
+      return;
+    }
+    const args = obj.args;
+    if (args !== undefined && (typeof args !== "object" || Array.isArray(args) || args === null)) {
+      this._yamlError = "`args` must be an object if present";
+      return;
+    }
+    this._yamlError = null;
+    this._emit({ script, args: (args ?? {}) as Record<string, unknown> });
+  }
 
   private _emit(next: ScriptPredicate) {
     this.value = next;
@@ -115,17 +200,58 @@ export class AmbienceScriptPredicateInput extends LitElement {
     const picked = (this.value && typeof this.value === "object") ? this.value.script : null;
     const schema = this._argsSchema();
     const args = (this.value && typeof this.value === "object" ? this.value.args : {}) ?? {};
+    const hasFields = schema.length > 0;
     return html`
       <div class="section">
         <h4>${localize(this.hass, "ui.script", "Script")}</h4>
         ${this._renderPicker(picked)}
       </div>
-      ${schema.length === 0 ? "" : html`
+      ${picked ? html`
+        <div class="tabs">
+          <button
+            type="button"
+            ?disabled=${!hasFields}
+            class=${this._mode === "form" ? "active" : ""}
+            @click=${() => this._setMode("form")}
+          >${localize(this.hass, "ui.form", "Form")}</button>
+          <button
+            type="button"
+            class=${this._mode === "yaml" ? "active" : ""}
+            @click=${() => this._setMode("yaml")}
+          >${localize(this.hass, "ui.yaml", "YAML")}</button>
+        </div>
+      ` : ""}
+      ${picked && this._mode === "form" && hasFields ? html`
         <div class="section args">
           <h4>${localize(this.hass, "ui.arguments", "Arguments")}</h4>
           ${this._renderArgs(schema, args)}
         </div>
-      `}
+      ` : ""}
+      ${picked && this._mode === "yaml" ? this._renderYaml() : ""}
+    `;
+  }
+
+  /* v8 ignore start -- ha-code-editor path (real HA only) */
+  private _renderYaml() {
+    const onInput = (e: Event) => {
+      const raw = ((e.target as HTMLTextAreaElement).value ?? (e as unknown as CustomEvent<{ value: string }>).detail?.value ?? "") as string;
+      this._onYamlInput(raw);
+    };
+    if (customElements.get("ha-code-editor")) {
+      return html`
+        <ha-code-editor mode="yaml" .value=${this._yamlText} @value-changed=${onInput}></ha-code-editor>
+        ${this._yamlError ? html`<div class="error">${this._yamlError}</div>` : ""}
+      `;
+    }
+    /* v8 ignore stop */
+    return html`
+      <textarea
+        rows="6"
+        style="width:100%;font-family:monospace;"
+        .value=${this._yamlText}
+        @input=${onInput}
+      ></textarea>
+      ${this._yamlError ? html`<div class="error">${this._yamlError}</div>` : ""}
     `;
   }
 

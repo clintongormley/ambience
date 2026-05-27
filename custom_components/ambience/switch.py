@@ -90,6 +90,9 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     def __init__(self, scope_kind: str, scope_id: str | None, display_name: str) -> None:
         self._scope_kind = scope_kind
         self._scope_id = scope_id
+        # Fallback prefix if the area/floor disappears from the registry mid-
+        # session. House always uses the literal "Global".
+        self._fallback_prefix = "Global" if scope_kind == "house" else display_name
         if scope_kind == "house":
             self._attr_unique_id = "ambience_switch_global"
         else:
@@ -101,7 +104,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         # Deterministic entity_id for clean installs; entity registry takes
         # over after first registration so user-renames stick.
         self.entity_id = _entity_id_for(scope_kind, display_name)
-        self._attr_name = DEFAULT_SWITCH_NAME
+        self._attr_name = f"{self._fallback_prefix} {DEFAULT_SWITCH_NAME}"
         self._attr_is_on = True
         self._timer: _CancellableTimer | None = None
 
@@ -160,10 +163,36 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             "auto_on_delay_seconds"
         ]
 
+    def _scope_prefix(self) -> str:
+        """Live name of the scope: 'Global' / floor name / area name.
+
+        Read from the HA registry so renames are reflected on the next
+        refresh. Falls back to the construction-time name if the registry
+        entry has been removed.
+        """
+        if self._scope_kind == "house":
+            return "Global"
+        if self._scope_kind == "floor":
+            floor = fr.async_get(self.hass).async_get_floor(self._scope_id)
+            return floor.name if floor is not None else self._fallback_prefix
+        area = ar.async_get(self.hass).async_get_area(self._scope_id)
+        return area.name if area is not None else self._fallback_prefix
+
     def _refresh_name_from_store(self) -> None:
-        self._attr_name = self._store().resolved_scope_switch_config(
-            self._scope_kind, self._scope_id
-        )["name"]
+        """Compose display name from override (verbatim) or `<prefix> <default>`.
+
+        A per-scope `name` override replaces the entire display name (the user
+        intentionally chose a custom label). Otherwise the displayed name is
+        the scope context (Global / floor / area name) followed by the global
+        default name ("Ambience" unless overridden).
+        """
+        store = self._store()
+        override = store.get_scope_switch_config(self._scope_kind, self._scope_id)
+        if override["name"] is not None:
+            self._attr_name = override["name"]
+            return
+        default_name = store.get_switch_defaults()["name"]
+        self._attr_name = f"{self._scope_prefix()} {default_name}"
 
     def _schedule_auto_on(self, seconds: int) -> None:
         if self._timer is not None:

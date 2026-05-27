@@ -165,6 +165,16 @@ async def test_restore_off_expired_turns_on_immediately(hass, mock_config_entry,
 # --- dispatcher -------------------------------------------------------------
 
 
+async def test_default_display_names_include_scope_prefix(hass, mock_config_entry):
+    """Default display name is '<Global|floor|area> <defaults.name>'."""
+    ar.async_get(hass).async_create("Master Bedroom")
+    fr.async_get(hass).async_create("Upstairs")
+    await _setup(hass, mock_config_entry)
+
+    names = {ent.name for ent in hass.data[DOMAIN][DATA_SWITCHES].values()}
+    assert names == {"Global Ambience", "Upstairs Ambience", "Master Bedroom Ambience"}
+
+
 async def test_dispatcher_signal_global_updates_all_names(hass, mock_config_entry):
     ar.async_get(hass).async_create("Living Room")
     fr.async_get(hass).async_create("Upstairs")
@@ -175,11 +185,12 @@ async def test_dispatcher_signal_global_updates_all_names(hass, mock_config_entr
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
 
-    for ent in hass.data[DOMAIN][DATA_SWITCHES].values():
-        assert ent.name == "Master"
+    names = {ent.name for ent in hass.data[DOMAIN][DATA_SWITCHES].values()}
+    assert names == {"Global Master", "Upstairs Master", "Living Room Master"}
 
 
 async def test_dispatcher_signal_scoped_updates_only_that_scope(hass, mock_config_entry):
+    """A per-scope name override replaces the whole display name (verbatim)."""
     ar.async_get(hass).async_create("Living Room")
     await _setup(hass, mock_config_entry)
 
@@ -187,13 +198,15 @@ async def test_dispatcher_signal_scoped_updates_only_that_scope(hass, mock_confi
     area_entries = [k for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "area"]
     area_kind, area_id = area_entries[0]
     await store.async_save_scope_switch(
-        area_kind, area_id, {"name": "Kitchen", "auto_on_delay_seconds": None}
+        area_kind, area_id, {"name": "Kitchen lights", "auto_on_delay_seconds": None}
     )
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, (area_kind, area_id))
     await hass.async_block_till_done()
 
-    assert _switch(hass, area_kind, area_id).name == "Kitchen"
-    assert _switch(hass, "house", None).name == "Ambience"
+    # Override: verbatim, no prefix.
+    assert _switch(hass, area_kind, area_id).name == "Kitchen lights"
+    # House untouched: still the default '<prefix> Ambience'.
+    assert _switch(hass, "house", None).name == "Global Ambience"
 
 
 async def test_unload_cancels_pending_timers(hass, mock_config_entry, fixed_utcnow):

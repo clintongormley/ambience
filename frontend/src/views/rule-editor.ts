@@ -11,7 +11,7 @@ import type {
   Rule,
 } from "../types.js";
 import type { HassConnection } from "../api.js";
-import { entitiesInArea } from "../area-entities.js";
+import { entitiesForScope } from "../entities-for-scope.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { localize, matcherLabel } from "../i18n.js";
 import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
@@ -553,7 +553,9 @@ export class AmbienceRuleEditor extends LitElement {
     const info = this.availableActions.find((x) => x.name === action.action);
     const open = this._isOpen({ kind: "action", idx });
     const summary = summariseAction(action, info, { hass: this.hass as any });
-    const entities = entitiesInArea(this.hass as any, this.areaId, info?.domains ?? []);
+    const entities = this.areaId
+      ? entitiesForScope(this.hass as any, { kind: "area", id: this.areaId }, info?.domains ?? [])
+      : [];
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "action", idx })}>

@@ -307,10 +307,13 @@ export class AmbienceRuleEditor extends LitElement {
 
   private _toggleSlot(slot: { kind: "name" } | { kind: "matcher"; id: string } | { kind: "action"; idx: number }) {
     if (this._isOpen(slot)) {
-      this._tryCloseCurrent();
+      // Collapsing your own slot is a "minimize for now" gesture, not
+      // "leaving" — no validation, no error. Validation only fires when
+      // the user actually moves on (switch slot, click outside, +Add).
+      this._open = null;
+      this._showError = false;
       return;
     }
-    // Switching to a different slot — try to close current first
     if (this._open !== null && !this._tryCloseCurrent()) return;
     this._open = slot;
     this._showError = false;

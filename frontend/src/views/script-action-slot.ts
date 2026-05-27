@@ -151,6 +151,7 @@ export class AmbienceScriptActionSlot extends LitElement {
   /* v8 ignore stop */
 
   private _renderScriptPicker() {
+    const label = localize(this.hass, "ui.script_entity", "Script");
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
       const schema = [{
@@ -159,25 +160,22 @@ export class AmbienceScriptActionSlot extends LitElement {
       }];
       return html`
         <div class="script-picker">
-          <label>${localize(this.hass, "ui.script_entity", "Script")}</label>
           <ha-form
             .hass=${this.hass}
             .schema=${schema}
             .data=${{ script: this.script ?? "" }}
-            .computeLabel=${() => ""}
+            .computeLabel=${() => label}
             @value-changed=${this._onScriptPickedHaForm}
           ></ha-form>
         </div>
       `;
     }
     /* v8 ignore stop */
-    // Fallback: a select listing script.* entities from hass.entities (or a
-    // plain text input if none are visible).
     const candidates = this._scriptCandidates();
     if (candidates.length === 0) {
       return html`
         <div class="script-picker">
-          <label>${localize(this.hass, "ui.script_entity", "Script")}</label>
+          <label>${label}</label>
           <input
             type="text"
             placeholder="script.foo"
@@ -189,7 +187,7 @@ export class AmbienceScriptActionSlot extends LitElement {
     }
     return html`
       <div class="script-picker">
-        <label>${localize(this.hass, "ui.script_entity", "Script")}</label>
+        <label>${label}</label>
         <select @change=${this._onScriptPicked}>
           <option value="">${localize(this.hass, "ui.pick_script", "— select a script —")}</option>
           ${candidates.map((s) => html`

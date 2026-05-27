@@ -583,6 +583,26 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(action0.querySelector(".error")).toBeNull();
   });
 
+  test("clicking your own slot's title bar collapses it silently (no validation)", async () => {
+    // Self-toggle means "minimize this for now", not "I'm leaving / validate me".
+    // Validation should still fire when switching to another slot or clicking
+    // outside, but the user collapsing their own open slot is a no-op gesture.
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: [], params: { brightness: 80 } }],
+    });
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const expanded = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    expect(expanded.classList.contains("expanded")).toBe(true);
+    expanded.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const collapsed = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    expect(collapsed.classList.contains("collapsed")).toBe(true);
+    expect(collapsed.querySelector(".error")).toBeNull();
+  });
+
   test("expanded name slot renders just the input — no summary header, no duplicate label", async () => {
     el = await mount({ name: "My rule", when: {}, actions: [] });
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;

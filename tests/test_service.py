@@ -344,7 +344,7 @@ async def test_apply_scene_threads_script_kwarg_to_action(hass: HomeAssistant) -
     }
     _install(hass, areas=areas, matchers={}, actions={"fake": fake})
 
-    await async_apply_scene(hass, "lr", "movie")
+    await async_apply_scene(hass, "area", "lr", "movie")
 
     assert fake.executions == [
         {"entity_ids": ["light.a"], "params": {"x": 1}, "script": "script.foo"}

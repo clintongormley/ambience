@@ -7,6 +7,7 @@ import {
   summariseAction,
   summariseWeather,
   summariseState,
+  summariseScript,
 } from "../frontend/src/summary";
 import type {
   ActionInfo,
@@ -441,4 +442,64 @@ test("summariseState falls back to entity_id when no friendly_name is set", () =
   expect(summariseState({
     kind: "is", entity_id: "sensor.x", states: ["on"],
   }, { hass })).toBe("sensor.x is on");
+});
+
+describe("summariseScript", () => {
+  test("null predicate renders as '(any)'", () => {
+    expect(summariseScript(null, { hass: noLocalize })).toBe("(any)");
+  });
+
+  test("no args renders the script id alone", () => {
+    expect(summariseScript({ script: "script.foo" }, { hass: noLocalize }))
+      .toBe("script.foo");
+  });
+
+  test("empty args object is treated as no args", () => {
+    expect(summariseScript({ script: "script.foo", args: {} }, { hass: noLocalize }))
+      .toBe("script.foo");
+  });
+
+  test("single arg renders as script.foo(k=v)", () => {
+    expect(summariseScript({ script: "script.foo", args: { k: 7 } }, { hass: noLocalize }))
+      .toBe("script.foo(k=7)");
+  });
+
+  test("multiple args render alphabetically by key", () => {
+    expect(summariseScript(
+      { script: "script.foo", args: { z: "down", k: 7 } },
+      { hass: noLocalize },
+    )).toBe("script.foo(k=7, z=down)");
+  });
+
+  test("malformed predicate (non-string script) falls back to String(pred)", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bad: any = { script: 123 };
+    expect(summariseScript(bad, { hass: noLocalize })).toBe(String(bad));
+  });
+
+  test("malformed predicate (non-object) falls back to String(pred)", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bad: any = "not-an-object";
+    expect(summariseScript(bad, { hass: noLocalize })).toBe("not-an-object");
+  });
+});
+
+test("summariseMatcher dispatches script with no args", () => {
+  expect(summariseMatcher(
+    "script",
+    { script: "script.foo" },
+    { hass: noLocalize },
+  )).toBe("script.foo");
+});
+
+test("summariseMatcher dispatches script with args (sorted)", () => {
+  expect(summariseMatcher(
+    "script",
+    { script: "script.foo", args: { z: "down", k: 7 } },
+    { hass: noLocalize },
+  )).toBe("script.foo(k=7, z=down)");
+});
+
+test("summariseMatcher script with null predicate yields '(any)'", () => {
+  expect(summariseMatcher("script", null, { hass: noLocalize })).toBe("(any)");
 });

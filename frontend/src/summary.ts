@@ -15,6 +15,7 @@ import type {
   DayPredicate,
   PeriodStoreView,
   Rule,
+  ScriptPredicate,
   StateExpr,
   StatePredicate,
   TimeEndpoint,
@@ -64,7 +65,23 @@ export function summariseMatcher(
   if (matcherName === "state") {
     return summariseState(predicate as StatePredicate, ctx);
   }
+  if (matcherName === "script") {
+    return summariseScript(predicate as ScriptPredicate, ctx);
+  }
   return String(predicate);
+}
+
+export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {}): string {
+  if (pred === null) return localize(ctx.hass, "ui.summary_any_paren", "(any)");
+  // Defensive: malformed predicate (non-object or missing/non-string script).
+  if (typeof pred !== "object" || pred === null || typeof (pred as { script?: unknown }).script !== "string") {
+    return String(pred);
+  }
+  const args = pred.args ?? {};
+  const keys = Object.keys(args).sort();
+  if (keys.length === 0) return pred.script;
+  const argStr = keys.map((k) => `${k}=${args[k]}`).join(", ");
+  return `${pred.script}(${argStr})`;
 }
 
 export function summariseDay(pred: DayPredicate, ctx: MatcherContext = {}): string {

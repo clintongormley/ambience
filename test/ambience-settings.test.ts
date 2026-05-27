@@ -67,35 +67,50 @@ describe("ambience-ambience-settings", () => {
     expect(rows[3].textContent).toContain("Living Room");
   });
 
-  test("each row previews the entity name HA will display", async () => {
+  test("override-name placeholder shows the computed entity name", async () => {
     el = await mount();
-    // House + each floor + each area show `<scope prefix> <default name>`;
-    // an overridden row shows the override verbatim.
-    expect(el.shadowRoot.querySelector("[data-test=computed-name-house]").textContent.trim())
-      .toBe("Global Ambience");
-    expect(el.shadowRoot.querySelector("[data-test=computed-name-floor-f1]").textContent.trim())
-      .toBe("Upstairs Ambience");
-    // Kitchen has an override set in the mock, so it shows the override
-    // string verbatim — no prefix.
-    expect(el.shadowRoot.querySelector("[data-test=computed-name-area-a2]").textContent.trim())
-      .toBe("Kitchen lights");
-    expect(el.shadowRoot.querySelector("[data-test=computed-name-area-a1]").textContent.trim())
-      .toBe("Living Room Ambience");
+    // Expand each row in turn and assert the placeholder.
+    const rows = el.shadowRoot.querySelectorAll("[data-test=scope-row]");
+    for (const row of rows) {
+      (row.querySelector("[data-test=expand]") as HTMLElement).click();
+    }
+    await el.updateComplete;
+
+    expect(
+      (el.shadowRoot.querySelector("[data-test=override-name-house]") as HTMLInputElement).placeholder,
+    ).toBe("Global Ambience");
+    expect(
+      (el.shadowRoot.querySelector("[data-test=override-name-floor-f1]") as HTMLInputElement).placeholder,
+    ).toBe("Upstairs Ambience");
+    expect(
+      (el.shadowRoot.querySelector("[data-test=override-name-area-a1]") as HTMLInputElement).placeholder,
+    ).toBe("Living Room Ambience");
+    // Kitchen has an override set in the mock — input value is the override
+    // (placeholder is hidden by the value, but still reflects the no-override default).
+    const kitchen = el.shadowRoot.querySelector("[data-test=override-name-area-a2]") as HTMLInputElement;
+    expect(kitchen.value).toBe("Kitchen lights");
+    expect(kitchen.placeholder).toBe("Kitchen Ambience");
   });
 
-  test("default-name edit updates the entity-name preview across all rows", async () => {
+  test("default-name edit updates the placeholder across all rows", async () => {
     el = await mount();
+    const rows = el.shadowRoot.querySelectorAll("[data-test=scope-row]");
+    for (const row of rows) {
+      (row.querySelector("[data-test=expand]") as HTMLElement).click();
+    }
+    await el.updateComplete;
+
     const input = el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement;
     input.value = "Lights";
     input.dispatchEvent(new Event("change", { bubbles: true }));
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector("[data-test=computed-name-house]").textContent.trim())
-      .toBe("Global Lights");
-    expect(el.shadowRoot.querySelector("[data-test=computed-name-floor-f1]").textContent.trim())
-      .toBe("Upstairs Lights");
-    // Overridden row is unaffected.
-    expect(el.shadowRoot.querySelector("[data-test=computed-name-area-a2]").textContent.trim())
-      .toBe("Kitchen lights");
+
+    expect(
+      (el.shadowRoot.querySelector("[data-test=override-name-house]") as HTMLInputElement).placeholder,
+    ).toBe("Global Lights");
+    expect(
+      (el.shadowRoot.querySelector("[data-test=override-name-floor-f1]") as HTMLInputElement).placeholder,
+    ).toBe("Upstairs Lights");
   });
 
   test("reset on overridden area row sends nulls via saveAreaSwitch", async () => {

@@ -221,9 +221,8 @@ export class AmbienceAmbienceSettings extends LitElement {
     this._saveRow(this._rows[idx]);
   }
 
-  /** Mirror the entity's name composition so users see exactly what HA will display. */
-  private _computedName(row: Row): string {
-    if (row.override.name !== null) return row.override.name;
+  /** The entity name HA will display when no per-scope `name` override is set. */
+  private _defaultDisplayName(row: Row): string {
     return `${row.scopePrefix} ${this._defaults.name}`;
   }
 
@@ -253,13 +252,12 @@ export class AmbienceAmbienceSettings extends LitElement {
               <div class="scope-header" data-test="expand" @click=${() => this._toggle(idx)}>
                 <span class="chevron ${r.expanded ? "open" : ""}">▶</span>
                 <div class="scope-name">${r.name}</div>
-                <div class="scope-status" data-test=${`computed-name-${_rowKey(r)}`}>${this._computedName(r)}</div>
               </div>
               ${r.expanded ? html`
                 <div class="scope-body">
                   <div class="row">
                     <label>${localize(this.hass, "ui.settings_ambience_field_name", "Switch name")}</label>
-                    <input data-test=${`override-name-${key}`} type="text" .value=${r.override.name ?? ""} placeholder=${this._defaults.name} @change=${(e: Event) => this._onOverrideName(idx, e)} />
+                    <input data-test=${`override-name-${key}`} type="text" .value=${r.override.name ?? ""} placeholder=${this._defaultDisplayName(r)} @change=${(e: Event) => this._onOverrideName(idx, e)} />
                   </div>
                   <div class="row">
                     <label>${localize(this.hass, "ui.settings_ambience_field_delay", "Auto-on delay (seconds)")}</label>

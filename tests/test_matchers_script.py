@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -173,12 +173,12 @@ def _install_service(
     response: object = None,
     raises: Exception | None = None,
     delay: float = 0.0,
-) -> AsyncMock:
+) -> MagicMock:
     """Register a mock script.<name> service via hass.services.async_register.
 
     Returns the mock so the test can assert call args.
     """
-    mock = AsyncMock()
+    mock = MagicMock()
 
     async def handler(call):
         if delay:

@@ -133,6 +133,14 @@ export class AmbienceRuleEditor extends LitElement {
   @state() private _draft: Rule | null = null;
   @state() private _open: OpenSlot = null;
   @state() private _showError = false;
+  /**
+   * Tracks whether each action's service requires a target. Keyed by service
+   * id rather than action index so it remains valid when actions are
+   * added/deleted/reordered. `false` means the schema loaded and has no target
+   * stanza (e.g. notify.send_message). Entries are populated lazily when the
+   * action-slot emits `target-mode-changed`.
+   */
+  @state() private _serviceHasTarget: Map<string, boolean> = new Map();
 
   override connectedCallback() {
     super.connectedCallback();
@@ -235,7 +243,13 @@ export class AmbienceRuleEditor extends LitElement {
     // slot.kind === "action"
     const action = this._draft?.actions[slot.idx];
     if (!action) return null;
-    if (action.entity_ids.length === 0) {
+    // Skip the entity-ids check for services whose schema confirms they have
+    // no target stanza (e.g. notify.send_message, homeassistant.reload_config).
+    // While schema is still loading (_serviceHasTarget has no entry yet), we
+    // default to requiring a target (conservative) — but `false` = confirmed
+    // no-target, so we allow saving.
+    const serviceHasTarget = this._serviceHasTarget.get(action.service);
+    if (action.entity_ids.length === 0 && serviceHasTarget !== false) {
       return localize(this.hass, "ui.at_least_one_target", "At least one target is required.");
     }
     return null;
@@ -576,6 +590,11 @@ export class AmbienceRuleEditor extends LitElement {
     this._updateActionAt(idx, (a) => ({ ...a, params }));
   }
 
+  private _onTargetModeChanged(service: string, hasTarget: boolean) {
+    if (this._serviceHasTarget.get(service) === hasTarget) return;
+    this._serviceHasTarget = new Map(this._serviceHasTarget).set(service, hasTarget);
+  }
+
   private _renderActionRow(action: ActionSpec, idx: number) {
     const exposed = this.availableActions.find((x) => x.id === action.service);
     const open = this._isOpen({ kind: "action", idx });
@@ -604,6 +623,10 @@ export class AmbienceRuleEditor extends LitElement {
               @params-changed=${(e: CustomEvent<{ params: Record<string, unknown> }>) => {
                 e.stopPropagation();
                 this._setActionParams(idx, e.detail.params);
+              }}
+              @target-mode-changed=${(e: CustomEvent<{ hasTarget: boolean }>) => {
+                e.stopPropagation();
+                this._onTargetModeChanged(action.service, e.detail.hasTarget);
               }}
             ></ambience-action-slot>
 

@@ -293,4 +293,124 @@ describe("ambience-action-slot", () => {
     const input = el.shadowRoot.querySelector(".fields-form input") as HTMLInputElement;
     expect(input.value).toBe("already typed");
   });
+
+  // Fix 2: exposed=undefined renders a "service not exposed" message
+  test("exposed=undefined renders a 'service not exposed' message instead of Loading…", async () => {
+    // Do NOT set exposed — the service is no longer in the exposed-action list.
+    el = document.createElement("ambience-action-slot");
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    // exposed stays undefined
+    el.entityIds = [];
+    el.params = {};
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // Must NOT show "Loading…"
+    expect(el.shadowRoot.textContent.toLowerCase()).not.toContain("loading");
+    // Must show the "not exposed" error message
+    expect(el.shadowRoot.querySelector(".schema-error")).toBeTruthy();
+    expect(el.shadowRoot.textContent.toLowerCase()).toMatch(/no longer exposed|settings.*actions/i);
+    // getServiceSchema should never have been called
+    expect(vi.mocked(api.getServiceSchema)).not.toHaveBeenCalled();
+  });
+
+  // Fix 1: no-target service emits target-mode-changed with hasTarget=false
+  test("emits target-mode-changed with hasTarget=false when schema has no target stanza", async () => {
+    const schema: ServiceSchema = { target: null, fields: { msg: { selector: { text: {} } } } };
+    const events: boolean[] = [];
+    el = document.createElement("ambience-action-slot");
+    el.addEventListener("target-mode-changed", (e: Event) => {
+      events.push((e as CustomEvent<{ hasTarget: boolean }>).detail.hasTarget);
+    });
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    el.exposed = { id: "notify.send_message", label: "", visible_fields: ["msg"], locked_values: {} };
+    el.entityIds = [];
+    el.params = {};
+    vi.mocked(api.getServiceSchema).mockResolvedValueOnce(schema);
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // The last emitted event must have hasTarget=false
+    expect(events.at(-1)).toBe(false);
+    // hasTarget() public method must agree
+    expect(el.hasTarget()).toBe(false);
+  });
+
+  // Fix 1: service-with-target emits target-mode-changed with hasTarget=true
+  test("emits target-mode-changed with hasTarget=true when schema has a target stanza", async () => {
+    const schema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: {},
+    };
+    const events: boolean[] = [];
+    el = document.createElement("ambience-action-slot");
+    el.addEventListener("target-mode-changed", (e: Event) => {
+      events.push((e as CustomEvent<{ hasTarget: boolean }>).detail.hasTarget);
+    });
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    el.exposed = { id: "light.turn_on", label: "", visible_fields: [], locked_values: {} };
+    el.entityIds = [];
+    el.params = {};
+    vi.mocked(api.getServiceSchema).mockResolvedValueOnce(schema);
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(events.at(-1)).toBe(true);
+    expect(el.hasTarget()).toBe(true);
+  });
+
+  // Fix 3: stale-fetch guard — second schema wins even if first resolves later
+  test("stale-fetch guard: second schema wins when first resolves after second", async () => {
+    // Simulate: slot mounts with light.turn_on, then exposed changes to
+    // light.turn_off before the first fetch resolves.
+    let resolveTurnOn!: (s: ServiceSchema) => void;
+    const turnOnPromise = new Promise<ServiceSchema>((res) => { resolveTurnOn = res; });
+    const turnOffSchema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: { transition: { selector: { number: {} } } },
+    };
+
+    // First call (light.turn_on) returns a never-yet-resolved promise.
+    vi.mocked(api.getServiceSchema).mockReturnValueOnce(turnOnPromise);
+    // Second call (light.turn_off) resolves immediately.
+    vi.mocked(api.getServiceSchema).mockResolvedValueOnce(turnOffSchema);
+
+    el = document.createElement("ambience-action-slot");
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    el.exposed = { id: "light.turn_on", label: "", visible_fields: [], locked_values: {} };
+    el.entityIds = [];
+    el.params = {};
+    document.body.appendChild(el);
+    await el.updateComplete;
+
+    // Change exposed to light.turn_off before the first fetch resolves.
+    el.exposed = { id: "light.turn_off", label: "", visible_fields: ["transition"], locked_values: {} };
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // Now resolve the first (stale) fetch — the slot must ignore it.
+    const turnOnSchema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: { brightness: { selector: { number: {} } } },
+    };
+    resolveTurnOn(turnOnSchema);
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // The rendered schema should be for light.turn_off (transition field),
+    // not light.turn_on (brightness field).
+    const rows = el.shadowRoot.querySelectorAll(".field-row");
+    expect(rows.length).toBe(1);
+    const labelText = rows[0].querySelector("label")?.textContent ?? "";
+    expect(labelText.toLowerCase()).toContain("transition");
+    expect(labelText.toLowerCase()).not.toContain("brightness");
+  });
 });

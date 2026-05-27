@@ -74,6 +74,8 @@ export class AmbienceActionSlot extends LitElement {
 
   @state() private _schema: ServiceSchema | null | undefined = undefined;
   @state() private _schemaError: string | null = null;
+  /** True when `exposed` is undefined (no entry in the exposed-action list). */
+  @state() private _exposedMissing = false;
   /** Cached form schema; rebuilt only when inputs change. */
   @state() private _formSchema: HaFormSchemaEntry[] = [];
   /** Service id that `_schema` was loaded for; guards against stale assigns
@@ -99,12 +101,21 @@ export class AmbienceActionSlot extends LitElement {
   }
 
   private async _loadSchema() {
+    // If exposed is undefined, the service is no longer in the exposed list.
+    if (this.exposed === undefined && this.hass) {
+      this._exposedMissing = true;
+      this._schema = null;
+      this._schemaServiceId = null;
+      return;
+    }
     const id = this.exposed?.id;
     if (!id || !this.hass) {
+      this._exposedMissing = false;
       this._schema = undefined;
       this._schemaServiceId = null;
       return;
     }
+    this._exposedMissing = false;
     this._schemaServiceId = id;
     this._schemaError = null;
     this._schema = undefined;
@@ -146,6 +157,19 @@ export class AmbienceActionSlot extends LitElement {
     return out;
   }
 
+  override updated(changed: Map<string, unknown>) {
+    super.updated?.(changed);
+    if (changed.has("_schema")) {
+      this.dispatchEvent(
+        new CustomEvent("target-mode-changed", {
+          detail: { hasTarget: this.hasTarget() },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
+  }
+
   // --- target picker -------------------------------------------------------
 
   /** True when the HA service has a target stanza (non-empty object). */
@@ -153,6 +177,18 @@ export class AmbienceActionSlot extends LitElement {
     const t = (this._schema?.target ?? null) as Record<string, unknown> | null;
     if (!t || typeof t !== "object") return false;
     return Object.keys(t).length > 0;
+  }
+
+  /**
+   * Public accessor for the parent to query whether this slot's service
+   * requires a target. Returns:
+   *   - true  when schema is loaded and has a non-empty target stanza
+   *   - false when schema is loaded and has no target (service like notify.send_message)
+   *   - false when schema is still loading (conservative — don't fail validation on a pending fetch)
+   */
+  hasTarget(): boolean {
+    if (this._schema === undefined) return false; // still loading → conservative
+    return this._hasTarget();
   }
 
   private _scopeEntities(): string[] {
@@ -261,6 +297,17 @@ export class AmbienceActionSlot extends LitElement {
 
   override render() {
     if (this._schema === null) {
+      if (this._exposedMissing) {
+        return html`
+          <div class="schema-error">
+            ${localize(
+              this.hass,
+              "ui.service_not_exposed",
+              "Service no longer exposed; configure it in Settings → Actions or remove this action.",
+            )}
+          </div>
+        `;
+      }
       return html`
         <div class="schema-error">
           ${this._schemaError ??

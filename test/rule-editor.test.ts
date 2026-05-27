@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, vi } from "vitest";
+import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
 
 // The rule editor's per-action body lazily fetches the service schema via
 // `api.getServiceSchema`. Mock the api module so the tests don't depend on
@@ -15,6 +15,7 @@ vi.mock("../frontend/src/api", () => ({
 
 import "../frontend/src/views/rule-editor";
 import type { ExposedAction, MatcherInfo, Rule, Scope } from "../frontend/src/types";
+import * as api from "../frontend/src/api";
 
 const matchers: MatcherInfo[] = [
   { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
@@ -847,5 +848,152 @@ describe("ambience-rule-editor — matcher dropdown + full-height layout", () =>
     expect(actionsBar).toBeTruthy();
     // The actions-bar lives outside the scrollable content so it stays anchored.
     expect(content!.querySelector(".actions-bar")).toBeNull();
+  });
+});
+
+describe("ambience-rule-editor — no-target services (Fix 1)", () => {
+  let el: any;
+
+  beforeEach(() => {
+    // Override the default mock to return a no-target schema for notify.send_message.
+    vi.mocked(api.getServiceSchema).mockImplementation(async (_hass, id) => {
+      if (id === "notify.send_message") {
+        return { target: null, fields: { message: { selector: { text: {} } } } };
+      }
+      return {
+        target: { entity: { domain: "light" } },
+        fields: { brightness: { selector: { number: { min: 0, max: 100 } } } },
+      };
+    });
+  });
+
+  afterEach(() => {
+    el?.remove();
+    vi.mocked(api.getServiceSchema).mockReset();
+  });
+
+  const noTargetActions: ExposedAction[] = [
+    {
+      id: "notify.send_message",
+      label: "Send notification",
+      visible_fields: ["message"],
+      locked_values: {},
+    },
+  ];
+
+  test("no-target service slot renders without a target picker", async () => {
+    const el2: any = document.createElement("ambience-rule-editor");
+    el2.matchers = matchers;
+    el2.availableActions = noTargetActions;
+    el2.periods = periods;
+    el2.hass = hass;
+    el2.scope = { kind: "area", id: "living_room" };
+    el2.rule = {
+      name: "test",
+      when: {},
+      actions: [{ service: "notify.send_message", entity_ids: [], params: {} }],
+    };
+    el2.open = true;
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+
+    // Open the action slot
+    const actionRow = el2.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    actionRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+
+    const slot = actionRow.querySelector("ambience-action-slot") as any;
+    expect(slot).toBeTruthy();
+    // No target picker rendered for a no-target service
+    expect(slot.shadowRoot.querySelector(".target-picker")).toBeNull();
+    el = el2;
+  });
+
+  test("no-target service can be saved with empty entity_ids (validation does not block)", async () => {
+    const el2: any = document.createElement("ambience-rule-editor");
+    el2.matchers = matchers;
+    el2.availableActions = noTargetActions;
+    el2.periods = periods;
+    el2.hass = hass;
+    el2.scope = { kind: "area", id: "living_room" };
+    el2.rule = {
+      name: "test",
+      when: {},
+      actions: [{ service: "notify.send_message", entity_ids: [], params: {} }],
+    };
+    el2.open = true;
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+
+    // Open the action slot so target-mode-changed fires and _serviceHasTarget is populated
+    const actionRow = el2.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    actionRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+
+    // Save should succeed (no validation error)
+    let saved: Rule | undefined;
+    el2.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el2.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+
+    // Rule was saved
+    expect(saved).toBeDefined();
+    expect(saved!.actions[0].service).toBe("notify.send_message");
+    expect(saved!.actions[0].entity_ids).toEqual([]);
+    el = el2;
+  });
+
+  test("clicking outside an open no-target slot with empty entity_ids does NOT keep it open", async () => {
+    const el2: any = document.createElement("ambience-rule-editor");
+    el2.matchers = matchers;
+    el2.availableActions = noTargetActions;
+    el2.periods = periods;
+    el2.hass = hass;
+    el2.scope = { kind: "area", id: "living_room" };
+    el2.rule = {
+      name: "test",
+      when: {},
+      actions: [{ service: "notify.send_message", entity_ids: [], params: {} }],
+    };
+    el2.open = true;
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+
+    // Open the action slot so target-mode-changed fires
+    const actionRow = el2.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    actionRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+
+    // Click outside — should collapse cleanly (no validation error blocking it)
+    const h3 = el2.shadowRoot.querySelector("h3") as HTMLElement;
+    h3.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el2.updateComplete;
+
+    // Slot should now be collapsed — no error
+    const after = el2.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    expect(after.classList.contains("collapsed")).toBe(true);
+    expect(after.querySelector(".error")).toBeNull();
+    el = el2;
   });
 });

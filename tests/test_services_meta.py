@@ -41,6 +41,7 @@ def test_list_services_returns_flat_list_with_domain_name_and_description() -> N
 
     ids = [item["id"] for item in items]
     assert ids == ["light.turn_off", "light.turn_on"]  # alpha-sorted
+    assert items[0]["target"] is None
     assert items[1]["description"] == "Turn the light on."
     assert items[1]["target"] == {"entity": [{"domain": "light"}]}
 

@@ -46,11 +46,32 @@ _PANEL_URL = "ambience"
 _PANEL_STATIC_PATH = "/ambience-panel"
 _PANEL_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-panel.js"
 
-_APPLY_SCENE_SCHEMA = vol.Schema(
-    {
-        vol.Required("area"): cv.string,
-        vol.Optional("scene"): cv.string,
-    }
+
+def _exactly_one_scope(value: dict) -> dict:
+    """Validator: exactly one of {area, floor, house} must be present."""
+    present = [k for k in ("area", "floor", "house") if k in value]
+    if len(present) != 1:
+        raise vol.Invalid(f"apply_scene requires exactly one of area/floor/house, got: {present!r}")
+    return value
+
+
+def _house_must_be_true(value: object) -> bool:
+    """Validator: `house` must be exactly True (not False, not truthy-but-non-bool)."""
+    if value is not True:
+        raise vol.Invalid("house must be true")
+    return value
+
+
+_APPLY_SCENE_SCHEMA = vol.All(
+    vol.Schema(
+        {
+            vol.Optional("area"): cv.string,
+            vol.Optional("floor"): cv.string,
+            vol.Optional("house"): _house_must_be_true,
+            vol.Optional("scene"): cv.string,
+        }
+    ),
+    _exactly_one_scope,
 )
 
 
@@ -87,7 +108,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     register_action(hass, SetLightAction())
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
-        await async_apply_scene(hass, "area", call.data["area"], call.data.get("scene"))
+        scene = call.data.get("scene")
+        if "area" in call.data:
+            await async_apply_scene(hass, "area", call.data["area"], scene)
+        elif "floor" in call.data:
+            await async_apply_scene(hass, "floor", call.data["floor"], scene)
+        else:  # house
+            await async_apply_scene(hass, "house", None, scene)
 
     hass.services.async_register(
         DOMAIN,

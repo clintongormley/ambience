@@ -119,3 +119,54 @@ async def test_time_of_day_rule_matches_for_area_without_matchers_field(
     # so resolve() sees no value for the predicate and the rule does not match.
     assert result["matched_rule_index"] == 0
     assert result["rule_name"] == "all-day"
+
+
+async def test_apply_scene_accepts_floor_field(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """`floor:` is a valid scope field."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_floor(
+        "upstairs",
+        {"rules": [{"name": "x", "when": {}, "actions": []}], "auto_sort": True},
+    )
+    await hass.services.async_call(DOMAIN, "apply_scene", {"floor": "upstairs"}, blocking=True)
+
+
+async def test_apply_scene_accepts_house_true(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """`house: true` is a valid scope field."""
+    await hass.services.async_call(DOMAIN, "apply_scene", {"house": True}, blocking=True)
+
+
+async def test_apply_scene_rejects_zero_scope_fields(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    import voluptuous as vol
+
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(DOMAIN, "apply_scene", {"scene": "movie"}, blocking=True)
+
+
+async def test_apply_scene_rejects_multiple_scope_fields(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    import voluptuous as vol
+
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN,
+            "apply_scene",
+            {"area": "a", "floor": "f"},
+            blocking=True,
+        )
+
+
+async def test_apply_scene_rejects_house_false(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    import voluptuous as vol
+
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(DOMAIN, "apply_scene", {"house": False}, blocking=True)

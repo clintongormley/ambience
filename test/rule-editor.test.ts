@@ -424,6 +424,16 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
     expect(action.classList.contains("expanded")).toBe(true);
+    // Simulate target-mode-changed so the editor KNOWS this service has a target.
+    // In real HA, ambience-action-slot emits this once the schema loads; the test
+    // must fire it explicitly because jsdom doesn't run the action-slot schema fetch.
+    const slot = action.querySelector("ambience-action-slot")!;
+    slot.dispatchEvent(new CustomEvent("target-mode-changed", {
+      detail: { hasTarget: true },
+      bubbles: true,
+      composed: true,
+    }));
+    await el.updateComplete;
     // Click on a non-slot region
     const h3 = el.shadowRoot.querySelector("h3") as HTMLElement;
     h3.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -441,6 +451,14 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
     action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
+    // Simulate target-mode-changed so the editor KNOWS this service has a target.
+    const slot = action.querySelector("ambience-action-slot")!;
+    slot.dispatchEvent(new CustomEvent("target-mode-changed", {
+      detail: { hasTarget: true },
+      bubbles: true,
+      composed: true,
+    }));
+    await el.updateComplete;
     const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
     scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
@@ -455,6 +473,14 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     });
     const action0 = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
     action0.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    // Simulate target-mode-changed so the editor KNOWS this service has a target.
+    const slot = action0.querySelector("ambience-action-slot")!;
+    slot.dispatchEvent(new CustomEvent("target-mode-changed", {
+      detail: { hasTarget: true },
+      bubbles: true,
+      composed: true,
+    }));
     await el.updateComplete;
     const select = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
     select.value = "script.foo";
@@ -994,6 +1020,43 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
     const after = el2.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
     expect(after.classList.contains("collapsed")).toBe(true);
     expect(after.querySelector(".error")).toBeNull();
+    el = el2;
+  });
+
+  test("schema still loading (undefined _serviceHasTarget) does NOT block save or close", async () => {
+    // Regression for the false-positive "at least one target" error: when the
+    // action slot hasn't been rendered yet (no target-mode-changed emitted),
+    // _serviceHasTarget has no entry → undefined. The old `!== false` guard
+    // treated undefined the same as true (has target), showing an error before
+    // the schema even loaded. The fix: only enforce when serviceHasTarget === true.
+    const el2: any = document.createElement("ambience-rule-editor");
+    el2.matchers = matchers;
+    el2.availableActions = noTargetActions;
+    el2.periods = periods;
+    el2.hass = hass;
+    el2.scope = { kind: "area", id: "living_room" };
+    el2.rule = {
+      name: "test",
+      when: {},
+      actions: [{ service: "notify.send_message", entity_ids: [], params: {} }],
+    };
+    el2.open = true;
+    document.body.appendChild(el2);
+    // Wait only enough for the editor to render its collapsed summary — do NOT
+    // open the action slot, so target-mode-changed never fires and
+    // _serviceHasTarget remains empty (all undefined).
+    await el2.updateComplete;
+
+    // _serviceHasTarget must have no entry for this service yet.
+    expect((el2 as any)._serviceHasTarget.has("notify.send_message")).toBe(false);
+
+    // Even with empty entity_ids and unknown hasTarget, validation must NOT block save.
+    let saved: Rule | undefined;
+    el2.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el2.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+
+    expect(saved).toBeDefined();
+    expect(saved!.actions[0].entity_ids).toEqual([]);
     el = el2;
   });
 });

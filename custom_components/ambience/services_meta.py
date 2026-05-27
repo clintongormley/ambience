@@ -45,15 +45,24 @@ def _registry_is_dict_stubbed(registry: dict) -> bool:
     return found_any
 
 
-async def _descriptions(hass: HomeAssistant) -> dict[str, dict[str, dict[str, Any]]]:
-    """Best-effort {domain: {name: {description?, fields?, target?}}} view."""
+async def _descriptions_with_status(
+    hass: HomeAssistant,
+) -> tuple[dict[str, dict[str, dict[str, Any]]], bool]:
+    """Return (descriptions, degraded_flag).
+
+    degraded=True means async_get_all_descriptions was unavailable; the
+    returned dict has the correct set of domain/service keys but every
+    spec is an empty dict (no fields, no target). Field-level validation
+    must be skipped when degraded is True.
+    """
     registry = hass.services.async_services()
     if _registry_is_dict_stubbed(registry):
-        return registry
+        # Test fixtures provide their own field/target data — not degraded.
+        return registry, False
     try:
         from homeassistant.helpers.service import async_get_all_descriptions
 
-        return await async_get_all_descriptions(hass)
+        return await async_get_all_descriptions(hass), False
     except Exception as exc:
         # Stripped test envs (no integrations on disk) can break the loader;
         # fall back to a runtime-registry view (no fields/target/description).
@@ -62,7 +71,16 @@ async def _descriptions(hass: HomeAssistant) -> dict[str, dict[str, dict[str, An
             "falling back to runtime-registry view",
             exc,
         )
-        return {domain: {name: {} for name in names} for domain, names in registry.items()}
+        return (
+            {domain: {name: {} for name in names} for domain, names in registry.items()},
+            True,
+        )
+
+
+async def _descriptions(hass: HomeAssistant) -> dict[str, dict[str, dict[str, Any]]]:
+    """Best-effort {domain: {name: {description?, fields?, target?}}} view."""
+    data, _degraded = await _descriptions_with_status(hass)
+    return data
 
 
 async def list_services(hass: HomeAssistant) -> list[dict[str, Any]]:

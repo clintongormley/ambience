@@ -187,14 +187,12 @@ export class AmbienceActionsSettings extends LitElement {
       this._services = services;
     } catch (e: unknown) {
       this._loadError = e instanceof Error ? e.message : String(e);
-      this.requestUpdate();
       return; // do NOT mark as loaded
     }
     // Fetch schemas for already-exposed services in parallel so the UI is
     // ready when the user expands a card.
     await Promise.all(this._actions.map((a) => this._ensureSchema(a.id)));
     this._loaded = true;
-    this.requestUpdate();
   }
 
   private async _ensureSchema(serviceId: string) {

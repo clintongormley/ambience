@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -206,3 +206,62 @@ async def test_validate_against_catalog_accepts_service_with_no_fields() -> None
         hass,
         [{"id": "notify.send_message", "label": "", "visible_fields": [], "locked_values": {}}],
     )  # no exception
+
+
+async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
+    """When async_get_all_descriptions raises, field validation is skipped.
+
+    The catalog is degraded — service-existence can still be checked (the
+    fallback view includes all registered services), but field-existence
+    cannot be reliably checked. We must accept valid entries whose
+    visible_fields are non-empty, and only reject entries for unknown services.
+    """
+    hass = MagicMock()
+    # Non-stubbed registry: async_services returns Service objects (use MagicMock so
+    # _registry_is_dict_stubbed returns False, falling through to the real loader path).
+    mock_service = MagicMock()  # not a dict → _registry_is_dict_stubbed returns False
+    hass.services.async_services.return_value = {
+        "light": {"turn_on": mock_service},
+    }
+
+    store = ExposedActionsStore(_FakeStorage())
+
+    with (
+        patch(
+            "custom_components.ambience.services_meta.async_get_all_descriptions",
+            side_effect=RuntimeError("descriptions unavailable in test"),
+            create=True,
+        ),
+        patch(
+            "homeassistant.helpers.service.async_get_all_descriptions",
+            side_effect=RuntimeError("descriptions unavailable in test"),
+            create=True,
+        ),
+    ):
+        # A valid entry with visible_fields: must pass (degraded → skip field checks).
+        await store.validate_against_catalog(
+            hass,
+            [
+                {
+                    "id": "light.turn_on",
+                    "label": "",
+                    "visible_fields": ["brightness_pct"],
+                    "locked_values": {},
+                },
+            ],
+        )  # no exception
+
+        # An entry for an unknown service must still fail (service-existence check
+        # uses the fallback dict which has the correct domain/service keys).
+        with pytest.raises(ValueError, match="unknown service"):
+            await store.validate_against_catalog(
+                hass,
+                [
+                    {
+                        "id": "light.no_such_service",
+                        "label": "",
+                        "visible_fields": [],
+                        "locked_values": {},
+                    },
+                ],
+            )

@@ -16,7 +16,7 @@ from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
 
-from .services_meta import get_service_schema
+from .services_meta import _descriptions_with_status
 
 
 class _StorageLike(Protocol):
@@ -76,10 +76,13 @@ class ExposedActionsStore:
     ) -> None:
         """Check each entry's service exists and every named field exists.
 
-        This is async because it consults `services_meta.get_service_schema`,
-        which in real HA goes through `async_get_all_descriptions` to fetch
-        field metadata (the on-disk services.yaml descriptions don't live in
-        the runtime service registry).
+        This is async because it consults the HA service catalog, which goes
+        through `async_get_all_descriptions` to fetch field metadata (the
+        on-disk services.yaml descriptions don't live in the runtime registry).
+
+        When the catalog is degraded (async_get_all_descriptions unavailable),
+        only service-existence is verified — field-level checks are skipped to
+        avoid false "unknown field" errors caused by the empty fallback view.
 
         Precondition: validate_shape() must have passed for `actions`. This
         method reads `entry["id"]` directly and will KeyError on a malformed
@@ -89,12 +92,19 @@ class ExposedActionsStore:
         is available. Locked-value type checking is intentionally not done
         here; HA's own service call rejects mismatched types at call time.
         """
+        descriptions, degraded = await _descriptions_with_status(hass)
         for entry in actions:
             sid = entry["id"]
-            schema = await get_service_schema(hass, sid)
-            if schema is None:
+            domain, name = sid.split(".", 1) if "." in sid else (sid, "")
+            spec = descriptions.get(domain, {}).get(name)
+            if spec is None:
                 raise ValueError(f"unknown service: {sid!r}")
-            known_fields = set(schema["fields"])
+            if degraded:
+                # Catalog is degraded — only verify the service exists. Field
+                # validation would falsely reject valid entries because the
+                # fallback view has empty fields dicts.
+                continue
+            known_fields = set(spec.get("fields", {}) if isinstance(spec, dict) else {})
             for fname in entry.get("visible_fields", []):
                 if fname not in known_fields:
                     raise ValueError(f"{sid}: unknown field {fname!r} in visible_fields")

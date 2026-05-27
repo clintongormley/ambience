@@ -243,13 +243,12 @@ export class AmbienceRuleEditor extends LitElement {
     // slot.kind === "action"
     const action = this._draft?.actions[slot.idx];
     if (!action) return null;
-    // Skip the entity-ids check for services whose schema confirms they have
-    // no target stanza (e.g. notify.send_message, homeassistant.reload_config).
-    // While schema is still loading (_serviceHasTarget has no entry yet), we
-    // default to requiring a target (conservative) — but `false` = confirmed
-    // no-target, so we allow saving.
+    // Only enforce the entity-ids check when we KNOW the service has a target
+    // (serviceHasTarget === true). If the schema is still loading (undefined)
+    // or the service has no target stanza (false), skip the check — the slot's
+    // hasTarget() uses the same conservative logic.
     const serviceHasTarget = this._serviceHasTarget.get(action.service);
-    if (action.entity_ids.length === 0 && serviceHasTarget !== false) {
+    if (action.entity_ids.length === 0 && serviceHasTarget === true) {
       return localize(this.hass, "ui.at_least_one_target", "At least one target is required.");
     }
     return null;

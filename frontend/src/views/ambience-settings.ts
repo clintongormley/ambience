@@ -149,20 +149,31 @@ export class AmbienceAmbienceSettings extends LitElement {
     };
   }
 
+  // --- error handling ---
+
+  private async _safeSave(fn: () => Promise<unknown>): Promise<void> {
+    try {
+      await fn();
+      this._error = "";
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
+    }
+  }
+
   // --- defaults ---
 
   private _onDefaultName(e: Event) {
     const value = (e.target as HTMLInputElement).value.trim();
     if (!value) return;
     this._defaults = { ...this._defaults, name: value };
-    void saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds);
+    void this._safeSave(() => saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds));
   }
 
   private _onDefaultDelay(e: Event) {
     const raw = (e.target as HTMLInputElement).value;
     if (raw === "" || !Number.isFinite(Number(raw)) || Number(raw) < 0) return;
     this._defaults = { ...this._defaults, auto_on_delay_seconds: Math.floor(Number(raw)) };
-    void saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds);
+    void this._safeSave(() => saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds));
   }
 
   // --- per-row ---
@@ -173,9 +184,11 @@ export class AmbienceAmbienceSettings extends LitElement {
 
   private _saveRow(row: Row) {
     const { name, auto_on_delay_seconds } = row.override;
-    if (row.kind === "house") void saveHouseSwitch(this.hass, name, auto_on_delay_seconds);
-    else if (row.kind === "floor") void saveFloorSwitch(this.hass, row.id!, name, auto_on_delay_seconds);
-    else void saveAreaSwitch(this.hass, row.id!, name, auto_on_delay_seconds);
+    void this._safeSave(() => {
+      if (row.kind === "house") return saveHouseSwitch(this.hass, name, auto_on_delay_seconds);
+      if (row.kind === "floor") return saveFloorSwitch(this.hass, row.id!, name, auto_on_delay_seconds);
+      return saveAreaSwitch(this.hass, row.id!, name, auto_on_delay_seconds);
+    });
   }
 
   private _onOverrideName(idx: number, e: Event) {

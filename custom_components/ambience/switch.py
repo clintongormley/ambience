@@ -185,10 +185,10 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             return
         try:
             off_at = datetime.fromisoformat(off_at_iso)
+            remaining = delay - (dt_util.utcnow() - off_at).total_seconds()
         except (ValueError, TypeError):
             _LOGGER.warning("ambience switch: invalid off_at %r — ignoring", off_at_iso)
             return
-        remaining = delay - (dt_util.utcnow() - off_at).total_seconds()
         if remaining <= 0:
             if turn_on_if_expired:
                 self.hass.async_create_task(self.async_turn_on())

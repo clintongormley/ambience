@@ -153,6 +153,7 @@ describe("summariseAction", () => {
     name: "set_light",
     description: "",
     domains: ["light"],
+    kind: "standard",
     target_params: [
       { name: "brightness", type: "int", required: true, unit: "%" },
       { name: "transition", type: "number", required: false, unit: "s" },
@@ -226,6 +227,7 @@ describe("summariseAction", () => {
       name: "set_light",
       description: "",
       domains: ["light"],
+      kind: "standard",
       target_params: [
         { name: "brightness", type: "int", required: true },
       ],
@@ -247,6 +249,43 @@ describe("summariseAction", () => {
     };
     expect(summariseAction(action, undefined, { hass: noLocalize }))
       .toBe("Unknown: 2 targets");
+  });
+
+  test("script action summary includes script id and field values", () => {
+    const scriptInfo: ActionInfo = {
+      name: "script",
+      description: "",
+      domains: [],
+      kind: "script",
+      target_params: [],
+    };
+    const action: ActionSpec = {
+      action: "script",
+      script: "script.foo",
+      entity_ids: ["light.a"],
+      params: { brightness: 50 },
+    };
+    const out = summariseAction(action, scriptInfo, { hass: noLocalize });
+    expect(out).toContain("script.foo");
+    expect(out).toContain("50");
+  });
+
+  test("script action summary indicates when no script is chosen", () => {
+    const scriptInfo: ActionInfo = {
+      name: "script",
+      description: "",
+      domains: [],
+      kind: "script",
+      target_params: [],
+    };
+    const action: ActionSpec = {
+      action: "script",
+      entity_ids: [],
+      params: {},
+    };
+    const out = summariseAction(action, scriptInfo, { hass: noLocalize });
+    // Some indication that no script is chosen yet.
+    expect(out.toLowerCase()).toMatch(/not selected|no script|\(.*\)/);
   });
 });
 

@@ -155,7 +155,8 @@ async def async_apply_scene(
             continue
         entity_ids = action_spec.get("entity_ids", [])
         params = action_spec.get("params", {})
-        coros.append(action.execute(hass, entity_ids, params))
+        script = action_spec.get("script")
+        coros.append(action.execute(hass, entity_ids, params, script=script))
     results = await asyncio.gather(*coros, return_exceptions=True)
     for result in results:
         if isinstance(result, BaseException):

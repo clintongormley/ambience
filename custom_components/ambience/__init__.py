@@ -19,6 +19,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.typing import ConfigType
 
+from .actions.script import ScriptAction
 from .actions.set_light import SetLightAction
 from .const import (
     DATA_ACTIONS,
@@ -121,6 +122,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     register_matcher(hass, WeatherMatcher(hass=hass))
     register_matcher(hass, StateMatcher(hass=hass))
     register_matcher(hass, ScriptMatcher(hass=hass))
+    register_action(hass, ScriptAction())
     register_action(hass, SetLightAction())
 
     async def _handle_apply_scene(call: ServiceCall) -> None:

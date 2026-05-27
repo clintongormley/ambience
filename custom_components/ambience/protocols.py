@@ -70,6 +70,7 @@ class Action(Protocol):
         hass: HomeAssistant,
         entity_ids: list[str],
         params: dict[str, Any],
+        script: str | None = None,
     ) -> None:
         """Apply this action to the given entity ids using shared params."""
         ...
@@ -78,6 +79,7 @@ class Action(Protocol):
         self,
         entity_ids: list[str],
         params: dict[str, Any],
+        script: str | None = None,
     ) -> None:
         """Raise ValueError if the entity_ids list or params are malformed."""
         ...

@@ -246,6 +246,9 @@ export function summariseAction(
   ctx: ActionContext,
 ): string {
   const name = actionLabel(ctx.hass, action.action);
+  if (action.action === "script" || info?.kind === "script") {
+    return _summariseScriptAction(action, name, ctx);
+  }
   const noun = info?.domains?.[0] ?? localize(ctx.hass, "ui.target_noun", "target");
   const n = action.entity_ids.length;
   let targets: string;
@@ -261,4 +264,24 @@ export function summariseAction(
     .map(([k, v]) => `${k} ${v}${unitFor[k] ?? ""}`)
     .join(", ");
   return params ? `${name}: ${targets}, ${params}` : `${name}: ${targets}`;
+}
+
+function _summariseScriptAction(
+  action: ActionSpec,
+  actionName: string,
+  ctx: ActionContext,
+): string {
+  const scriptId = action.script ?? localize(ctx.hass, "ui.no_script_chosen", "(not selected)");
+  const n = action.entity_ids.length;
+  const targetNoun = localize(ctx.hass, "ui.target_noun", "target");
+  let targets: string;
+  if (n === 0) targets = "";
+  else if (n === 1) targets = `1 ${targetNoun}`;
+  else targets = `${n} ${targetNoun}s`;
+  const params = Object.entries(action.params)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => `${k}=${v}`)
+    .join(", ");
+  const parts = [scriptId, targets, params].filter((s) => s !== "");
+  return `${actionName}: ${parts.join(", ")}`;
 }

@@ -110,3 +110,11 @@ def test_validate_rejects_non_number_transition() -> None:
     action = SetLightAction()
     with pytest.raises(ValueError, match="transition must be number"):
         action.validate_target_params(["light.a"], {"brightness": 50, "transition": "fast"})
+
+
+async def test_execute_ignores_script_kwarg(hass: HomeAssistant) -> None:
+    on_calls = async_mock_service(hass, "light", "turn_on")
+    action = SetLightAction()
+    await action.execute(hass, ["light.a"], {"brightness": 50}, script="ignored")
+    assert len(on_calls) == 1
+    action.validate_target_params(["light.a"], {"brightness": 50}, script="ignored")

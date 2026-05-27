@@ -60,10 +60,10 @@ class RecordingAction:
     def __init__(self) -> None:
         self.executions: list[tuple] = []
 
-    async def execute(self, hass, entity_ids, params):
+    async def execute(self, hass, entity_ids, params, script=None):
         self.executions.append((list(entity_ids), dict(params)))
 
-    def validate_target_params(self, entity_ids, params):
+    def validate_target_params(self, entity_ids, params, script=None):
         return
 
 
@@ -217,10 +217,10 @@ async def test_action_failure_does_not_block_other_actions(
         name = "fail"
         domains = ("light",)
 
-        async def execute(self, hass, entity_ids, params):
+        async def execute(self, hass, entity_ids, params, script=None):
             raise RuntimeError("boom")
 
-        def validate_target_params(self, entity_ids, params):
+        def validate_target_params(self, entity_ids, params, script=None):
             return
 
     recorded = RecordingAction()
@@ -306,6 +306,49 @@ async def test_cancellation_treated_as_failure_isolation(
 
     # Wildcard rule should still match (cancelled snapshot becomes None).
     assert action.executions == [(["light.a"], {"brightness": 10})]
+
+
+async def test_apply_scene_threads_script_kwarg_to_action(hass: HomeAssistant) -> None:
+    class ScriptRecordingAction:
+        name = "fake"
+        domains = ()
+
+        def __init__(self) -> None:
+            self.executions: list[dict] = []
+
+        async def execute(self, hass, entity_ids, params, script=None):
+            self.executions.append(
+                {"entity_ids": list(entity_ids), "params": dict(params), "script": script}
+            )
+
+        def validate_target_params(self, entity_ids, params, script=None):
+            return
+
+    fake = ScriptRecordingAction()
+    areas = {
+        "lr": {
+            "rules": [
+                {
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        {
+                            "action": "fake",
+                            "script": "script.foo",
+                            "entity_ids": ["light.a"],
+                            "params": {"x": 1},
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    _install(hass, areas=areas, matchers={}, actions={"fake": fake})
+
+    await async_apply_scene(hass, "lr", "movie")
+
+    assert fake.executions == [
+        {"entity_ids": ["light.a"], "params": {"x": 1}, "script": "script.foo"}
+    ]
 
 
 async def test_resolve_only_describes_activating_scene(hass: HomeAssistant) -> None:

@@ -44,6 +44,7 @@ class SetLightAction:
         hass: HomeAssistant,
         entity_ids: list[str],
         params: dict[str, Any],
+        script: str | None = None,
     ) -> None:
         coros = [self._apply_one(hass, eid, params) for eid in entity_ids]
         results = await asyncio.gather(*coros, return_exceptions=True)
@@ -77,6 +78,7 @@ class SetLightAction:
         self,
         entity_ids: list[str],
         params: dict[str, Any],
+        script: str | None = None,
     ) -> None:
         if not entity_ids:
             raise ValueError("set_light requires at least one target entity")

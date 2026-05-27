@@ -15,6 +15,10 @@ export type ActionSpec = {
   action: string;
   entity_ids: string[];
   params: Record<string, unknown>;
+  // Set only when `action === "script"` — the chosen HA script entity id
+  // (e.g. "script.foo"). Backend stores this verbatim and uses it to look up
+  // the script's fields/target metadata at execution time.
+  script?: string;
 };
 
 export type AreaConfig = {
@@ -56,6 +60,10 @@ export type ActionInfo = {
   description: string;
   domains: string[];
   target_params: ParamSpec[];
+  // "standard" actions are config-driven (set_light, …); "script" actions
+  // dispatch to an HA script chosen at edit time. The dispatch shapes
+  // are different enough that the editor and summariser branch on this.
+  kind: "standard" | "script";
 };
 
 export type DryRunResult = {

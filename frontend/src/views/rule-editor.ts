@@ -14,9 +14,10 @@ import type {
 import type { HassConnection } from "../api.js";
 import { entitiesForScope } from "../entities-for-scope.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
-import { localize, matcherLabel } from "../i18n.js";
+import { actionLabel, localize, matcherLabel } from "../i18n.js";
 import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
 import "./matcher-input.js";
+import "./script-action-slot.js";
 import "./target-picker.js";
 
 type OpenSlot =
@@ -142,6 +143,9 @@ export class AmbienceRuleEditor extends LitElement {
   @state() private _draft: Rule | null = null;
   @state() private _open: OpenSlot = null;
   @state() private _showError = false;
+  // Action-type chosen in the "+ Add action" picker. Defaults to the first
+  // entry in `availableActions` when that prop resolves.
+  @state() private _pendingActionType: string | null = null;
 
   override connectedCallback() {
     super.connectedCallback();
@@ -241,16 +245,48 @@ export class AmbienceRuleEditor extends LitElement {
     // slot.kind === "action"
     const action = this._draft?.actions[slot.idx];
     if (!action) return null;
+    const info = this.availableActions.find((x) => x.name === action.action);
+    if (info?.kind === "script" || action.action === "script") {
+      return this._validateScriptAction(action);
+    }
     if (action.entity_ids.length === 0) {
       return localize(this.hass, "ui.at_least_one_target", "At least one target is required.");
     }
-    const info = this.availableActions.find((x) => x.name === action.action);
     if (!info) return null;
     for (const p of info.target_params) {
       if (!p.required) continue;
       const v = action.params[p.name];
       if (v === undefined || v === null || v === "") {
         return localize(this.hass, "ui.param_required", "{param} is required.").replace("{param}", this._paramLabel(p.name));
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Validation for a script-kind action:
+   *  - `script` must be set and look like "script.<object_id>".
+   *  - If the script's metadata is available in `hass.services.script`,
+   *    every required field must have a non-empty value in `params`.
+   *  - If metadata is missing, accept the config (the user can still save
+   *    so they can recover after a transient connection issue / rename).
+   */
+  private _validateScriptAction(action: ActionSpec): string | null {
+    const script = action.script;
+    if (!script || !script.startsWith("script.")) {
+      return localize(this.hass, "ui.script_required", "Please pick a script.");
+    }
+    const objectId = script.split(".").slice(1).join(".");
+    const services = (this.hass as any)?.services?.script as
+      | Record<string, { fields?: Record<string, { required?: boolean }> }>
+      | undefined;
+    const meta = services?.[objectId];
+    if (!meta?.fields) return null;
+    for (const [key, field] of Object.entries(meta.fields)) {
+      if (!field.required) continue;
+      const v = action.params[key];
+      if (v === undefined || v === null || v === "") {
+        return localize(this.hass, "ui.param_required", "{param} is required.").replace("{param}", this._paramLabel(key));
       }
     }
     return null;
@@ -476,10 +512,29 @@ export class AmbienceRuleEditor extends LitElement {
 
   private _addActionSlot() {
     if (!this._draft) return;
-    const spec: ActionSpec = { action: "set_light", entity_ids: [], params: {} };
+    const type = this._pendingActionType ?? this.availableActions[0]?.name ?? "set_light";
+    const spec: ActionSpec = { action: type, entity_ids: [], params: {} };
     const newIdx = this._draft.actions.length;
     this._draft = { ...this._draft, actions: [...this._draft.actions, spec] };
     this._open = { kind: "action", idx: newIdx };
+  }
+
+  private _onActionTypeChange = (e: Event) => {
+    this._pendingActionType = (e.target as HTMLSelectElement).value;
+  };
+
+  private _renderActionTypePicker() {
+    if (this.availableActions.length <= 1) return "";
+    const current = this._pendingActionType ?? this.availableActions[0]?.name ?? "";
+    return html`
+      <div class="action-type-picker">
+        <select @change=${this._onActionTypeChange}>
+          ${this.availableActions.map((a) => html`
+            <option value=${a.name} ?selected=${a.name === current}>${actionLabel(this.hass as any, a.name)}</option>
+          `)}
+        </select>
+      </div>
+    `;
   }
 
   private _updateActionAt(idx: number, mutate: (a: ActionSpec) => ActionSpec) {
@@ -554,9 +609,7 @@ export class AmbienceRuleEditor extends LitElement {
     const info = this.availableActions.find((x) => x.name === action.action);
     const open = this._isOpen({ kind: "action", idx });
     const summary = summariseAction(action, info, { hass: this.hass as any });
-    const entities = this.scope
-      ? entitiesForScope(this.hass as any, this.scope, info?.domains ?? [])
-      : [];
+    const isScript = info?.kind === "script" || action.action === "script";
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "action", idx })}>
@@ -565,18 +618,7 @@ export class AmbienceRuleEditor extends LitElement {
         </div>
         ${open ? html`
           <div class="body">
-            <label>${localize(this.hass, "ui.target", "Target")}</label>
-            <ambience-target-picker
-              .hass=${this.hass}
-              .entities=${entities}
-              .value=${action.entity_ids}
-              @value-changed=${(e: CustomEvent<{ value: string[] }>) => {
-                e.stopPropagation();
-                this._setActionTargets(idx, e.detail.value);
-              }}
-            ></ambience-target-picker>
-
-            ${this._renderActionParams(idx, action, info)}
+            ${isScript ? this._renderScriptBody(idx, action) : this._renderStandardBody(idx, action, info)}
 
             ${this._showError && this._validationError({ kind: "action", idx }) ? html`
               <div class="error">${this._validationError({ kind: "action", idx })}</div>
@@ -585,6 +627,60 @@ export class AmbienceRuleEditor extends LitElement {
         ` : ""}
       </div>
     `;
+  }
+
+  private _renderStandardBody(idx: number, action: ActionSpec, info: ActionInfo | undefined) {
+    const entities = this.scope
+      ? entitiesForScope(this.hass as any, this.scope, info?.domains ?? [])
+      : [];
+    return html`
+      <label>${localize(this.hass, "ui.target", "Target")}</label>
+      <ambience-target-picker
+        .hass=${this.hass}
+        .entities=${entities}
+        .value=${action.entity_ids}
+        @value-changed=${(e: CustomEvent<{ value: string[] }>) => {
+          e.stopPropagation();
+          this._setActionTargets(idx, e.detail.value);
+        }}
+      ></ambience-target-picker>
+
+      ${this._renderActionParams(idx, action, info)}
+    `;
+  }
+
+  private _renderScriptBody(idx: number, action: ActionSpec) {
+    return html`
+      <ambience-script-action-slot
+        .hass=${this.hass}
+        .scope=${this.scope}
+        .script=${action.script}
+        .entityIds=${action.entity_ids}
+        .params=${action.params}
+        @script-changed=${(e: CustomEvent<{ script: string }>) => {
+          e.stopPropagation();
+          this._setActionScript(idx, e.detail.script);
+        }}
+        @entity-ids-changed=${(e: CustomEvent<{ entityIds: string[] }>) => {
+          e.stopPropagation();
+          this._setActionTargets(idx, e.detail.entityIds);
+        }}
+        @params-changed=${(e: CustomEvent<{ params: Record<string, unknown> }>) => {
+          e.stopPropagation();
+          this._setActionParams(idx, e.detail.params);
+        }}
+      ></ambience-script-action-slot>
+    `;
+  }
+
+  private _setActionScript(idx: number, script: string) {
+    // Reset entity_ids and params when the script changes — they likely won't
+    // apply to the new script's target/fields.
+    this._updateActionAt(idx, (a) => ({ ...a, script, entity_ids: [], params: {} }));
+  }
+
+  private _setActionParams(idx: number, params: Record<string, unknown>) {
+    this._updateActionAt(idx, (a) => ({ ...a, params }));
   }
 
   // --- Save / cancel ---
@@ -620,6 +716,7 @@ export class AmbienceRuleEditor extends LitElement {
 
           <h3>${localize(this.hass, "ui.actions_heading", "Actions")}</h3>
           ${this._draft.actions.map((a, i) => this._renderActionRow(a, i))}
+          ${this._renderActionTypePicker()}
           <button class="secondary add-action" @click=${this._addActionSlot}>${localize(this.hass, "ui.add_action", "+ Add action")}</button>
         </div>
 

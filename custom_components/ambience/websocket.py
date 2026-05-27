@@ -153,7 +153,8 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
                 )
             entity_ids = action_spec.get("entity_ids", [])
             params = action_spec.get("params", {})
-            action.validate_target_params(entity_ids, params)
+            script = action_spec.get("script")
+            action.validate_target_params(entity_ids, params, script=script)
 
 
 @websocket_api.require_admin
@@ -225,6 +226,7 @@ async def _ws_actions_list(
             "description": a.description,
             "domains": list(a.domains),
             "target_params": a.target_params,
+            "kind": getattr(a, "kind", "standard"),
         }
         for a in actions.values()
     ]

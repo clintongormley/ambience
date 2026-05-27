@@ -12,10 +12,18 @@ const availableActions: ActionInfo[] = [
     name: "set_light",
     description: "",
     domains: ["light"],
+    kind: "standard",
     target_params: [
       { name: "brightness", type: "int", required: true, min: 0, max: 100, unit: "%", description: "Percentage brightness, 0 for off" },
       { name: "transition", type: "number", required: false, min: 0, unit: "s", description: "Seconds" },
     ],
+  },
+  {
+    name: "script",
+    description: "",
+    domains: [],
+    kind: "script",
+    target_params: [],
   },
 ];
 
@@ -663,6 +671,172 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
 
     expect((el as any)._draft.name).toBe("second");
+  });
+});
+
+describe("ambience-rule-editor — script-action support", () => {
+  let el: any;
+  afterEach(() => { el?.remove(); });
+
+  test("renders an action-type picker exposing both standard and script kinds", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const picker = el.shadowRoot.querySelector(".action-type-picker") as HTMLElement;
+    expect(picker).toBeTruthy();
+    const select = picker.querySelector("select") as HTMLSelectElement;
+    const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
+    expect(values).toContain("set_light");
+    expect(values).toContain("script");
+  });
+
+  test("selecting 'script' in the action-type picker and clicking + Add creates a script slot", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const picker = el.shadowRoot.querySelector(".action-type-picker") as HTMLElement;
+    const select = picker.querySelector("select") as HTMLSelectElement;
+    select.value = "script";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    const addBtn = el.shadowRoot.querySelector(".add-action") as HTMLButtonElement;
+    addBtn.click();
+    await el.updateComplete;
+    // _draft.actions[0].action should be "script"
+    expect(el._draft.actions[0].action).toBe("script");
+  });
+
+  test("a script-kind slot renders <ambience-script-action-slot> and NOT the legacy target picker", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "script", script: "script.foo", entity_ids: [], params: {} }],
+    });
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    slot.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(slot.querySelector("ambience-script-action-slot")).toBeTruthy();
+    // Legacy direct target picker must not render — it's owned by the script slot now.
+    expect(slot.querySelector(":scope > .body > ambience-target-picker")).toBeNull();
+  });
+
+  test("a standard slot still renders the legacy target picker", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp_a"], params: { brightness: 50 } }],
+    });
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    slot.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(slot.querySelector("ambience-target-picker")).toBeTruthy();
+    expect(slot.querySelector("ambience-script-action-slot")).toBeNull();
+  });
+
+  test("script-changed event from the slot updates the draft's script field and resets entity_ids/params", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "script", entity_ids: ["light.lamp_a"], params: { brightness: 50 } }],
+    });
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    slot.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const scriptSlot = slot.querySelector("ambience-script-action-slot")!;
+    scriptSlot.dispatchEvent(new CustomEvent("script-changed", {
+      detail: { script: "script.bar" }, bubbles: true, composed: true,
+    }));
+    await el.updateComplete;
+    expect(el._draft.actions[0].script).toBe("script.bar");
+    expect(el._draft.actions[0].entity_ids).toEqual([]);
+    expect(el._draft.actions[0].params).toEqual({});
+  });
+
+  test("entity-ids-changed from the script slot updates the draft", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "script", script: "script.foo", entity_ids: [], params: {} }],
+    });
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    slot.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const scriptSlot = slot.querySelector("ambience-script-action-slot")!;
+    scriptSlot.dispatchEvent(new CustomEvent("entity-ids-changed", {
+      detail: { entityIds: ["light.lamp_a", "light.lamp_b"] }, bubbles: true, composed: true,
+    }));
+    await el.updateComplete;
+    expect(el._draft.actions[0].entity_ids).toEqual(["light.lamp_a", "light.lamp_b"]);
+  });
+
+  test("params-changed from the script slot updates the draft", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "script", script: "script.foo", entity_ids: [], params: {} }],
+    });
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    slot.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const scriptSlot = slot.querySelector("ambience-script-action-slot")!;
+    scriptSlot.dispatchEvent(new CustomEvent("params-changed", {
+      detail: { params: { brightness: 75 } }, bubbles: true, composed: true,
+    }));
+    await el.updateComplete;
+    expect(el._draft.actions[0].params).toEqual({ brightness: 75 });
+  });
+
+  test("_validationError reports an error for a script slot with no script chosen", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "script", entity_ids: [], params: {} }],
+    });
+    expect(el._validationError({ kind: "action", idx: 0 })).toBeTruthy();
+  });
+
+  test("_validationError accepts a script slot with `script` set even when entity_ids is empty", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "script", script: "script.foo", entity_ids: [], params: {} }],
+    });
+    // hass.services has no script.foo, so missing-metadata branch must accept.
+    expect(el._validationError({ kind: "action", idx: 0 })).toBeNull();
+  });
+
+  test("_validationError accepts a script slot when all required fields are populated", async () => {
+    // Provide script.foo metadata with a required field that IS populated.
+    const hass2 = {
+      ...hass,
+      services: { script: { foo: { fields: { msg: { required: true } } } } },
+    };
+    const el2: any = document.createElement("ambience-rule-editor");
+    el2.matchers = matchers;
+    el2.availableActions = availableActions;
+    el2.periods = periods;
+    el2.hass = hass2;
+    el2.scope = { kind: "area", id: "living_room" };
+    el2.rule = {
+      name: "t", when: {},
+      actions: [{ action: "script", script: "script.foo", entity_ids: [], params: { msg: "hi" } }],
+    };
+    el2.open = true;
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    expect(el2._validationError({ kind: "action", idx: 0 })).toBeNull();
+    el2.remove();
+  });
+
+  test("_validationError rejects a script slot whose required field is missing", async () => {
+    const hass2 = {
+      ...hass,
+      services: { script: { foo: { fields: { msg: { required: true } } } } },
+    };
+    const el2: any = document.createElement("ambience-rule-editor");
+    el2.matchers = matchers;
+    el2.availableActions = availableActions;
+    el2.periods = periods;
+    el2.hass = hass2;
+    el2.scope = { kind: "area", id: "living_room" };
+    el2.rule = {
+      name: "t", when: {},
+      actions: [{ action: "script", script: "script.foo", entity_ids: [], params: {} }],
+    };
+    el2.open = true;
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    expect(el2._validationError({ kind: "action", idx: 0 })).toBeTruthy();
+    el2.remove();
   });
 });
 

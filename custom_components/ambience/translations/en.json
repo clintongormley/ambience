@@ -44,7 +44,8 @@
     "script": "Script"
   },
   "action": {
-    "set_light": "Set light"
+    "set_light": "Set light",
+    "script": "Run script"
   },
   "anchor": {
     "dawn": "Dawn",
@@ -164,7 +165,16 @@
     "arguments": "Arguments",
     "form": "Form",
     "script": "Script",
-    "yaml": "YAML"
+    "yaml": "YAML",
+    "script_entity": "Script",
+    "pick_script": "— select a script —",
+    "script_not_found_prefix": "Script",
+    "script_not_found_suffix": "not found. It may have been removed.",
+    "script_no_parameters": "This script has no parameters.",
+    "script_required": "Please pick a script.",
+    "no_script_chosen": "(not selected)",
+    "yaml_must_be_object": "Top-level value must be a mapping.",
+    "invalid_yaml": "Invalid YAML."
   },
   "day_summary": {
     "any": "any",

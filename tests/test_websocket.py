@@ -94,6 +94,73 @@ async def test_actions_list(hass: HomeAssistant, installed, hass_ws_client) -> N
     assert {"brightness", "transition"} <= param_names
 
 
+async def test_actions_list_includes_kind(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/actions/list")
+    assert resp["success"] is True
+    by_name = {a["name"]: a for a in resp["result"]}
+    assert by_name["set_light"]["kind"] == "standard"
+    assert by_name["script"]["kind"] == "script"
+
+
+async def test_area_save_accepts_valid_script_action(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    config = {
+        "auto_sort": True,
+        "rules": [
+            {
+                "when": {"scene": "movie"},
+                "actions": [
+                    {
+                        "action": "script",
+                        "script": "script.foo",
+                        "entity_ids": ["light.a"],
+                        "params": {"x": 1},
+                    }
+                ],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert resp["success"] is True
+    assert resp["result"]["ok"] is True
+
+
+async def test_area_save_rejects_script_action_missing_script(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    config = {
+        "auto_sort": True,
+        "rules": [
+            {
+                "when": {"scene": "movie"},
+                "actions": [
+                    {
+                        "action": "script",
+                        "script": "",
+                        "entity_ids": [],
+                        "params": {},
+                    }
+                ],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "script" in resp["error"]["message"]
+
+
 async def test_area_get_unknown(hass: HomeAssistant, installed, hass_ws_client) -> None:
     """area/get errors when the area_id is not in HA's registry at all."""
     resp = await _ws_send(hass_ws_client, type="ambience/area/get", area_id="nope")

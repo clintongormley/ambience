@@ -274,3 +274,59 @@ async def test_snapshot_empty_when_no_script_predicates(hass: HomeAssistant) -> 
     _install_store(hass, {"a": {"rules": [{"when": {"state": {"x": 1}}}]}})
     snap = await ScriptMatcher(hass=hass).snapshot(hass)
     assert snap.results == {}
+
+
+async def test_snapshot_reuses_cached_result_within_ttl(hass: HomeAssistant) -> None:
+    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.cached"}}}]}})
+    spy = _install_service(hass, "script", "cached", response={"match": True})
+
+    m = ScriptMatcher(hass=hass)
+    # Long TTL so the second tick reuses the first call's result.
+    m._ttl_seconds = 60.0
+
+    await m.snapshot(hass)
+    await m.snapshot(hass)
+    assert spy.call_count == 1  # second snapshot hit the cache
+
+
+async def test_snapshot_recalls_after_ttl_expiry(hass: HomeAssistant, monkeypatch) -> None:
+    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.expires"}}}]}})
+    spy = _install_service(hass, "script", "expires", response={"match": True})
+
+    m = ScriptMatcher(hass=hass)
+    m._ttl_seconds = 0.1
+
+    fake_now = [1000.0]
+    monkeypatch.setattr(
+        "custom_components.ambience.matchers.script._monotonic", lambda: fake_now[0]
+    )
+
+    await m.snapshot(hass)
+    fake_now[0] += 0.05
+    await m.snapshot(hass)  # still within TTL
+    assert spy.call_count == 1
+    fake_now[0] += 0.2  # past TTL
+    await m.snapshot(hass)
+    assert spy.call_count == 2
+
+
+async def test_snapshot_caches_per_args(hass: HomeAssistant) -> None:
+    _install_store(
+        hass,
+        {
+            "a": {
+                "rules": [
+                    {"when": {"script": {"script": "script.same", "args": {"k": 1}}}},
+                    {"when": {"script": {"script": "script.same", "args": {"k": 2}}}},
+                ],
+            },
+        },
+    )
+    spy = _install_service(hass, "script", "same", response={"match": True})
+
+    m = ScriptMatcher(hass=hass)
+    m._ttl_seconds = 60.0
+    await m.snapshot(hass)
+    await m.snapshot(hass)
+    # Two distinct arg-sets => two calls on first snapshot; second snapshot cached.
+    assert spy.call_count == 2

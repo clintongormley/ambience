@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
+from time import monotonic as _monotonic
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -54,8 +55,12 @@ class ScriptMatcher:
     # deliberate, opaque user constraint — semantically very specific.
     priority = 25
 
+    _ttl_seconds: float = 2.0
+
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
+        # {cache_key: (result, expires_at_monotonic_s)}
+        self._cache: dict[str, tuple[bool, float]] = {}
 
     # --- protocol stubs ----------------------------------------------------
 
@@ -139,18 +144,25 @@ class ScriptMatcher:
 
     async def snapshot(self, hass: HomeAssistant) -> ScriptSnapshot:
         pairs = self._collect_pairs()
-        if not pairs:
-            return ScriptSnapshot(results={})
-        results = await asyncio.gather(
-            *[self._call_one(hass, script, args_json) for script, args_json in pairs],
-            return_exceptions=False,
-        )
-        return ScriptSnapshot(
-            results={
-                _cache_key(script, json.loads(args_json)): r
-                for (script, args_json), r in zip(pairs, results, strict=True)
-            }
-        )
+        results: dict[str, bool] = {}
+        misses: list[tuple[str, str, str]] = []  # (script, args_json, cache_key)
+        now = _monotonic()
+        for script, args_json in pairs:
+            key = _cache_key(script, json.loads(args_json))
+            cached = self._cache.get(key)
+            if cached is not None and cached[1] > now:
+                results[key] = cached[0]
+            else:
+                misses.append((script, args_json, key))
+        if misses:
+            fetched = await asyncio.gather(
+                *[self._call_one(hass, script, args_json) for script, args_json, _ in misses],
+            )
+            expires_at = _monotonic() + self._ttl_seconds
+            for (_, _, key), value in zip(misses, fetched, strict=True):
+                self._cache[key] = (value, expires_at)
+                results[key] = value
+        return ScriptSnapshot(results=results)
 
     async def _call_one(self, hass: HomeAssistant, script: str, args_json: str) -> bool:
         """Call one script.* service; return True iff response is `{"match": True}`.

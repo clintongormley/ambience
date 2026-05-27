@@ -3,12 +3,28 @@
 from __future__ import annotations
 
 import pytest
+from homeassistant.core import HomeAssistant
 
+from custom_components.ambience.const import DATA_STORE, DOMAIN
 from custom_components.ambience.matchers.script import (
     ScriptMatcher,
     ScriptSnapshot,
     _cache_key,
 )
+
+
+class _StoreStub:
+    """Minimal store stub exposing `areas()` for the snapshot collector."""
+
+    def __init__(self, areas: dict[str, dict]) -> None:
+        self._areas = areas
+
+    def areas(self) -> dict[str, dict]:
+        return self._areas
+
+
+def _install_store(hass: HomeAssistant, areas: dict[str, dict]) -> None:
+    hass.data.setdefault(DOMAIN, {})[DATA_STORE] = _StoreStub(areas)
 
 
 def test_protocol_fields() -> None:
@@ -96,3 +112,51 @@ def test_matches_returns_false_on_malformed_predicate() -> None:
     snap = ScriptSnapshot(results={})
     assert ScriptMatcher().matches("nope", snap) is False
     assert ScriptMatcher().matches({"script": 42}, snap) is False
+
+
+def test_collect_pairs_walks_all_areas_and_rules(hass: HomeAssistant) -> None:
+    _install_store(
+        hass,
+        {
+            "kitchen": {
+                "rules": [
+                    {"when": {"script": {"script": "script.a", "args": {"k": 1}}}},
+                    {"when": {"script": {"script": "script.a", "args": {"k": 1}}}},  # dup
+                ],
+            },
+            "living": {
+                "rules": [
+                    {"when": {"script": {"script": "script.b"}}},
+                    {"when": {"state": {"some": "thing"}}},  # skip
+                    {"when": {"script": None}},  # wildcard, skip
+                ],
+            },
+        },
+    )
+    pairs = ScriptMatcher(hass=hass)._collect_pairs()
+    assert sorted(pairs) == [
+        ("script.a", '{"k":1}'),
+        ("script.b", "{}"),
+    ]
+
+
+def test_collect_pairs_no_store_returns_empty(hass: HomeAssistant) -> None:
+    # No store installed under DOMAIN — matcher must not blow up.
+    assert ScriptMatcher(hass=hass)._collect_pairs() == []
+
+
+def test_collect_pairs_skips_malformed_predicates(hass: HomeAssistant) -> None:
+    _install_store(
+        hass,
+        {
+            "kitchen": {
+                "rules": [
+                    {"when": {"script": "not a dict"}},
+                    {"when": {"script": {"script": 42}}},
+                    {"when": {"script": {"script": "script.ok"}}},
+                ],
+            },
+        },
+    )
+    pairs = ScriptMatcher(hass=hass)._collect_pairs()
+    assert pairs == [("script.ok", "{}")]

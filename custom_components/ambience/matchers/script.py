@@ -94,3 +94,38 @@ class ScriptMatcher:
         if not isinstance(args, dict):
             return False
         return snapshot.results.get(_cache_key(script, args), False) is True
+
+    # --- snapshot orchestration -------------------------------------------
+
+    def _collect_pairs(self) -> list[tuple[str, str]]:
+        """Walk every area's rules and return distinct (script, args-json) pairs
+        carried by `when.script` predicates. Malformed predicates are skipped.
+        Order is insertion order; duplicates are removed."""
+        hass = self._hass
+        if hass is None:
+            return []
+        from ..const import DATA_STORE, DOMAIN
+
+        store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+        if store is None:
+            return []
+        seen: set[tuple[str, str]] = set()
+        pairs: list[tuple[str, str]] = []
+        for area_cfg in store.areas().values():
+            for rule in area_cfg.get("rules", []):
+                pred = rule.get("when", {}).get("script")
+                if not isinstance(pred, dict):
+                    continue
+                script = pred.get("script")
+                if not isinstance(script, str):
+                    continue
+                args = pred.get("args") or {}
+                if not isinstance(args, dict):
+                    continue
+                args_json = json.dumps(args, sort_keys=True, separators=(",", ":"))
+                key = (script, args_json)
+                if key in seen:
+                    continue
+                seen.add(key)
+                pairs.append(key)
+        return pairs

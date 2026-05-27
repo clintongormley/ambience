@@ -40,7 +40,8 @@
   "matcher": {
     "scene": "Scene",
     "time_of_day": "Time of day",
-    "state": "Entity state"
+    "state": "Entity state",
+    "script": "Script"
   },
   "action": {
     "set_light": "Set light"
@@ -156,7 +157,11 @@
     "weather_entity": "Weather entity",
     "weather_warning_text": "rules now reference an unconfigured weather entity:",
     "groups": "Groups",
-    "add_group": "+ Add group"
+    "add_group": "+ Add group",
+    "arguments": "Arguments",
+    "form": "Form",
+    "script": "Script",
+    "yaml": "YAML"
   },
   "day_summary": {
     "any": "any",

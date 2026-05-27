@@ -21,11 +21,22 @@ export type ActionSpec = {
   script?: string;
 };
 
+export type SwitchDefaults = {
+  name: string;
+  auto_on_delay_seconds: number;
+};
+
+export type ScopeSwitchOverride = {
+  name: string | null;
+  auto_on_delay_seconds: number | null;
+};
+
 export type AreaConfig = {
   // Ordered list — array order is authoritative for the engine.
   rules: Rule[];
   // When true the backend keeps `rules` sorted on every save.
   auto_sort: boolean;
+  switch?: ScopeSwitchOverride & { off_at?: string | null };
 };
 
 // `name` is resolved by the backend from HA's area registry, not stored.
@@ -71,6 +82,7 @@ export type DryRunResult = {
   rule_name: string | null;
   actions: ActionSpec[];
   snapshots_described: Record<string, string | null>;
+  switch_state: "on" | "off" | "unknown";
 };
 
 export type SunAnchor =

@@ -14,6 +14,7 @@ import type {
   PeriodStoreView,
   Scope,
   ScopeConfig,
+  SwitchDefaults,
   WeatherConfig,
   WeatherGroup,
 } from "./types.js";
@@ -187,4 +188,60 @@ export async function getKnownStates(
   entity_id: string,
 ): Promise<{ states: string[] }> {
   return hass.callWS({ type: "ambience/state/known_states", entity_id });
+}
+
+export async function getSwitchDefaults(hass: HassConnection): Promise<SwitchDefaults> {
+  return hass.callWS({ type: "ambience/switch_defaults/list" });
+}
+
+export async function saveSwitchDefaults(
+  hass: HassConnection,
+  name: string,
+  auto_on_delay_seconds: number,
+): Promise<{ ok: true }> {
+  return hass.callWS({
+    type: "ambience/switch_defaults/save",
+    name,
+    auto_on_delay_seconds,
+  });
+}
+
+export async function saveHouseSwitch(
+  hass: HassConnection,
+  name: string | null,
+  auto_on_delay_seconds: number | null,
+): Promise<{ ok: true }> {
+  return hass.callWS({
+    type: "ambience/house/switch/save",
+    name,
+    auto_on_delay_seconds,
+  });
+}
+
+export async function saveFloorSwitch(
+  hass: HassConnection,
+  floor_id: string,
+  name: string | null,
+  auto_on_delay_seconds: number | null,
+): Promise<{ ok: true }> {
+  return hass.callWS({
+    type: "ambience/floor/switch/save",
+    floor_id,
+    name,
+    auto_on_delay_seconds,
+  });
+}
+
+export async function saveAreaSwitch(
+  hass: HassConnection,
+  area_id: string,
+  name: string | null,
+  auto_on_delay_seconds: number | null,
+): Promise<{ ok: true }> {
+  return hass.callWS({
+    type: "ambience/area/switch/save",
+    area_id,
+    name,
+    auto_on_delay_seconds,
+  });
 }

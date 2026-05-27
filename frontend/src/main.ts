@@ -9,7 +9,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import type { HassConnection } from "./api.js";
 import { localize } from "./i18n.js";
 import { watchHaComponents } from "./ha-components.js";
-import "./views/areas-list-view.js";
+import "./views/scopes-view.js";
 import "./views/configuration-view.js";
 
 type PanelView = "areas" | "configuration";
@@ -83,7 +83,7 @@ export class AmbiencePanel extends LitElement {
         </nav>
       </header>
       ${this._view === "areas"
-        ? html`<ambience-areas-list .hass=${this.hass}></ambience-areas-list>`
+        ? html`<ambience-scopes-view .hass=${this.hass}></ambience-scopes-view>`
         : html`<ambience-configuration-view .hass=${this.hass}></ambience-configuration-view>`}
     `;
   }

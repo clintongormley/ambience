@@ -35,6 +35,14 @@ pytest
 
 Configure Ambience via the **Ambience** panel (sidebar, admin-only). Add an area, define scene names, pick which matchers participate, then author rules. Activating a scene picks the first matching rule from an ordered list (based on time of day, weather, etc.) and runs its actions.
 
+### Per-scope switches and cascade
+
+Each scope (the house, every HA floor, and every HA area) gets its own
+`switch.*_ambience` entity. `ambience.apply_scene` is a no-op when any
+switch in the cascade (house → floor → area) is off. Switches auto-turn-on
+after a configurable delay (default 2h; 0 disables). Defaults and per-scope
+overrides live in **Settings → Ambience**.
+
 ### Service: `ambience.apply_scene`
 
 ```yaml
@@ -71,3 +79,8 @@ All commands are admin-only.
 | `ambience/actions/list` | – | actions + descriptions + target param schemas |
 | `ambience/validate` | `{config}` | `{ok: true}` or error |
 | `ambience/dry_run` | `{area_id, scene}` | resolved-rule preview |
+| `ambience/switch_defaults/list` | – | `{name, auto_on_delay_seconds}` |
+| `ambience/switch_defaults/save` | `{name, auto_on_delay_seconds}` | `{ok: true}` |
+| `ambience/house/switch/save` | `{name\|null, auto_on_delay_seconds\|null}` | `{ok: true}` |
+| `ambience/floor/switch/save` | `{floor_id, name\|null, auto_on_delay_seconds\|null}` | `{ok: true}` |
+| `ambience/area/switch/save` | `{area_id, name\|null, auto_on_delay_seconds\|null}` | `{ok: true}` |

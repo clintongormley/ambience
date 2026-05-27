@@ -166,3 +166,20 @@ export type StatePredicate = StateExpr | null;
 export type ScriptPredicate =
   | null
   | { script: string; args?: Record<string, unknown> };
+
+// --- scope ---------------------------------------------------------------
+
+// Scope = the activation surface for a rule list. Area: HA area. Floor:
+// HA floor. House: singleton — id is omitted.
+export type Scope =
+  | { kind: "area"; id: string }
+  | { kind: "floor"; id: string }
+  | { kind: "house" };
+
+export type FloorListItem = {
+  floor_id: string;
+  name: string;
+};
+
+// Storage shape is identical for area, floor, and house: alias for clarity.
+export type ScopeConfig = AreaConfig;

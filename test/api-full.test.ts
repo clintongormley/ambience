@@ -8,7 +8,10 @@ import {
   getArea,
   saveArea,
   listMatchers,
-  listActions,
+  listExposedActions,
+  listServices,
+  getServiceSchema,
+  saveExposedActions,
   validateConfig,
   dryRun,
   listFloors,
@@ -35,8 +38,19 @@ function makeFakeHass() {
     if (msg.type === "ambience/matchers/list") {
       return [{ name: "scene" }];
     }
-    if (msg.type === "ambience/actions/list") {
-      return [{ name: "set_light", domains: ["light"] }];
+    if (msg.type === "ambience/exposed_actions/list") {
+      return [
+        { id: "light.turn_on", label: "", visible_fields: [], locked_values: {} },
+      ];
+    }
+    if (msg.type === "ambience/exposed_actions/save") {
+      return { ok: true, warnings: [] };
+    }
+    if (msg.type === "ambience/services/list") {
+      return [{ id: "light.turn_on", description: "Turn on", target: null }];
+    }
+    if (msg.type === "ambience/services/get_schema") {
+      return { fields: { brightness_pct: { selector: { number: {} } } }, target: null };
     }
     if (msg.type === "ambience/validate") {
       return { ok: true };
@@ -89,12 +103,50 @@ describe("API: listMatchers", () => {
   });
 });
 
-describe("API: listActions", () => {
-  test("sends correct WS message and returns actions", async () => {
+describe("API: listExposedActions", () => {
+  test("sends correct WS message and returns exposed actions", async () => {
     const { callWS, sent } = makeFakeHass();
-    const res = await listActions({ callWS } as any);
-    expect(sent[0]).toEqual({ type: "ambience/actions/list" });
-    expect(res).toEqual([{ name: "set_light", domains: ["light"] }]);
+    const res = await listExposedActions({ callWS } as any);
+    expect(sent[0]).toEqual({ type: "ambience/exposed_actions/list" });
+    expect(res).toEqual([
+      { id: "light.turn_on", label: "", visible_fields: [], locked_values: {} },
+    ]);
+  });
+});
+
+describe("API: saveExposedActions", () => {
+  test("sends actions list and returns warnings result", async () => {
+    const { callWS, sent } = makeFakeHass();
+    const actions = [
+      { id: "light.turn_on", label: "", visible_fields: ["brightness_pct"], locked_values: {} },
+    ];
+    const res = await saveExposedActions({ callWS } as any, actions);
+    expect(sent[0]).toEqual({ type: "ambience/exposed_actions/save", actions });
+    expect(res).toEqual({ ok: true, warnings: [] });
+  });
+});
+
+describe("API: listServices", () => {
+  test("sends correct WS message and returns the service catalog", async () => {
+    const { callWS, sent } = makeFakeHass();
+    const res = await listServices({ callWS } as any);
+    expect(sent[0]).toEqual({ type: "ambience/services/list" });
+    expect(res).toEqual([{ id: "light.turn_on", description: "Turn on", target: null }]);
+  });
+});
+
+describe("API: getServiceSchema", () => {
+  test("sends the service id and returns its schema", async () => {
+    const { callWS, sent } = makeFakeHass();
+    const res = await getServiceSchema({ callWS } as any, "light.turn_on");
+    expect(sent[0]).toEqual({
+      type: "ambience/services/get_schema",
+      service: "light.turn_on",
+    });
+    expect(res).toEqual({
+      fields: { brightness_pct: { selector: { number: {} } } },
+      target: null,
+    });
   });
 });
 

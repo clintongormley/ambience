@@ -80,32 +80,10 @@ export class AmbienceScopesView extends LitElement {
       color: var(--error-color, #d32f2f);
       margin: 0.5rem 0;
     }
-    section {
-      margin-bottom: 1rem;
-    }
-    .section-header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 0.25rem;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 1.05rem;
-      color: var(--primary-text-color, inherit);
-      border-bottom: 1px solid var(--divider-color, #e0e0e0);
-    }
-    .section-chevron {
-      width: 1em;
-      color: var(--secondary-text-color, #888);
-      transition: transform 0.1s;
-    }
-    .section-chevron.open {
-      transform: rotate(90deg);
-    }
     ul {
       list-style: none;
       padding: 0;
-      margin: 0.5rem 0 0 0;
+      margin: 0;
     }
     li.scope-row {
       border: 1px solid var(--divider-color, #e0e0e0);
@@ -163,12 +141,6 @@ export class AmbienceScopesView extends LitElement {
   @state() private _weatherConfig?: WeatherConfig;
   // _expanded keys: "area:<id>" | "floor:<id>" | "house"
   @state() private _expanded = new Set<string>();
-  // _sectionsExpanded keys: "house" | "floors" | "areas"
-  // All three sections default to expanded so the panel doesn't open into
-  // three empty headers — users immediately see the House row, area list,
-  // and (when configured) floors. The "floors" entry is inert when
-  // `_floors.length === 0` because the section is hidden entirely.
-  @state() private _sectionsExpanded = new Set<string>(["house", "floors", "areas"]);
   @state() private _error = "";
   @state() private _editing: EditingState | null = null;
   private _unsubArea?: () => void;
@@ -385,13 +357,6 @@ export class AmbienceScopesView extends LitElement {
     this._expanded = next;
   }
 
-  private _toggleSection(section: "house" | "floors" | "areas") {
-    const next = new Set(this._sectionsExpanded);
-    if (next.has(section)) next.delete(section);
-    else next.add(section);
-    this._sectionsExpanded = next;
-  }
-
   // --- auto_sort -----------------------------------------------------------
 
   private _toggleAutoSort(scope: Scope, on: boolean) {
@@ -503,11 +468,48 @@ export class AmbienceScopesView extends LitElement {
   // --- render --------------------------------------------------------------
 
   override render() {
+    const floorPrefix = localize(this.hass, "ui.scope_floor_prefix", "Floor: ");
+    const areaPrefix = localize(this.hass, "ui.scope_area_prefix", "Area: ");
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
-      ${this._renderHouseSection()}
-      ${this._floors.length > 0 ? this._renderFloorsSection() : ""}
-      ${this._renderAreasSection()}
+      <ul>
+        ${this._renderScopeRow(
+          { kind: "house" },
+          localize(this.hass, "ui.scope_global", "Global"),
+          this._house,
+          "house",
+        )}
+        ${this._floors.map((f) => {
+          const cfg = this._floorConfigs.get(f.floor_id);
+          if (!cfg) return html``;
+          return this._renderScopeRow(
+            { kind: "floor", id: f.floor_id },
+            `${floorPrefix}${f.name}`,
+            cfg,
+            "floor",
+          );
+        })}
+        ${this._areas.length === 0
+          ? html`<li>
+              <p class="empty">
+                ${localize(
+                  this.hass,
+                  "ui.no_areas",
+                  "No areas found in Home Assistant.",
+                )}
+              </p>
+            </li>`
+          : this._areas.map((a) => {
+              const cfg = this._areaConfigs.get(a.area_id);
+              if (!cfg) return html``;
+              return this._renderScopeRow(
+                { kind: "area", id: a.area_id },
+                `${areaPrefix}${a.name}`,
+                cfg,
+                "area",
+              );
+            })}
+      </ul>
 
       <ambience-rule-editor
         ?open=${this._editing !== null}
@@ -523,104 +525,6 @@ export class AmbienceScopesView extends LitElement {
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}
       ></ambience-rule-editor>
-    `;
-  }
-
-  private _renderSectionHeader(
-    section: "house" | "floors" | "areas",
-    title: string,
-  ) {
-    const open = this._sectionsExpanded.has(section);
-    return html`
-      <div
-        class="section-header"
-        data-section=${section}
-        @click=${() => this._toggleSection(section)}
-      >
-        <span class="section-chevron ${open ? "open" : ""}">▶</span>
-        <span>${title}</span>
-      </div>
-    `;
-  }
-
-  private _renderHouseSection() {
-    const open = this._sectionsExpanded.has("house");
-    const scope: Scope = { kind: "house" };
-    return html`
-      <section data-section="house">
-        ${this._renderSectionHeader(
-          "house",
-          localize(this.hass, "ui.section_house", "House"),
-        )}
-        ${open
-          ? html`<ul>${this._renderScopeRow(
-              scope,
-              localize(this.hass, "ui.section_house", "House"),
-              this._house,
-              "house",
-            )}</ul>`
-          : ""}
-      </section>
-    `;
-  }
-
-  private _renderFloorsSection() {
-    const open = this._sectionsExpanded.has("floors");
-    return html`
-      <section data-section="floors">
-        ${this._renderSectionHeader(
-          "floors",
-          localize(this.hass, "ui.section_floors", "Floors"),
-        )}
-        ${open
-          ? html`<ul>
-              ${this._floors.map((f) => {
-                const cfg = this._floorConfigs.get(f.floor_id);
-                if (!cfg) return html``;
-                return this._renderScopeRow(
-                  { kind: "floor", id: f.floor_id },
-                  f.name,
-                  cfg,
-                  "floor",
-                );
-              })}
-            </ul>`
-          : ""}
-      </section>
-    `;
-  }
-
-  private _renderAreasSection() {
-    const open = this._sectionsExpanded.has("areas");
-    return html`
-      <section data-section="areas">
-        ${this._renderSectionHeader(
-          "areas",
-          localize(this.hass, "ui.section_areas", "Areas"),
-        )}
-        ${open
-          ? this._areas.length === 0
-            ? html`<p class="empty">
-                ${localize(
-                  this.hass,
-                  "ui.no_areas",
-                  "No areas found in Home Assistant.",
-                )}
-              </p>`
-            : html`<ul>
-                ${this._areas.map((a) => {
-                  const cfg = this._areaConfigs.get(a.area_id);
-                  if (!cfg) return html``;
-                  return this._renderScopeRow(
-                    { kind: "area", id: a.area_id },
-                    a.name,
-                    cfg,
-                    "area",
-                  );
-                })}
-              </ul>`
-          : ""}
-      </section>
     `;
   }
 

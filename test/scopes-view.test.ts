@@ -115,76 +115,60 @@ describe("ambience-scopes-view", () => {
     el?.remove();
   });
 
-  // --- section headers ----------------------------------------------------
+  // --- row labels ---------------------------------------------------------
 
-  test("renders the House section header", async () => {
+  test("renders the Global row for the house scope", async () => {
     el = await mount();
-    const headers = Array.from(
-      el.shadowRoot.querySelectorAll(".section-header"),
-    ).map((h: any) => h.textContent?.trim());
-    expect(headers.some((h) => h?.includes("House"))).toBe(true);
+    const houseRow = el.shadowRoot.querySelector(".scope-row.house");
+    expect(houseRow).toBeTruthy();
+    expect(houseRow.textContent).toContain("Global");
   });
 
-  test("renders the Areas section header", async () => {
+  test("renders one row per HA area with 'Area: ' prefix", async () => {
     el = await mount();
-    const headers = Array.from(
-      el.shadowRoot.querySelectorAll(".section-header"),
-    ).map((h: any) => h.textContent?.trim());
-    expect(headers.some((h) => h?.includes("Areas"))).toBe(true);
+    expect(el.shadowRoot.textContent).toContain("Area: Living Room");
+    expect(el.shadowRoot.textContent).toContain("Area: Bedroom");
   });
 
-  test("renders the Floors section header when floors exist", async () => {
+  test("renders one row per HA floor with 'Floor: ' prefix", async () => {
     el = await mount();
-    const headers = Array.from(
-      el.shadowRoot.querySelectorAll(".section-header"),
-    ).map((h: any) => h.textContent?.trim());
-    expect(headers.some((h) => h?.includes("Floors"))).toBe(true);
+    expect(el.shadowRoot.textContent).toContain("Floor: Ground");
+    expect(el.shadowRoot.textContent).toContain("Floor: Upstairs");
   });
 
-  test("Floors section is hidden entirely when listFloors returns []", async () => {
+  test("no floor rows render when listFloors returns []", async () => {
     el = await mount({ floors: [] });
-    const headers = Array.from(
-      el.shadowRoot.querySelectorAll(".section-header"),
-    ).map((h: any) => h.textContent?.trim());
-    expect(headers.some((h) => h?.includes("Floors"))).toBe(false);
+    const floorRows = el.shadowRoot.querySelectorAll(".scope-row.floor");
+    expect(floorRows.length).toBe(0);
+  });
+
+  // --- ordering -----------------------------------------------------------
+
+  test("flat list order: Global first, then floors, then areas", async () => {
+    el = await mount();
+    const rows = Array.from(
+      el.shadowRoot.querySelectorAll(".scope-row"),
+    ) as HTMLElement[];
+    const kinds = rows.map((r) => {
+      if (r.classList.contains("house")) return "house";
+      if (r.classList.contains("floor")) return "floor";
+      return "area";
+    });
+    // House row first
+    expect(kinds[0]).toBe("house");
+    // All floors before any areas
+    const firstAreaIdx = kinds.indexOf("area");
+    const lastFloorIdx = kinds.lastIndexOf("floor");
+    expect(lastFloorIdx).toBeGreaterThan(0);
+    expect(firstAreaIdx).toBeGreaterThan(lastFloorIdx);
   });
 
   // --- house --------------------------------------------------------------
 
-  test("House section always shows exactly one row", async () => {
+  test("Exactly one house row is rendered", async () => {
     el = await mount();
-    // Sections default to expanded — no click needed
     const houseRows = el.shadowRoot.querySelectorAll(".scope-row.house");
     expect(houseRows.length).toBe(1);
-  });
-
-  // --- areas: regression of today's behaviour -----------------------------
-
-  test("renders one row per HA area", async () => {
-    el = await mount();
-    expect(el.shadowRoot.textContent).toContain("Living Room");
-    expect(el.shadowRoot.textContent).toContain("Bedroom");
-  });
-
-  test("renders one row per HA floor", async () => {
-    el = await mount();
-    expect(el.shadowRoot.textContent).toContain("Ground");
-    expect(el.shadowRoot.textContent).toContain("Upstairs");
-  });
-
-  // --- default-expanded sections -----------------------------------------
-
-  test("scopes-view defaults all three sections to expanded", async () => {
-    el = await mount();
-    // House row visible (not just header)
-    const houseRow = el.shadowRoot.querySelector(".scope-row.house");
-    expect(houseRow).toBeTruthy();
-    // Areas section shows actual area rows
-    const areaRows = el.shadowRoot.querySelectorAll(".scope-row.area");
-    expect(areaRows.length).toBeGreaterThan(0);
-    // Floors section shows floor rows when configured
-    const floorRows = el.shadowRoot.querySelectorAll(".scope-row.floor");
-    expect(floorRows.length).toBeGreaterThan(0);
   });
 
   // --- mutation routing ---------------------------------------------------

@@ -265,13 +265,14 @@ export class AmbienceScriptActionSlot extends LitElement {
   private _renderTargetPicker(meta: ScriptServiceMeta) {
     if (!meta.target || Object.keys(meta.target).length === 0) return "";
     const entities = this._targetEntities(meta);
+    const label = localize(this.hass, "ui.target", "Target");
     return html`
       <div class="target-picker">
-        <label>${localize(this.hass, "ui.target", "Target")}</label>
         <ambience-target-picker
           .hass=${this.hass}
           .entities=${entities}
           .value=${this.entityIds}
+          .label=${label}
           @value-changed=${this._onTargetChanged}
         ></ambience-target-picker>
       </div>
@@ -367,16 +368,14 @@ export class AmbienceScriptActionSlot extends LitElement {
 
   // --- YAML mode -----------------------------------------------------------
 
-  /**
-   * Format the combined `{ entity_id, ...params }` object as JSON (which is
-   * a strict subset of YAML, so `<ha-yaml-editor>` and any YAML parser will
-   * accept it). Real HA replaces this with native YAML round-tripping inside
-   * `<ha-yaml-editor>`.
-   */
-  private _serializeYaml(): string {
+  private _combinedObject(): Record<string, unknown> {
     const combined: Record<string, unknown> = { ...this.params };
     if (this.entityIds.length > 0) combined.entity_id = this.entityIds;
-    return JSON.stringify(combined, null, 2);
+    return combined;
+  }
+
+  private _serializeYaml(): string {
+    return JSON.stringify(this._combinedObject(), null, 2);
   }
 
   private _onYamlInput = (e: Event) => {
@@ -428,23 +427,20 @@ export class AmbienceScriptActionSlot extends LitElement {
   /* v8 ignore stop */
 
   private _renderYamlEditor() {
-    const value = this._serializeYaml();
-    /* v8 ignore start -- ha-yaml-editor not registered in jsdom */
     if (customElements.get("ha-yaml-editor")) {
       return html`
         <ha-yaml-editor
           .hass=${this.hass}
-          .value=${value}
+          .value=${this._combinedObject()}
           @value-changed=${this._onHaYamlChanged}
         ></ha-yaml-editor>
         ${this._yamlError ? html`<div class="yaml-error">${this._yamlError}</div>` : ""}
       `;
     }
-    /* v8 ignore stop */
     return html`
       <textarea
         spellcheck="false"
-        .value=${value}
+        .value=${this._serializeYaml()}
         @input=${this._onYamlInput}
       ></textarea>
       ${this._yamlError ? html`<div class="yaml-error">${this._yamlError}</div>` : ""}

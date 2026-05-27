@@ -266,4 +266,56 @@ describe("ambience-script-action-slot", () => {
     await el.updateComplete;
     expect(get()?.params).toEqual({ msg: "hello" });
   });
+
+  test("script slot does not wrap the target picker in its own <label>", async () => {
+    const hass = makeHass({
+      foo: { target: { entity: { domain: "light" } } },
+    });
+    el = await mount({ hass, script: "script.foo" });
+    const wrapper = el.shadowRoot.querySelector(".target-picker") as HTMLElement;
+    expect(wrapper).toBeTruthy();
+    expect(wrapper.querySelector("label")).toBeNull();
+  });
+
+  test("script slot passes a non-empty label down to the target picker", async () => {
+    const hass = makeHass({
+      foo: { target: { entity: { domain: "light" } } },
+    });
+    el = await mount({ hass, script: "script.foo" });
+    const picker = el.shadowRoot.querySelector("ambience-target-picker") as any;
+    expect(picker.label).toBeTruthy();
+    expect(picker.label).not.toBe("entity_id");
+    expect(picker.label).not.toBe("entity_ids");
+  });
+
+  test("ha-yaml-editor receives the combined object as .value (not a JSON string)", async () => {
+    class FakeHaYamlEditor extends HTMLElement {
+      private _value: unknown;
+      set value(v: unknown) { this._value = v; }
+      get value() { return this._value; }
+    }
+    if (!customElements.get("ha-yaml-editor")) {
+      customElements.define("ha-yaml-editor", FakeHaYamlEditor);
+    }
+    const hass = makeHass({
+      foo: { fields: { brightness: { selector: { number: {} } } } },
+    });
+    el = await mount({
+      hass,
+      script: "script.foo",
+      entityIds: ["light.lamp_a"],
+      params: { brightness: 50 },
+    });
+    const yamlBtn = Array.from(el.shadowRoot.querySelectorAll(".mode-toggle button"))
+      .find((b: any) => b.textContent.trim() === "YAML") as HTMLButtonElement;
+    yamlBtn.click();
+    await el.updateComplete;
+    const editor = el.shadowRoot.querySelector("ha-yaml-editor") as any;
+    expect(editor).toBeTruthy();
+    expect(typeof editor.value).toBe("object");
+    expect(editor.value).toEqual({
+      entity_id: ["light.lamp_a"],
+      brightness: 50,
+    });
+  });
 });

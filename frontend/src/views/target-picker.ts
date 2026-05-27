@@ -38,6 +38,10 @@ export class AmbienceTargetPicker extends LitElement {
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) entities: string[] = [];
   @property({ attribute: false }) value: string[] = [];
+  // When set, used as the inner ha-form field label. Default " " (a single
+  // space) is truthy but visually empty — without it, ha-form's entity
+  // selector falls back to rendering the schema name ("entity_ids").
+  @property() label = " ";
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -72,17 +76,13 @@ export class AmbienceTargetPicker extends LitElement {
         },
       },
     ];
-    // `.computeLabel` returning empty suppresses ha-form's per-field label
-    // (the outer "Target" label in rule-editor is enough). Setting
-    // `label: ""` on the schema doesn't suppress it — ha-form falls back to
-    // rendering the field NAME ("entity_ids"), which is what the user was
-    // seeing.
+    const label = this.label;
     return html`
       <ha-form
         .hass=${this.hass}
         .schema=${schema}
         .data=${{ entity_ids: this.value }}
-        .computeLabel=${() => ""}
+        .computeLabel=${() => label}
         @value-changed=${this._onHaFormChange}
       ></ha-form>
     `;

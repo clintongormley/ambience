@@ -119,7 +119,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_state_known_states)
 
 
-def _validate_area_config(hass: HomeAssistant, area_id: str, config: dict[str, Any]) -> None:
+def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise ValueError("config must be an object")
     config.pop("matchers", None)  # legacy field; dropped silently
@@ -249,7 +249,7 @@ async def _ws_area_save(
         )
         return
     try:
-        _validate_area_config(hass, area_id, msg["config"])
+        _validate_scope_config(hass, msg["config"])
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
@@ -279,7 +279,7 @@ async def _ws_validate(
     msg: dict[str, Any],
 ) -> None:
     try:
-        _validate_area_config(hass, area_id="_", config=msg["config"])
+        _validate_scope_config(hass, msg["config"])
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return

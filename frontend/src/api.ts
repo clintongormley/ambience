@@ -3,17 +3,20 @@
  */
 
 import type {
-  ActionInfo,
   AreaConfig,
   AreaListItem,
   DayConfig,
   DryRunResult,
+  ExposedAction,
+  ExposedActionWarning,
   FloorListItem,
   MatcherInfo,
   PeriodDef,
   PeriodStoreView,
   Scope,
   ScopeConfig,
+  ServiceInfo,
+  ServiceSchema,
   SwitchDefaults,
   WeatherConfig,
   WeatherGroup,
@@ -105,8 +108,26 @@ export async function listMatchers(hass: HassConnection): Promise<MatcherInfo[]>
   return hass.callWS({ type: "ambience/matchers/list" });
 }
 
-export async function listActions(hass: HassConnection): Promise<ActionInfo[]> {
-  return hass.callWS({ type: "ambience/actions/list" });
+export async function listExposedActions(hass: HassConnection): Promise<ExposedAction[]> {
+  return hass.callWS({ type: "ambience/exposed_actions/list" });
+}
+
+export async function saveExposedActions(
+  hass: HassConnection,
+  actions: ExposedAction[],
+): Promise<{ ok: true; warnings: ExposedActionWarning[] }> {
+  return hass.callWS({ type: "ambience/exposed_actions/save", actions });
+}
+
+export async function listServices(hass: HassConnection): Promise<ServiceInfo[]> {
+  return hass.callWS({ type: "ambience/services/list" });
+}
+
+export async function getServiceSchema(
+  hass: HassConnection,
+  service: string,
+): Promise<ServiceSchema> {
+  return hass.callWS({ type: "ambience/services/get_schema", service });
 }
 
 export async function validateConfig(

@@ -1,6 +1,6 @@
 import { describe, test, expect, afterEach } from "vitest";
 import "../frontend/src/views/rule-editor";
-import type { ActionInfo, MatcherInfo, Rule } from "../frontend/src/types";
+import type { ActionInfo, MatcherInfo, Rule, Scope } from "../frontend/src/types";
 
 const matchers: MatcherInfo[] = [
   { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
@@ -34,13 +34,16 @@ const hass = {
   },
 } as any;
 
-async function mount(rule: Rule | null, opts: { areaId?: string } = {}): Promise<any> {
+async function mount(
+  rule: Rule | null,
+  opts: { scope?: Scope; hass?: any } = {},
+): Promise<any> {
   const el: any = document.createElement("ambience-rule-editor");
   el.matchers = matchers;
   el.availableActions = availableActions;
   el.periods = periods;
-  el.hass = hass;
-  el.areaId = opts.areaId ?? "living_room";
+  el.hass = opts.hass ?? hass;
+  el.scope = opts.scope ?? { kind: "area", id: "living_room" };
   el.rule = rule;
   el.open = true;
   document.body.appendChild(el);
@@ -241,6 +244,40 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     expect(saved?.actions[0]?.params?.transition).toBeUndefined();
+  });
+
+  test("rule-editor passes floor-scope entities to the target picker", async () => {
+    // Floor "upstairs" contains the bedroom area; "downstairs" contains kitchen.
+    // light.up_a lives in bedroom → should be in scope.
+    // light.down_a lives in kitchen → should NOT be in scope.
+    const floorHass: any = {
+      localize: hass.localize,
+      entities: {
+        "light.up_a": { entity_id: "light.up_a", area_id: "bedroom" },
+        "light.down_a": { entity_id: "light.down_a", area_id: "kitchen" },
+      },
+      devices: {},
+      areas: {
+        bedroom: { area_id: "bedroom", floor_id: "upstairs" },
+        kitchen: { area_id: "kitchen", floor_id: "downstairs" },
+      },
+    };
+    el = await mount(
+      {
+        name: "test",
+        when: {},
+        actions: [{ action: "set_light", entity_ids: [], params: { brightness: 50 } }],
+      },
+      { scope: { kind: "floor", id: "upstairs" }, hass: floorHass },
+    );
+    // Open the action slot so the target picker is rendered.
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const picker = action.querySelector("ambience-target-picker") as any;
+    expect(picker).toBeTruthy();
+    expect(picker.entities).toContain("light.up_a");
+    expect(picker.entities).not.toContain("light.down_a");
   });
 
   test("target-picker value-changed updates action entity_ids", async () => {

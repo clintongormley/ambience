@@ -365,7 +365,7 @@ export class AmbienceAreasList extends LitElement {
       <ambience-rule-editor
         ?open=${this._editing !== null}
         .hass=${this.hass}
-        .areaId=${this._editing?.areaId}
+        .scope=${this._editing ? { kind: "area", id: this._editing.areaId } : undefined}
         .rule=${this._editingRule}
         .matchers=${this._editorMatchers}
         .sceneSuggestions=${this._sceneSuggestions}

@@ -9,6 +9,7 @@ import type {
   ParamSpec,
   PeriodStoreView,
   Rule,
+  Scope,
 } from "../types.js";
 import type { HassConnection } from "../api.js";
 import { entitiesForScope } from "../entities-for-scope.js";
@@ -136,7 +137,7 @@ export class AmbienceRuleEditor extends LitElement {
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) availableActions: ActionInfo[] = [];
   @property({ attribute: false }) hass?: HassConnection;
-  @property({ attribute: false }) areaId?: string;
+  @property({ attribute: false }) scope?: Scope;
 
   @state() private _draft: Rule | null = null;
   @state() private _open: OpenSlot = null;
@@ -553,8 +554,8 @@ export class AmbienceRuleEditor extends LitElement {
     const info = this.availableActions.find((x) => x.name === action.action);
     const open = this._isOpen({ kind: "action", idx });
     const summary = summariseAction(action, info, { hass: this.hass as any });
-    const entities = this.areaId
-      ? entitiesForScope(this.hass as any, { kind: "area", id: this.areaId }, info?.domains ?? [])
+    const entities = this.scope
+      ? entitiesForScope(this.hass as any, this.scope, info?.domains ?? [])
       : [];
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">

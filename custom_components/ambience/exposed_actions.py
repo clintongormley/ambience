@@ -76,6 +76,11 @@ class ExposedActionsStore:
     ) -> None:
         """Check each entry's service exists and every named field exists.
 
+        This is async because it consults `services_meta.get_service_schema`,
+        which in real HA goes through `async_get_all_descriptions` to fetch
+        field metadata (the on-disk services.yaml descriptions don't live in
+        the runtime service registry).
+
         Precondition: validate_shape() must have passed for `actions`. This
         method reads `entry["id"]` directly and will KeyError on a malformed
         entry — never call standalone on untrusted input.

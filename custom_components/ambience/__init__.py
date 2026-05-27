@@ -141,6 +141,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for sid in sorted(services_used):
             if sid in existing:
                 continue
+            if "." not in sid:
+                _LOGGER.warning(
+                    "ambience: cannot auto-expose service %r (not a domain.service id); "
+                    "rule(s) using it will fail validation until the user fixes them",
+                    sid,
+                )
+                continue
             if sid == "light.turn_on":
                 additions.append(
                     {
@@ -185,7 +192,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if additions:
             await exposed_store.save(exposed_store.list() + additions)
             _LOGGER.info(
-                "ambience: migrated %d action(s); auto-exposed %s",
+                "ambience: migrated rules to use %d distinct service(s); auto-exposed %s",
                 len(services_used),
                 [a["id"] for a in additions],
             )

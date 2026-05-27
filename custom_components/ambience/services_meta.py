@@ -31,15 +31,18 @@ def _registry_is_dict_stubbed(registry: dict) -> bool:
     """True iff every non-empty domain map's first entry is a plain dict.
 
     Test fixtures stub `hass.services.async_services()` to return plain
-    dicts of dicts; real HA returns dicts of `Service` objects.
+    dicts of dicts; real HA returns dicts of `Service` objects. An empty
+    registry is treated as real HA (no stubs to detect).
     """
+    found_any = False
     for domain_map in registry.values():
         if not domain_map:
             continue
+        found_any = True
         sample = next(iter(domain_map.values()))
         if not isinstance(sample, dict):
             return False
-    return True
+    return found_any
 
 
 async def _descriptions(hass: HomeAssistant) -> dict[str, dict[str, dict[str, Any]]]:

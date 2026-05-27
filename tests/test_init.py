@@ -310,3 +310,62 @@ async def test_setup_migrates_old_action_shape_and_auto_exposes(
         "brightness_pct",
         "transition",
     }
+
+
+async def test_setup_skips_auto_expose_for_unknown_action_types(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A rule with an unknown legacy action type migrates safely and is not auto-exposed."""
+    from homeassistant.helpers.storage import Store
+
+    area = ar.async_get(hass).async_create("Kitchen")
+
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {
+                area.id: {
+                    "rules": [
+                        {
+                            "actions": [
+                                {
+                                    "action": "third_party_thing",
+                                    "entity_ids": [],
+                                    "params": {},
+                                },
+                            ],
+                        },
+                    ],
+                    "auto_sort": True,
+                }
+            },
+            "floors": {},
+            "house": {"rules": [], "auto_sort": True},
+            "matchers": {},
+            "exposed_actions": [],
+        }
+    )
+
+    caplog.set_level(logging.WARNING)
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # migrate_scope rewrites the action in-place as designed.
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = store.get_area(area.id)
+    assert cfg is not None
+    migrated_action = cfg["rules"][0]["actions"][0]
+    assert migrated_action.get("service") == "third_party_thing"
+    assert "action" not in migrated_action
+
+    # The malformed service id must NOT appear in exposed_actions.
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    exposed_ids = {e["id"] for e in exposed_store.list()}
+    assert "third_party_thing" not in exposed_ids
+
+    # A warning should have been logged.
+    assert "third_party_thing" in caplog.text

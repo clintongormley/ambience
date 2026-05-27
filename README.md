@@ -35,13 +35,15 @@ pytest
 
 Configure Ambience via the **Ambience** panel (sidebar, admin-only). Add an area, define scene names, pick which matchers participate, then author rules. Activating a scene picks the first matching rule from an ordered list (based on time of day, weather, etc.) and runs its actions.
 
-### Per-scope switches and cascade
+### Per-scope switches
 
 Each scope (the house, every HA floor, and every HA area) gets its own
-`switch.*_ambience` entity. `ambience.apply_scene` is a no-op when any
-switch in the cascade (house → floor → area) is off. Switches auto-turn-on
-after a configurable delay (default 2h; 0 disables). Defaults and per-scope
-overrides live in **Settings → Ambience**.
+`switch.*_ambience` entity. Each switch independently gates only its own
+scope's rules — `ambience.apply_scene` for an area is a no-op iff *that
+area's* switch is off; same for floor and house. There is no cascade, so
+turning a floor off does not affect rooms on that floor. Switches
+auto-turn-on after a configurable delay (default 2h; 0 disables). Defaults
+and per-scope overrides live in **Settings → Ambience**.
 
 ### Service: `ambience.apply_scene`
 

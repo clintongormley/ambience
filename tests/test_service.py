@@ -318,7 +318,7 @@ async def test_resolve_only_describes_activating_scene(hass: HomeAssistant) -> N
     }
     _install(hass, areas=areas, matchers={}, actions={})
 
-    result = await async_resolve_only(hass, "lr", "movie")
+    result = await async_resolve_only(hass, "area", "lr", "movie")
 
     assert result["snapshots_described"]["scene"] == "movie"
     assert result["matched_rule_index"] == 0
@@ -355,3 +355,74 @@ async def test_apply_scene_without_scene_treats_scene_predicates_as_wildcard(
     await async_apply_scene(hass, "lr", None)
 
     assert action.executions == [(["light.a"], {"brightness": 42})]
+
+
+class FakeScopeStore:
+    """In-memory store with area/floor/house accessors. Mirrors AmbienceStore's
+    API surface used by the service layer."""
+
+    def __init__(
+        self,
+        areas: dict | None = None,
+        floors: dict | None = None,
+        house: dict | None = None,
+    ) -> None:
+        self._areas = areas or {}
+        self._floors = floors or {}
+        self._house = house or {"rules": [], "auto_sort": True}
+
+    def get_area(self, area_id):
+        return self._areas.get(area_id)
+
+    def get_floor(self, floor_id):
+        return self._floors.get(floor_id)
+
+    def get_house(self):
+        return dict(self._house)
+
+
+async def test_async_resolve_only_floor_routes_to_floor_store(hass: HomeAssistant) -> None:
+    """Calling with scope_kind='floor' resolves against the floor's rules."""
+    floors = {
+        "upstairs": {
+            "rules": [
+                {
+                    "name": "movie",
+                    "when": {"scene": "movie"},
+                    "actions": [],
+                }
+            ],
+            "auto_sort": True,
+        }
+    }
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][DATA_STORE] = FakeScopeStore(floors=floors)
+    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher()}
+    hass.data[DOMAIN][DATA_ACTIONS] = {}
+
+    plan = await async_resolve_only(hass, "floor", "upstairs", "movie")
+    assert plan["rule_name"] == "movie"
+
+
+async def test_async_resolve_only_house_routes_to_house_store(hass: HomeAssistant) -> None:
+    house = {
+        "rules": [{"name": "away", "when": {"scene": "away"}, "actions": []}],
+        "auto_sort": True,
+    }
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][DATA_STORE] = FakeScopeStore(house=house)
+    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher()}
+    hass.data[DOMAIN][DATA_ACTIONS] = {}
+
+    plan = await async_resolve_only(hass, "house", None, "away")
+    assert plan["rule_name"] == "away"
+
+
+async def test_async_resolve_only_unknown_floor_raises(hass: HomeAssistant) -> None:
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][DATA_STORE] = FakeScopeStore()
+    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher()}
+    hass.data[DOMAIN][DATA_ACTIONS] = {}
+
+    with pytest.raises(ServiceValidationError, match="unknown_floor"):
+        await async_resolve_only(hass, "floor", "nonexistent", None)

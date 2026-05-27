@@ -15,23 +15,47 @@ from .engine import resolve
 _LOGGER = logging.getLogger(__name__)
 
 
+def _scope_config(store, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
+    """Resolve a (scope_kind, scope_id) pair to its persisted config dict.
+
+    Raises ServiceValidationError for unknown areas/floors or an unrecognised
+    scope kind. For "house", scope_id is ignored.
+    """
+    if scope_kind == "area":
+        cfg = store.get_area(scope_id)
+        if cfg is None:
+            raise ServiceValidationError(f"unknown_area: {scope_id!r}")
+        return cfg
+    if scope_kind == "floor":
+        cfg = store.get_floor(scope_id)
+        if cfg is None:
+            raise ServiceValidationError(f"unknown_floor: {scope_id!r}")
+        return cfg
+    if scope_kind == "house":
+        return store.get_house()
+    raise ServiceValidationError(f"unknown_scope_kind: {scope_kind!r}")
+
+
 async def async_resolve_only(
-    hass: HomeAssistant, area_id: str, scene: str | None = None
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    scene: str | None = None,
 ) -> dict[str, Any]:
     """Like apply_scene, but does not execute actions.
 
     Returns: {matched_rule_index, rule_name, actions, snapshots_described}.
     If no rule matched, matched_rule_index/rule_name are None and actions=[].
 
+    `scope_kind` is one of "area", "floor", "house". For "house", scope_id is
+    None.
     `scene` is optional. When omitted, the scene matcher is excluded from the
     resolve — scene predicates on rules are stripped (treated as wildcards).
     """
     store = hass.data[DOMAIN][DATA_STORE]
     matchers_registry: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
 
-    area = store.get_area(area_id)
-    if area is None:
-        raise ServiceValidationError(f"unknown_area: {area_id!r}")
+    scope_cfg = _scope_config(store, scope_kind, scope_id)
 
     # Snapshot every matcher whose snapshot can be derived from `hass`.
     # `scene`'s snapshot is injected from the service call below, so we
@@ -71,7 +95,7 @@ async def async_resolve_only(
     active_keys = set(engine_matchers)
     rules = [
         {**rule, "when": {k: v for k, v in rule.get("when", {}).items() if k in active_keys}}
-        for rule in area.get("rules", [])
+        for rule in scope_cfg.get("rules", [])
     ]
     match = resolve(rules, snapshots, engine_matchers)
     if match is None:
@@ -98,7 +122,7 @@ async def async_apply_scene(hass: HomeAssistant, area_id: str, scene: str | None
     """
     actions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_ACTIONS]
 
-    plan = await async_resolve_only(hass, area_id, scene)
+    plan = await async_resolve_only(hass, "area", area_id, scene)
     if plan["matched_rule_index"] is None:
         _LOGGER.info(
             "ambience: no rule matched for area=%s scene=%s snapshots=%s",

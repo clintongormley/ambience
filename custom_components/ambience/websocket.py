@@ -301,7 +301,7 @@ async def _ws_dry_run(
     msg: dict[str, Any],
 ) -> None:
     try:
-        result = await async_resolve_only(hass, msg["area_id"], msg.get("scene"))
+        result = await async_resolve_only(hass, "area", msg["area_id"], msg.get("scene"))
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return

@@ -111,7 +111,7 @@ async def test_time_of_day_rule_matches_for_area_without_matchers_field(
         },
     )
 
-    result = await async_resolve_only(hass, "lr", "movie")
+    result = await async_resolve_only(hass, "area", "lr", "movie")
 
     # The time_of_day matcher must have been activated (snapshot captured)...
     assert "time_of_day" in result["snapshots_described"]

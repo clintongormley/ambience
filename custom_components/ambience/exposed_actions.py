@@ -76,6 +76,10 @@ class ExposedActionsStore:
     ) -> None:
         """Check each entry's service exists and every named field exists.
 
+        Precondition: validate_shape() must have passed for `actions`. This
+        method reads `entry["id"]` directly and will KeyError on a malformed
+        entry — never call standalone on untrusted input.
+
         Call after validate_shape (or via save) when the HA service catalog
         is available. Locked-value type checking is intentionally not done
         here; HA's own service call rejects mismatched types at call time.

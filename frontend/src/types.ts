@@ -159,3 +159,10 @@ export type StateExpr = StateAtom | StateGroup | StateNot;
 
 /** Top-level state predicate. `null` = no constraint. */
 export type StatePredicate = StateExpr | null;
+
+// --- script matcher -------------------------------------------------------
+
+/** Per-rule predicate. `null` = wildcard. */
+export type ScriptPredicate =
+  | null
+  | { script: string; args?: Record<string, unknown> };

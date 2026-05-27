@@ -417,3 +417,48 @@ async def test_load_empty_returns_default_house(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
     assert store.get_house() == {"rules": [], "auto_sort": True}
+
+
+async def test_save_and_read_floor(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    config = {"rules": [{"name": "x", "when": {}, "actions": []}], "auto_sort": True}
+    await store.async_save_floor("upstairs", config)
+    assert store.get_floor("upstairs") == config
+    assert store.floors() == {"upstairs": config}
+
+
+async def test_delete_floor(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_floor("a", {"rules": [], "auto_sort": True})
+    await store.async_delete_floor("a")
+    assert store.get_floor("a") is None
+
+
+async def test_delete_unknown_floor_is_noop(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_delete_floor("nope")  # must not raise
+
+
+async def test_save_and_read_house(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    config = {"rules": [{"name": "away", "when": {}, "actions": []}], "auto_sort": False}
+    await store.async_save_house(config)
+    assert store.get_house() == config
+
+
+async def test_persisted_floor_and_house_survive_new_store(hass: HomeAssistant) -> None:
+    s1 = AmbienceStore(hass)
+    await s1.async_load()
+    await s1.async_save_floor("upstairs", {"rules": [], "auto_sort": True})
+    await s1.async_save_house(
+        {"rules": [{"name": "h", "when": {}, "actions": []}], "auto_sort": True}
+    )
+
+    s2 = AmbienceStore(hass)
+    await s2.async_load()
+    assert s2.get_floor("upstairs") == {"rules": [], "auto_sort": True}
+    assert s2.get_house()["rules"][0]["name"] == "h"

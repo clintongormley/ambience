@@ -146,6 +146,21 @@ def test_handles_mixed_rules() -> None:
     }
     used = migrate_scope(cfg)
     assert used == {"light.turn_on", "script.foo"}
+    assert cfg["rules"][0]["actions"][0]["service"] == "light.turn_on"
+    assert cfg["rules"][1]["actions"][0]["service"] == "switch.turn_on"  # untouched
+    assert cfg["rules"][2]["actions"][0]["service"] == "script.foo"
+
+
+def test_unknown_action_passes_through_as_service() -> None:
+    cfg = {
+        "rules": [
+            {"actions": [{"action": "custom_action", "entity_ids": [], "params": {}}]},
+        ],
+    }
+    used = migrate_scope(cfg)
+    assert used == {"custom_action"}
+    assert cfg["rules"][0]["actions"][0]["service"] == "custom_action"
+    assert "action" not in cfg["rules"][0]["actions"][0]
 
 
 def test_handles_empty_rules() -> None:

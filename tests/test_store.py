@@ -405,3 +405,15 @@ async def test_existing_weather_entity_keeps_user_groups(hass: HomeAssistant) ->
     await store.async_load()
     cfg = store.get_matcher_config("weather")
     assert cfg == {"entity": "weather.home", "groups": user_groups}
+
+
+async def test_load_empty_returns_empty_floors(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.floors() == {}
+
+
+async def test_load_empty_returns_default_house(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.get_house() == {"rules": [], "auto_sort": True}

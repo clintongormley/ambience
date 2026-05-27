@@ -28,6 +28,8 @@ class AmbienceStore:
         return {
             "version": STORAGE_VERSION,
             "areas": {},
+            "floors": {},
+            "house": {"rules": [], "auto_sort": True},
             "matchers": {
                 "time_of_day": {"custom": {}, "hidden": []},
                 "day": {"workday_sensor": None, "workday_calendar": None},
@@ -133,6 +135,11 @@ class AmbienceStore:
         weather.setdefault("entity", None)
         weather.setdefault("groups", list(DEFAULT_WEATHER_GROUPS))
 
+    def _ensure_scope_buckets(self) -> None:
+        """Floors and house keys are additive — make sure they exist."""
+        self._data.setdefault("floors", {})
+        self._data.setdefault("house", {"rules": [], "auto_sort": True})
+
     async def async_load(self) -> None:
         raw = await self._store.async_load()
         if raw is None:
@@ -148,6 +155,7 @@ class AmbienceStore:
         self._migrate_drop_area_matchers()
         self._migrate_relocate_periods()
         self._ensure_matchers_namespace()
+        self._ensure_scope_buckets()
 
     def areas(self) -> dict[str, dict[str, Any]]:
         return dict(self._data["areas"])
@@ -163,6 +171,28 @@ class AmbienceStore:
         if area_id in self._data["areas"]:
             del self._data["areas"][area_id]
             await self._store.async_save(self._data)
+
+    def floors(self) -> dict[str, dict[str, Any]]:
+        return dict(self._data["floors"])
+
+    def get_floor(self, floor_id: str) -> dict[str, Any] | None:
+        return self._data["floors"].get(floor_id)
+
+    async def async_save_floor(self, floor_id: str, config: dict[str, Any]) -> None:
+        self._data["floors"][floor_id] = config
+        await self._store.async_save(self._data)
+
+    async def async_delete_floor(self, floor_id: str) -> None:
+        if floor_id in self._data["floors"]:
+            del self._data["floors"][floor_id]
+            await self._store.async_save(self._data)
+
+    def get_house(self) -> dict[str, Any]:
+        return dict(self._data["house"])
+
+    async def async_save_house(self, config: dict[str, Any]) -> None:
+        self._data["house"] = config
+        await self._store.async_save(self._data)
 
     def get_matcher_config(self, name: str) -> dict[str, Any]:
         """Return per-matcher config dict, with defaults applied for missing keys."""

@@ -20,7 +20,7 @@ export type ActionSpec = {
 // One entry in the user's exposed-actions list (Configuration → Actions).
 export type ExposedAction = {
   id: string;                 // "domain.service"; primary key
-  label: string;              // optional user-friendly name; "" allowed
+  label: string;              // user-friendly display name; "" allowed
   visible_fields: string[];   // shown in the rule editor
   locked_values: Record<string, unknown>; // always sent on every call
 };
@@ -87,7 +87,6 @@ export type MatcherInfo = {
   // Linearisation-slot order; lower sorts earlier. Default 1000, `scene` is 0.
   priority: number;
 };
-
 
 export type DryRunResult = {
   matched_rule_index: number | null;

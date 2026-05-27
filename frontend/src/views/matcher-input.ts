@@ -5,6 +5,7 @@ import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
 import type { DayConfig, MatcherInfo, PeriodStoreView } from "../types.js";
 import "./scene-combobox.js";
+import "./script-predicate-input.js";
 import "./time-of-day-input.js";
 import "./day-predicate-input.js";
 import "./weather-predicate-input.js";
@@ -91,6 +92,18 @@ export class AmbienceMatcherInput extends LitElement {
             this._emit(e.detail.value);
           }}
         ></ambience-scene-combobox>
+      `;
+    }
+    if (this.matcher.input === "script_predicate") {
+      return html`
+        <ambience-script-predicate-input
+          .hass=${this.hass}
+          .value=${this.value as any}
+          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
+            e.stopPropagation();
+            this._emit(e.detail.value);
+          }}
+        ></ambience-script-predicate-input>
       `;
     }
     if (this.matcher.input === "day_predicate") {

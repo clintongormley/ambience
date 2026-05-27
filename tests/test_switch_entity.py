@@ -53,7 +53,7 @@ def _switch(hass: HomeAssistant, kind: str, sid: str | None) -> Any:
 async def test_house_switch_always_exists(hass, mock_config_entry):
     await _setup(hass, mock_config_entry)
     ent = _switch(hass, "house", None)
-    assert ent.unique_id == "ambience_switch_house"
+    assert ent.unique_id == "ambience_switch_global"
     assert ent.is_on is True
 
 
@@ -132,7 +132,7 @@ async def test_auto_on_fires_after_delay(hass, mock_config_entry, fixed_utcnow):
 
 
 async def test_restore_off_with_remaining_delay_reschedules(hass, mock_config_entry, fixed_utcnow):
-    mock_restore_cache(hass, (State("switch.house_ambience", "off"),))
+    mock_restore_cache(hass, (State("switch.global_ambience", "off"),))
     from custom_components.ambience.store import AmbienceStore
 
     pre = AmbienceStore(hass)
@@ -148,7 +148,7 @@ async def test_restore_off_with_remaining_delay_reschedules(hass, mock_config_en
 
 
 async def test_restore_off_expired_turns_on_immediately(hass, mock_config_entry, fixed_utcnow):
-    mock_restore_cache(hass, (State("switch.house_ambience", "off"),))
+    mock_restore_cache(hass, (State("switch.global_ambience", "off"),))
     from custom_components.ambience.store import AmbienceStore
 
     pre = AmbienceStore(hass)

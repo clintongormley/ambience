@@ -52,7 +52,7 @@ class _CancellableTimer:
 
 def _entity_id_for(scope_kind: str, display_name: str) -> str:
     if scope_kind == "house":
-        return "switch.house_ambience"
+        return "switch.global_ambience"
     if scope_kind == "floor":
         # Suffix with `_floor_ambience` so a floor and an area with the same
         # name don't collide on the entity_id slug.
@@ -91,7 +91,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         self._scope_kind = scope_kind
         self._scope_id = scope_id
         if scope_kind == "house":
-            self._attr_unique_id = "ambience_switch_house"
+            self._attr_unique_id = "ambience_switch_global"
         else:
             self._attr_unique_id = f"ambience_switch_{scope_kind}_{scope_id}"
         # Area-bound switches show up under the area in HA UI; floor and house

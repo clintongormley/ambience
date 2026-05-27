@@ -153,13 +153,7 @@ describe("ambience-scopes-view", () => {
 
   test("House section always shows exactly one row", async () => {
     el = await mount();
-    // Expand the house section so the row is visible
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const houseSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("House"),
-    ) as HTMLElement;
-    houseSection.click();
-    await el.updateComplete;
+    // Sections default to expanded — no click needed
     const houseRows = el.shadowRoot.querySelectorAll(".scope-row.house");
     expect(houseRows.length).toBe(1);
   });
@@ -168,27 +162,29 @@ describe("ambience-scopes-view", () => {
 
   test("renders one row per HA area", async () => {
     el = await mount();
-    // Expand the Areas section
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const areasSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("Areas"),
-    ) as HTMLElement;
-    areasSection.click();
-    await el.updateComplete;
     expect(el.shadowRoot.textContent).toContain("Living Room");
     expect(el.shadowRoot.textContent).toContain("Bedroom");
   });
 
   test("renders one row per HA floor", async () => {
     el = await mount();
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const floorsSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("Floors"),
-    ) as HTMLElement;
-    floorsSection.click();
-    await el.updateComplete;
     expect(el.shadowRoot.textContent).toContain("Ground");
     expect(el.shadowRoot.textContent).toContain("Upstairs");
+  });
+
+  // --- default-expanded sections -----------------------------------------
+
+  test("scopes-view defaults all three sections to expanded", async () => {
+    el = await mount();
+    // House row visible (not just header)
+    const houseRow = el.shadowRoot.querySelector(".scope-row.house");
+    expect(houseRow).toBeTruthy();
+    // Areas section shows actual area rows
+    const areaRows = el.shadowRoot.querySelectorAll(".scope-row.area");
+    expect(areaRows.length).toBeGreaterThan(0);
+    // Floors section shows floor rows when configured
+    const floorRows = el.shadowRoot.querySelectorAll(".scope-row.floor");
+    expect(floorRows.length).toBeGreaterThan(0);
   });
 
   // --- mutation routing ---------------------------------------------------
@@ -218,14 +214,6 @@ describe("ambience-scopes-view", () => {
 
   test("save-rule on an area routes to saveArea", async () => {
     el = await mount();
-    // Expand the Areas section first
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const areasSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("Areas"),
-    ) as HTMLElement;
-    areasSection.click();
-    await el.updateComplete;
-
     await expandAndAddRuleToScope(".scope-row.area[data-id='living_room']");
     expect(api.saveArea).toHaveBeenCalledWith(
       expect.anything(),
@@ -240,13 +228,6 @@ describe("ambience-scopes-view", () => {
 
   test("save-rule on a floor routes to saveFloor", async () => {
     el = await mount();
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const floorsSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("Floors"),
-    ) as HTMLElement;
-    floorsSection.click();
-    await el.updateComplete;
-
     await expandAndAddRuleToScope(".scope-row.floor[data-id='ground']");
     expect(api.saveFloor).toHaveBeenCalledWith(
       expect.anything(),
@@ -261,13 +242,6 @@ describe("ambience-scopes-view", () => {
 
   test("save-rule on the house routes to saveHouse", async () => {
     el = await mount();
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const houseSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("House"),
-    ) as HTMLElement;
-    houseSection.click();
-    await el.updateComplete;
-
     await expandAndAddRuleToScope(".scope-row.house");
     expect(api.saveHouse).toHaveBeenCalledWith(
       expect.anything(),
@@ -297,13 +271,7 @@ describe("ambience-scopes-view", () => {
     )?.[0];
     if (!areaCallback) throw new Error("no area_registry_updated subscription");
 
-    // Expand the Areas section + the living_room row
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const areasSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("Areas"),
-    ) as HTMLElement;
-    areasSection.click();
-    await el.updateComplete;
+    // Areas section is expanded by default — just expand the living_room row
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
     ) as HTMLElement;
@@ -328,13 +296,7 @@ describe("ambience-scopes-view", () => {
     )?.[0];
     if (!floorCallback) throw new Error("no floor_registry_updated subscription");
 
-    // Expand floors section, then the ground row
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const floorsSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("Floors"),
-    ) as HTMLElement;
-    floorsSection.click();
-    await el.updateComplete;
+    // Floors section is expanded by default — just expand the ground row
     const row = el.shadowRoot.querySelector(
       ".scope-row.floor[data-id='ground']",
     ) as HTMLElement;
@@ -360,13 +322,6 @@ describe("ambience-scopes-view", () => {
       auto_sort: false,
     };
     el = await mount({ areaConfigs: { living_room: cfg } });
-
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const areasSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("Areas"),
-    ) as HTMLElement;
-    areasSection.click();
-    await el.updateComplete;
 
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
@@ -397,13 +352,6 @@ describe("ambience-scopes-view", () => {
     vi.mocked(api.saveArea).mockRejectedValueOnce(new Error("Save failed"));
     el = await mount();
 
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const areasSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("Areas"),
-    ) as HTMLElement;
-    areasSection.click();
-    await el.updateComplete;
-
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
     ) as HTMLElement;
@@ -421,13 +369,6 @@ describe("ambience-scopes-view", () => {
 
   test("editor receives a Scope object (kind + id) for an area", async () => {
     el = await mount();
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const areasSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("Areas"),
-    ) as HTMLElement;
-    areasSection.click();
-    await el.updateComplete;
-
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
     ) as HTMLElement;
@@ -446,13 +387,6 @@ describe("ambience-scopes-view", () => {
 
   test("editor receives a Scope object for the house", async () => {
     el = await mount();
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const houseSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("House"),
-    ) as HTMLElement;
-    houseSection.click();
-    await el.updateComplete;
-
     const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();
     await el.updateComplete;
@@ -469,13 +403,6 @@ describe("ambience-scopes-view", () => {
 
   test("editor receives a Scope object for a floor", async () => {
     el = await mount();
-    const sectionHeaders = el.shadowRoot.querySelectorAll(".section-header");
-    const floorsSection = Array.from(sectionHeaders).find((h: any) =>
-      h.textContent?.includes("Floors"),
-    ) as HTMLElement;
-    floorsSection.click();
-    await el.updateComplete;
-
     const row = el.shadowRoot.querySelector(
       ".scope-row.floor[data-id='ground']",
     ) as HTMLElement;

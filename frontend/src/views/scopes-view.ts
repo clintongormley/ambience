@@ -164,7 +164,11 @@ export class AmbienceScopesView extends LitElement {
   // _expanded keys: "area:<id>" | "floor:<id>" | "house"
   @state() private _expanded = new Set<string>();
   // _sectionsExpanded keys: "house" | "floors" | "areas"
-  @state() private _sectionsExpanded = new Set<string>();
+  // All three sections default to expanded so the panel doesn't open into
+  // three empty headers — users immediately see the House row, area list,
+  // and (when configured) floors. The "floors" entry is inert when
+  // `_floors.length === 0` because the section is hidden entirely.
+  @state() private _sectionsExpanded = new Set<string>(["house", "floors", "areas"]);
   @state() private _error = "";
   @state() private _editing: EditingState | null = null;
   private _unsubArea?: () => void;

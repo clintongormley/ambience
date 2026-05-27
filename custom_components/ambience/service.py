@@ -8,8 +8,9 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import area_registry as ar
 
-from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_STORE, DOMAIN
+from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from .engine import resolve
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +37,46 @@ def _scope_config(store, scope_kind: str, scope_id: str | None) -> dict[str, Any
     raise ServiceValidationError(f"unknown_scope_kind: {scope_kind!r}")
 
 
+def _cascade_keys(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None
+) -> list[tuple[str, str | None]]:
+    """Return the chain of (scope_kind, scope_id) switches to consult.
+
+    house apply → [house]
+    floor apply → [house, floor]
+    area apply  → [house, floor(area), area]  (floor omitted if area has none)
+    """
+    chain: list[tuple[str, str | None]] = [("house", None)]
+    if scope_kind == "house":
+        return chain
+    if scope_kind == "floor":
+        chain.append(("floor", scope_id))
+        return chain
+    if scope_kind == "area":
+        area = ar.async_get(hass).async_get_area(scope_id) if scope_id else None
+        if area is not None and area.floor_id is not None:
+            chain.append(("floor", area.floor_id))
+        chain.append(("area", scope_id))
+    return chain
+
+
+def _cascade_state(hass: HomeAssistant, chain: list[tuple[str, str | None]]) -> str:
+    """Reduce a cascade to 'on' | 'off' | 'unknown'.
+
+    'off' if any switch is off; 'unknown' if any switch is missing; else 'on'.
+    """
+    switches = hass.data[DOMAIN].get(DATA_SWITCHES, {})
+    seen_unknown = False
+    for key in chain:
+        ent = switches.get(key)
+        if ent is None:
+            seen_unknown = True
+            continue
+        if not ent.is_on:
+            return "off"
+    return "unknown" if seen_unknown else "on"
+
+
 async def async_resolve_only(
     hass: HomeAssistant,
     scope_kind: str,
@@ -44,7 +85,9 @@ async def async_resolve_only(
 ) -> dict[str, Any]:
     """Like apply_scene, but does not execute actions.
 
-    Returns: {matched_rule_index, rule_name, actions, snapshots_described}.
+    Returns: {matched_rule_index, rule_name, actions, snapshots_described,
+    switch_state}.  switch_state is "on" if all cascade switches are on,
+    "off" if any are off, or "unknown" if any are missing.
     If no rule matched, matched_rule_index/rule_name are None and actions=[].
 
     `scope_kind` is one of "area", "floor", "house". For "house", scope_id is
@@ -98,12 +141,14 @@ async def async_resolve_only(
         for rule in scope_cfg.get("rules", [])
     ]
     match = resolve(rules, snapshots, engine_matchers)
+    switch_state = _cascade_state(hass, _cascade_keys(hass, scope_kind, scope_id))
     if match is None:
         return {
             "matched_rule_index": None,
             "rule_name": None,
             "actions": [],
             "snapshots_described": described,
+            "switch_state": switch_state,
         }
     idx, rule = match
     return {
@@ -111,6 +156,7 @@ async def async_resolve_only(
         "rule_name": rule.get("name"),
         "actions": rule.get("actions", []),
         "snapshots_described": described,
+        "switch_state": switch_state,
     }
 
 
@@ -128,6 +174,15 @@ async def async_apply_scene(
     as wildcards.
     """
     actions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_ACTIONS]
+
+    state = _cascade_state(hass, _cascade_keys(hass, scope_kind, scope_id))
+    if state == "off":
+        _LOGGER.info(
+            "ambience: scope=%s/%s switch is off; skipping apply_scene",
+            scope_kind,
+            scope_id,
+        )
+        return
 
     plan = await async_resolve_only(hass, scope_kind, scope_id, scene)
     if plan["matched_rule_index"] is None:

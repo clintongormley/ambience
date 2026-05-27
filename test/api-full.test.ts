@@ -11,6 +11,11 @@ import {
   listActions,
   validateConfig,
   dryRun,
+  listFloors,
+  getFloor,
+  saveFloor,
+  getHouse,
+  saveHouse,
 } from "../frontend/src/api";
 import type { AreaConfig } from "../frontend/src/types";
 
@@ -134,5 +139,62 @@ describe("API: dryRun", () => {
       scene: "movie_night",
     });
     expect(res).toEqual({ matched_rule_index: null, rule_name: null, actions: [] });
+  });
+});
+
+test("listFloors calls ambience/floors/list", async () => {
+  const calls: any[] = [];
+  const hass = {
+    callWS: async (msg: any) => { calls.push(msg); return []; },
+    connection: {} as any,
+  };
+  await listFloors(hass as any);
+  expect(calls[0]).toEqual({ type: "ambience/floors/list" });
+});
+
+test("getFloor passes floor_id", async () => {
+  const calls: any[] = [];
+  const hass = {
+    callWS: async (msg: any) => { calls.push(msg); return { rules: [], auto_sort: true }; },
+    connection: {} as any,
+  };
+  await getFloor(hass as any, "upstairs");
+  expect(calls[0]).toEqual({ type: "ambience/floor/get", floor_id: "upstairs" });
+});
+
+test("saveFloor sends config", async () => {
+  const calls: any[] = [];
+  const hass = {
+    callWS: async (msg: any) => { calls.push(msg); return { ok: true, config: msg.config }; },
+    connection: {} as any,
+  };
+  await saveFloor(hass as any, "upstairs", { rules: [], auto_sort: true });
+  expect(calls[0]).toEqual({
+    type: "ambience/floor/save",
+    floor_id: "upstairs",
+    config: { rules: [], auto_sort: true },
+  });
+});
+
+test("getHouse calls ambience/house/get", async () => {
+  const calls: any[] = [];
+  const hass = {
+    callWS: async (msg: any) => { calls.push(msg); return { rules: [], auto_sort: true }; },
+    connection: {} as any,
+  };
+  await getHouse(hass as any);
+  expect(calls[0]).toEqual({ type: "ambience/house/get" });
+});
+
+test("saveHouse calls ambience/house/save", async () => {
+  const calls: any[] = [];
+  const hass = {
+    callWS: async (msg: any) => { calls.push(msg); return { ok: true, config: msg.config }; },
+    connection: {} as any,
+  };
+  await saveHouse(hass as any, { rules: [], auto_sort: false });
+  expect(calls[0]).toEqual({
+    type: "ambience/house/save",
+    config: { rules: [], auto_sort: false },
   });
 });

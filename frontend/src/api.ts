@@ -8,9 +8,11 @@ import type {
   AreaListItem,
   DayConfig,
   DryRunResult,
+  FloorListItem,
   MatcherInfo,
   PeriodDef,
   PeriodStoreView,
+  ScopeConfig,
   WeatherConfig,
   WeatherGroup,
 } from "./types.js";
@@ -18,6 +20,11 @@ import type {
 // HA fires this on the event bus whenever an area is created/updated/removed.
 export type AreaRegistryEvent = {
   data: { action: "create" | "update" | "remove"; area_id: string };
+};
+
+// HA fires this on the event bus whenever a floor is created/updated/removed.
+export type FloorRegistryEvent = {
+  data: { action: "create" | "update" | "remove"; floor_id: string };
 };
 
 // HA panel components receive a `hass` object. We type only what we use,
@@ -56,6 +63,40 @@ export async function saveArea(
     area_id: areaId,
     config,
   });
+}
+
+export async function listFloors(hass: HassConnection): Promise<FloorListItem[]> {
+  return hass.callWS({ type: "ambience/floors/list" });
+}
+
+export async function getFloor(
+  hass: HassConnection,
+  floorId: string,
+): Promise<ScopeConfig> {
+  return hass.callWS({ type: "ambience/floor/get", floor_id: floorId });
+}
+
+export async function saveFloor(
+  hass: HassConnection,
+  floorId: string,
+  config: ScopeConfig,
+): Promise<{ ok: true; config: ScopeConfig }> {
+  return hass.callWS({
+    type: "ambience/floor/save",
+    floor_id: floorId,
+    config,
+  });
+}
+
+export async function getHouse(hass: HassConnection): Promise<ScopeConfig> {
+  return hass.callWS({ type: "ambience/house/get" });
+}
+
+export async function saveHouse(
+  hass: HassConnection,
+  config: ScopeConfig,
+): Promise<{ ok: true; config: ScopeConfig }> {
+  return hass.callWS({ type: "ambience/house/save", config });
 }
 
 export async function listMatchers(hass: HassConnection): Promise<MatcherInfo[]> {

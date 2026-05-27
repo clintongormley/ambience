@@ -1035,3 +1035,21 @@ async def test_floor_save_unknown_floor_is_validation_error(
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
+
+
+async def test_house_get_returns_default(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/house/get")
+    assert resp["success"] is True
+    assert resp["result"] == {"rules": [], "auto_sort": True}
+
+
+async def test_house_save_round_trip(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    config = {
+        "rules": [{"name": "away", "when": {}, "actions": []}],
+        "auto_sort": False,
+    }
+    resp = await _ws_send(hass_ws_client, type="ambience/house/save", config=config)
+    assert resp["success"] is True
+
+    resp2 = await _ws_send(hass_ws_client, type="ambience/house/get")
+    assert resp2["result"]["rules"][0]["name"] == "away"

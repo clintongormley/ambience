@@ -23,6 +23,8 @@ _WS_COMMANDS = (
     "ambience/floors/list",
     "ambience/floor/get",
     "ambience/floor/save",
+    "ambience/house/get",
+    "ambience/house/save",
     "ambience/matchers/list",
     "ambience/actions/list",
     "ambience/validate",
@@ -114,6 +116,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_area_save)
     websocket_api.async_register_command(hass, _ws_floor_get)
     websocket_api.async_register_command(hass, _ws_floor_save)
+    websocket_api.async_register_command(hass, _ws_house_get)
+    websocket_api.async_register_command(hass, _ws_house_save)
     websocket_api.async_register_command(hass, _ws_validate)
     websocket_api.async_register_command(hass, _ws_dry_run)
     websocket_api.async_register_command(hass, _ws_periods_list)
@@ -346,6 +350,48 @@ async def _ws_floor_save(
         }
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_floor(floor_id, config)
+    connection.send_result(msg["id"], {"ok": True, "config": config})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/house/get"})
+@websocket_api.async_response
+async def _ws_house_get(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    connection.send_result(msg["id"], store.get_house())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/house/save",
+        vol.Required("config"): dict,
+    }
+)
+@websocket_api.async_response
+async def _ws_house_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    try:
+        _validate_scope_config(hass, msg["config"])
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    config = msg["config"]
+    if config.get("auto_sort", True):
+        matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
+        config = {
+            **config,
+            "rules": sort_rules(config.get("rules", []), matchers_registry),
+        }
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_house(config)
     connection.send_result(msg["id"], {"ok": True, "config": config})
 
 

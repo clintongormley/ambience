@@ -12,7 +12,7 @@ beforeAll(() => {
   }
 });
 import "../frontend/src/views/rules-list";
-import type { MatcherInfo, Rule, PeriodStoreView } from "../frontend/src/types";
+import type { ActionInfo, MatcherInfo, Rule, PeriodStoreView } from "../frontend/src/types";
 
 const matchers: MatcherInfo[] = [
   { name: "scene",       description: "", predicate_help: "", input: "scene_combobox",    priority: 0 },
@@ -54,13 +54,18 @@ const testHass = {
   },
 };
 
-async function mount(rules: Rule[] = [], autoSort = true): Promise<any> {
+async function mount(
+  rules: Rule[] = [],
+  autoSort = true,
+  availableActions: ActionInfo[] = [],
+): Promise<any> {
   const el: any = document.createElement("ambience-rules-list");
   el.rules = rules;
   el.autoSort = autoSort;
   el.periods = periods;
   el.matchers = matchers;
   el.hass = testHass;
+  el.availableActions = availableActions;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
@@ -333,6 +338,118 @@ describe("ambience-rules-list", () => {
     expect(summary).toContain("Afternoon");
     expect(summary).toContain("Scene:");
     expect(summary).toContain("movie");
+  });
+
+  test("action count is rendered as a clickable element", async () => {
+    el = await mount([movieRule]);
+    const actionCount = el.shadowRoot.querySelector(".action-count");
+    expect(actionCount).toBeTruthy();
+    expect(actionCount.textContent).toContain("1 action");
+  });
+
+  test("clicking action count expands the actions inline", async () => {
+    const availableActions: ActionInfo[] = [
+      { name: "set_light", description: "", domains: ["light"], target_params: [{ name: "brightness", type: "int", required: false, unit: "%" }] },
+    ];
+    el = await mount([movieRule], true, availableActions);
+    expect(el.shadowRoot.querySelector(".actions-detail")).toBeFalsy();
+    const actionCount = el.shadowRoot.querySelector(".action-count") as HTMLElement;
+    actionCount.click();
+    await el.updateComplete;
+    const detail = el.shadowRoot.querySelector(".actions-detail");
+    expect(detail).toBeTruthy();
+    expect(detail.textContent).toContain("Set light");
+    expect(detail.textContent).toContain("brightness 30%");
+  });
+
+  test("expanded action lists target entity ids", async () => {
+    const rule: Rule = {
+      name: "multi",
+      when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp", "light.kitchen"], params: {} }],
+    };
+    el = await mount([rule]);
+    (el.shadowRoot.querySelector(".action-count") as HTMLElement).click();
+    await el.updateComplete;
+    const items = el.shadowRoot.querySelectorAll(".entity-list li");
+    expect(items.length).toBe(2);
+    expect(items[0].textContent).toContain("light.lamp");
+    expect(items[1].textContent).toContain("light.kitchen");
+  });
+
+  test("expanded action uses friendly_name from hass.states when available", async () => {
+    const rule: Rule = {
+      name: "named",
+      when: {},
+      actions: [{ action: "set_light", entity_ids: ["light.lamp", "light.kitchen"], params: {} }],
+    };
+    const el2: any = document.createElement("ambience-rules-list");
+    el2.rules = [rule];
+    el2.autoSort = true;
+    el2.periods = periods;
+    el2.matchers = matchers;
+    el2.availableActions = [];
+    el2.hass = {
+      ...testHass,
+      states: {
+        "light.lamp": { attributes: { friendly_name: "Bedroom Lamp" } },
+        // light.kitchen deliberately omitted — falls back to entity_id
+      },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    el = el2;
+    (el.shadowRoot.querySelector(".action-count") as HTMLElement).click();
+    await el.updateComplete;
+    const items = el.shadowRoot.querySelectorAll(".entity-list li");
+    expect(items[0].textContent).toContain("Bedroom Lamp");
+    expect(items[0].textContent).not.toContain("light.lamp");
+    expect(items[1].textContent).toContain("light.kitchen");
+  });
+
+  test("clicking action count again collapses the actions", async () => {
+    el = await mount([movieRule]);
+    const actionCount = el.shadowRoot.querySelector(".action-count") as HTMLElement;
+    actionCount.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".actions-detail")).toBeTruthy();
+    actionCount.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".actions-detail")).toBeFalsy();
+  });
+
+  test("clicking action count does not emit edit-rule", async () => {
+    el = await mount([movieRule]);
+    const get = captureEvent(el, "edit-rule");
+    const actionCount = el.shadowRoot.querySelector(".action-count") as HTMLElement;
+    actionCount.click();
+    await el.updateComplete;
+    expect(get()).toBeUndefined();
+  });
+
+  test("expanding actions for one rule does not expand actions for others", async () => {
+    el = await mount([movieRule, eveningRule]);
+    const counts = el.shadowRoot.querySelectorAll(".action-count");
+    (counts[0] as HTMLElement).click();
+    await el.updateComplete;
+    const details = el.shadowRoot.querySelectorAll(".actions-detail");
+    expect(details.length).toBe(1);
+    // The expanded one should be inside the first rule's li
+    const firstLi = el.shadowRoot.querySelectorAll("li")[0];
+    expect(firstLi.querySelector(".actions-detail")).toBeTruthy();
+  });
+
+  test("expanded action with 0 entity_ids renders '(no targets)'", async () => {
+    const rule: Rule = {
+      name: "no targets",
+      when: {},
+      actions: [{ action: "set_light", entity_ids: [], params: {} }],
+    };
+    el = await mount([rule]);
+    (el.shadowRoot.querySelector(".action-count") as HTMLElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".actions-detail")?.textContent).toContain("(no targets)");
+    expect(el.shadowRoot.querySelector(".entity-list")).toBeFalsy();
   });
 
   test("summary lists matchers in priority order (scene, day, time_of_day, weather)", async () => {

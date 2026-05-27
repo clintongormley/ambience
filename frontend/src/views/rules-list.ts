@@ -1,9 +1,11 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { localize, matcherLabel } from "../i18n.js";
+import { actionLabel, localize, matcherLabel } from "../i18n.js";
 import { ruleDisplayName, summariseMatcher } from "../summary.js";
 import type {
+  ActionInfo,
+  ActionSpec,
   MatcherInfo,
   PeriodStoreView,
   Rule,
@@ -63,6 +65,40 @@ export class AmbienceRulesList extends LitElement {
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
     }
+    .action-count {
+      cursor: pointer;
+    }
+    .action-count:hover {
+      text-decoration: underline;
+    }
+    .actions-detail {
+      margin-top: 0.25rem;
+      padding-left: 0.75rem;
+      border-left: 2px solid var(--divider-color, #e0e0e0);
+      font-size: 0.85em;
+      color: var(--secondary-text-color, #888);
+    }
+    .actions-detail-item {
+      padding: 0.15rem 0;
+    }
+    .actions-detail-item .action-header {
+      color: var(--primary-text-color, #212121);
+    }
+    .entity-list {
+      list-style: disc;
+      padding-left: 1.25rem;
+      margin: 0.1rem 0 0.25rem 0;
+    }
+    .entity-list li {
+      padding: 0;
+      margin: 0;
+      border: 0;
+      background: transparent;
+      display: list-item;
+    }
+    .no-targets {
+      font-style: italic;
+    }
     button {
       background: transparent;
       border: 0;
@@ -89,11 +125,17 @@ export class AmbienceRulesList extends LitElement {
   // so it reads in the same order as the linearisation tiebreaker (lower
   // priority first). Undefined → falls back to `when`-dict insertion order.
   @property({ attribute: false }) matchers?: MatcherInfo[];
+  // Action registry — used to resolve `target_params` (units) when rendering
+  // the expanded action detail under a rule. Optional; falls back to the
+  // first domain word and no unit suffixes when not provided.
+  @property({ attribute: false }) availableActions: ActionInfo[] = [];
 
   // Index of the row currently being dragged, or null.
   @state() private _dragFrom: number | null = null;
   // Index of the row a drag is currently hovering over, or null.
   @state() private _dragOver: number | null = null;
+  // Rule indices whose action list is expanded inline.
+  @state() private _expandedActions = new Set<number>();
 
   private _emit(name: string, detail: unknown) {
     this.dispatchEvent(
@@ -101,27 +143,55 @@ export class AmbienceRulesList extends LitElement {
     );
   }
 
-  /** Human-readable one-line summary of a rule's `when` map + action count. */
-  private _summary(rule: Rule): string {
+  /** "when" portion of the rule summary — friendly matcher labels joined by `, `. */
+  private _whenSummary(rule: Rule): string {
     const priorityOf = new Map((this.matchers ?? []).map((m) => [m.name, m.priority]));
     const keys = Object.keys(rule.when)
       .filter((k) => rule.when[k] != null)
       // Stable sort by matcher priority (lower first); unknown matchers go last.
       .sort((a, b) => (priorityOf.get(a) ?? Infinity) - (priorityOf.get(b) ?? Infinity));
-    const when =
-      keys.length === 0
-        ? localize(this.hass, "ui.summary_any", "any")
-        : keys
-            .map(
-              (k) =>
-                `${matcherLabel(this.hass as any, k)}: ${summariseMatcher(k, rule.when[k], { hass: this.hass as any, periods: this.periods, weatherGroups: this.weatherConfig?.groups })}`,
-            )
-            .join(", ");
+    if (keys.length === 0) return localize(this.hass, "ui.summary_any", "any");
+    return keys
+      .map(
+        (k) =>
+          `${matcherLabel(this.hass as any, k)}: ${summariseMatcher(k, rule.when[k], { hass: this.hass as any, periods: this.periods, weatherGroups: this.weatherConfig?.groups })}`,
+      )
+      .join(", ");
+  }
+
+  /** "N actions" / "1 action" / "0 actions" label. */
+  private _actionCountLabel(rule: Rule): string {
     const n = rule.actions.length;
-    const actionWord = n === 1
+    const word = n === 1
       ? localize(this.hass, "ui.action_singular", "action")
       : localize(this.hass, "ui.action_plural", "actions");
-    return `${when} · ${n} ${actionWord}`;
+    return `${n} ${word}`;
+  }
+
+  private _toggleActions(i: number) {
+    const next = new Set(this._expandedActions);
+    if (next.has(i)) next.delete(i);
+    else next.add(i);
+    this._expandedActions = next;
+  }
+
+  /** Render-friendly name for an entity: friendly_name attribute, else entity_id. */
+  private _entityName(entity_id: string): string {
+    const states = (this.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
+    const name = states?.[entity_id]?.attributes?.friendly_name;
+    return typeof name === "string" && name ? name : entity_id;
+  }
+
+  /** "param value<unit>, ..." string for the expanded action header. */
+  private _actionParamsString(action: ActionSpec, info: ActionInfo | undefined): string {
+    const unitFor: Record<string, string> = {};
+    for (const p of info?.target_params ?? []) {
+      if (p.unit) unitFor[p.name] = p.unit;
+    }
+    return Object.entries(action.params)
+      .filter(([, v]) => v !== undefined && v !== null && v !== "")
+      .map(([k, v]) => `${k} ${v}${unitFor[k] ?? ""}`)
+      .join(", ");
   }
 
   private _onDragStart(i: number) {
@@ -186,7 +256,36 @@ export class AmbienceRulesList extends LitElement {
                 >
                   ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1)))}
                 </div>
-                <div class="summary">${this._summary(rule)}</div>
+                <div class="summary">
+                  ${this._whenSummary(rule)} ·
+                  <span
+                    class="action-count"
+                    @click=${() => this._toggleActions(i)}
+                  >${this._actionCountLabel(rule)}</span>
+                </div>
+                ${this._expandedActions.has(i)
+                  ? html`
+                      <div class="actions-detail">
+                        ${rule.actions.map((a) => {
+                          const info = this.availableActions.find((x) => x.name === a.action);
+                          const params = this._actionParamsString(a, info);
+                          const header = params
+                            ? `${actionLabel(this.hass as any, a.action)} · ${params}`
+                            : actionLabel(this.hass as any, a.action);
+                          return html`
+                            <div class="actions-detail-item">
+                              <div class="action-header">${header}</div>
+                              ${a.entity_ids.length === 0
+                                ? html`<div class="no-targets">${localize(this.hass, "ui.no_targets", "(no targets)")}</div>`
+                                : html`<ul class="entity-list">
+                                    ${a.entity_ids.map((eid) => html`<li>${this._entityName(eid)}</li>`)}
+                                  </ul>`}
+                            </div>
+                          `;
+                        })}
+                      </div>
+                    `
+                  : ""}
               </div>
               <button
                 @click=${() => this._emit("duplicate-rule", { index: i })}

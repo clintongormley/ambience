@@ -571,6 +571,7 @@ export class AmbienceScopesView extends LitElement {
                   .periods=${this._periods}
                   .weatherConfig=${this._weatherConfig}
                   .matchers=${this._matchers}
+                  .availableActions=${this._actions}
                   .hass=${this.hass}
                   @add-rule=${() => this._addRule(scope)}
                   @edit-rule=${(e: CustomEvent<{ index: number }>) =>

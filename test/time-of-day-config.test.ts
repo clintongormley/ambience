@@ -162,13 +162,37 @@ describe("ambience-time-of-day-config", () => {
     el = await mount(view);
     vi.mocked(api.savePeriods).mockResolvedValueOnce({
       ok: true,
-      warnings: [{ area_id: "abc", rule_name: "Evening rule", missing_period: "evening" }],
+      warnings: [{ scope_kind: "area", scope_id: "abc", rule_name: "Evening rule", missing_period: "evening" }],
     });
     const customRow = Array.from(el.shadowRoot.querySelectorAll(".row.custom"))[0] as HTMLElement;
     (customRow.querySelector('button[title="Delete"]') as HTMLButtonElement).click();
     await new Promise(r => setTimeout(r, 0));
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".warnings")).toBeTruthy();
-    expect(el.shadowRoot.querySelector(".warnings").textContent).toContain("Evening rule");
+    const txt = el.shadowRoot.querySelector(".warnings").textContent;
+    expect(txt).toContain("Evening rule");
+    expect(txt).toContain("abc");  // area scope renders the id
+  });
+
+  test("warnings render scope labels for floor and house scopes", async () => {
+    const view = { ...baseView, custom: {
+      wind_down: { from: {kind:"time",hh:20,mm:0} as const, to: {kind:"time",hh:22,mm:0} as const, label: "Wind down" },
+    }};
+    el = await mount(view);
+    vi.mocked(api.savePeriods).mockResolvedValueOnce({
+      ok: true,
+      warnings: [
+        { scope_kind: "floor", scope_id: "ground", rule_name: "Floor rule", missing_period: "evening" },
+        { scope_kind: "house", scope_id: null, rule_name: "House rule", missing_period: "evening" },
+      ],
+    });
+    const customRow = Array.from(el.shadowRoot.querySelectorAll(".row.custom"))[0] as HTMLElement;
+    (customRow.querySelector('button[title="Delete"]') as HTMLButtonElement).click();
+    await new Promise(r => setTimeout(r, 0));
+    await el.updateComplete;
+    const txt = el.shadowRoot.querySelector(".warnings").textContent;
+    expect(txt).toContain("Floor: ground");
+    expect(txt).toContain("House");
+    expect(txt).not.toContain("undefined");
   });
 });

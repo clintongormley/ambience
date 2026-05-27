@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { listPeriods, savePeriods } from "../api.js";
 import type { HassConnection } from "../api.js";
 import { anchorLabel, localize, periodLabel } from "../i18n.js";
+import { scopeLabel } from "../scope-label.js";
 import type { PeriodDef, PeriodStoreView, TimeEndpoint } from "../types.js";
 import "./period-edit-modal.js";
 
@@ -72,7 +73,7 @@ export class AmbienceTimeOfDayConfig extends LitElement {
 
   @state() private _view: PeriodStoreView = { builtins: {}, custom: {}, hidden: [] };
   @state() private _modal: ModalState = { mode: "closed" };
-  @state() private _warnings: Array<{ area_id: string; rule_name: string; missing_period: string }> = [];
+  @state() private _warnings: Array<{ scope_kind: string; scope_id: string | null; rule_name: string; missing_period: string }> = [];
 
   override async connectedCallback(): Promise<void> {
     super.connectedCallback();
@@ -161,7 +162,7 @@ export class AmbienceTimeOfDayConfig extends LitElement {
             <strong>${localize(this.hass, "ui.period_warning_prefix", "Warning:")}</strong> ${localize(this.hass, "ui.period_warning_text", "some rules now reference missing periods:")}
             <ul>
               ${this._warnings.map(
-                (w) => html`<li>${w.area_id} / "${w.rule_name}" → ${w.missing_period}</li>`,
+                (w) => html`<li>${scopeLabel(w)} / "${w.rule_name}" → ${w.missing_period}</li>`,
               )}
             </ul>
           </div>`

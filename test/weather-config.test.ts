@@ -160,4 +160,24 @@ describe("ambience-weather-config", () => {
     expect(text).toContain("Wet");    // group label
     expect(text).toContain("Rainy");  // selected condition label
   });
+
+  test("renders dangling warnings with scope labels for area, floor and house", async () => {
+    vi.mocked(saveWeatherConfig).mockResolvedValueOnce({
+      ok: true,
+      warnings: [
+        { scope_kind: "area",  scope_id: "lounge",  rule_name: "Area rule",  reason: "missing entity" },
+        { scope_kind: "floor", scope_id: "ground",  rule_name: "Floor rule", reason: "missing entity" },
+        { scope_kind: "house", scope_id: null,      rule_name: "House rule", reason: "missing entity" },
+      ],
+    });
+    el = await mount();
+    el._onEntityChange({ detail: { value: "weather.home" } });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const txt = el.shadowRoot.querySelector(".warnings").textContent;
+    expect(txt).toContain("lounge");        // area scope renders the id
+    expect(txt).toContain("Floor: ground"); // floor scope renders with prefix
+    expect(txt).toContain("House");          // house scope renders the literal label
+    expect(txt).not.toContain("undefined");
+  });
 });

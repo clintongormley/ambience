@@ -136,7 +136,7 @@ export async function savePeriods(
   hass: HassConnection,
   custom: Record<string, PeriodDef>,
   hidden: string[],
-): Promise<{ ok: true; warnings: Array<{ area_id: string; rule_name: string; missing_period: string }> }> {
+): Promise<{ ok: true; warnings: Array<{ scope_kind: string; scope_id: string | null; rule_name: string; missing_period: string }> }> {
   return hass.callWS({
     type: "ambience/time_of_day_periods/save",
     custom,
@@ -156,7 +156,7 @@ export async function saveDayConfig(
   hass: HassConnection,
   workday_sensor: string | null,
   workday_calendar: string | null,
-): Promise<{ ok: true; warnings: Array<{ area_id: string; rule_name: string; reason: string }> }> {
+): Promise<{ ok: true; warnings: Array<{ scope_kind: string; scope_id: string | null; rule_name: string; reason: string }> }> {
   return hass.callWS({
     type: "ambience/matchers/day/config/save",
     workday_sensor,
@@ -172,7 +172,7 @@ export async function saveWeatherConfig(
   hass: HassConnection,
   entity: string | null,
   groups: WeatherGroup[],
-): Promise<{ ok: true; warnings: Array<{ area_id: string; rule_name: string; reason: string }> }> {
+): Promise<{ ok: true; warnings: Array<{ scope_kind: string; scope_id: string | null; rule_name: string; reason: string }> }> {
   return hass.callWS({
     type: "ambience/matchers/weather/config/save",
     entity,

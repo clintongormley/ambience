@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { getWeatherConfig, saveWeatherConfig, type HassConnection } from "../api.js";
 import { localize, weatherConditionLabel } from "../i18n.js";
+import { scopeLabel } from "../scope-label.js";
 import type { WeatherConfig, WeatherGroup } from "../types.js";
 
 const ALL_CONDITIONS = [
@@ -11,7 +12,7 @@ const ALL_CONDITIONS = [
   "windy", "windy-variant", "exceptional",
 ];
 
-type Warning = { area_id: string; rule_name: string; reason: string };
+type Warning = { scope_kind: string; scope_id: string | null; rule_name: string; reason: string };
 
 @customElement("ambience-weather-config")
 export class AmbienceWeatherConfig extends LitElement {
@@ -236,7 +237,7 @@ export class AmbienceWeatherConfig extends LitElement {
         <div class="warnings">
           <strong>${localize(this.hass, "ui.day_warning_prefix", "Warning:")}</strong>
           ${localize(this.hass, "ui.weather_warning_text", "rules now reference an unconfigured weather entity:")}
-          <ul>${this._warnings.map(w => html`<li>${w.area_id} / "${w.rule_name}" → ${w.reason}</li>`)}</ul>
+          <ul>${this._warnings.map(w => html`<li>${scopeLabel(w)} / "${w.rule_name}" → ${w.reason}</li>`)}</ul>
         </div>
       ` : ""}
     `;

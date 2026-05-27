@@ -247,4 +247,20 @@ describe("ambience-script-predicate-input — YAML mode", () => {
     el._setMode("form");                    // attempt
     expect(el._mode).toBe("yaml");          // refused
   });
+
+  test("Form tab button disabled attribute reflects yaml error", async () => {
+    el = await mount(
+      { script: "script.foo", args: {} },
+      { services: { script: { foo: { fields: { x: { selector: { number: {} } } } } } } },
+    );
+    // Switch to YAML mode and type invalid YAML.
+    el._setMode("yaml");
+    await el.updateComplete;
+    el._onYamlInput("script: [unclosed");
+    await el.updateComplete;
+    const buttons = Array.from(el.shadowRoot.querySelectorAll(".tabs button")) as HTMLButtonElement[];
+    const formBtn = buttons.find((b) => b.textContent?.trim() === "Form");
+    expect(formBtn?.disabled).toBe(true);
+    expect(formBtn?.title).toContain("unclosed");  // error message preview
+  });
 });

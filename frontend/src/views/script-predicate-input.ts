@@ -210,7 +210,8 @@ export class AmbienceScriptPredicateInput extends LitElement {
         <div class="tabs">
           <button
             type="button"
-            ?disabled=${!hasFields}
+            ?disabled=${!hasFields || this._yamlError !== null}
+            title=${this._yamlError ?? ""}
             class=${this._mode === "form" ? "active" : ""}
             @click=${() => this._setMode("form")}
           >${localize(this.hass, "ui.form", "Form")}</button>

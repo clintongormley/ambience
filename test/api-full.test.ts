@@ -111,7 +111,11 @@ describe("API: validateConfig", () => {
 describe("API: dryRun", () => {
   test("sends area_id and scene to dry_run endpoint", async () => {
     const { callWS, sent } = makeFakeHass();
-    const res = await dryRun({ callWS } as any, "living_room", "movie");
+    const res = await dryRun(
+      { callWS } as any,
+      { kind: "area", id: "living_room" },
+      "movie",
+    );
     expect(sent[0]).toEqual({
       type: "ambience/dry_run",
       area_id: "living_room",
@@ -122,7 +126,10 @@ describe("API: dryRun", () => {
 
   test("dryRun omits the scene field when called without one", async () => {
     const { callWS, sent } = makeFakeHass();
-    const res = await dryRun({ callWS } as any, "living_room");
+    const res = await dryRun(
+      { callWS } as any,
+      { kind: "area", id: "living_room" },
+    );
     expect(sent[0]).toEqual({
       type: "ambience/dry_run",
       area_id: "living_room",
@@ -132,13 +139,51 @@ describe("API: dryRun", () => {
 
   test("dryRun includes the scene field when given", async () => {
     const { callWS, sent } = makeFakeHass();
-    const res = await dryRun({ callWS } as any, "living_room", "movie_night");
+    const res = await dryRun(
+      { callWS } as any,
+      { kind: "area", id: "living_room" },
+      "movie_night",
+    );
     expect(sent[0]).toEqual({
       type: "ambience/dry_run",
       area_id: "living_room",
       scene: "movie_night",
     });
     expect(res).toEqual({ matched_rule_index: null, rule_name: null, actions: [] });
+  });
+
+  test("dryRun area sends area_id", async () => {
+    const calls: any[] = [];
+    const hass = {
+      callWS: async (msg: any) => { calls.push(msg); return {}; },
+      connection: {} as any,
+    };
+    await dryRun(hass as any, { kind: "area", id: "kitchen" });
+    expect(calls[0]).toEqual({ type: "ambience/dry_run", area_id: "kitchen" });
+  });
+
+  test("dryRun floor sends floor_id", async () => {
+    const calls: any[] = [];
+    const hass = {
+      callWS: async (msg: any) => { calls.push(msg); return {}; },
+      connection: {} as any,
+    };
+    await dryRun(hass as any, { kind: "floor", id: "upstairs" }, "movie");
+    expect(calls[0]).toEqual({
+      type: "ambience/dry_run",
+      floor_id: "upstairs",
+      scene: "movie",
+    });
+  });
+
+  test("dryRun house sends house:true", async () => {
+    const calls: any[] = [];
+    const hass = {
+      callWS: async (msg: any) => { calls.push(msg); return {}; },
+      connection: {} as any,
+    };
+    await dryRun(hass as any, { kind: "house" });
+    expect(calls[0]).toEqual({ type: "ambience/dry_run", house: true });
   });
 });
 

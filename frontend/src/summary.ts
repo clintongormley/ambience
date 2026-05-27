@@ -9,10 +9,10 @@ import {
   weekdayLabel,
 } from "./i18n.js";
 import type {
-  ActionInfo,
   ActionSpec,
   DayItem,
   DayPredicate,
+  ExposedAction,
   PeriodStoreView,
   Rule,
   ScriptPredicate,
@@ -37,6 +37,10 @@ interface MatcherContext {
 
 interface ActionContext {
   hass?: HassLike;
+  // Optional. When provided, the matching ExposedAction is used to resolve
+  // a human-friendly label for the action (otherwise the service id is
+  // used verbatim).
+  exposedActions?: ExposedAction[];
 }
 
 /**
@@ -240,48 +244,42 @@ function _fmtEndpoint(ep: TimeEndpoint, ctx: MatcherContext): string {
   return `${anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
 }
 
+/**
+ * Render-friendly name for an action. Prefers the user-supplied label from
+ * the exposed-actions list; falls back to actionLabel (which itself falls
+ * back to the snake-case → title-case form of the service id).
+ */
+function _actionDisplayName(action: ActionSpec, ctx: ActionContext): string {
+  const exposed = ctx.exposedActions?.find((e) => e.id === action.service);
+  if (exposed?.label && exposed.label.trim()) return exposed.label;
+  return actionLabel(ctx.hass, action.service);
+}
+
+/**
+ * Pluralisation noun for the target count summary. We don't have HA target
+ * metadata here, so derive a noun from the service's domain ("light" from
+ * "light.turn_on") — same heuristic as the old ActionInfo.domains[0] path.
+ */
+function _targetNoun(action: ActionSpec, ctx: ActionContext): string {
+  const dot = action.service.indexOf(".");
+  if (dot > 0) return action.service.slice(0, dot);
+  return localize(ctx.hass, "ui.target_noun", "target");
+}
+
 export function summariseAction(
   action: ActionSpec,
-  info: ActionInfo | undefined,
   ctx: ActionContext,
 ): string {
-  const name = actionLabel(ctx.hass, action.action);
-  if (action.action === "script" || info?.kind === "script") {
-    return _summariseScriptAction(action, name, ctx);
-  }
-  const noun = info?.domains?.[0] ?? localize(ctx.hass, "ui.target_noun", "target");
+  const name = _actionDisplayName(action, ctx);
+  const noun = _targetNoun(action, ctx);
   const n = action.entity_ids.length;
   let targets: string;
   if (n === 0) targets = localize(ctx.hass, "ui.no_targets", "(no targets)");
   else if (n === 1) targets = `1 ${noun}`;
   else targets = `${n} ${noun}s`;
-  const unitFor: Record<string, string> = {};
-  for (const p of info?.target_params ?? []) {
-    if (p.unit) unitFor[p.name] = p.unit;
-  }
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${k} ${v}${unitFor[k] ?? ""}`)
+    .map(([k, v]) => `${k} ${v}`)
     .join(", ");
   return params ? `${name}: ${targets}, ${params}` : `${name}: ${targets}`;
-}
-
-function _summariseScriptAction(
-  action: ActionSpec,
-  actionName: string,
-  ctx: ActionContext,
-): string {
-  const scriptId = action.script ?? localize(ctx.hass, "ui.no_script_chosen", "(not selected)");
-  const n = action.entity_ids.length;
-  const targetNoun = localize(ctx.hass, "ui.target_noun", "target");
-  let targets: string;
-  if (n === 0) targets = "";
-  else if (n === 1) targets = `1 ${targetNoun}`;
-  else targets = `${n} ${targetNoun}s`;
-  const params = Object.entries(action.params)
-    .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${k}=${v}`)
-    .join(", ");
-  const parts = [scriptId, targets, params].filter((s) => s !== "");
-  return `${actionName}: ${parts.join(", ")}`;
 }

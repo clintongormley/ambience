@@ -4,10 +4,12 @@ import "../frontend/src/views/target-picker";
 async function mount(opts: {
   entities?: string[];
   value?: string[];
+  target?: unknown;
 }): Promise<any> {
   const el: any = document.createElement("ambience-target-picker");
   el.entities = opts.entities ?? [];
   el.value = opts.value ?? [];
+  if (opts.target !== undefined) el.target = opts.target;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
@@ -66,5 +68,42 @@ describe("ambience-target-picker (Lit fallback)", () => {
   test("empty entity list renders an empty-state hint", async () => {
     el = await mount({ entities: [] });
     expect(el.shadowRoot.textContent).toContain("No matching entities");
+  });
+
+  test("HA target metadata filters the displayed entity list by domain", async () => {
+    el = await mount({
+      entities: ["light.a", "switch.fan", "light.b"],
+      target: { entity: { domain: "light" } },
+    });
+    const boxes = el.shadowRoot.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    // switch.fan filtered out by HA target metadata
+    expect(boxes.length).toBe(2);
+    const labels = Array.from(el.shadowRoot.querySelectorAll("label"))
+      .map((l: any) => l.textContent.trim());
+    expect(labels).toContain("light.a");
+    expect(labels).toContain("light.b");
+    expect(labels).not.toContain("switch.fan");
+  });
+
+  test("HA target with no entity stanza does not filter", async () => {
+    el = await mount({
+      entities: ["light.a", "switch.fan"],
+      target: { device: {} },
+    });
+    expect(el.shadowRoot.querySelectorAll('input[type="checkbox"]').length).toBe(2);
+  });
+
+  test("checked emission preserves the filtered-list order", async () => {
+    el = await mount({
+      entities: ["light.a", "switch.fan", "light.b"],
+      target: { entity: { domain: "light" } },
+      value: ["light.a"],
+    });
+    const get = captureEmit(el);
+    const boxes = el.shadowRoot.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    // Second box (light.b) — switch.fan was filtered out
+    boxes[1].checked = true;
+    boxes[1].dispatchEvent(new Event("change"));
+    expect(get()).toEqual(["light.a", "light.b"]);
   });
 });

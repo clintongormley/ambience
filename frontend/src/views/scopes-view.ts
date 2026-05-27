@@ -13,8 +13,8 @@ import {
   getFloor,
   getHouse,
   getWeatherConfig,
-  listActions,
   listAreas,
+  listExposedActions,
   listFloors,
   listMatchers,
   listPeriods,
@@ -23,9 +23,9 @@ import {
   saveHouse,
 } from "../api.js";
 import type {
-  ActionInfo,
   AreaListItem,
   DayConfig,
+  ExposedAction,
   FloorListItem,
   MatcherInfo,
   PeriodStoreView,
@@ -135,7 +135,7 @@ export class AmbienceScopesView extends LitElement {
   @state() private _floorConfigs = new Map<string, ScopeConfig>();
   @state() private _house: ScopeConfig = { rules: [], auto_sort: true };
   @state() private _matchers: MatcherInfo[] = [];
-  @state() private _actions: ActionInfo[] = [];
+  @state() private _actions: ExposedAction[] = [];
   @state() private _periods?: PeriodStoreView;
   @state() private _dayConfig?: DayConfig;
   @state() private _weatherConfig?: WeatherConfig;
@@ -171,7 +171,7 @@ export class AmbienceScopesView extends LitElement {
     try {
       const [matchers, actions, periods, dayConfig, weatherConfig] = await Promise.all([
         listMatchers(this.hass),
-        listActions(this.hass),
+        listExposedActions(this.hass),
         listPeriods(this.hass),
         getDayConfig(this.hass),
         getWeatherConfig(this.hass),

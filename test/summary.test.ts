@@ -10,9 +10,9 @@ import {
   summariseScript,
 } from "../frontend/src/summary";
 import type {
-  ActionInfo,
   ActionSpec,
   DayPredicate,
+  ExposedAction,
   PeriodStoreView,
 } from "../frontend/src/types";
 
@@ -149,143 +149,111 @@ describe("summariseDay", () => {
 });
 
 describe("summariseAction", () => {
-  const info: ActionInfo = {
-    name: "set_light",
-    description: "",
-    domains: ["light"],
-    kind: "standard",
-    target_params: [
-      { name: "brightness", type: "int", required: true, unit: "%" },
-      { name: "transition", type: "number", required: false, unit: "s" },
-    ],
-  };
+  const exposedActions: ExposedAction[] = [
+    {
+      id: "light.turn_on",
+      label: "Set light",
+      visible_fields: ["brightness", "transition"],
+      locked_values: {},
+    },
+  ];
 
-  test("action with multiple entities pluralises", () => {
+  test("action with multiple entities pluralises by domain", () => {
     const action: ActionSpec = {
-      action: "set_light",
+      service: "light.turn_on",
       entity_ids: ["light.a", "light.b"],
       params: { brightness: 80 },
     };
-    expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("Set light: 2 lights, brightness 80%");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
+      .toBe("Set light: 2 lights, brightness 80");
   });
 
   test("action with one entity uses singular", () => {
     const action: ActionSpec = {
-      action: "set_light",
+      service: "light.turn_on",
       entity_ids: ["light.a"],
       params: { brightness: 80 },
     };
-    expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("Set light: 1 light, brightness 80%");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
+      .toBe("Set light: 1 light, brightness 80");
   });
 
   test("action with no entities", () => {
     const action: ActionSpec = {
-      action: "set_light",
+      service: "light.turn_on",
       entity_ids: [],
       params: { brightness: 80 },
     };
-    expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("Set light: (no targets), brightness 80%");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
+      .toBe("Set light: (no targets), brightness 80");
   });
 
   test("action with no params omits the params clause", () => {
     const action: ActionSpec = {
-      action: "set_light",
+      service: "light.turn_on",
       entity_ids: ["light.a"],
       params: {},
     };
-    expect(summariseAction(action, info, { hass: noLocalize }))
+    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
       .toBe("Set light: 1 light");
   });
 
-  test("uses actionLabel for the action name when hass.localize hits", () => {
+  test("ExposedAction.label takes precedence over hass.localize", () => {
     const hass = { localize: (k: string) =>
-      k === "component.ambience.action.set_light" ? "Set light" : undefined };
+      k === "component.ambience.action.light.turn_on" ? "Localised" : undefined };
     const action: ActionSpec = {
-      action: "set_light",
+      service: "light.turn_on",
       entity_ids: ["light.a"],
       params: { brightness: 50 },
     };
-    expect(summariseAction(action, info, { hass }))
-      .toBe("Set light: 1 light, brightness 50%");
-  });
-
-  test("appends param unit suffix when ParamSpec has unit", () => {
-    const action: ActionSpec = {
-      action: "set_light",
-      entity_ids: ["light.a"],
-      params: { brightness: 80, transition: 1.5 },
-    };
-    expect(summariseAction(action, info, { hass: noLocalize }))
-      .toBe("Set light: 1 light, brightness 80%, transition 1.5s");
-  });
-
-  test("omits unit suffix when ParamSpec has no unit field", () => {
-    const noUnitInfo: ActionInfo = {
-      name: "set_light",
-      description: "",
-      domains: ["light"],
-      kind: "standard",
-      target_params: [
-        { name: "brightness", type: "int", required: true },
-      ],
-    };
-    const action: ActionSpec = {
-      action: "set_light",
-      entity_ids: ["light.a"],
-      params: { brightness: 50 },
-    };
-    expect(summariseAction(action, noUnitInfo, { hass: noLocalize }))
+    expect(summariseAction(action, { hass, exposedActions }))
       .toBe("Set light: 1 light, brightness 50");
   });
 
-  test("uses 'target' as fallback when info has no domains", () => {
+  test("falls back to hass.localize when exposed list omits the service", () => {
+    const hass = { localize: (k: string) =>
+      k === "component.ambience.action.light.turn_on" ? "Set light" : undefined };
     const action: ActionSpec = {
-      action: "unknown",
-      entity_ids: ["x.a", "x.b"],
-      params: {},
-    };
-    expect(summariseAction(action, undefined, { hass: noLocalize }))
-      .toBe("Unknown: 2 targets");
-  });
-
-  test("script action summary includes script id and field values", () => {
-    const scriptInfo: ActionInfo = {
-      name: "script",
-      description: "",
-      domains: [],
-      kind: "script",
-      target_params: [],
-    };
-    const action: ActionSpec = {
-      action: "script",
-      script: "script.foo",
+      service: "light.turn_on",
       entity_ids: ["light.a"],
       params: { brightness: 50 },
     };
-    const out = summariseAction(action, scriptInfo, { hass: noLocalize });
-    expect(out).toContain("script.foo");
-    expect(out).toContain("50");
+    expect(summariseAction(action, { hass }))
+      .toBe("Set light: 1 light, brightness 50");
   });
 
-  test("script action summary indicates when no script is chosen", () => {
-    const scriptInfo: ActionInfo = {
-      name: "script",
-      description: "",
-      domains: [],
-      kind: "script",
-      target_params: [],
-    };
+  test("multiple params render comma-separated", () => {
     const action: ActionSpec = {
-      action: "script",
-      entity_ids: [],
+      service: "light.turn_on",
+      entity_ids: ["light.a"],
+      params: { brightness: 80, transition: 1.5 },
+    };
+    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
+      .toBe("Set light: 1 light, brightness 80, transition 1.5");
+  });
+
+  test("uses domain prefix as fallback target noun (no exposed entry)", () => {
+    const action: ActionSpec = {
+      service: "x.unknown",
+      entity_ids: ["x.a", "x.b"],
       params: {},
     };
-    const out = summariseAction(action, scriptInfo, { hass: noLocalize });
-    // Some indication that no script is chosen yet.
-    expect(out.toLowerCase()).toMatch(/not selected|no script|\(.*\)/);
+    // Domain "x" is the noun; service id ("X.unknown") is the fallback label.
+    expect(summariseAction(action, { hass: noLocalize }))
+      .toBe("X.unknown: 2 xs");
+  });
+
+  test("script.<id> service is just another action", () => {
+    const action: ActionSpec = {
+      service: "script.foo",
+      entity_ids: [],
+      params: { msg: "hello" },
+    };
+    const out = summariseAction(action, { hass: noLocalize });
+    // Service id is used verbatim as the action name fallback (after the
+    // snake-case → title-case humaniser).
+    expect(out).toContain("Script.foo");
+    expect(out).toContain("msg hello");
   });
 });
 

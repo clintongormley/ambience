@@ -12,7 +12,7 @@ beforeAll(() => {
   }
 });
 import "../frontend/src/views/rules-list";
-import type { ActionInfo, MatcherInfo, Rule, PeriodStoreView } from "../frontend/src/types";
+import type { ExposedAction, MatcherInfo, Rule, PeriodStoreView } from "../frontend/src/types";
 
 const matchers: MatcherInfo[] = [
   { name: "scene",       description: "", predicate_help: "", input: "scene_combobox",    priority: 0 },
@@ -35,7 +35,7 @@ const periods: PeriodStoreView = {
 const movieRule: Rule = {
   name: "Movie rule",
   when: { scene: "movie" },
-  actions: [{ action: "set_light", entity_ids: ["light.lamp"], params: { brightness: 30 } }],
+  actions: [{ service: "light.turn_on", entity_ids: ["light.lamp"], params: { brightness: 30 } }],
 };
 
 const eveningRule: Rule = {
@@ -57,7 +57,7 @@ const testHass = {
 async function mount(
   rules: Rule[] = [],
   autoSort = true,
-  availableActions: ActionInfo[] = [],
+  availableActions: ExposedAction[] = [],
 ): Promise<any> {
   const el: any = document.createElement("ambience-rules-list");
   el.rules = rules;
@@ -330,7 +330,7 @@ describe("ambience-rules-list", () => {
     const rules: Rule[] = [{
       name: "test",
       when: { time_of_day: { period: "afternoon" }, scene: "movie" },
-      actions: [{ action: "set_light", entity_ids: ["light.a"], params: { brightness: 80 } }],
+      actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: { brightness: 80 } }],
     }];
     el = await mount(rules);
     const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
@@ -348,8 +348,8 @@ describe("ambience-rules-list", () => {
   });
 
   test("clicking action count expands the actions inline", async () => {
-    const availableActions: ActionInfo[] = [
-      { name: "set_light", description: "", domains: ["light"], target_params: [{ name: "brightness", type: "int", required: false, unit: "%" }] },
+    const availableActions: ExposedAction[] = [
+      { id: "light.turn_on", label: "Set light", visible_fields: ["brightness"], locked_values: {} },
     ];
     el = await mount([movieRule], true, availableActions);
     expect(el.shadowRoot.querySelector(".actions-detail")).toBeFalsy();
@@ -359,14 +359,14 @@ describe("ambience-rules-list", () => {
     const detail = el.shadowRoot.querySelector(".actions-detail");
     expect(detail).toBeTruthy();
     expect(detail.textContent).toContain("Set light");
-    expect(detail.textContent).toContain("brightness 30%");
+    expect(detail.textContent).toContain("brightness 30");
   });
 
   test("expanded action lists target entity ids", async () => {
     const rule: Rule = {
       name: "multi",
       when: {},
-      actions: [{ action: "set_light", entity_ids: ["light.lamp", "light.kitchen"], params: {} }],
+      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp", "light.kitchen"], params: {} }],
     };
     el = await mount([rule]);
     (el.shadowRoot.querySelector(".action-count") as HTMLElement).click();
@@ -381,7 +381,7 @@ describe("ambience-rules-list", () => {
     const rule: Rule = {
       name: "named",
       when: {},
-      actions: [{ action: "set_light", entity_ids: ["light.lamp", "light.kitchen"], params: {} }],
+      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp", "light.kitchen"], params: {} }],
     };
     const el2: any = document.createElement("ambience-rules-list");
     el2.rules = [rule];
@@ -443,7 +443,7 @@ describe("ambience-rules-list", () => {
     const rule: Rule = {
       name: "no targets",
       when: {},
-      actions: [{ action: "set_light", entity_ids: [], params: {} }],
+      actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
     };
     el = await mount([rule]);
     (el.shadowRoot.querySelector(".action-count") as HTMLElement).click();

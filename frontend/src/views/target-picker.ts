@@ -1,6 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
+import { filterEntities, type HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
 import type { HassConnection } from "../api.js";
@@ -36,12 +37,25 @@ export class AmbienceTargetPicker extends LitElement {
   `;
 
   @property({ attribute: false }) hass?: HassConnection;
+  // Pre-scoped list of candidate entity_ids (already filtered by floor / area
+  // / house). The picker intersects this with the HA service `target`
+  // metadata via filterEntities, so the displayed list never offers an
+  // entity that the service couldn't accept.
   @property({ attribute: false }) entities: string[] = [];
   @property({ attribute: false }) value: string[] = [];
+  // HA target metadata, as returned by `ambience/services/get_schema`.
+  // `null`/`undefined` → no service-level filtering (display all in-scope
+  // entities).
+  @property({ attribute: false }) target: HaTarget = null;
   // When set, used as the inner ha-form field label. Default " " (a single
   // space) is truthy but visually empty — without it, ha-form's entity
   // selector falls back to rendering the schema name ("entity_ids").
   @property() label = " ";
+
+  /** Entities after intersecting the pre-scoped list with the HA target. */
+  private _filteredEntities(): string[] {
+    return filterEntities(this.entities, this.target);
+  }
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -65,13 +79,14 @@ export class AmbienceTargetPicker extends LitElement {
   }
 
   private _renderHaForm() {
+    const entities = this._filteredEntities();
     const schema = [
       {
         name: "entity_ids",
         selector: {
           entity: {
             multiple: true,
-            include_entities: this.entities,
+            include_entities: entities,
           },
         },
       },
@@ -94,16 +109,17 @@ export class AmbienceTargetPicker extends LitElement {
     if (checked) set.add(entity_id);
     else set.delete(entity_id);
     // Preserve the canonical sorted order of `entities` in the emitted value.
-    this._emit(this.entities.filter((e) => set.has(e)));
+    this._emit(this._filteredEntities().filter((e) => set.has(e)));
   }
 
   private _renderFallback() {
-    if (this.entities.length === 0) {
+    const entities = this._filteredEntities();
+    if (entities.length === 0) {
       return html`<p class="empty">${localize(this.hass, "ui.no_matching_entities", "No matching entities in this area.")}</p>`;
     }
     return html`
       <div class="checkboxes">
-        ${this.entities.map(
+        ${entities.map(
           (entity_id) => html`
             <label>
               <input

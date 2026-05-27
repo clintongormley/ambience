@@ -4,8 +4,8 @@ import { customElement, property, state } from "lit/decorators.js";
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
 import { ruleDisplayName, summariseMatcher } from "../summary.js";
 import type {
-  ActionInfo,
   ActionSpec,
+  ExposedAction,
   MatcherInfo,
   PeriodStoreView,
   Rule,
@@ -125,10 +125,10 @@ export class AmbienceRulesList extends LitElement {
   // so it reads in the same order as the linearisation tiebreaker (lower
   // priority first). Undefined → falls back to `when`-dict insertion order.
   @property({ attribute: false }) matchers?: MatcherInfo[];
-  // Action registry — used to resolve `target_params` (units) when rendering
-  // the expanded action detail under a rule. Optional; falls back to the
-  // first domain word and no unit suffixes when not provided.
-  @property({ attribute: false }) availableActions: ActionInfo[] = [];
+  // Exposed-actions registry — used to resolve a friendly label for each
+  // action when rendering the expanded detail under a rule. Optional;
+  // when missing, falls back to the service id (snake-case → title-case).
+  @property({ attribute: false }) availableActions: ExposedAction[] = [];
 
   // Index of the row currently being dragged, or null.
   @state() private _dragFrom: number | null = null;
@@ -182,16 +182,24 @@ export class AmbienceRulesList extends LitElement {
     return typeof name === "string" && name ? name : entity_id;
   }
 
-  /** "param value<unit>, ..." string for the expanded action header. */
-  private _actionParamsString(action: ActionSpec, info: ActionInfo | undefined): string {
-    const unitFor: Record<string, string> = {};
-    for (const p of info?.target_params ?? []) {
-      if (p.unit) unitFor[p.name] = p.unit;
-    }
+  /** "param value, ..." string for the expanded action header. Units are
+   *  no longer rendered — the new model carries the value verbatim through
+   *  HA selectors and the param keys themselves are usually unit-suffixed
+   *  (e.g. `brightness_pct`) where it matters. */
+  private _actionParamsString(action: ActionSpec): string {
     return Object.entries(action.params)
       .filter(([, v]) => v !== undefined && v !== null && v !== "")
-      .map(([k, v]) => `${k} ${v}${unitFor[k] ?? ""}`)
+      .map(([k, v]) => `${k} ${v}`)
       .join(", ");
+  }
+
+  /** Friendly label for an action: user-provided ExposedAction.label when
+   *  set, otherwise the service id rendered via actionLabel (which is
+   *  snake-case → title-case for unknown ids). */
+  private _actionLabel(action: ActionSpec): string {
+    const exposed = this.availableActions.find((e) => e.id === action.service);
+    if (exposed?.label && exposed.label.trim()) return exposed.label;
+    return actionLabel(this.hass as any, action.service);
   }
 
   private _onDragStart(i: number) {
@@ -267,11 +275,9 @@ export class AmbienceRulesList extends LitElement {
                   ? html`
                       <div class="actions-detail">
                         ${rule.actions.map((a) => {
-                          const info = this.availableActions.find((x) => x.name === a.action);
-                          const params = this._actionParamsString(a, info);
-                          const header = params
-                            ? `${actionLabel(this.hass as any, a.action)} · ${params}`
-                            : actionLabel(this.hass as any, a.action);
+                          const params = this._actionParamsString(a);
+                          const label = this._actionLabel(a);
+                          const header = params ? `${label} · ${params}` : label;
                           return html`
                             <div class="actions-detail-item">
                               <div class="action-header">${header}</div>

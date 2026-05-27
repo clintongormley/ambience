@@ -113,9 +113,7 @@ async def test_floor_off_does_not_block_area_on_that_floor(hass, mock_config_ent
     assert "switch is off" not in caplog.text.lower()
 
 
-async def test_area_off_does_not_block_floor_or_house_apply(
-    hass, mock_config_entry, caplog
-):
+async def test_area_off_does_not_block_floor_or_house_apply(hass, mock_config_entry, caplog):
     area_id, floor_id = await _setup_with_one_rule_per_scope(hass, mock_config_entry)
     area_switch = await _switch(hass, "area", area_id)
     await area_switch.async_turn_off()

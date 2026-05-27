@@ -1,8 +1,8 @@
 import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
 import "../frontend/src/views/scopes-view";
 import type {
-  ActionInfo,
   AreaListItem,
+  ExposedAction,
   FloorListItem,
   MatcherInfo,
   PeriodStoreView,
@@ -22,7 +22,7 @@ vi.mock("../frontend/src/api", () => ({
   getHouse: vi.fn(),
   saveHouse: vi.fn(),
   listMatchers: vi.fn(),
-  listActions: vi.fn(),
+  listExposedActions: vi.fn(),
   listPeriods: vi.fn(),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
   getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
@@ -47,8 +47,8 @@ const matchers: MatcherInfo[] = [
   { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day", priority: 200 },
 ];
 
-const actions: ActionInfo[] = [
-  { name: "set_light", description: "", domains: ["light"], target_params: [] },
+const actions: ExposedAction[] = [
+  { id: "light.turn_on", label: "Set light", visible_fields: [], locked_values: {} },
 ];
 
 const periods: PeriodStoreView = { builtins: {}, custom: {}, hidden: [] };
@@ -86,7 +86,7 @@ async function mount(opts: MountOpts = {}): Promise<any> {
   );
   vi.mocked(api.getHouse).mockResolvedValue(houseConfig);
   vi.mocked(api.listMatchers).mockResolvedValue(matchers);
-  vi.mocked(api.listActions).mockResolvedValue(actions);
+  vi.mocked(api.listExposedActions).mockResolvedValue(actions);
   vi.mocked(api.listPeriods).mockResolvedValue(periods);
   vi.mocked(api.saveArea).mockResolvedValue({ ok: true, config: baseConfig });
   vi.mocked(api.saveFloor).mockResolvedValue({ ok: true, config: baseConfig });
@@ -413,7 +413,7 @@ describe("ambience-scopes-view", () => {
     vi.mocked(api.getFloor).mockResolvedValue(baseConfig);
     vi.mocked(api.getHouse).mockResolvedValue(baseConfig);
     vi.mocked(api.listMatchers).mockResolvedValue(matchers);
-    vi.mocked(api.listActions).mockResolvedValue(actions);
+    vi.mocked(api.listExposedActions).mockResolvedValue(actions);
     vi.mocked(api.listPeriods).mockResolvedValue(periods);
 
     const hass = {

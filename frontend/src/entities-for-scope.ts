@@ -2,6 +2,77 @@ import type { HassConnection } from "./api.js";
 import type { Scope } from "./types.js";
 
 /**
+ * HA service target metadata. Mirrors the shape of the `target` field in
+ * HA's services.yaml descriptions (and what HA returns from
+ * `async_get_all_descriptions`). All keys are optional.
+ *
+ * For now we honour only `target.entity[*].domain` for filtering; other keys
+ * (integration, device_class, supported_features, etc.) are accepted as a
+ * pass-through for future use.
+ */
+export type HaTargetEntry = {
+  domain?: string | string[];
+  integration?: string;
+  device_class?: string | string[];
+  [key: string]: unknown;
+};
+
+export type HaTarget =
+  | null
+  | undefined
+  | {
+      entity?: HaTargetEntry | HaTargetEntry[];
+      device?: unknown;
+      area?: unknown;
+      [key: string]: unknown;
+    };
+
+/**
+ * Filter a pre-scoped list of entity_ids by HA's target metadata.
+ *
+ * If `target` is null/undefined or has no `entity` constraints, returns
+ * the input unchanged. Otherwise, builds the union of allowed domains
+ * across all entries in `target.entity` and keeps only entities whose
+ * domain is in that set. An entry without a `domain` accepts any domain
+ * (and thus collapses the filter to "all input entities").
+ *
+ * Pure function — exported separately from `entitiesForScope` so callers
+ * can compose scope-filtering with target-filtering, or skip target
+ * filtering entirely (e.g. for services with no target metadata).
+ */
+export function filterEntities(
+  entityIds: readonly string[],
+  target: HaTarget,
+): string[] {
+  if (!target || target.entity == null) return [...entityIds];
+  const entries = Array.isArray(target.entity) ? target.entity : [target.entity];
+  if (entries.length === 0) return [...entityIds];
+  const allowedDomains = new Set<string>();
+  let anyDomain = false;
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    const domain = entry.domain;
+    if (domain == null) {
+      anyDomain = true;
+      continue;
+    }
+    if (Array.isArray(domain)) {
+      for (const d of domain) {
+        if (typeof d === "string") allowedDomains.add(d);
+      }
+    } else if (typeof domain === "string") {
+      allowedDomains.add(domain);
+    }
+  }
+  if (anyDomain || allowedDomains.size === 0) return [...entityIds];
+  return entityIds.filter((id) => {
+    const dot = id.indexOf(".");
+    if (dot < 0) return false;
+    return allowedDomains.has(id.slice(0, dot));
+  });
+}
+
+/**
  * Returns entity_ids in the given scope that match one of the given domains.
  *
  * Scope semantics:
@@ -10,12 +81,13 @@ import type { Scope } from "./types.js";
  *   - house: entity belongs to any area (directly or via device). Orphan
  *     entities (no area, no device area) are excluded.
  *
- * Returned list is sorted for stable rendering.
+ * Returned list is sorted for stable rendering. When `domains` is empty or
+ * omitted, no domain filter is applied (every in-scope entity is returned).
  */
 export function entitiesForScope(
   hass: HassConnection,
   scope: Scope,
-  domains: readonly string[],
+  domains: readonly string[] = [],
 ): string[] {
   const anyHass = hass as any;
   if (!anyHass?.entities) return [];
@@ -56,7 +128,7 @@ export function entitiesForScope(
 
   return Object.values(entities)
     .filter(inScope)
-    .filter((e) => domains.includes(e.entity_id.split(".")[0]!))
+    .filter((e) => domains.length === 0 || domains.includes(e.entity_id.split(".")[0]!))
     .map((e) => e.entity_id)
     .sort();
 }

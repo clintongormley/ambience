@@ -194,6 +194,20 @@ class AmbienceStore:
         self._data["house"] = config
         await self._store.async_save(self._data)
 
+    def all_scope_configs(self) -> list[tuple[str, str | None, dict[str, Any]]]:
+        """Yield (kind, scope_id, config) for every configured scope.
+
+        `scope_id` is None for the house. Used by handlers that walk every
+        rule list to gather dangling-reference warnings.
+        """
+        triples: list[tuple[str, str | None, dict[str, Any]]] = []
+        for area_id, cfg in self._data.get("areas", {}).items():
+            triples.append(("area", area_id, cfg))
+        for floor_id, cfg in self._data.get("floors", {}).items():
+            triples.append(("floor", floor_id, cfg))
+        triples.append(("house", None, self._data.get("house", {"rules": [], "auto_sort": True})))
+        return triples
+
     def get_matcher_config(self, name: str) -> dict[str, Any]:
         """Return per-matcher config dict, with defaults applied for missing keys."""
         cfg = self._data.get("matchers", {}).get(name, {})

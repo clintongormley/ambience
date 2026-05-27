@@ -462,3 +462,26 @@ async def test_persisted_floor_and_house_survive_new_store(hass: HomeAssistant) 
     await s2.async_load()
     assert s2.get_floor("upstairs") == {"rules": [], "auto_sort": True}
     assert s2.get_house()["rules"][0]["name"] == "h"
+
+
+async def test_all_scope_configs_yields_every_scope(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_area(
+        "kitchen", {"rules": [{"name": "k", "when": {}, "actions": []}], "auto_sort": True}
+    )
+    await store.async_save_floor(
+        "upstairs", {"rules": [{"name": "u", "when": {}, "actions": []}], "auto_sort": True}
+    )
+    await store.async_save_house(
+        {"rules": [{"name": "h", "when": {}, "actions": []}], "auto_sort": True}
+    )
+
+    triples = list(store.all_scope_configs())
+    by_kind = {(k, sid): cfg for (k, sid, cfg) in triples}
+
+    assert ("area", "kitchen") in by_kind
+    assert ("floor", "upstairs") in by_kind
+    assert ("house", None) in by_kind
+    assert by_kind[("area", "kitchen")]["rules"][0]["name"] == "k"
+    assert by_kind[("house", None)]["rules"][0]["name"] == "h"

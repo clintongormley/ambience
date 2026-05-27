@@ -143,9 +143,11 @@ export class AmbienceActionsSettings extends LitElement {
   @state() private _actions: ExposedAction[] = [];
   @state() private _services: ServiceInfo[] = [];
   @state() private _schemas: Record<string, ServiceSchema | null> = {};
+  @state() private _fieldSchemas: Record<string, HaFormSchemaEntry[]> = {};
   @state() private _expanded: Set<string> = new Set();
   @state() private _adding = false;
   @state() private _warnings: ExposedActionWarning[] = [];
+  @state() private _loadError: string | null = null;
   @state() private _saveError: string | null = null;
   @state() private _saving = false;
   @state() private _loaded = false;
@@ -154,7 +156,28 @@ export class AmbienceActionsSettings extends LitElement {
     await this._reload();
   }
 
+  protected override willUpdate(changed: Map<string, unknown>) {
+    if (changed.has("_actions") || changed.has("_schemas")) {
+      const next: Record<string, HaFormSchemaEntry[]> = {};
+      for (const action of this._actions) {
+        const schema = this._schemas[action.id];
+        if (!schema) continue;
+        for (const [fieldName, field] of Object.entries(schema.fields)) {
+          next[`${action.id}:${fieldName}`] = [
+            {
+              name: fieldName,
+              selector: field.selector ?? { text: {} },
+              required: false,
+            },
+          ];
+        }
+      }
+      this._fieldSchemas = next;
+    }
+  }
+
   private async _reload() {
+    this._loadError = null;
     try {
       const [actions, services] = await Promise.all([
         listExposedActions(this.hass),
@@ -163,12 +186,15 @@ export class AmbienceActionsSettings extends LitElement {
       this._actions = actions;
       this._services = services;
     } catch (e: unknown) {
-      this._saveError = e instanceof Error ? e.message : String(e);
+      this._loadError = e instanceof Error ? e.message : String(e);
+      this.requestUpdate();
+      return; // do NOT mark as loaded
     }
     // Fetch schemas for already-exposed services in parallel so the UI is
     // ready when the user expands a card.
     await Promise.all(this._actions.map((a) => this._ensureSchema(a.id)));
     this._loaded = true;
+    this.requestUpdate();
   }
 
   private async _ensureSchema(serviceId: string) {
@@ -218,8 +244,12 @@ export class AmbienceActionsSettings extends LitElement {
 
   private _toggleExpand(actionId: string) {
     const next = new Set(this._expanded);
-    if (next.has(actionId)) next.delete(actionId);
-    else next.add(actionId);
+    if (next.has(actionId)) {
+      next.delete(actionId);
+    } else {
+      next.add(actionId);
+      void this._ensureSchema(actionId);
+    }
     this._expanded = next;
   }
 
@@ -245,6 +275,7 @@ export class AmbienceActionsSettings extends LitElement {
   private async _save() {
     this._saving = true;
     this._saveError = null;
+    this._warnings = [];
     try {
       const res = await saveExposedActions(this.hass, this._actions);
       this._warnings = res.warnings ?? [];
@@ -257,6 +288,12 @@ export class AmbienceActionsSettings extends LitElement {
   }
 
   override render() {
+    if (this._loadError !== null) {
+      return html`
+        <div class="error">${this._loadError}</div>
+        <button @click=${() => this._reload()}>${localize(this.hass, "ui.retry", "Retry")}</button>
+      `;
+    }
     if (!this._loaded) {
       return html`<div>${localize(this.hass, "ui.loading", "Loading…")}</div>`;
     }
@@ -366,16 +403,10 @@ export class AmbienceActionsSettings extends LitElement {
   private _renderLockedValue(
     action: ExposedAction,
     fieldName: string,
-    field: ServiceField,
+    _field: ServiceField,
   ) {
     const value = action.locked_values?.[fieldName];
-    const schema: HaFormSchemaEntry[] = [
-      {
-        name: fieldName,
-        selector: field.selector ?? { text: {} },
-        required: false,
-      },
-    ];
+    const schema = this._fieldSchemas[`${action.id}:${fieldName}`] ?? [];
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
       return html`<ha-form

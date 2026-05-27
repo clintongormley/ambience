@@ -222,6 +222,16 @@ describe("ambience-actions-settings", () => {
     expect(err.textContent).toContain("validation_error");
   });
 
+  test("renders an error and no save button when load fails", async () => {
+    vi.mocked(listExposedActions).mockRejectedValueOnce(new Error("WS unavailable"));
+    el = await mount();
+
+    // Save button must NOT be present
+    expect(el.shadowRoot.querySelector("button[data-action='save']")).toBeNull();
+    // Error message visible
+    expect(el.shadowRoot.textContent).toContain("WS unavailable");
+  });
+
   test("editing the label updates the action's label in the saved payload", async () => {
     el = await mount();
     const labelInput = el.shadowRoot.querySelector("[data-card] input[type='text']") as HTMLInputElement;

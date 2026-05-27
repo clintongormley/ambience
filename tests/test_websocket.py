@@ -9,7 +9,70 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
+
+
+def _seed_services_catalog(hass: HomeAssistant) -> None:
+    """Register stub services with descriptions so catalog validation passes.
+
+    We register light.turn_on, light.turn_off and script.foo with realistic
+    field schemas (via async_set_service_schema, which seeds the description
+    cache so async_get_all_descriptions skips the on-disk yaml loader — that
+    loader can fail in stripped test envs).
+    """
+    from homeassistant.helpers.service import async_set_service_schema
+
+    catalog = {
+        ("light", "turn_on"): {
+            "fields": {
+                "brightness_pct": {"selector": {"number": {"min": 0, "max": 100}}},
+                "transition": {"selector": {"number": {"min": 0}}},
+                "effect": {"selector": {"text": {}}},
+            },
+            "target": {"entity": [{"domain": "light"}]},
+        },
+        ("light", "turn_off"): {
+            "fields": {"transition": {"selector": {"number": {"min": 0}}}},
+            "target": {"entity": [{"domain": "light"}]},
+        },
+        ("script", "foo"): {
+            "fields": {
+                "x": {"selector": {"text": {}}},
+                "brightness_pct": {"selector": {"number": {"min": 0, "max": 100}}},
+            },
+        },
+    }
+    for (domain, name), schema in catalog.items():
+        if not hass.services.has_service(domain, name):
+            hass.services.async_register(domain, name, lambda _call: None)
+        async_set_service_schema(hass, domain, name, schema)
+
+
+async def _seed_exposed_actions(hass: HomeAssistant) -> None:
+    """Pre-expose the services the tests' rules reference."""
+    store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await store.save(
+        [
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct", "transition"],
+                "locked_values": {},
+            },
+            {
+                "id": "light.turn_off",
+                "label": "",
+                "visible_fields": ["transition"],
+                "locked_values": {},
+            },
+            {
+                "id": "script.foo",
+                "label": "",
+                "visible_fields": ["x", "brightness_pct"],
+                "locked_values": {},
+            },
+        ]
+    )
 
 
 @pytest.fixture
@@ -17,6 +80,21 @@ async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> 
     mock_config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
+    return mock_config_entry
+
+
+@pytest.fixture
+async def installed_with_actions(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> MockConfigEntry:
+    """Like `installed` but with `light.turn_on/off` and `script.foo` exposed
+    and registered in the HA service catalog. Tests that build rules
+    referencing these services should use this fixture."""
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    _seed_services_catalog(hass)
+    await _seed_exposed_actions(hass)
     return mock_config_entry
 
 
@@ -81,29 +159,262 @@ async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> 
     assert tod["predicate_help"].strip() != ""
 
 
-async def test_actions_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
-    resp = await _ws_send(hass_ws_client, type="ambience/actions/list")
-    assert resp["success"] is True
-    by_name = {a["name"]: a for a in resp["result"]}
-    assert "set_light" in by_name
-    entry = by_name["set_light"]
-    assert entry["description"].strip() != ""
-    assert entry["domains"] == ["light"]
-    assert isinstance(entry["target_params"], list)
-    param_names = {p["name"] for p in entry["target_params"]}
-    assert {"brightness", "transition"} <= param_names
+# ---------------------------------------------------------------------------
+# services/list, services/get_schema, exposed_actions/list, exposed_actions/save
+# ---------------------------------------------------------------------------
 
 
-async def test_actions_list_includes_kind(hass: HomeAssistant, installed, hass_ws_client) -> None:
-    resp = await _ws_send(hass_ws_client, type="ambience/actions/list")
+async def test_services_list_returns_ha_services(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """services/list returns the HA service catalog (id, description, target)."""
+    _seed_services_catalog(hass)
+    resp = await _ws_send(hass_ws_client, type="ambience/services/list")
     assert resp["success"] is True
-    by_name = {a["name"]: a for a in resp["result"]}
-    assert by_name["set_light"]["kind"] == "standard"
-    assert by_name["script"]["kind"] == "script"
+    ids = {item["id"] for item in resp["result"]}
+    assert {"light.turn_on", "light.turn_off", "script.foo"} <= ids
+
+
+async def test_services_get_schema_returns_fields_and_target(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    _seed_services_catalog(hass)
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/services/get_schema",
+        service="light.turn_on",
+    )
+    assert resp["success"] is True
+    assert "fields" in resp["result"]
+
+
+async def test_services_get_schema_unknown_service_errors(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/services/get_schema",
+        service="nope.nope",
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "unknown_service"
+
+
+async def test_services_get_schema_malformed_service_id_errors(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/services/get_schema",
+        service="no_dot",
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_exposed_actions_list_empty_initially(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/exposed_actions/list")
+    assert resp["success"] is True
+    assert resp["result"] == []
+
+
+async def test_exposed_actions_save_and_list_round_trip(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    _seed_services_catalog(hass)
+    actions = [
+        {
+            "id": "light.turn_on",
+            "label": "Set brightness",
+            "visible_fields": ["brightness_pct"],
+            "locked_values": {"transition": 1},
+        }
+    ]
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/exposed_actions/save",
+        actions=actions,
+    )
+    assert resp["success"] is True, resp
+    assert resp["result"]["ok"] is True
+    assert resp["result"]["warnings"] == []
+
+    resp2 = await _ws_send(hass_ws_client, type="ambience/exposed_actions/list")
+    assert resp2["success"] is True
+    assert resp2["result"] == actions
+
+
+async def test_exposed_actions_save_rejects_shape_error(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/exposed_actions/save",
+        actions=[{"id": "no_dot", "label": "", "visible_fields": [], "locked_values": {}}],
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_exposed_actions_save_rejects_unknown_service(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """Catalog validation rejects a service not present in HA."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/exposed_actions/save",
+        actions=[
+            {
+                "id": "light.does_not_exist",
+                "label": "",
+                "visible_fields": [],
+                "locked_values": {},
+            }
+        ],
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_exposed_actions_save_warns_on_removed_service(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """Removing a service from the exposed list while a rule still references
+    it emits a dangling warning."""
+    _seed_services_catalog(hass)
+    # First expose light.turn_on so the rule below validates.
+    await _ws_send(
+        hass_ws_client,
+        type="ambience/exposed_actions/save",
+        actions=[
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct"],
+                "locked_values": {},
+            }
+        ],
+    )
+    # Save a rule that references the exposed service.
+    save_area = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={
+            "auto_sort": True,
+            "rules": [
+                {
+                    "name": "movie",
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness_pct": 30},
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    assert save_area["success"] is True
+
+    # Now remove the service from the exposed list → dangling warning.
+    resp = await _ws_send(
+        hass_ws_client,
+        id=3,
+        type="ambience/exposed_actions/save",
+        actions=[],
+    )
+    assert resp["success"] is True
+    warnings = resp["result"]["warnings"]
+    assert any(
+        w["scope_kind"] == "area"
+        and w["scope_id"] == area_id
+        and w["rule_name"] == "movie"
+        and "no longer exposed" in w["reason"]
+        for w in warnings
+    )
+
+
+async def test_exposed_actions_save_warns_on_removed_visible_field(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """If an existing rule sets a param that was visible but is no longer,
+    the save emits a dangling warning."""
+    _seed_services_catalog(hass)
+    await _ws_send(
+        hass_ws_client,
+        type="ambience/exposed_actions/save",
+        actions=[
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct", "transition"],
+                "locked_values": {},
+            }
+        ],
+    )
+    save_area = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={
+            "auto_sort": True,
+            "rules": [
+                {
+                    "name": "movie",
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness_pct": 30, "transition": 1.5},
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    assert save_area["success"] is True
+
+    # Re-save with `transition` no longer visible → warn.
+    resp = await _ws_send(
+        hass_ws_client,
+        id=3,
+        type="ambience/exposed_actions/save",
+        actions=[
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct"],
+                "locked_values": {},
+            }
+        ],
+    )
+    assert resp["success"] is True
+    warnings = resp["result"]["warnings"]
+    assert any(
+        w["scope_kind"] == "area"
+        and w["scope_id"] == area_id
+        and w["rule_name"] == "movie"
+        and "transition" in w["reason"]
+        and "no longer visible" in w["reason"]
+        for w in warnings
+    )
+
+
+# ---------------------------------------------------------------------------
+# Area save / get with the new action shape
+# ---------------------------------------------------------------------------
 
 
 async def test_area_save_accepts_valid_script_action(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
     config = {
         "auto_sort": True,
@@ -112,8 +423,7 @@ async def test_area_save_accepts_valid_script_action(
                 "when": {"scene": "movie"},
                 "actions": [
                     {
-                        "action": "script",
-                        "script": "script.foo",
+                        "service": "script.foo",
                         "entity_ids": ["light.a"],
                         "params": {"x": 1},
                     }
@@ -131,9 +441,58 @@ async def test_area_save_accepts_valid_script_action(
     assert resp["result"]["ok"] is True
 
 
-async def test_area_save_rejects_script_action_missing_script(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
+async def test_area_save_rejects_missing_service(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
+    """Validator rejects an action that has no `service` key."""
+    config = {
+        "auto_sort": True,
+        "rules": [
+            {
+                "when": {"scene": "movie"},
+                "actions": [{"entity_ids": [], "params": {}}],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "service" in resp["error"]["message"]
+
+
+async def test_area_save_rejects_malformed_service(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    """Validator rejects an action whose `service` has no dot."""
+    config = {
+        "auto_sort": True,
+        "rules": [
+            {
+                "when": {"scene": "movie"},
+                "actions": [{"service": "no_dot", "entity_ids": [], "params": {}}],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_area_save_rejects_unexposed_service(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    """Validator rejects a service that exists in HA but is not exposed."""
+    # switch.turn_on is not in our seeded exposed list.
     config = {
         "auto_sort": True,
         "rules": [
@@ -141,9 +500,8 @@ async def test_area_save_rejects_script_action_missing_script(
                 "when": {"scene": "movie"},
                 "actions": [
                     {
-                        "action": "script",
-                        "script": "",
-                        "entity_ids": [],
+                        "service": "switch.turn_on",
+                        "entity_ids": ["switch.a"],
                         "params": {},
                     }
                 ],
@@ -158,7 +516,92 @@ async def test_area_save_rejects_script_action_missing_script(
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
-    assert "script" in resp["error"]["message"]
+    assert "not exposed" in resp["error"]["message"]
+
+
+async def test_area_save_rejects_non_list_entity_ids(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    config = {
+        "auto_sort": True,
+        "rules": [
+            {
+                "when": {"scene": "movie"},
+                "actions": [
+                    {
+                        "service": "light.turn_on",
+                        "entity_ids": "light.a",  # should be a list
+                        "params": {},
+                    }
+                ],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert resp["success"] is False
+    assert "entity_ids" in resp["error"]["message"]
+
+
+async def test_area_save_rejects_non_dict_params(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    config = {
+        "auto_sort": True,
+        "rules": [
+            {
+                "when": {"scene": "movie"},
+                "actions": [
+                    {
+                        "service": "light.turn_on",
+                        "entity_ids": ["light.a"],
+                        "params": [],  # should be a dict
+                    }
+                ],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert resp["success"] is False
+    assert "params" in resp["error"]["message"]
+
+
+async def test_area_save_rejects_param_not_in_visible_fields(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    """A rule param key must be one of the service's visible_fields."""
+    config = {
+        "auto_sort": True,
+        "rules": [
+            {
+                "when": {"scene": "movie"},
+                "actions": [
+                    {
+                        "service": "light.turn_on",
+                        "entity_ids": ["light.a"],
+                        "params": {"effect": "bouncy"},  # not visible
+                    }
+                ],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert resp["success"] is False
+    assert "visible_fields" in resp["error"]["message"]
 
 
 async def test_area_get_unknown(hass: HomeAssistant, installed, hass_ws_client) -> None:
@@ -177,7 +620,9 @@ async def test_area_get_unconfigured_returns_empty_config(
     assert resp["result"] == {"rules": [], "auto_sort": True}
 
 
-async def test_area_save_then_get(hass: HomeAssistant, installed, area_id, hass_ws_client) -> None:
+async def test_area_save_then_get(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
     config = {
         "auto_sort": False,
         "rules": [
@@ -185,9 +630,9 @@ async def test_area_save_then_get(hass: HomeAssistant, installed, area_id, hass_
                 "when": {"scene": "movie", "time_of_day": {"period": "evening"}},
                 "actions": [
                     {
-                        "action": "set_light",
+                        "service": "light.turn_on",
                         "entity_ids": ["light.lamp"],
-                        "params": {"brightness": 30},
+                        "params": {"brightness_pct": 30},
                     }
                 ],
             }
@@ -246,35 +691,6 @@ async def test_area_save_rejects_invalid_predicate(
     assert "garbage_predicate" in resp["error"]["message"]
 
 
-async def test_area_save_rejects_invalid_action_params(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
-) -> None:
-    config = {
-        "matchers": [],
-        "auto_sort": True,
-        "rules": [
-            {
-                "when": {"scene": "movie"},
-                "actions": [
-                    {
-                        "action": "set_light",
-                        "entity_ids": ["light.x"],
-                        "params": {"brightness": 200},  # out of range
-                    }
-                ],
-            }
-        ],
-    }
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/area/save",
-        area_id=area_id,
-        config=config,
-    )
-    assert resp["success"] is False
-    assert "brightness" in resp["error"]["message"]
-
-
 async def test_validate_ok(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(
         hass_ws_client,
@@ -302,7 +718,7 @@ async def test_validate_rejects_bad_scene_predicate(
 
 
 async def test_dry_run_returns_matched_rule(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
     save = await _ws_send(
         hass_ws_client,
@@ -316,9 +732,9 @@ async def test_dry_run_returns_matched_rule(
                     "when": {"scene": "movie"},
                     "actions": [
                         {
-                            "action": "set_light",
+                            "service": "light.turn_on",
                             "entity_ids": ["light.lamp"],
-                            "params": {"brightness": 30},
+                            "params": {"brightness_pct": 30},
                         }
                     ],
                 }
@@ -336,7 +752,7 @@ async def test_dry_run_returns_matched_rule(
     assert resp["success"] is True
     assert resp["result"]["matched_rule_index"] == 0
     assert resp["result"]["rule_name"] == "movie default"
-    assert resp["result"]["actions"][0]["action"] == "set_light"
+    assert resp["result"]["actions"][0]["service"] == "light.turn_on"
 
 
 async def test_dry_run_no_match(hass: HomeAssistant, installed, area_id, hass_ws_client) -> None:
@@ -362,7 +778,7 @@ async def test_dry_run_no_match(hass: HomeAssistant, installed, area_id, hass_ws
 
 
 async def test_dry_run_accepts_missing_scene(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
     """The dry_run WS command should accept a payload without `scene`."""
     save = await _ws_send(
@@ -377,9 +793,9 @@ async def test_dry_run_accepts_missing_scene(
                     "when": {"scene": "movie"},
                     "actions": [
                         {
-                            "action": "set_light",
+                            "service": "light.turn_on",
                             "entity_ids": ["light.lamp"],
-                            "params": {"brightness": 50},
+                            "params": {"brightness_pct": 50},
                         }
                     ],
                 }

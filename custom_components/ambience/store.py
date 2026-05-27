@@ -257,7 +257,6 @@ class AmbienceStore:
     async def async_save_periods(self, payload: dict[str, Any]) -> None:
         await self.async_save_matcher_config("time_of_day", payload)
 
-<<<<<<< HEAD
     # -------------------------------------------------------------------------
     # Switch defaults + per-scope overrides
     # -------------------------------------------------------------------------

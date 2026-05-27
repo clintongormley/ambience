@@ -69,7 +69,7 @@ class ExposedActionsStore:
                     f"{sid}: field(s) cannot be both visible and locked: {sorted(overlap)!r}"
                 )
 
-    def validate_against_catalog(
+    async def validate_against_catalog(
         self,
         hass: HomeAssistant,
         actions: list[dict[str, Any]],
@@ -86,7 +86,7 @@ class ExposedActionsStore:
         """
         for entry in actions:
             sid = entry["id"]
-            schema = get_service_schema(hass, sid)
+            schema = await get_service_schema(hass, sid)
             if schema is None:
                 raise ValueError(f"unknown service: {sid!r}")
             known_fields = set(schema["fields"])

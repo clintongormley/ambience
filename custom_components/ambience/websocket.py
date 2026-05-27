@@ -13,13 +13,14 @@ from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .const import (
-    DATA_ACTIONS,
+    DATA_EXPOSED_ACTIONS,
     DATA_MATCHERS,
     DATA_PERIODS,
     DATA_STORE,
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
+from .exposed_actions import ExposedActionsStore
 from .matchers.weather import WEATHER_CONDITIONS
 from .service import async_resolve_only
 from .sorting import sort_rules
@@ -34,7 +35,10 @@ _WS_COMMANDS = (
     "ambience/house/get",
     "ambience/house/save",
     "ambience/matchers/list",
-    "ambience/actions/list",
+    "ambience/services/list",
+    "ambience/services/get_schema",
+    "ambience/exposed_actions/list",
+    "ambience/exposed_actions/save",
     "ambience/validate",
     "ambience/dry_run",
     "ambience/time_of_day_periods/list",
@@ -124,7 +128,10 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_areas_list)
     websocket_api.async_register_command(hass, _ws_floors_list)
     websocket_api.async_register_command(hass, _ws_matchers_list)
-    websocket_api.async_register_command(hass, _ws_actions_list)
+    websocket_api.async_register_command(hass, _ws_services_list)
+    websocket_api.async_register_command(hass, _ws_services_get_schema)
+    websocket_api.async_register_command(hass, _ws_exposed_actions_list)
+    websocket_api.async_register_command(hass, _ws_exposed_actions_save)
     websocket_api.async_register_command(hass, _ws_area_get)
     websocket_api.async_register_command(hass, _ws_area_save)
     websocket_api.async_register_command(hass, _ws_floor_get)
@@ -153,7 +160,7 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
         raise ValueError("config must be an object")
     config.pop("matchers", None)  # legacy field; dropped silently
     matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
-    actions_registry = hass.data[DOMAIN][DATA_ACTIONS]
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
     for rule_idx, rule in enumerate(config.get("rules", [])):
         when = rule.get("when", {})
         for key, predicate in when.items():
@@ -163,16 +170,29 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
                 raise ValueError(f"rule {rule_idx}: unknown matcher {key}")
             matchers_registry[key].validate_predicate(predicate)
         for action_idx, action_spec in enumerate(rule.get("actions", [])):
-            action_name = action_spec.get("action")
-            action = actions_registry.get(action_name)
-            if action is None:
+            service_id = action_spec.get("service")
+            if not isinstance(service_id, str) or "." not in service_id:
                 raise ValueError(
-                    f"rule {rule_idx} action {action_idx}: unknown action {action_name}"
+                    f"rule {rule_idx} action {action_idx}: missing or malformed `service`"
+                )
+            exposed = exposed_store.get(service_id)
+            if exposed is None:
+                raise ValueError(
+                    f"rule {rule_idx} action {action_idx}: service {service_id!r} not exposed"
                 )
             entity_ids = action_spec.get("entity_ids", [])
+            if not isinstance(entity_ids, list):
+                raise ValueError(f"rule {rule_idx} action {action_idx}: entity_ids must be a list")
             params = action_spec.get("params", {})
-            script = action_spec.get("script")
-            action.validate_target_params(entity_ids, params, script=script)
+            if not isinstance(params, dict):
+                raise ValueError(f"rule {rule_idx} action {action_idx}: params must be an object")
+            visible = set(exposed.get("visible_fields", []))
+            extra = set(params) - visible
+            if extra:
+                raise ValueError(
+                    f"rule {rule_idx} action {action_idx}: "
+                    f"param(s) not in visible_fields: {sorted(extra)!r}"
+                )
 
 
 @websocket_api.require_admin
@@ -230,25 +250,125 @@ async def _ws_matchers_list(
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/actions/list"})
+@websocket_api.websocket_command({vol.Required("type"): "ambience/services/list"})
 @websocket_api.async_response
-async def _ws_actions_list(
+async def _ws_services_list(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    actions = hass.data[DOMAIN][DATA_ACTIONS]
-    result = [
-        {
-            "name": a.name,
-            "description": a.description,
-            "domains": list(a.domains),
-            "target_params": a.target_params,
-            "kind": getattr(a, "kind", "standard"),
-        }
-        for a in actions.values()
-    ]
-    connection.send_result(msg["id"], result)
+    from .services_meta import list_services
+
+    connection.send_result(msg["id"], await list_services(hass))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/services/get_schema",
+        vol.Required("service"): str,
+    }
+)
+@websocket_api.async_response
+async def _ws_services_get_schema(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    from .services_meta import get_service_schema
+
+    try:
+        schema = await get_service_schema(hass, msg["service"])
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    if schema is None:
+        connection.send_error(msg["id"], "unknown_service", f"unknown service: {msg['service']!r}")
+        return
+    connection.send_result(msg["id"], schema)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/exposed_actions/list"})
+@websocket_api.async_response
+async def _ws_exposed_actions_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    store: ExposedActionsStore = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    connection.send_result(msg["id"], store.list())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/exposed_actions/save",
+        vol.Required("actions"): list,
+    }
+)
+@websocket_api.async_response
+async def _ws_exposed_actions_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    exposed_store: ExposedActionsStore = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    actions = msg["actions"]
+    try:
+        exposed_store.validate_shape(actions)
+        await exposed_store.validate_against_catalog(hass, actions)
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+
+    old_list = exposed_store.list()
+    old_by_id = {a["id"]: a for a in old_list}
+    new_by_id = {a["id"]: a for a in actions}
+
+    await exposed_store.save(actions)
+
+    # Dangling-rule warnings: walk every scope and flag any rule whose
+    # action references a removed service or sets a param for a field
+    # that is no longer visible.
+    store = hass.data[DOMAIN][DATA_STORE]
+    warnings: list[dict[str, Any]] = []
+    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
+        for rule in scope_cfg.get("rules", []):
+            for action_spec in rule.get("actions", []):
+                sid = action_spec.get("service")
+                if not isinstance(sid, str):
+                    continue
+                old_entry = old_by_id.get(sid)
+                new_entry = new_by_id.get(sid)
+                if new_entry is None and old_entry is not None:
+                    warnings.append(
+                        {
+                            "scope_kind": scope_kind,
+                            "scope_id": scope_id,
+                            "rule_name": rule.get("name", ""),
+                            "reason": f"rule references {sid!r} which is no longer exposed",
+                        }
+                    )
+                    continue
+                if new_entry is None:
+                    continue
+                visible_now = set(new_entry.get("visible_fields", []))
+                lost = set(action_spec.get("params", {})) - visible_now
+                if lost:
+                    warnings.append(
+                        {
+                            "scope_kind": scope_kind,
+                            "scope_id": scope_id,
+                            "rule_name": rule.get("name", ""),
+                            "reason": (
+                                f"rule sets {sorted(lost)!r} on {sid!r} but those "
+                                f"fields are no longer visible"
+                            ),
+                        }
+                    )
+
+    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
 
 
 @websocket_api.require_admin

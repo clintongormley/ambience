@@ -13,7 +13,7 @@ from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
-    DATA_ACTIONS,
+    DATA_EXPOSED_ACTIONS,
     DATA_MATCHERS,
     DATA_STORE,
     DOMAIN,
@@ -61,7 +61,9 @@ async def test_setup_seeds_registries_and_store(
     assert DATA_STORE in data
     assert "scene" in data[DATA_MATCHERS]
     assert "time_of_day" in data[DATA_MATCHERS]
-    assert "set_light" in data[DATA_ACTIONS]
+    # ExposedActionsStore is wired up; fresh setup starts empty.
+    assert DATA_EXPOSED_ACTIONS in data
+    assert data[DATA_EXPOSED_ACTIONS].list() == []
 
 
 async def test_script_matcher_is_registered(
@@ -246,3 +248,65 @@ async def test_panel_is_removed_on_unload(
 
     panels = hass.data.get("frontend_panels", {})
     assert "ambience" not in panels
+
+
+async def test_setup_migrates_old_action_shape_and_auto_exposes(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A stored area with an old-shape set_light action is rewritten and
+    the implied service is auto-added to the exposed-actions list."""
+    from homeassistant.helpers.storage import Store
+
+    area = ar.async_get(hass).async_create("Lounge")
+
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {
+                area.id: {
+                    "rules": [
+                        {
+                            "name": "movie",
+                            "when": {"scene": "movie"},
+                            "actions": [
+                                {
+                                    "action": "set_light",
+                                    "entity_ids": ["light.a"],
+                                    "params": {"brightness": 60, "transition": 1},
+                                }
+                            ],
+                        }
+                    ],
+                    "auto_sort": True,
+                }
+            },
+            "floors": {},
+            "house": {"rules": [], "auto_sort": True},
+            "matchers": {},
+            "exposed_actions": [],
+        }
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = store.get_area(area.id)
+    assert cfg is not None
+    new_action = cfg["rules"][0]["actions"][0]
+    # Old shape rewritten in place.
+    assert "action" not in new_action
+    assert new_action["service"] == "light.turn_on"
+    assert new_action["params"] == {"brightness_pct": 60, "transition": 1}
+
+    # Service auto-exposed with sensible default visible_fields.
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    entries = {e["id"]: e for e in exposed_store.list()}
+    assert "light.turn_on" in entries
+    assert set(entries["light.turn_on"]["visible_fields"]) == {
+        "brightness_pct",
+        "transition",
+    }

@@ -9,7 +9,13 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
-from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
+from .const import (
+    DATA_EXPOSED_ACTIONS,
+    DATA_MATCHERS,
+    DATA_STORE,
+    DATA_SWITCHES,
+    DOMAIN,
+)
 from .engine import resolve
 
 _LOGGER = logging.getLogger(__name__)
@@ -144,7 +150,7 @@ async def async_apply_scene(
     `scene` is optional; when omitted, scene predicates on rules are treated
     as wildcards.
     """
-    actions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_ACTIONS]
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
 
     if _switch_state(hass, scope_kind, scope_id) == "off":
         _LOGGER.info(
@@ -165,23 +171,34 @@ async def async_apply_scene(
         )
         return
 
-    coros = []
+    coros: list = []
     for action_spec in plan["actions"]:
-        action_name = action_spec.get("action")
-        action = actions_registry.get(action_name)
-        if action is None:
+        service_id = action_spec.get("service")
+        if not service_id or "." not in service_id:
             _LOGGER.warning(
-                "ambience: unknown action %r in rule %d (scope=%s/%s); skipping",
-                action_name,
+                "ambience: rule %d in scope=%s/%s has malformed action %r; skipping",
+                plan["matched_rule_index"],
+                scope_kind,
+                scope_id,
+                action_spec,
+            )
+            continue
+        exposed = exposed_store.get(service_id)
+        if exposed is None:
+            _LOGGER.warning(
+                "ambience: service %r not exposed; skipping (rule %d, scope=%s/%s)",
+                service_id,
                 plan["matched_rule_index"],
                 scope_kind,
                 scope_id,
             )
             continue
-        entity_ids = action_spec.get("entity_ids", [])
-        params = action_spec.get("params", {})
-        script = action_spec.get("script")
-        coros.append(action.execute(hass, entity_ids, params, script=script))
+        domain, name = service_id.split(".", 1)
+        params = {**exposed.get("locked_values", {}), **action_spec.get("params", {})}
+        entity_ids = action_spec.get("entity_ids") or []
+        target = {"entity_id": entity_ids} if entity_ids else None
+        coros.append(hass.services.async_call(domain, name, params, target=target, blocking=True))
+
     results = await asyncio.gather(*coros, return_exceptions=True)
     for result in results:
         if isinstance(result, BaseException):

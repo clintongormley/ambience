@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from pathlib import Path
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.components.frontend import (
@@ -21,10 +22,8 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.typing import ConfigType
 
-from .actions.script import ScriptAction
-from .actions.set_light import SetLightAction
 from .const import (
-    DATA_ACTIONS,
+    DATA_EXPOSED_ACTIONS,
     DATA_MATCHERS,
     DATA_PERIODS,
     DATA_STORE,
@@ -32,14 +31,16 @@ from .const import (
     DATA_SWITCHES,
     DOMAIN,
 )
+from .exposed_actions import ExposedActionsStore
 from .matchers.day import DayMatcher
 from .matchers.scene import SceneMatcher
 from .matchers.script import ScriptMatcher
 from .matchers.state import StateMatcher
 from .matchers.time_of_day import TimeOfDayMatcher
 from .matchers.weather import WeatherMatcher
+from .migration import migrate_scope
 from .periods import PeriodStore
-from .registry import register_action, register_matcher
+from .registry import register_matcher
 from .service import async_apply_scene
 from .store import AmbienceStore
 from .websocket import async_register_commands, async_unregister_commands
@@ -96,7 +97,6 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[DATA_MATCHERS] = {}
-    domain_data[DATA_ACTIONS] = {}
     domain_data[DATA_SWITCHES] = {}
 
     store = AmbienceStore(hass)
@@ -118,6 +118,78 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     domain_data[DATA_STORE] = store
 
+    exposed_store = ExposedActionsStore(store)
+    domain_data[DATA_EXPOSED_ACTIONS] = exposed_store
+
+    # One-shot pre-1.0 migration: rewrite set_light / script action entries
+    # to generic service calls and auto-expose the services they reference.
+    services_used: set[str] = set()
+    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
+        added = migrate_scope(scope_cfg)
+        if not added:
+            continue
+        services_used.update(added)
+        if scope_kind == "area":
+            await store.async_save_area(scope_id, scope_cfg)
+        elif scope_kind == "floor":
+            await store.async_save_floor(scope_id, scope_cfg)
+        elif scope_kind == "house":
+            await store.async_save_house(scope_cfg)
+    if services_used:
+        existing = {a["id"] for a in exposed_store.list()}
+        additions: list[dict[str, Any]] = []
+        for sid in sorted(services_used):
+            if sid in existing:
+                continue
+            if sid == "light.turn_on":
+                additions.append(
+                    {
+                        "id": sid,
+                        "label": "",
+                        "visible_fields": ["brightness_pct", "transition"],
+                        "locked_values": {},
+                    }
+                )
+            elif sid == "light.turn_off":
+                additions.append(
+                    {
+                        "id": sid,
+                        "label": "",
+                        "visible_fields": ["transition"],
+                        "locked_values": {},
+                    }
+                )
+            elif sid.startswith("script."):
+                # Expose with every declared field visible.
+                from .services_meta import get_service_schema
+
+                schema = await get_service_schema(hass, sid)
+                fields = list((schema or {}).get("fields") or {})
+                additions.append(
+                    {
+                        "id": sid,
+                        "label": "",
+                        "visible_fields": fields,
+                        "locked_values": {},
+                    }
+                )
+            else:
+                additions.append(
+                    {
+                        "id": sid,
+                        "label": "",
+                        "visible_fields": [],
+                        "locked_values": {},
+                    }
+                )
+        if additions:
+            await exposed_store.save(exposed_store.list() + additions)
+            _LOGGER.info(
+                "ambience: migrated %d action(s); auto-exposed %s",
+                len(services_used),
+                [a["id"] for a in additions],
+            )
+
     period_store = PeriodStore(store)
     domain_data[DATA_PERIODS] = period_store
 
@@ -127,8 +199,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     register_matcher(hass, WeatherMatcher(hass=hass))
     register_matcher(hass, StateMatcher(hass=hass))
     register_matcher(hass, ScriptMatcher(hass=hass))
-    register_action(hass, ScriptAction())
-    register_action(hass, SetLightAction())
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
         scene = call.data.get("scene")

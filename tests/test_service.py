@@ -1,17 +1,19 @@
-"""ambience.apply_scene service handler."""
+"""ambience.apply_scene service handler — generic service dispatch."""
 
 from __future__ import annotations
 
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from pytest_homeassistant_custom_component.common import async_mock_service
 
 from custom_components.ambience.const import (
-    DATA_ACTIONS,
+    DATA_EXPOSED_ACTIONS,
     DATA_MATCHERS,
     DATA_STORE,
     DOMAIN,
 )
+from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.matchers.scene import SceneMatcher
 from custom_components.ambience.service import async_apply_scene, async_resolve_only
 
@@ -53,55 +55,71 @@ class FailingMatcher:
         return
 
 
-class RecordingAction:
-    name = "record"
-    domains = ("light",)
-
-    def __init__(self) -> None:
-        self.executions: list[tuple] = []
-
-    async def execute(self, hass, entity_ids, params, script=None):
-        self.executions.append((list(entity_ids), dict(params)))
-
-    def validate_target_params(self, entity_ids, params, script=None):
-        return
-
-
 class FakeStore:
-    def __init__(self, areas: dict) -> None:
-        self._areas = areas
+    def __init__(self, areas: dict | None = None) -> None:
+        self._areas = areas or {}
 
     def get_area(self, area_id):
         return self._areas.get(area_id)
 
 
-def _install(hass: HomeAssistant, *, areas: dict, matchers: dict, actions: dict) -> None:
+class _FakeExposedStorage:
+    """Minimal storage backing for ExposedActionsStore in tests."""
+
+    def __init__(self, initial: list[dict] | None = None) -> None:
+        self._actions = list(initial or [])
+
+    def get_exposed_actions(self) -> list[dict]:
+        return list(self._actions)
+
+    async def async_save_exposed_actions(self, actions: list[dict]) -> None:
+        self._actions = list(actions)
+
+
+def _install(
+    hass: HomeAssistant,
+    *,
+    areas: dict | None = None,
+    matchers: dict | None = None,
+    exposed: list[dict] | None = None,
+    store: object | None = None,
+) -> None:
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][DATA_STORE] = FakeStore(areas)
-    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher(), **matchers}
-    hass.data[DOMAIN][DATA_ACTIONS] = actions
+    hass.data[DOMAIN][DATA_STORE] = store if store is not None else FakeStore(areas or {})
+    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher(), **(matchers or {})}
+    hass.data[DOMAIN][DATA_EXPOSED_ACTIONS] = ExposedActionsStore(
+        _FakeExposedStorage(exposed or [])
+    )
+
+
+def _exposed(sid: str, *, visible: list[str] | None = None, locked: dict | None = None) -> dict:
+    return {
+        "id": sid,
+        "label": "",
+        "visible_fields": list(visible or []),
+        "locked_values": dict(locked or {}),
+    }
 
 
 async def test_unknown_area_raises(hass: HomeAssistant) -> None:
-    _install(hass, areas={}, matchers={}, actions={})
+    _install(hass)
     with pytest.raises(ServiceValidationError, match="unknown_area"):
         await async_apply_scene(hass, "area", "missing", "movie")
 
 
-async def test_happy_path_executes_matching_rule(hass: HomeAssistant) -> None:
-    action = RecordingAction()
+async def test_happy_path_calls_service_for_matching_rule(hass: HomeAssistant) -> None:
+    calls = async_mock_service(hass, "light", "turn_on")
     matchers = {"tod": FixedMatcher("evening")}
     areas = {
         "lr": {
-            "matchers": ["tod"],
             "rules": [
                 {
                     "when": {"scene": "movie", "tod": "morning"},
                     "actions": [
                         {
-                            "action": "record",
+                            "service": "light.turn_on",
                             "entity_ids": ["light.a"],
-                            "params": {"brightness": 10},
+                            "params": {"brightness_pct": 10},
                         }
                     ],
                 },
@@ -109,134 +127,179 @@ async def test_happy_path_executes_matching_rule(hass: HomeAssistant) -> None:
                     "when": {"scene": "movie", "tod": "evening"},
                     "actions": [
                         {
-                            "action": "record",
+                            "service": "light.turn_on",
                             "entity_ids": ["light.b"],
-                            "params": {"brightness": 30},
+                            "params": {"brightness_pct": 30},
                         }
                     ],
                 },
             ],
         }
     }
-    _install(hass, areas=areas, matchers=matchers, actions={"record": action})
+    _install(
+        hass,
+        areas=areas,
+        matchers=matchers,
+        exposed=[_exposed("light.turn_on", visible=["brightness_pct"])],
+    )
 
     await async_apply_scene(hass, "area", "lr", "movie")
 
-    assert action.executions == [(["light.b"], {"brightness": 30})]
+    assert len(calls) == 1
+    assert calls[0].data["entity_id"] == ["light.b"]
+    assert calls[0].data["brightness_pct"] == 30
 
 
-async def test_no_match_is_silent_noop(hass: HomeAssistant) -> None:
-    action = RecordingAction()
-    matchers = {"tod": FixedMatcher("evening")}
+async def test_locked_values_merged_with_rule_params(hass: HomeAssistant) -> None:
+    """Locked defaults are applied even when the rule doesn't set them."""
+    calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
-            "matchers": ["tod"],
             "rules": [
-                {"when": {"scene": "movie", "tod": "morning"}, "actions": []},
-            ],
-        }
-    }
-    _install(hass, areas=areas, matchers=matchers, actions={"record": action})
-    await async_apply_scene(hass, "area", "lr", "movie")
-    assert action.executions == []
-
-
-async def test_snapshot_failure_treats_matcher_as_unresolved(
-    hass: HomeAssistant,
-) -> None:
-    action = RecordingAction()
-    matchers = {"tod": FixedMatcher("evening"), "weather": FailingMatcher()}
-    areas = {
-        "lr": {
-            "matchers": ["tod", "weather"],
-            "rules": [
-                {
-                    "when": {"scene": "movie", "weather": "rainy"},
-                    "actions": [
-                        {
-                            "action": "record",
-                            "entity_ids": ["light.a"],
-                            "params": {"brightness": 10},
-                        }
-                    ],
-                },
                 {
                     "when": {"scene": "movie"},
                     "actions": [
                         {
-                            "action": "record",
-                            "entity_ids": ["light.b"],
-                            "params": {"brightness": 20},
-                        }
-                    ],
-                },
-            ],
-        }
-    }
-    _install(hass, areas=areas, matchers=matchers, actions={"record": action})
-
-    await async_apply_scene(hass, "area", "lr", "movie")
-
-    assert action.executions == [(["light.b"], {"brightness": 20})]
-
-
-async def test_unknown_action_skipped_other_actions_run(
-    hass: HomeAssistant,
-) -> None:
-    recorded = RecordingAction()
-    matchers = {"tod": FixedMatcher("evening")}
-    areas = {
-        "lr": {
-            "matchers": ["tod"],
-            "rules": [
-                {
-                    "when": {"scene": "movie"},
-                    "actions": [
-                        {"action": "nonexistent", "entity_ids": ["x.y"], "params": {}},
-                        {
-                            "action": "record",
+                            "service": "light.turn_on",
                             "entity_ids": ["light.a"],
-                            "params": {"brightness": 50},
-                        },
+                            "params": {"brightness_pct": 60},
+                        }
                     ],
                 }
             ],
         }
     }
-    _install(hass, areas=areas, matchers=matchers, actions={"record": recorded})
+    _install(
+        hass,
+        areas=areas,
+        exposed=[
+            _exposed(
+                "light.turn_on",
+                visible=["brightness_pct"],
+                locked={"transition": 1.5},
+            )
+        ],
+    )
 
     await async_apply_scene(hass, "area", "lr", "movie")
 
-    assert recorded.executions == [(["light.a"], {"brightness": 50})]
+    assert len(calls) == 1
+    assert calls[0].data["brightness_pct"] == 60
+    assert calls[0].data["transition"] == 1.5
 
 
-async def test_action_failure_does_not_block_other_actions(
-    hass: HomeAssistant,
-) -> None:
-    class FailingAction:
-        name = "fail"
-        domains = ("light",)
-
-        async def execute(self, hass, entity_ids, params, script=None):
-            raise RuntimeError("boom")
-
-        def validate_target_params(self, entity_ids, params, script=None):
-            return
-
-    recorded = RecordingAction()
-    matchers = {"tod": FixedMatcher("evening")}
+async def test_rule_params_override_locked_values(hass: HomeAssistant) -> None:
+    """If both locked + rule params set a key, the rule wins (later-wins via spread)."""
+    calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
-            "matchers": ["tod"],
             "rules": [
                 {
                     "when": {"scene": "movie"},
                     "actions": [
-                        {"action": "fail", "entity_ids": ["x.y"], "params": {}},
                         {
-                            "action": "record",
+                            "service": "light.turn_on",
                             "entity_ids": ["light.a"],
-                            "params": {"brightness": 50},
+                            "params": {"transition": 3.0},
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    _install(
+        hass,
+        areas=areas,
+        exposed=[
+            _exposed(
+                "light.turn_on",
+                visible=["transition"],
+                locked={"transition": 1.0},
+            )
+        ],
+    )
+
+    await async_apply_scene(hass, "area", "lr", "movie")
+
+    assert calls[0].data["transition"] == 3.0
+
+
+async def test_no_match_is_silent_noop(hass: HomeAssistant) -> None:
+    calls = async_mock_service(hass, "light", "turn_on")
+    matchers = {"tod": FixedMatcher("evening")}
+    areas = {
+        "lr": {
+            "rules": [
+                {"when": {"scene": "movie", "tod": "morning"}, "actions": []},
+            ],
+        }
+    }
+    _install(hass, areas=areas, matchers=matchers)
+    await async_apply_scene(hass, "area", "lr", "movie")
+    assert calls == []
+
+
+async def test_snapshot_failure_treats_matcher_as_unresolved(
+    hass: HomeAssistant,
+) -> None:
+    calls = async_mock_service(hass, "light", "turn_on")
+    matchers = {"tod": FixedMatcher("evening"), "weather": FailingMatcher()}
+    areas = {
+        "lr": {
+            "rules": [
+                {
+                    "when": {"scene": "movie", "weather": "rainy"},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness_pct": 10},
+                        }
+                    ],
+                },
+                {
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.b"],
+                            "params": {"brightness_pct": 20},
+                        }
+                    ],
+                },
+            ],
+        }
+    }
+    _install(
+        hass,
+        areas=areas,
+        matchers=matchers,
+        exposed=[_exposed("light.turn_on", visible=["brightness_pct"])],
+    )
+
+    await async_apply_scene(hass, "area", "lr", "movie")
+
+    assert len(calls) == 1
+    assert calls[0].data["entity_id"] == ["light.b"]
+    assert calls[0].data["brightness_pct"] == 20
+
+
+async def test_malformed_action_skipped_other_actions_run(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    calls = async_mock_service(hass, "light", "turn_on")
+    areas = {
+        "lr": {
+            "rules": [
+                {
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        # Missing dot in service id → malformed.
+                        {"service": "nope", "entity_ids": [], "params": {}},
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness_pct": 50},
                         },
                     ],
                 }
@@ -246,13 +309,98 @@ async def test_action_failure_does_not_block_other_actions(
     _install(
         hass,
         areas=areas,
-        matchers=matchers,
-        actions={"record": recorded, "fail": FailingAction()},
+        exposed=[_exposed("light.turn_on", visible=["brightness_pct"])],
+    )
+
+    import logging
+
+    caplog.set_level(logging.WARNING)
+    await async_apply_scene(hass, "area", "lr", "movie")
+
+    assert len(calls) == 1
+    assert calls[0].data["entity_id"] == ["light.a"]
+    assert "malformed action" in caplog.text
+
+
+async def test_unexposed_service_skipped_with_warning(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A rule referencing a not-exposed service should be skipped and warned."""
+    calls = async_mock_service(hass, "light", "turn_on")
+    areas = {
+        "lr": {
+            "rules": [
+                {
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness_pct": 50},
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    # exposed is empty → service not exposed
+    _install(hass, areas=areas, exposed=[])
+
+    import logging
+
+    caplog.set_level(logging.WARNING)
+    await async_apply_scene(hass, "area", "lr", "movie")
+
+    assert calls == []
+    assert "not exposed" in caplog.text
+
+
+async def test_action_failure_does_not_block_other_actions(
+    hass: HomeAssistant,
+) -> None:
+    """A failing first service call must not prevent the second one from running."""
+
+    async def _boom(_call):
+        raise RuntimeError("boom")
+
+    hass.services.async_register("light", "turn_on", _boom)
+    off_calls = async_mock_service(hass, "light", "turn_off")
+
+    areas = {
+        "lr": {
+            "rules": [
+                {
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.a"],
+                            "params": {},
+                        },
+                        {
+                            "service": "light.turn_off",
+                            "entity_ids": ["light.b"],
+                            "params": {},
+                        },
+                    ],
+                }
+            ],
+        }
+    }
+    _install(
+        hass,
+        areas=areas,
+        exposed=[
+            _exposed("light.turn_on", visible=[]),
+            _exposed("light.turn_off", visible=[]),
+        ],
     )
 
     await async_apply_scene(hass, "area", "lr", "movie")
 
-    assert recorded.executions == [(["light.a"], {"brightness": 50})]
+    # The failing turn_on raised, but turn_off still completed.
+    assert len(off_calls) == 1
+    assert off_calls[0].data["entity_id"] == ["light.b"]
 
 
 async def test_cancellation_treated_as_failure_isolation(
@@ -277,18 +425,17 @@ async def test_cancellation_treated_as_failure_isolation(
         def validate_predicate(self, predicate):
             return
 
-    action = RecordingAction()
+    calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
-            "matchers": ["tod"],
             "rules": [
                 {
                     "when": {"scene": "movie"},
                     "actions": [
                         {
-                            "action": "record",
+                            "service": "light.turn_on",
                             "entity_ids": ["light.a"],
-                            "params": {"brightness": 10},
+                            "params": {"brightness_pct": 10},
                         }
                     ],
                 }
@@ -299,32 +446,21 @@ async def test_cancellation_treated_as_failure_isolation(
         hass,
         areas=areas,
         matchers={"tod": CancelledMatcher()},
-        actions={"record": action},
+        exposed=[_exposed("light.turn_on", visible=["brightness_pct"])],
     )
 
     await async_apply_scene(hass, "area", "lr", "movie")
 
     # Wildcard rule should still match (cancelled snapshot becomes None).
-    assert action.executions == [(["light.a"], {"brightness": 10})]
+    assert len(calls) == 1
+    assert calls[0].data["entity_id"] == ["light.a"]
 
 
-async def test_apply_scene_threads_script_kwarg_to_action(hass: HomeAssistant) -> None:
-    class ScriptRecordingAction:
-        name = "fake"
-        domains = ()
-
-        def __init__(self) -> None:
-            self.executions: list[dict] = []
-
-        async def execute(self, hass, entity_ids, params, script=None):
-            self.executions.append(
-                {"entity_ids": list(entity_ids), "params": dict(params), "script": script}
-            )
-
-        def validate_target_params(self, entity_ids, params, script=None):
-            return
-
-    fake = ScriptRecordingAction()
+async def test_apply_scene_with_no_entity_ids_omits_target(
+    hass: HomeAssistant,
+) -> None:
+    """Actions with no entity_ids should be dispatched without a target."""
+    calls = async_mock_service(hass, "script", "foo")
     areas = {
         "lr": {
             "rules": [
@@ -332,34 +468,36 @@ async def test_apply_scene_threads_script_kwarg_to_action(hass: HomeAssistant) -
                     "when": {"scene": "movie"},
                     "actions": [
                         {
-                            "action": "fake",
-                            "script": "script.foo",
-                            "entity_ids": ["light.a"],
-                            "params": {"x": 1},
+                            "service": "script.foo",
+                            "entity_ids": [],
+                            "params": {"message": "hi"},
                         }
                     ],
                 }
             ],
         }
     }
-    _install(hass, areas=areas, matchers={}, actions={"fake": fake})
+    _install(
+        hass,
+        areas=areas,
+        exposed=[_exposed("script.foo", visible=["message"])],
+    )
 
     await async_apply_scene(hass, "area", "lr", "movie")
 
-    assert fake.executions == [
-        {"entity_ids": ["light.a"], "params": {"x": 1}, "script": "script.foo"}
-    ]
+    assert len(calls) == 1
+    assert calls[0].data.get("entity_id") is None
+    assert calls[0].data["message"] == "hi"
 
 
 async def test_resolve_only_describes_activating_scene(hass: HomeAssistant) -> None:
     """The activating scene is injected as the `scene` snapshot and described."""
     areas = {
         "lr": {
-            "matchers": [],
             "rules": [{"when": {"scene": "movie"}, "actions": []}],
         }
     }
-    _install(hass, areas=areas, matchers={}, actions={})
+    _install(hass, areas=areas)
 
     result = await async_resolve_only(hass, "area", "lr", "movie")
 
@@ -373,31 +511,37 @@ async def test_apply_scene_without_scene_treats_scene_predicates_as_wildcard(
     """Calling apply_scene without scene should match rules whose scene
     predicate would otherwise constrain them — i.e. the scene predicate
     is stripped (treated as wildcard) for this resolve."""
-    action = RecordingAction()
+    calls = async_mock_service(hass, "light", "turn_on")
     matchers = {"tod": FixedMatcher("evening")}
     areas = {
         "lr": {
-            "matchers": ["tod"],
             "rules": [
                 {
                     "name": "always-on rule",
                     "when": {"scene": "movie_night", "tod": "evening"},
                     "actions": [
                         {
-                            "action": "record",
+                            "service": "light.turn_on",
                             "entity_ids": ["light.a"],
-                            "params": {"brightness": 42},
+                            "params": {"brightness_pct": 42},
                         }
                     ],
                 }
             ],
         }
     }
-    _install(hass, areas=areas, matchers=matchers, actions={"record": action})
+    _install(
+        hass,
+        areas=areas,
+        matchers=matchers,
+        exposed=[_exposed("light.turn_on", visible=["brightness_pct"])],
+    )
 
     await async_apply_scene(hass, "area", "lr", None)
 
-    assert action.executions == [(["light.a"], {"brightness": 42})]
+    assert len(calls) == 1
+    assert calls[0].data["entity_id"] == ["light.a"]
+    assert calls[0].data["brightness_pct"] == 42
 
 
 class FakeScopeStore:
@@ -438,10 +582,7 @@ async def test_async_resolve_only_floor_routes_to_floor_store(hass: HomeAssistan
             "auto_sort": True,
         }
     }
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][DATA_STORE] = FakeScopeStore(floors=floors)
-    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher()}
-    hass.data[DOMAIN][DATA_ACTIONS] = {}
+    _install(hass, store=FakeScopeStore(floors=floors))
 
     plan = await async_resolve_only(hass, "floor", "upstairs", "movie")
     assert plan["rule_name"] == "movie"
@@ -452,20 +593,14 @@ async def test_async_resolve_only_house_routes_to_house_store(hass: HomeAssistan
         "rules": [{"name": "away", "when": {"scene": "away"}, "actions": []}],
         "auto_sort": True,
     }
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][DATA_STORE] = FakeScopeStore(house=house)
-    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher()}
-    hass.data[DOMAIN][DATA_ACTIONS] = {}
+    _install(hass, store=FakeScopeStore(house=house))
 
     plan = await async_resolve_only(hass, "house", None, "away")
     assert plan["rule_name"] == "away"
 
 
 async def test_async_resolve_only_unknown_floor_raises(hass: HomeAssistant) -> None:
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][DATA_STORE] = FakeScopeStore()
-    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher()}
-    hass.data[DOMAIN][DATA_ACTIONS] = {}
+    _install(hass, store=FakeScopeStore())
 
     with pytest.raises(ServiceValidationError, match="unknown_floor"):
         await async_resolve_only(hass, "floor", "nonexistent", None)
@@ -473,7 +608,7 @@ async def test_async_resolve_only_unknown_floor_raises(hass: HomeAssistant) -> N
 
 async def test_async_apply_scene_floor_runs_floor_actions(hass: HomeAssistant) -> None:
     """apply_scene with scope_kind='floor' executes the matched floor rule's actions."""
-    recording = RecordingAction()
+    calls = async_mock_service(hass, "light", "turn_on")
     floors = {
         "upstairs": {
             "rules": [
@@ -481,17 +616,25 @@ async def test_async_apply_scene_floor_runs_floor_actions(hass: HomeAssistant) -
                     "name": "movie",
                     "when": {"scene": "movie"},
                     "actions": [
-                        {"action": "record", "entity_ids": ["light.up_a"], "params": {"x": 1}}
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.up_a"],
+                            "params": {"brightness_pct": 25},
+                        }
                     ],
                 }
             ],
             "auto_sort": True,
         }
     }
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][DATA_STORE] = FakeScopeStore(floors=floors)
-    hass.data[DOMAIN][DATA_MATCHERS] = {"scene": SceneMatcher()}
-    hass.data[DOMAIN][DATA_ACTIONS] = {"record": recording}
+    _install(
+        hass,
+        store=FakeScopeStore(floors=floors),
+        exposed=[_exposed("light.turn_on", visible=["brightness_pct"])],
+    )
 
     await async_apply_scene(hass, "floor", "upstairs", "movie")
-    assert recording.executions == [(["light.up_a"], {"x": 1})]
+
+    assert len(calls) == 1
+    assert calls[0].data["entity_id"] == ["light.up_a"]
+    assert calls[0].data["brightness_pct"] == 25

@@ -127,7 +127,7 @@ async def test_validate_against_catalog_passes_for_known_service_and_fields() ->
         {"light": {"turn_on": {"fields": {"brightness_pct": {}, "transition": {}}}}}
     )
     store = ExposedActionsStore(_FakeStorage())
-    store.validate_against_catalog(
+    await store.validate_against_catalog(
         hass,
         [
             {
@@ -144,7 +144,7 @@ async def test_validate_against_catalog_rejects_unknown_service() -> None:
     hass = _hass_with_services({"light": {"turn_on": {"fields": {}}}})
     store = ExposedActionsStore(_FakeStorage())
     with pytest.raises(ValueError, match="unknown service"):
-        store.validate_against_catalog(
+        await store.validate_against_catalog(
             hass,
             [
                 {"id": "light.nope", "label": "", "visible_fields": [], "locked_values": {}},
@@ -156,7 +156,7 @@ async def test_validate_against_catalog_rejects_unknown_field_in_visible() -> No
     hass = _hass_with_services({"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
     store = ExposedActionsStore(_FakeStorage())
     with pytest.raises(ValueError, match="unknown field"):
-        store.validate_against_catalog(
+        await store.validate_against_catalog(
             hass,
             [
                 {
@@ -173,7 +173,7 @@ async def test_validate_against_catalog_rejects_unknown_field_in_locked() -> Non
     hass = _hass_with_services({"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
     store = ExposedActionsStore(_FakeStorage())
     with pytest.raises(ValueError, match="unknown field"):
-        store.validate_against_catalog(
+        await store.validate_against_catalog(
             hass,
             [
                 {
@@ -190,7 +190,7 @@ async def test_validate_against_catalog_stops_at_first_bad_entry() -> None:
     hass = _hass_with_services({"light": {"turn_on": {"fields": {}}}})
     store = ExposedActionsStore(_FakeStorage())
     with pytest.raises(ValueError, match="light.nope"):
-        store.validate_against_catalog(
+        await store.validate_against_catalog(
             hass,
             [
                 {"id": "light.nope", "label": "", "visible_fields": [], "locked_values": {}},
@@ -202,7 +202,7 @@ async def test_validate_against_catalog_stops_at_first_bad_entry() -> None:
 async def test_validate_against_catalog_accepts_service_with_no_fields() -> None:
     hass = _hass_with_services({"notify": {"send_message": {"fields": {}}}})
     store = ExposedActionsStore(_FakeStorage())
-    store.validate_against_catalog(
+    await store.validate_against_catalog(
         hass,
         [{"id": "notify.send_message", "label": "", "visible_fields": [], "locked_values": {}}],
     )  # no exception

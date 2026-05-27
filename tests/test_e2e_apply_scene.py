@@ -11,7 +11,7 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
 from custom_components.ambience.service import async_resolve_only
 
 
@@ -46,6 +46,18 @@ async def test_service_call_invokes_light_turn_on(
 ) -> None:
     on_calls = async_mock_service(hass, "light", "turn_on")
     store = hass.data[DOMAIN][DATA_STORE]
+    # Pre-expose the service the rule will reference.
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct", "transition"],
+                "locked_values": {},
+            }
+        ]
+    )
     await store.async_save_area(
         "lr",
         {
@@ -55,9 +67,9 @@ async def test_service_call_invokes_light_turn_on(
                     "when": {"scene": "movie"},
                     "actions": [
                         {
-                            "action": "set_light",
+                            "service": "light.turn_on",
                             "entity_ids": ["light.lamp"],
-                            "params": {"brightness": 30, "transition": 2.0},
+                            "params": {"brightness_pct": 30, "transition": 2.0},
                         }
                     ],
                 }
@@ -73,7 +85,7 @@ async def test_service_call_invokes_light_turn_on(
     )
 
     assert len(on_calls) == 1
-    assert on_calls[0].data["entity_id"] == "light.lamp"
+    assert on_calls[0].data["entity_id"] == ["light.lamp"]
     assert on_calls[0].data["brightness_pct"] == 30
     assert on_calls[0].data["transition"] == 2.0  # passed straight through
 

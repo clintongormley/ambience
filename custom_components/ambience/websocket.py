@@ -513,13 +513,14 @@ async def _ws_periods_save(
     store = hass.data[DOMAIN][DATA_STORE]
     effective_ids = set(period_store.effective())
     warnings: list[dict[str, Any]] = []
-    for area_id, area_cfg in store.areas().items():
-        for rule in area_cfg.get("rules", []):
+    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
+        for rule in scope_cfg.get("rules", []):
             pred = rule.get("when", {}).get("time_of_day")
             for missing in _missing_period_refs(pred, effective_ids):
                 warnings.append(
                     {
-                        "area_id": area_id,
+                        "scope_kind": scope_kind,
+                        "scope_id": scope_id,
                         "rule_name": rule.get("name", ""),
                         "missing_period": missing,
                     }
@@ -586,8 +587,8 @@ def _dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> l
     sensor_ok = bool(cfg.get("workday_sensor"))
     calendar_ok = bool(cfg.get("workday_calendar"))
     warnings: list[dict[str, Any]] = []
-    for area_id, area_cfg in store.areas().items():
-        for rule in area_cfg.get("rules", []):
+    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
+        for rule in scope_cfg.get("rules", []):
             pred = rule.get("when", {}).get("day")
             if not isinstance(pred, dict):
                 continue
@@ -596,7 +597,8 @@ def _dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> l
                 if kind in _SENSOR_DEPENDENT_KINDS and not sensor_ok:
                     warnings.append(
                         {
-                            "area_id": area_id,
+                            "scope_kind": scope_kind,
+                            "scope_id": scope_id,
                             "rule_name": rule.get("name", ""),
                             "reason": f"uses `{kind}` item but `workday_sensor` is unset",
                         }
@@ -604,7 +606,8 @@ def _dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> l
                 if kind in _CALENDAR_DEPENDENT_KINDS and not calendar_ok:
                     warnings.append(
                         {
-                            "area_id": area_id,
+                            "scope_kind": scope_kind,
+                            "scope_id": scope_id,
                             "rule_name": rule.get("name", ""),
                             "reason": f"uses `{kind}` item but `workday_calendar` is unset",
                         }
@@ -696,15 +699,16 @@ def _dangling_weather_warnings(
     entity_cleared = not new_cfg.get("entity")
 
     warnings: list[dict[str, Any]] = []
-    for area_id, area_cfg in store.areas().items():
-        for rule in area_cfg.get("rules", []):
+    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
+        for rule in scope_cfg.get("rules", []):
             pred = rule.get("when", {}).get("weather")
             if not _weather_predicate_active(pred):
                 continue
             if entity_cleared:
                 warnings.append(
                     {
-                        "area_id": area_id,
+                        "scope_kind": scope_kind,
+                        "scope_id": scope_id,
                         "rule_name": rule.get("name", ""),
                         "reason": "uses a weather predicate but the weather entity is unset",
                     }
@@ -713,7 +717,8 @@ def _dangling_weather_warnings(
                 if gid in removed_ids:
                     warnings.append(
                         {
-                            "area_id": area_id,
+                            "scope_kind": scope_kind,
+                            "scope_id": scope_id,
                             "rule_name": rule.get("name", ""),
                             "reason": f"references deleted weather group {gid!r}",
                         }

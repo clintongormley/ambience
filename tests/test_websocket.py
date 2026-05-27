@@ -648,11 +648,47 @@ async def test_ws_periods_save_returns_warnings_for_dangling_refs(
     assert msg["success"]
     warnings = msg["result"]["warnings"]
     assert any(
-        w["area_id"] == area.id
+        w["scope_kind"] == "area"
+        and w["scope_id"] == area.id
         and w["rule_name"] == "Evening rule"
         and w["missing_period"] == "evening"
         for w in warnings
     )
+
+
+async def test_periods_save_warnings_include_floor_scope(
+    hass: HomeAssistant, installed, hass_ws_client, floor_id
+) -> None:
+    """A dangling period reference in a floor's rule shows up in periods/save warnings."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    # Save a floor rule referencing a custom period id we'll later delete.
+    await store.async_save_floor(
+        floor_id,
+        {
+            "rules": [
+                {
+                    "name": "evening",
+                    "when": {"time_of_day": {"period": "supper"}},
+                    "actions": [],
+                }
+            ],
+            "auto_sort": True,
+        },
+    )
+    # Save periods with no `supper` entry → reference is dangling.
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/time_of_day_periods/save",
+        custom={},
+        hidden=[],
+    )
+    assert resp["success"] is True
+    warnings = resp["result"]["warnings"]
+    matching = [
+        w for w in warnings if w.get("scope_kind") == "floor" and w.get("scope_id") == floor_id
+    ]
+    assert matching, f"expected a floor warning, got {warnings!r}"
+    assert matching[0]["missing_period"] == "supper"
 
 
 # ---------------------------------------------------------------------------
@@ -753,7 +789,11 @@ async def test_day_config_save_emits_warnings_when_clearing_sensor(
         workday_calendar=None,
     )
     assert resp["success"] is True
-    assert any("workday_sensor" in w["reason"] for w in resp["result"]["warnings"])
+    warnings = resp["result"]["warnings"]
+    assert any(
+        w["scope_kind"] == "area" and w["scope_id"] == area_id and "workday_sensor" in w["reason"]
+        for w in warnings
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -854,7 +894,11 @@ async def test_weather_config_save_warns_when_clearing_referenced_entity(
         groups=[{"id": "wet", "label": "Wet", "conditions": ["rainy"]}],
     )
     assert resp["success"] is True
-    assert any("weather entity" in w["reason"] for w in resp["result"]["warnings"])
+    warnings = resp["result"]["warnings"]
+    assert any(
+        w["scope_kind"] == "area" and w["scope_id"] == area_id and "weather entity" in w["reason"]
+        for w in warnings
+    )
 
 
 async def test_weather_config_save_warns_when_deleting_referenced_group(
@@ -893,7 +937,13 @@ async def test_weather_config_save_warns_when_deleting_referenced_group(
     )
     assert resp["success"] is True
     warnings = resp["result"]["warnings"]
-    assert any("wet" in w["reason"] and w["rule_name"] == "Rainy rule" for w in warnings)
+    assert any(
+        w["scope_kind"] == "area"
+        and w["scope_id"] == area_id
+        and "wet" in w["reason"]
+        and w["rule_name"] == "Rainy rule"
+        for w in warnings
+    )
 
 
 async def test_weather_config_save_rejects_malformed_groups(

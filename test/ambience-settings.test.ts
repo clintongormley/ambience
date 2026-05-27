@@ -64,9 +64,38 @@ describe("ambience-ambience-settings", () => {
     expect(rows[1].textContent).toContain("Upstairs");
     // Areas sorted alphabetically: Kitchen, Living Room
     expect(rows[2].textContent).toContain("Kitchen");
-    expect(rows[2].textContent).toContain("Overridden");
     expect(rows[3].textContent).toContain("Living Room");
-    expect(rows[3].textContent).toContain("Using defaults");
+  });
+
+  test("each row previews the entity name HA will display", async () => {
+    el = await mount();
+    // House + each floor + each area show `<scope prefix> <default name>`;
+    // an overridden row shows the override verbatim.
+    expect(el.shadowRoot.querySelector("[data-test=computed-name-house]").textContent.trim())
+      .toBe("Global Ambience");
+    expect(el.shadowRoot.querySelector("[data-test=computed-name-floor-f1]").textContent.trim())
+      .toBe("Upstairs Ambience");
+    // Kitchen has an override set in the mock, so it shows the override
+    // string verbatim — no prefix.
+    expect(el.shadowRoot.querySelector("[data-test=computed-name-area-a2]").textContent.trim())
+      .toBe("Kitchen lights");
+    expect(el.shadowRoot.querySelector("[data-test=computed-name-area-a1]").textContent.trim())
+      .toBe("Living Room Ambience");
+  });
+
+  test("default-name edit updates the entity-name preview across all rows", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement;
+    input.value = "Lights";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("[data-test=computed-name-house]").textContent.trim())
+      .toBe("Global Lights");
+    expect(el.shadowRoot.querySelector("[data-test=computed-name-floor-f1]").textContent.trim())
+      .toBe("Upstairs Lights");
+    // Overridden row is unaffected.
+    expect(el.shadowRoot.querySelector("[data-test=computed-name-area-a2]").textContent.trim())
+      .toBe("Kitchen lights");
   });
 
   test("reset on overridden area row sends nulls via saveAreaSwitch", async () => {

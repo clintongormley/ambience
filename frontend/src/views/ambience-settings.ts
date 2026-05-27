@@ -26,7 +26,8 @@ import type {
 type Row = {
   kind: "house" | "floor" | "area";
   id: string | null;
-  name: string;
+  name: string;              // row header label (e.g. "Floor: Upstairs")
+  scopePrefix: string;       // raw scope name for the entity-name preview
   override: ScopeSwitchOverride;
   expanded: boolean;
 };
@@ -110,6 +111,7 @@ export class AmbienceAmbienceSettings extends LitElement {
         kind: "house",
         id: null,
         name: localize(this.hass, "ui.settings_ambience_house_row", "Global"),
+        scopePrefix: "Global",
         override: this._toOverride((house as ScopeConfig).switch),
         expanded: false,
       };
@@ -121,6 +123,7 @@ export class AmbienceAmbienceSettings extends LitElement {
         kind: "floor",
         id: f.floor_id,
         name: `${floorPrefix}${f.name}`,
+        scopePrefix: f.name,
         override: this._toOverride((floorConfigs[i] as ScopeConfig).switch),
         expanded: false,
       }));
@@ -132,6 +135,7 @@ export class AmbienceAmbienceSettings extends LitElement {
         kind: "area",
         id: a.area_id,
         name: `${areaPrefix}${a.name}`,
+        scopePrefix: a.name,
         override: this._toOverride((areaConfigs[i] as ScopeConfig).switch),
         expanded: false,
       }));
@@ -217,11 +221,10 @@ export class AmbienceAmbienceSettings extends LitElement {
     this._saveRow(this._rows[idx]);
   }
 
-  private _statusLabel(o: ScopeSwitchOverride): string {
-    if (o.name === null && o.auto_on_delay_seconds === null) {
-      return localize(this.hass, "ui.settings_ambience_using_defaults", "Using defaults");
-    }
-    return localize(this.hass, "ui.settings_ambience_overridden", "Overridden");
+  /** Mirror the entity's name composition so users see exactly what HA will display. */
+  private _computedName(row: Row): string {
+    if (row.override.name !== null) return row.override.name;
+    return `${row.scopePrefix} ${this._defaults.name}`;
   }
 
   override render() {
@@ -250,7 +253,7 @@ export class AmbienceAmbienceSettings extends LitElement {
               <div class="scope-header" data-test="expand" @click=${() => this._toggle(idx)}>
                 <span class="chevron ${r.expanded ? "open" : ""}">▶</span>
                 <div class="scope-name">${r.name}</div>
-                <div class="scope-status">${this._statusLabel(r.override)}</div>
+                <div class="scope-status" data-test=${`computed-name-${_rowKey(r)}`}>${this._computedName(r)}</div>
               </div>
               ${r.expanded ? html`
                 <div class="scope-body">

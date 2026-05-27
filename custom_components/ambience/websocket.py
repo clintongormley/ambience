@@ -416,11 +416,19 @@ async def _ws_validate(
     connection.send_result(msg["id"], {"ok": True})
 
 
+def _house_must_be_true(v: Any) -> bool:
+    if v is not True:
+        raise vol.Invalid("house must be true")
+    return v
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/dry_run",
-        vol.Required("area_id"): str,
+        vol.Optional("area_id"): str,
+        vol.Optional("floor_id"): str,
+        vol.Optional("house"): _house_must_be_true,
         vol.Optional("scene"): str,
     }
 )
@@ -430,8 +438,22 @@ async def _ws_dry_run(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
+    present = [k for k in ("area_id", "floor_id", "house") if k in msg]
+    if len(present) != 1:
+        connection.send_error(
+            msg["id"],
+            "validation_error",
+            f"dry_run requires exactly one of area_id/floor_id/house, got: {present!r}",
+        )
+        return
+    if "area_id" in msg:
+        scope_kind, scope_id = "area", msg["area_id"]
+    elif "floor_id" in msg:
+        scope_kind, scope_id = "floor", msg["floor_id"]
+    else:
+        scope_kind, scope_id = "house", None
     try:
-        result = await async_resolve_only(hass, "area", msg["area_id"], msg.get("scene"))
+        result = await async_resolve_only(hass, scope_kind, scope_id, msg.get("scene"))
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return

@@ -334,6 +334,54 @@ async def test_dry_run_accepts_missing_scene(
     assert "snapshots_described" in resp["result"]
 
 
+async def test_dry_run_with_floor_resolves_against_floor_rules(
+    hass: HomeAssistant, installed, hass_ws_client, floor_id
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_floor(
+        floor_id,
+        {
+            "rules": [{"name": "movie", "when": {"scene": "movie"}, "actions": []}],
+            "auto_sort": True,
+        },
+    )
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/dry_run",
+        floor_id=floor_id,
+        scene="movie",
+    )
+    assert resp["success"] is True
+    assert resp["result"]["rule_name"] == "movie"
+
+
+async def test_dry_run_with_house_resolves_against_house_rules(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_house(
+        {
+            "rules": [{"name": "away", "when": {"scene": "away"}, "actions": []}],
+            "auto_sort": True,
+        },
+    )
+    resp = await _ws_send(hass_ws_client, type="ambience/dry_run", house=True, scene="away")
+    assert resp["success"] is True
+    assert resp["result"]["rule_name"] == "away"
+
+
+async def test_dry_run_rejects_multiple_scope_fields(
+    hass: HomeAssistant, installed, hass_ws_client, area_id, floor_id
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/dry_run",
+        area_id=area_id,
+        floor_id=floor_id,
+    )
+    assert resp["success"] is False
+
+
 async def test_area_save_sorts_rules_when_auto_sort_on(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:

@@ -9,6 +9,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import floor_registry as fr
 
 from .const import DATA_ACTIONS, DATA_MATCHERS, DATA_PERIODS, DATA_STORE, DOMAIN
 from .matchers.weather import WEATHER_CONDITIONS
@@ -19,6 +20,7 @@ _WS_COMMANDS = (
     "ambience/areas/list",
     "ambience/area/get",
     "ambience/area/save",
+    "ambience/floors/list",
     "ambience/matchers/list",
     "ambience/actions/list",
     "ambience/validate",
@@ -103,6 +105,7 @@ def _known_states_for(hass: HomeAssistant, entity_id: str) -> list[str]:
 
 def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_areas_list)
+    websocket_api.async_register_command(hass, _ws_floors_list)
     websocket_api.async_register_command(hass, _ws_matchers_list)
     websocket_api.async_register_command(hass, _ws_actions_list)
     websocket_api.async_register_command(hass, _ws_area_get)
@@ -157,6 +160,22 @@ async def _ws_areas_list(
     result = [
         {"area_id": entry.id, "name": entry.name}
         for entry in sorted(area_reg.async_list_areas(), key=lambda a: a.name)
+    ]
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/floors/list"})
+@websocket_api.async_response
+async def _ws_floors_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    floor_reg = fr.async_get(hass)
+    result = [
+        {"floor_id": entry.floor_id, "name": entry.name}
+        for entry in sorted(floor_reg.async_list_floors(), key=lambda f: f.name)
     ]
     connection.send_result(msg["id"], result)
 

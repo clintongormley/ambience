@@ -958,3 +958,26 @@ async def test_state_known_states_missing_entity_returns_empty(
     assert resp["success"] is True
     # No known sensor domain map + no current state → empty.
     assert resp["result"]["states"] == []
+
+
+async def test_floors_list_empty(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/floors/list")
+    assert resp["success"] is True
+    assert resp["result"] == []
+
+
+async def test_floors_list_returns_ha_floors(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    from homeassistant.helpers import floor_registry as fr
+
+    reg = fr.async_get(hass)
+    up = reg.async_create("Upstairs")
+    down = reg.async_create("Downstairs")
+    resp = await _ws_send(hass_ws_client, type="ambience/floors/list")
+    assert resp["success"] is True
+    # Sorted by name.
+    assert resp["result"] == [
+        {"floor_id": down.floor_id, "name": "Downstairs"},
+        {"floor_id": up.floor_id, "name": "Upstairs"},
+    ]

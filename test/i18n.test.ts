@@ -82,12 +82,12 @@ describe("matcherLabel", () => {
 describe("actionLabel", () => {
   test("returns translated label when hass.localize hits", () => {
     const hass = { localize: (k: string) =>
-      k === "component.ambience.action.set_light" ? "Set light" : undefined };
-    expect(actionLabel(hass, "set_light")).toBe("Set light");
+      k === "component.ambience.action.light.turn_on" ? "Turn on lights" : undefined };
+    expect(actionLabel(hass, "light.turn_on")).toBe("Turn on lights");
   });
 
   test("falls back to friendly form of name", () => {
-    expect(actionLabel(undefined, "set_light")).toBe("Set light");
+    expect(actionLabel(undefined, "scene_activated")).toBe("Scene activated");
   });
 });
 

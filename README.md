@@ -78,7 +78,9 @@ All commands are admin-only.
 | `ambience/area/save` | `{area_id, config}` | `{ok: true}` or error |
 | `ambience/area/delete` | `{area_id}` | `{ok: true}` |
 | `ambience/matchers/list` | – | matchers + descriptions + predicate help |
-| `ambience/actions/list` | – | actions + descriptions + target param schemas |
+| `ambience/services/list` | – | HA services available for use as actions |
+| `ambience/exposed_actions/list` | – | configured action definitions (id, label, service, …) |
+| `ambience/exposed_actions/save` | `{actions}` | `{ok: true}` |
 | `ambience/validate` | `{config}` | `{ok: true}` or error |
 | `ambience/dry_run` | `{area_id, scene}` | resolved-rule preview |
 | `ambience/switch_defaults/list` | – | `{name, auto_on_delay_seconds}` |

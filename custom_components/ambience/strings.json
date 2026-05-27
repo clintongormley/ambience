@@ -43,10 +43,7 @@
     "state": "Entity state",
     "script": "Script"
   },
-  "action": {
-    "set_light": "Set light",
-    "script": "Run script"
-  },
+  "action": {},
   "anchor": {
     "dawn": "Dawn",
     "sunrise": "Sunrise",

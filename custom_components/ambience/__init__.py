@@ -13,6 +13,7 @@ from homeassistant.components.frontend import (
 )
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant, ServiceCall
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
@@ -26,6 +27,7 @@ from .const import (
     DATA_MATCHERS,
     DATA_PERIODS,
     DATA_STORE,
+    DATA_SWITCHES,
     DOMAIN,
 )
 from .matchers.day import DayMatcher
@@ -93,6 +95,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[DATA_MATCHERS] = {}
     domain_data[DATA_ACTIONS] = {}
+    domain_data[DATA_SWITCHES] = {}
 
     store = AmbienceStore(hass)
     await store.async_load()
@@ -142,6 +145,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     async_register_commands(hass)
+
+    await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
 
     async def _handle_area_registry_update(event: Event) -> None:
         """Drop an area's config when the HA area is deleted from the registry."""
@@ -196,6 +201,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    await hass.config_entries.async_unload_platforms(entry, [Platform.SWITCH])
     async_remove_panel(hass, _PANEL_URL)
     hass.services.async_remove(DOMAIN, "apply_scene")
     async_unregister_commands(hass)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time as _time_module
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock
 
@@ -18,6 +19,64 @@ def auto_enable_custom_integrations(
 ) -> Generator[None]:
     """Enable custom integrations for all tests."""
     yield
+
+
+class _MonotonicFromZero:
+    """Monotonically increasing counter starting near zero.
+
+    async_fire_time_changed fires asyncio TimerHandles where:
+        mock_seconds_into_future >= future_seconds
+    where mock_seconds_into_future = mocked_timestamp - time.time().
+
+    With time.time() near zero, mocked_timestamp (a POSIX timestamp ~1.75e9
+    for 2026 dates) is always >> future_seconds, so the condition fires any
+    timer that was scheduled via async_track_point_in_utc_time.  The small
+    monotonic increment keeps HA's internal timestamps strictly ordered, while
+    keeping the absolute value near zero so that
+    async_track_point_in_utc_time schedules handles far in the event-loop
+    future (asyncio will not fire them prematurely).
+
+    This fixture is intentionally NOT autouse — it is activated only for tests
+    that request the ``fixed_utcnow`` fixture, via the
+    ``patch_time_for_fixed_utcnow`` autouse fixture below.
+    """
+
+    def __init__(self) -> None:
+        self._t = 0.0
+
+    def __call__(self) -> float:
+        self._t += 0.001  # 1 ms per call — distinct timestamps
+        return self._t
+
+
+@pytest.fixture
+def _fake_time() -> _MonotonicFromZero:
+    """Provide a near-zero monotonic time.time() replacement."""
+    return _MonotonicFromZero()
+
+
+@pytest.fixture(autouse=True)
+def patch_time_for_fixed_utcnow(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    _fake_time: _MonotonicFromZero,
+) -> None:
+    """Patch time.time() to near-zero only when the fixed_utcnow fixture is active.
+
+    async_fire_time_changed fires asyncio TimerHandles where
+    ``mock_seconds_into_future >= future_seconds``.  When ``dt_util.utcnow``
+    is mocked to a 2026 timestamp (~1.75e9), keeping ``time.time()`` near
+    zero makes ``mock_seconds_into_future`` very large and positive, so the
+    condition is satisfied for any reasonably scheduled handle.
+
+    Limiting this to tests that use ``fixed_utcnow`` avoids breaking other
+    tests (especially WebSocket auth, which relies on JWT expiry checked
+    against ``datetime.now()`` — but ``time.time()`` is used for token
+    *creation* so a near-zero value would produce tokens that appear to have
+    expired decades ago).
+    """
+    if "fixed_utcnow" in request.fixturenames:
+        monkeypatch.setattr(_time_module, "time", _fake_time)
 
 
 @pytest.fixture(autouse=True)

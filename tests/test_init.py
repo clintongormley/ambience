@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
+import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
@@ -171,6 +173,64 @@ async def test_floor_remove_event_deletes_floor_config(
     await hass.async_block_till_done()
 
     assert store.get_floor(entry.floor_id) is None
+
+
+async def test_startup_reconciliation_drops_orphan_area(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An area_id in storage that has no entry in HA's registry is dropped on setup."""
+    from homeassistant.helpers.storage import Store
+
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {"ghost_area": {"rules": [], "auto_sort": True}},
+            "floors": {},
+            "house": {"rules": [], "auto_sort": True},
+            "matchers": {},
+        }
+    )
+
+    caplog.set_level(logging.INFO)
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    assert store.get_area("ghost_area") is None
+    assert "ghost_area" in caplog.text
+
+
+async def test_startup_reconciliation_drops_orphan_floor(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A floor_id in storage that has no entry in HA's registry is dropped on setup."""
+    from homeassistant.helpers.storage import Store
+
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {},
+            "floors": {"ghost_floor": {"rules": [], "auto_sort": True}},
+            "house": {"rules": [], "auto_sort": True},
+            "matchers": {},
+        }
+    )
+
+    caplog.set_level(logging.INFO)
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    assert store.get_floor("ghost_floor") is None
+    assert "ghost_floor" in caplog.text
 
 
 async def test_panel_is_removed_on_unload(

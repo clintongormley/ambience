@@ -95,6 +95,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     store = AmbienceStore(hass)
     await store.async_load()
+
+    # Reconcile against HA registries: drop stored configs whose registry
+    # entry has gone away (e.g. while HA was down).
+    area_reg = ar.async_get(hass)
+    known_area_ids = {a.id for a in area_reg.async_list_areas()}
+    for orphan in [aid for aid in store.areas() if aid not in known_area_ids]:
+        _LOGGER.info("ambience: dropping orphan area config %r", orphan)
+        await store.async_delete_area(orphan)
+
+    floor_reg = fr.async_get(hass)
+    known_floor_ids = {f.floor_id for f in floor_reg.async_list_floors()}
+    for orphan in [fid for fid in store.floors() if fid not in known_floor_ids]:
+        _LOGGER.info("ambience: dropping orphan floor config %r", orphan)
+        await store.async_delete_floor(orphan)
+
     domain_data[DATA_STORE] = store
 
     period_store = PeriodStore(store)

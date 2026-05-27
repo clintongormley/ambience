@@ -12,13 +12,46 @@ export type Rule = {
 };
 
 export type ActionSpec = {
-  action: string;
+  service: string;            // "domain.service"
   entity_ids: string[];
   params: Record<string, unknown>;
-  // Set only when `action === "script"` — the chosen HA script entity id
-  // (e.g. "script.foo"). Backend stores this verbatim and uses it to look up
-  // the script's fields/target metadata at execution time.
-  script?: string;
+};
+
+// One entry in the user's exposed-actions list (Configuration → Actions).
+export type ExposedAction = {
+  id: string;                 // "domain.service"; primary key
+  label: string;              // optional user-friendly name; "" allowed
+  visible_fields: string[];   // shown in the rule editor
+  locked_values: Record<string, unknown>; // always sent on every call
+};
+
+// HA service listing for the settings UI's service picker.
+export type ServiceInfo = {
+  id: string;                 // "domain.service"
+  description: string;
+  target: unknown;            // HA's target metadata; passed through unchanged
+};
+
+// One service's field schema, as returned by ambience/services/get_schema.
+export type ServiceSchema = {
+  fields: Record<string, ServiceField>;
+  target: unknown;
+};
+
+export type ServiceField = {
+  selector?: unknown;         // HA selector dict; ha-form consumes verbatim
+  description?: string;
+  required?: boolean;
+  default?: unknown;
+  example?: unknown;
+};
+
+// Warning shape returned by exposed_actions/save (parallels other warnings).
+export type ExposedActionWarning = {
+  scope_kind: string;
+  scope_id: string | null;
+  rule_name: string;
+  reason: string;
 };
 
 export type SwitchDefaults = {
@@ -55,27 +88,6 @@ export type MatcherInfo = {
   priority: number;
 };
 
-export type ParamSpec = {
-  name: string;
-  type: "int" | "number" | "string" | "boolean";
-  required: boolean;
-  default?: unknown;
-  min?: number;
-  max?: number;
-  description?: string;
-  unit?: string;
-};
-
-export type ActionInfo = {
-  name: string;
-  description: string;
-  domains: string[];
-  target_params: ParamSpec[];
-  // "standard" actions are config-driven (set_light, …); "script" actions
-  // dispatch to an HA script chosen at edit time. The dispatch shapes
-  // are different enough that the editor and summariser branch on this.
-  kind: "standard" | "script";
-};
 
 export type DryRunResult = {
   matched_rule_index: number | null;

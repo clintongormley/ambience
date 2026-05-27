@@ -93,14 +93,74 @@ export class AmbienceScriptPredicateInput extends LitElement {
     this._emit({ script: scriptEntityId, args: this._defaultArgs(scriptEntityId) });
   }
 
+  /** Build an ha-form schema reflecting the picked script's fields. */
+  _argsSchema(): HaFormSchema[] {
+    const fields = this._fieldsFor(this.value && typeof this.value === "object" ? this.value.script : null);
+    if (!fields) return [];
+    return Object.entries(fields).map(([name, f]) => ({
+      name,
+      required: f.required,
+      description: f.description ? { suffix: f.description } : undefined,
+      selector: f.selector ?? { text: {} },
+    } as HaFormSchema & { description?: { suffix: string } }));
+  }
+
+  /** Merge edited args into the predicate and emit. */
+  _updateArgs(args: Record<string, unknown>) {
+    if (!this.value || typeof this.value !== "object") return;
+    this._emit({ script: this.value.script, args });
+  }
+
   override render() {
     const picked = (this.value && typeof this.value === "object") ? this.value.script : null;
+    const schema = this._argsSchema();
+    const args = (this.value && typeof this.value === "object" ? this.value.args : {}) ?? {};
     return html`
       <div class="section">
         <h4>${localize(this.hass, "ui.script", "Script")}</h4>
         ${this._renderPicker(picked)}
       </div>
+      ${schema.length === 0 ? "" : html`
+        <div class="section args">
+          <h4>${localize(this.hass, "ui.arguments", "Arguments")}</h4>
+          ${this._renderArgs(schema, args)}
+        </div>
+      `}
     `;
+  }
+
+  /* v8 ignore start -- ha-form path (real HA only) */
+  private _renderArgs(schema: HaFormSchema[], args: Record<string, unknown>) {
+    if (customElements.get("ha-form")) {
+      return html`<ha-form
+        .hass=${this.hass}
+        .schema=${schema}
+        .data=${args}
+        @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => {
+          e.stopPropagation();
+          this._updateArgs(e.detail.value);
+        }}
+      ></ha-form>`;
+    }
+    /* v8 ignore stop */
+    // jsdom fallback: native inputs (keyed by field type) so headless tests
+    // can still drive the component.
+    return html`${schema.map((s) => {
+      const v = args[s.name];
+      return html`
+        <label style="display:block;margin-bottom:0.4rem;">
+          <span style="display:inline-block;min-width:8em;">${s.name}</span>
+          <input
+            .value=${v == null ? "" : String(v)}
+            @change=${(e: Event) => {
+              const raw = (e.target as HTMLInputElement).value;
+              const next = { ...args, [s.name]: raw };
+              this._updateArgs(next);
+            }}
+          />
+        </label>
+      `;
+    })}`;
   }
 
   /* v8 ignore start -- ha-form path (real HA only) */

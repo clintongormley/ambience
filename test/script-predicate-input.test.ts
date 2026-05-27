@@ -85,3 +85,93 @@ describe("ambience-script-predicate-input — picker", () => {
     expect(detail.value).toBeNull();
   });
 });
+
+describe("ambience-script-predicate-input — auto-form", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("_argsSchema mirrors the picked script's fields", async () => {
+    el = await mount(
+      { script: "script.foo", args: { temp: 20 } },
+      {
+        services: {
+          script: {
+            foo: {
+              fields: {
+                temp: {
+                  name: "Threshold",
+                  required: true,
+                  description: "Trigger above this temperature",
+                  selector: { number: { min: 0, max: 100 } },
+                },
+                zone: {
+                  selector: { text: {} },
+                },
+              },
+            },
+          },
+        },
+      },
+    );
+    const schema = el._argsSchema();
+    expect(schema).toEqual([
+      {
+        name: "temp",
+        required: true,
+        description: { suffix: "Trigger above this temperature" },
+        selector: { number: { min: 0, max: 100 } },
+      },
+      {
+        name: "zone",
+        required: undefined,
+        description: undefined,
+        selector: { text: {} },
+      },
+    ]);
+  });
+
+  test("editing an arg emits value-changed preserving other args", async () => {
+    el = await mount(
+      { script: "script.foo", args: { temp: 20, zone: "down" } },
+      {
+        services: {
+          script: {
+            foo: {
+              fields: {
+                temp: { selector: { number: {} } },
+                zone: { selector: { text: {} } },
+              },
+            },
+          },
+        },
+      },
+    );
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el._updateArgs({ temp: 25, zone: "down" });
+    expect(detail.value).toEqual({ script: "script.foo", args: { temp: 25, zone: "down" } });
+  });
+
+  test("form mode hidden when script declares no fields", async () => {
+    el = await mount(
+      { script: "script.bare", args: {} },
+      { services: { script: { bare: {} } } },          // no fields
+    );
+    expect(el._argsSchema()).toEqual([]);
+    // The args section should not render an empty <ha-form> block — implementer
+    // tests this via the rendered DOM:
+    expect(el.shadowRoot.querySelector(".args")).toBeNull();
+  });
+
+  test("renders args section when the picked script has fields", async () => {
+    el = await mount(
+      { script: "script.foo", args: {} },
+      {
+        services: {
+          script: { foo: { fields: { temp: { selector: { number: {} } } } } },
+        },
+      },
+    );
+    expect(el.shadowRoot.querySelector(".args")).not.toBeNull();
+  });
+});

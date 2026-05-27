@@ -431,7 +431,7 @@ export class AmbienceScriptActionSlot extends LitElement {
       return html`
         <ha-yaml-editor
           .hass=${this.hass}
-          .value=${this._combinedObject()}
+          .defaultValue=${this._combinedObject()}
           @value-changed=${this._onHaYamlChanged}
         ></ha-yaml-editor>
         ${this._yamlError ? html`<div class="yaml-error">${this._yamlError}</div>` : ""}

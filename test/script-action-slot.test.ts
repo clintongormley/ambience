@@ -288,11 +288,11 @@ describe("ambience-script-action-slot", () => {
     expect(picker.label).not.toBe("entity_ids");
   });
 
-  test("ha-yaml-editor receives the combined object as .value (not a JSON string)", async () => {
+  test("ha-yaml-editor receives the combined object as .defaultValue (not a JSON string)", async () => {
     class FakeHaYamlEditor extends HTMLElement {
-      private _value: unknown;
-      set value(v: unknown) { this._value = v; }
-      get value() { return this._value; }
+      private _defaultValue: unknown;
+      set defaultValue(v: unknown) { this._defaultValue = v; }
+      get defaultValue() { return this._defaultValue; }
     }
     if (!customElements.get("ha-yaml-editor")) {
       customElements.define("ha-yaml-editor", FakeHaYamlEditor);
@@ -312,8 +312,8 @@ describe("ambience-script-action-slot", () => {
     await el.updateComplete;
     const editor = el.shadowRoot.querySelector("ha-yaml-editor") as any;
     expect(editor).toBeTruthy();
-    expect(typeof editor.value).toBe("object");
-    expect(editor.value).toEqual({
+    expect(typeof editor.defaultValue).toBe("object");
+    expect(editor.defaultValue).toEqual({
       entity_id: ["light.lamp_a"],
       brightness: 50,
     });

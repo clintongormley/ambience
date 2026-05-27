@@ -92,7 +92,7 @@ export class AmbienceRuleEditor extends LitElement {
       background: var(--card-background-color, #fff);
       flex-shrink: 0;
     }
-    select.add-matcher {
+    select.add-matcher, select.add-action {
       margin-top: 0.5rem;
     }
     button {
@@ -143,9 +143,6 @@ export class AmbienceRuleEditor extends LitElement {
   @state() private _draft: Rule | null = null;
   @state() private _open: OpenSlot = null;
   @state() private _showError = false;
-  // Action-type chosen in the "+ Add action" picker. Defaults to the first
-  // entry in `availableActions` when that prop resolves.
-  @state() private _pendingActionType: string | null = null;
 
   override connectedCallback() {
     super.connectedCallback();
@@ -510,32 +507,80 @@ export class AmbienceRuleEditor extends LitElement {
 
   // --- Action row ---
 
-  private _addActionSlot() {
-    if (!this._draft) return;
-    const type = this._pendingActionType ?? this.availableActions[0]?.name ?? "set_light";
-    const spec: ActionSpec = { action: type, entity_ids: [], params: {} };
+  private static readonly _ADD_ACTION_PLACEHOLDER = "__add_action__";
+
+  private _onAddAction = (e: Event) => {
+    const select = e.target as HTMLSelectElement;
+    const name = select.value;
+    select.value = "";
+    this._addActionSlot(name);
+  };
+
+  /* v8 ignore start -- ha-form not registered in jsdom */
+  private _onAddActionHaForm = (e: CustomEvent<{ value: { add: string } }>) => {
+    e.stopPropagation();
+    const name = e.detail.value.add;
+    if (name === AmbienceRuleEditor._ADD_ACTION_PLACEHOLDER) return;
+    this._addActionSlot(name);
+  };
+  /* v8 ignore stop */
+
+  private _addActionSlot(name: string) {
+    if (!this._draft || !name) return;
+    if (this._open !== null && !this._tryCloseCurrent()) return;
+    const spec: ActionSpec = { action: name, entity_ids: [], params: {} };
     const newIdx = this._draft.actions.length;
     this._draft = { ...this._draft, actions: [...this._draft.actions, spec] };
     this._open = { kind: "action", idx: newIdx };
+    this._showError = false;
   }
 
-  private _onActionTypeChange = (e: Event) => {
-    this._pendingActionType = (e.target as HTMLSelectElement).value;
-  };
-
-  private _renderActionTypePicker() {
-    if (this.availableActions.length <= 1) return "";
-    const current = this._pendingActionType ?? this.availableActions[0]?.name ?? "";
+  private _renderAddAction() {
+    if (this.availableActions.length === 0) return "";
+    /* v8 ignore next 3 -- ha-form not registered in jsdom */
+    if (customElements.get("ha-form")) {
+      return this._renderAddActionHaForm();
+    }
     return html`
-      <div class="action-type-picker">
-        <select @change=${this._onActionTypeChange}>
+      <div class="add-action">
+        <select class="add-action" @change=${this._onAddAction}>
+          <option value="">${localize(this.hass, "ui.add_action", "+ Add action…")}</option>
           ${this.availableActions.map((a) => html`
-            <option value=${a.name} ?selected=${a.name === current}>${actionLabel(this.hass as any, a.name)}</option>
+            <option value=${a.name}>${actionLabel(this.hass as any, a.name)}</option>
           `)}
         </select>
       </div>
     `;
   }
+
+  /* v8 ignore start -- ha-form path (real HA only) */
+  private _renderAddActionHaForm() {
+    const placeholderLabel = localize(this.hass, "ui.add_action", "+ Add action…");
+    const schema = [{
+      name: "add",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: AmbienceRuleEditor._ADD_ACTION_PLACEHOLDER, label: placeholderLabel },
+            ...this.availableActions.map((a) => ({ value: a.name, label: actionLabel(this.hass as any, a.name) })),
+          ],
+        },
+      },
+    }];
+    return html`
+      <div class="add-action">
+        <ha-form
+          .hass=${this.hass}
+          .schema=${schema}
+          .data=${{ add: AmbienceRuleEditor._ADD_ACTION_PLACEHOLDER }}
+          .computeLabel=${() => ""}
+          @value-changed=${this._onAddActionHaForm}
+        ></ha-form>
+      </div>
+    `;
+  }
+  /* v8 ignore stop */
 
   private _updateActionAt(idx: number, mutate: (a: ActionSpec) => ActionSpec) {
     if (!this._draft) return;
@@ -716,8 +761,7 @@ export class AmbienceRuleEditor extends LitElement {
 
           <h3>${localize(this.hass, "ui.actions_heading", "Actions")}</h3>
           ${this._draft.actions.map((a, i) => this._renderActionRow(a, i))}
-          ${this._renderActionTypePicker()}
-          <button class="secondary add-action" @click=${this._addActionSlot}>${localize(this.hass, "ui.add_action", "+ Add action")}</button>
+          ${this._renderAddAction()}
         </div>
 
         <div class="actions-bar">

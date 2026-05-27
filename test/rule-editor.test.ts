@@ -147,8 +147,9 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("adding a new action auto-opens it", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
-    const addBtn = el.shadowRoot.querySelector(".add-action") as HTMLButtonElement;
-    addBtn.click();
+    const addSelect = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
+    addSelect.value = "set_light";
+    addSelect.dispatchEvent(new Event("change", { bubbles: true }));
     await el.updateComplete;
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
     expect(action.classList.contains("expanded")).toBe(true);
@@ -216,7 +217,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   test("updating an int param (brightness) via input fires _updateActionParam", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     // Add an action and open it
-    el.shadowRoot.querySelector(".add-action")!.dispatchEvent(new MouseEvent("click"));
+    {
+      const s = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
+      s.value = "set_light";
+      s.dispatchEvent(new Event("change", { bubbles: true }));
+    }
     await el.updateComplete;
     // The action slot is now expanded; find the brightness input
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
@@ -290,7 +295,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("target-picker value-changed updates action entity_ids", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
-    el.shadowRoot.querySelector(".add-action")!.dispatchEvent(new MouseEvent("click"));
+    {
+      const s = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
+      s.value = "set_light";
+      s.dispatchEvent(new Event("change", { bubbles: true }));
+    }
     await el.updateComplete;
 
     const picker = el.shadowRoot.querySelector("ambience-target-picker")!;
@@ -678,25 +687,24 @@ describe("ambience-rule-editor — script-action support", () => {
   let el: any;
   afterEach(() => { el?.remove(); });
 
-  test("renders an action-type picker exposing both standard and script kinds", async () => {
+  test("Add-action picker exposes a placeholder plus all available action kinds", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
-    const picker = el.shadowRoot.querySelector(".action-type-picker") as HTMLElement;
+    const picker = el.shadowRoot.querySelector(".add-action") as HTMLElement;
     expect(picker).toBeTruthy();
     const select = picker.querySelector("select") as HTMLSelectElement;
-    const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
+    const options = Array.from(select.querySelectorAll("option"));
+    expect(options[0]?.value).toBe("");
+    expect(options[0]?.textContent).toMatch(/add action/i);
+    const values = options.map((o: any) => o.value);
     expect(values).toContain("set_light");
     expect(values).toContain("script");
   });
 
-  test("selecting 'script' in the action-type picker and clicking + Add creates a script slot", async () => {
+  test("selecting 'script' in the add-action picker immediately creates a script slot", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
-    const picker = el.shadowRoot.querySelector(".action-type-picker") as HTMLElement;
-    const select = picker.querySelector("select") as HTMLSelectElement;
+    const select = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
     select.value = "script";
     select.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-    const addBtn = el.shadowRoot.querySelector(".add-action") as HTMLButtonElement;
-    addBtn.click();
     await el.updateComplete;
     // _draft.actions[0].action should be "script"
     expect(el._draft.actions[0].action).toBe("script");

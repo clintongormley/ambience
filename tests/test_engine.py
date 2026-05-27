@@ -117,3 +117,28 @@ def test_missing_scene_matcher_skips_scene_constrained_rule(
     result = resolve(rules, {"scene": "movie"}, no_scene)
     assert result is not None
     assert result[0] == 1
+
+
+def test_engine_routes_through_script_matcher() -> None:
+    """A rule whose `when.script` predicate matches the script snapshot fires."""
+    from custom_components.ambience.engine import resolve
+    from custom_components.ambience.matchers.script import (
+        ScriptMatcher,
+        ScriptSnapshot,
+        _cache_key,
+    )
+
+    matchers = {"script": ScriptMatcher()}
+    key_yes = _cache_key("script.yes", {})
+    key_no = _cache_key("script.no", {})
+    snap = ScriptSnapshot(results={key_yes: True, key_no: False})
+
+    rules = [
+        {"name": "n", "when": {"script": {"script": "script.no"}}, "actions": []},
+        {"name": "y", "when": {"script": {"script": "script.yes"}}, "actions": []},
+    ]
+    match = resolve(rules, {"script": snap}, matchers)
+    assert match is not None
+    idx, rule = match
+    assert idx == 1
+    assert rule["name"] == "y"

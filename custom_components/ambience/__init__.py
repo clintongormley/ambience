@@ -28,6 +28,7 @@ from .const import (
 )
 from .matchers.day import DayMatcher
 from .matchers.scene import SceneMatcher
+from .matchers.script import ScriptMatcher
 from .matchers.state import StateMatcher
 from .matchers.time_of_day import TimeOfDayMatcher
 from .matchers.weather import WeatherMatcher
@@ -82,6 +83,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     register_matcher(hass, DayMatcher(hass=hass))
     register_matcher(hass, WeatherMatcher(hass=hass))
     register_matcher(hass, StateMatcher(hass=hass))
+    register_matcher(hass, ScriptMatcher(hass=hass))
     register_action(hass, SetLightAction())
 
     async def _handle_apply_scene(call: ServiceCall) -> None:

@@ -62,6 +62,17 @@ async def test_setup_seeds_registries_and_store(
     assert "set_light" in data[DATA_ACTIONS]
 
 
+async def test_script_matcher_is_registered(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    matchers = hass.data[DOMAIN][DATA_MATCHERS]
+    assert "script" in matchers
+    assert matchers["script"].priority == 25
+
+
 async def test_setup_registers_apply_scene_service(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,

@@ -14,6 +14,10 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from homeassistant.core import HomeAssistant
+
+from .services_meta import get_service_schema
+
 
 class _StorageLike(Protocol):
     def get_exposed_actions(self) -> list[dict[str, Any]]: ...
@@ -64,6 +68,30 @@ class ExposedActionsStore:
                 raise ValueError(
                     f"{sid}: field(s) cannot be both visible and locked: {sorted(overlap)!r}"
                 )
+
+    def validate_against_catalog(
+        self,
+        hass: HomeAssistant,
+        actions: list[dict[str, Any]],
+    ) -> None:
+        """Check each entry's service exists and every named field exists.
+
+        Call after validate_shape (or via save) when the HA service catalog
+        is available. Locked-value type checking is intentionally not done
+        here; HA's own service call rejects mismatched types at call time.
+        """
+        for entry in actions:
+            sid = entry["id"]
+            schema = get_service_schema(hass, sid)
+            if schema is None:
+                raise ValueError(f"unknown service: {sid!r}")
+            known_fields = set(schema["fields"])
+            for fname in entry.get("visible_fields", []):
+                if fname not in known_fields:
+                    raise ValueError(f"{sid}: unknown field {fname!r} in visible_fields")
+            for fname in entry.get("locked_values", {}):
+                if fname not in known_fields:
+                    raise ValueError(f"{sid}: unknown field {fname!r} in locked_values")
 
     async def save(self, actions: list[dict[str, Any]]) -> None:
         self.validate_shape(actions)

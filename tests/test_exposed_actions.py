@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from custom_components.ambience.exposed_actions import ExposedActionsStore
@@ -112,3 +114,73 @@ async def test_save_rejects_malformed_id() -> None:
             ]
         )
     assert storage.saved == []
+
+
+def _hass_with_services(services: dict) -> MagicMock:
+    hass = MagicMock()
+    hass.services.async_services.return_value = services
+    return hass
+
+
+async def test_validate_against_catalog_passes_for_known_service_and_fields() -> None:
+    hass = _hass_with_services(
+        {"light": {"turn_on": {"fields": {"brightness_pct": {}, "transition": {}}}}}
+    )
+    store = ExposedActionsStore(_FakeStorage())
+    store.validate_against_catalog(
+        hass,
+        [
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct"],
+                "locked_values": {"transition": 1},
+            },
+        ],
+    )  # no exception
+
+
+async def test_validate_against_catalog_rejects_unknown_service() -> None:
+    hass = _hass_with_services({"light": {"turn_on": {"fields": {}}}})
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="unknown service"):
+        store.validate_against_catalog(
+            hass,
+            [
+                {"id": "light.nope", "label": "", "visible_fields": [], "locked_values": {}},
+            ],
+        )
+
+
+async def test_validate_against_catalog_rejects_unknown_field_in_visible() -> None:
+    hass = _hass_with_services({"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="unknown field"):
+        store.validate_against_catalog(
+            hass,
+            [
+                {
+                    "id": "light.turn_on",
+                    "label": "",
+                    "visible_fields": ["bogus_field"],
+                    "locked_values": {},
+                },
+            ],
+        )
+
+
+async def test_validate_against_catalog_rejects_unknown_field_in_locked() -> None:
+    hass = _hass_with_services({"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="unknown field"):
+        store.validate_against_catalog(
+            hass,
+            [
+                {
+                    "id": "light.turn_on",
+                    "label": "",
+                    "visible_fields": [],
+                    "locked_values": {"bogus_field": 1},
+                },
+            ],
+        )

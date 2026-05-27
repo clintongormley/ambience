@@ -552,6 +552,37 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(scene.classList.contains("collapsed")).toBe(true);
   });
 
+  test("picking from the +Add action dropdown while current is invalid keeps current open with error", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: [], params: { brightness: 80 } }],
+    });
+    const action0 = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action0.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const select = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
+    select.value = "script";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('.slot[data-slot-id="action-1"]')).toBeNull();
+    expect(action0.classList.contains("expanded")).toBe(true);
+    expect(action0.querySelector(".error")?.textContent).toContain("target is required");
+  });
+
+  test("clicking the +Add action dropdown without picking an option does NOT trigger close-validation", async () => {
+    el = await mount({
+      name: "test", when: {},
+      actions: [{ action: "set_light", entity_ids: [], params: { brightness: 80 } }],
+    });
+    const action0 = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action0.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const select = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
+    select.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(action0.querySelector(".error")).toBeNull();
+  });
+
   test("expanded name slot renders just the input — no summary header, no duplicate label", async () => {
     el = await mount({ name: "My rule", when: {}, actions: [] });
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;

@@ -330,6 +330,9 @@ export class AmbienceRuleEditor extends LitElement {
       // `click` from the selected option. Without this skip, that click
       // would collapse the matcher slot the change handler just opened.
       if (node.classList.contains("add-matcher")) return;
+      // Same reasoning for the +Add action dropdown: opening it to browse
+      // options should not be treated as "leaving the current slot".
+      if (node.classList.contains("add-action")) return;
     }
     this._tryCloseCurrent();
   }

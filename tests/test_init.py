@@ -149,6 +149,30 @@ async def test_area_registry_removal_deletes_ambience_config(
     assert store.get_area(area.id) is None
 
 
+async def test_floor_remove_event_deletes_floor_config(
+    hass: HomeAssistant, mock_config_entry
+) -> None:
+    """Removing a floor from HA's registry drops its Ambience config."""
+    from homeassistant.helpers import floor_registry as fr
+
+    from custom_components.ambience.const import DATA_STORE
+
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    reg = fr.async_get(hass)
+    entry = reg.async_create("Upstairs")
+    store = hass.data["ambience"][DATA_STORE]
+    await store.async_save_floor(entry.floor_id, {"rules": [], "auto_sort": True})
+    assert store.get_floor(entry.floor_id) is not None
+
+    reg.async_delete(entry.floor_id)
+    await hass.async_block_till_done()
+
+    assert store.get_floor(entry.floor_id) is None
+
+
 async def test_panel_is_removed_on_unload(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,

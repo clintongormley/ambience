@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, ServiceCall
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.typing import ConfigType
 
 from .actions.set_light import SetLightAction
@@ -133,6 +134,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(
         hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _handle_area_registry_update)
+    )
+
+    async def _handle_floor_registry_update(event: Event) -> None:
+        """Drop a floor's config when the HA floor is deleted from the registry."""
+        if event.data["action"] != "remove":
+            return
+        await store.async_delete_floor(event.data["floor_id"])
+
+    entry.async_on_unload(
+        hass.bus.async_listen(fr.EVENT_FLOOR_REGISTRY_UPDATED, _handle_floor_registry_update)
     )
 
     # Serve the bundled JS from the integration's frontend/ directory.

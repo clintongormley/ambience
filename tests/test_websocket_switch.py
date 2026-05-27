@@ -48,9 +48,7 @@ async def test_switch_defaults_list(hass, installed, hass_ws_client):
 
 async def test_switch_defaults_save_fires_None(hass, installed, hass_ws_client):
     fired: list[Any] = []
-    unsub = async_dispatcher_connect(
-        hass, SIGNAL_SWITCH_CONFIG_UPDATED, lambda p: fired.append(p)
-    )
+    unsub = async_dispatcher_connect(hass, SIGNAL_SWITCH_CONFIG_UPDATED, lambda p: fired.append(p))
     try:
         resp = await _ws_send(
             hass_ws_client,
@@ -84,9 +82,7 @@ async def test_switch_defaults_save_validation_error(hass, installed, hass_ws_cl
 
 async def test_house_switch_save_fires_house_key(hass, installed, hass_ws_client):
     fired: list[Any] = []
-    unsub = async_dispatcher_connect(
-        hass, SIGNAL_SWITCH_CONFIG_UPDATED, lambda p: fired.append(p)
-    )
+    unsub = async_dispatcher_connect(hass, SIGNAL_SWITCH_CONFIG_UPDATED, lambda p: fired.append(p))
     try:
         resp = await _ws_send(
             hass_ws_client,
@@ -107,9 +103,7 @@ async def test_house_switch_save_fires_house_key(hass, installed, hass_ws_client
 
 async def test_floor_switch_save_round_trip(hass, installed, floor_id, hass_ws_client):
     fired: list[Any] = []
-    unsub = async_dispatcher_connect(
-        hass, SIGNAL_SWITCH_CONFIG_UPDATED, lambda p: fired.append(p)
-    )
+    unsub = async_dispatcher_connect(hass, SIGNAL_SWITCH_CONFIG_UPDATED, lambda p: fired.append(p))
     try:
         resp = await _ws_send(
             hass_ws_client,
@@ -141,9 +135,7 @@ async def test_floor_switch_save_rejects_unknown_floor(hass, installed, hass_ws_
 
 async def test_area_switch_save_round_trip(hass, installed, area_id, hass_ws_client):
     fired: list[Any] = []
-    unsub = async_dispatcher_connect(
-        hass, SIGNAL_SWITCH_CONFIG_UPDATED, lambda p: fired.append(p)
-    )
+    unsub = async_dispatcher_connect(hass, SIGNAL_SWITCH_CONFIG_UPDATED, lambda p: fired.append(p))
     try:
         resp = await _ws_send(
             hass_ws_client,

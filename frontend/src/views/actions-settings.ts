@@ -222,12 +222,6 @@ export class AmbienceActionsSettings extends LitElement {
       gap: 0.5rem;
       align-items: center;
     }
-    .actions {
-      margin-top: 0.75rem;
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-    }
     .warning {
       background: var(--warning-color, #ffd);
       border: 1px solid var(--warning-color, #cc9);
@@ -249,12 +243,6 @@ export class AmbienceActionsSettings extends LitElement {
       font: inherit;
       cursor: pointer;
     }
-    button.primary {
-      background: var(--primary-color, #03a9f4);
-      color: var(--text-primary-color, #fff);
-      border-color: var(--primary-color, #03a9f4);
-    }
-    button.primary[disabled] { opacity: 0.6; cursor: progress; }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
@@ -267,7 +255,6 @@ export class AmbienceActionsSettings extends LitElement {
   @state() private _warnings: ExposedActionWarning[] = [];
   @state() private _loadError: string | null = null;
   @state() private _saveError: string | null = null;
-  @state() private _saving = false;
   @state() private _loaded = false;
   /** Key: "${actionId}:${fieldName}" of the field currently being edited. */
   @state() private _editingDefault: string | null = null;
@@ -315,6 +302,7 @@ export class AmbienceActionsSettings extends LitElement {
     this._editingDefault = null;
     this._editingOriginalValue = undefined;
     this._editingOriginalHad = false;
+    void this._autoSave();
   }
 
   private _cancelEditingDefault() {
@@ -404,6 +392,7 @@ export class AmbienceActionsSettings extends LitElement {
       else visible.delete(fieldName);
       return { ...a, visible_fields: [...visible] };
     });
+    void this._autoSave();
   }
 
   private _setDefault(actionId: string, fieldName: string, value: unknown) {
@@ -450,6 +439,7 @@ export class AmbienceActionsSettings extends LitElement {
     ];
     this._expanded = new Set([...this._expanded, serviceId]);
     this._adding = false;
+    void this._autoSave();
   }
 
   private _removeService(actionId: string) {
@@ -457,10 +447,10 @@ export class AmbienceActionsSettings extends LitElement {
     const next = new Set(this._expanded);
     next.delete(actionId);
     this._expanded = next;
+    void this._autoSave();
   }
 
-  private async _save() {
-    this._saving = true;
+  private async _autoSave(): Promise<void> {
     this._saveError = null;
     this._warnings = [];
     try {
@@ -469,9 +459,6 @@ export class AmbienceActionsSettings extends LitElement {
       window.dispatchEvent(new CustomEvent("ambience-exposed-actions-changed"));
     } catch (e: unknown) {
       this._saveError = e instanceof Error ? e.message : String(e);
-      this._warnings = [];
-    } finally {
-      this._saving = false;
     }
   }
 
@@ -487,22 +474,10 @@ export class AmbienceActionsSettings extends LitElement {
     }
     return html`
       <section>
-        ${this._actions.map((a) => this._renderCard(a))}
-        ${this._renderAdd()}
         ${this._renderWarnings()}
         ${this._saveError ? html`<div class="error">${this._saveError}</div>` : ""}
-        <div class="actions">
-          <button
-            class="primary"
-            data-action="save"
-            ?disabled=${this._saving}
-            @click=${() => this._save()}
-          >
-            ${this._saving
-              ? localize(this.hass, "ui.saving", "Saving…")
-              : localize(this.hass, "ui.save", "Save")}
-          </button>
-        </div>
+        ${this._actions.map((a) => this._renderCard(a))}
+        ${this._renderAdd()}
       </section>
     `;
   }
@@ -535,6 +510,7 @@ export class AmbienceActionsSettings extends LitElement {
                   e.stopPropagation();
                   this._setLabel(action.id, (e.target as HTMLInputElement).value);
                 }}
+                @blur=${() => void this._autoSave()}
                 @click=${(e: Event) => e.stopPropagation()}
               ></ha-input>`
             : html`<span class="header-label-display">${action.label}</span>`}

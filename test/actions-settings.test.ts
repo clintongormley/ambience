@@ -38,6 +38,12 @@ function clickToggle(root: ShadowRoot) {
   header.click();
 }
 
+// Wait for all pending microtasks/timers to settle after an async action.
+async function flush(el: any) {
+  await new Promise((r) => setTimeout(r, 0));
+  await el.updateComplete;
+}
+
 describe("ambience-actions-settings", () => {
   let el: any;
   beforeEach(() => vi.clearAllMocks());
@@ -122,45 +128,23 @@ describe("ambience-actions-settings", () => {
     expect(el.shadowRoot.querySelector("[data-card] .header-label-display")).toBeNull();
   });
 
-  test("calls saveExposedActions when save clicked, with current state (new shape)", async () => {
+  test("no Save button is present in the rendered UI", async () => {
     el = await mount();
-    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    expect(saveBtn).not.toBeNull();
-    saveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-
-    expect(saveExposedActions).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "light.turn_on",
-          visible_fields: ["brightness_pct"],
-          defaults: {},
-        }),
-      ]),
-    );
+    expect(el.shadowRoot.querySelector("button[data-action='save']")).toBeNull();
   });
 
-  test("ticking 'Show in editor' adds the field to visible_fields", async () => {
+  test("auto-saves after checkbox toggle", async () => {
     el = await mount();
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    // The `transition` field starts hidden (visible_fields only has brightness_pct).
     const checkbox = el.shadowRoot.querySelector(
       "input[type='checkbox'][data-show-in-editor='transition']",
     ) as HTMLInputElement;
     expect(checkbox).not.toBeNull();
-    expect(checkbox.checked).toBe(false);
     checkbox.checked = true;
     checkbox.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-
-    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    saveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
+    await flush(el);
 
     expect(saveExposedActions).toHaveBeenCalledWith(
       expect.anything(),
@@ -173,7 +157,7 @@ describe("ambience-actions-settings", () => {
     );
   });
 
-  test("unchecking 'Show in editor' removes the field from visible_fields", async () => {
+  test("auto-saves after unchecking checkbox", async () => {
     el = await mount();
     clickToggle(el.shadowRoot);
     await el.updateComplete;
@@ -184,12 +168,7 @@ describe("ambience-actions-settings", () => {
     expect(checkbox.checked).toBe(true);
     checkbox.checked = false;
     checkbox.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-
-    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    saveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
+    await flush(el);
 
     expect(saveExposedActions).toHaveBeenCalledWith(
       expect.anything(),
@@ -202,7 +181,220 @@ describe("ambience-actions-settings", () => {
     );
   });
 
-  test("'Set default' button reveals an editor (row 2) and writes into defaults", async () => {
+  test("auto-saves after Save in default editor", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 50 },
+      },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    // Enter edit mode.
+    const summaryBtn = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    summaryBtn.click();
+    await el.updateComplete;
+
+    // Change the value.
+    const editorInput = el.shadowRoot.querySelector(
+      "input[data-default-value='brightness_pct']",
+    ) as HTMLInputElement;
+    editorInput.value = "75";
+    editorInput.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+
+    // Click the inner Save button — this commits the edit and auto-saves.
+    const saveDefaultBtn = el.shadowRoot.querySelector(
+      "button[data-save-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(saveDefaultBtn).not.toBeNull();
+    saveDefaultBtn.click();
+    await flush(el);
+
+    // Edit mode should have exited.
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
+
+    // The summary should reflect the new committed value (75).
+    const summaryAfter = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(summaryAfter).not.toBeNull();
+    expect(summaryAfter.textContent).toContain("75");
+
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          defaults: { brightness_pct: "75" },
+        }),
+      ]),
+    );
+  });
+
+  test("auto-saves after ✕ clear in default editor", async () => {
+    // Seed an action with a pre-existing default.
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 80 },
+      },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    // Enter edit mode via the compact summary button.
+    const summaryBtn = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(summaryBtn).not.toBeNull();
+    summaryBtn.click();
+    await el.updateComplete;
+
+    // Row 2 is now visible — the clear button should be inside it.
+    const clearBtn = el.shadowRoot.querySelector(
+      "button[data-clear-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(clearBtn).not.toBeNull();
+    clearBtn.click();
+    await flush(el);
+
+    // Edit mode must have exited (row 2 gone).
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
+    // Compact summary should also be gone (no default left).
+    expect(el.shadowRoot.querySelector("button[data-default-summary='brightness_pct']")).toBeNull();
+    // Set-default button should be back.
+    expect(el.shadowRoot.querySelector("button[data-set-default='brightness_pct']")).not.toBeNull();
+
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          defaults: {},
+        }),
+      ]),
+    );
+  });
+
+  test("auto-saves after add service", async () => {
+    el = await mount();
+    const addBtn = el.shadowRoot.querySelector("button[data-action='add']") as HTMLButtonElement;
+    addBtn.click();
+    await el.updateComplete;
+
+    const picker = el.shadowRoot.querySelector("select[data-add-service]") as HTMLSelectElement;
+    picker.value = "light.turn_off";
+    picker.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
+    const cards = el.shadowRoot.querySelectorAll("[data-card]");
+    expect(cards.length).toBe(2);
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({ id: "light.turn_off" }),
+      ]),
+    );
+  });
+
+  test("auto-saves after remove service", async () => {
+    el = await mount();
+    const removeBtn = el.shadowRoot.querySelector("[data-card] button[data-remove]") as HTMLButtonElement;
+    expect(removeBtn).not.toBeNull();
+    removeBtn.click();
+    await flush(el);
+
+    expect(el.shadowRoot.querySelectorAll("[data-card]").length).toBe(0);
+    expect(saveExposedActions).toHaveBeenCalledWith(expect.anything(), []);
+  });
+
+  test("auto-saves label change on blur, not on input", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const labelEl = el.shadowRoot.querySelector("[data-card] [data-label-input]") as any;
+    expect(labelEl).not.toBeNull();
+
+    // Simulate typing (input event) — should NOT trigger a save yet.
+    Object.defineProperty(labelEl, "value", { value: "Lights on", writable: true });
+    labelEl.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+    expect(saveExposedActions).not.toHaveBeenCalled();
+
+    // Now blur — should trigger a save.
+    labelEl.dispatchEvent(new Event("blur", { bubbles: true }));
+    await flush(el);
+
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({ id: "light.turn_on", label: "Lights on" }),
+      ]),
+    );
+  });
+
+  test("Cancel in default editor does NOT trigger a save", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 80 },
+      },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    // Enter edit mode.
+    const summaryBtn = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    summaryBtn.click();
+    await el.updateComplete;
+
+    // Change the value in the editor.
+    const editorInput = el.shadowRoot.querySelector(
+      "input[data-default-value='brightness_pct']",
+    ) as HTMLInputElement;
+    editorInput.value = "20";
+    editorInput.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+
+    // Click Cancel.
+    const cancelBtn = el.shadowRoot.querySelector(
+      "button[data-cancel-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(cancelBtn).not.toBeNull();
+    cancelBtn.click();
+    await flush(el);
+
+    // Edit mode should have exited.
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
+
+    // The summary should be restored to the original value (80).
+    const summaryAfter = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(summaryAfter).not.toBeNull();
+    expect(summaryAfter.textContent).toContain("80");
+
+    // No save should have been triggered.
+    expect(saveExposedActions).not.toHaveBeenCalled();
+  });
+
+  test("'Set default' button reveals an editor (row 2) and writes into defaults on save", async () => {
     el = await mount();
     clickToggle(el.shadowRoot);
     await el.updateComplete;
@@ -226,10 +418,12 @@ describe("ambience-actions-settings", () => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await el.updateComplete;
 
-    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    saveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
+    // Click the inner Save button to commit.
+    const saveDefaultBtn = el.shadowRoot.querySelector(
+      "button[data-save-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    saveDefaultBtn.click();
+    await flush(el);
 
     expect(saveExposedActions).toHaveBeenCalledWith(
       expect.anything(),
@@ -280,59 +474,6 @@ describe("ambience-actions-settings", () => {
     expect(el.shadowRoot.querySelector("button[data-default-summary='brightness_pct']")).toBeNull();
   });
 
-  test("clear-default ✕ inside row 2 removes the default AND exits edit mode", async () => {
-    // Seed an action with a pre-existing default.
-    vi.mocked(listExposedActions).mockResolvedValueOnce([
-      {
-        id: "light.turn_on",
-        label: "",
-        visible_fields: ["brightness_pct"],
-        defaults: { brightness_pct: 80 },
-      },
-    ]);
-    el = await mount();
-    clickToggle(el.shadowRoot);
-    await el.updateComplete;
-
-    // Enter edit mode via the compact summary button.
-    const summaryBtn = el.shadowRoot.querySelector(
-      "button[data-default-summary='brightness_pct']",
-    ) as HTMLButtonElement;
-    expect(summaryBtn).not.toBeNull();
-    summaryBtn.click();
-    await el.updateComplete;
-
-    // Row 2 is now visible — the clear button should be inside it.
-    const clearBtn = el.shadowRoot.querySelector(
-      "button[data-clear-default='brightness_pct']",
-    ) as HTMLButtonElement;
-    expect(clearBtn).not.toBeNull();
-    clearBtn.click();
-    await el.updateComplete;
-
-    // Edit mode must have exited (row 2 gone).
-    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
-    // Compact summary should also be gone (no default left).
-    expect(el.shadowRoot.querySelector("button[data-default-summary='brightness_pct']")).toBeNull();
-    // Set-default button should be back.
-    expect(el.shadowRoot.querySelector("button[data-set-default='brightness_pct']")).not.toBeNull();
-
-    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    saveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-
-    expect(saveExposedActions).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "light.turn_on",
-          defaults: {},
-        }),
-      ]),
-    );
-  });
-
   test("clicking outside the editor row cancels — exits edit mode and reverts value", async () => {
     // Seed with a pre-existing default.
     vi.mocked(listExposedActions).mockResolvedValueOnce([
@@ -380,69 +521,7 @@ describe("ambience-actions-settings", () => {
     expect(restoredSummary.textContent).toContain("50");
   });
 
-  test("clicking Save commits the value and exits edit mode", async () => {
-    vi.mocked(listExposedActions).mockResolvedValueOnce([
-      {
-        id: "light.turn_on",
-        label: "",
-        visible_fields: ["brightness_pct"],
-        defaults: { brightness_pct: 50 },
-      },
-    ]);
-    el = await mount();
-    clickToggle(el.shadowRoot);
-    await el.updateComplete;
-
-    // Enter edit mode.
-    const summaryBtn = el.shadowRoot.querySelector(
-      "button[data-default-summary='brightness_pct']",
-    ) as HTMLButtonElement;
-    summaryBtn.click();
-    await el.updateComplete;
-
-    // Change the value.
-    const editorInput = el.shadowRoot.querySelector(
-      "input[data-default-value='brightness_pct']",
-    ) as HTMLInputElement;
-    editorInput.value = "75";
-    editorInput.dispatchEvent(new Event("input", { bubbles: true }));
-    await el.updateComplete;
-
-    // Click Save.
-    const saveDefaultBtn = el.shadowRoot.querySelector(
-      "button[data-save-default='brightness_pct']",
-    ) as HTMLButtonElement;
-    expect(saveDefaultBtn).not.toBeNull();
-    saveDefaultBtn.click();
-    await el.updateComplete;
-
-    // Edit mode should have exited.
-    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
-
-    // The summary should reflect the new committed value (75).
-    const summaryAfter = el.shadowRoot.querySelector(
-      "button[data-default-summary='brightness_pct']",
-    ) as HTMLButtonElement;
-    expect(summaryAfter).not.toBeNull();
-    expect(summaryAfter.textContent).toContain("75");
-
-    // Global Save should persist the new value.
-    const globalSaveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    globalSaveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-    expect(saveExposedActions).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "light.turn_on",
-          defaults: { brightness_pct: "75" },
-        }),
-      ]),
-    );
-  });
-
-  test("clicking Cancel reverts the value and exits edit mode", async () => {
+  test("clicking Cancel reverts the value and exits edit mode without saving", async () => {
     vi.mocked(listExposedActions).mockResolvedValueOnce([
       {
         id: "light.turn_on",
@@ -476,7 +555,7 @@ describe("ambience-actions-settings", () => {
     ) as HTMLButtonElement;
     expect(cancelBtn).not.toBeNull();
     cancelBtn.click();
-    await el.updateComplete;
+    await flush(el);
 
     // Edit mode should have exited.
     expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
@@ -488,20 +567,8 @@ describe("ambience-actions-settings", () => {
     expect(summaryAfter).not.toBeNull();
     expect(summaryAfter.textContent).toContain("80");
 
-    // Global Save should persist the reverted value.
-    const globalSaveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    globalSaveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-    expect(saveExposedActions).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "light.turn_on",
-          defaults: { brightness_pct: 80 },
-        }),
-      ]),
-    );
+    // No auto-save should have fired.
+    expect(saveExposedActions).not.toHaveBeenCalled();
   });
 
   test("Cancel after '+ Set default' removes the field entirely (was never set)", async () => {
@@ -532,7 +599,7 @@ describe("ambience-actions-settings", () => {
     ) as HTMLButtonElement;
     expect(cancelBtn).not.toBeNull();
     cancelBtn.click();
-    await el.updateComplete;
+    await flush(el);
 
     // Edit mode should have exited.
     expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
@@ -541,20 +608,8 @@ describe("ambience-actions-settings", () => {
     expect(el.shadowRoot.querySelector("button[data-set-default='brightness_pct']")).not.toBeNull();
     expect(el.shadowRoot.querySelector("button[data-default-summary='brightness_pct']")).toBeNull();
 
-    // Global Save should persist empty defaults.
-    const globalSaveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    globalSaveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-    expect(saveExposedActions).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "light.turn_on",
-          defaults: {},
-        }),
-      ]),
-    );
+    // No save should have fired (cancel path).
+    expect(saveExposedActions).not.toHaveBeenCalled();
   });
 
   test("field-row-main has three columns: checkbox / name / summary-cell", async () => {
@@ -616,13 +671,13 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    // Uncheck brightness_pct → hidden from rule editor.
+    // Uncheck brightness_pct → hidden from rule editor (auto-saves).
     const checkbox = el.shadowRoot.querySelector(
       "input[type='checkbox'][data-show-in-editor='brightness_pct']",
     ) as HTMLInputElement;
     checkbox.checked = false;
     checkbox.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
+    await flush(el);
 
     // Set a default for brightness_pct → always sent at execution.
     const setDefaultBtn = el.shadowRoot.querySelector(
@@ -637,13 +692,17 @@ describe("ambience-actions-settings", () => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await el.updateComplete;
 
-    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    saveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
+    // Click inner Save to commit — triggers auto-save.
+    const saveDefaultBtn = el.shadowRoot.querySelector(
+      "button[data-save-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    saveDefaultBtn.click();
+    await flush(el);
 
-    expect(saveExposedActions).toHaveBeenCalledWith(
-      expect.anything(),
+    // The last saveExposedActions call should have the final state.
+    const calls = vi.mocked(saveExposedActions).mock.calls;
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall[1]).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "light.turn_on",
@@ -692,22 +751,7 @@ describe("ambience-actions-settings", () => {
     expect(getServiceSchema).toHaveBeenCalledWith(expect.anything(), "light.turn_off");
   });
 
-  test("removing a card drops it from the saved payload", async () => {
-    el = await mount();
-    const removeBtn = el.shadowRoot.querySelector("[data-card] button[data-remove]") as HTMLButtonElement;
-    expect(removeBtn).not.toBeNull();
-    removeBtn.click();
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelectorAll("[data-card]").length).toBe(0);
-
-    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    saveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-    expect(saveExposedActions).toHaveBeenCalledWith(expect.anything(), []);
-  });
-
-  test("renders warnings returned by saveExposedActions", async () => {
+  test("renders warnings returned by saveExposedActions after auto-save", async () => {
     vi.mocked(saveExposedActions).mockResolvedValueOnce({
       ok: true,
       warnings: [
@@ -715,10 +759,17 @@ describe("ambience-actions-settings", () => {
       ],
     });
     el = await mount();
-    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    saveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
+
+    // Trigger an auto-save via checkbox toggle.
+    const checkbox = el.shadowRoot.querySelector(
+      "input[type='checkbox'][data-show-in-editor='brightness_pct']",
+    ) as HTMLInputElement;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
     const warnings = el.shadowRoot.querySelector(".warning");
     expect(warnings).not.toBeNull();
     const txt = warnings.textContent ?? "";
@@ -727,23 +778,30 @@ describe("ambience-actions-settings", () => {
     expect(txt).toContain("field removed");
   });
 
-  test("surfaces save errors inline", async () => {
+  test("surfaces save errors inline after auto-save", async () => {
     vi.mocked(saveExposedActions).mockRejectedValueOnce(new Error("validation_error: bad"));
     el = await mount();
-    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    saveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
+
+    // Trigger an auto-save via checkbox toggle.
+    const checkbox = el.shadowRoot.querySelector(
+      "input[type='checkbox'][data-show-in-editor='brightness_pct']",
+    ) as HTMLInputElement;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
     const err = el.shadowRoot.querySelector(".error");
     expect(err).not.toBeNull();
     expect(err.textContent).toContain("validation_error");
   });
 
-  test("renders an error and no save button when load fails", async () => {
+  test("renders an error and retry button when load fails (no cards shown)", async () => {
     vi.mocked(listExposedActions).mockRejectedValueOnce(new Error("WS unavailable"));
     el = await mount();
 
-    expect(el.shadowRoot.querySelector("button[data-action='save']")).toBeNull();
+    expect(el.shadowRoot.querySelector("[data-card]")).toBeNull();
     expect(el.shadowRoot.textContent).toContain("WS unavailable");
   });
 
@@ -783,15 +841,21 @@ describe("ambience-actions-settings", () => {
     expect(nameSpan.querySelector("small.field-id")).toBeNull();
   });
 
-  test("dispatches ambience-exposed-actions-changed on successful save", async () => {
+  test("dispatches ambience-exposed-actions-changed on auto-save (checkbox toggle)", async () => {
     const listener = vi.fn();
     window.addEventListener("ambience-exposed-actions-changed", listener);
     try {
       el = await mount();
-      const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-      saveBtn.click();
-      await new Promise((r) => setTimeout(r, 0));
+      clickToggle(el.shadowRoot);
       await el.updateComplete;
+
+      const checkbox = el.shadowRoot.querySelector(
+        "input[type='checkbox'][data-show-in-editor='brightness_pct']",
+      ) as HTMLInputElement;
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+      await flush(el);
+
       expect(listener).toHaveBeenCalledTimes(1);
     } finally {
       window.removeEventListener("ambience-exposed-actions-changed", listener);
@@ -804,37 +868,41 @@ describe("ambience-actions-settings", () => {
     window.addEventListener("ambience-exposed-actions-changed", listener);
     try {
       el = await mount();
-      const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-      saveBtn.click();
-      await new Promise((r) => setTimeout(r, 0));
+      clickToggle(el.shadowRoot);
       await el.updateComplete;
+
+      const checkbox = el.shadowRoot.querySelector(
+        "input[type='checkbox'][data-show-in-editor='brightness_pct']",
+      ) as HTMLInputElement;
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+      await flush(el);
+
       expect(listener).not.toHaveBeenCalled();
     } finally {
       window.removeEventListener("ambience-exposed-actions-changed", listener);
     }
   });
 
-  test("editing the label updates the action's label in the saved payload", async () => {
+  test("editing the label updates the action's label — save fires on blur", async () => {
     el = await mount();
     // Expand the card so the ha-input is visible.
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    // ha-input is the label field when expanded; it renders as a custom element
-    // in jsdom (not registered), so we query by data-label-input and look for
-    // the internal input or simulate via the component's .value property.
     const labelEl = el.shadowRoot.querySelector("[data-card] [data-label-input]") as any;
     expect(labelEl).not.toBeNull();
-    // Dispatch an input event directly on the ha-input element simulating a value change.
-    // Since ha-input is not registered in jsdom, we fire the event on it directly.
+    // Dispatch an input event on the ha-input element simulating a value change.
     Object.defineProperty(labelEl, "value", { value: "Lights on", writable: true });
     labelEl.dispatchEvent(new Event("input", { bubbles: true }));
     await el.updateComplete;
 
-    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
-    saveBtn.click();
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
+    // No save yet — only on blur.
+    expect(saveExposedActions).not.toHaveBeenCalled();
+
+    // Blur fires the auto-save.
+    labelEl.dispatchEvent(new Event("blur", { bubbles: true }));
+    await flush(el);
 
     expect(saveExposedActions).toHaveBeenCalledWith(
       expect.anything(),

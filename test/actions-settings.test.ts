@@ -148,7 +148,7 @@ describe("ambience-actions-settings", () => {
     );
   });
 
-  test("'Set default' button reveals an editor and writes into defaults", async () => {
+  test("'Set default' button reveals an editor (row 2) and writes into defaults", async () => {
     el = await mount();
     const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
     toggle.click();
@@ -158,10 +158,13 @@ describe("ambience-actions-settings", () => {
       "button[data-set-default='brightness_pct']",
     ) as HTMLButtonElement;
     expect(setDefaultBtn).not.toBeNull();
+    // Editor (row 2) must not exist yet.
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
+
     setDefaultBtn.click();
     await el.updateComplete;
 
-    // The default-value editor (fallback input) should now be visible.
+    // The default-value editor (fallback input) should now be visible in row 2.
     const input = el.shadowRoot.querySelector(
       "input[data-default-value='brightness_pct']",
     ) as HTMLInputElement;
@@ -188,7 +191,44 @@ describe("ambience-actions-settings", () => {
     );
   });
 
-  test("clear-default ✕ removes the field from defaults", async () => {
+  test("clicking the compact default summary enters edit mode (row 2 appears)", async () => {
+    // Seed with a pre-existing default so the compact summary is shown.
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 80 },
+      },
+    ]);
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    // Compact summary button should be visible; editor row should not be present.
+    const summaryBtn = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(summaryBtn).not.toBeNull();
+    expect(summaryBtn.textContent).toContain("80");
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
+
+    // Click the summary to enter edit mode.
+    summaryBtn.click();
+    await el.updateComplete;
+
+    // Editor row (row 2) must now be visible.
+    const editorInput = el.shadowRoot.querySelector(
+      "input[data-default-value='brightness_pct']",
+    ) as HTMLInputElement;
+    expect(editorInput).not.toBeNull();
+
+    // Compact summary should be hidden while editing.
+    expect(el.shadowRoot.querySelector("button[data-default-summary='brightness_pct']")).toBeNull();
+  });
+
+  test("clear-default ✕ inside row 2 removes the default AND exits edit mode", async () => {
     // Seed an action with a pre-existing default.
     vi.mocked(listExposedActions).mockResolvedValueOnce([
       {
@@ -203,12 +243,28 @@ describe("ambience-actions-settings", () => {
     toggle.click();
     await el.updateComplete;
 
+    // Enter edit mode via the compact summary button.
+    const summaryBtn = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(summaryBtn).not.toBeNull();
+    summaryBtn.click();
+    await el.updateComplete;
+
+    // Row 2 is now visible — the clear button should be inside it.
     const clearBtn = el.shadowRoot.querySelector(
       "button[data-clear-default='brightness_pct']",
     ) as HTMLButtonElement;
     expect(clearBtn).not.toBeNull();
     clearBtn.click();
     await el.updateComplete;
+
+    // Edit mode must have exited (row 2 gone).
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
+    // Compact summary should also be gone (no default left).
+    expect(el.shadowRoot.querySelector("button[data-default-summary='brightness_pct']")).toBeNull();
+    // Set-default button should be back.
+    expect(el.shadowRoot.querySelector("button[data-set-default='brightness_pct']")).not.toBeNull();
 
     const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
     saveBtn.click();
@@ -224,6 +280,42 @@ describe("ambience-actions-settings", () => {
         }),
       ]),
     );
+  });
+
+  test("clicking outside the editor row exits edit mode (row 2 disappears)", async () => {
+    // Seed with a pre-existing default.
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 50 },
+      },
+    ]);
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    // Enter edit mode.
+    const summaryBtn = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    summaryBtn.click();
+    await el.updateComplete;
+
+    // Row 2 should be present.
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).not.toBeNull();
+
+    // Dispatch a pointerdown on document.body (outside the editor).
+    // composedPath() in jsdom will include document.body but not the shadow element.
+    document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    // Edit mode should have exited.
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
+    // Compact summary should be restored.
+    expect(el.shadowRoot.querySelector("button[data-default-summary='brightness_pct']")).not.toBeNull();
   });
 
   test("a field can be hidden AND have a default (the old 'locked' mode)", async () => {

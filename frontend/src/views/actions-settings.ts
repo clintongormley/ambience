@@ -79,37 +79,74 @@ export class AmbienceActionsSettings extends LitElement {
       color: var(--secondary-text-color, #888);
       margin: 0 0 0.5rem 0;
     }
+    /* Two-row field layout */
     .field-row {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      gap: 0.5rem;
-      align-items: center;
       padding: 0.35rem 0;
       border-bottom: 1px dotted var(--divider-color, #eee);
     }
     .field-row:last-child { border-bottom: none; }
-    .field-row .name { color: var(--primary-text-color, inherit); }
-    .field-row .name small {
+    .field-row-main {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .field-row-main .name {
+      flex: 1;
+      color: var(--primary-text-color, inherit);
+    }
+    .field-row-main .name small {
       color: var(--secondary-text-color, #888);
       font-weight: normal;
     }
-    .field-row .show-cell {
+    .field-row-main .show-cell {
       display: flex;
       align-items: center;
       gap: 0.3rem;
       white-space: nowrap;
       color: var(--secondary-text-color, #888);
       font-size: 0.85rem;
+      flex: 0 0 auto;
     }
-    .field-row .default-cell {
+    .field-row-main .summary-cell {
+      flex: 0 0 auto;
+    }
+    /* The collapsed-summary pill / set-default button */
+    .set-default-btn {
+      background: transparent;
+      border: 1px dashed var(--divider-color, #ccc);
+      color: var(--secondary-text-color, #888);
+      cursor: pointer;
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+      font: inherit;
+      font-size: 0.85rem;
+    }
+    button.default-summary {
+      background: var(--secondary-background-color, #f5f5f5);
+      border: 1px solid var(--divider-color, #ddd);
+      border-radius: 3px;
+      color: var(--primary-text-color, inherit);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.85rem;
+      padding: 0.2rem 0.5rem;
+      white-space: nowrap;
+    }
+    button.default-summary:hover {
+      border-color: var(--primary-color, #03a9f4);
+      color: var(--primary-color, #03a9f4);
+    }
+    /* Row 2: the full editor */
+    .field-row-editor {
       display: flex;
       align-items: center;
       gap: 0.3rem;
+      padding-top: 0.35rem;
     }
-    .field-row .default-cell .default-editor {
+    .field-row-editor .default-editor {
       flex: 1;
     }
-    .field-row .default-cell button.clear-default {
+    .field-row-editor button.clear-default {
       background: transparent;
       border: none;
       cursor: pointer;
@@ -117,8 +154,9 @@ export class AmbienceActionsSettings extends LitElement {
       font-size: 1rem;
       padding: 0 0.25rem;
       line-height: 1;
+      flex: 0 0 auto;
     }
-    .field-row .default-cell button.clear-default:hover {
+    .field-row-editor button.clear-default:hover {
       color: var(--error-color, #c62828);
     }
     .field-row input[data-default-value] {
@@ -130,16 +168,6 @@ export class AmbienceActionsSettings extends LitElement {
       background: transparent;
       color: var(--primary-text-color, inherit);
       font: inherit;
-    }
-    .field-row .set-default-btn {
-      background: transparent;
-      border: 1px dashed var(--divider-color, #ccc);
-      color: var(--secondary-text-color, #888);
-      cursor: pointer;
-      padding: 0.2rem 0.5rem;
-      border-radius: 3px;
-      font: inherit;
-      font-size: 0.85rem;
     }
     .add-row {
       margin: 0.75rem 0;
@@ -194,6 +222,42 @@ export class AmbienceActionsSettings extends LitElement {
   @state() private _saveError: string | null = null;
   @state() private _saving = false;
   @state() private _loaded = false;
+  /** Key: "${actionId}:${fieldName}" of the field currently being edited. */
+  @state() private _editingDefault: string | null = null;
+
+  private _onDocPointerDown = (e: PointerEvent) => {
+    if (this._editingDefault === null) return;
+    // Find the active editor row and check if the click was inside it.
+    const editorRow = this.shadowRoot?.querySelector(
+      `.field-row-editor[data-editing-key="${this._editingDefault}"]`,
+    );
+    if (!editorRow) {
+      this._editingDefault = null;
+      return;
+    }
+    const path = e.composedPath();
+    if (!path.includes(editorRow as EventTarget)) {
+      this._editingDefault = null;
+    }
+  };
+
+  override connectedCallback() {
+    super.connectedCallback();
+    document.addEventListener("pointerdown", this._onDocPointerDown);
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback();
+    document.removeEventListener("pointerdown", this._onDocPointerDown);
+  }
+
+  private _startEditingDefault(actionId: string, fieldName: string) {
+    this._editingDefault = `${actionId}:${fieldName}`;
+  }
+
+  private _stopEditingDefault() {
+    this._editingDefault = null;
+  }
 
   protected override async firstUpdated() {
     await this._reload();
@@ -436,6 +500,12 @@ export class AmbienceActionsSettings extends LitElement {
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
   }
 
+  private _formatDefaultSummary(value: unknown): string {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+  }
+
   private _renderFieldRow(
     action: ExposedAction,
     name: string,
@@ -443,46 +513,74 @@ export class AmbienceActionsSettings extends LitElement {
   ) {
     const shown = (action.visible_fields ?? []).includes(name);
     const hasDefault = name in (action.defaults ?? {});
+    const editKey = `${action.id}:${name}`;
+    const isEditing = this._editingDefault === editKey;
+
     return html`
       <div class="field-row">
-        <span class="name">
-          ${field.name || this._humanizeFieldId(name)}
-          ${field.name ? html` <small class="field-id">(${name})</small>` : ""}
-          ${field.description ? html` <small>— ${field.description}</small>` : ""}
-        </span>
-        <label class="show-cell">
-          <input
-            type="checkbox"
-            data-show-in-editor=${name}
-            .checked=${shown}
-            @change=${(e: Event) =>
-              this._setShowInEditor(
-                action.id,
-                name,
-                (e.target as HTMLInputElement).checked,
-              )}
-          />
-          ${localize(this.hass, "ui.show_in_editor", "Show in editor")}
-        </label>
-        <div class="default-cell">
-          ${hasDefault
-            ? html`
-                <div class="default-editor">${this._renderDefaultEditor(action, name, field)}</div>
-                <button
-                  class="clear-default"
-                  data-clear-default=${name}
-                  title=${localize(this.hass, "ui.clear_default", "Clear default")}
-                  @click=${() => this._clearDefault(action.id, name)}
-                >✕</button>
-              `
-            : html`
-                <button
-                  class="set-default-btn"
-                  data-set-default=${name}
-                  @click=${() => this._setDefault(action.id, name, null)}
-                >+ ${localize(this.hass, "ui.set_default", "Set default")}</button>
-              `}
+        <!-- Row 1: name | show-in-editor | collapsed summary / set-default -->
+        <div class="field-row-main">
+          <span class="name">
+            ${field.name || this._humanizeFieldId(name)}
+            ${field.name ? html` <small class="field-id">(${name})</small>` : ""}
+            ${field.description ? html` <small>— ${field.description}</small>` : ""}
+          </span>
+          <label class="show-cell">
+            <input
+              type="checkbox"
+              data-show-in-editor=${name}
+              .checked=${shown}
+              @change=${(e: Event) =>
+                this._setShowInEditor(
+                  action.id,
+                  name,
+                  (e.target as HTMLInputElement).checked,
+                )}
+            />
+            ${localize(this.hass, "ui.show_in_editor", "Show in editor")}
+          </label>
+          <div class="summary-cell">
+            ${isEditing
+              ? ""
+              : hasDefault
+                ? html`<button
+                    class="default-summary"
+                    data-default-summary=${name}
+                    @click=${(e: Event) => {
+                      e.stopPropagation();
+                      this._startEditingDefault(action.id, name);
+                    }}
+                  >Default: ${this._formatDefaultSummary((action.defaults ?? {})[name])}</button>`
+                : html`<button
+                    class="set-default-btn"
+                    data-set-default=${name}
+                    @click=${(e: Event) => {
+                      e.stopPropagation();
+                      this._setDefault(action.id, name, null);
+                      this._startEditingDefault(action.id, name);
+                    }}
+                  >+ ${localize(this.hass, "ui.set_default", "Set default")}</button>`}
+          </div>
         </div>
+        <!-- Row 2: full editor (only when editing) -->
+        ${isEditing
+          ? html`<div
+              class="field-row-editor"
+              data-editing-key=${editKey}
+            >
+              <div class="default-editor">${this._renderDefaultEditor(action, name, field)}</div>
+              <button
+                class="clear-default"
+                data-clear-default=${name}
+                title=${localize(this.hass, "ui.clear_default", "Clear default")}
+                @click=${(e: Event) => {
+                  e.stopPropagation();
+                  this._clearDefault(action.id, name);
+                  this._stopEditingDefault();
+                }}
+              >✕</button>
+            </div>`
+          : ""}
       </div>
     `;
   }

@@ -286,7 +286,7 @@ export function summariseAction(
   else targets = `${n} ${noun}s`;
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${_humanizeFieldId(k)} ${v}`)
+    .map(([k, v]) => `${_humanizeFieldId(k)}: ${v}`)
     .join(", ");
   return params ? `${name}: ${targets}, ${params}` : `${name}: ${targets}`;
 }

@@ -165,7 +165,7 @@ describe("summariseAction", () => {
       params: { brightness: 80 },
     };
     expect(summariseAction(action, { hass: noLocalize, exposedActions }))
-      .toBe("Set light: 2 lights, Brightness 80");
+      .toBe("Set light: 2 lights, Brightness: 80");
   });
 
   test("action with one entity uses singular", () => {
@@ -175,7 +175,7 @@ describe("summariseAction", () => {
       params: { brightness: 80 },
     };
     expect(summariseAction(action, { hass: noLocalize, exposedActions }))
-      .toBe("Set light: 1 light, Brightness 80");
+      .toBe("Set light: 1 light, Brightness: 80");
   });
 
   test("action with no entities", () => {
@@ -185,7 +185,7 @@ describe("summariseAction", () => {
       params: { brightness: 80 },
     };
     expect(summariseAction(action, { hass: noLocalize, exposedActions }))
-      .toBe("Set light: (no targets), Brightness 80");
+      .toBe("Set light: (no targets), Brightness: 80");
   });
 
   test("action with no params omits the params clause", () => {
@@ -207,7 +207,7 @@ describe("summariseAction", () => {
       params: { brightness: 50 },
     };
     expect(summariseAction(action, { hass, exposedActions }))
-      .toBe("Set light: 1 light, Brightness 50");
+      .toBe("Set light: 1 light, Brightness: 50");
   });
 
   test("falls back to hass.localize when exposed list omits the service", () => {
@@ -219,7 +219,7 @@ describe("summariseAction", () => {
       params: { brightness: 50 },
     };
     expect(summariseAction(action, { hass }))
-      .toBe("Set light: 1 light, Brightness 50");
+      .toBe("Set light: 1 light, Brightness: 50");
   });
 
   test("multiple params render comma-separated", () => {
@@ -229,7 +229,7 @@ describe("summariseAction", () => {
       params: { brightness: 80, transition: 1.5 },
     };
     expect(summariseAction(action, { hass: noLocalize, exposedActions }))
-      .toBe("Set light: 1 light, Brightness 80, Transition 1.5");
+      .toBe("Set light: 1 light, Brightness: 80, Transition: 1.5");
   });
 
   test("uses domain prefix as fallback target noun (no exposed entry)", () => {
@@ -253,7 +253,7 @@ describe("summariseAction", () => {
     // Service id is used verbatim as the action name fallback (after the
     // snake-case → title-case humaniser).
     expect(out).toContain("Script.foo");
-    expect(out).toContain("Msg hello");
+    expect(out).toContain("Msg: hello");
   });
 });
 

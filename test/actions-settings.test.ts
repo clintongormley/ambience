@@ -282,7 +282,7 @@ describe("ambience-actions-settings", () => {
     );
   });
 
-  test("clicking outside the editor row exits edit mode (row 2 disappears)", async () => {
+  test("clicking outside the editor row cancels — exits edit mode and reverts value", async () => {
     // Seed with a pre-existing default.
     vi.mocked(listExposedActions).mockResolvedValueOnce([
       {
@@ -307,6 +307,14 @@ describe("ambience-actions-settings", () => {
     // Row 2 should be present.
     expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).not.toBeNull();
 
+    // Change the value in the editor.
+    const editorInput = el.shadowRoot.querySelector(
+      "input[data-default-value='brightness_pct']",
+    ) as HTMLInputElement;
+    editorInput.value = "99";
+    editorInput.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+
     // Dispatch a pointerdown on document.body (outside the editor).
     // composedPath() in jsdom will include document.body but not the shadow element.
     document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
@@ -314,8 +322,229 @@ describe("ambience-actions-settings", () => {
 
     // Edit mode should have exited.
     expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
-    // Compact summary should be restored.
-    expect(el.shadowRoot.querySelector("button[data-default-summary='brightness_pct']")).not.toBeNull();
+    // Compact summary should be restored with the ORIGINAL value (50), not 99.
+    const restoredSummary = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(restoredSummary).not.toBeNull();
+    expect(restoredSummary.textContent).toContain("50");
+  });
+
+  test("clicking Save commits the value and exits edit mode", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 50 },
+      },
+    ]);
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    // Enter edit mode.
+    const summaryBtn = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    summaryBtn.click();
+    await el.updateComplete;
+
+    // Change the value.
+    const editorInput = el.shadowRoot.querySelector(
+      "input[data-default-value='brightness_pct']",
+    ) as HTMLInputElement;
+    editorInput.value = "75";
+    editorInput.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+
+    // Click Save.
+    const saveDefaultBtn = el.shadowRoot.querySelector(
+      "button[data-save-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(saveDefaultBtn).not.toBeNull();
+    saveDefaultBtn.click();
+    await el.updateComplete;
+
+    // Edit mode should have exited.
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
+
+    // The summary should reflect the new committed value (75).
+    const summaryAfter = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(summaryAfter).not.toBeNull();
+    expect(summaryAfter.textContent).toContain("75");
+
+    // Global Save should persist the new value.
+    const globalSaveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
+    globalSaveBtn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          defaults: { brightness_pct: "75" },
+        }),
+      ]),
+    );
+  });
+
+  test("clicking Cancel reverts the value and exits edit mode", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 80 },
+      },
+    ]);
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    // Enter edit mode.
+    const summaryBtn = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    summaryBtn.click();
+    await el.updateComplete;
+
+    // Change the value in the editor.
+    const editorInput = el.shadowRoot.querySelector(
+      "input[data-default-value='brightness_pct']",
+    ) as HTMLInputElement;
+    editorInput.value = "20";
+    editorInput.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+
+    // Click Cancel.
+    const cancelBtn = el.shadowRoot.querySelector(
+      "button[data-cancel-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(cancelBtn).not.toBeNull();
+    cancelBtn.click();
+    await el.updateComplete;
+
+    // Edit mode should have exited.
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
+
+    // The summary should be restored to the original value (80).
+    const summaryAfter = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(summaryAfter).not.toBeNull();
+    expect(summaryAfter.textContent).toContain("80");
+
+    // Global Save should persist the reverted value.
+    const globalSaveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
+    globalSaveBtn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          defaults: { brightness_pct: 80 },
+        }),
+      ]),
+    );
+  });
+
+  test("Cancel after '+ Set default' removes the field entirely (was never set)", async () => {
+    // Default action has no default for brightness_pct (defaults: {}).
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    // Click "+ Set default" — enters edit mode, no key added yet.
+    const setDefaultBtn = el.shadowRoot.querySelector(
+      "button[data-set-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(setDefaultBtn).not.toBeNull();
+    setDefaultBtn.click();
+    await el.updateComplete;
+
+    // Type something — this writes into _actions via live mutation.
+    const editorInput = el.shadowRoot.querySelector(
+      "input[data-default-value='brightness_pct']",
+    ) as HTMLInputElement;
+    editorInput.value = "30";
+    editorInput.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+
+    // Click Cancel — the key should be removed entirely.
+    const cancelBtn = el.shadowRoot.querySelector(
+      "button[data-cancel-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(cancelBtn).not.toBeNull();
+    cancelBtn.click();
+    await el.updateComplete;
+
+    // Edit mode should have exited.
+    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).toBeNull();
+
+    // "Set default" button should be back (no default exists).
+    expect(el.shadowRoot.querySelector("button[data-set-default='brightness_pct']")).not.toBeNull();
+    expect(el.shadowRoot.querySelector("button[data-default-summary='brightness_pct']")).toBeNull();
+
+    // Global Save should persist empty defaults.
+    const globalSaveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
+    globalSaveBtn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          defaults: {},
+        }),
+      ]),
+    );
+  });
+
+  test("summary-cell always renders in column 3 regardless of edit state", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 50 },
+      },
+    ]);
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    const fieldRowMain = el.shadowRoot.querySelector(".field-row-main") as HTMLElement;
+    expect(fieldRowMain).not.toBeNull();
+
+    // Before editing: expect 3 children (name, show-cell, summary-cell).
+    const childrenBefore = Array.from(fieldRowMain.children);
+    expect(childrenBefore.length).toBe(3);
+    expect(childrenBefore[2].classList.contains("summary-cell")).toBe(true);
+
+    // Enter edit mode.
+    const summaryBtn = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    summaryBtn.click();
+    await el.updateComplete;
+
+    // After entering edit: still 3 children, summary-cell still in position 3.
+    const childrenAfter = Array.from(fieldRowMain.children);
+    expect(childrenAfter.length).toBe(3);
+    expect(childrenAfter[2].classList.contains("summary-cell")).toBe(true);
+    // It now renders the "Editing…" placeholder.
+    expect(childrenAfter[2].textContent).toContain("Editing");
   });
 
   test("a field can be hidden AND have a default (the old 'locked' mode)", async () => {

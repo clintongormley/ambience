@@ -158,6 +158,32 @@ export class AmbienceActionsSettings extends LitElement {
     .field-row-editor button.clear-default:hover {
       color: var(--error-color, #c62828);
     }
+    .field-row-editor button.save-default {
+      background: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+      border-color: var(--primary-color, #03a9f4);
+      padding: 0.2rem 0.5rem;
+      font-size: 0.85rem;
+      flex: 0 0 auto;
+    }
+    .field-row-editor button.cancel-default {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--secondary-text-color, #888);
+      padding: 0.2rem 0.3rem;
+      font-size: 0.85rem;
+      flex: 0 0 auto;
+      text-decoration: underline;
+    }
+    .field-row-editor button.cancel-default:hover {
+      color: var(--primary-text-color, inherit);
+    }
+    .summary-cell-editing {
+      color: var(--secondary-text-color, #888);
+      font-size: 0.85rem;
+      font-style: italic;
+    }
     .field-row input[data-default-value] {
       width: 100%;
       box-sizing: border-box;
@@ -223,6 +249,10 @@ export class AmbienceActionsSettings extends LitElement {
   @state() private _loaded = false;
   /** Key: "${actionId}:${fieldName}" of the field currently being edited. */
   @state() private _editingDefault: string | null = null;
+  /** Value the field had before entering edit mode (for Cancel). */
+  @state() private _editingOriginalValue: unknown = undefined;
+  /** Whether the field had a default before entering edit mode. */
+  @state() private _editingOriginalHad = false;
 
   private _onDocPointerDown = (e: PointerEvent) => {
     if (this._editingDefault === null) return;
@@ -231,12 +261,12 @@ export class AmbienceActionsSettings extends LitElement {
       `.field-row-editor[data-editing-key="${this._editingDefault}"]`,
     );
     if (!editorRow) {
-      this._editingDefault = null;
+      this._cancelEditingDefault();
       return;
     }
     const path = e.composedPath();
     if (!path.includes(editorRow as EventTarget)) {
-      this._editingDefault = null;
+      this._cancelEditingDefault();
     }
   };
 
@@ -251,11 +281,40 @@ export class AmbienceActionsSettings extends LitElement {
   }
 
   private _startEditingDefault(actionId: string, fieldName: string) {
+    const action = this._actions.find((a) => a.id === actionId);
+    const defaults = action?.defaults ?? {};
+    this._editingOriginalHad = fieldName in defaults;
+    this._editingOriginalValue = defaults[fieldName];
     this._editingDefault = `${actionId}:${fieldName}`;
   }
 
-  private _stopEditingDefault() {
+  private _saveEditingDefault() {
+    // Live mutations already applied to _actions; just exit edit mode.
     this._editingDefault = null;
+    this._editingOriginalValue = undefined;
+    this._editingOriginalHad = false;
+  }
+
+  private _cancelEditingDefault() {
+    const key = this._editingDefault;
+    if (key) {
+      const colonIdx = key.indexOf(":");
+      const actionId = key.slice(0, colonIdx);
+      const fieldName = key.slice(colonIdx + 1);
+      this._actions = this._actions.map((a) => {
+        if (a.id !== actionId) return a;
+        const defaults = { ...(a.defaults ?? {}) };
+        if (this._editingOriginalHad) {
+          defaults[fieldName] = this._editingOriginalValue;
+        } else {
+          delete defaults[fieldName];
+        }
+        return { ...a, defaults };
+      });
+    }
+    this._editingDefault = null;
+    this._editingOriginalValue = undefined;
+    this._editingOriginalHad = false;
   }
 
   protected override async firstUpdated() {
@@ -540,7 +599,7 @@ export class AmbienceActionsSettings extends LitElement {
           </label>
           <div class="summary-cell">
             ${isEditing
-              ? ""
+              ? html`<span class="summary-cell-editing">Editing…</span>`
               : hasDefault
                 ? html`<button
                     class="default-summary"
@@ -555,7 +614,6 @@ export class AmbienceActionsSettings extends LitElement {
                     data-set-default=${name}
                     @click=${(e: Event) => {
                       e.stopPropagation();
-                      this._setDefault(action.id, name, null);
                       this._startEditingDefault(action.id, name);
                     }}
                   >+ ${localize(this.hass, "ui.set_default", "Set default")}</button>`}
@@ -569,13 +627,29 @@ export class AmbienceActionsSettings extends LitElement {
             >
               <div class="default-editor">${this._renderDefaultEditor(action, name, field)}</div>
               <button
+                class="save-default"
+                data-save-default=${name}
+                @click=${(e: Event) => {
+                  e.stopPropagation();
+                  this._saveEditingDefault();
+                }}
+              >${localize(this.hass, "ui.save", "Save")}</button>
+              <button
+                class="cancel-default"
+                data-cancel-default=${name}
+                @click=${(e: Event) => {
+                  e.stopPropagation();
+                  this._cancelEditingDefault();
+                }}
+              >${localize(this.hass, "ui.cancel", "Cancel")}</button>
+              <button
                 class="clear-default"
                 data-clear-default=${name}
                 title=${localize(this.hass, "ui.clear_default", "Clear default")}
                 @click=${(e: Event) => {
                   e.stopPropagation();
                   this._clearDefault(action.id, name);
-                  this._stopEditingDefault();
+                  this._saveEditingDefault();
                 }}
               >✕</button>
             </div>`

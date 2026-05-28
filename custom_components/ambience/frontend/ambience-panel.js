@@ -217,7 +217,7 @@ var Ri=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var c=(t,n,e
           @value-changed=${this._onTargetChanged}
         ></ambience-target-picker>
       </div>
-    `}_humanizeFieldLabel(e){let r=this._schema?.fields[e];if(r?.name)return r.name;let i=e.replaceAll("_"," ").toLowerCase();return i.charAt(0).toUpperCase()+i.slice(1)}_fieldLabel(e){return this._humanizeFieldLabel(e)}_renderFieldsForm(){let e=this._formSchema;if(e.length===0)return"";let r={};for(let i of e)r[i.name]=this.params[i.name]??"";return customElements.get("ha-form")?l`
+    `}_humanizeFieldLabel(e){let r=this._schema?.fields[e];if(r?.name)return r.name;let i=e.replaceAll("_"," ").toLowerCase();return i.charAt(0).toUpperCase()+i.slice(1)}_fieldLabel(e){return this._humanizeFieldLabel(e)}_renderFieldsForm(){let e=this._formSchema;if(e.length===0)return"";let r={};for(let i of e)i.name in this.params&&(r[i.name]=this.params[i.name]);return customElements.get("ha-form")?l`
         <div class="fields-form">
           <ha-form
             .hass=${this.hass}

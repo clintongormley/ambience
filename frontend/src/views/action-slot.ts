@@ -256,11 +256,15 @@ export class AmbienceActionSlot extends LitElement {
   private _renderFieldsForm() {
     const schema = this._formSchema;
     if (schema.length === 0) return "";
-    // Seed the form data from current params, falling back to "" so
-    // controlled inputs render.
+    // Pass params as-is to <ha-form>. Don't substitute "" for missing keys —
+    // HA's selectors are type-sensitive (color_rgb expects number[], number
+    // expects number, etc.) and a wrong-typed value can break rendering (e.g.
+    // color_rgb renders as a black rectangle when given "").
     const data: Record<string, unknown> = {};
     for (const entry of schema) {
-      data[entry.name] = this.params[entry.name] ?? "";
+      if (entry.name in this.params) {
+        data[entry.name] = this.params[entry.name];
+      }
     }
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {

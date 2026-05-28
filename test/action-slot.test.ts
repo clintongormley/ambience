@@ -408,6 +408,69 @@ describe("ambience-action-slot", () => {
     expect(label.textContent).toContain("Brightness pct");
   });
 
+  // Fix (color_rgb): ha-form data must NOT include "" for unset non-text fields
+  test("ha-form data omits unset fields rather than filling them with empty string", async () => {
+    // Register a stub ha-form so the ha-form branch (not jsdom fallback) is taken.
+    if (!customElements.get("ha-form")) {
+      class HaFormStub extends HTMLElement {
+        data: Record<string, unknown> = {};
+      }
+      customElements.define("ha-form", HaFormStub);
+    }
+
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        rgb_color: { selector: { color_rgb: {} } },
+        brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["rgb_color", "brightness_pct"],
+        locked_values: {},
+      },
+      schema,
+      params: {},
+    });
+
+    const haForm = el.shadowRoot.querySelector("ha-form") as any;
+    expect(haForm).toBeTruthy();
+    // Neither field is set in params={} — the data object must be empty.
+    expect(haForm.data).not.toHaveProperty("rgb_color");
+    expect(haForm.data).not.toHaveProperty("brightness_pct");
+    // Specifically must NOT be "" (the old broken default).
+    expect(haForm.data?.rgb_color).toBeUndefined();
+  });
+
+  test("ha-form data includes only keys that are set in params", async () => {
+    // ha-form stub is already registered from the test above.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+        transition: { selector: { number: { min: 0, max: 60 } } },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct", "transition"],
+        locked_values: {},
+      },
+      schema,
+      params: { brightness_pct: 50 },
+    });
+
+    const haForm = el.shadowRoot.querySelector("ha-form") as any;
+    expect(haForm).toBeTruthy();
+    // Only the set key must be present.
+    expect(haForm.data).toEqual({ brightness_pct: 50 });
+    // Unset key must be absent (not "").
+    expect(haForm.data).not.toHaveProperty("transition");
+  });
+
   // Fix 3: stale-fetch guard — second schema wins even if first resolves later
   test("stale-fetch guard: second schema wins when first resolves after second", async () => {
     // Simulate: slot mounts with light.turn_on, then exposed changes to
@@ -450,10 +513,19 @@ describe("ambience-action-slot", () => {
 
     // The rendered schema should be for light.turn_off (transition field),
     // not light.turn_on (brightness field).
-    const rows = el.shadowRoot.querySelectorAll(".field-row");
-    expect(rows.length).toBe(1);
-    const labelText = rows[0].querySelector("label")?.textContent ?? "";
-    expect(labelText.toLowerCase()).toContain("transition");
-    expect(labelText.toLowerCase()).not.toContain("brightness");
+    // ha-form is registered (from the earlier tests) so check its schema;
+    // otherwise fall back to checking .field-row labels.
+    const haForm = el.shadowRoot.querySelector("ha-form") as any;
+    if (haForm) {
+      const schemaNames = (haForm.schema as Array<{ name: string }> ?? []).map((e) => e.name);
+      expect(schemaNames).toContain("transition");
+      expect(schemaNames).not.toContain("brightness");
+    } else {
+      const rows = el.shadowRoot.querySelectorAll(".field-row");
+      expect(rows.length).toBe(1);
+      const labelText = rows[0].querySelector("label")?.textContent ?? "";
+      expect(labelText.toLowerCase()).toContain("transition");
+      expect(labelText.toLowerCase()).not.toContain("brightness");
+    }
   });
 });

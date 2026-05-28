@@ -2312,12 +2312,12 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var c=(t,n,e
     }
     .field-row:last-child { border-bottom: none; }
     .field-row-main {
-      display: flex;
-      align-items: center;
+      display: grid;
+      grid-template-columns: 1fr 9rem 9rem;
       gap: 0.5rem;
+      align-items: center;
     }
     .field-row-main .name {
-      flex: 1;
       color: var(--primary-text-color, inherit);
     }
     .field-row-main .name small {
@@ -2331,10 +2331,9 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var c=(t,n,e
       white-space: nowrap;
       color: var(--secondary-text-color, #888);
       font-size: 0.85rem;
-      flex: 0 0 auto;
     }
     .field-row-main .summary-cell {
-      flex: 0 0 auto;
+      justify-self: start;
     }
     /* The collapsed-summary pill / set-default button */
     .set-default-btn {

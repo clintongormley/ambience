@@ -31,6 +31,13 @@ import {
   getServiceSchema,
 } from "../frontend/src/api.js";
 
+// Helper: finds the card-header element (now a div[data-toggle]) and clicks it to toggle expand.
+function clickToggle(root: ShadowRoot) {
+  const header = root.querySelector("[data-card] [data-toggle]") as HTMLElement;
+  expect(header).not.toBeNull();
+  header.click();
+}
+
 describe("ambience-actions-settings", () => {
   let el: any;
   beforeEach(() => vi.clearAllMocks());
@@ -56,14 +63,63 @@ describe("ambience-actions-settings", () => {
     expect(listExposedActions).toHaveBeenCalled();
   });
 
-  test("cards are collapsed by default; clicking the toggle expands them", async () => {
+  test("cards are collapsed by default; clicking the header toggles expansion", async () => {
     el = await mount();
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeNull();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    expect(toggle).not.toBeNull();
-    toggle.click();
+    // The header area (div[data-toggle]) is the clickable expand target.
+    const header = el.shadowRoot.querySelector("[data-card] [data-toggle]") as HTMLElement;
+    expect(header).not.toBeNull();
+    header.click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeTruthy();
+  });
+
+  test("clicking anywhere on the card header (not remove) toggles expand", async () => {
+    el = await mount();
+    // Click on the service id <strong> inside the header.
+    const strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
+    expect(strong).not.toBeNull();
+    strong.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("[data-card] .body")).toBeTruthy();
+    // Click again to collapse.
+    strong.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("[data-card] .body")).toBeNull();
+  });
+
+  test("collapsed card shows label in header when label is set", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "light.turn_on", label: "Morning lights", visible_fields: [], defaults: {} },
+    ]);
+    el = await mount();
+    // Card is collapsed by default. The label display span should show just the label.
+    const labelDisplay = el.shadowRoot.querySelector(
+      "[data-card] .header-label-display",
+    ) as HTMLElement;
+    expect(labelDisplay).not.toBeNull();
+    expect(labelDisplay.textContent).toContain("Morning lights");
+  });
+
+  test("collapsed card with no label shows empty label display", async () => {
+    el = await mount();
+    const labelDisplay = el.shadowRoot.querySelector(
+      "[data-card] .header-label-display",
+    ) as HTMLElement;
+    expect(labelDisplay).not.toBeNull();
+    // No label set, so display is empty (or whitespace).
+    expect(labelDisplay.textContent?.trim()).toBe("");
+  });
+
+  test("expanded card shows ha-input for label editing", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+    // When expanded, ha-input (data-label-input) should be present.
+    const labelInput = el.shadowRoot.querySelector("[data-card] [data-label-input]") as HTMLElement;
+    expect(labelInput).not.toBeNull();
+    // The static label-display span should be gone when expanded.
+    expect(el.shadowRoot.querySelector("[data-card] .header-label-display")).toBeNull();
   });
 
   test("calls saveExposedActions when save clicked, with current state (new shape)", async () => {
@@ -88,8 +144,7 @@ describe("ambience-actions-settings", () => {
 
   test("ticking 'Show in editor' adds the field to visible_fields", async () => {
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     // The `transition` field starts hidden (visible_fields only has brightness_pct).
@@ -120,8 +175,7 @@ describe("ambience-actions-settings", () => {
 
   test("unchecking 'Show in editor' removes the field from visible_fields", async () => {
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     const checkbox = el.shadowRoot.querySelector(
@@ -150,8 +204,7 @@ describe("ambience-actions-settings", () => {
 
   test("'Set default' button reveals an editor (row 2) and writes into defaults", async () => {
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     const setDefaultBtn = el.shadowRoot.querySelector(
@@ -202,8 +255,7 @@ describe("ambience-actions-settings", () => {
       },
     ]);
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     // Compact summary button should be visible; editor row should not be present.
@@ -239,8 +291,7 @@ describe("ambience-actions-settings", () => {
       },
     ]);
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     // Enter edit mode via the compact summary button.
@@ -293,8 +344,7 @@ describe("ambience-actions-settings", () => {
       },
     ]);
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     // Enter edit mode.
@@ -340,8 +390,7 @@ describe("ambience-actions-settings", () => {
       },
     ]);
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     // Enter edit mode.
@@ -403,8 +452,7 @@ describe("ambience-actions-settings", () => {
       },
     ]);
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     // Enter edit mode.
@@ -459,8 +507,7 @@ describe("ambience-actions-settings", () => {
   test("Cancel after '+ Set default' removes the field entirely (was never set)", async () => {
     // Default action has no default for brightness_pct (defaults: {}).
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     // Click "+ Set default" — enters edit mode, no key added yet.
@@ -510,7 +557,7 @@ describe("ambience-actions-settings", () => {
     );
   });
 
-  test("summary-cell always renders in column 3 regardless of edit state", async () => {
+  test("field-row-main has three columns: checkbox / name / summary-cell", async () => {
     vi.mocked(listExposedActions).mockResolvedValueOnce([
       {
         id: "light.turn_on",
@@ -520,37 +567,53 @@ describe("ambience-actions-settings", () => {
       },
     ]);
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     const fieldRowMain = el.shadowRoot.querySelector(".field-row-main") as HTMLElement;
     expect(fieldRowMain).not.toBeNull();
 
-    // Before editing: expect 3 children (name, show-cell, summary-cell).
-    const childrenBefore = Array.from(fieldRowMain.children);
-    expect(childrenBefore.length).toBe(3);
-    expect(childrenBefore[2].classList.contains("summary-cell")).toBe(true);
+    // Expect 3 children: checkbox-cell, name, summary-cell.
+    const children = Array.from(fieldRowMain.children);
+    expect(children.length).toBe(3);
+    expect(children[0].classList.contains("checkbox-cell")).toBe(true);
+    expect(children[1].classList.contains("name")).toBe(true);
+    expect(children[2].classList.contains("summary-cell")).toBe(true);
 
-    // Enter edit mode.
+    // Enter edit mode — summary-cell stays in position 3 but shows "Editing…".
     const summaryBtn = el.shadowRoot.querySelector(
       "button[data-default-summary='brightness_pct']",
     ) as HTMLButtonElement;
     summaryBtn.click();
     await el.updateComplete;
 
-    // After entering edit: still 3 children, summary-cell still in position 3.
     const childrenAfter = Array.from(fieldRowMain.children);
     expect(childrenAfter.length).toBe(3);
+    expect(childrenAfter[0].classList.contains("checkbox-cell")).toBe(true);
     expect(childrenAfter[2].classList.contains("summary-cell")).toBe(true);
-    // It now renders the "Editing…" placeholder.
     expect(childrenAfter[2].textContent).toContain("Editing");
+  });
+
+  test("show-in-editor checkbox is in the leftmost column (checkbox-cell)", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const fieldRowMain = el.shadowRoot.querySelector(".field-row-main") as HTMLElement;
+    const checkboxCell = fieldRowMain.querySelector(".checkbox-cell") as HTMLElement;
+    expect(checkboxCell).not.toBeNull();
+    // The checkbox should be inside the checkbox-cell (first column).
+    const checkbox = checkboxCell.querySelector(
+      "input[type='checkbox'][data-show-in-editor]",
+    ) as HTMLInputElement;
+    expect(checkbox).not.toBeNull();
+    // title attribute should be set for accessibility.
+    expect(checkbox.getAttribute("title")).toBe("Show in rule editor");
   });
 
   test("a field can be hidden AND have a default (the old 'locked' mode)", async () => {
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     // Uncheck brightness_pct → hidden from rule editor.
@@ -593,8 +656,7 @@ describe("ambience-actions-settings", () => {
 
   test("field rows are sorted alphabetically by field id", async () => {
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     // The mock schema returns fields in non-alphabetical order
@@ -696,8 +758,7 @@ describe("ambience-actions-settings", () => {
       target: null,
     });
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     const nameSpan = el.shadowRoot.querySelector(".field-row .name") as HTMLElement;
@@ -712,8 +773,7 @@ describe("ambience-actions-settings", () => {
 
   test("shows humanized field id when schema has no name attribute", async () => {
     el = await mount();
-    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
-    toggle.click();
+    clickToggle(el.shadowRoot);
     await el.updateComplete;
 
     const nameSpan = el.shadowRoot.querySelector(".field-row .name") as HTMLElement;
@@ -756,10 +816,19 @@ describe("ambience-actions-settings", () => {
 
   test("editing the label updates the action's label in the saved payload", async () => {
     el = await mount();
-    const labelInput = el.shadowRoot.querySelector("[data-card] input[type='text']") as HTMLInputElement;
-    expect(labelInput).not.toBeNull();
-    labelInput.value = "Lights on";
-    labelInput.dispatchEvent(new Event("input", { bubbles: true }));
+    // Expand the card so the ha-input is visible.
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    // ha-input is the label field when expanded; it renders as a custom element
+    // in jsdom (not registered), so we query by data-label-input and look for
+    // the internal input or simulate via the component's .value property.
+    const labelEl = el.shadowRoot.querySelector("[data-card] [data-label-input]") as any;
+    expect(labelEl).not.toBeNull();
+    // Dispatch an input event directly on the ha-input element simulating a value change.
+    // Since ha-input is not registered in jsdom, we fire the event on it directly.
+    Object.defineProperty(labelEl, "value", { value: "Lights on", writable: true });
+    labelEl.dispatchEvent(new Event("input", { bubbles: true }));
     await el.updateComplete;
 
     const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;

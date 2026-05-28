@@ -38,29 +38,38 @@ export class AmbienceActionsSettings extends LitElement {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-    }
-    .card-header button.toggle {
-      background: transparent;
-      border: none;
       cursor: pointer;
+    }
+    .card-header:hover .toggle-arrow {
+      color: var(--primary-color, #03a9f4);
+    }
+    .toggle-arrow {
+      flex: 0 0 auto;
       font-size: 0.95rem;
       color: var(--primary-text-color, inherit);
+      user-select: none;
     }
     .card-header strong {
       flex: 0 0 auto;
       font-family: var(--code-font-family, monospace);
       font-size: 0.9rem;
     }
-    .card-header input[type="text"] {
+    /* Collapsed label display (plain text) */
+    .header-label-display {
       flex: 1;
-      padding: 0.25rem 0.4rem;
-      border: 1px solid var(--divider-color, #ccc);
-      border-radius: 3px;
-      background: transparent;
-      color: var(--primary-text-color, inherit);
-      font: inherit;
+      font-size: 0.9rem;
+      color: var(--secondary-text-color, #888);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* ha-input for the label when expanded */
+    .header-label-input {
+      flex: 1;
+      /* Prevent click-on-input from propagating to the header toggle */
     }
     .card-header button.remove {
+      flex: 0 0 auto;
       background: transparent;
       border: 1px solid transparent;
       cursor: pointer;
@@ -73,6 +82,9 @@ export class AmbienceActionsSettings extends LitElement {
       margin-top: 0.5rem;
       border-top: 1px dashed var(--divider-color, #e0e0e0);
       padding-top: 0.5rem;
+      /* Indent so field names align under the service id in the header.
+         Arrow glyph (≈1ch) + gap (0.5rem) ≈ 1.5rem total. */
+      padding-left: 1.5rem;
     }
     .body-help {
       font-size: 0.85rem;
@@ -87,8 +99,12 @@ export class AmbienceActionsSettings extends LitElement {
     .field-row:last-child { border-bottom: none; }
     .field-row-main {
       display: grid;
-      grid-template-columns: 1fr 9rem 9rem;
+      grid-template-columns: min-content 1fr auto;
       gap: 0.5rem;
+      align-items: center;
+    }
+    .field-row-main .checkbox-cell {
+      display: flex;
       align-items: center;
     }
     .field-row-main .name {
@@ -97,14 +113,6 @@ export class AmbienceActionsSettings extends LitElement {
     .field-row-main .name small {
       color: var(--secondary-text-color, #888);
       font-weight: normal;
-    }
-    .field-row-main .show-cell {
-      display: flex;
-      align-items: center;
-      gap: 0.3rem;
-      white-space: nowrap;
-      color: var(--secondary-text-color, #888);
-      font-size: 0.85rem;
     }
     .field-row-main .summary-cell {
       justify-self: start;
@@ -135,17 +143,16 @@ export class AmbienceActionsSettings extends LitElement {
       border-color: var(--primary-color, #03a9f4);
       color: var(--primary-color, #03a9f4);
     }
-    /* Row 2: the full editor — inset from the left so it visually nests
-       under the field row above. Two stacked lines: editor + ✕, then
-       Cancel + Save right-aligned. */
+    /* Row 2: the full editor — thin bordered box, no filled background */
     .field-row-editor {
       display: flex;
       flex-direction: column;
-      gap: 0.35rem;
-      padding: 0.35rem 0.5rem 0.35rem 1.5rem;
-      background: var(--secondary-background-color, #f5f5f5);
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+      background: transparent;
+      border: 1px solid var(--divider-color, #ddd);
       border-radius: 4px;
-      margin: 0.35rem 0;
+      margin: 0.5rem 0;
     }
     .field-row-editor .editor-line {
       display: flex;
@@ -503,25 +510,42 @@ export class AmbienceActionsSettings extends LitElement {
   private _renderCard(action: ExposedAction) {
     const schema = this._schemas[action.id];
     const isExpanded = this._expanded.has(action.id);
+
     return html`
       <div class="card" data-card data-service=${action.id}>
-        <div class="card-header">
-          <button class="toggle" data-toggle @click=${() => this._toggleExpand(action.id)}>
-            ${isExpanded ? "▾" : "▸"}
-          </button>
+        <div
+          class="card-header"
+          data-toggle
+          @click=${(e: Event) => {
+            // Don't toggle if the click came from the label input or remove button.
+            const target = e.target as HTMLElement;
+            if (target.closest("ha-input, input, button.remove")) return;
+            this._toggleExpand(action.id);
+          }}
+        >
+          <span class="toggle-arrow">${isExpanded ? "▾" : "▸"}</span>
           <strong>${action.id}</strong>
-          <input
-            type="text"
-            placeholder=${localize(this.hass, "ui.action_label_placeholder", "Label (optional)")}
-            .value=${action.label}
-            @input=${(e: Event) =>
-              this._setLabel(action.id, (e.target as HTMLInputElement).value)}
-          />
+          ${isExpanded
+            ? html`<ha-input
+                class="header-label-input"
+                data-label-input
+                placeholder=${localize(this.hass, "ui.action_label_placeholder", "Label (optional)")}
+                .value=${action.label}
+                @input=${(e: Event) => {
+                  e.stopPropagation();
+                  this._setLabel(action.id, (e.target as HTMLInputElement).value);
+                }}
+                @click=${(e: Event) => e.stopPropagation()}
+              ></ha-input>`
+            : html`<span class="header-label-display">${action.label}</span>`}
           <button
             class="remove"
             data-remove
             title=${localize(this.hass, "ui.remove", "Remove")}
-            @click=${() => this._removeService(action.id)}
+            @click=${(e: Event) => {
+              e.stopPropagation();
+              this._removeService(action.id);
+            }}
           >✖</button>
         </div>
         ${isExpanded ? this._renderBody(action, schema) : ""}
@@ -558,9 +582,7 @@ export class AmbienceActionsSettings extends LitElement {
           ${localize(
             this.hass,
             "ui.actions_field_help",
-            "Show in editor: tick fields you want to set per rule. " +
-              "Default value: optional pre-fill the rule editor; applied at " +
-              "execution when the rule doesn't override it.",
+            "Tick a checkbox to make a field editable per rule. Set a default to pre-fill it.",
           )}
         </p>
         ${fields.map(([name, field]) => this._renderFieldRow(action, name, field))}
@@ -591,17 +613,13 @@ export class AmbienceActionsSettings extends LitElement {
 
     return html`
       <div class="field-row">
-        <!-- Row 1: name | show-in-editor | collapsed summary / set-default -->
+        <!-- Row 1: [checkbox] [name] [default summary] -->
         <div class="field-row-main">
-          <span class="name">
-            ${field.name || this._humanizeFieldId(name)}
-            ${field.name ? html` <small class="field-id">(${name})</small>` : ""}
-            ${field.description ? html` <small>— ${field.description}</small>` : ""}
-          </span>
-          <label class="show-cell">
+          <div class="checkbox-cell">
             <input
               type="checkbox"
               data-show-in-editor=${name}
+              title="Show in rule editor"
               .checked=${shown}
               @change=${(e: Event) =>
                 this._setShowInEditor(
@@ -610,8 +628,12 @@ export class AmbienceActionsSettings extends LitElement {
                   (e.target as HTMLInputElement).checked,
                 )}
             />
-            ${localize(this.hass, "ui.show_in_editor", "Show in editor")}
-          </label>
+          </div>
+          <span class="name">
+            ${field.name || this._humanizeFieldId(name)}
+            ${field.name ? html` <small class="field-id">(${name})</small>` : ""}
+            ${field.description ? html` <small>— ${field.description}</small>` : ""}
+          </span>
           <div class="summary-cell">
             ${isEditing
               ? html`<span class="summary-cell-editing">Editing…</span>`

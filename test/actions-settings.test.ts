@@ -232,6 +232,51 @@ describe("ambience-actions-settings", () => {
     expect(el.shadowRoot.textContent).toContain("WS unavailable");
   });
 
+  test("shows field name from schema when present, with raw id as secondary text", async () => {
+    vi.mocked(getServiceSchema).mockResolvedValueOnce({
+      fields: {
+        brightness_pct: {
+          name: "Brightness",
+          selector: { number: { min: 0, max: 100 } },
+        },
+      },
+      target: null,
+    });
+    el = await mount();
+    // Expand the card.
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    const nameSpan = el.shadowRoot.querySelector(".field-row .name") as HTMLElement;
+    expect(nameSpan).not.toBeNull();
+    const text = nameSpan.textContent ?? "";
+    // Human name visible.
+    expect(text).toContain("Brightness");
+    // Raw field id shown as secondary text in parentheses.
+    expect(text).toContain("brightness_pct");
+    // The field-id small element wraps the raw id.
+    const fieldIdSmall = nameSpan.querySelector("small.field-id") as HTMLElement;
+    expect(fieldIdSmall).not.toBeNull();
+    expect(fieldIdSmall.textContent).toContain("brightness_pct");
+  });
+
+  test("shows raw field id when schema has no name attribute", async () => {
+    el = await mount();
+    // Expand the card.
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    // The default mock schema has no name on brightness_pct.
+    const nameSpan = el.shadowRoot.querySelector(".field-row .name") as HTMLElement;
+    expect(nameSpan).not.toBeNull();
+    const text = nameSpan.textContent ?? "";
+    expect(text).toContain("brightness_pct");
+    // No field-id small element when there's no human name.
+    expect(nameSpan.querySelector("small.field-id")).toBeNull();
+  });
+
   test("editing the label updates the action's label in the saved payload", async () => {
     el = await mount();
     const labelInput = el.shadowRoot.querySelector("[data-card] input[type='text']") as HTMLInputElement;

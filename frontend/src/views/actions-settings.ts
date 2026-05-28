@@ -381,7 +381,9 @@ export class AmbienceActionsSettings extends LitElement {
     return html`
       <div class="field-row">
         <span class="name">
-          ${name}${field.description ? html` <small>— ${field.description}</small>` : ""}
+          ${field.name || name}
+          ${field.name ? html` <small class="field-id">(${name})</small>` : ""}
+          ${field.description ? html` <small>— ${field.description}</small>` : ""}
         </span>
         <select
           data-field-mode=${name}

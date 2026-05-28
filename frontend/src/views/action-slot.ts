@@ -241,6 +241,8 @@ export class AmbienceActionSlot extends LitElement {
   /* v8 ignore stop */
 
   private _fieldLabel(key: string): string {
+    const field = this._schema?.fields[key];
+    if (field?.name) return field.name;
     const spaced = key.replaceAll("_", " ").toLowerCase();
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
   }
@@ -262,6 +264,10 @@ export class AmbienceActionSlot extends LitElement {
             .hass=${this.hass}
             .schema=${schema}
             .data=${data}
+            .computeLabel=${(entry: HaFormSchemaEntry) => {
+              const field = this._schema?.fields[entry.name];
+              return field?.name || entry.name;
+            }}
             @value-changed=${this._onHaFormChanged}
           ></ha-form>
         </div>

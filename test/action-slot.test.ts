@@ -365,6 +365,49 @@ describe("ambience-action-slot", () => {
     expect(el.hasTarget()).toBe(true);
   });
 
+  test("fallback label shows human name from schema when field has a name attribute", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        brightness_pct: {
+          name: "Brightness",
+          selector: { number: { min: 0, max: 100 } },
+        },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct"], locked_values: {},
+      },
+      schema,
+    });
+    const label = el.shadowRoot.querySelector(".field-row label") as HTMLElement;
+    expect(label).not.toBeNull();
+    expect(label.textContent).toContain("Brightness");
+    expect(label.textContent).not.toContain("brightness_pct");
+  });
+
+  test("fallback label uses humanised field id when schema field has no name attribute", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct"], locked_values: {},
+      },
+      schema,
+    });
+    const label = el.shadowRoot.querySelector(".field-row label") as HTMLElement;
+    expect(label).not.toBeNull();
+    // Falls back to capitalised/underscores-replaced id.
+    expect(label.textContent).toContain("Brightness pct");
+  });
+
   // Fix 3: stale-fetch guard — second schema wins even if first resolves later
   test("stale-fetch guard: second schema wins when first resolves after second", async () => {
     // Simulate: slot mounts with light.turn_on, then exposed changes to

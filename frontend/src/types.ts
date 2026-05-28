@@ -39,6 +39,7 @@ export type ServiceSchema = {
 };
 
 export type ServiceField = {
+  name?: string;              // human-readable label (e.g. "Brightness"); from services.yaml
   selector?: unknown;         // HA selector dict; ha-form consumes verbatim
   description?: string;
   required?: boolean;

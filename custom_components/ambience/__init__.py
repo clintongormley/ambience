@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import logging
 from pathlib import Path
-from typing import Any
 
 import voluptuous as vol
 from homeassistant.components.frontend import (
@@ -38,7 +37,6 @@ from .matchers.script import ScriptMatcher
 from .matchers.state import StateMatcher
 from .matchers.time_of_day import TimeOfDayMatcher
 from .matchers.weather import WeatherMatcher
-from .migration import migrate_scope
 from .periods import PeriodStore
 from .registry import register_matcher
 from .service import async_apply_scene
@@ -120,82 +118,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     exposed_store = ExposedActionsStore(store)
     domain_data[DATA_EXPOSED_ACTIONS] = exposed_store
-
-    # One-shot pre-1.0 migration: rewrite set_light / script action entries
-    # to generic service calls and auto-expose the services they reference.
-    services_used: set[str] = set()
-    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        added = migrate_scope(scope_cfg)
-        if not added:
-            continue
-        services_used.update(added)
-        if scope_kind == "area":
-            await store.async_save_area(scope_id, scope_cfg)
-        elif scope_kind == "floor":
-            await store.async_save_floor(scope_id, scope_cfg)
-        elif scope_kind == "house":
-            await store.async_save_house(scope_cfg)
-    if services_used:
-        existing = {a["id"] for a in exposed_store.list()}
-        additions: list[dict[str, Any]] = []
-        for sid in sorted(services_used):
-            if sid in existing:
-                continue
-            if "." not in sid:
-                _LOGGER.warning(
-                    "ambience: cannot auto-expose service %r (not a domain.service id); "
-                    "rule(s) using it will fail validation until the user fixes them",
-                    sid,
-                )
-                continue
-            if sid == "light.turn_on":
-                additions.append(
-                    {
-                        "id": sid,
-                        "label": "",
-                        "visible_fields": ["brightness_pct", "transition"],
-                        "locked_values": {},
-                    }
-                )
-            elif sid == "light.turn_off":
-                additions.append(
-                    {
-                        "id": sid,
-                        "label": "",
-                        "visible_fields": ["transition"],
-                        "locked_values": {},
-                    }
-                )
-            elif sid.startswith("script."):
-                # Expose with every declared field visible.
-                from .services_meta import get_service_schema
-
-                schema = await get_service_schema(hass, sid)
-                fields = list((schema or {}).get("fields") or {})
-                additions.append(
-                    {
-                        "id": sid,
-                        "label": "",
-                        "visible_fields": fields,
-                        "locked_values": {},
-                    }
-                )
-            else:
-                additions.append(
-                    {
-                        "id": sid,
-                        "label": "",
-                        "visible_fields": [],
-                        "locked_values": {},
-                    }
-                )
-        if additions:
-            await exposed_store.save(exposed_store.list() + additions)
-            _LOGGER.info(
-                "ambience: migrated rules to use %d distinct service(s); auto-exposed %s",
-                len(services_used),
-                [a["id"] for a in additions],
-            )
 
     period_store = PeriodStore(store)
     domain_data[DATA_PERIODS] = period_store

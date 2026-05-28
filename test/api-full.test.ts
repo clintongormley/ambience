@@ -40,7 +40,7 @@ function makeFakeHass() {
     }
     if (msg.type === "ambience/exposed_actions/list") {
       return [
-        { id: "light.turn_on", label: "", visible_fields: [], locked_values: {} },
+        { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
       ];
     }
     if (msg.type === "ambience/exposed_actions/save") {
@@ -109,7 +109,7 @@ describe("API: listExposedActions", () => {
     const res = await listExposedActions({ callWS } as any);
     expect(sent[0]).toEqual({ type: "ambience/exposed_actions/list" });
     expect(res).toEqual([
-      { id: "light.turn_on", label: "", visible_fields: [], locked_values: {} },
+      { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
     ]);
   });
 });
@@ -118,7 +118,7 @@ describe("API: saveExposedActions", () => {
   test("sends actions list and returns warnings result", async () => {
     const { callWS, sent } = makeFakeHass();
     const actions = [
-      { id: "light.turn_on", label: "", visible_fields: ["brightness_pct"], locked_values: {} },
+      { id: "light.turn_on", label: "", visible_fields: ["brightness_pct"], defaults: {} },
     ];
     const res = await saveExposedActions({ callWS } as any, actions);
     expect(sent[0]).toEqual({ type: "ambience/exposed_actions/save", actions });

@@ -194,7 +194,7 @@ async def async_apply_scene(
             )
             continue
         domain, name = service_id.split(".", 1)
-        params = {**exposed.get("locked_values", {}), **action_spec.get("params", {})}
+        params = {**exposed.get("defaults", {}), **action_spec.get("params", {})}
         entity_ids = action_spec.get("entity_ids") or []
         target = {"entity_id": entity_ids} if entity_ids else None
         coros.append(hass.services.async_call(domain, name, params, target=target, blocking=True))

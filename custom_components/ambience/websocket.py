@@ -186,13 +186,13 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
             params = action_spec.get("params", {})
             if not isinstance(params, dict):
                 raise ValueError(f"rule {rule_idx} action {action_idx}: params must be an object")
-            visible = set(exposed.get("visible_fields", []))
-            extra = set(params) - visible
-            if extra:
-                raise ValueError(
-                    f"rule {rule_idx} action {action_idx}: "
-                    f"param(s) not in visible_fields: {sorted(extra)!r}"
-                )
+            # Note: params keys are NOT whitelisted against visible_fields.
+            # A rule may carry extra params for fields that have since been
+            # hidden in settings (or were never exposed); they're still sent
+            # at execution. The save-time dangling-rule warnings surface this
+            # to the user; the engine treats them as overrides.
+            # `exposed` is used here only for the existence check above.
+            _ = exposed
 
 
 @websocket_api.require_admin
@@ -353,17 +353,20 @@ async def _ws_exposed_actions_save(
                     continue
                 if new_entry is None:
                     continue
-                visible_now = set(new_entry.get("visible_fields", []))
-                lost = set(action_spec.get("params", {})) - visible_now
-                if lost:
+                exposed_keys = set(new_entry.get("visible_fields", [])) | set(
+                    new_entry.get("defaults", {})
+                )
+                extra = set(action_spec.get("params", {})) - exposed_keys
+                if extra:
                     warnings.append(
                         {
                             "scope_kind": scope_kind,
                             "scope_id": scope_id,
                             "rule_name": rule.get("name", ""),
                             "reason": (
-                                f"rule sets {sorted(lost)!r} on {sid!r} but those "
-                                f"fields are no longer visible"
+                                f"rule sets {sorted(extra)!r} on {sid!r} but those "
+                                f"fields are not currently exposed (the rule will "
+                                f"still send them at execution)"
                             ),
                         }
                     )

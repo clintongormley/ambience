@@ -37,7 +37,7 @@ async def test_save_persists_and_list_returns_saved() -> None:
                 "id": "light.turn_on",
                 "label": "Set lights on",
                 "visible_fields": ["brightness_pct"],
-                "locked_values": {"transition": 1},
+                "defaults": {"transition": 1},
             },
         ]
     )
@@ -47,7 +47,7 @@ async def test_save_persists_and_list_returns_saved() -> None:
             "id": "light.turn_on",
             "label": "Set lights on",
             "visible_fields": ["brightness_pct"],
-            "locked_values": {"transition": 1},
+            "defaults": {"transition": 1},
         },
     ]
     assert storage.saved == [
@@ -56,7 +56,7 @@ async def test_save_persists_and_list_returns_saved() -> None:
                 "id": "light.turn_on",
                 "label": "Set lights on",
                 "visible_fields": ["brightness_pct"],
-                "locked_values": {"transition": 1},
+                "defaults": {"transition": 1},
             },
         ]
     ]
@@ -65,7 +65,7 @@ async def test_save_persists_and_list_returns_saved() -> None:
 async def test_get_returns_entry_by_id() -> None:
     storage = _FakeStorage(
         [
-            {"id": "light.turn_on", "label": "", "visible_fields": [], "locked_values": {}},
+            {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
         ]
     )
     store = ExposedActionsStore(storage)
@@ -80,28 +80,41 @@ async def test_save_rejects_duplicate_ids() -> None:
     with pytest.raises(ValueError, match="duplicate"):
         await store.save(
             [
-                {"id": "light.turn_on", "label": "", "visible_fields": [], "locked_values": {}},
-                {"id": "light.turn_on", "label": "", "visible_fields": [], "locked_values": {}},
+                {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
+                {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
             ]
         )
     assert storage.saved == []
 
 
-async def test_save_rejects_field_in_both_visible_and_locked() -> None:
+async def test_save_accepts_field_in_both_visible_and_defaults() -> None:
+    """A field may appear in BOTH visible_fields and defaults.
+
+    Meaning: shown in the rule editor pre-filled with the default value.
+    The old "cannot be both visible and locked" exclusion no longer applies.
+    """
     storage = _FakeStorage()
     store = ExposedActionsStore(storage)
-    with pytest.raises(ValueError, match="cannot be both"):
-        await store.save(
-            [
-                {
-                    "id": "light.turn_on",
-                    "label": "",
-                    "visible_fields": ["brightness_pct"],
-                    "locked_values": {"brightness_pct": 50},
-                },
-            ]
-        )
-    assert storage.saved == []
+    await store.save(
+        [
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct"],
+                "defaults": {"brightness_pct": 50},
+            },
+        ]
+    )
+    assert storage.saved == [
+        [
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct"],
+                "defaults": {"brightness_pct": 50},
+            },
+        ]
+    ]
 
 
 async def test_save_rejects_malformed_id() -> None:
@@ -110,10 +123,57 @@ async def test_save_rejects_malformed_id() -> None:
     with pytest.raises(ValueError, match="service id"):
         await store.save(
             [
-                {"id": "no_dot", "label": "", "visible_fields": [], "locked_values": {}},
+                {"id": "no_dot", "label": "", "visible_fields": [], "defaults": {}},
             ]
         )
     assert storage.saved == []
+
+
+async def test_list_renames_legacy_locked_values_to_defaults() -> None:
+    """Legacy entries with `locked_values` are normalised on read.
+
+    Transient single-release compat: data persisted before the rename keeps
+    working without a one-shot migration.
+    """
+    storage = _FakeStorage(
+        [
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct"],
+                "locked_values": {"transition": 1},
+            },
+        ]
+    )
+    store = ExposedActionsStore(storage)
+    listed = store.list()
+    assert listed == [
+        {
+            "id": "light.turn_on",
+            "label": "",
+            "visible_fields": ["brightness_pct"],
+            "defaults": {"transition": 1},
+        }
+    ]
+
+
+async def test_get_renames_legacy_locked_values_to_defaults() -> None:
+    """The same legacy rename applies on single-entry get()."""
+    storage = _FakeStorage(
+        [
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": [],
+                "locked_values": {"effect": "pulse"},
+            },
+        ]
+    )
+    store = ExposedActionsStore(storage)
+    got = store.get("light.turn_on")
+    assert got is not None
+    assert "locked_values" not in got
+    assert got["defaults"] == {"effect": "pulse"}
 
 
 def _hass_with_services(services: dict) -> MagicMock:
@@ -134,7 +194,7 @@ async def test_validate_against_catalog_passes_for_known_service_and_fields() ->
                 "id": "light.turn_on",
                 "label": "",
                 "visible_fields": ["brightness_pct"],
-                "locked_values": {"transition": 1},
+                "defaults": {"transition": 1},
             },
         ],
     )  # no exception
@@ -147,7 +207,7 @@ async def test_validate_against_catalog_rejects_unknown_service() -> None:
         await store.validate_against_catalog(
             hass,
             [
-                {"id": "light.nope", "label": "", "visible_fields": [], "locked_values": {}},
+                {"id": "light.nope", "label": "", "visible_fields": [], "defaults": {}},
             ],
         )
 
@@ -163,13 +223,13 @@ async def test_validate_against_catalog_rejects_unknown_field_in_visible() -> No
                     "id": "light.turn_on",
                     "label": "",
                     "visible_fields": ["bogus_field"],
-                    "locked_values": {},
+                    "defaults": {},
                 },
             ],
         )
 
 
-async def test_validate_against_catalog_rejects_unknown_field_in_locked() -> None:
+async def test_validate_against_catalog_rejects_unknown_field_in_defaults() -> None:
     hass = _hass_with_services({"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
     store = ExposedActionsStore(_FakeStorage())
     with pytest.raises(ValueError, match="unknown field"):
@@ -180,7 +240,7 @@ async def test_validate_against_catalog_rejects_unknown_field_in_locked() -> Non
                     "id": "light.turn_on",
                     "label": "",
                     "visible_fields": [],
-                    "locked_values": {"bogus_field": 1},
+                    "defaults": {"bogus_field": 1},
                 },
             ],
         )
@@ -193,8 +253,8 @@ async def test_validate_against_catalog_stops_at_first_bad_entry() -> None:
         await store.validate_against_catalog(
             hass,
             [
-                {"id": "light.nope", "label": "", "visible_fields": [], "locked_values": {}},
-                {"id": "light.turn_on", "label": "", "visible_fields": [], "locked_values": {}},
+                {"id": "light.nope", "label": "", "visible_fields": [], "defaults": {}},
+                {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
             ],
         )
 
@@ -204,7 +264,7 @@ async def test_validate_against_catalog_accepts_service_with_no_fields() -> None
     store = ExposedActionsStore(_FakeStorage())
     await store.validate_against_catalog(
         hass,
-        [{"id": "notify.send_message", "label": "", "visible_fields": [], "locked_values": {}}],
+        [{"id": "notify.send_message", "label": "", "visible_fields": [], "defaults": {}}],
     )  # no exception
 
 
@@ -246,7 +306,7 @@ async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
                     "id": "light.turn_on",
                     "label": "",
                     "visible_fields": ["brightness_pct"],
-                    "locked_values": {},
+                    "defaults": {},
                 },
             ],
         )  # no exception
@@ -261,7 +321,7 @@ async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
                         "id": "light.no_such_service",
                         "label": "",
                         "visible_fields": [],
-                        "locked_values": {},
+                        "defaults": {},
                     },
                 ],
             )

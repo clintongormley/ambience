@@ -57,19 +57,19 @@ async def _seed_exposed_actions(hass: HomeAssistant) -> None:
                 "id": "light.turn_on",
                 "label": "",
                 "visible_fields": ["brightness_pct", "transition"],
-                "locked_values": {},
+                "defaults": {},
             },
             {
                 "id": "light.turn_off",
                 "label": "",
                 "visible_fields": ["transition"],
-                "locked_values": {},
+                "defaults": {},
             },
             {
                 "id": "script.foo",
                 "label": "",
                 "visible_fields": ["x", "brightness_pct"],
-                "locked_values": {},
+                "defaults": {},
             },
         ]
     )
@@ -229,7 +229,7 @@ async def test_exposed_actions_save_and_list_round_trip(
             "id": "light.turn_on",
             "label": "Set brightness",
             "visible_fields": ["brightness_pct"],
-            "locked_values": {"transition": 1},
+            "defaults": {"transition": 1},
         }
     ]
     resp = await _ws_send(
@@ -252,7 +252,7 @@ async def test_exposed_actions_save_rejects_shape_error(
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/exposed_actions/save",
-        actions=[{"id": "no_dot", "label": "", "visible_fields": [], "locked_values": {}}],
+        actions=[{"id": "no_dot", "label": "", "visible_fields": [], "defaults": {}}],
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
@@ -270,7 +270,7 @@ async def test_exposed_actions_save_rejects_unknown_service(
                 "id": "light.does_not_exist",
                 "label": "",
                 "visible_fields": [],
-                "locked_values": {},
+                "defaults": {},
             }
         ],
     )
@@ -293,7 +293,7 @@ async def test_exposed_actions_save_warns_on_removed_service(
                 "id": "light.turn_on",
                 "label": "",
                 "visible_fields": ["brightness_pct"],
-                "locked_values": {},
+                "defaults": {},
             }
         ],
     )
@@ -340,11 +340,11 @@ async def test_exposed_actions_save_warns_on_removed_service(
     )
 
 
-async def test_exposed_actions_save_warns_on_removed_visible_field(
+async def test_exposed_actions_save_warns_on_param_not_currently_exposed(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
-    """If an existing rule sets a param that was visible but is no longer,
-    the save emits a dangling warning."""
+    """If an existing rule sets a param that is no longer in visible_fields
+    OR defaults (i.e. not currently exposed), the save emits a warning."""
     _seed_services_catalog(hass)
     await _ws_send(
         hass_ws_client,
@@ -354,7 +354,7 @@ async def test_exposed_actions_save_warns_on_removed_visible_field(
                 "id": "light.turn_on",
                 "label": "",
                 "visible_fields": ["brightness_pct", "transition"],
-                "locked_values": {},
+                "defaults": {},
             }
         ],
     )
@@ -382,7 +382,7 @@ async def test_exposed_actions_save_warns_on_removed_visible_field(
     )
     assert save_area["success"] is True
 
-    # Re-save with `transition` no longer visible → warn.
+    # Re-save with `transition` removed from both visible and defaults → warn.
     resp = await _ws_send(
         hass_ws_client,
         id=3,
@@ -392,7 +392,7 @@ async def test_exposed_actions_save_warns_on_removed_visible_field(
                 "id": "light.turn_on",
                 "label": "",
                 "visible_fields": ["brightness_pct"],
-                "locked_values": {},
+                "defaults": {},
             }
         ],
     )
@@ -403,9 +403,70 @@ async def test_exposed_actions_save_warns_on_removed_visible_field(
         and w["scope_id"] == area_id
         and w["rule_name"] == "movie"
         and "transition" in w["reason"]
-        and "no longer visible" in w["reason"]
+        and "not currently exposed" in w["reason"]
         for w in warnings
     )
+
+
+async def test_exposed_actions_save_no_warning_when_param_in_defaults_only(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """A param matching a key in `defaults` (even if not in visible_fields)
+    is still 'exposed' — no warning should fire."""
+    _seed_services_catalog(hass)
+    await _ws_send(
+        hass_ws_client,
+        type="ambience/exposed_actions/save",
+        actions=[
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct", "transition"],
+                "defaults": {},
+            }
+        ],
+    )
+    save_area = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={
+            "auto_sort": True,
+            "rules": [
+                {
+                    "name": "movie",
+                    "when": {"scene": "movie"},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness_pct": 30, "transition": 1.5},
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    assert save_area["success"] is True
+
+    # Move `transition` from visible to defaults — still exposed, no warning.
+    resp = await _ws_send(
+        hass_ws_client,
+        id=3,
+        type="ambience/exposed_actions/save",
+        actions=[
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": ["brightness_pct"],
+                "defaults": {"transition": 2.0},
+            }
+        ],
+    )
+    assert resp["success"] is True
+    warnings = resp["result"]["warnings"]
+    assert not any("transition" in w["reason"] for w in warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -575,10 +636,12 @@ async def test_area_save_rejects_non_dict_params(
     assert "params" in resp["error"]["message"]
 
 
-async def test_area_save_rejects_param_not_in_visible_fields(
+async def test_area_save_accepts_param_not_in_visible_fields(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
-    """A rule param key must be one of the service's visible_fields."""
+    """A rule param key is NOT whitelisted against visible_fields any more —
+    extra params (e.g. left over from a settings edit) are accepted; the
+    dispatcher still sends them at execution."""
     config = {
         "auto_sort": True,
         "rules": [
@@ -588,7 +651,7 @@ async def test_area_save_rejects_param_not_in_visible_fields(
                     {
                         "service": "light.turn_on",
                         "entity_ids": ["light.a"],
-                        "params": {"effect": "bouncy"},  # not visible
+                        "params": {"effect": "bouncy"},  # not in visible_fields — OK
                     }
                 ],
             }
@@ -600,8 +663,8 @@ async def test_area_save_rejects_param_not_in_visible_fields(
         area_id=area_id,
         config=config,
     )
-    assert resp["success"] is False
-    assert "visible_fields" in resp["error"]["message"]
+    assert resp["success"] is True
+    assert resp["result"]["ok"] is True
 
 
 async def test_area_get_unknown(hass: HomeAssistant, installed, hass_ws_client) -> None:

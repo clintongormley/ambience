@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach, beforeEach, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
   listExposedActions: vi.fn(async () => [
-    { id: "light.turn_on", label: "", visible_fields: ["brightness_pct"], locked_values: {} },
+    { id: "light.turn_on", label: "", visible_fields: ["brightness_pct"], defaults: {} },
   ]),
   listServices: vi.fn(async () => [
     { id: "light.turn_on", description: "Turn on", target: null },
@@ -12,8 +12,9 @@ vi.mock("../frontend/src/api.js", () => ({
     if (service === "light.turn_on") {
       return {
         fields: {
-          brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+          // Intentionally not alphabetical so the sort test below has bite.
           transition: { selector: { number: { min: 0 } } },
+          brightness_pct: { selector: { number: { min: 0, max: 100 } } },
         },
         target: null,
       };
@@ -57,7 +58,6 @@ describe("ambience-actions-settings", () => {
 
   test("cards are collapsed by default; clicking the toggle expands them", async () => {
     el = await mount();
-    // Body fields should not be visible initially.
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeNull();
     const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
     expect(toggle).not.toBeNull();
@@ -66,7 +66,7 @@ describe("ambience-actions-settings", () => {
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeTruthy();
   });
 
-  test("calls saveExposedActions when save clicked, with current state", async () => {
+  test("calls saveExposedActions when save clicked, with current state (new shape)", async () => {
     el = await mount();
     const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
     expect(saveBtn).not.toBeNull();
@@ -80,24 +80,26 @@ describe("ambience-actions-settings", () => {
         expect.objectContaining({
           id: "light.turn_on",
           visible_fields: ["brightness_pct"],
-          locked_values: {},
+          defaults: {},
         }),
       ]),
     );
   });
 
-  test("toggling a field from hidden to visible updates the saved payload", async () => {
+  test("ticking 'Show in editor' adds the field to visible_fields", async () => {
     el = await mount();
-    // Expand the card so the field rows are rendered.
     const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
     toggle.click();
     await el.updateComplete;
 
-    // The `transition` field starts as hidden (only brightness_pct is visible).
-    const select = el.shadowRoot.querySelector("select[data-field-mode='transition']") as HTMLSelectElement;
-    expect(select).not.toBeNull();
-    select.value = "visible";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    // The `transition` field starts hidden (visible_fields only has brightness_pct).
+    const checkbox = el.shadowRoot.querySelector(
+      "input[type='checkbox'][data-show-in-editor='transition']",
+    ) as HTMLInputElement;
+    expect(checkbox).not.toBeNull();
+    expect(checkbox.checked).toBe(false);
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
     await el.updateComplete;
 
     const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
@@ -116,22 +118,18 @@ describe("ambience-actions-settings", () => {
     );
   });
 
-  test("toggling a field to locked moves it from visible_fields to locked_values", async () => {
+  test("unchecking 'Show in editor' removes the field from visible_fields", async () => {
     el = await mount();
     const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
     toggle.click();
     await el.updateComplete;
 
-    const select = el.shadowRoot.querySelector("select[data-field-mode='brightness_pct']") as HTMLSelectElement;
-    select.value = "locked";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-
-    // A native input fallback should appear for editing the locked value.
-    const lockedInput = el.shadowRoot.querySelector("input[data-locked-value='brightness_pct']") as HTMLInputElement;
-    expect(lockedInput).not.toBeNull();
-    lockedInput.value = "42";
-    lockedInput.dispatchEvent(new Event("input", { bubbles: true }));
+    const checkbox = el.shadowRoot.querySelector(
+      "input[type='checkbox'][data-show-in-editor='brightness_pct']",
+    ) as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
     await el.updateComplete;
 
     const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
@@ -145,10 +143,147 @@ describe("ambience-actions-settings", () => {
         expect.objectContaining({
           id: "light.turn_on",
           visible_fields: expect.not.arrayContaining(["brightness_pct"]),
-          locked_values: { brightness_pct: "42" },
         }),
       ]),
     );
+  });
+
+  test("'Set default' button reveals an editor and writes into defaults", async () => {
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    const setDefaultBtn = el.shadowRoot.querySelector(
+      "button[data-set-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(setDefaultBtn).not.toBeNull();
+    setDefaultBtn.click();
+    await el.updateComplete;
+
+    // The default-value editor (fallback input) should now be visible.
+    const input = el.shadowRoot.querySelector(
+      "input[data-default-value='brightness_pct']",
+    ) as HTMLInputElement;
+    expect(input).not.toBeNull();
+    input.value = "42";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+
+    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
+    saveBtn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          // Field is still shown AND has a default — orthogonal axes.
+          visible_fields: ["brightness_pct"],
+          defaults: { brightness_pct: "42" },
+        }),
+      ]),
+    );
+  });
+
+  test("clear-default ✕ removes the field from defaults", async () => {
+    // Seed an action with a pre-existing default.
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 80 },
+      },
+    ]);
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    const clearBtn = el.shadowRoot.querySelector(
+      "button[data-clear-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(clearBtn).not.toBeNull();
+    clearBtn.click();
+    await el.updateComplete;
+
+    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
+    saveBtn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          defaults: {},
+        }),
+      ]),
+    );
+  });
+
+  test("a field can be hidden AND have a default (the old 'locked' mode)", async () => {
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    // Uncheck brightness_pct → hidden from rule editor.
+    const checkbox = el.shadowRoot.querySelector(
+      "input[type='checkbox'][data-show-in-editor='brightness_pct']",
+    ) as HTMLInputElement;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+
+    // Set a default for brightness_pct → always sent at execution.
+    const setDefaultBtn = el.shadowRoot.querySelector(
+      "button[data-set-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    setDefaultBtn.click();
+    await el.updateComplete;
+    const input = el.shadowRoot.querySelector(
+      "input[data-default-value='brightness_pct']",
+    ) as HTMLInputElement;
+    input.value = "60";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+
+    const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
+    saveBtn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          visible_fields: expect.not.arrayContaining(["brightness_pct"]),
+          defaults: { brightness_pct: "60" },
+        }),
+      ]),
+    );
+  });
+
+  test("field rows are sorted alphabetically by field id", async () => {
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
+    toggle.click();
+    await el.updateComplete;
+
+    // The mock schema returns fields in non-alphabetical order
+    // (transition, then brightness_pct). The UI must render them
+    // alphabetically (brightness_pct, then transition).
+    const checkboxes = el.shadowRoot.querySelectorAll(
+      "input[type='checkbox'][data-show-in-editor]",
+    );
+    const names = Array.from(checkboxes).map((c: any) => c.getAttribute("data-show-in-editor"));
+    expect(names).toEqual(["brightness_pct", "transition"]);
   });
 
   test("add-service flow adds a new card for the chosen service", async () => {
@@ -160,7 +295,6 @@ describe("ambience-actions-settings", () => {
 
     const picker = el.shadowRoot.querySelector("select[data-add-service]") as HTMLSelectElement;
     expect(picker).not.toBeNull();
-    // Already-exposed services are not in the picker.
     const options = Array.from(picker.options).map((o) => o.value);
     expect(options).toContain("light.turn_off");
     expect(options).not.toContain("light.turn_on");
@@ -226,9 +360,7 @@ describe("ambience-actions-settings", () => {
     vi.mocked(listExposedActions).mockRejectedValueOnce(new Error("WS unavailable"));
     el = await mount();
 
-    // Save button must NOT be present
     expect(el.shadowRoot.querySelector("button[data-action='save']")).toBeNull();
-    // Error message visible
     expect(el.shadowRoot.textContent).toContain("WS unavailable");
   });
 
@@ -243,7 +375,6 @@ describe("ambience-actions-settings", () => {
       target: null,
     });
     el = await mount();
-    // Expand the card.
     const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
     toggle.click();
     await el.updateComplete;
@@ -251,11 +382,8 @@ describe("ambience-actions-settings", () => {
     const nameSpan = el.shadowRoot.querySelector(".field-row .name") as HTMLElement;
     expect(nameSpan).not.toBeNull();
     const text = nameSpan.textContent ?? "";
-    // Human name visible.
     expect(text).toContain("Brightness");
-    // Raw field id shown as secondary text in parentheses.
     expect(text).toContain("brightness_pct");
-    // The field-id small element wraps the raw id.
     const fieldIdSmall = nameSpan.querySelector("small.field-id") as HTMLElement;
     expect(fieldIdSmall).not.toBeNull();
     expect(fieldIdSmall.textContent).toContain("brightness_pct");
@@ -263,17 +391,14 @@ describe("ambience-actions-settings", () => {
 
   test("shows humanized field id when schema has no name attribute", async () => {
     el = await mount();
-    // Expand the card.
     const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
     toggle.click();
     await el.updateComplete;
 
-    // The default mock schema has no name on brightness_pct → humanized to "Brightness pct".
     const nameSpan = el.shadowRoot.querySelector(".field-row .name") as HTMLElement;
     expect(nameSpan).not.toBeNull();
     const text = nameSpan.textContent ?? "";
     expect(text).toContain("Brightness pct");
-    // No field-id small element when there's no explicit human name.
     expect(nameSpan.querySelector("small.field-id")).toBeNull();
   });
 

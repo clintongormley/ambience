@@ -18,11 +18,18 @@ export type ActionSpec = {
 };
 
 // One entry in the user's exposed-actions list (Configuration → Actions).
+//
+// `visible_fields` and `defaults` are orthogonal:
+//   - in visible_fields only       → field shown in the rule editor, empty
+//   - in defaults only             → field hidden, default sent at execution
+//                                    (= old "locked" mode)
+//   - in both                      → field shown pre-filled with the default
+//   - in neither                   → field not used
 export type ExposedAction = {
   id: string;                 // "domain.service"; primary key
   label: string;              // user-friendly display name; "" allowed
   visible_fields: string[];   // shown in the rule editor
-  locked_values: Record<string, unknown>; // always sent on every call
+  defaults: Record<string, unknown>; // applied at execution; rule params override
 };
 
 // HA service listing for the settings UI's service picker.

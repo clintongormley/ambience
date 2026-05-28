@@ -54,7 +54,7 @@ async def test_service_call_invokes_light_turn_on(
                 "id": "light.turn_on",
                 "label": "",
                 "visible_fields": ["brightness_pct", "transition"],
-                "locked_values": {},
+                "defaults": {},
             }
         ]
     )

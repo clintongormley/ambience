@@ -17,8 +17,6 @@ import type {
   ServiceSchema,
 } from "../types.js";
 
-type FieldMode = "hidden" | "visible" | "locked";
-
 type HaFormSchemaEntry = {
   name: string;
   selector?: unknown;
@@ -76,19 +74,54 @@ export class AmbienceActionsSettings extends LitElement {
       border-top: 1px dashed var(--divider-color, #e0e0e0);
       padding-top: 0.5rem;
     }
+    .body-help {
+      font-size: 0.85rem;
+      color: var(--secondary-text-color, #888);
+      margin: 0 0 0.5rem 0;
+    }
     .field-row {
       display: grid;
-      grid-template-columns: 1fr 7rem 1fr;
+      grid-template-columns: 1fr auto 1fr;
       gap: 0.5rem;
       align-items: center;
-      padding: 0.25rem 0;
+      padding: 0.35rem 0;
+      border-bottom: 1px dotted var(--divider-color, #eee);
     }
+    .field-row:last-child { border-bottom: none; }
     .field-row .name { color: var(--primary-text-color, inherit); }
     .field-row .name small {
       color: var(--secondary-text-color, #888);
       font-weight: normal;
     }
-    .field-row input[data-locked-value] {
+    .field-row .show-cell {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      white-space: nowrap;
+      color: var(--secondary-text-color, #888);
+      font-size: 0.85rem;
+    }
+    .field-row .default-cell {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .field-row .default-cell .default-editor {
+      flex: 1;
+    }
+    .field-row .default-cell button.clear-default {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--secondary-text-color, #888);
+      font-size: 1rem;
+      padding: 0 0.25rem;
+      line-height: 1;
+    }
+    .field-row .default-cell button.clear-default:hover {
+      color: var(--error-color, #c62828);
+    }
+    .field-row input[data-default-value] {
       width: 100%;
       box-sizing: border-box;
       padding: 0.25rem 0.4rem;
@@ -97,6 +130,16 @@ export class AmbienceActionsSettings extends LitElement {
       background: transparent;
       color: var(--primary-text-color, inherit);
       font: inherit;
+    }
+    .field-row .set-default-btn {
+      background: transparent;
+      border: 1px dashed var(--divider-color, #ccc);
+      color: var(--secondary-text-color, #888);
+      cursor: pointer;
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+      font: inherit;
+      font-size: 0.85rem;
     }
     .add-row {
       margin: 0.75rem 0;
@@ -207,32 +250,34 @@ export class AmbienceActionsSettings extends LitElement {
     }
   }
 
-  private _fieldMode(action: ExposedAction, fieldName: string): FieldMode {
-    if (fieldName in (action.locked_values ?? {})) return "locked";
-    if ((action.visible_fields ?? []).includes(fieldName)) return "visible";
-    return "hidden";
-  }
+  // --- per-field state mutators -------------------------------------------
 
-  private _setFieldMode(actionId: string, fieldName: string, mode: FieldMode) {
+  private _setShowInEditor(actionId: string, fieldName: string, checked: boolean) {
     this._actions = this._actions.map((a) => {
       if (a.id !== actionId) return a;
       const visible = new Set(a.visible_fields ?? []);
-      const locked = { ...(a.locked_values ?? {}) };
-      visible.delete(fieldName);
-      delete locked[fieldName];
-      if (mode === "visible") visible.add(fieldName);
-      if (mode === "locked") locked[fieldName] = locked[fieldName] ?? null;
-      return { ...a, visible_fields: [...visible], locked_values: locked };
+      if (checked) visible.add(fieldName);
+      else visible.delete(fieldName);
+      return { ...a, visible_fields: [...visible] };
     });
   }
 
-  private _setLockedValue(actionId: string, fieldName: string, value: unknown) {
+  private _setDefault(actionId: string, fieldName: string, value: unknown) {
     this._actions = this._actions.map((a) => {
       if (a.id !== actionId) return a;
       return {
         ...a,
-        locked_values: { ...(a.locked_values ?? {}), [fieldName]: value },
+        defaults: { ...(a.defaults ?? {}), [fieldName]: value },
       };
+    });
+  }
+
+  private _clearDefault(actionId: string, fieldName: string) {
+    this._actions = this._actions.map((a) => {
+      if (a.id !== actionId) return a;
+      const defaults = { ...(a.defaults ?? {}) };
+      delete defaults[fieldName];
+      return { ...a, defaults };
     });
   }
 
@@ -257,7 +302,7 @@ export class AmbienceActionsSettings extends LitElement {
     await this._ensureSchema(serviceId);
     this._actions = [
       ...this._actions,
-      { id: serviceId, label: "", visible_fields: [], locked_values: {} },
+      { id: serviceId, label: "", visible_fields: [], defaults: {} },
     ];
     this._expanded = new Set([...this._expanded, serviceId]);
     this._adding = false;
@@ -358,7 +403,11 @@ export class AmbienceActionsSettings extends LitElement {
     if (schema === undefined) {
       return html`<div class="body">${localize(this.hass, "ui.loading", "Loading…")}</div>`;
     }
-    const fields = Object.entries(schema.fields);
+    // Sort fields alphabetically by field id (stable, predictable for users
+    // scanning a long service like light.turn_on).
+    const fields = Object.entries(schema.fields).slice().sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
     if (fields.length === 0) {
       return html`<div class="body">${localize(
         this.hass,
@@ -368,6 +417,15 @@ export class AmbienceActionsSettings extends LitElement {
     }
     return html`
       <div class="body">
+        <p class="body-help">
+          ${localize(
+            this.hass,
+            "ui.actions_field_help",
+            "Show in editor: tick fields you want to set per rule. " +
+              "Default value: optional pre-fill the rule editor; applied at " +
+              "execution when the rule doesn't override it.",
+          )}
+        </p>
         ${fields.map(([name, field]) => this._renderFieldRow(action, name, field))}
       </div>
     `;
@@ -383,7 +441,8 @@ export class AmbienceActionsSettings extends LitElement {
     name: string,
     field: ServiceField,
   ) {
-    const mode = this._fieldMode(action, name);
+    const shown = (action.visible_fields ?? []).includes(name);
+    const hasDefault = name in (action.defaults ?? {});
     return html`
       <div class="field-row">
         <span class="name">
@@ -391,27 +450,49 @@ export class AmbienceActionsSettings extends LitElement {
           ${field.name ? html` <small class="field-id">(${name})</small>` : ""}
           ${field.description ? html` <small>— ${field.description}</small>` : ""}
         </span>
-        <select
-          data-field-mode=${name}
-          .value=${mode}
-          @change=${(e: Event) =>
-            this._setFieldMode(action.id, name, (e.target as HTMLSelectElement).value as FieldMode)}
-        >
-          <option value="hidden" ?selected=${mode === "hidden"}>${localize(this.hass, "ui.field_hidden", "Hidden")}</option>
-          <option value="visible" ?selected=${mode === "visible"}>${localize(this.hass, "ui.field_visible", "Visible")}</option>
-          <option value="locked" ?selected=${mode === "locked"}>${localize(this.hass, "ui.field_locked", "Locked")}</option>
-        </select>
-        ${mode === "locked" ? this._renderLockedValue(action, name, field) : html`<span></span>`}
+        <label class="show-cell">
+          <input
+            type="checkbox"
+            data-show-in-editor=${name}
+            .checked=${shown}
+            @change=${(e: Event) =>
+              this._setShowInEditor(
+                action.id,
+                name,
+                (e.target as HTMLInputElement).checked,
+              )}
+          />
+          ${localize(this.hass, "ui.show_in_editor", "Show in editor")}
+        </label>
+        <div class="default-cell">
+          ${hasDefault
+            ? html`
+                <div class="default-editor">${this._renderDefaultEditor(action, name, field)}</div>
+                <button
+                  class="clear-default"
+                  data-clear-default=${name}
+                  title=${localize(this.hass, "ui.clear_default", "Clear default")}
+                  @click=${() => this._clearDefault(action.id, name)}
+                >✕</button>
+              `
+            : html`
+                <button
+                  class="set-default-btn"
+                  data-set-default=${name}
+                  @click=${() => this._setDefault(action.id, name, null)}
+                >+ ${localize(this.hass, "ui.set_default", "Set default")}</button>
+              `}
+        </div>
       </div>
     `;
   }
 
-  private _renderLockedValue(
+  private _renderDefaultEditor(
     action: ExposedAction,
     fieldName: string,
     _field: ServiceField,
   ) {
-    const value = action.locked_values?.[fieldName];
+    const value = action.defaults?.[fieldName];
     const schema = this._fieldSchemas[`${action.id}:${fieldName}`] ?? [];
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
@@ -422,16 +503,16 @@ export class AmbienceActionsSettings extends LitElement {
         .computeLabel=${() => ""}
         @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => {
           e.stopPropagation();
-          this._setLockedValue(action.id, fieldName, e.detail.value[fieldName]);
+          this._setDefault(action.id, fieldName, e.detail.value[fieldName]);
         }}
       ></ha-form>`;
     }
     /* v8 ignore stop */
     return html`<input
-      data-locked-value=${fieldName}
+      data-default-value=${fieldName}
       .value=${value == null ? "" : String(value)}
       @input=${(e: Event) =>
-        this._setLockedValue(action.id, fieldName, (e.target as HTMLInputElement).value)}
+        this._setDefault(action.id, fieldName, (e.target as HTMLInputElement).value)}
     />`;
   }
 

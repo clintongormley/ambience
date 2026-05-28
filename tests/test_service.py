@@ -92,12 +92,12 @@ def _install(
     )
 
 
-def _exposed(sid: str, *, visible: list[str] | None = None, locked: dict | None = None) -> dict:
+def _exposed(sid: str, *, visible: list[str] | None = None, defaults: dict | None = None) -> dict:
     return {
         "id": sid,
         "label": "",
         "visible_fields": list(visible or []),
-        "locked_values": dict(locked or {}),
+        "defaults": dict(defaults or {}),
     }
 
 
@@ -150,8 +150,8 @@ async def test_happy_path_calls_service_for_matching_rule(hass: HomeAssistant) -
     assert calls[0].data["brightness_pct"] == 30
 
 
-async def test_locked_values_merged_with_rule_params(hass: HomeAssistant) -> None:
-    """Locked defaults are applied even when the rule doesn't set them."""
+async def test_defaults_merged_with_rule_params(hass: HomeAssistant) -> None:
+    """Settings defaults are applied even when the rule doesn't set them."""
     calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
@@ -176,7 +176,7 @@ async def test_locked_values_merged_with_rule_params(hass: HomeAssistant) -> Non
             _exposed(
                 "light.turn_on",
                 visible=["brightness_pct"],
-                locked={"transition": 1.5},
+                defaults={"transition": 1.5},
             )
         ],
     )
@@ -188,8 +188,8 @@ async def test_locked_values_merged_with_rule_params(hass: HomeAssistant) -> Non
     assert calls[0].data["transition"] == 1.5
 
 
-async def test_rule_params_override_locked_values(hass: HomeAssistant) -> None:
-    """If both locked + rule params set a key, the rule wins (later-wins via spread)."""
+async def test_rule_params_override_defaults(hass: HomeAssistant) -> None:
+    """If both defaults + rule params set a key, the rule wins (later-wins via spread)."""
     calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
@@ -214,7 +214,7 @@ async def test_rule_params_override_locked_values(hass: HomeAssistant) -> None:
             _exposed(
                 "light.turn_on",
                 visible=["transition"],
-                locked={"transition": 1.0},
+                defaults={"transition": 1.0},
             )
         ],
     )

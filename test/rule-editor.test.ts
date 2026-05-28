@@ -27,13 +27,13 @@ const availableActions: ExposedAction[] = [
     id: "light.turn_on",
     label: "Set light",
     visible_fields: ["brightness", "transition"],
-    locked_values: {},
+    defaults: {},
   },
   {
     id: "script.foo",
     label: "Run foo script",
     visible_fields: [],
-    locked_values: {},
+    defaults: {},
   },
 ];
 
@@ -673,7 +673,7 @@ describe("ambience-rule-editor — action picker from exposed-actions list", () 
     const el2: any = document.createElement("ambience-rule-editor");
     el2.matchers = matchers;
     el2.availableActions = [
-      { id: "homeassistant.reload_config", label: "", visible_fields: [], locked_values: {} },
+      { id: "homeassistant.reload_config", label: "", visible_fields: [], defaults: {} },
     ];
     el2.periods = periods;
     el2.hass = hass;
@@ -903,7 +903,7 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
       id: "notify.send_message",
       label: "Send notification",
       visible_fields: ["message"],
-      locked_values: {},
+      defaults: {},
     },
   ];
 

@@ -349,7 +349,7 @@ describe("ambience-rules-list", () => {
 
   test("clicking action count expands the actions inline", async () => {
     const availableActions: ExposedAction[] = [
-      { id: "light.turn_on", label: "Set light", visible_fields: ["brightness"], locked_values: {} },
+      { id: "light.turn_on", label: "Set light", visible_fields: ["brightness"], defaults: {} },
     ];
     el = await mount([movieRule], true, availableActions);
     expect(el.shadowRoot.querySelector(".actions-detail")).toBeFalsy();

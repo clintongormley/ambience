@@ -154,7 +154,7 @@ describe("summariseAction", () => {
       id: "light.turn_on",
       label: "Set light",
       visible_fields: ["brightness", "transition"],
-      locked_values: {},
+      defaults: {},
     },
   ];
 

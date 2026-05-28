@@ -48,7 +48,7 @@ const matchers: MatcherInfo[] = [
 ];
 
 const actions: ExposedAction[] = [
-  { id: "light.turn_on", label: "Set light", visible_fields: [], locked_values: {} },
+  { id: "light.turn_on", label: "Set light", visible_fields: [], defaults: {} },
 ];
 
 const periods: PeriodStoreView = { builtins: {}, custom: {}, hidden: [] };
@@ -410,7 +410,7 @@ describe("ambience-scopes-view", () => {
     const initialCallCount = vi.mocked(api.listExposedActions).mock.calls.length;
 
     const updatedActions: ExposedAction[] = [
-      { id: "light.turn_on", label: "Set light", visible_fields: ["brightness_pct"], locked_values: {} },
+      { id: "light.turn_on", label: "Set light", visible_fields: ["brightness_pct"], defaults: {} },
     ];
     vi.mocked(api.listExposedActions).mockResolvedValueOnce(updatedActions);
 

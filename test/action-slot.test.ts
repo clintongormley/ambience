@@ -74,7 +74,7 @@ describe("ambience-action-slot", () => {
     // its `_schema === undefined` (Loading…) state.
     vi.mocked(api.getServiceSchema).mockReturnValue(new Promise(() => {}));
     const exposed: ExposedAction = {
-      id: "light.turn_on", label: "", visible_fields: [], locked_values: {},
+      id: "light.turn_on", label: "", visible_fields: [], defaults: {},
     };
     el = document.createElement("ambience-action-slot");
     el.hass = makeHass();
@@ -99,7 +99,7 @@ describe("ambience-action-slot", () => {
         id: "light.turn_on",
         label: "Set light",
         visible_fields: ["brightness"],
-        locked_values: {},
+        defaults: {},
       },
       schema,
     });
@@ -117,7 +117,7 @@ describe("ambience-action-slot", () => {
         id: "notify.email",
         label: "",
         visible_fields: ["msg"],
-        locked_values: {},
+        defaults: {},
       },
       schema,
     });
@@ -135,7 +135,7 @@ describe("ambience-action-slot", () => {
         id: "light.turn_on",
         label: "",
         visible_fields: [],
-        locked_values: {},
+        defaults: {},
       },
       schema,
     });
@@ -150,7 +150,7 @@ describe("ambience-action-slot", () => {
         id: "homeassistant.reload_config",
         label: "",
         visible_fields: [],
-        locked_values: {},
+        defaults: {},
       },
       schema,
     });
@@ -168,7 +168,7 @@ describe("ambience-action-slot", () => {
         label: "",
         // `gone` is no longer in the service schema → dropped
         visible_fields: ["gone", "brightness"],
-        locked_values: {},
+        defaults: {},
       },
       schema,
     });
@@ -186,7 +186,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "notify.email", label: "",
-        visible_fields: ["msg"], locked_values: {},
+        visible_fields: ["msg"], defaults: {},
       },
       schema,
     });
@@ -207,7 +207,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "light.turn_on", label: "",
-        visible_fields: [], locked_values: {},
+        visible_fields: [], defaults: {},
       },
       schema,
     });
@@ -230,7 +230,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "light.turn_on", label: "",
-        visible_fields: [], locked_values: {},
+        visible_fields: [], defaults: {},
       },
       schema,
     });
@@ -250,7 +250,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "notify.email", label: "",
-        visible_fields: ["msg"], locked_values: {},
+        visible_fields: ["msg"], defaults: {},
       },
       schema,
     });
@@ -265,7 +265,7 @@ describe("ambience-action-slot", () => {
     el2.scope = { kind: "area", id: "living_room" };
     el2.exposed = {
       id: "missing.service", label: "",
-      visible_fields: [], locked_values: {},
+      visible_fields: [], defaults: {},
     };
     el2.entityIds = [];
     el2.params = {};
@@ -286,7 +286,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "notify.email", label: "",
-        visible_fields: ["msg"], locked_values: {},
+        visible_fields: ["msg"], defaults: {},
       },
       schema,
       params: { msg: "already typed" },
@@ -327,7 +327,7 @@ describe("ambience-action-slot", () => {
     });
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
-    el.exposed = { id: "notify.send_message", label: "", visible_fields: ["msg"], locked_values: {} };
+    el.exposed = { id: "notify.send_message", label: "", visible_fields: ["msg"], defaults: {} };
     el.entityIds = [];
     el.params = {};
     vi.mocked(api.getServiceSchema).mockResolvedValueOnce(schema);
@@ -354,7 +354,7 @@ describe("ambience-action-slot", () => {
     });
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
-    el.exposed = { id: "light.turn_on", label: "", visible_fields: [], locked_values: {} };
+    el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
     el.entityIds = [];
     el.params = {};
     vi.mocked(api.getServiceSchema).mockResolvedValueOnce(schema);
@@ -379,7 +379,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct"], locked_values: {},
+        visible_fields: ["brightness_pct"], defaults: {},
       },
       schema,
     });
@@ -399,7 +399,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct"], locked_values: {},
+        visible_fields: ["brightness_pct"], defaults: {},
       },
       schema,
     });
@@ -431,7 +431,7 @@ describe("ambience-action-slot", () => {
       exposed: {
         id: "light.turn_on", label: "",
         visible_fields: ["rgb_color", "brightness_pct"],
-        locked_values: {},
+        defaults: {},
       },
       schema,
       params: {},
@@ -469,7 +469,7 @@ describe("ambience-action-slot", () => {
       exposed: {
         id: "light.turn_on", label: "",
         visible_fields: ["brightness_pct", "transition"],
-        locked_values: {},
+        defaults: {},
       },
       schema,
       params: { brightness_pct: 50 },
@@ -505,7 +505,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct"], locked_values: {},
+        visible_fields: ["brightness_pct"], defaults: {},
       },
       schema,
       params: {},
@@ -536,14 +536,14 @@ describe("ambience-action-slot", () => {
     el = document.createElement("ambience-action-slot");
     el.hass = makeHass();
     el.scope = { kind: "area", id: "living_room" };
-    el.exposed = { id: "light.turn_on", label: "", visible_fields: [], locked_values: {} };
+    el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
     el.entityIds = [];
     el.params = {};
     document.body.appendChild(el);
     await el.updateComplete;
 
     // Change exposed to light.turn_off before the first fetch resolves.
-    el.exposed = { id: "light.turn_off", label: "", visible_fields: ["transition"], locked_values: {} };
+    el.exposed = { id: "light.turn_off", label: "", visible_fields: ["transition"], defaults: {} };
     await el.updateComplete;
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
@@ -586,7 +586,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct"], locked_values: {},
+        visible_fields: ["brightness_pct"], defaults: {},
       },
       schema,
       params: {},
@@ -607,7 +607,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct"], locked_values: {},
+        visible_fields: ["brightness_pct"], defaults: {},
       },
       schema,
       params: { brightness_pct: 80 },
@@ -632,7 +632,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "light.turn_on", label: "",
-        visible_fields: [], locked_values: {},
+        visible_fields: [], defaults: {},
       },
       schema,
     });
@@ -657,7 +657,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct", "transition"], locked_values: {},
+        visible_fields: ["brightness_pct", "transition"], defaults: {},
       },
       schema,
       params: {},
@@ -682,7 +682,7 @@ describe("ambience-action-slot", () => {
     el = await mount({
       exposed: {
         id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct", "transition"], locked_values: {},
+        visible_fields: ["brightness_pct", "transition"], defaults: {},
       },
       schema,
       params: { brightness_pct: 75 },
@@ -700,5 +700,166 @@ describe("ambience-action-slot", () => {
       (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "transition")
     ) as any;
     expect(transitionForm.data).toEqual({});
+  });
+
+  // --- Show+default model: HA declaration order, default pre-fill, extras notice ---
+
+  test("fields render in HA services.yaml declaration order, not visible_fields order", async () => {
+    // Schema declares brightness_pct BEFORE transition.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+        transition: { selector: { number: { min: 0, max: 60 } } },
+      },
+    };
+    el = await mount({
+      // visible_fields stores them in the opposite order — should not matter.
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["transition", "brightness_pct"], defaults: {},
+      },
+      schema,
+      params: {},
+    });
+
+    const haForms = el.shadowRoot.querySelectorAll("ha-form") as NodeListOf<any>;
+    expect(haForms.length).toBe(2);
+    const orderedNames = Array.from(haForms).map((f: any) =>
+      ((f.schema as Array<{ name: string }> ?? [])[0] ?? {}).name,
+    );
+    expect(orderedNames).toEqual(["brightness_pct", "transition"]);
+  });
+
+  test("settings default pre-fills the form when rule has no value for that field", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 42 },
+      },
+      schema,
+      params: {},
+    });
+
+    const haForm = el.shadowRoot.querySelector("ha-form") as any;
+    expect(haForm).toBeTruthy();
+    // Default pre-fill becomes the form data even though params is empty.
+    expect(haForm.data).toEqual({ brightness_pct: 42 });
+  });
+
+  test("user override wins over the settings default", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { brightness_pct: { selector: { number: { min: 0, max: 100 } } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 42 },
+      },
+      schema,
+      params: { brightness_pct: 99 },
+    });
+    const haForm = el.shadowRoot.querySelector("ha-form") as any;
+    expect(haForm.data).toEqual({ brightness_pct: 99 });
+  });
+
+  test("clear ✕ button only shows for user overrides, not default-only values", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { brightness_pct: { selector: { number: { min: 0, max: 100 } } } },
+    };
+    // Default-only: no clear button.
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: 30 },
+      },
+      schema,
+      params: {},
+    });
+    expect(el.shadowRoot.querySelector("[data-clear]")).toBeNull();
+
+    // Now add a user override → ✕ button appears.
+    el.params = { brightness_pct: 80 };
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("[data-clear]")).toBeTruthy();
+  });
+
+  test("'Extra fields' notice appears when params contain keys not in visible_fields and not in defaults", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        rgb_color: { selector: { color_rgb: {} } },
+        brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: {},
+      },
+      schema,
+      params: { rgb_color: [255, 0, 0] },  // not exposed
+    });
+    const notice = el.shadowRoot.querySelector("[data-extra-params]");
+    expect(notice).toBeTruthy();
+    expect(notice.textContent).toContain("rgb_color");
+  });
+
+  test("'Extra fields' notice does NOT appear when the extra key is in defaults", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { rgb_color: { selector: { color_rgb: {} } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: [],  // not shown in the editor
+        defaults: { rgb_color: [0, 0, 0] },  // but defaults expose it
+      },
+      schema,
+      params: { rgb_color: [255, 0, 0] },
+    });
+    expect(el.shadowRoot.querySelector("[data-extra-params]")).toBeNull();
+  });
+
+  test("'Remove extras' button clears only the extra keys, preserving exposed-field values", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+        rgb_color: { selector: { color_rgb: {} } },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: {},
+      },
+      schema,
+      params: { brightness_pct: 50, rgb_color: [255, 0, 0] },
+    });
+    const get = captureEvent(el, "params-changed");
+    const removeBtn = el.shadowRoot.querySelector("[data-remove-extras]") as HTMLElement;
+    expect(removeBtn).toBeTruthy();
+    removeBtn.click();
+    await el.updateComplete;
+
+    const emitted = get();
+    expect(emitted).toBeTruthy();
+    expect(emitted.params).toEqual({ brightness_pct: 50 });
+    expect(emitted.params).not.toHaveProperty("rgb_color");
   });
 });

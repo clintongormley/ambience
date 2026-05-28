@@ -85,6 +85,27 @@ export class AmbienceActionSlot extends LitElement {
     .field-clear:hover {
       color: var(--error-color, #c62828);
     }
+    .extra-params-notice {
+      margin-top: 0.5rem;
+      padding: 0.4rem 0.6rem;
+      border: 1px solid var(--warning-color, #cc9);
+      background: var(--warning-color, #ffd);
+      border-radius: 4px;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .extra-params-notice button {
+      background: transparent;
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 3px;
+      cursor: pointer;
+      padding: 0.15rem 0.5rem;
+      font: inherit;
+      color: inherit;
+    }
   `;
 
   @property({ attribute: false }) hass?: HassConnection;
@@ -164,17 +185,20 @@ export class AmbienceActionSlot extends LitElement {
 
   /**
    * Intersection of `exposed.visible_fields` and `serviceSchema.fields`,
-   * mapped to ha-form's schema-entry shape. Entries are ordered as in
-   * `visible_fields` so the user sees them in the order they configured.
+   * mapped to ha-form's schema-entry shape. Iteration order follows the HA
+   * service schema (services.yaml declaration order), filtered by
+   * `visible_fields` membership — so the rule editor renders fields in the
+   * same order as HA's own service UI, regardless of the order the user
+   * toggled them in settings.
    */
   private _buildFormSchema(): HaFormSchemaEntry[] {
     const schema = this._schema;
     const exposed = this.exposed;
     if (!schema || !exposed) return [];
+    const visible = new Set(exposed.visible_fields ?? []);
     const out: HaFormSchemaEntry[] = [];
-    for (const name of exposed.visible_fields ?? []) {
-      const field = schema.fields[name];
-      if (!field) continue;
+    for (const [name, field] of Object.entries(schema.fields)) {
+      if (!visible.has(name)) continue;
       out.push({
         name,
         selector: field.selector ?? { text: {} },
@@ -294,25 +318,90 @@ export class AmbienceActionSlot extends LitElement {
     this._emit("params-changed", { params: next });
   }
 
+  /** Keys present in `params` that are neither in the current schema's
+   *  visible fields nor in `exposed.defaults`. These are typically left over
+   *  from a settings edit where a previously-visible field was hidden.
+   *  The dispatcher will still send them at execution. */
+  private _extraParamKeys(): string[] {
+    const exposedKeys = new Set<string>();
+    for (const entry of this._formSchema) exposedKeys.add(entry.name);
+    for (const k of Object.keys(this.exposed?.defaults ?? {})) exposedKeys.add(k);
+    return Object.keys(this.params).filter((k) => !exposedKeys.has(k));
+  }
+
+  private _clearExtraParams() {
+    const extras = new Set(this._extraParamKeys());
+    if (extras.size === 0) return;
+    const next: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(this.params)) {
+      if (!extras.has(k)) next[k] = v;
+    }
+    this._emit("params-changed", { params: next });
+  }
+
+  /** Build the ha-form data for a single field row.
+   *
+   * Precedence (highest first):
+   *   1. User override stored on the rule (`this.params[name]`)
+   *   2. Settings default (`this.exposed.defaults[name]`)
+   *   3. Omit the key so ha-form renders the field empty.
+   */
+  private _fieldData(name: string): Record<string, unknown> {
+    if (name in this.params) return { [name]: this.params[name] };
+    const defaults = this.exposed?.defaults ?? {};
+    if (name in defaults) return { [name]: defaults[name] };
+    return {};
+  }
+
+  /** Whether to show the per-field ✕ clear button.
+   *
+   * Only when the user has set a distinct value on the rule (something to
+   * clear back to the default). Pure-default rows have nothing to clear. */
+  private _hasUserOverride(name: string): boolean {
+    return name in this.params;
+  }
+
+  private _renderExtraParamsNotice() {
+    const extras = this._extraParamKeys();
+    if (extras.length === 0) return "";
+    const list = extras.join(", ");
+    return html`
+      <div class="extra-params-notice" data-extra-params>
+        <span>
+          ${localize(this.hass, "ui.extra_fields_prefix", "Extra fields:")} ${list}.
+          ${localize(
+            this.hass,
+            "ui.extra_fields_hint",
+            "These fields aren't currently exposed but will still be sent.",
+          )}
+        </span>
+        <button data-remove-extras @click=${() => this._clearExtraParams()}>
+          ${localize(this.hass, "ui.remove", "Remove")}
+        </button>
+      </div>
+    `;
+  }
+
   private _renderFieldsForm() {
     const schema = this._formSchema;
-    if (schema.length === 0) return "";
+    const extrasNotice = this._renderExtraParamsNotice();
+    if (schema.length === 0) {
+      // No visible fields — still render the extras notice on its own if any.
+      return extrasNotice === "" ? "" : html`<div class="fields-form">${extrasNotice}</div>`;
+    }
 
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
       return html`
         <div class="fields-form">
           ${schema.map((entry) => {
-            const hasValue = entry.name in this.params;
             const fieldSchema = this._perFieldSchemas[entry.name] ?? [entry];
-            const fieldData: Record<string, unknown> = hasValue
-              ? { [entry.name]: this.params[entry.name] }
-              : {};
+            const fieldData = this._fieldData(entry.name);
             return html`
               <div class="field-row">
                 <div class="field-header">
                   <span class="field-label">${this._humanizeFieldLabel(entry.name)}${entry.required ? " *" : ""}</span>
-                  ${hasValue
+                  ${this._hasUserOverride(entry.name)
                     ? html`<button
                         class="field-clear"
                         data-clear=${entry.name}
@@ -331,6 +420,7 @@ export class AmbienceActionSlot extends LitElement {
               </div>
             `;
           })}
+          ${extrasNotice}
         </div>
       `;
     }
@@ -341,12 +431,13 @@ export class AmbienceActionSlot extends LitElement {
       <div class="fields-form">
         ${schema.map(
           (entry) => {
-            const hasValue = entry.name in this.params;
+            const fieldData = this._fieldData(entry.name);
+            const displayValue = entry.name in fieldData ? String(fieldData[entry.name] ?? "") : "";
             return html`
               <div class="field-row">
                 <div class="field-header">
                   <label class="field-label">${this._fieldLabel(entry.name)}${entry.required ? " *" : ""}</label>
-                  ${hasValue
+                  ${this._hasUserOverride(entry.name)
                     ? html`<button
                         class="field-clear"
                         data-clear=${entry.name}
@@ -358,13 +449,14 @@ export class AmbienceActionSlot extends LitElement {
                 <input
                   type="text"
                   data-field=${entry.name}
-                  .value=${String(this.params[entry.name] ?? "")}
+                  .value=${displayValue}
                   @input=${this._onFieldInput(entry.name)}
                 />
               </div>
             `;
           },
         )}
+        ${extrasNotice}
       </div>
     `;
   }

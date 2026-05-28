@@ -136,18 +136,29 @@ export class AmbienceActionsSettings extends LitElement {
       color: var(--primary-color, #03a9f4);
     }
     /* Row 2: the full editor — inset from the left so it visually nests
-       under the field row above. */
+       under the field row above. Two stacked lines: editor + ✕, then
+       Cancel + Save right-aligned. */
     .field-row-editor {
       display: flex;
-      align-items: center;
-      gap: 0.3rem;
+      flex-direction: column;
+      gap: 0.35rem;
       padding: 0.35rem 0.5rem 0.35rem 1.5rem;
       background: var(--secondary-background-color, #f5f5f5);
       border-radius: 4px;
       margin: 0.35rem 0;
     }
-    .field-row-editor .default-editor {
+    .field-row-editor .editor-line {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .field-row-editor .editor-line .default-editor {
       flex: 1;
+    }
+    .field-row-editor .editor-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.4rem;
     }
     .field-row-editor button.clear-default {
       background: transparent;
@@ -629,33 +640,37 @@ export class AmbienceActionsSettings extends LitElement {
               class="field-row-editor"
               data-editing-key=${editKey}
             >
-              <div class="default-editor">${this._renderDefaultEditor(action, name, field)}</div>
-              <button
-                class="save-default"
-                data-save-default=${name}
-                @click=${(e: Event) => {
-                  e.stopPropagation();
-                  this._saveEditingDefault();
-                }}
-              >${localize(this.hass, "ui.save", "Save")}</button>
-              <button
-                class="cancel-default"
-                data-cancel-default=${name}
-                @click=${(e: Event) => {
-                  e.stopPropagation();
-                  this._cancelEditingDefault();
-                }}
-              >${localize(this.hass, "ui.cancel", "Cancel")}</button>
-              <button
-                class="clear-default"
-                data-clear-default=${name}
-                title=${localize(this.hass, "ui.clear_default", "Clear default")}
-                @click=${(e: Event) => {
-                  e.stopPropagation();
-                  this._clearDefault(action.id, name);
-                  this._saveEditingDefault();
-                }}
-              >✕</button>
+              <div class="editor-line">
+                <div class="default-editor">${this._renderDefaultEditor(action, name, field)}</div>
+                <button
+                  class="clear-default"
+                  data-clear-default=${name}
+                  title=${localize(this.hass, "ui.clear_default", "Clear default")}
+                  @click=${(e: Event) => {
+                    e.stopPropagation();
+                    this._clearDefault(action.id, name);
+                    this._saveEditingDefault();
+                  }}
+                >✕</button>
+              </div>
+              <div class="editor-actions">
+                <button
+                  class="cancel-default"
+                  data-cancel-default=${name}
+                  @click=${(e: Event) => {
+                    e.stopPropagation();
+                    this._cancelEditingDefault();
+                  }}
+                >${localize(this.hass, "ui.cancel", "Cancel")}</button>
+                <button
+                  class="save-default"
+                  data-save-default=${name}
+                  @click=${(e: Event) => {
+                    e.stopPropagation();
+                    this._saveEditingDefault();
+                  }}
+                >${localize(this.hass, "ui.save", "Save")}</button>
+              </div>
             </div>`
           : ""}
       </div>

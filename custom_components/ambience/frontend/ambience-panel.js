@@ -2213,23 +2213,27 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
               class="field-row-editor"
               data-editing-key=${o}
             >
-              <div class="default-editor">${this._renderDefaultEditor(e,r,i)}</div>
-              <button
-                class="save-default"
-                data-save-default=${r}
-                @click=${h=>{h.stopPropagation(),this._saveEditingDefault()}}
-              >${c(this.hass,"ui.save","Save")}</button>
-              <button
-                class="cancel-default"
-                data-cancel-default=${r}
-                @click=${h=>{h.stopPropagation(),this._cancelEditingDefault()}}
-              >${c(this.hass,"ui.cancel","Cancel")}</button>
-              <button
-                class="clear-default"
-                data-clear-default=${r}
-                title=${c(this.hass,"ui.clear_default","Clear default")}
-                @click=${h=>{h.stopPropagation(),this._clearDefault(e.id,r),this._saveEditingDefault()}}
-              >✕</button>
+              <div class="editor-line">
+                <div class="default-editor">${this._renderDefaultEditor(e,r,i)}</div>
+                <button
+                  class="clear-default"
+                  data-clear-default=${r}
+                  title=${c(this.hass,"ui.clear_default","Clear default")}
+                  @click=${h=>{h.stopPropagation(),this._clearDefault(e.id,r),this._saveEditingDefault()}}
+                >✕</button>
+              </div>
+              <div class="editor-actions">
+                <button
+                  class="cancel-default"
+                  data-cancel-default=${r}
+                  @click=${h=>{h.stopPropagation(),this._cancelEditingDefault()}}
+                >${c(this.hass,"ui.cancel","Cancel")}</button>
+                <button
+                  class="save-default"
+                  data-save-default=${r}
+                  @click=${h=>{h.stopPropagation(),this._saveEditingDefault()}}
+                >${c(this.hass,"ui.save","Save")}</button>
+              </div>
             </div>`:""}
       </div>
     `}_renderDefaultEditor(e,r,i){let s=e.defaults?.[r],a=this._fieldSchemas[`${e.id}:${r}`]??[];return customElements.get("ha-form")?l`<ha-form
@@ -2372,18 +2376,29 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
       color: var(--primary-color, #03a9f4);
     }
     /* Row 2: the full editor — inset from the left so it visually nests
-       under the field row above. */
+       under the field row above. Two stacked lines: editor + ✕, then
+       Cancel + Save right-aligned. */
     .field-row-editor {
       display: flex;
-      align-items: center;
-      gap: 0.3rem;
+      flex-direction: column;
+      gap: 0.35rem;
       padding: 0.35rem 0.5rem 0.35rem 1.5rem;
       background: var(--secondary-background-color, #f5f5f5);
       border-radius: 4px;
       margin: 0.35rem 0;
     }
-    .field-row-editor .default-editor {
+    .field-row-editor .editor-line {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .field-row-editor .editor-line .default-editor {
       flex: 1;
+    }
+    .field-row-editor .editor-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.4rem;
     }
     .field-row-editor button.clear-default {
       background: transparent;

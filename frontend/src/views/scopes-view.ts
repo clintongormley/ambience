@@ -146,8 +146,20 @@ export class AmbienceScopesView extends LitElement {
   private _unsubArea?: () => void;
   private _unsubFloor?: () => void;
 
+  private _onExposedActionsChanged = async () => {
+    try {
+      const actions = await listExposedActions(this.hass);
+      if (!this.isConnected) return;
+      this._actions = actions;
+    } catch {
+      // Silent — the user just saw a successful save; transient refetch failures
+      // are not worth surfacing here. The next manual reload will re-fetch.
+    }
+  };
+
   override async connectedCallback() {
     super.connectedCallback();
+    window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     await this._loadStatic();
     await Promise.all([
       this._refreshAreas(),
@@ -159,6 +171,7 @@ export class AmbienceScopesView extends LitElement {
 
   override disconnectedCallback() {
     super.disconnectedCallback();
+    window.removeEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     this._unsubArea?.();
     this._unsubArea = undefined;
     this._unsubFloor?.();

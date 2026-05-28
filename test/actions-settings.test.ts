@@ -277,6 +277,37 @@ describe("ambience-actions-settings", () => {
     expect(nameSpan.querySelector("small.field-id")).toBeNull();
   });
 
+  test("dispatches ambience-exposed-actions-changed on successful save", async () => {
+    const listener = vi.fn();
+    window.addEventListener("ambience-exposed-actions-changed", listener);
+    try {
+      el = await mount();
+      const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
+      saveBtn.click();
+      await new Promise((r) => setTimeout(r, 0));
+      await el.updateComplete;
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("ambience-exposed-actions-changed", listener);
+    }
+  });
+
+  test("does not dispatch ambience-exposed-actions-changed on save error", async () => {
+    vi.mocked(saveExposedActions).mockRejectedValueOnce(new Error("server error"));
+    const listener = vi.fn();
+    window.addEventListener("ambience-exposed-actions-changed", listener);
+    try {
+      el = await mount();
+      const saveBtn = el.shadowRoot.querySelector("button[data-action='save']") as HTMLButtonElement;
+      saveBtn.click();
+      await new Promise((r) => setTimeout(r, 0));
+      await el.updateComplete;
+      expect(listener).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("ambience-exposed-actions-changed", listener);
+    }
+  });
+
   test("editing the label updates the action's label in the saved payload", async () => {
     el = await mount();
     const labelInput = el.shadowRoot.querySelector("[data-card] input[type='text']") as HTMLInputElement;

@@ -403,6 +403,38 @@ describe("ambience-scopes-view", () => {
     expect(editor.scope).toEqual({ kind: "floor", id: "ground" });
   });
 
+  // --- exposed-actions refresh --------------------------------------------
+
+  test("ambience-exposed-actions-changed event re-fetches listExposedActions", async () => {
+    el = await mount();
+    const initialCallCount = vi.mocked(api.listExposedActions).mock.calls.length;
+
+    const updatedActions: ExposedAction[] = [
+      { id: "light.turn_on", label: "Set light", visible_fields: ["brightness_pct"], locked_values: {} },
+    ];
+    vi.mocked(api.listExposedActions).mockResolvedValueOnce(updatedActions);
+
+    window.dispatchEvent(new CustomEvent("ambience-exposed-actions-changed"));
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    expect(vi.mocked(api.listExposedActions).mock.calls.length).toBe(initialCallCount + 1);
+  });
+
+  test("ambience-exposed-actions-changed listener is removed on disconnect", async () => {
+    el = await mount();
+    el.remove();
+    await new Promise((r) => setTimeout(r, 0));
+
+    const callsBefore = vi.mocked(api.listExposedActions).mock.calls.length;
+    window.dispatchEvent(new CustomEvent("ambience-exposed-actions-changed"));
+    await new Promise((r) => setTimeout(r, 0));
+
+    // No additional call after disconnect
+    expect(vi.mocked(api.listExposedActions).mock.calls.length).toBe(callsBefore);
+    el = null; // already removed, don't double-remove in afterEach
+  });
+
   test("disconnectedCallback unsubscribes from both registries", async () => {
     const unsubArea = vi.fn();
     const unsubFloor = vi.fn();

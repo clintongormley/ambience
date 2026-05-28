@@ -277,6 +277,7 @@ export class AmbienceActionsSettings extends LitElement {
     try {
       const res = await saveExposedActions(this.hass, this._actions);
       this._warnings = res.warnings ?? [];
+      window.dispatchEvent(new CustomEvent("ambience-exposed-actions-changed"));
     } catch (e: unknown) {
       this._saveError = e instanceof Error ? e.message : String(e);
       this._warnings = [];

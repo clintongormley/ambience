@@ -220,7 +220,7 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
           @value-changed=${this._onTargetChanged}
         ></ambience-target-picker>
       </div>
-    `}_humanizeFieldLabel(e){let r=this._schema?.fields[e];if(r?.name)return r.name;let i=e.replaceAll("_"," ").toLowerCase();return i.charAt(0).toUpperCase()+i.slice(1)}_fieldLabel(e){return this._humanizeFieldLabel(e)}_clearField(e){if(!(e in this.params))return;let r={...this.params};delete r[e],this._emit("params-changed",{params:r})}_extraParamKeys(){let e=new Set;for(let r of this._formSchema)e.add(r.name);for(let r of Object.keys(this.exposed?.defaults??{}))e.add(r);return Object.keys(this.params).filter(r=>!e.has(r))}_clearExtraParams(){let e=new Set(this._extraParamKeys());if(e.size===0)return;let r={};for(let[i,s]of Object.entries(this.params))e.has(i)||(r[i]=s);this._emit("params-changed",{params:r})}_fieldData(e){if(e in this.params)return{[e]:this.params[e]};let r=this.exposed?.defaults??{};return e in r?{[e]:r[e]}:{}}_hasUserOverride(e){return e in this.params}_renderExtraParamsNotice(){let e=this._extraParamKeys();if(e.length===0)return"";let r=e.join(", ");return l`
+    `}_humanizeFieldLabel(e){let r=this._schema?.fields[e];if(r?.name)return r.name;let i=e.replaceAll("_"," ").toLowerCase();return i.charAt(0).toUpperCase()+i.slice(1)}_fieldLabel(e){return this._humanizeFieldLabel(e)}_clearField(e){if(!(e in this.params))return;let r={...this.params};delete r[e],this._emit("params-changed",{params:r})}_extraParamKeys(){let e=new Set;for(let r of this._formSchema)e.add(r.name);for(let r of Object.keys(this.exposed?.defaults??{}))e.add(r);return Object.keys(this.params).filter(r=>!e.has(r))}_clearExtraParams(){let e=new Set(this._extraParamKeys());if(e.size===0)return;let r={};for(let[i,s]of Object.entries(this.params))e.has(i)||(r[i]=s);this._emit("params-changed",{params:r})}_fieldData(e){return e in this.params?{[e]:this.params[e]}:{}}_formatDefault(e){return typeof e=="string"?e:typeof e=="number"||typeof e=="boolean"?String(e):JSON.stringify(e)}_hasUserOverride(e){return e in this.params}_renderExtraParamsNotice(){let e=this._extraParamKeys();if(e.length===0)return"";let r=e.join(", ");return l`
       <div class="extra-params-notice" data-extra-params>
         <span>
           ${c(this.hass,"ui.extra_fields_prefix","Extra fields:")} ${r}.
@@ -232,10 +232,11 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
       </div>
     `}_renderFieldsForm(){let e=this._formSchema,r=this._renderExtraParamsNotice();return e.length===0?r===""?"":l`<div class="fields-form">${r}</div>`:customElements.get("ha-form")?l`
         <div class="fields-form">
-          ${e.map(i=>{let s=this._perFieldSchemas[i.name]??[i],a=this._fieldData(i.name);return l`
+          ${e.map(i=>{let s=this._perFieldSchemas[i.name]??[i],a=this._fieldData(i.name),o=this.exposed?.defaults??{},d=i.name in o;return l`
               <div class="field-row">
                 <div class="field-header">
                   <span class="field-label">${this._humanizeFieldLabel(i.name)}${i.required?" *":""}</span>
+                  ${d?l`<span class="field-default-hint">Default: ${this._formatDefault(o[i.name])}</span>`:""}
                   ${this._hasUserOverride(i.name)?l`<button
                         class="field-clear"
                         data-clear=${i.name}
@@ -256,10 +257,11 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
         </div>
       `:l`
       <div class="fields-form">
-        ${e.map(i=>{let s=this._fieldData(i.name),a=i.name in s?String(s[i.name]??""):"";return l`
+        ${e.map(i=>{let s=this._fieldData(i.name),a=i.name in s?String(s[i.name]??""):"",o=this.exposed?.defaults??{},d=i.name in o;return l`
               <div class="field-row">
                 <div class="field-header">
                   <label class="field-label">${this._fieldLabel(i.name)}${i.required?" *":""}</label>
+                  ${d?l`<span class="field-default-hint">Default: ${this._formatDefault(o[i.name])}</span>`:""}
                   ${this._hasUserOverride(i.name)?l`<button
                         class="field-clear"
                         data-clear=${i.name}
@@ -318,7 +320,7 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
       margin: 0.5rem 0 0.25rem 0;
     }
     .field-label {
-      flex: 1;
+      flex: 0 0 auto;
       font-weight: 600;
     }
     .field-clear {
@@ -332,6 +334,12 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
     }
     .field-clear:hover {
       color: var(--error-color, #c62828);
+    }
+    .field-default-hint {
+      flex: 1;
+      font-size: 0.85rem;
+      color: var(--secondary-text-color, #888);
+      font-style: italic;
     }
     .extra-params-notice {
       margin-top: 0.5rem;

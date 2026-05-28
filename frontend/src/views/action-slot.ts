@@ -70,7 +70,7 @@ export class AmbienceActionSlot extends LitElement {
       margin: 0.5rem 0 0.25rem 0;
     }
     .field-label {
-      flex: 1;
+      flex: 0 0 auto;
       font-weight: 600;
     }
     .field-clear {
@@ -84,6 +84,12 @@ export class AmbienceActionSlot extends LitElement {
     }
     .field-clear:hover {
       color: var(--error-color, #c62828);
+    }
+    .field-default-hint {
+      flex: 1;
+      font-size: 0.85rem;
+      color: var(--secondary-text-color, #888);
+      font-style: italic;
     }
     .extra-params-notice {
       margin-top: 0.5rem;
@@ -341,16 +347,23 @@ export class AmbienceActionSlot extends LitElement {
 
   /** Build the ha-form data for a single field row.
    *
-   * Precedence (highest first):
-   *   1. User override stored on the rule (`this.params[name]`)
-   *   2. Settings default (`this.exposed.defaults[name]`)
-   *   3. Omit the key so ha-form renders the field empty.
+   * Only includes user-set overrides from `this.params`. Settings defaults are
+   * intentionally NOT pre-filled here — they are displayed as a separate hint
+   * beside the field label so the user can distinguish "using default" from
+   * "explicitly set to this value".
    */
   private _fieldData(name: string): Record<string, unknown> {
     if (name in this.params) return { [name]: this.params[name] };
-    const defaults = this.exposed?.defaults ?? {};
-    if (name in defaults) return { [name]: defaults[name] };
+    // else: leave key out — the field renders empty; the default is shown
+    // as a sibling hint (see _renderFieldsForm below)
     return {};
+  }
+
+  /** Format a default value for display in the hint label. */
+  private _formatDefault(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    return JSON.stringify(value);
   }
 
   /** Whether to show the per-field ✕ clear button.
@@ -397,10 +410,15 @@ export class AmbienceActionSlot extends LitElement {
           ${schema.map((entry) => {
             const fieldSchema = this._perFieldSchemas[entry.name] ?? [entry];
             const fieldData = this._fieldData(entry.name);
+            const defaults = this.exposed?.defaults ?? {};
+            const hasDefault = entry.name in defaults;
             return html`
               <div class="field-row">
                 <div class="field-header">
                   <span class="field-label">${this._humanizeFieldLabel(entry.name)}${entry.required ? " *" : ""}</span>
+                  ${hasDefault
+                    ? html`<span class="field-default-hint">Default: ${this._formatDefault(defaults[entry.name])}</span>`
+                    : ""}
                   ${this._hasUserOverride(entry.name)
                     ? html`<button
                         class="field-clear"
@@ -433,10 +451,15 @@ export class AmbienceActionSlot extends LitElement {
           (entry) => {
             const fieldData = this._fieldData(entry.name);
             const displayValue = entry.name in fieldData ? String(fieldData[entry.name] ?? "") : "";
+            const defaults = this.exposed?.defaults ?? {};
+            const hasDefault = entry.name in defaults;
             return html`
               <div class="field-row">
                 <div class="field-header">
                   <label class="field-label">${this._fieldLabel(entry.name)}${entry.required ? " *" : ""}</label>
+                  ${hasDefault
+                    ? html`<span class="field-default-hint">Default: ${this._formatDefault(defaults[entry.name])}</span>`
+                    : ""}
                   ${this._hasUserOverride(entry.name)
                     ? html`<button
                         class="field-clear"

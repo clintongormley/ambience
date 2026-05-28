@@ -731,7 +731,7 @@ describe("ambience-action-slot", () => {
     expect(orderedNames).toEqual(["brightness_pct", "transition"]);
   });
 
-  test("settings default pre-fills the form when rule has no value for that field", async () => {
+  test("settings default does NOT pre-fill the form; field renders empty and hint appears", async () => {
     const schema: ServiceSchema = {
       target: null,
       fields: {
@@ -748,10 +748,22 @@ describe("ambience-action-slot", () => {
       params: {},
     });
 
+    // ha-form branch: data must NOT contain the default
     const haForm = el.shadowRoot.querySelector("ha-form") as any;
-    expect(haForm).toBeTruthy();
-    // Default pre-fill becomes the form data even though params is empty.
-    expect(haForm.data).toEqual({ brightness_pct: 42 });
+    if (haForm) {
+      expect(haForm.data).not.toHaveProperty("brightness_pct");
+    }
+
+    // jsdom fallback: input value must be empty
+    const input = el.shadowRoot.querySelector("input[data-field='brightness_pct']") as HTMLInputElement | null;
+    if (input) {
+      expect(input.value).toBe("");
+    }
+
+    // The default hint must be visible
+    const hint = el.shadowRoot.querySelector(".field-default-hint");
+    expect(hint).toBeTruthy();
+    expect(hint!.textContent).toContain("42");
   });
 
   test("user override wins over the settings default", async () => {
@@ -861,5 +873,149 @@ describe("ambience-action-slot", () => {
     expect(emitted).toBeTruthy();
     expect(emitted.params).toEqual({ brightness_pct: 50 });
     expect(emitted.params).not.toHaveProperty("rgb_color");
+  });
+
+  // --- Default hint rendering ---
+
+  test("renders 'Default: X' hint beside the field label when settings has a default", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { transition: { selector: { number: { min: 0, max: 60 } } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["transition"],
+        defaults: { transition: 3 },
+      },
+      schema,
+      params: {},
+    });
+    const hint = el.shadowRoot.querySelector(".field-default-hint");
+    expect(hint).toBeTruthy();
+    expect(hint!.textContent).toContain("Default:");
+    expect(hint!.textContent).toContain("3");
+  });
+
+  test("no default hint when settings has no default for the field", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { transition: { selector: { number: { min: 0, max: 60 } } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["transition"],
+        defaults: {},
+      },
+      schema,
+      params: {},
+    });
+    expect(el.shadowRoot.querySelector(".field-default-hint")).toBeNull();
+  });
+
+  test("user typing a value equal to the default still counts as an override", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { transition: { selector: { number: { min: 0, max: 60 } } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["transition"],
+        defaults: { transition: 3 },
+      },
+      schema,
+      params: {},
+    });
+
+    // Before typing: no clear button
+    expect(el.shadowRoot.querySelector("[data-clear='transition']")).toBeNull();
+
+    const get = captureEvent(el, "params-changed");
+    const input = el.shadowRoot.querySelector("input[data-field='transition']") as HTMLInputElement;
+    if (input) {
+      // Type "3" — same as default, but now an explicit override
+      input.value = "3";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      await el.updateComplete;
+
+      const emitted = get();
+      expect(emitted).toBeTruthy();
+      expect(emitted.params).toHaveProperty("transition");
+      expect(emitted.params.transition).toBe("3");
+
+      // Simulate the parent reflecting the emitted params back
+      el.params = emitted.params;
+      await el.updateComplete;
+
+      // Clear button must now be visible
+      expect(el.shadowRoot.querySelector("[data-clear='transition']")).toBeTruthy();
+    } else {
+      // ha-form branch: simulate ha-form value-changed
+      const haForm = el.shadowRoot.querySelector("ha-form") as HTMLElement | null;
+      if (haForm) {
+        haForm.dispatchEvent(new CustomEvent("value-changed", {
+          detail: { value: { transition: 3 } },
+          bubbles: true,
+          composed: true,
+        }));
+        await el.updateComplete;
+
+        const emitted = get();
+        expect(emitted).toBeTruthy();
+        expect(emitted.params).toHaveProperty("transition", 3);
+
+        el.params = emitted.params;
+        await el.updateComplete;
+        expect(el.shadowRoot.querySelector("[data-clear='transition']")).toBeTruthy();
+      }
+    }
+  });
+
+  test("✕ clear removes the override; field renders empty again with default hint", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { transition: { selector: { number: { min: 0, max: 60 } } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["transition"],
+        defaults: { transition: 3 },
+      },
+      schema,
+      params: { transition: 5 },
+    });
+
+    const get = captureEvent(el, "params-changed");
+
+    // Clear button should be present (there's a user override)
+    const clearBtn = el.shadowRoot.querySelector("[data-clear='transition']") as HTMLElement;
+    expect(clearBtn).toBeTruthy();
+    clearBtn.click();
+    await el.updateComplete;
+
+    const emitted = get();
+    expect(emitted).toBeTruthy();
+    expect(emitted.params).not.toHaveProperty("transition");
+
+    // Simulate parent reflecting the cleared params
+    el.params = emitted.params;
+    await el.updateComplete;
+
+    // No clear button anymore
+    expect(el.shadowRoot.querySelector("[data-clear='transition']")).toBeNull();
+
+    // Default hint still visible
+    const hint = el.shadowRoot.querySelector(".field-default-hint");
+    expect(hint).toBeTruthy();
+    expect(hint!.textContent).toContain("3");
+
+    // Input is empty (jsdom fallback)
+    const input = el.shadowRoot.querySelector("input[data-field='transition']") as HTMLInputElement | null;
+    if (input) {
+      expect(input.value).toBe("");
+    }
   });
 });

@@ -22,7 +22,7 @@ from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
 
-from .services_meta import _descriptions_with_status
+from .services_meta import _descriptions_with_status, _flatten_field_groups
 
 
 class _StorageLike(Protocol):
@@ -109,7 +109,9 @@ class ExposedActionsStore:
                 # validation would falsely reject valid entries because the
                 # fallback view has empty fields dicts.
                 continue
-            known_fields = set(spec.get("fields", {}) if isinstance(spec, dict) else {})
+            known_fields = set(
+                _flatten_field_groups(spec.get("fields")) if isinstance(spec, dict) else {}
+            )
             for fname in entry.get("visible_fields", []):
                 if fname not in known_fields:
                     raise ValueError(f"{sid}: unknown field {fname!r} in visible_fields")

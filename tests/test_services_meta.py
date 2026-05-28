@@ -86,3 +86,33 @@ async def test_get_service_schema_handles_malformed_id() -> None:
 
     with pytest.raises(ValueError):
         await get_service_schema(hass, "no_dot")
+
+
+async def test_get_service_schema_flattens_nested_field_groups() -> None:
+    """HA's `advanced_fields`-style nested groups are flattened into the
+    top-level fields dict — the group entry itself disappears."""
+    hass = _make_hass(
+        {
+            "light": {
+                "turn_on": {
+                    "fields": {
+                        "brightness_pct": {"selector": {"number": {"min": 0, "max": 100}}},
+                        "transition": {"selector": {"number": {"min": 0}}},
+                        "advanced_fields": {
+                            "collapsed": True,
+                            "fields": {
+                                "white": {"selector": {"number": {}}},
+                                "profile": {"selector": {"text": {}}},
+                            },
+                        },
+                    },
+                },
+            },
+        }
+    )
+
+    schema = await get_service_schema(hass, "light.turn_on")
+
+    assert schema is not None
+    assert set(schema["fields"]) == {"brightness_pct", "transition", "white", "profile"}
+    assert "advanced_fields" not in schema["fields"]

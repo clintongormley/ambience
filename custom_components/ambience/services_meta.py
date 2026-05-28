@@ -27,6 +27,27 @@ from homeassistant.core import HomeAssistant
 _LOGGER = logging.getLogger(__name__)
 
 
+def _flatten_field_groups(fields: Any) -> dict[str, Any]:
+    """Flatten HA-style nested field groups into a single dict.
+
+    HA's services.yaml allows grouping fields under a parent entry that has
+    its own `fields` key (e.g. `advanced_fields` on `light.turn_on`). Those
+    parent entries aren't real fields — they're collapsible UI sections.
+    For Ambience's purposes we want a flat list of actual fields, so any
+    entry that has a nested `fields` dict is replaced by its nested fields.
+    Recursive in case groups are nested further.
+    """
+    if not isinstance(fields, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key, value in fields.items():
+        if isinstance(value, dict) and isinstance(value.get("fields"), dict):
+            out.update(_flatten_field_groups(value["fields"]))
+        else:
+            out[key] = value
+    return out
+
+
 def _registry_is_dict_stubbed(registry: dict) -> bool:
     """True iff every non-empty domain map's first entry is a plain dict.
 
@@ -120,6 +141,6 @@ async def get_service_schema(hass: HomeAssistant, service_id: str) -> dict[str, 
     if spec is None:
         return None
     return {
-        "fields": dict(spec.get("fields") or {}) if isinstance(spec, dict) else {},
+        "fields": _flatten_field_groups(spec.get("fields")) if isinstance(spec, dict) else {},
         "target": spec.get("target") if isinstance(spec, dict) else None,
     }

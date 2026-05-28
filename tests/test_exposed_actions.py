@@ -129,53 +129,6 @@ async def test_save_rejects_malformed_id() -> None:
     assert storage.saved == []
 
 
-async def test_list_renames_legacy_locked_values_to_defaults() -> None:
-    """Legacy entries with `locked_values` are normalised on read.
-
-    Transient single-release compat: data persisted before the rename keeps
-    working without a one-shot migration.
-    """
-    storage = _FakeStorage(
-        [
-            {
-                "id": "light.turn_on",
-                "label": "",
-                "visible_fields": ["brightness_pct"],
-                "locked_values": {"transition": 1},
-            },
-        ]
-    )
-    store = ExposedActionsStore(storage)
-    listed = store.list()
-    assert listed == [
-        {
-            "id": "light.turn_on",
-            "label": "",
-            "visible_fields": ["brightness_pct"],
-            "defaults": {"transition": 1},
-        }
-    ]
-
-
-async def test_get_renames_legacy_locked_values_to_defaults() -> None:
-    """The same legacy rename applies on single-entry get()."""
-    storage = _FakeStorage(
-        [
-            {
-                "id": "light.turn_on",
-                "label": "",
-                "visible_fields": [],
-                "locked_values": {"effect": "pulse"},
-            },
-        ]
-    )
-    store = ExposedActionsStore(storage)
-    got = store.get("light.turn_on")
-    assert got is not None
-    assert "locked_values" not in got
-    assert got["defaults"] == {"effect": "pulse"}
-
-
 def _hass_with_services(services: dict) -> MagicMock:
     hass = MagicMock()
     hass.services.async_services.return_value = services

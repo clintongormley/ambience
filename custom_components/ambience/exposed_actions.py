@@ -34,28 +34,13 @@ class ExposedActionsStore:
     def __init__(self, storage: _StorageLike) -> None:
         self._storage = storage
 
-    @staticmethod
-    def _normalise_legacy(entry: dict[str, Any]) -> dict[str, Any]:
-        """Lazily rename `locked_values` → `defaults` on read.
-
-        Transient compatibility shim (single release) so on-disk data from
-        before the rename keeps working without a one-shot migration. The
-        rewrite is in-memory only; `save()` is what persists the new shape.
-        """
-        if not isinstance(entry, dict):
-            return entry
-        if "locked_values" in entry and "defaults" not in entry:
-            entry = dict(entry)
-            entry["defaults"] = entry.pop("locked_values")
-        return entry
-
     def list(self) -> list[dict[str, Any]]:
-        return [self._normalise_legacy(e) for e in self._storage.get_exposed_actions()]
+        return self._storage.get_exposed_actions()
 
     def get(self, service_id: str) -> dict[str, Any] | None:
         for entry in self._storage.get_exposed_actions():
             if entry.get("id") == service_id:
-                return self._normalise_legacy(dict(entry))
+                return dict(entry)
         return None
 
     def validate_shape(self, actions: list[dict[str, Any]]) -> None:

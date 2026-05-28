@@ -437,11 +437,12 @@ describe("ambience-action-slot", () => {
 
     const haForm = el.shadowRoot.querySelector("ha-form") as any;
     expect(haForm).toBeTruthy();
-    // Neither field is set in params={} — the data object must be empty.
-    expect(haForm.data).not.toHaveProperty("rgb_color");
+    // color_rgb is pre-filled with the neutral white sentinel so MDC floats the label.
+    expect(haForm.data.rgb_color).toEqual([255, 255, 255]);
+    // Non-color selectors (number) are still omitted when unset — not "" and not 0.
     expect(haForm.data).not.toHaveProperty("brightness_pct");
-    // Specifically must NOT be "" (the old broken default).
-    expect(haForm.data?.rgb_color).toBeUndefined();
+    // Must NOT be "" (the old broken default).
+    expect(haForm.data?.brightness_pct).toBeUndefined();
   });
 
   test("ha-form data includes only keys that are set in params", async () => {
@@ -469,6 +470,75 @@ describe("ambience-action-slot", () => {
     expect(haForm.data).toEqual({ brightness_pct: 50 });
     // Unset key must be absent (not "").
     expect(haForm.data).not.toHaveProperty("transition");
+  });
+
+  // Color-selector label fix: pre-fill unset color fields with sensible defaults
+
+  test("pre-fills unset color_rgb fields with white [255,255,255]", async () => {
+    // ha-form stub is already registered from earlier tests.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        rgb_color: { selector: { color_rgb: {} } },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["rgb_color"], locked_values: {},
+      },
+      schema,
+      params: {},
+    });
+
+    const haForm = el.shadowRoot.querySelector("ha-form") as any;
+    expect(haForm).toBeTruthy();
+    expect(haForm.data.rgb_color).toEqual([255, 255, 255]);
+  });
+
+  test("uses the field's declared default for color_rgb when present", async () => {
+    // ha-form stub is already registered from earlier tests.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        rgb_color: { selector: { color_rgb: {} }, default: [100, 50, 25] },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["rgb_color"], locked_values: {},
+      },
+      schema,
+      params: {},
+    });
+
+    const haForm = el.shadowRoot.querySelector("ha-form") as any;
+    expect(haForm).toBeTruthy();
+    expect(haForm.data.rgb_color).toEqual([100, 50, 25]);
+  });
+
+  test("does not pre-fill non-color selectors when unset in params", async () => {
+    // ha-form stub is already registered from earlier tests.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct"], locked_values: {},
+      },
+      schema,
+      params: {},
+    });
+
+    const haForm = el.shadowRoot.querySelector("ha-form") as any;
+    expect(haForm).toBeTruthy();
+    // Non-color selectors keep the existing omit-from-data behaviour.
+    expect(haForm.data).not.toHaveProperty("brightness_pct");
   });
 
   // Fix 3: stale-fetch guard — second schema wins even if first resolves later

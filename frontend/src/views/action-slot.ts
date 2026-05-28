@@ -8,8 +8,20 @@ import {
 } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
-import type { ExposedAction, Scope, ServiceSchema } from "../types.js";
+import type { ExposedAction, Scope, ServiceField, ServiceSchema } from "../types.js";
 import "./target-picker.js";
+
+/** Default value for HA color selectors when the user hasn't set one.
+ * Returns undefined for non-color selectors so the existing
+ * "omit-from-data" behaviour applies. */
+function _colorSelectorDefault(field: ServiceField | undefined): unknown {
+  if (!field?.selector || typeof field.selector !== "object") return undefined;
+  const sel = field.selector as Record<string, unknown>;
+  if ("color_rgb" in sel) return field.default ?? [255, 255, 255];
+  if ("color_rgbw" in sel) return field.default ?? [255, 255, 255, 0];
+  if ("color_rgbww" in sel) return field.default ?? [255, 255, 255, 0, 0];
+  return undefined;
+}
 
 type HaFormSchemaEntry = {
   name: string;
@@ -264,6 +276,17 @@ export class AmbienceActionSlot extends LitElement {
     for (const entry of schema) {
       if (entry.name in this.params) {
         data[entry.name] = this.params[entry.name];
+        continue;
+      }
+      // MDC outlined-textfield only floats its label above the input when a
+      // value is set. For color selectors, the underlying <input type="color">
+      // always shows black when empty, so the label sits invisibly over the
+      // black swatch. Pre-fill with the field's default (or a neutral
+      // sentinel) so the label floats above on first render.
+      const field = this._schema?.fields[entry.name];
+      const colorDefault = _colorSelectorDefault(field);
+      if (colorDefault !== undefined) {
+        data[entry.name] = colorDefault;
       }
     }
     /* v8 ignore start -- ha-form path (real HA only) */

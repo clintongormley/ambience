@@ -8,20 +8,8 @@ import {
 } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
-import type { ExposedAction, Scope, ServiceField, ServiceSchema } from "../types.js";
+import type { ExposedAction, Scope, ServiceSchema } from "../types.js";
 import "./target-picker.js";
-
-/** Default value for HA color selectors when the user hasn't set one.
- * Returns undefined for non-color selectors so the existing
- * "omit-from-data" behaviour applies. */
-function _colorSelectorDefault(field: ServiceField | undefined): unknown {
-  if (!field?.selector || typeof field.selector !== "object") return undefined;
-  const sel = field.selector as Record<string, unknown>;
-  if ("color_rgb" in sel) return field.default ?? [255, 255, 255];
-  if ("color_rgbw" in sel) return field.default ?? [255, 255, 255, 0];
-  if ("color_rgbww" in sel) return field.default ?? [255, 255, 255, 0, 0];
-  return undefined;
-}
 
 type HaFormSchemaEntry = {
   name: string;
@@ -76,6 +64,27 @@ export class AmbienceActionSlot extends LitElement {
     .field-row {
       margin-bottom: 0.5rem;
     }
+    .field-header {
+      display: flex;
+      align-items: center;
+      margin: 0.5rem 0 0.25rem 0;
+    }
+    .field-label {
+      flex: 1;
+      font-weight: 600;
+    }
+    .field-clear {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--secondary-text-color, #888);
+      font-size: 1rem;
+      padding: 0 0.25rem;
+      line-height: 1;
+    }
+    .field-clear:hover {
+      color: var(--error-color, #c62828);
+    }
   `;
 
   @property({ attribute: false }) hass?: HassConnection;
@@ -90,6 +99,9 @@ export class AmbienceActionSlot extends LitElement {
   @state() private _exposedMissing = false;
   /** Cached form schema; rebuilt only when inputs change. */
   @state() private _formSchema: HaFormSchemaEntry[] = [];
+  /** Per-field schemas (length-1 arrays) keyed by field name; memoised to
+   *  prevent ha-form from re-initialising the selector mid-edit. */
+  @state() private _perFieldSchemas: Record<string, HaFormSchemaEntry[]> = {};
   /** Service id that `_schema` was loaded for; guards against stale assigns
    *  when `exposed` changes mid-fetch. */
   private _schemaServiceId: string | null = null;
@@ -109,6 +121,13 @@ export class AmbienceActionSlot extends LitElement {
     }
     if (changed.has("exposed") || changed.has("_schema")) {
       this._formSchema = this._buildFormSchema();
+    }
+    if (changed.has("_formSchema") || changed.has("_schema") || changed.has("exposed")) {
+      const next: Record<string, HaFormSchemaEntry[]> = {};
+      for (const entry of this._formSchema) {
+        next[entry.name] = [entry];
+      }
+      this._perFieldSchemas = next;
     }
   }
 
@@ -265,41 +284,50 @@ export class AmbienceActionSlot extends LitElement {
     return this._humanizeFieldLabel(key);
   }
 
+  private _clearField(name: string) {
+    if (!(name in this.params)) return;
+    const next = { ...this.params };
+    delete next[name];
+    this._emit("params-changed", { params: next });
+  }
+
   private _renderFieldsForm() {
     const schema = this._formSchema;
     if (schema.length === 0) return "";
-    // Pass params as-is to <ha-form>. Don't substitute "" for missing keys —
-    // HA's selectors are type-sensitive (color_rgb expects number[], number
-    // expects number, etc.) and a wrong-typed value can break rendering (e.g.
-    // color_rgb renders as a black rectangle when given "").
-    const data: Record<string, unknown> = {};
-    for (const entry of schema) {
-      if (entry.name in this.params) {
-        data[entry.name] = this.params[entry.name];
-        continue;
-      }
-      // MDC outlined-textfield only floats its label above the input when a
-      // value is set. For color selectors, the underlying <input type="color">
-      // always shows black when empty, so the label sits invisibly over the
-      // black swatch. Pre-fill with the field's default (or a neutral
-      // sentinel) so the label floats above on first render.
-      const field = this._schema?.fields[entry.name];
-      const colorDefault = _colorSelectorDefault(field);
-      if (colorDefault !== undefined) {
-        data[entry.name] = colorDefault;
-      }
-    }
+
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
       return html`
         <div class="fields-form">
-          <ha-form
-            .hass=${this.hass}
-            .schema=${schema}
-            .data=${data}
-            .computeLabel=${(entry: HaFormSchemaEntry) => this._humanizeFieldLabel(entry.name)}
-            @value-changed=${this._onHaFormChanged}
-          ></ha-form>
+          ${schema.map((entry) => {
+            const hasValue = entry.name in this.params;
+            const fieldSchema = this._perFieldSchemas[entry.name] ?? [entry];
+            const fieldData: Record<string, unknown> = hasValue
+              ? { [entry.name]: this.params[entry.name] }
+              : {};
+            return html`
+              <div class="field-row">
+                <div class="field-header">
+                  <span class="field-label">${this._humanizeFieldLabel(entry.name)}${entry.required ? " *" : ""}</span>
+                  ${hasValue
+                    ? html`<button
+                        class="field-clear"
+                        data-clear=${entry.name}
+                        @click=${() => this._clearField(entry.name)}
+                        title="Clear"
+                      >✕</button>`
+                    : ""}
+                </div>
+                <ha-form
+                  .hass=${this.hass}
+                  .schema=${fieldSchema}
+                  .data=${fieldData}
+                  .computeLabel=${() => ""}
+                  @value-changed=${this._onHaFormChanged}
+                ></ha-form>
+              </div>
+            `;
+          })}
         </div>
       `;
     }
@@ -309,17 +337,30 @@ export class AmbienceActionSlot extends LitElement {
     return html`
       <div class="fields-form">
         ${schema.map(
-          (entry) => html`
-            <div class="field-row">
-              <label>${this._fieldLabel(entry.name)}${entry.required ? " *" : ""}</label>
-              <input
-                type="text"
-                data-field=${entry.name}
-                .value=${String(this.params[entry.name] ?? "")}
-                @input=${this._onFieldInput(entry.name)}
-              />
-            </div>
-          `,
+          (entry) => {
+            const hasValue = entry.name in this.params;
+            return html`
+              <div class="field-row">
+                <div class="field-header">
+                  <label class="field-label">${this._fieldLabel(entry.name)}${entry.required ? " *" : ""}</label>
+                  ${hasValue
+                    ? html`<button
+                        class="field-clear"
+                        data-clear=${entry.name}
+                        @click=${() => this._clearField(entry.name)}
+                        title="Clear"
+                      >✕</button>`
+                    : ""}
+                </div>
+                <input
+                  type="text"
+                  data-field=${entry.name}
+                  .value=${String(this.params[entry.name] ?? "")}
+                  @input=${this._onFieldInput(entry.name)}
+                />
+              </div>
+            `;
+          },
         )}
       </div>
     `;

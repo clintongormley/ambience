@@ -174,7 +174,8 @@ describe("ambience-action-slot", () => {
     });
     const rows = el.shadowRoot.querySelectorAll(".field-row");
     expect(rows.length).toBe(1);
-    expect(rows[0].querySelector("label")?.textContent).toContain("Brightness");
+    const header = rows[0].querySelector(".field-label") as HTMLElement;
+    expect(header?.textContent).toContain("Brightness");
   });
 
   test("typing in a field input emits params-changed", async () => {
@@ -253,7 +254,7 @@ describe("ambience-action-slot", () => {
       },
       schema,
     });
-    const label = el.shadowRoot.querySelector(".field-row label")?.textContent;
+    const label = el.shadowRoot.querySelector(".field-row .field-label")?.textContent;
     expect(label).toContain("Msg *");
   });
 
@@ -382,7 +383,7 @@ describe("ambience-action-slot", () => {
       },
       schema,
     });
-    const label = el.shadowRoot.querySelector(".field-row label") as HTMLElement;
+    const label = el.shadowRoot.querySelector(".field-row .field-label") as HTMLElement;
     expect(label).not.toBeNull();
     expect(label.textContent).toContain("Brightness");
     expect(label.textContent).not.toContain("brightness_pct");
@@ -402,7 +403,7 @@ describe("ambience-action-slot", () => {
       },
       schema,
     });
-    const label = el.shadowRoot.querySelector(".field-row label") as HTMLElement;
+    const label = el.shadowRoot.querySelector(".field-row .field-label") as HTMLElement;
     expect(label).not.toBeNull();
     // Falls back to capitalised/underscores-replaced id.
     expect(label.textContent).toContain("Brightness pct");
@@ -414,6 +415,7 @@ describe("ambience-action-slot", () => {
     if (!customElements.get("ha-form")) {
       class HaFormStub extends HTMLElement {
         data: Record<string, unknown> = {};
+        schema: unknown[] = [];
       }
       customElements.define("ha-form", HaFormStub);
     }
@@ -435,14 +437,23 @@ describe("ambience-action-slot", () => {
       params: {},
     });
 
-    const haForm = el.shadowRoot.querySelector("ha-form") as any;
-    expect(haForm).toBeTruthy();
-    // color_rgb is pre-filled with the neutral white sentinel so MDC floats the label.
-    expect(haForm.data.rgb_color).toEqual([255, 255, 255]);
-    // Non-color selectors (number) are still omitted when unset — not "" and not 0.
-    expect(haForm.data).not.toHaveProperty("brightness_pct");
-    // Must NOT be "" (the old broken default).
-    expect(haForm.data?.brightness_pct).toBeUndefined();
+    // With per-field rendering, there are two ha-form elements.
+    const haForms = el.shadowRoot.querySelectorAll("ha-form") as NodeListOf<any>;
+    expect(haForms.length).toBe(2);
+
+    // rgb_color form: field is unset → data should be empty (no pre-fill).
+    const rgbForm = Array.from(haForms).find((f: any) =>
+      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "rgb_color")
+    ) as any;
+    expect(rgbForm).toBeTruthy();
+    expect(rgbForm.data).not.toHaveProperty("rgb_color");
+
+    // brightness_pct form: field is also unset → data should be empty.
+    const brightnessForm = Array.from(haForms).find((f: any) =>
+      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "brightness_pct")
+    ) as any;
+    expect(brightnessForm).toBeTruthy();
+    expect(brightnessForm.data).not.toHaveProperty("brightness_pct");
   });
 
   test("ha-form data includes only keys that are set in params", async () => {
@@ -464,60 +475,25 @@ describe("ambience-action-slot", () => {
       params: { brightness_pct: 50 },
     });
 
-    const haForm = el.shadowRoot.querySelector("ha-form") as any;
-    expect(haForm).toBeTruthy();
-    // Only the set key must be present.
-    expect(haForm.data).toEqual({ brightness_pct: 50 });
-    // Unset key must be absent (not "").
-    expect(haForm.data).not.toHaveProperty("transition");
+    const haForms = el.shadowRoot.querySelectorAll("ha-form") as NodeListOf<any>;
+    expect(haForms.length).toBe(2);
+
+    // Find the brightness_pct form and check its data.
+    const brightnessForm = Array.from(haForms).find((f: any) =>
+      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "brightness_pct")
+    ) as any;
+    expect(brightnessForm).toBeTruthy();
+    expect(brightnessForm.data).toEqual({ brightness_pct: 50 });
+
+    // Find the transition form and check data is empty.
+    const transitionForm = Array.from(haForms).find((f: any) =>
+      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "transition")
+    ) as any;
+    expect(transitionForm).toBeTruthy();
+    expect(transitionForm.data).not.toHaveProperty("transition");
   });
 
-  // Color-selector label fix: pre-fill unset color fields with sensible defaults
-
-  test("pre-fills unset color_rgb fields with white [255,255,255]", async () => {
-    // ha-form stub is already registered from earlier tests.
-    const schema: ServiceSchema = {
-      target: null,
-      fields: {
-        rgb_color: { selector: { color_rgb: {} } },
-      },
-    };
-    el = await mount({
-      exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: ["rgb_color"], locked_values: {},
-      },
-      schema,
-      params: {},
-    });
-
-    const haForm = el.shadowRoot.querySelector("ha-form") as any;
-    expect(haForm).toBeTruthy();
-    expect(haForm.data.rgb_color).toEqual([255, 255, 255]);
-  });
-
-  test("uses the field's declared default for color_rgb when present", async () => {
-    // ha-form stub is already registered from earlier tests.
-    const schema: ServiceSchema = {
-      target: null,
-      fields: {
-        rgb_color: { selector: { color_rgb: {} }, default: [100, 50, 25] },
-      },
-    };
-    el = await mount({
-      exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: ["rgb_color"], locked_values: {},
-      },
-      schema,
-      params: {},
-    });
-
-    const haForm = el.shadowRoot.querySelector("ha-form") as any;
-    expect(haForm).toBeTruthy();
-    expect(haForm.data.rgb_color).toEqual([100, 50, 25]);
-  });
-
+  // Non-color selectors should never be pre-filled with any default.
   test("does not pre-fill non-color selectors when unset in params", async () => {
     // ha-form stub is already registered from earlier tests.
     const schema: ServiceSchema = {
@@ -593,9 +569,114 @@ describe("ambience-action-slot", () => {
     } else {
       const rows = el.shadowRoot.querySelectorAll(".field-row");
       expect(rows.length).toBe(1);
-      const labelText = rows[0].querySelector("label")?.textContent ?? "";
+      const labelText = rows[0].querySelector(".field-label")?.textContent ?? "";
       expect(labelText.toLowerCase()).toContain("transition");
       expect(labelText.toLowerCase()).not.toContain("brightness");
     }
+  });
+
+  // --- New tests for per-field layout, clear button, and label rendering ---
+
+  test("renders a clear button only when a field has a value", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { brightness_pct: { selector: { number: { min: 0, max: 100 } } } },
+    };
+    // No params set — no clear button expected.
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct"], locked_values: {},
+      },
+      schema,
+      params: {},
+    });
+    expect(el.shadowRoot.querySelector("[data-clear]")).toBeNull();
+
+    // Now set params — clear button should appear.
+    el.params = { brightness_pct: 80 };
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("[data-clear]")).toBeTruthy();
+  });
+
+  test("clear button removes the param from emitted state", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { brightness_pct: { selector: { number: { min: 0, max: 100 } } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct"], locked_values: {},
+      },
+      schema,
+      params: { brightness_pct: 80 },
+    });
+
+    const get = captureEvent(el, "params-changed");
+    const clearBtn = el.shadowRoot.querySelector("[data-clear]") as HTMLElement;
+    expect(clearBtn).toBeTruthy();
+    clearBtn.click();
+    await el.updateComplete;
+
+    const emitted = get();
+    expect(emitted).toBeTruthy();
+    expect(emitted.params).not.toHaveProperty("brightness_pct");
+  });
+
+  test("each visible field renders its label above the input", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+        transition: { selector: { number: { min: 0, max: 60 } } },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct", "transition"], locked_values: {},
+      },
+      schema,
+      params: {},
+    });
+
+    const labels = el.shadowRoot.querySelectorAll(".field-label");
+    expect(labels.length).toBe(2);
+    const labelTexts = Array.from(labels).map((l: any) => l.textContent.trim());
+    expect(labelTexts.some((t: string) => t.includes("Brightness pct"))).toBe(true);
+    expect(labelTexts.some((t: string) => t.includes("Transition"))).toBe(true);
+  });
+
+  test("ha-form receives empty data for unset fields per row", async () => {
+    // ha-form stub is already registered from earlier tests.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+        transition: { selector: { number: { min: 0, max: 60 } } },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: ["brightness_pct", "transition"], locked_values: {},
+      },
+      schema,
+      params: { brightness_pct: 75 },
+    });
+
+    const haForms = el.shadowRoot.querySelectorAll("ha-form") as NodeListOf<any>;
+    expect(haForms.length).toBe(2);
+
+    const brightnessForm = Array.from(haForms).find((f: any) =>
+      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "brightness_pct")
+    ) as any;
+    expect(brightnessForm.data).toEqual({ brightness_pct: 75 });
+
+    const transitionForm = Array.from(haForms).find((f: any) =>
+      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "transition")
+    ) as any;
+    expect(transitionForm.data).toEqual({});
   });
 });

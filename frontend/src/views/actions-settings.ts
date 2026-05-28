@@ -135,12 +135,16 @@ export class AmbienceActionsSettings extends LitElement {
       border-color: var(--primary-color, #03a9f4);
       color: var(--primary-color, #03a9f4);
     }
-    /* Row 2: the full editor */
+    /* Row 2: the full editor — inset from the left so it visually nests
+       under the field row above. */
     .field-row-editor {
       display: flex;
       align-items: center;
       gap: 0.3rem;
-      padding-top: 0.35rem;
+      padding: 0.35rem 0.5rem 0.35rem 1.5rem;
+      background: var(--secondary-background-color, #f5f5f5);
+      border-radius: 4px;
+      margin: 0.35rem 0;
     }
     .field-row-editor .default-editor {
       flex: 1;

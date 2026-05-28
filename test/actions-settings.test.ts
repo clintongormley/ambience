@@ -261,19 +261,19 @@ describe("ambience-actions-settings", () => {
     expect(fieldIdSmall.textContent).toContain("brightness_pct");
   });
 
-  test("shows raw field id when schema has no name attribute", async () => {
+  test("shows humanized field id when schema has no name attribute", async () => {
     el = await mount();
     // Expand the card.
     const toggle = el.shadowRoot.querySelector("[data-card] button[data-toggle]") as HTMLButtonElement;
     toggle.click();
     await el.updateComplete;
 
-    // The default mock schema has no name on brightness_pct.
+    // The default mock schema has no name on brightness_pct → humanized to "Brightness pct".
     const nameSpan = el.shadowRoot.querySelector(".field-row .name") as HTMLElement;
     expect(nameSpan).not.toBeNull();
     const text = nameSpan.textContent ?? "";
-    expect(text).toContain("brightness_pct");
-    // No field-id small element when there's no human name.
+    expect(text).toContain("Brightness pct");
+    // No field-id small element when there's no explicit human name.
     expect(nameSpan.querySelector("small.field-id")).toBeNull();
   });
 

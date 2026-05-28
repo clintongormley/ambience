@@ -372,6 +372,11 @@ export class AmbienceActionsSettings extends LitElement {
     `;
   }
 
+  private _humanizeFieldId(fieldName: string): string {
+    const spaced = fieldName.replaceAll("_", " ").toLowerCase();
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  }
+
   private _renderFieldRow(
     action: ExposedAction,
     name: string,
@@ -381,7 +386,7 @@ export class AmbienceActionsSettings extends LitElement {
     return html`
       <div class="field-row">
         <span class="name">
-          ${field.name || name}
+          ${field.name || this._humanizeFieldId(name)}
           ${field.name ? html` <small class="field-id">(${name})</small>` : ""}
           ${field.description ? html` <small>— ${field.description}</small>` : ""}
         </span>

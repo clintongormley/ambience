@@ -126,6 +126,13 @@ function _fmtDayItem(item: DayItem, ctx: MatcherContext): string {
 
 const _OP_LABEL: Record<string, string> = { "<": "<", "<=": "≤", ">": ">", ">=": "≥" };
 
+/** Humanize a field id: replace underscores with spaces and capitalize first letter.
+ *  "brightness_pct" → "Brightness pct", "transition" → "Transition" */
+function _humanizeFieldId(fieldId: string): string {
+  const spaced = fieldId.replaceAll("_", " ").toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
 /** Fallback display for a group id that no longer matches any configured
  *  group — split on `_`/`-`/whitespace and title-case each word. */
 function _humaniseGroupId(id: string): string {
@@ -279,7 +286,7 @@ export function summariseAction(
   else targets = `${n} ${noun}s`;
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${k} ${v}`)
+    .map(([k, v]) => `${_humanizeFieldId(k)} ${v}`)
     .join(", ");
   return params ? `${name}: ${targets}, ${params}` : `${name}: ${targets}`;
 }

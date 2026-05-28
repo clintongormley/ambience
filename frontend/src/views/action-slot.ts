@@ -240,11 +240,17 @@ export class AmbienceActionSlot extends LitElement {
   };
   /* v8 ignore stop */
 
-  private _fieldLabel(key: string): string {
-    const field = this._schema?.fields[key];
+  /** Human label for a field: prefers HA's `name` attribute; otherwise humanizes the id. */
+  private _humanizeFieldLabel(fieldName: string): string {
+    const field = this._schema?.fields[fieldName];
     if (field?.name) return field.name;
-    const spaced = key.replaceAll("_", " ").toLowerCase();
+    // Humanize: "brightness_pct" → "Brightness pct", "transition" → "Transition"
+    const spaced = fieldName.replaceAll("_", " ").toLowerCase();
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  }
+
+  private _fieldLabel(key: string): string {
+    return this._humanizeFieldLabel(key);
   }
 
   private _renderFieldsForm() {
@@ -264,10 +270,7 @@ export class AmbienceActionSlot extends LitElement {
             .hass=${this.hass}
             .schema=${schema}
             .data=${data}
-            .computeLabel=${(entry: HaFormSchemaEntry) => {
-              const field = this._schema?.fields[entry.name];
-              return field?.name || entry.name;
-            }}
+            .computeLabel=${(entry: HaFormSchemaEntry) => this._humanizeFieldLabel(entry.name)}
             @value-changed=${this._onHaFormChanged}
           ></ha-form>
         </div>

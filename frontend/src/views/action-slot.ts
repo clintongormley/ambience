@@ -240,13 +240,16 @@ export class AmbienceActionSlot extends LitElement {
     const target = (this._schema?.target ?? null) as HaTarget;
     const label = localize(this.hass, "ui.target", "Target");
     return html`
-      <div class="target-picker">
+      <div class="target-picker field-row">
+        <div class="field-header">
+          <span class="field-label">${label}</span>
+        </div>
         <ambience-target-picker
           .hass=${this.hass}
           .entities=${entities}
           .target=${target}
           .value=${this.entityIds}
-          .label=${label}
+          .label=${" "}
           @value-changed=${this._onTargetChanged}
         ></ambience-target-picker>
       </div>

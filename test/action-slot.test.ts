@@ -624,6 +624,28 @@ describe("ambience-action-slot", () => {
     expect(emitted.params).not.toHaveProperty("brightness_pct");
   });
 
+  test("target label is rendered by action-slot with .field-label class", async () => {
+    const schema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: {},
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on", label: "",
+        visible_fields: [], locked_values: {},
+      },
+      schema,
+    });
+    // The Target label must appear as a .field-label inside the action-slot's
+    // own shadow DOM, not delegated to ambience-target-picker's internal label.
+    const labelEl = el.shadowRoot.querySelector(".target-picker .field-label") as HTMLElement;
+    expect(labelEl).not.toBeNull();
+    expect(labelEl.textContent?.trim()).toBe("Target");
+    // The picker itself must receive a placeholder label (single space), not "Target".
+    const picker = el.shadowRoot.querySelector("ambience-target-picker") as any;
+    expect(picker.label).toBe(" ");
+  });
+
   test("each visible field renders its label above the input", async () => {
     const schema: ServiceSchema = {
       target: null,

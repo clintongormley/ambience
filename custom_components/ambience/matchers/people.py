@@ -121,8 +121,18 @@ class PeopleMatcher:
             return None
         return state == label
 
-    def describe(self, snapshot: PeopleSnapshot) -> str | None:  # noqa: ARG002
-        return None
+    def describe(self, snapshot: PeopleSnapshot) -> str | None:
+        if not snapshot.persons:
+            return "no people tracked"
+        total = len(snapshot.persons)
+        home = sorted(
+            snapshot.names.get(pid, pid)
+            for pid, (state, _) in snapshot.persons.items()
+            if state == _HOME
+        )
+        if home:
+            return f"{len(home)} of {total} home ({', '.join(home)})"
+        return f"0 of {total} home"
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:

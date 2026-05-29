@@ -218,3 +218,22 @@ def test_validate_rejects_bad_for() -> None:
         m.validate_predicate({"for": {"h": -1, "m": 0, "s": 0}})
     with pytest.raises(ValueError, match="for"):
         m.validate_predicate({"for": {"h": 0, "m": "five", "s": 0}})
+
+
+def test_describe_summarises_home_count() -> None:
+    m = PeopleMatcher()
+    snap = _snap(
+        {"person.a": _p("home"), "person.b": _p("not_home"), "person.c": _p("home")},
+        names={"person.a": "Alice", "person.b": "Bob", "person.c": "Cara"},
+    )
+    assert m.describe(snap) == "2 of 3 home (Alice, Cara)"
+
+
+def test_describe_none_home() -> None:
+    m = PeopleMatcher()
+    snap = _snap({"person.a": _p("not_home")}, names={"person.a": "Alice"})
+    assert m.describe(snap) == "0 of 1 home"
+
+
+def test_describe_empty() -> None:
+    assert PeopleMatcher().describe(_snap()) == "no people tracked"

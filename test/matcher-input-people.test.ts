@@ -96,6 +96,56 @@ describe("ambience-people-predicate-input", () => {
     di.remove();
   });
 
+  test("round-trips a non-zero `for` into the native h/m/s inputs and emits {h,m,s}", async () => {
+    el = await mount({ quant: "any", where: "home", for: { h: 0, m: 10, s: 0 } });
+    const inputs = Array.from(
+      el.shadowRoot.querySelectorAll<HTMLInputElement>("[data-field=for] input[type=number]"),
+    );
+    expect(inputs).toHaveLength(3);
+    const [h, m, s] = inputs as HTMLInputElement[];
+    expect(h.value).toBe("0");
+    expect(m.value).toBe("10");
+    expect(s.value).toBe("0");
+
+    let emitted: PeoplePredicate | null | undefined = undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    // Change the hours input; emitted `for` must keep the {h,m,s} shape.
+    h.value = "2";
+    h.dispatchEvent(new Event("change"));
+    expect(emitted?.for).toEqual({ h: 2, m: 10, s: 0 });
+    // Guard against a key-name coercion bug ({hours,minutes,seconds}).
+    expect(Object.keys(emitted?.for ?? {}).sort()).toEqual(["h", "m", "s"]);
+  });
+
+  test("deselecting the last selected person collapses to null", async () => {
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
+    let emitted: PeoplePredicate | null | undefined = undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    const checked = Array.from(
+      el.shadowRoot.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
+    ).filter((c: HTMLInputElement) => c.checked);
+    expect(checked).toHaveLength(1);
+    const cb = checked[0];
+    cb.checked = false;
+    cb.dispatchEvent(new Event("change"));
+    expect(emitted).toBeNull();
+  });
+
+  test("excludes zone.home from the location dropdown options", async () => {
+    el = await mount();
+    const options = Array.from(
+      el.shadowRoot.querySelectorAll<HTMLOptionElement>("select.where option"),
+    ).map((o: HTMLOptionElement) => o.value);
+    expect(options).toContain("home");
+    expect(options).toContain("away");
+    expect(options).toContain("zone.work");
+    expect(options).not.toContain("zone.home");
+  });
+
   test("default selection (any/home/no who/no for) emits null", async () => {
     // Start from a non-default value, then return to the default.
     el = await mount({ quant: "nobody", where: "home" });

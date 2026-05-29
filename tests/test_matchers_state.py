@@ -628,3 +628,38 @@ def test_validate_numeric_op_accepts_negative_and_decimals() -> None:
 def test_order_key_supports_numeric_kinds() -> None:
     m = StateMatcher()
     assert m.order_key({"kind": ">", "entity_id": "x", "states": ["5"]}) == "x"
+
+
+# --- trigger_deps ------------------------------------------------------
+
+
+def test_trigger_deps_collects_entities_and_durations() -> None:
+    m = StateMatcher()
+    pred = {
+        "kind": "and",
+        "items": [
+            {"kind": "is", "entity_id": "person.bob", "states": ["home"]},
+            {
+                "kind": "is",
+                "entity_id": "binary_sensor.motion",
+                "states": ["off"],
+                "for": {"h": 0, "m": 10, "s": 0},
+            },
+            {
+                "kind": "not",
+                "item": {"kind": "is", "entity_id": "light.x", "states": ["on"]},
+            },
+        ],
+    }
+    spec = m.trigger_deps(pred)
+    assert spec.entities == frozenset({"person.bob", "binary_sensor.motion", "light.x"})
+    assert spec.entity_durations == frozenset({("binary_sensor.motion", 600.0)})
+    assert spec.clock_times == frozenset()
+    assert spec.date_rollover is False
+    assert spec.opaque is False
+
+
+def test_trigger_deps_none_predicate_is_empty() -> None:
+    from custom_components.ambience.triggers import EMPTY
+
+    assert StateMatcher().trigger_deps(None) == EMPTY

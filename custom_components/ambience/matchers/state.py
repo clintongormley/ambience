@@ -9,6 +9,8 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..triggers import EMPTY, TriggerSpec
+
 
 @dataclass(frozen=True)
 class StateSnapshot:
@@ -261,3 +263,39 @@ class StateMatcher:
         if kind == "not":
             return self._first_atom(expr.get("item"))
         return None
+
+    # --- trigger dependencies -------------------------------------------
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        if predicate is None:
+            return EMPTY
+        entities: set[str] = set()
+        durations: set[tuple[str, float]] = set()
+        self._collect_deps(predicate, entities, durations)
+        return TriggerSpec(
+            entities=frozenset(entities),
+            entity_durations=frozenset(durations),
+        )
+
+    def _collect_deps(
+        self,
+        expr: Any,
+        entities: set[str],
+        durations: set[tuple[str, float]],
+    ) -> None:
+        if not isinstance(expr, dict):
+            return
+        kind = expr.get("kind")
+        if kind in self._ATOM_KINDS:
+            entity_id = expr.get("entity_id")
+            if isinstance(entity_id, str) and entity_id:
+                entities.add(entity_id)
+                seconds = self._dur_seconds(expr.get("for"))
+                if seconds > 0:
+                    durations.add((entity_id, seconds))
+            return
+        if kind in ("and", "or"):
+            for item in expr.get("items") or []:
+                self._collect_deps(item, entities, durations)
+        elif kind == "not":
+            self._collect_deps(expr.get("item"), entities, durations)

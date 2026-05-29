@@ -7,6 +7,8 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..triggers import EMPTY, TriggerSpec
+
 WEATHER_CONDITIONS = (
     "clear-night",
     "cloudy",
@@ -205,6 +207,16 @@ class WeatherMatcher:
             self._validate_threshold(t)
         if (groups or thresholds) and self._hass is not None and not self._entity():
             raise ValueError("weather predicate requires the weather entity to be configured")
+
+    # --- trigger dependencies -------------------------------------------
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        if not isinstance(predicate, dict):
+            return EMPTY
+        if not (predicate.get("groups") or predicate.get("thresholds")):
+            return EMPTY
+        entity = self._entity()
+        return TriggerSpec(entities=frozenset({entity}) if entity else frozenset())
 
     @staticmethod
     def _validate_threshold(t: Any) -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 from homeassistant.core import HomeAssistant
 
@@ -12,6 +14,7 @@ from custom_components.ambience.matchers.weather import (
     WeatherMatcher,
     WeatherSnapshot,
 )
+from custom_components.ambience.triggers import EMPTY
 
 
 def _install_store_stub(hass: HomeAssistant, entity: str | None = None) -> None:
@@ -305,3 +308,29 @@ async def test_matches_groups_and_thresholds_anded(hass: HomeAssistant) -> None:
     assert m.matches(pred, _snap("rainy", temperature=4.0)) is True
     assert m.matches(pred, _snap("rainy", temperature=10.0)) is False
     assert m.matches(pred, _snap("sunny", temperature=4.0)) is False
+
+
+def _matcher_with_entity(entity: str | None) -> WeatherMatcher:
+    hass = MagicMock()
+    store = MagicMock()
+    store.get_matcher_config.return_value = {"entity": entity, "groups": []}
+    hass.data = {DOMAIN: {DATA_STORE: store}}
+    return WeatherMatcher(hass=hass)
+
+
+def test_trigger_deps_watches_weather_entity_when_predicate_nonempty() -> None:
+    m = _matcher_with_entity("weather.home")
+    spec = m.trigger_deps({"groups": ["dim"]})
+    assert spec.entities == frozenset({"weather.home"})
+
+
+def test_trigger_deps_thresholds_also_watch_entity() -> None:
+    m = _matcher_with_entity("weather.home")
+    spec = m.trigger_deps({"thresholds": [{"attribute": "temperature", "op": "<", "value": 5}]})
+    assert spec.entities == frozenset({"weather.home"})
+
+
+def test_trigger_deps_empty_predicate_is_empty() -> None:
+    m = _matcher_with_entity("weather.home")
+    assert m.trigger_deps({}) == EMPTY
+    assert m.trigger_deps(None) == EMPTY

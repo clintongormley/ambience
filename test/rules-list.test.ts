@@ -356,6 +356,60 @@ describe("ambience-rules-list", () => {
     expect(strongs).toContain("Scene:");
   });
 
+  test("clicking the summary expands the whole rule", async () => {
+    const rules: Rule[] = [{
+      name: "r",
+      when: { time_of_day: { period: "afternoon" }, scene: "movie" },
+      actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: {} }],
+    }];
+    el = await mount(rules);
+    expect(el.shadowRoot.querySelector(".rule-detail")).toBeFalsy();
+    const summary = el.shadowRoot.querySelector(".summary") as HTMLElement;
+    summary.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".rule-detail")).toBeTruthy();
+  });
+
+  test("expanded rule renders each matcher on its own line", async () => {
+    const rules: Rule[] = [{
+      name: "r",
+      when: { time_of_day: { period: "afternoon" }, scene: "movie" },
+      actions: [],
+    }];
+    el = await mount(rules);
+    (el.shadowRoot.querySelector(".summary") as HTMLElement).click();
+    await el.updateComplete;
+    const lines = Array.from(
+      el.shadowRoot.querySelectorAll(".rule-detail .matcher-line"),
+    );
+    expect(lines.length).toBe(2);
+    const texts = lines.map((n: any) => n.textContent?.trim() ?? "");
+    expect(texts.some((t: string) => t.startsWith("Scene:"))).toBe(true);
+    expect(texts.some((t: string) => t.startsWith("Time of day:"))).toBe(true);
+  });
+
+  test("expanded rule still shows the per-action detail", async () => {
+    const rules: Rule[] = [{
+      name: "r",
+      when: {},
+      actions: [{
+        service: "light.turn_on",
+        entity_ids: ["light.a"],
+        params: { brightness: 80 },
+      }],
+    }];
+    const availableActions: ExposedAction[] = [
+      { id: "light.turn_on", label: "Set light", visible_fields: ["brightness"], defaults: {} },
+    ];
+    el = await mount(rules, true, availableActions);
+    (el.shadowRoot.querySelector(".summary") as HTMLElement).click();
+    await el.updateComplete;
+    const item = el.shadowRoot.querySelector(".actions-detail-item");
+    expect(item).toBeTruthy();
+    expect(item.textContent).toContain("Set light");
+    expect(item.textContent).toContain("Brightness: 80");
+  });
+
   test("action count is rendered as a clickable element", async () => {
     el = await mount([movieRule]);
     const actionCount = el.shadowRoot.querySelector(".action-count");
@@ -491,15 +545,15 @@ describe("ambience-rules-list", () => {
     expect(items[1].textContent).toContain("light.kitchen");
   });
 
-  test("clicking action count again collapses the actions", async () => {
+  test("clicking the summary again collapses the rule", async () => {
     el = await mount([movieRule]);
-    const actionCount = el.shadowRoot.querySelector(".action-count") as HTMLElement;
-    actionCount.click();
+    (el.shadowRoot.querySelector(".summary") as HTMLElement).click();
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".actions-detail")).toBeTruthy();
-    actionCount.click();
+    expect(el.shadowRoot.querySelector(".rule-detail")).toBeTruthy();
+    // Re-query after re-render before the second click.
+    (el.shadowRoot.querySelector(".summary") as HTMLElement).click();
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".actions-detail")).toBeFalsy();
+    expect(el.shadowRoot.querySelector(".rule-detail")).toBeFalsy();
   });
 
   test("clicking action count does not emit edit-rule", async () => {

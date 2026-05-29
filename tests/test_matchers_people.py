@@ -145,3 +145,31 @@ def test_matches_empty_household() -> None:
     assert m.matches({"quant": "any", "where": "home"}, snap) is False
     assert m.matches({"quant": "everyone", "where": "home"}, snap) is False
     assert m.matches({"quant": "nobody", "where": "home"}, snap) is True
+
+
+def test_matches_for_duration_met_any() -> None:
+    m = PeopleMatcher()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    snap = _snap({"person.a": ("home", now - timedelta(minutes=10))}, now=now)
+    pred = {"quant": "any", "where": "home", "for": {"h": 0, "m": 5, "s": 0}}
+    assert m.matches(pred, snap) is True
+
+
+def test_matches_for_duration_not_yet_any() -> None:
+    m = PeopleMatcher()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    snap = _snap({"person.a": ("home", now - timedelta(minutes=1))}, now=now)
+    pred = {"quant": "any", "where": "home", "for": {"h": 0, "m": 5, "s": 0}}
+    assert m.matches(pred, snap) is False
+
+
+def test_matches_for_duration_nobody_uses_away_clock() -> None:
+    m = PeopleMatcher()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    # a left home 10m ago (not_home since then) -> nobody home for 5m holds
+    snap = _snap({"person.a": ("not_home", now - timedelta(minutes=10))}, now=now)
+    pred = {"quant": "nobody", "where": "home", "for": {"h": 0, "m": 5, "s": 0}}
+    assert m.matches(pred, snap) is True
+    # only 1m since leaving -> not yet
+    snap2 = _snap({"person.a": ("not_home", now - timedelta(minutes=1))}, now=now)
+    assert m.matches(pred, snap2) is False

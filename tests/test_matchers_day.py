@@ -414,3 +414,9 @@ def test_trigger_deps_ignores_workday_sensor_when_not_used() -> None:
     m = _matcher_with_workday_sensor("binary_sensor.workday")
     spec = m.trigger_deps({"include": [{"kind": "weekday", "days": [5, 6]}]})
     assert spec.entities == frozenset()
+
+
+def test_trigger_deps_watches_workday_sensor_in_exclude() -> None:
+    m = _matcher_with_workday_sensor("binary_sensor.workday")
+    spec = m.trigger_deps({"exclude": [{"kind": "holiday"}]})
+    assert spec.entities == frozenset({"binary_sensor.workday"})

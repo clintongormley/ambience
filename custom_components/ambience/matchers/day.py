@@ -281,4 +281,7 @@ class DayMatcher:
                 sensor = self._day_config().get("workday_sensor")
                 if sensor:
                     entities.add(sensor)
+            # first_workday / last_workday depend on a calendar entity, not a
+            # state entity, so they can't be watched via state-change; the
+            # date_rollover re-eval below covers their (rare) changes.
         return TriggerSpec(entities=frozenset(entities), date_rollover=True)

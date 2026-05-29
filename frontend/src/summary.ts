@@ -164,6 +164,20 @@ export function formatParamValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/** Extract the `unit_of_measurement` from a selector dict, if any — e.g.
+ *  `{ number: { unit_of_measurement: "seconds" } }` → "seconds". Returns
+ *  undefined for selectors that don't declare one. */
+export function selectorUnit(selector: unknown): string | undefined {
+  if (!selector || typeof selector !== "object") return undefined;
+  for (const v of Object.values(selector as Record<string, unknown>)) {
+    if (v && typeof v === "object") {
+      const unit = (v as Record<string, unknown>).unit_of_measurement;
+      if (typeof unit === "string" && unit) return unit;
+    }
+  }
+  return undefined;
+}
+
 /** Fallback display for a group id that no longer matches any configured
  *  group — split on `_`/`-`/whitespace and title-case each word. */
 function _humaniseGroupId(id: string): string {

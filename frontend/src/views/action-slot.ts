@@ -8,7 +8,7 @@ import {
 } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
-import { formatParamValue } from "../summary.js";
+import { formatParamValue, selectorUnit } from "../summary.js";
 import type { ExposedAction, Scope, ServiceSchema } from "../types.js";
 import "./target-picker.js";
 
@@ -362,24 +362,11 @@ export class AmbienceActionSlot extends LitElement {
     return {};
   }
 
-  /** Extract the unit_of_measurement from a selector dict, if any. */
-  private _fieldUnit(entry: HaFormSchemaEntry): string | undefined {
-    const sel = entry.selector;
-    if (!sel || typeof sel !== "object") return undefined;
-    for (const v of Object.values(sel as Record<string, unknown>)) {
-      if (v && typeof v === "object") {
-        const unit = (v as Record<string, unknown>).unit_of_measurement;
-        if (typeof unit === "string" && unit) return unit;
-      }
-    }
-    return undefined;
-  }
-
   /** Compose the default hint suffix: " (Default: <value> <unit>)" or "". */
   private _defaultHintSuffix(entry: HaFormSchemaEntry): string {
     const defaults = this.exposed?.defaults ?? {};
     if (!(entry.name in defaults)) return "";
-    const unit = this._fieldUnit(entry);
+    const unit = selectorUnit(entry.selector);
     const value = formatParamValue(defaults[entry.name]);
     return ` (Default: ${value}${unit ? ` ${unit}` : ""})`;
   }

@@ -13,8 +13,8 @@ vi.mock("../frontend/src/api.js", () => ({
       return {
         fields: {
           // Intentionally not alphabetical so the sort test below has bite.
-          transition: { selector: { number: { min: 0 } } },
-          brightness_pct: { selector: { number: { min: 0, max: 100 } } },
+          transition: { selector: { number: { min: 0, unit_of_measurement: "seconds" } } },
+          brightness_pct: { selector: { number: { min: 0, max: 100, unit_of_measurement: "%" } } },
         },
         target: null,
       };
@@ -200,6 +200,29 @@ describe("ambience-actions-settings", () => {
         }),
       ]),
     );
+  });
+
+  test("default summary pill includes the selector's unit_of_measurement", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["transition"],
+        defaults: { transition: 3 },
+      },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+    // Wait for the schema fetch (mock includes unit_of_measurement: "seconds")
+    // to resolve and re-render.
+    await flush(el);
+
+    const summary = el.shadowRoot.querySelector(
+      "button[data-default-summary='transition']",
+    ) as HTMLButtonElement;
+    expect(summary).not.toBeNull();
+    expect(summary.textContent).toBe("Default: 3 seconds");
   });
 
   test("auto-saves after Save in default editor", async () => {

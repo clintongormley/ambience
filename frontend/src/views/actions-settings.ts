@@ -9,6 +9,7 @@ import {
   saveExposedActions,
   type HassConnection,
 } from "../api.js";
+import { selectorUnit } from "../summary.js";
 import type {
   ExposedAction,
   ExposedActionWarning,
@@ -601,6 +602,16 @@ export class AmbienceActionsSettings extends LitElement {
     return String(value);
   }
 
+  /** " seconds" / " %" / "" — read the schema's unit_of_measurement for the
+   *  field's selector so the default-summary pill shows "Default: 3 seconds"
+   *  rather than just "Default: 3". */
+  private _defaultUnitSuffix(serviceId: string, fieldName: string): string {
+    const field = this._schemas[serviceId]?.fields?.[fieldName];
+    if (!field || typeof field !== "object") return "";
+    const unit = selectorUnit((field as { selector?: unknown }).selector);
+    return unit ? ` ${unit}` : "";
+  }
+
   private _renderFieldRow(
     action: ExposedAction,
     name: string,
@@ -645,7 +656,7 @@ export class AmbienceActionsSettings extends LitElement {
                       e.stopPropagation();
                       this._startEditingDefault(action.id, name);
                     }}
-                  >Default: ${this._formatDefaultSummary((action.defaults ?? {})[name])}</button>`
+                  >Default: ${this._formatDefaultSummary((action.defaults ?? {})[name])}${this._defaultUnitSuffix(action.id, name)}</button>`
                 : html`<button
                     class="set-default-btn"
                     data-set-default=${name}

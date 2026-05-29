@@ -8,6 +8,7 @@ import {
 } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
+import { formatParamValue } from "../summary.js";
 import type { ExposedAction, Scope, ServiceSchema } from "../types.js";
 import "./target-picker.js";
 
@@ -361,13 +362,6 @@ export class AmbienceActionSlot extends LitElement {
     return {};
   }
 
-  /** Format a default value for display in the hint label. */
-  private _formatDefault(value: unknown): string {
-    if (typeof value === "string") return value;
-    if (typeof value === "number" || typeof value === "boolean") return String(value);
-    return JSON.stringify(value);
-  }
-
   /** Extract the unit_of_measurement from a selector dict, if any. */
   private _fieldUnit(entry: HaFormSchemaEntry): string | undefined {
     const sel = entry.selector;
@@ -386,7 +380,7 @@ export class AmbienceActionSlot extends LitElement {
     const defaults = this.exposed?.defaults ?? {};
     if (!(entry.name in defaults)) return "";
     const unit = this._fieldUnit(entry);
-    const value = this._formatDefault(defaults[entry.name]);
+    const value = formatParamValue(defaults[entry.name]);
     return ` (Default: ${value}${unit ? ` ${unit}` : ""})`;
   }
 

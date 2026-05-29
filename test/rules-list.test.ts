@@ -359,7 +359,36 @@ describe("ambience-rules-list", () => {
     const detail = el.shadowRoot.querySelector(".actions-detail");
     expect(detail).toBeTruthy();
     expect(detail.textContent).toContain("Set light");
-    expect(detail.textContent).toContain("brightness 30");
+    expect(detail.textContent).toContain("Brightness: 30");
+  });
+
+  test("expanded action header renders array params with brackets and humanized keys", async () => {
+    const rule: Rule = {
+      name: "test",
+      when: {},
+      actions: [
+        {
+          service: "light.turn_on",
+          entity_ids: ["light.a"],
+          params: { rgb_color: [210, 81, 81], brightness_pct: 31 },
+        },
+      ],
+    };
+    const availableActions: ExposedAction[] = [
+      {
+        id: "light.turn_on",
+        label: "Turn on light",
+        visible_fields: ["rgb_color", "brightness_pct"],
+        defaults: {},
+      },
+    ];
+    el = await mount([rule], true, availableActions);
+    const actionCount = el.shadowRoot.querySelector(".action-count") as HTMLElement;
+    actionCount.click();
+    await el.updateComplete;
+    const detail = el.shadowRoot.querySelector(".actions-detail");
+    expect(detail.textContent).toContain("Rgb color: [210,81,81]");
+    expect(detail.textContent).toContain("Brightness pct: 31");
   });
 
   test("expanded action lists target entity ids", async () => {

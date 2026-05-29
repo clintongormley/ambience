@@ -232,6 +232,16 @@ describe("summariseAction", () => {
       .toBe("Set light: 1 light, Brightness: 80, Transition: 1.5");
   });
 
+  test("array param values render with [ ] brackets", () => {
+    const action: ActionSpec = {
+      service: "light.turn_on",
+      entity_ids: ["light.a"],
+      params: { rgb_color: [210, 81, 81], brightness_pct: 31 },
+    };
+    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
+      .toBe("Set light: 1 light, Rgb color: [210,81,81], Brightness pct: 31");
+  });
+
   test("uses domain prefix as fallback target noun (no exposed entry)", () => {
     const action: ActionSpec = {
       service: "x.unknown",

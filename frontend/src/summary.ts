@@ -128,9 +128,18 @@ const _OP_LABEL: Record<string, string> = { "<": "<", "<=": "≤", ">": ">", ">=
 
 /** Humanize a field id: replace underscores with spaces and capitalize first letter.
  *  "brightness_pct" → "Brightness pct", "transition" → "Transition" */
-function _humanizeFieldId(fieldId: string): string {
+export function humanizeFieldId(fieldId: string): string {
   const spaced = fieldId.replaceAll("_", " ").toLowerCase();
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/** Format a param value for display: primitives as-is, arrays/objects via
+ *  JSON.stringify so arrays render with [ ] brackets — e.g.
+ *  [210, 81, 81] → "[210,81,81]". */
+export function formatParamValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
 }
 
 /** Fallback display for a group id that no longer matches any configured
@@ -286,7 +295,7 @@ export function summariseAction(
   else targets = `${n} ${noun}s`;
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${_humanizeFieldId(k)}: ${v}`)
+    .map(([k, v]) => `${humanizeFieldId(k)}: ${formatParamValue(v)}`)
     .join(", ");
   return params ? `${name}: ${targets}, ${params}` : `${name}: ${targets}`;
 }

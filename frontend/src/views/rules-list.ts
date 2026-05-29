@@ -2,7 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
-import { ruleDisplayName, summariseMatcher } from "../summary.js";
+import { formatParamValue, humanizeFieldId, ruleDisplayName, summariseMatcher } from "../summary.js";
 import type {
   ActionSpec,
   ExposedAction,
@@ -182,14 +182,13 @@ export class AmbienceRulesList extends LitElement {
     return typeof name === "string" && name ? name : entity_id;
   }
 
-  /** "param value, ..." string for the expanded action header. Units are
-   *  no longer rendered — the new model carries the value verbatim through
-   *  HA selectors and the param keys themselves are usually unit-suffixed
-   *  (e.g. `brightness_pct`) where it matters. */
+  /** "Key: value, ..." string for the expanded action header. Keys are
+   *  humanized ("brightness_pct" → "Brightness pct"); array values are
+   *  wrapped in [ ] via formatParamValue. */
   private _actionParamsString(action: ActionSpec): string {
     return Object.entries(action.params)
       .filter(([, v]) => v !== undefined && v !== null && v !== "")
-      .map(([k, v]) => `${k} ${v}`)
+      .map(([k, v]) => `${humanizeFieldId(k)}: ${formatParamValue(v)}`)
       .join(", ");
   }
 

@@ -211,6 +211,18 @@ export type StateExpr = StateAtom | StateGroup | StateNot;
 /** Top-level state predicate. `null` = no constraint. */
 export type StatePredicate = StateExpr | null;
 
+// --- people matcher -------------------------------------------------------
+
+export type PeopleQuant = "any" | "everyone" | "nobody";
+
+/** Per-rule predicate. `null` = wildcard (no presence constraint). */
+export interface PeoplePredicate {
+  who?: string[];                 // person.* entity_ids; empty/absent = all persons
+  quant?: PeopleQuant;            // default "any"
+  where?: string;                 // "home" | "away" | "zone.*"; default "home"
+  for?: { h: number; m: number; s: number } | null;
+}
+
 // --- script matcher -------------------------------------------------------
 
 /** Per-rule predicate. `null` = wildcard. */

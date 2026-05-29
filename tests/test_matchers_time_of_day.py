@@ -412,6 +412,36 @@ def test_trigger_deps_list_merges_all_items() -> None:
     ]
     spec = m.trigger_deps(pred)
     assert spec.clock_times == frozenset({(7, 0), (9, 0), (18, 0), (20, 0)})
+    assert spec.sun_events == frozenset()
+
+
+def test_trigger_deps_tolerates_garbage_input() -> None:
+    m = TimeOfDayMatcher()
+    bad_inputs: list[Any] = [
+        "string",
+        42,
+        None,
+        {},
+        {"from": None, "to": None},
+        {"period": "missing"},
+        [None, "x"],
+        {"kind": "sun", "anchor": "nope"},
+    ]
+    for bad in bad_inputs:
+        spec = m.trigger_deps(bad)
+        assert spec.clock_times == frozenset()
+        assert spec.sun_events == frozenset()
+
+
+def test_trigger_deps_skips_out_of_range_and_unknown_anchor() -> None:
+    m = TimeOfDayMatcher()
+    pred = {
+        "from": {"kind": "time", "hh": 99, "mm": 0},
+        "to": {"kind": "sun", "anchor": "nope", "offset_min": 0},
+    }
+    spec = m.trigger_deps(pred)
+    assert spec.clock_times == frozenset()
+    assert spec.sun_events == frozenset()
 
 
 def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:

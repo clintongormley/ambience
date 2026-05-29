@@ -233,7 +233,9 @@ class TimeOfDayMatcher:
         kind = endpoint.get("kind")
         if kind == "time":
             hh, mm = endpoint.get("hh"), endpoint.get("mm")
-            if isinstance(hh, int) and isinstance(mm, int):
+            # Mirror _resolve_endpoint's bounds so an unvalidated predicate
+            # can't seed an unschedulable clock-time.
+            if isinstance(hh, int) and 0 <= hh <= 23 and isinstance(mm, int) and 0 <= mm <= 59:
                 clock_times.add((hh, mm))
         elif kind == "sun":
             anchor = endpoint.get("anchor")

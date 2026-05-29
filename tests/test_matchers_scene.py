@@ -50,3 +50,10 @@ def test_validate_predicate_rejects_bad_values(bad: object) -> None:
 async def test_scene_matcher_snapshot_returns_none() -> None:
     """`scene`'s snapshot is injected by the service handler; snapshot() returns None."""
     assert await SceneMatcher().snapshot(None) is None
+
+
+def test_trigger_deps_is_empty() -> None:
+    from custom_components.ambience.triggers import EMPTY
+
+    assert SceneMatcher().trigger_deps("movie_night") == EMPTY
+    assert SceneMatcher().trigger_deps(None) == EMPTY

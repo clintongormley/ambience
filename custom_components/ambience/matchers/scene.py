@@ -12,6 +12,8 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..triggers import EMPTY, TriggerSpec
+
 
 class SceneMatcher:
     """Matches the activating scene by exact name."""
@@ -37,3 +39,8 @@ class SceneMatcher:
 
     def order_key(self, predicate: Any) -> str:
         return predicate.lower()
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        # Scene is driven by the apply_scene call itself; scene predicates are
+        # stripped on the auto path, so it contributes no auto-dependencies.
+        return EMPTY

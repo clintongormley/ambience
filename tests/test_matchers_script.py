@@ -398,3 +398,13 @@ def test_validate_predicate_rejects_non_list_triggers() -> None:
 def test_validate_predicate_rejects_non_string_trigger_items() -> None:
     with pytest.raises(ValueError, match="triggers"):
         ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": ["person.john", 5]})
+
+
+def test_validate_predicate_rejects_empty_string_trigger() -> None:
+    with pytest.raises(ValueError, match="triggers"):
+        ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": [""]})
+
+
+def test_validate_predicate_accepts_empty_triggers_list() -> None:
+    # An empty list means "no declared triggers" — equivalent to omitting it.
+    ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": []})

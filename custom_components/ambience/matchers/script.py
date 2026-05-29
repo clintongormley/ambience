@@ -49,9 +49,10 @@ class ScriptMatcher:
     name = "script"
     description = "Matches by calling a HA script that returns {match: bool}."
     predicate_help = (
-        "Object {script: 'script.<name>', args?: {...}}. The script must end "
-        "with `stop:` + `response_variable:` pointing at a dict {match: bool}. "
-        "True = match. None = wildcard."
+        "Object {script: 'script.<name>', args?: {...}, triggers?: [entity_id]}. "
+        "The script must end with `stop:` + `response_variable:` pointing at a "
+        "dict {match: bool}. True = match. None = wildcard. `triggers` lists "
+        "entities to re-evaluate on, since the script itself is opaque."
     )
     input = "script_predicate"
     # Between scene (0) and state (50): a named script + named args is a

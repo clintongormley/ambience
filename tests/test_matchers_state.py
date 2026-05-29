@@ -11,13 +11,22 @@ from custom_components.ambience.matchers.state import StateMatcher, StateSnapsho
 
 
 def _snap(
-    states: dict[str, tuple[str, datetime]] | None = None,
+    states: dict[str, tuple] | None = None,
     now: datetime | None = None,
     attributes: dict[str, dict[str, object]] | None = None,
 ) -> StateSnapshot:
+    # Snapshot stores (state, last_changed, last_updated). Callers may pass a
+    # 2-tuple (state, ts) when last_changed == last_updated; normalise it here.
+    norm: dict[str, tuple[str, datetime, datetime]] = {}
+    for eid, value in (states or {}).items():
+        if len(value) == 2:
+            state, ts = value
+            norm[eid] = (state, ts, ts)
+        else:
+            norm[eid] = value
     return StateSnapshot(
         now=now or datetime(2026, 5, 25, 12, 0, tzinfo=UTC),
-        states=states or {},
+        states=norm,
         attributes=attributes or {},
     )
 
@@ -92,6 +101,60 @@ def test_matches_atom_for_duration_not_yet() -> None:
         "kind": "is",
         "entity_id": "person.bob",
         "states": ["home"],
+        "for": {"h": 0, "m": 5, "s": 0},
+    }
+    assert m.matches(pred, snap) is False
+
+
+def test_state_mode_for_clocks_on_last_changed_not_last_updated() -> None:
+    """A state-mode atom (no `attribute`) must clock `for` off last_changed.
+    Entity has been "home" for 10m (last_changed), but an attribute-only
+    refresh bumped last_updated to 1m ago. A `for: 5m` state atom must still
+    match — the state string never changed."""
+    m = StateMatcher()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    snap = _snap(
+        {
+            "person.bob": (
+                "home",
+                now - timedelta(minutes=10),  # last_changed
+                now - timedelta(minutes=1),  # last_updated (attr-only refresh)
+            )
+        },
+        now=now,
+    )
+    pred = {
+        "kind": "is",
+        "entity_id": "person.bob",
+        "states": ["home"],
+        "for": {"h": 0, "m": 5, "s": 0},
+    }
+    assert m.matches(pred, snap) is True
+
+
+def test_attribute_mode_for_clocks_on_last_updated() -> None:
+    """An attribute-mode atom must keep clocking `for` off last_updated, so an
+    attribute change resets its own clock. Same timestamps as the state-mode
+    test, but a `for: 5m` attribute atom must NOT match — only 1m since the
+    attribute last changed (last_updated)."""
+    m = StateMatcher()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    snap = _snap(
+        {
+            "media_player.x": (
+                "playing",
+                now - timedelta(minutes=10),  # last_changed
+                now - timedelta(minutes=1),  # last_updated
+            )
+        },
+        now=now,
+        attributes={"media_player.x": {"source": "Spotify"}},
+    )
+    pred = {
+        "kind": "is",
+        "entity_id": "media_player.x",
+        "attribute": "source",
+        "states": ["Spotify"],
         "for": {"h": 0, "m": 5, "s": 0},
     }
     assert m.matches(pred, snap) is False
@@ -445,10 +508,11 @@ async def test_snapshot_captures_entity_attributes(hass) -> None:
     assert snap.attributes["media_player.x"]["volume_level"] == 0.5
 
 
-async def test_snapshot_uses_last_updated_so_attribute_changes_reset_for_clock(hass) -> None:
+async def test_snapshot_captures_both_last_changed_and_last_updated(hass) -> None:
     """last_updated bumps on any change (state OR attribute), while
-    last_changed only bumps on state change. We want `for` to track both
-    so attribute-mode atoms work correctly."""
+    last_changed only bumps on state change. The snapshot captures both as
+    (state, last_changed, last_updated) so the `for` clock can pick the right
+    one per atom — attribute-mode atoms still track last_updated."""
     hass.states.async_set("media_player.x", "playing", {"source": "Spotify"})
     s1 = hass.states.get("media_player.x")
     ts1 = s1.last_updated
@@ -461,8 +525,9 @@ async def test_snapshot_uses_last_updated_so_attribute_changes_reset_for_clock(h
     assert s2.last_changed == s1.last_changed
 
     snap = await StateMatcher().snapshot(hass)
-    captured_ts = snap.states["media_player.x"][1]
-    assert captured_ts == s2.last_updated, "snapshot must capture last_updated, not last_changed"
+    _state, captured_changed, captured_updated = snap.states["media_player.x"]
+    assert captured_changed == s2.last_changed, "snapshot must capture last_changed"
+    assert captured_updated == s2.last_updated, "snapshot must capture last_updated"
 
 
 def test_validate_atom_attribute_is_optional() -> None:

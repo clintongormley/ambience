@@ -15,10 +15,13 @@ class StateSnapshot:
     """Frozen view of HA states at tick time."""
 
     now: datetime
-    # entity_id -> (state, last_updated). Captured up-front so matching is
-    # pure. `last_updated` (not last_changed) so attribute-only updates also
-    # reset the 'for' clock — important when the atom's LHS is an attribute.
-    states: dict[str, tuple[str, datetime]]
+    # entity_id -> (state, last_changed, last_updated). Captured up-front so
+    # matching is pure. Both timestamps are kept so the `for` clock can pick
+    # the right one per atom: state-mode atoms clock off `last_changed` (only
+    # moves when the state string changes), while attribute-mode atoms clock
+    # off `last_updated` (any change, including an attribute-only refresh,
+    # resets the clock — correct when the atom's LHS *is* an attribute).
+    states: dict[str, tuple[str, datetime, datetime]]
     # entity_id -> attribute dict. Populated alongside states for atoms that
     # compare an attribute instead of the state itself.
     attributes: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -56,10 +59,10 @@ class StateMatcher:
         self._hass = hass
 
     async def snapshot(self, hass: HomeAssistant) -> StateSnapshot:
-        states: dict[str, tuple[str, datetime]] = {}
+        states: dict[str, tuple[str, datetime, datetime]] = {}
         attributes: dict[str, dict[str, Any]] = {}
         for s in hass.states.async_all():
-            states[s.entity_id] = (s.state, s.last_updated)
+            states[s.entity_id] = (s.state, s.last_changed, s.last_updated)
             # `s.attributes` is a Mapping; copy into a plain dict so the
             # snapshot stays detached from HA's live state object.
             attributes[s.entity_id] = dict(s.attributes)
@@ -102,7 +105,7 @@ class StateMatcher:
         cur = snap.states.get(entity_id)
         if cur is None:
             return False
-        state, last_updated = cur
+        state, last_changed, last_updated = cur
         if state in _UNAVAILABLE:
             return False
         # When `attribute` is set, swap the LHS from entity.state to
@@ -130,7 +133,11 @@ class StateMatcher:
         if dur:
             seconds = self._dur_seconds(dur)
             if seconds > 0:
-                elapsed = (snap.now - last_updated).total_seconds()
+                # State-mode atoms clock off last_changed (the state string has
+                # been stable that long); attribute-mode atoms clock off
+                # last_updated (an attribute change should reset its own clock).
+                since = last_updated if attribute else last_changed
+                elapsed = (snap.now - since).total_seconds()
                 if elapsed < seconds:
                     return False
         return True

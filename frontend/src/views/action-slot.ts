@@ -69,11 +69,14 @@ export class AmbienceActionSlot extends LitElement {
       align-items: center;
       margin: 0.5rem 0 0.25rem 0;
     }
+    .field-label-group {
+      flex: 1;
+    }
     .field-label {
-      flex: 0 0 auto;
       font-weight: 600;
     }
     .field-clear {
+      flex: 0 0 auto;
       background: transparent;
       border: none;
       cursor: pointer;
@@ -86,7 +89,6 @@ export class AmbienceActionSlot extends LitElement {
       color: var(--error-color, #c62828);
     }
     .field-default-hint {
-      flex: 1;
       font-size: 0.85rem;
       color: var(--secondary-text-color, #888);
       font-style: italic;
@@ -366,6 +368,28 @@ export class AmbienceActionSlot extends LitElement {
     return JSON.stringify(value);
   }
 
+  /** Extract the unit_of_measurement from a selector dict, if any. */
+  private _fieldUnit(entry: HaFormSchemaEntry): string | undefined {
+    const sel = entry.selector;
+    if (!sel || typeof sel !== "object") return undefined;
+    for (const v of Object.values(sel as Record<string, unknown>)) {
+      if (v && typeof v === "object") {
+        const unit = (v as Record<string, unknown>).unit_of_measurement;
+        if (typeof unit === "string" && unit) return unit;
+      }
+    }
+    return undefined;
+  }
+
+  /** Compose the default hint suffix: " (Default: <value> <unit>)" or "". */
+  private _defaultHintSuffix(entry: HaFormSchemaEntry): string {
+    const defaults = this.exposed?.defaults ?? {};
+    if (!(entry.name in defaults)) return "";
+    const unit = this._fieldUnit(entry);
+    const value = this._formatDefault(defaults[entry.name]);
+    return ` (Default: ${value}${unit ? ` ${unit}` : ""})`;
+  }
+
   /** Whether to show the per-field ✕ clear button.
    *
    * Only when the user has set a distinct value on the rule (something to
@@ -410,15 +434,15 @@ export class AmbienceActionSlot extends LitElement {
           ${schema.map((entry) => {
             const fieldSchema = this._perFieldSchemas[entry.name] ?? [entry];
             const fieldData = this._fieldData(entry.name);
-            const defaults = this.exposed?.defaults ?? {};
-            const hasDefault = entry.name in defaults;
+            const hint = this._defaultHintSuffix(entry);
             return html`
               <div class="field-row">
                 <div class="field-header">
-                  <span class="field-label">${this._humanizeFieldLabel(entry.name)}${entry.required ? " *" : ""}</span>
-                  ${hasDefault
-                    ? html`<span class="field-default-hint">Default: ${this._formatDefault(defaults[entry.name])}</span>`
-                    : ""}
+                  <span class="field-label-group">
+                    <span class="field-label">${this._humanizeFieldLabel(entry.name)}${entry.required ? " *" : ""}</span>${hint
+                      ? html`<span class="field-default-hint">${hint}</span>`
+                      : ""}
+                  </span>
                   ${this._hasUserOverride(entry.name)
                     ? html`<button
                         class="field-clear"
@@ -451,15 +475,15 @@ export class AmbienceActionSlot extends LitElement {
           (entry) => {
             const fieldData = this._fieldData(entry.name);
             const displayValue = entry.name in fieldData ? String(fieldData[entry.name] ?? "") : "";
-            const defaults = this.exposed?.defaults ?? {};
-            const hasDefault = entry.name in defaults;
+            const hint = this._defaultHintSuffix(entry);
             return html`
               <div class="field-row">
                 <div class="field-header">
-                  <label class="field-label">${this._fieldLabel(entry.name)}${entry.required ? " *" : ""}</label>
-                  ${hasDefault
-                    ? html`<span class="field-default-hint">Default: ${this._formatDefault(defaults[entry.name])}</span>`
-                    : ""}
+                  <span class="field-label-group">
+                    <label class="field-label">${this._fieldLabel(entry.name)}${entry.required ? " *" : ""}</label>${hint
+                      ? html`<span class="field-default-hint">${hint}</span>`
+                      : ""}
+                  </span>
                   ${this._hasUserOverride(entry.name)
                     ? html`<button
                         class="field-clear"

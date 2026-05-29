@@ -14,6 +14,7 @@ import {
   getHouse,
   getWeatherConfig,
   listAreas,
+  getServiceSchema,
   listExposedActions,
   listFloors,
   listMatchers,
@@ -32,6 +33,7 @@ import type {
   Rule,
   Scope,
   ScopeConfig,
+  ServiceSchema,
   WeatherConfig,
 } from "../types.js";
 import "./rules-list.js";
@@ -136,6 +138,10 @@ export class AmbienceScopesView extends LitElement {
   @state() private _house: ScopeConfig = { rules: [], auto_sort: true };
   @state() private _matchers: MatcherInfo[] = [];
   @state() private _actions: ExposedAction[] = [];
+  // Per-service schemas, keyed by service id. Loaded after _actions so the
+  // summary functions can show HA's `field.name` instead of the humanized
+  // field id. Best-effort: services whose schema fetch fails are omitted.
+  @state() private _schemas: Record<string, ServiceSchema> = {};
   @state() private _periods?: PeriodStoreView;
   @state() private _dayConfig?: DayConfig;
   @state() private _weatherConfig?: WeatherConfig;
@@ -151,11 +157,33 @@ export class AmbienceScopesView extends LitElement {
       const actions = await listExposedActions(this.hass);
       if (!this.isConnected) return;
       this._actions = actions;
+      await this._refreshSchemas(actions);
     } catch {
       // Silent — the user just saw a successful save; transient refetch failures
       // are not worth surfacing here. The next manual reload will re-fetch.
     }
   };
+
+  /** Fetch the service schema for each exposed action. Failures per-service
+   *  are silently skipped (the summary just falls back to humanized ids). */
+  private async _refreshSchemas(actions: ExposedAction[]): Promise<void> {
+    const results = await Promise.all(
+      actions.map(async (a) => {
+        try {
+          const schema = await getServiceSchema(this.hass, a.id);
+          return [a.id, schema] as const;
+        } catch {
+          return [a.id, null] as const;
+        }
+      }),
+    );
+    if (!this.isConnected) return;
+    const next: Record<string, ServiceSchema> = {};
+    for (const [id, schema] of results) {
+      if (schema) next[id] = schema;
+    }
+    this._schemas = next;
+  }
 
   override async connectedCallback() {
     super.connectedCallback();
@@ -195,6 +223,7 @@ export class AmbienceScopesView extends LitElement {
       this._periods = periods;
       this._dayConfig = dayConfig;
       this._weatherConfig = weatherConfig;
+      await this._refreshSchemas(actions);
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
@@ -535,6 +564,7 @@ export class AmbienceScopesView extends LitElement {
         .dayConfig=${this._dayConfig}
         .weatherConfig=${this._weatherConfig}
         .availableActions=${this._actions}
+        .schemas=${this._schemas}
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}
       ></ambience-rule-editor>
@@ -585,6 +615,7 @@ export class AmbienceScopesView extends LitElement {
                   .weatherConfig=${this._weatherConfig}
                   .matchers=${this._matchers}
                   .availableActions=${this._actions}
+                  .schemas=${this._schemas}
                   .hass=${this.hass}
                   @add-rule=${() => this._addRule(scope)}
                   @edit-rule=${(e: CustomEvent<{ index: number }>) =>

@@ -2,7 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
-import { formatParamValue, humanizeFieldId, ruleDisplayName, summariseMatcher } from "../summary.js";
+import { formatParamValue, paramLabel, ruleDisplayName, summariseMatcher } from "../summary.js";
 import type {
   ActionSpec,
   ExposedAction,
@@ -129,6 +129,10 @@ export class AmbienceRulesList extends LitElement {
   // action when rendering the expanded detail under a rule. Optional;
   // when missing, falls back to the service id (snake-case → title-case).
   @property({ attribute: false }) availableActions: ExposedAction[] = [];
+  // Per-service schemas — used to look up HA's `field.name` attribute
+  // for each param key in the expanded action detail. Optional; when
+  // missing, the param key is humanized (snake_case → "Title case").
+  @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
 
   // Index of the row currently being dragged, or null.
   @state() private _dragFrom: number | null = null;
@@ -182,13 +186,14 @@ export class AmbienceRulesList extends LitElement {
     return typeof name === "string" && name ? name : entity_id;
   }
 
-  /** "Key: value, ..." string for the expanded action header. Keys are
-   *  humanized ("brightness_pct" → "Brightness pct"); array values are
-   *  wrapped in [ ] via formatParamValue. */
+  /** "Key: value, ..." string for the expanded action header. Keys use
+   *  HA's `field.name` from the schema when available, otherwise the
+   *  humanized field id ("brightness_pct" → "Brightness pct"). Array
+   *  values are wrapped in [ ] via formatParamValue. */
   private _actionParamsString(action: ActionSpec): string {
     return Object.entries(action.params)
       .filter(([, v]) => v !== undefined && v !== null && v !== "")
-      .map(([k, v]) => `${humanizeFieldId(k)}: ${formatParamValue(v)}`)
+      .map(([k, v]) => `${paramLabel(k, action.service, this.schemas)}: ${formatParamValue(v)}`)
       .join(", ");
   }
 

@@ -16,6 +16,7 @@ import type {
   PeriodStoreView,
   Rule,
   ScriptPredicate,
+  ServiceSchema,
   StateExpr,
   StatePredicate,
   TimeEndpoint,
@@ -41,6 +42,27 @@ interface ActionContext {
   // a human-friendly label for the action (otherwise the service id is
   // used verbatim).
   exposedActions?: ExposedAction[];
+  // Optional. When provided, the service schema is consulted for each
+  // param's display name (HA's `field.name` attribute), falling back to
+  // the humanized field id when absent.
+  schemas?: Record<string, ServiceSchema>;
+}
+
+/** Human label for one param field: prefers HA's `field.name` attribute
+ *  from the service schema; falls back to humanizing the raw field id. */
+export function paramLabel(
+  fieldId: string,
+  serviceId: string | undefined,
+  schemas?: Record<string, ServiceSchema>,
+): string {
+  if (serviceId && schemas) {
+    const field = schemas[serviceId]?.fields?.[fieldId];
+    if (field && typeof field === "object") {
+      const name = (field as { name?: unknown }).name;
+      if (typeof name === "string" && name) return name;
+    }
+  }
+  return humanizeFieldId(fieldId);
 }
 
 /**
@@ -295,7 +317,7 @@ export function summariseAction(
   else targets = `${n} ${noun}s`;
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${humanizeFieldId(k)}: ${formatParamValue(v)}`)
+    .map(([k, v]) => `${paramLabel(k, action.service, ctx.schemas)}: ${formatParamValue(v)}`)
     .join(", ");
   return params ? `${name}: ${targets}, ${params}` : `${name}: ${targets}`;
 }

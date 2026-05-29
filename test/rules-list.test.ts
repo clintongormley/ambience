@@ -58,6 +58,7 @@ async function mount(
   rules: Rule[] = [],
   autoSort = true,
   availableActions: ExposedAction[] = [],
+  schemas: Record<string, unknown> = {},
 ): Promise<any> {
   const el: any = document.createElement("ambience-rules-list");
   el.rules = rules;
@@ -66,6 +67,7 @@ async function mount(
   el.matchers = matchers;
   el.hass = testHass;
   el.availableActions = availableActions;
+  el.schemas = schemas;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
@@ -389,6 +391,45 @@ describe("ambience-rules-list", () => {
     const detail = el.shadowRoot.querySelector(".actions-detail");
     expect(detail.textContent).toContain("Rgb color: [210,81,81]");
     expect(detail.textContent).toContain("Brightness pct: 31");
+  });
+
+  test("expanded action header uses HA's field.name from schemas when present", async () => {
+    const rule: Rule = {
+      name: "test",
+      when: {},
+      actions: [
+        {
+          service: "light.turn_on",
+          entity_ids: ["light.a"],
+          params: { brightness_pct: 31, rgb_color: [210, 81, 81] },
+        },
+      ],
+    };
+    const availableActions: ExposedAction[] = [
+      {
+        id: "light.turn_on",
+        label: "Turn on light",
+        visible_fields: ["brightness_pct", "rgb_color"],
+        defaults: {},
+      },
+    ];
+    const schemas = {
+      "light.turn_on": {
+        fields: {
+          brightness_pct: { name: "Brightness", selector: {} },
+          rgb_color: { name: "RGB Color", selector: {} },
+        },
+        target: null,
+      },
+    };
+    el = await mount([rule], true, availableActions, schemas);
+    const actionCount = el.shadowRoot.querySelector(".action-count") as HTMLElement;
+    actionCount.click();
+    await el.updateComplete;
+    const detail = el.shadowRoot.querySelector(".actions-detail");
+    expect(detail.textContent).toContain("Brightness: 31");
+    expect(detail.textContent).toContain("RGB Color: [210,81,81]");
+    expect(detail.textContent).not.toContain("Brightness pct");
   });
 
   test("expanded action lists target entity ids", async () => {

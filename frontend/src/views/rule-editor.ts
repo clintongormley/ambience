@@ -127,6 +127,7 @@ export class AmbienceRuleEditor extends LitElement {
   @property({ attribute: false }) dayConfig?: DayConfig;
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) availableActions: ExposedAction[] = [];
+  @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) scope?: Scope;
 
@@ -600,6 +601,7 @@ export class AmbienceRuleEditor extends LitElement {
     const summary = summariseAction(action, {
       hass: this.hass as any,
       exposedActions: this.availableActions,
+      schemas: this.schemas,
     });
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">

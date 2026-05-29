@@ -242,6 +242,44 @@ describe("summariseAction", () => {
       .toBe("Set light: 1 light, Rgb color: [210,81,81], Brightness pct: 31");
   });
 
+  test("uses HA's field.name from schema when available", () => {
+    const action: ActionSpec = {
+      service: "light.turn_on",
+      entity_ids: ["light.a"],
+      params: { brightness_pct: 31, rgb_color: [210, 81, 81] },
+    };
+    const schemas = {
+      "light.turn_on": {
+        fields: {
+          brightness_pct: { name: "Brightness", selector: {} },
+          rgb_color: { name: "RGB Color", selector: {} },
+        },
+        target: null,
+      },
+    };
+    expect(summariseAction(action, { hass: noLocalize, exposedActions, schemas }))
+      .toBe("Set light: 1 light, Brightness: 31, RGB Color: [210,81,81]");
+  });
+
+  test("falls back to humanized id when schema lacks field.name for a field", () => {
+    const action: ActionSpec = {
+      service: "light.turn_on",
+      entity_ids: ["light.a"],
+      params: { brightness_pct: 31, transition: 2 },
+    };
+    const schemas = {
+      "light.turn_on": {
+        fields: {
+          brightness_pct: { name: "Brightness", selector: {} },
+          transition: { selector: {} },  // no name attribute
+        },
+        target: null,
+      },
+    };
+    expect(summariseAction(action, { hass: noLocalize, exposedActions, schemas }))
+      .toBe("Set light: 1 light, Brightness: 31, Transition: 2");
+  });
+
   test("uses domain prefix as fallback target noun (no exposed entry)", () => {
     const action: ActionSpec = {
       service: "x.unknown",

@@ -342,6 +342,20 @@ describe("ambience-rules-list", () => {
     expect(summary).toContain("movie");
   });
 
+  test("matcher labels in the summary are wrapped in <strong>", async () => {
+    const rules: Rule[] = [{
+      name: "test",
+      when: { time_of_day: { period: "afternoon" }, scene: "movie" },
+      actions: [],
+    }];
+    el = await mount(rules);
+    const strongs = Array.from(
+      el.shadowRoot.querySelectorAll(".summary strong"),
+    ).map((s: any) => s.textContent?.trim());
+    expect(strongs).toContain("Time of day:");
+    expect(strongs).toContain("Scene:");
+  });
+
   test("action count is rendered as a clickable element", async () => {
     el = await mount([movieRule]);
     const actionCount = el.shadowRoot.querySelector(".action-count");

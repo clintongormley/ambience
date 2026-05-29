@@ -147,20 +147,25 @@ export class AmbienceRulesList extends LitElement {
     );
   }
 
-  /** "when" portion of the rule summary — friendly matcher labels joined by `, `. */
-  private _whenSummary(rule: Rule): string {
+  /** "when" portion of the rule summary — friendly matcher labels joined by
+   *  `, ` with each matcher name wrapped in <strong>. */
+  private _whenSummary(rule: Rule) {
     const priorityOf = new Map((this.matchers ?? []).map((m) => [m.name, m.priority]));
     const keys = Object.keys(rule.when)
       .filter((k) => rule.when[k] != null)
       // Stable sort by matcher priority (lower first); unknown matchers go last.
       .sort((a, b) => (priorityOf.get(a) ?? Infinity) - (priorityOf.get(b) ?? Infinity));
     if (keys.length === 0) return localize(this.hass, "ui.summary_any", "any");
-    return keys
-      .map(
-        (k) =>
-          `${matcherLabel(this.hass as any, k)}: ${summariseMatcher(k, rule.when[k], { hass: this.hass as any, periods: this.periods, weatherGroups: this.weatherConfig?.groups })}`,
-      )
-      .join(", ");
+    return keys.map((k, i) => {
+      const label = matcherLabel(this.hass as any, k);
+      const body = summariseMatcher(k, rule.when[k], {
+        hass: this.hass as any,
+        periods: this.periods,
+        weatherGroups: this.weatherConfig?.groups,
+      });
+      const sep = i === 0 ? "" : ", ";
+      return html`${sep}<strong>${label}:</strong> ${body}`;
+    });
   }
 
   /** "N actions" / "1 action" / "0 actions" label. */

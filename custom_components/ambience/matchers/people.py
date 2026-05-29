@@ -125,7 +125,36 @@ class PeopleMatcher:
         return None
 
     def validate_predicate(self, predicate: Any) -> None:
-        return None
+        if predicate is None:
+            return
+        if not isinstance(predicate, dict):
+            raise ValueError("people predicate must be a dict")
+        who = predicate.get("who")
+        if who is not None:
+            if not isinstance(who, list):
+                raise ValueError("`who` must be a list of person entity_ids")
+            for p in who:
+                if not isinstance(p, str) or not p.startswith("person."):
+                    raise ValueError(f"`who` entries must be person.* entity_ids, got {p!r}")
+        quant = predicate.get("quant")
+        if quant is not None and quant not in _QUANTS:
+            raise ValueError(f"`quant` must be one of {_QUANTS}, got {quant!r}")
+        where = predicate.get("where")
+        if where is not None:
+            if not isinstance(where, str) or (
+                where not in (_HOME, "away") and not where.startswith("zone.")
+            ):
+                raise ValueError(
+                    f"`where` must be 'home', 'away', or a zone.* id, got {where!r}"
+                )
+        dur = predicate.get("for")
+        if dur is not None:
+            if not isinstance(dur, dict):
+                raise ValueError("`for` must be a dict {h,m,s} or null")
+            for k in ("h", "m", "s"):
+                v = dur.get(k, 0)
+                if not isinstance(v, int) or isinstance(v, bool) or v < 0:
+                    raise ValueError(f"`for.{k}` must be a non-negative int")
 
     @staticmethod
     def _dur_seconds(dur: Any) -> float:

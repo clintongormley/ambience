@@ -173,3 +173,48 @@ def test_matches_for_duration_nobody_uses_away_clock() -> None:
     # only 1m since leaving -> not yet
     snap2 = _snap({"person.a": ("not_home", now - timedelta(minutes=1))}, now=now)
     assert m.matches(pred, snap2) is False
+
+
+def test_validate_accepts_none_and_valid() -> None:
+    m = PeopleMatcher()
+    m.validate_predicate(None)
+    m.validate_predicate({})
+    m.validate_predicate(
+        {"who": ["person.a"], "quant": "everyone", "where": "home", "for": {"h": 0, "m": 5, "s": 0}}
+    )
+    m.validate_predicate({"where": "zone.work"})
+    m.validate_predicate({"where": "away"})
+
+
+def test_validate_rejects_non_dict() -> None:
+    with pytest.raises(ValueError):
+        PeopleMatcher().validate_predicate(42)
+
+
+def test_validate_rejects_bad_who() -> None:
+    m = PeopleMatcher()
+    with pytest.raises(ValueError, match="who"):
+        m.validate_predicate({"who": "person.a"})
+    with pytest.raises(ValueError, match="person"):
+        m.validate_predicate({"who": ["light.x"]})
+
+
+def test_validate_rejects_bad_quant() -> None:
+    with pytest.raises(ValueError, match="quant"):
+        PeopleMatcher().validate_predicate({"quant": "some"})
+
+
+def test_validate_rejects_bad_where() -> None:
+    m = PeopleMatcher()
+    with pytest.raises(ValueError, match="where"):
+        m.validate_predicate({"where": "office"})
+    with pytest.raises(ValueError, match="where"):
+        m.validate_predicate({"where": 5})
+
+
+def test_validate_rejects_bad_for() -> None:
+    m = PeopleMatcher()
+    with pytest.raises(ValueError, match="for"):
+        m.validate_predicate({"for": {"h": -1, "m": 0, "s": 0}})
+    with pytest.raises(ValueError, match="for"):
+        m.validate_predicate({"for": {"h": 0, "m": "five", "s": 0}})

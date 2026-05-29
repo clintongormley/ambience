@@ -123,7 +123,7 @@ describe("summariseDay", () => {
       include: [{ kind: "weekday", days: [0, 1, 2, 3, 4] }],
       exclude: [{ kind: "holiday" }],
     };
-    expect(summariseDay(pred)).toBe("Mon/Tue/Wed/Thu/Fri (except holiday)");
+    expect(summariseDay(pred)).toBe("Mon/Tue/Wed/Thu/Fri (except Holiday)");
   });
 
   test("formats date, date_range, day_of_month, and month-position kinds", () => {
@@ -134,11 +134,11 @@ describe("summariseDay", () => {
       exclude: [],
     })).toBe("July 15 → August 31");
     expect(summariseDay({ include: [{ kind: "day_of_month", days: "1-10, 15" }], exclude: [] }))
-      .toBe("day 1-10, 15");
-    expect(summariseDay({ include: [{ kind: "last_day" }], exclude: [] })).toBe("last day");
-    expect(summariseDay({ include: [{ kind: "workday" }], exclude: [] })).toBe("workday");
-    expect(summariseDay({ include: [{ kind: "first_workday" }], exclude: [] })).toBe("first workday");
-    expect(summariseDay({ include: [{ kind: "last_workday" }], exclude: [] })).toBe("last workday");
+      .toBe("Day 1-10, 15");
+    expect(summariseDay({ include: [{ kind: "last_day" }], exclude: [] })).toBe("Last day");
+    expect(summariseDay({ include: [{ kind: "workday" }], exclude: [] })).toBe("Workday");
+    expect(summariseDay({ include: [{ kind: "first_workday" }], exclude: [] })).toBe("First workday");
+    expect(summariseDay({ include: [{ kind: "last_workday" }], exclude: [] })).toBe("Last workday");
   });
 
   test("summariseMatcher delegates day to summariseDay", () => {

@@ -128,21 +128,21 @@ function _fmtDayItem(item: DayItem, ctx: MatcherContext): string {
     case "weekday":
       return item.days.map((d) => weekdayLabel(ctx.hass, d)).join("/");
     case "day_of_month":
-      return `${localize(ctx.hass, "day_summary.day_prefix", "day")} ${item.days}`;
+      return `${localize(ctx.hass, "day_summary.day_prefix", "Day")} ${item.days}`;
     case "date":
       return `${monthLabel(ctx.hass, item.month)} ${item.day}`;
     case "date_range":
       return `${monthLabel(ctx.hass, item.from.month)} ${item.from.day} → ${monthLabel(ctx.hass, item.to.month)} ${item.to.day}`;
     case "last_day":
-      return localize(ctx.hass, "day_summary.last_day", "last day");
+      return localize(ctx.hass, "day_summary.last_day", "Last day");
     case "workday":
-      return localize(ctx.hass, "day_summary.workday", "workday");
+      return localize(ctx.hass, "day_summary.workday", "Workday");
     case "holiday":
-      return localize(ctx.hass, "day_summary.holiday", "holiday");
+      return localize(ctx.hass, "day_summary.holiday", "Holiday");
     case "first_workday":
-      return localize(ctx.hass, "day_summary.first_workday", "first workday");
+      return localize(ctx.hass, "day_summary.first_workday", "First workday");
     case "last_workday":
-      return localize(ctx.hass, "day_summary.last_workday", "last workday");
+      return localize(ctx.hass, "day_summary.last_workday", "Last workday");
   }
 }
 

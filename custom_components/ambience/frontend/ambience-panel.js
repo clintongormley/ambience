@@ -47,7 +47,7 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
                 @click=${i=>{i.stopPropagation(),this._emit("edit-rule",{index:r})}}
                 title=${c(this.hass,"ui.edit","Edit")}
               >
-                ✎
+                🖉
               </button>
               <button
                 @click=${i=>{i.stopPropagation(),this._emit("duplicate-rule",{index:r})}}

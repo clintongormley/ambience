@@ -340,7 +340,7 @@ export class AmbienceRulesList extends LitElement {
                 }}
                 title=${localize(this.hass, "ui.edit", "Edit")}
               >
-                ✎
+                🖉
               </button>
               <button
                 @click=${(e: Event) => {

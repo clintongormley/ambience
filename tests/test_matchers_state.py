@@ -663,3 +663,17 @@ def test_trigger_deps_none_predicate_is_empty() -> None:
     from custom_components.ambience.triggers import EMPTY
 
     assert StateMatcher().trigger_deps(None) == EMPTY
+
+
+def test_trigger_deps_collects_from_or_group() -> None:
+    m = StateMatcher()
+    pred = {
+        "kind": "or",
+        "items": [
+            {"kind": "is", "entity_id": "person.alice", "states": ["home"]},
+            {"kind": "is", "entity_id": "person.bob", "states": ["home"]},
+        ],
+    }
+    spec = m.trigger_deps(pred)
+    assert spec.entities == frozenset({"person.alice", "person.bob"})
+    assert spec.entity_durations == frozenset()

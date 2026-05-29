@@ -297,5 +297,5 @@ class StateMatcher:
         if kind in ("and", "or"):
             for item in expr.get("items") or []:
                 self._collect_deps(item, entities, durations)
-        elif kind == "not":
+        if kind == "not":
             self._collect_deps(expr.get("item"), entities, durations)

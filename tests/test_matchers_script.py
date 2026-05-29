@@ -17,17 +17,35 @@ from custom_components.ambience.matchers.script import (
 
 
 class _StoreStub:
-    """Minimal store stub exposing `areas()` for the snapshot collector."""
+    """Minimal store stub exposing area/floor/house scopes for the collector."""
 
-    def __init__(self, areas: dict[str, dict]) -> None:
-        self._areas = areas
+    def __init__(
+        self,
+        areas: dict[str, dict] | None = None,
+        floors: dict[str, dict] | None = None,
+        house: dict | None = None,
+    ) -> None:
+        self._areas = areas or {}
+        self._floors = floors or {}
+        self._house = house or {}
 
     def areas(self) -> dict[str, dict]:
         return self._areas
 
+    def floors(self) -> dict[str, dict]:
+        return self._floors
 
-def _install_store(hass: HomeAssistant, areas: dict[str, dict]) -> None:
-    hass.data.setdefault(DOMAIN, {})[DATA_STORE] = _StoreStub(areas)
+    def get_house(self) -> dict:
+        return self._house
+
+
+def _install_store(
+    hass: HomeAssistant,
+    areas: dict[str, dict] | None = None,
+    floors: dict[str, dict] | None = None,
+    house: dict | None = None,
+) -> None:
+    hass.data.setdefault(DOMAIN, {})[DATA_STORE] = _StoreStub(areas, floors, house)
 
 
 def test_protocol_fields() -> None:
@@ -141,6 +159,24 @@ def test_collect_pairs_walks_all_areas_and_rules(hass: HomeAssistant) -> None:
         ("script.a", '{"k":1}'),
         ("script.b", "{}"),
     ]
+
+
+def test_collect_pairs_walks_floors(hass: HomeAssistant) -> None:
+    _install_store(
+        hass,
+        floors={"f1": {"rules": [{"when": {"script": {"script": "script.floor_check"}}}]}},
+    )
+    pairs = ScriptMatcher(hass=hass)._collect_pairs()
+    assert ("script.floor_check", "{}") in pairs
+
+
+def test_collect_pairs_walks_house(hass: HomeAssistant) -> None:
+    _install_store(
+        hass,
+        house={"rules": [{"when": {"script": {"script": "script.house_check"}}}]},
+    )
+    pairs = ScriptMatcher(hass=hass)._collect_pairs()
+    assert ("script.house_check", "{}") in pairs
 
 
 def test_collect_pairs_no_store_returns_empty(hass: HomeAssistant) -> None:

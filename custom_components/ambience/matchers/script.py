@@ -107,9 +107,9 @@ class ScriptMatcher:
     # --- snapshot orchestration -------------------------------------------
 
     def _collect_pairs(self) -> list[tuple[str, str]]:
-        """Walk every area's rules and return distinct (script, args-json) pairs
-        carried by `when.script` predicates. Malformed predicates are skipped.
-        Order is insertion order; duplicates are removed."""
+        """Walk every scope's rules (areas, floors, house) and return distinct
+        (script, args-json) pairs carried by `when.script` predicates. Malformed
+        predicates are skipped. Order is insertion order; duplicates are removed."""
         hass = self._hass
         if hass is None:
             return []
@@ -118,10 +118,15 @@ class ScriptMatcher:
         store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
         if store is None:
             return []
+        scopes: list[dict[str, Any]] = [
+            *store.areas().values(),
+            *store.floors().values(),
+            store.get_house() or {},
+        ]
         seen: set[tuple[str, str]] = set()
         pairs: list[tuple[str, str]] = []
-        for area_cfg in store.areas().values():
-            for rule in area_cfg.get("rules", []):
+        for scope_cfg in scopes:
+            for rule in scope_cfg.get("rules", []):
                 pred = rule.get("when", {}).get("script")
                 if not isinstance(pred, dict):
                     continue

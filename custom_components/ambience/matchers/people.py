@@ -92,9 +92,7 @@ class PeopleMatcher:
                 return False
             if at is not want_at:
                 return False
-            if seconds > 0 and (snapshot.now - changed).total_seconds() < seconds:
-                return False
-            return True
+            return not (seconds > 0 and (snapshot.now - changed).total_seconds() < seconds)
 
         if quant == "everyone":
             return bool(person_ids) and all(holds(p, True) for p in person_ids)
@@ -150,13 +148,11 @@ class PeopleMatcher:
         if quant is not None and quant not in _QUANTS:
             raise ValueError(f"`quant` must be one of {_QUANTS}, got {quant!r}")
         where = predicate.get("where")
-        if where is not None:
-            if not isinstance(where, str) or (
-                where not in (_HOME, "away") and not where.startswith("zone.")
-            ):
-                raise ValueError(
-                    f"`where` must be 'home', 'away', or a zone.* id, got {where!r}"
-                )
+        if where is not None and (
+            not isinstance(where, str)
+            or (where not in (_HOME, "away") and not where.startswith("zone."))
+        ):
+            raise ValueError(f"`where` must be 'home', 'away', or a zone.* id, got {where!r}")
         dur = predicate.get("for")
         if dur is not None:
             if not isinstance(dur, dict):

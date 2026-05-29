@@ -32,6 +32,7 @@ from .const import (
 )
 from .exposed_actions import ExposedActionsStore
 from .matchers.day import DayMatcher
+from .matchers.people import PeopleMatcher
 from .matchers.scene import SceneMatcher
 from .matchers.script import ScriptMatcher
 from .matchers.state import StateMatcher
@@ -129,6 +130,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     register_matcher(hass, WeatherMatcher(hass=hass))
     register_matcher(hass, SunMatcher(hass=hass))
     register_matcher(hass, StateMatcher(hass=hass))
+    register_matcher(hass, PeopleMatcher(hass=hass))
     register_matcher(hass, ScriptMatcher(hass=hass))
 
     async def _handle_apply_scene(call: ServiceCall) -> None:

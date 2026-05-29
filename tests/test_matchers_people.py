@@ -299,11 +299,21 @@ def test_contains_longer_for_is_subset() -> None:
 def test_contains_empty_who_is_all_superset() -> None:
     m = PeopleMatcher()
     # any over explicit ⊆ any over ALL
-    assert m.contains({"quant": "any", "where": "home"},
-                      {"who": ["person.a"], "quant": "any", "where": "home"}) is True
+    assert (
+        m.contains(
+            {"quant": "any", "where": "home"},
+            {"who": ["person.a"], "quant": "any", "where": "home"},
+        )
+        is True
+    )
     # everyone over ALL ⊆ everyone over explicit
-    assert m.contains({"who": ["person.a"], "quant": "everyone", "where": "home"},
-                      {"quant": "everyone", "where": "home"}) is True
+    assert (
+        m.contains(
+            {"who": ["person.a"], "quant": "everyone", "where": "home"},
+            {"quant": "everyone", "where": "home"},
+        )
+        is True
+    )
 
 
 def test_contains_everyone_inner_any_outer_requires_intersection() -> None:

@@ -313,7 +313,7 @@ async def test_matches_groups_and_thresholds_anded(hass: HomeAssistant) -> None:
 def _matcher_with_entity(entity: str | None) -> WeatherMatcher:
     hass = MagicMock()
     store = MagicMock()
-    store.get_matcher_config.return_value = {"entity": entity, "groups": []}
+    store.get_matcher_config.return_value = {"entity": entity}
     hass.data = {DOMAIN: {DATA_STORE: store}}
     return WeatherMatcher(hass=hass)
 
@@ -334,3 +334,9 @@ def test_trigger_deps_empty_predicate_is_empty() -> None:
     m = _matcher_with_entity("weather.home")
     assert m.trigger_deps({}) == EMPTY
     assert m.trigger_deps(None) == EMPTY
+
+
+def test_trigger_deps_entity_not_configured_returns_empty_entities() -> None:
+    m = _matcher_with_entity(None)
+    spec = m.trigger_deps({"groups": ["dim"]})
+    assert spec.entities == frozenset()

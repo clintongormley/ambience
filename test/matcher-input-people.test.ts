@@ -1,5 +1,6 @@
 import { describe, test, expect, afterEach } from "vitest";
 import "../frontend/src/views/people-predicate-input";
+import "../frontend/src/views/matcher-input";
 import type { PeoplePredicate } from "../frontend/src/types";
 
 // Minimal hass stub exposing two persons and one (non-home) zone.
@@ -82,6 +83,17 @@ describe("ambience-people-predicate-input", () => {
     cb.checked = true;
     cb.dispatchEvent(new Event("change"));
     expect(emitted?.who).toContain("person.alice");
+  });
+
+  test("matcher-input dispatches to the people widget for input=people_predicate", async () => {
+    const di: any = document.createElement("ambience-matcher-input");
+    di.matcher = { name: "people", description: "", predicate_help: "", input: "people_predicate", priority: 75 };
+    di.value = null;
+    di.hass = hass;
+    document.body.appendChild(di);
+    await di.updateComplete;
+    expect(di.shadowRoot.querySelector("ambience-people-predicate-input")).not.toBeNull();
+    di.remove();
   });
 
   test("default selection (any/home/no who/no for) emits null", async () => {

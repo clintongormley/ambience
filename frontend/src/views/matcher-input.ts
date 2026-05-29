@@ -11,6 +11,7 @@ import "./day-predicate-input.js";
 import "./weather-predicate-input.js";
 import "./sun-predicate-input.js";
 import "./state-predicate-input.js";
+import "./people-predicate-input.js";
 
 /**
  * Dispatcher element for one matcher's predicate input. Given a matcher's
@@ -156,6 +157,18 @@ export class AmbienceMatcherInput extends LitElement {
             this._emit(e.detail.value);
           }}
         ></ambience-state-predicate-input>
+      `;
+    }
+    if (this.matcher.input === "people_predicate") {
+      return html`
+        <ambience-people-predicate-input
+          .hass=${this.hass}
+          .value=${this.value as any}
+          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
+            e.stopPropagation();
+            this._emit(e.detail.value);
+          }}
+        ></ambience-people-predicate-input>
       `;
     }
     return html`

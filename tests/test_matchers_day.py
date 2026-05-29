@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -383,3 +383,34 @@ def test_validate_with_entities_accepts_workday_items(m_with_entities: DayMatche
             "exclude": [{"kind": "holiday"}, {"kind": "last_workday"}],
         }
     )
+
+
+def _matcher_with_workday_sensor(sensor: str | None) -> DayMatcher:
+    hass = MagicMock()
+    store = MagicMock()
+    store.get_matcher_config.return_value = {
+        "workday_sensor": sensor,
+        "workday_calendar": None,
+    }
+    hass.data = {DOMAIN: {DATA_STORE: store}}
+    return DayMatcher(hass=hass)
+
+
+def test_trigger_deps_always_sets_date_rollover() -> None:
+    m = _matcher_with_workday_sensor(None)
+    spec = m.trigger_deps({"include": [{"kind": "weekday", "days": [0, 1]}]})
+    assert spec.date_rollover is True
+    assert spec.entities == frozenset()
+
+
+def test_trigger_deps_watches_workday_sensor_when_used() -> None:
+    m = _matcher_with_workday_sensor("binary_sensor.workday")
+    spec = m.trigger_deps({"include": [{"kind": "workday"}]})
+    assert spec.date_rollover is True
+    assert spec.entities == frozenset({"binary_sensor.workday"})
+
+
+def test_trigger_deps_ignores_workday_sensor_when_not_used() -> None:
+    m = _matcher_with_workday_sensor("binary_sensor.workday")
+    spec = m.trigger_deps({"include": [{"kind": "weekday", "days": [5, 6]}]})
+    assert spec.entities == frozenset()

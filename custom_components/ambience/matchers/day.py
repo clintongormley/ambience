@@ -11,6 +11,8 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..triggers import TriggerSpec
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -267,3 +269,16 @@ class DayMatcher:
             raise ValueError(f"day item: invalid month {month!r}")
         if not isinstance(day, int) or not 1 <= day <= 31:
             raise ValueError(f"day item: invalid day {day!r}")
+
+    # --- trigger dependencies -------------------------------------------
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        entities: set[str] = set()
+        if isinstance(predicate, dict):
+            items = (predicate.get("include") or []) + (predicate.get("exclude") or [])
+            kinds = {it.get("kind") for it in items if isinstance(it, dict)}
+            if kinds & {"workday", "holiday"}:
+                sensor = self._day_config().get("workday_sensor")
+                if sensor:
+                    entities.add(sensor)
+        return TriggerSpec(entities=frozenset(entities), date_rollover=True)

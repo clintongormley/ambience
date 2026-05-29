@@ -20,6 +20,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..triggers import TriggerSpec
 from ._collect import collect_scope_predicates
 
 _LOGGER = logging.getLogger(__name__)
@@ -90,6 +91,11 @@ class ScriptMatcher:
         args = predicate.get("args")
         if args is not None and not isinstance(args, dict):
             raise ValueError(f"script predicate `args` must be a dict or absent: {args!r}")
+        triggers = predicate.get("triggers")
+        if triggers is not None and (
+            not isinstance(triggers, list) or not all(isinstance(t, str) and t for t in triggers)
+        ):
+            raise ValueError("script predicate `triggers` must be a list of entity_id strings")
 
     # --- evaluation --------------------------------------------------------
 
@@ -105,6 +111,16 @@ class ScriptMatcher:
         if not isinstance(args, dict):
             return False
         return snapshot.results.get(_cache_key(script, args), False) is True
+
+    # --- trigger dependencies ---------------------------------------------
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        entities: set[str] = set()
+        if isinstance(predicate, dict):
+            for entity_id in predicate.get("triggers") or []:
+                if isinstance(entity_id, str) and entity_id:
+                    entities.add(entity_id)
+        return TriggerSpec(entities=frozenset(entities), opaque=True)
 
     # --- snapshot orchestration -------------------------------------------
 

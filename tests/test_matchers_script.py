@@ -364,3 +364,37 @@ async def test_snapshot_caches_per_args(hass: HomeAssistant) -> None:
     await m.snapshot(hass)
     # Two distinct arg-sets => two calls on first snapshot; second snapshot cached.
     assert spy.call_count == 2
+
+
+def test_trigger_deps_is_opaque_with_no_declared_triggers() -> None:
+    spec = ScriptMatcher().trigger_deps({"script": "script.foo"})
+    assert spec.opaque is True
+    assert spec.entities == frozenset()
+
+
+def test_trigger_deps_includes_declared_triggers() -> None:
+    spec = ScriptMatcher().trigger_deps(
+        {"script": "script.foo", "triggers": ["person.john", "input_boolean.guest"]}
+    )
+    assert spec.opaque is True
+    assert spec.entities == frozenset({"person.john", "input_boolean.guest"})
+
+
+def test_trigger_deps_none_predicate_is_opaque_no_entities() -> None:
+    spec = ScriptMatcher().trigger_deps(None)
+    assert spec.opaque is True
+    assert spec.entities == frozenset()
+
+
+def test_validate_predicate_accepts_valid_triggers() -> None:
+    ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": ["person.john"]})
+
+
+def test_validate_predicate_rejects_non_list_triggers() -> None:
+    with pytest.raises(ValueError, match="triggers"):
+        ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": "person.john"})
+
+
+def test_validate_predicate_rejects_non_string_trigger_items() -> None:
+    with pytest.raises(ValueError, match="triggers"):
+        ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": ["person.john", 5]})

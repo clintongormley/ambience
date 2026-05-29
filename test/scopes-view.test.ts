@@ -342,9 +342,17 @@ describe("ambience-scopes-view", () => {
     (row.querySelector(".scope-header") as HTMLElement).click();
     await el.updateComplete;
 
-    const checkbox = row.querySelector("input[type='checkbox']") as HTMLInputElement;
-    checkbox.checked = true;
-    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    // The autosort checkbox now lives inside <ambience-rules-list>'s shadow
+    // DOM. Dispatch the public toggle-autosort event on the rules-list
+    // element directly — that's what scopes-view listens for.
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    rulesList.dispatchEvent(
+      new CustomEvent("toggle-autosort", {
+        detail: { manual: true },
+        bubbles: true,
+        composed: true,
+      }),
+    );
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
 

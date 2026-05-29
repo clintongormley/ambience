@@ -123,6 +123,14 @@ export class AmbienceRulesList extends LitElement {
       border-radius: 4px;
       margin-top: 0.5rem;
     }
+    .autosort {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0.5rem 0 0.25rem 0;
+      font-size: 0.9em;
+      color: var(--secondary-text-color, #888);
+    }
   `;
 
   @property({ attribute: false }) rules: Rule[] = [];
@@ -364,6 +372,17 @@ export class AmbienceRulesList extends LitElement {
           `,
         )}
       </ul>
+      <label class="autosort">
+        <input
+          type="checkbox"
+          .checked=${!this.autoSort}
+          @change=${(e: Event) =>
+            this._emit("toggle-autosort", {
+              manual: (e.target as HTMLInputElement).checked,
+            })}
+        />
+        ${localize(this.hass, "ui.order_rules_manually", "Order rules manually")}
+      </label>
       <button class="add" @click=${() => this._emit("add-rule", {})}>
         ${localize(this.hass, "ui.add_rule", "+ Add rule")}
       </button>

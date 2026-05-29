@@ -64,6 +64,14 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
             </li>
           `)}
       </ul>
+      <label class="autosort">
+        <input
+          type="checkbox"
+          .checked=${!this.autoSort}
+          @change=${e=>this._emit("toggle-autosort",{manual:e.target.checked})}
+        />
+        ${c(this.hass,"ui.order_rules_manually","Order rules manually")}
+      </label>
       <button class="add" @click=${()=>this._emit("add-rule",{})}>
         ${c(this.hass,"ui.add_rule","+ Add rule")}
       </button>
@@ -176,6 +184,14 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
       padding: 0.5rem 1rem;
       border-radius: 4px;
       margin-top: 0.5rem;
+    }
+    .autosort {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0.5rem 0 0.25rem 0;
+      font-size: 0.9em;
+      color: var(--secondary-text-color, #888);
     }
   `,u([m({attribute:!1})],H.prototype,"rules",2),u([m({type:Boolean})],H.prototype,"autoSort",2),u([m({attribute:!1})],H.prototype,"periods",2),u([m({attribute:!1})],H.prototype,"weatherConfig",2),u([m({attribute:!1})],H.prototype,"hass",2),u([m({attribute:!1})],H.prototype,"matchers",2),u([m({attribute:!1})],H.prototype,"availableActions",2),u([m({attribute:!1})],H.prototype,"schemas",2),u([g()],H.prototype,"_dragFrom",2),u([g()],H.prototype,"_dragOver",2),u([g()],H.prototype,"_expanded",2),H=u([x("ambience-rules-list")],H);function Br(t,n){if(!n||n.entity==null)return[...t];let e=Array.isArray(n.entity)?n.entity:[n.entity];if(e.length===0)return[...t];let r=new Set,i=!1;for(let s of e){if(!s||typeof s!="object")continue;let a=s.domain;if(a==null){i=!0;continue}if(Array.isArray(a))for(let o of a)typeof o=="string"&&r.add(o);else typeof a=="string"&&r.add(a)}return i||r.size===0?[...t]:t.filter(s=>{let a=s.indexOf(".");return a<0?!1:r.has(s.slice(0,a))})}function Gr(t,n,e=[]){let r=t;if(!r?.entities)return[];let i=r.entities,s=r.devices??{},a=r.areas??{},o=n.kind==="area"?new Set([n.id]):n.kind==="floor"?new Set(Object.values(a).filter(h=>h.floor_id===n.id).map(h=>h.area_id)):null,d=h=>{let f=h.area_id??(h.device_id?s[h.device_id]?.area_id??null:null);return f==null?!1:o===null?!0:o.has(f)};return Object.values(i).filter(d).filter(h=>e.length===0||e.includes(h.entity_id.split(".")[0])).map(h=>h.entity_id).sort()}var q=class extends y{constructor(){super(...arguments);this.entities=[];this.value=[];this.target=null;this.label=" "}_filteredEntities(){return Br(this.entities,this.target)}connectedCallback(){super.connectedCallback(),Y(this,this.hass)}_emit(e){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_onHaFormChange(e){e.stopPropagation(),this._emit(e.detail.value.entity_ids??[])}_renderHaForm(){let r=[{name:"entity_ids",selector:{entity:{multiple:!0,include_entities:this._filteredEntities()}}}],i=this.label;return l`
       <ha-form
@@ -1655,15 +1671,8 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
                   @duplicate-rule=${d=>this._duplicateRule(e,d)}
                   @delete-rule=${d=>this._deleteRule(e,d)}
                   @reorder-rules=${d=>this._reorderRules(e,d)}
+                  @toggle-autosort=${d=>this._toggleAutoSort(e,!d.detail.manual)}
                 ></ambience-rules-list>
-                <label class="autosort">
-                  <input
-                    type="checkbox"
-                    .checked=${!i.auto_sort}
-                    @change=${d=>this._toggleAutoSort(e,!d.target.checked)}
-                  />
-                  ${c(this.hass,"ui.order_rules_manually","Order rules manually")}
-                </label>
               </div>
             `:""}
       </li>
@@ -1720,13 +1729,6 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
     .scope-body {
       padding: 0.5rem 1rem 1rem 1rem;
       border-top: 1px solid var(--divider-color, #e0e0e0);
-    }
-    .autosort {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin: 0.5rem 0 1rem 0;
-      font-size: 0.9em;
     }
   `,u([m({attribute:!1})],L.prototype,"hass",2),u([g()],L.prototype,"_areas",2),u([g()],L.prototype,"_floors",2),u([g()],L.prototype,"_areaConfigs",2),u([g()],L.prototype,"_floorConfigs",2),u([g()],L.prototype,"_house",2),u([g()],L.prototype,"_matchers",2),u([g()],L.prototype,"_actions",2),u([g()],L.prototype,"_schemas",2),u([g()],L.prototype,"_periods",2),u([g()],L.prototype,"_dayConfig",2),u([g()],L.prototype,"_weatherConfig",2),u([g()],L.prototype,"_expanded",2),u([g()],L.prototype,"_error",2),u([g()],L.prototype,"_editing",2),L=u([x("ambience-scopes-view")],L);function ro(t){return t.kind==="house"?"house":`${t.kind}-${t.id}`}var ie=class extends y{constructor(){super(...arguments);this._defaults={name:"Ambience",auto_on_delay_seconds:7200};this._rows=[];this._error=""}async connectedCallback(){super.connectedCallback();try{let[e,r,i,s]=await Promise.all([Nr(this.hass),lt(this.hass),ct(this.hass),ht(this.hass)]);this._defaults=e;let a={kind:"house",id:null,name:c(this.hass,"ui.settings_ambience_house_row","Global"),scopePrefix:"Global",override:this._toOverride(s.switch),expanded:!1},o=i.slice().sort((w,S)=>w.name.localeCompare(S.name)),d=await Promise.all(o.map(w=>ut(this.hass,w.floor_id))),h=c(this.hass,"ui.settings_ambience_floor_prefix","Floor: "),f=o.map((w,S)=>({kind:"floor",id:w.floor_id,name:`${h}${w.name}`,scopePrefix:w.name,override:this._toOverride(d[S].switch),expanded:!1})),p=r.slice().sort((w,S)=>w.name.localeCompare(S.name)),_=await Promise.all(p.map(w=>dt(this.hass,w.area_id))),v=c(this.hass,"ui.settings_ambience_area_prefix","Area: "),k=p.map((w,S)=>({kind:"area",id:w.area_id,name:`${v}${w.name}`,scopePrefix:w.name,override:this._toOverride(_[S].switch),expanded:!1}));this._rows=[a,...f,...k]}catch(e){this._error=e.message||String(e)}}_toOverride(e){return{name:e?.name??null,auto_on_delay_seconds:e?.auto_on_delay_seconds??null}}async _safeSave(e){try{await e(),this._error=""}catch(r){this._error=r.message||String(r)}}_onDefaultName(e){let r=e.target.value.trim();r&&(this._defaults={...this._defaults,name:r},this._safeSave(()=>Ut(this.hass,this._defaults.name,this._defaults.auto_on_delay_seconds)))}_onDefaultDelay(e){let r=e.target.value;r===""||!Number.isFinite(Number(r))||Number(r)<0||(this._defaults={...this._defaults,auto_on_delay_seconds:Math.floor(Number(r))},this._safeSave(()=>Ut(this.hass,this._defaults.name,this._defaults.auto_on_delay_seconds)))}_toggle(e){this._rows=this._rows.map((r,i)=>i===e?{...r,expanded:!r.expanded}:r)}_saveRow(e){let{name:r,auto_on_delay_seconds:i}=e.override;this._safeSave(()=>e.kind==="house"?Ir(this.hass,r,i):e.kind==="floor"?Rr(this.hass,e.id,r,i):Mr(this.hass,e.id,r,i))}_onOverrideName(e,r){let i=r.target.value.trim(),s=i===""?null:i;this._rows=this._rows.map((a,o)=>o===e?{...a,override:{...a.override,name:s}}:a),this._saveRow(this._rows[e])}_onOverrideDelay(e,r){let i=r.target.value;if(i!==""&&(!Number.isFinite(Number(i))||Number(i)<0))return;let s=i===""?null:Math.floor(Number(i));this._rows=this._rows.map((a,o)=>o===e?{...a,override:{...a.override,auto_on_delay_seconds:s}}:a),this._saveRow(this._rows[e])}_reset(e){this._rows=this._rows.map((r,i)=>i===e?{...r,override:{name:null,auto_on_delay_seconds:null}}:r),this._saveRow(this._rows[e])}_defaultDisplayName(e){return`${e.scopePrefix} ${this._defaults.name}`}render(){return l`
       ${this._error?l`<p style="color: var(--error-color, #d32f2f)">${this._error}</p>`:""}

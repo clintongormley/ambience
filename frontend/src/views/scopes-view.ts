@@ -120,13 +120,6 @@ export class AmbienceScopesView extends LitElement {
       padding: 0.5rem 1rem 1rem 1rem;
       border-top: 1px solid var(--divider-color, #e0e0e0);
     }
-    .autosort {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin: 0.5rem 0 1rem 0;
-      font-size: 0.9em;
-    }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
@@ -611,23 +604,9 @@ export class AmbienceScopesView extends LitElement {
                   @reorder-rules=${(
                     e: CustomEvent<{ from: number; to: number }>,
                   ) => this._reorderRules(scope, e)}
+                  @toggle-autosort=${(e: CustomEvent<{ manual: boolean }>) =>
+                    this._toggleAutoSort(scope, !e.detail.manual)}
                 ></ambience-rules-list>
-                <label class="autosort">
-                  <input
-                    type="checkbox"
-                    .checked=${!cfg.auto_sort}
-                    @change=${(e: Event) =>
-                      this._toggleAutoSort(
-                        scope,
-                        !(e.target as HTMLInputElement).checked,
-                      )}
-                  />
-                  ${localize(
-                    this.hass,
-                    "ui.order_rules_manually",
-                    "Order rules manually",
-                  )}
-                </label>
               </div>
             `
           : ""}

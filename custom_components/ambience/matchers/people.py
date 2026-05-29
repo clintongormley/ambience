@@ -163,6 +163,9 @@ class PeopleMatcher:
                     raise ValueError(f"`for.{k}` must be a non-negative int")
 
     # --- sorting (containment lattice) ----------------------------------
+    # No `order_key`: there is no meaningful total order among people
+    # predicates for the linearisation tiebreaker, so that slot falls back to
+    # "sorts last". `contains` is this matcher's only sorting contribution.
 
     def contains(self, outer: Any, inner: Any) -> bool:
         """True iff every world-state matching `inner` also matches `outer`
@@ -186,6 +189,7 @@ class PeopleMatcher:
             return self._subset(so, si)
         if qo == "any" and qi == "everyone":
             return self._intersects(si, so)
+        # All other quant pairs: no provable containment (stay conservative).
         return False
 
     @staticmethod

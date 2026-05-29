@@ -10,6 +10,8 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..triggers import TriggerSpec
+
 _ANCHOR_ATTR = {
     "sunrise": "next_rising",
     "sunset": "next_setting",
@@ -191,6 +193,53 @@ class TimeOfDayMatcher:
         items = predicate if isinstance(predicate, list) else [predicate]
         snapshot = _synthetic_snapshot()
         return min(_minute_of_day(self._resolve_range(item, snapshot)[0]) for item in items)
+
+    # --- trigger dependencies -------------------------------------------
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        clock_times: set[tuple[int, int]] = set()
+        sun_events: set[tuple[str, int]] = set()
+        items = predicate if isinstance(predicate, list) else [predicate]
+        for item in items:
+            for endpoint in self._dep_endpoints(item):
+                self._classify_endpoint(endpoint, clock_times, sun_events)
+        return TriggerSpec(
+            clock_times=frozenset(clock_times),
+            sun_events=frozenset(sun_events),
+        )
+
+    def _dep_endpoints(self, item: Any) -> list[Any]:
+        """Return the [from, to] endpoint dicts for a predicate item, resolving
+        named periods via the lookup. Malformed items yield no endpoints."""
+        if not isinstance(item, dict):
+            return []
+        if "period" in item:
+            defn = self._period_lookup().get(item["period"])
+            if not isinstance(defn, dict):
+                return []
+            return [defn.get("from"), defn.get("to")]
+        if "from" in item and "to" in item:
+            return [item["from"], item["to"]]
+        return []
+
+    @staticmethod
+    def _classify_endpoint(
+        endpoint: Any,
+        clock_times: set[tuple[int, int]],
+        sun_events: set[tuple[str, int]],
+    ) -> None:
+        if not isinstance(endpoint, dict):
+            return
+        kind = endpoint.get("kind")
+        if kind == "time":
+            hh, mm = endpoint.get("hh"), endpoint.get("mm")
+            if isinstance(hh, int) and isinstance(mm, int):
+                clock_times.add((hh, mm))
+        elif kind == "sun":
+            anchor = endpoint.get("anchor")
+            offset = endpoint.get("offset_min", 0)
+            if anchor in _ANCHOR_ATTR and isinstance(offset, int):
+                sun_events.add((anchor, offset))
 
 
 def _in_range(now: datetime, start: datetime, end: datetime) -> bool:

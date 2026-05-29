@@ -368,6 +368,52 @@ def test_priority() -> None:
     assert _matcher().priority == 200
 
 
+def test_trigger_deps_absolute_range_yields_clock_times() -> None:
+    m = TimeOfDayMatcher()
+    pred = {
+        "from": {"kind": "time", "hh": 22, "mm": 30},
+        "to": {"kind": "time", "hh": 6, "mm": 0},
+    }
+    spec = m.trigger_deps(pred)
+    assert spec.clock_times == frozenset({(22, 30), (6, 0)})
+    assert spec.sun_events == frozenset()
+    assert spec.date_rollover is False
+
+
+def test_trigger_deps_sun_range_yields_sun_events() -> None:
+    m = TimeOfDayMatcher()
+    pred = {
+        "from": {"kind": "sun", "anchor": "sunrise", "offset_min": -30},
+        "to": {"kind": "sun", "anchor": "sunset", "offset_min": 0},
+    }
+    spec = m.trigger_deps(pred)
+    assert spec.sun_events == frozenset({("sunrise", -30), ("sunset", 0)})
+    assert spec.clock_times == frozenset()
+
+
+def test_trigger_deps_named_period_resolves_via_lookup() -> None:
+    periods = {
+        "evening": {
+            "from": {"kind": "sun", "anchor": "sunset", "offset_min": 0},
+            "to": {"kind": "time", "hh": 23, "mm": 0},
+        }
+    }
+    m = TimeOfDayMatcher(period_lookup=lambda: periods)
+    spec = m.trigger_deps({"period": "evening"})
+    assert spec.sun_events == frozenset({("sunset", 0)})
+    assert spec.clock_times == frozenset({(23, 0)})
+
+
+def test_trigger_deps_list_merges_all_items() -> None:
+    m = TimeOfDayMatcher()
+    pred = [
+        {"from": {"kind": "time", "hh": 7, "mm": 0}, "to": {"kind": "time", "hh": 9, "mm": 0}},
+        {"from": {"kind": "time", "hh": 18, "mm": 0}, "to": {"kind": "time", "hh": 20, "mm": 0}},
+    ]
+    spec = m.trigger_deps(pred)
+    assert spec.clock_times == frozenset({(7, 0), (9, 0), (18, 0), (20, 0)})
+
+
 def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:
     """An absolute time {kind: time, hh: 16, mm: 0} is interpreted as 16:00
     in HA's local timezone, not UTC. With HA's default test tz (UTC), this

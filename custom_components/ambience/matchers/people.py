@@ -166,6 +166,55 @@ class PeopleMatcher:
                 if not isinstance(v, int) or isinstance(v, bool) or v < 0:
                     raise ValueError(f"`for.{k}` must be a non-negative int")
 
+    # --- sorting (containment lattice) ----------------------------------
+
+    def contains(self, outer: Any, inner: Any) -> bool:
+        """True iff every world-state matching `inner` also matches `outer`
+        (inner's match-set ⊆ outer's). Conservative: unprovable -> False."""
+        if not isinstance(outer, dict) or not isinstance(inner, dict):
+            return False
+        if (outer.get("where") or _HOME) != (inner.get("where") or _HOME):
+            return False
+        # inner must hold at least as long as outer (longer for = more specific).
+        if self._dur_seconds(inner.get("for")) < self._dur_seconds(outer.get("for")):
+            return False
+        qo = outer.get("quant") or "any"
+        qi = inner.get("quant") or "any"
+        so = self._who_set(outer.get("who"))
+        si = self._who_set(inner.get("who"))
+        if qo == "any" and qi == "any":
+            return self._subset(si, so)
+        if qo == "everyone" and qi == "everyone":
+            return self._subset(so, si)
+        if qo == "nobody" and qi == "nobody":
+            return self._subset(so, si)
+        if qo == "any" and qi == "everyone":
+            return self._intersects(si, so)
+        return False
+
+    @staticmethod
+    def _who_set(who: Any) -> frozenset[str] | None:
+        """A person set, or None meaning ALL (superset of every explicit set)."""
+        if not who:
+            return None
+        return frozenset(who)
+
+    @staticmethod
+    def _subset(a: frozenset[str] | None, b: frozenset[str] | None) -> bool:
+        """a ⊆ b, where None = ALL (the universe)."""
+        if b is None:
+            return True  # everything ⊆ ALL
+        if a is None:
+            return False  # ALL ⊆ explicit (b not None) -> only if a were ALL
+        return a <= b
+
+    @staticmethod
+    def _intersects(a: frozenset[str] | None, b: frozenset[str] | None) -> bool:
+        """Non-empty intersection; None = ALL (intersects any non-empty set)."""
+        if a is None or b is None:
+            return True
+        return bool(a & b)
+
     @staticmethod
     def _dur_seconds(dur: Any) -> float:
         if not isinstance(dur, dict):

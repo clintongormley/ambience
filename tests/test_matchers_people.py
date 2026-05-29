@@ -237,3 +237,85 @@ def test_describe_none_home() -> None:
 
 def test_describe_empty() -> None:
     assert PeopleMatcher().describe(_snap()) == "no people tracked"
+
+
+# contains(outer, inner) -> True iff every state matching inner also matches outer
+# (inner's match-set is a subset of outer's).
+
+
+def test_contains_everyone_subset_of_any_same_set() -> None:
+    m = PeopleMatcher()
+    inner = {"quant": "everyone", "where": "home"}
+    outer = {"quant": "any", "where": "home"}
+    assert m.contains(outer, inner) is True
+    assert m.contains(inner, outer) is False
+
+
+def test_contains_any_smaller_set_subset_of_bigger() -> None:
+    m = PeopleMatcher()
+    inner = {"who": ["person.a"], "quant": "any", "where": "home"}
+    outer = {"who": ["person.a", "person.b"], "quant": "any", "where": "home"}
+    assert m.contains(outer, inner) is True
+    assert m.contains(inner, outer) is False
+
+
+def test_contains_everyone_bigger_set_subset_of_smaller() -> None:
+    m = PeopleMatcher()
+    inner = {"who": ["person.a", "person.b"], "quant": "everyone", "where": "home"}
+    outer = {"who": ["person.a"], "quant": "everyone", "where": "home"}
+    assert m.contains(outer, inner) is True
+
+
+def test_contains_nobody_bigger_set_subset_of_smaller() -> None:
+    m = PeopleMatcher()
+    inner = {"who": ["person.a", "person.b"], "quant": "nobody", "where": "home"}
+    outer = {"who": ["person.a"], "quant": "nobody", "where": "home"}
+    assert m.contains(outer, inner) is True
+
+
+def test_contains_nobody_disjoint_from_any() -> None:
+    m = PeopleMatcher()
+    a = {"quant": "nobody", "where": "home"}
+    b = {"quant": "any", "where": "home"}
+    assert m.contains(a, b) is False
+    assert m.contains(b, a) is False
+
+
+def test_contains_different_where_is_false() -> None:
+    m = PeopleMatcher()
+    inner = {"quant": "everyone", "where": "home"}
+    outer = {"quant": "any", "where": "away"}
+    assert m.contains(outer, inner) is False
+
+
+def test_contains_longer_for_is_subset() -> None:
+    m = PeopleMatcher()
+    inner = {"quant": "any", "where": "home", "for": {"h": 0, "m": 10, "s": 0}}
+    outer = {"quant": "any", "where": "home", "for": {"h": 0, "m": 5, "s": 0}}
+    assert m.contains(outer, inner) is True  # held 10m ⊆ held 5m
+    assert m.contains(inner, outer) is False
+
+
+def test_contains_empty_who_is_all_superset() -> None:
+    m = PeopleMatcher()
+    # any over explicit ⊆ any over ALL
+    assert m.contains({"quant": "any", "where": "home"},
+                      {"who": ["person.a"], "quant": "any", "where": "home"}) is True
+    # everyone over ALL ⊆ everyone over explicit
+    assert m.contains({"who": ["person.a"], "quant": "everyone", "where": "home"},
+                      {"quant": "everyone", "where": "home"}) is True
+
+
+def test_contains_everyone_inner_any_outer_requires_intersection() -> None:
+    m = PeopleMatcher()
+    inner = {"who": ["person.a"], "quant": "everyone", "where": "home"}
+    outer = {"who": ["person.a", "person.c"], "quant": "any", "where": "home"}
+    assert m.contains(outer, inner) is True  # a ∈ both
+    disjoint_outer = {"who": ["person.c"], "quant": "any", "where": "home"}
+    assert m.contains(disjoint_outer, inner) is False
+
+
+def test_contains_non_dict_is_false() -> None:
+    m = PeopleMatcher()
+    assert m.contains(None, {"quant": "any"}) is False
+    assert m.contains({"quant": "any"}, 5) is False

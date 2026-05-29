@@ -83,12 +83,13 @@ describe("ambience-actions-settings", () => {
   test("clicking anywhere on the card header (not remove) toggles expand", async () => {
     el = await mount();
     // Click on the service id <strong> inside the header.
-    const strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
+    let strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
     expect(strong).not.toBeNull();
     strong.click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeTruthy();
-    // Click again to collapse.
+    // Re-query — the expanded branch renders a different <strong>.
+    strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
     strong.click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeNull();
@@ -107,14 +108,34 @@ describe("ambience-actions-settings", () => {
     expect(labelDisplay.textContent).toContain("Morning lights");
   });
 
-  test("collapsed card with no label shows empty label display", async () => {
+  test("collapsed card with no label shows only the service id", async () => {
+    el = await mount();
+    // No label set: no .header-label-display is rendered; the service id
+    // shows in <strong> alone.
+    const labelDisplay = el.shadowRoot.querySelector(
+      "[data-card] .header-label-display",
+    );
+    expect(labelDisplay).toBeNull();
+    const strong = el.shadowRoot.querySelector(
+      "[data-card] .card-header strong",
+    ) as HTMLElement;
+    expect(strong).not.toBeNull();
+    expect(strong.textContent).toContain("light.turn_on");
+  });
+
+  test("collapsed card with label shows 'label (service.id)' format", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "light.turn_on", label: "Morning lights", visible_fields: [], defaults: {} },
+    ]);
     el = await mount();
     const labelDisplay = el.shadowRoot.querySelector(
       "[data-card] .header-label-display",
     ) as HTMLElement;
-    expect(labelDisplay).not.toBeNull();
-    // No label set, so display is empty (or whitespace).
-    expect(labelDisplay.textContent?.trim()).toBe("");
+    expect(labelDisplay?.textContent).toBe("Morning lights");
+    const serviceId = el.shadowRoot.querySelector(
+      "[data-card] .header-service-id",
+    ) as HTMLElement;
+    expect(serviceId?.textContent).toBe("(light.turn_on)");
   });
 
   test("expanded card shows ha-input for label editing", async () => {

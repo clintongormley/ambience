@@ -2159,16 +2159,21 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
           @click=${s=>{s.target.closest("ha-input, input, button.remove")||this._toggleExpand(e.id)}}
         >
           <span class="toggle-arrow">${i?"\u25BE":"\u25B8"}</span>
-          <strong>${e.id}</strong>
-          ${i?l`<ha-input
-                class="header-label-input"
-                data-label-input
-                placeholder=${c(this.hass,"ui.action_label_placeholder","Label (optional)")}
-                .value=${e.label}
-                @input=${s=>{s.stopPropagation(),this._setLabel(e.id,s.target.value)}}
-                @blur=${()=>void this._autoSave()}
-                @click=${s=>s.stopPropagation()}
-              ></ha-input>`:l`<span class="header-label-display">${e.label}</span>`}
+          ${i?l`
+                <strong>${e.id}</strong>
+                <ha-input
+                  class="header-label-input"
+                  data-label-input
+                  placeholder=${c(this.hass,"ui.action_label_placeholder","Label (optional)")}
+                  .value=${e.label}
+                  @input=${s=>{s.stopPropagation(),this._setLabel(e.id,s.target.value)}}
+                  @blur=${()=>void this._autoSave()}
+                  @click=${s=>s.stopPropagation()}
+                ></ha-input>
+              `:e.label?l`
+                  <span class="header-label-display">${e.label}</span>
+                  <span class="header-service-id">(${e.id})</span>
+                `:l`<strong>${e.id}</strong>`}
           <button
             class="remove"
             data-remove
@@ -2301,10 +2306,19 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
       font-family: var(--code-font-family, monospace);
       font-size: 0.9rem;
     }
-    /* Collapsed label display (plain text) */
+    /* Collapsed: label (primary) + "(service.id)" (secondary, monospace) */
     .header-label-display {
+      flex: 0 0 auto;
+      font-weight: 600;
+      color: var(--primary-text-color, inherit);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .header-service-id {
       flex: 1;
-      font-size: 0.9rem;
+      font-family: var(--code-font-family, monospace);
+      font-size: 0.85rem;
       color: var(--secondary-text-color, #888);
       overflow: hidden;
       text-overflow: ellipsis;

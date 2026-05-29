@@ -54,10 +54,19 @@ export class AmbienceActionsSettings extends LitElement {
       font-family: var(--code-font-family, monospace);
       font-size: 0.9rem;
     }
-    /* Collapsed label display (plain text) */
+    /* Collapsed: label (primary) + "(service.id)" (secondary, monospace) */
     .header-label-display {
+      flex: 0 0 auto;
+      font-weight: 600;
+      color: var(--primary-text-color, inherit);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .header-service-id {
       flex: 1;
-      font-size: 0.9rem;
+      font-family: var(--code-font-family, monospace);
+      font-size: 0.85rem;
       color: var(--secondary-text-color, #888);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -499,21 +508,28 @@ export class AmbienceActionsSettings extends LitElement {
           }}
         >
           <span class="toggle-arrow">${isExpanded ? "▾" : "▸"}</span>
-          <strong>${action.id}</strong>
           ${isExpanded
-            ? html`<ha-input
-                class="header-label-input"
-                data-label-input
-                placeholder=${localize(this.hass, "ui.action_label_placeholder", "Label (optional)")}
-                .value=${action.label}
-                @input=${(e: Event) => {
-                  e.stopPropagation();
-                  this._setLabel(action.id, (e.target as HTMLInputElement).value);
-                }}
-                @blur=${() => void this._autoSave()}
-                @click=${(e: Event) => e.stopPropagation()}
-              ></ha-input>`
-            : html`<span class="header-label-display">${action.label}</span>`}
+            ? html`
+                <strong>${action.id}</strong>
+                <ha-input
+                  class="header-label-input"
+                  data-label-input
+                  placeholder=${localize(this.hass, "ui.action_label_placeholder", "Label (optional)")}
+                  .value=${action.label}
+                  @input=${(e: Event) => {
+                    e.stopPropagation();
+                    this._setLabel(action.id, (e.target as HTMLInputElement).value);
+                  }}
+                  @blur=${() => void this._autoSave()}
+                  @click=${(e: Event) => e.stopPropagation()}
+                ></ha-input>
+              `
+            : action.label
+              ? html`
+                  <span class="header-label-display">${action.label}</span>
+                  <span class="header-service-id">(${action.id})</span>
+                `
+              : html`<strong>${action.id}</strong>`}
           <button
             class="remove"
             data-remove

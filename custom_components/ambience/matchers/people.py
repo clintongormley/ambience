@@ -70,8 +70,56 @@ class PeopleMatcher:
             now=dt_util.utcnow(), persons=persons, names=names, zone_labels=zone_labels
         )
 
-    def matches(self, predicate: Any, snapshot: PeopleSnapshot) -> bool:  # noqa: ARG002
-        return True
+    def matches(self, predicate: Any, snapshot: PeopleSnapshot) -> bool:
+        if predicate is None:
+            return True
+        if not isinstance(predicate, dict):
+            return False
+        who = predicate.get("who") or []
+        quant = predicate.get("quant") or "any"
+        where = predicate.get("where") or _HOME
+        seconds = self._dur_seconds(predicate.get("for"))
+
+        person_ids = list(who) if who else list(snapshot.persons)
+
+        def holds(pid: str, want_at: bool) -> bool:
+            cur = snapshot.persons.get(pid)
+            if cur is None:
+                return False  # named but absent -> unobservable
+            state, changed = cur
+            at = self._at_where(state, where, snapshot)
+            if at is None:  # unobservable (unavailable / unknown zone)
+                return False
+            if at is not want_at:
+                return False
+            if seconds > 0 and (snapshot.now - changed).total_seconds() < seconds:
+                return False
+            return True
+
+        if quant == "everyone":
+            return bool(person_ids) and all(holds(p, True) for p in person_ids)
+        if quant == "nobody":
+            return all(holds(p, False) for p in person_ids)
+        # "any" (default)
+        return any(holds(p, True) for p in person_ids)
+
+    @staticmethod
+    def _at_where(state: str, where: str, snapshot: PeopleSnapshot) -> bool | None:
+        """True/False if observable, None if unobservable.
+
+        `where`: 'home' -> state == 'home'; 'away' -> state != 'home';
+        'zone.*' -> state == that zone's label.
+        """
+        if state in _UNAVAILABLE:
+            return None
+        if where == _HOME:
+            return state == _HOME
+        if where == "away":
+            return state != _HOME
+        label = snapshot.zone_labels.get(where)
+        if label is None:
+            return None
+        return state == label
 
     def describe(self, snapshot: PeopleSnapshot) -> str | None:  # noqa: ARG002
         return None

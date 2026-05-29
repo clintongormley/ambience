@@ -2173,7 +2173,7 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
               `:e.label?l`
                   <span class="header-label-display">${e.label}</span>
                   <span class="header-service-id">(${e.id})</span>
-                `:l`<strong>${e.id}</strong>`}
+                `:l`<strong class="standalone">${e.id}</strong>`}
           <button
             class="remove"
             data-remove
@@ -2305,6 +2305,14 @@ var Mi=Object.defineProperty;var ji=Object.getOwnPropertyDescriptor;var u=(t,n,e
       flex: 0 0 auto;
       font-family: var(--code-font-family, monospace);
       font-size: 0.9rem;
+    }
+    /* Standalone service id (no label set): fill the row so the ✕ button
+       gets pushed to the far right, matching the labelled-card layout. */
+    .card-header strong.standalone {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     /* Collapsed: label (primary) + "(service.id)" (secondary, monospace) */
     .header-label-display {

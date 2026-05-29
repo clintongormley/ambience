@@ -275,7 +275,11 @@ class DayMatcher:
     def trigger_deps(self, predicate: Any) -> TriggerSpec:
         entities: set[str] = set()
         if isinstance(predicate, dict):
-            items = (predicate.get("include") or []) + (predicate.get("exclude") or [])
+            include = predicate.get("include")
+            exclude = predicate.get("exclude")
+            items = (include if isinstance(include, list) else []) + (
+                exclude if isinstance(exclude, list) else []
+            )
             kinds = {it.get("kind") for it in items if isinstance(it, dict)}
             if kinds & {"workday", "holiday"}:
                 sensor = self._day_config().get("workday_sensor")

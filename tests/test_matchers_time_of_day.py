@@ -444,6 +444,17 @@ def test_trigger_deps_skips_out_of_range_and_unknown_anchor() -> None:
     assert spec.sun_events == frozenset()
 
 
+def test_trigger_deps_rejects_bool_time_and_offset() -> None:
+    m = TimeOfDayMatcher()
+    pred = {
+        "from": {"kind": "time", "hh": True, "mm": False},
+        "to": {"kind": "sun", "anchor": "sunset", "offset_min": True},
+    }
+    spec = m.trigger_deps(pred)
+    assert spec.clock_times == frozenset()
+    assert spec.sun_events == frozenset()
+
+
 def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:
     """An absolute time {kind: time, hh: 16, mm: 0} is interpreted as 16:00
     in HA's local timezone, not UTC. With HA's default test tz (UTC), this

@@ -420,3 +420,18 @@ def test_trigger_deps_watches_workday_sensor_in_exclude() -> None:
     m = _matcher_with_workday_sensor("binary_sensor.workday")
     spec = m.trigger_deps({"exclude": [{"kind": "holiday"}]})
     assert spec.entities == frozenset({"binary_sensor.workday"})
+
+
+def test_trigger_deps_tolerates_garbage_input() -> None:
+    m = _matcher_with_workday_sensor("binary_sensor.workday")
+    for bad in [
+        None,
+        "string",
+        42,
+        {"include": "workday"},
+        {"include": {"kind": "workday"}},
+        {"include": [None, "x"]},
+    ]:
+        spec = m.trigger_deps(bad)
+        assert spec.date_rollover is True
+        assert spec.entities == frozenset()

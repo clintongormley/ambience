@@ -19,16 +19,13 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
             >
               ${this.autoSort?"":l`<span class="handle" title=${c(this.hass,"ui.drag_to_reorder","Drag to reorder")}>⠿</span>`}
               <span class="idx">${r+1}</span>
-              <div class="body">
-                <div
-                  class="name"
-                  @click=${()=>this._emit("edit-rule",{index:r})}
-                >
+              <div class="body" @click=${()=>this._toggleRule(r)}>
+                <div class="name">
                   ${_t(e,c(this.hass,"ui.rule_n","Rule {n}").replace("{n}",String(r+1)))}
                 </div>
-                <div class="summary" @click=${()=>this._toggleRule(r)}>
+                <div class="summary">
                   <span class="chevron">${this._expanded.has(r)?"\u25BE":"\u25B8"}</span>
-                  ${this._expanded.has(r)?l`<span class="action-count">${this._actionCountLabel(e)}</span>`:l`${this._whenSummary(e)} · <span class="action-count">${this._actionCountLabel(e)}</span>`}
+                  ${this._expanded.has(r)?"":l`${this._whenSummary(e)} · <span class="action-count">${this._actionCountLabel(e)}</span>`}
                 </div>
                 ${this._expanded.has(r)?l`
                       <div class="rule-detail">
@@ -47,13 +44,19 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
                     `:""}
               </div>
               <button
-                @click=${()=>this._emit("duplicate-rule",{index:r})}
+                @click=${i=>{i.stopPropagation(),this._emit("edit-rule",{index:r})}}
+                title=${c(this.hass,"ui.edit","Edit")}
+              >
+                ✎
+              </button>
+              <button
+                @click=${i=>{i.stopPropagation(),this._emit("duplicate-rule",{index:r})}}
                 title=${c(this.hass,"ui.duplicate","Duplicate")}
               >
                 ⧉
               </button>
               <button
-                @click=${()=>this._confirmDelete(r,e)}
+                @click=${i=>{i.stopPropagation(),this._confirmDelete(r,e)}}
                 title=${c(this.hass,"ui.title_delete","Delete")}
               >
                 🗑
@@ -105,17 +108,14 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
     }
     .body {
       flex: 1;
-    }
-    .name {
       cursor: pointer;
     }
-    .name:hover {
-      text-decoration: underline;
+    .name {
+      font-weight: 600;
     }
     .summary {
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
-      cursor: pointer;
     }
     .summary .chevron {
       display: inline-block;
@@ -131,6 +131,10 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
     }
     .matcher-line {
       padding: 0.05rem 0;
+      /* Wrap continuation lines indented to align under the matcher body
+         (after the bold "Matcher:" label). */
+      padding-left: 1.25rem;
+      text-indent: -1.25rem;
     }
     .actions-detail {
       margin-top: 0.35rem;

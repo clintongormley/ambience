@@ -113,12 +113,37 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.textContent).toContain("Movie rule");
   });
 
-  test("emits edit-rule with index when rule name clicked", async () => {
+  test("emits edit-rule with index when the edit button clicked", async () => {
     el = await mount([movieRule, eveningRule]);
     const get = captureEvent(el, "edit-rule");
-    const names = el.shadowRoot.querySelectorAll(".name");
-    (names[1] as HTMLElement).click();
+    const btns = el.shadowRoot.querySelectorAll("button[title='Edit']");
+    (btns[1] as HTMLButtonElement).click();
     expect(get()).toEqual({ index: 1 });
+  });
+
+  test("clicking the rule name toggles expansion (does NOT emit edit-rule)", async () => {
+    el = await mount([movieRule]);
+    const get = captureEvent(el, "edit-rule");
+    expect(el.shadowRoot.querySelector(".rule-detail")).toBeFalsy();
+    (el.shadowRoot.querySelector(".name") as HTMLElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".rule-detail")).toBeTruthy();
+    expect(get()).toBeUndefined();
+  });
+
+  test("expanded rule does not show the action count", async () => {
+    el = await mount([movieRule]);
+    (el.shadowRoot.querySelector(".name") as HTMLElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".action-count")).toBeNull();
+  });
+
+  test("clicking the edit button does NOT toggle expansion", async () => {
+    el = await mount([movieRule]);
+    const btn = el.shadowRoot.querySelector("button[title='Edit']") as HTMLButtonElement;
+    btn.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".rule-detail")).toBeFalsy();
   });
 
   test("emits duplicate-rule with index when duplicate button clicked", async () => {

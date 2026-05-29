@@ -54,17 +54,14 @@ export class AmbienceRulesList extends LitElement {
     }
     .body {
       flex: 1;
-    }
-    .name {
       cursor: pointer;
     }
-    .name:hover {
-      text-decoration: underline;
+    .name {
+      font-weight: 600;
     }
     .summary {
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
-      cursor: pointer;
     }
     .summary .chevron {
       display: inline-block;
@@ -80,6 +77,10 @@ export class AmbienceRulesList extends LitElement {
     }
     .matcher-line {
       padding: 0.05rem 0;
+      /* Wrap continuation lines indented to align under the matcher body
+         (after the bold "Matcher:" label). */
+      padding-left: 1.25rem;
+      text-indent: -1.25rem;
     }
     .actions-detail {
       margin-top: 0.35rem;
@@ -295,17 +296,14 @@ export class AmbienceRulesList extends LitElement {
                 ? html`<span class="handle" title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}>⠿</span>`
                 : ""}
               <span class="idx">${i + 1}</span>
-              <div class="body">
-                <div
-                  class="name"
-                  @click=${() => this._emit("edit-rule", { index: i })}
-                >
+              <div class="body" @click=${() => this._toggleRule(i)}>
+                <div class="name">
                   ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1)))}
                 </div>
-                <div class="summary" @click=${() => this._toggleRule(i)}>
+                <div class="summary">
                   <span class="chevron">${this._expanded.has(i) ? "▾" : "▸"}</span>
                   ${this._expanded.has(i)
-                    ? html`<span class="action-count">${this._actionCountLabel(rule)}</span>`
+                    ? ""
                     : html`${this._whenSummary(rule)} · <span class="action-count">${this._actionCountLabel(rule)}</span>`}
                 </div>
                 ${this._expanded.has(i)
@@ -336,13 +334,28 @@ export class AmbienceRulesList extends LitElement {
                   : ""}
               </div>
               <button
-                @click=${() => this._emit("duplicate-rule", { index: i })}
+                @click=${(e: Event) => {
+                  e.stopPropagation();
+                  this._emit("edit-rule", { index: i });
+                }}
+                title=${localize(this.hass, "ui.edit", "Edit")}
+              >
+                ✎
+              </button>
+              <button
+                @click=${(e: Event) => {
+                  e.stopPropagation();
+                  this._emit("duplicate-rule", { index: i });
+                }}
                 title=${localize(this.hass, "ui.duplicate", "Duplicate")}
               >
                 ⧉
               </button>
               <button
-                @click=${() => this._confirmDelete(i, rule)}
+                @click=${(e: Event) => {
+                  e.stopPropagation();
+                  this._confirmDelete(i, rule);
+                }}
                 title=${localize(this.hass, "ui.title_delete", "Delete")}
               >
                 🗑

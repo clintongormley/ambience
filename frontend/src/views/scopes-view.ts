@@ -592,22 +592,6 @@ export class AmbienceScopesView extends LitElement {
         ${open
           ? html`
               <div class="scope-body">
-                <label class="autosort">
-                  <input
-                    type="checkbox"
-                    .checked=${!cfg.auto_sort}
-                    @change=${(e: Event) =>
-                      this._toggleAutoSort(
-                        scope,
-                        !(e.target as HTMLInputElement).checked,
-                      )}
-                  />
-                  ${localize(
-                    this.hass,
-                    "ui.order_rules_manually",
-                    "Order rules manually",
-                  )}
-                </label>
                 <ambience-rules-list
                   .rules=${cfg.rules}
                   .autoSort=${cfg.auto_sort}
@@ -628,6 +612,22 @@ export class AmbienceScopesView extends LitElement {
                     e: CustomEvent<{ from: number; to: number }>,
                   ) => this._reorderRules(scope, e)}
                 ></ambience-rules-list>
+                <label class="autosort">
+                  <input
+                    type="checkbox"
+                    .checked=${!cfg.auto_sort}
+                    @change=${(e: Event) =>
+                      this._toggleAutoSort(
+                        scope,
+                        !(e.target as HTMLInputElement).checked,
+                      )}
+                  />
+                  ${localize(
+                    this.hass,
+                    "ui.order_rules_manually",
+                    "Order rules manually",
+                  )}
+                </label>
               </div>
             `
           : ""}

@@ -1641,14 +1641,6 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
         </div>
         ${a?l`
               <div class="scope-body">
-                <label class="autosort">
-                  <input
-                    type="checkbox"
-                    .checked=${!i.auto_sort}
-                    @change=${d=>this._toggleAutoSort(e,!d.target.checked)}
-                  />
-                  ${c(this.hass,"ui.order_rules_manually","Order rules manually")}
-                </label>
                 <ambience-rules-list
                   .rules=${i.rules}
                   .autoSort=${i.auto_sort}
@@ -1664,6 +1656,14 @@ var Ui=Object.defineProperty;var Wi=Object.getOwnPropertyDescriptor;var u=(t,n,e
                   @delete-rule=${d=>this._deleteRule(e,d)}
                   @reorder-rules=${d=>this._reorderRules(e,d)}
                 ></ambience-rules-list>
+                <label class="autosort">
+                  <input
+                    type="checkbox"
+                    .checked=${!i.auto_sort}
+                    @change=${d=>this._toggleAutoSort(e,!d.target.checked)}
+                  />
+                  ${c(this.hass,"ui.order_rules_manually","Order rules manually")}
+                </label>
               </div>
             `:""}
       </li>

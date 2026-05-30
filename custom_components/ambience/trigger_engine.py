@@ -50,7 +50,7 @@ class AutoTriggerEngine:
         self._index = build_index(self._build_entries())
 
     def _build_entries(self) -> list[tuple[PredKey, TriggerSpec]]:
-        """Yield (PredKey, TriggerSpec) for every non-wildcard predicate with deps."""
+        """Return (PredKey, TriggerSpec) for every non-wildcard predicate with deps."""
         matchers = self._matchers()
         entries: list[tuple[PredKey, TriggerSpec]] = []
         for (scope_kind, scope_id), cfg in self._scope_cfgs.items():

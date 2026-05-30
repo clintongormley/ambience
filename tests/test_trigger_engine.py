@@ -53,9 +53,7 @@ async def test_rebuild_indexes_enabled_scope_predicate(hass) -> None:
     engine = _engine(hass, scopes, matchers)
     engine.async_rebuild()
     idx = engine.index
-    assert idx.by_entity["binary_sensor.motion"] == frozenset(
-        {("area", "kitchen", 0, "state")}
-    )
+    assert idx.by_entity["binary_sensor.motion"] == frozenset({("area", "kitchen", 0, "state")})
 
 
 async def test_rebuild_skips_disabled_scope(hass) -> None:
@@ -153,4 +151,26 @@ async def test_recompute_stale_key_is_ignored(hass) -> None:
     engine = _engine_with_state(hass)
     stale = ("area", "a", 9, "tod")  # rule index out of range
     dirty = engine._recompute({stale}, {"tod": "evening"})
+    assert dirty == set()
+
+
+async def test_recompute_one_flip_among_two_predicates_marks_scope_once(hass) -> None:
+    # Two predicates in one scope; only one flips → scope appears once in dirty.
+    scopes = [
+        ("area", "a", {"rules": [{"when": {"tod": "evening"}}, {"when": {"tod": "night"}}]}),
+    ]
+    matchers = {"tod": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.x"})))}
+    engine = _engine(hass, scopes, matchers)
+    engine.async_rebuild()
+    k0 = ("area", "a", 0, "tod")
+    k1 = ("area", "a", 1, "tod")
+    engine._recompute({k0, k1}, {"tod": "evening"})  # seed: k0 True, k1 False
+    dirty = engine._recompute({k0, k1}, {"tod": "night"})  # k0 True→False, k1 False→True
+    assert dirty == {("area", "a")}
+
+
+async def test_recompute_key_for_removed_scope_is_ignored(hass) -> None:
+    engine = _engine_with_state(hass)
+    gone = ("area", "ghost", 0, "tod")  # scope not in _scope_cfgs
+    dirty = engine._recompute({gone}, {"tod": "evening"})
     assert dirty == set()

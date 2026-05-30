@@ -571,3 +571,14 @@ async def test_initial_sync_does_not_apply_scene_gated_rule(hass) -> None:
     engine.async_rebuild()
     await engine.async_initial_sync()
     assert ("area", "a") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
+async def test_rebuild_prunes_stale_predicate_state(hass) -> None:
+    engine = _engine_with_state(hass)  # area a, rule0 {tod: evening}
+    key = ("area", "a", 0, "tod")
+    engine._recompute({key}, {"tod": "evening"})  # seed flip-state for the key
+    assert key in engine._predicate_state
+    # Rebuild over a store where that scope now has no rules.
+    hass.data[DOMAIN][DATA_STORE] = FakeStore([("area", "a", {"rules": []})])
+    engine.async_rebuild()
+    assert key not in engine._predicate_state  # stale key pruned

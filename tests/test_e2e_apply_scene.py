@@ -11,7 +11,12 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
+from custom_components.ambience.const import (
+    DATA_ENGINE,
+    DATA_EXPOSED_ACTIONS,
+    DATA_STORE,
+    DOMAIN,
+)
 from custom_components.ambience.service import async_resolve_only
 
 
@@ -182,3 +187,66 @@ async def test_apply_scene_rejects_house_false(
 
     with pytest.raises(vol.Invalid):
         await hass.services.async_call(DOMAIN, "apply_scene", {"house": False}, blocking=True)
+
+
+async def test_engine_auto_applies_state_rule_on_config_change(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """Saving an auto-rule that matches current state makes the engine apply it
+    (SIGNAL_CONFIG_CHANGED -> rebuild -> initial_sync), exercising the wiring."""
+    calls = async_mock_service(hass, "light", "turn_on")
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    hass.states.async_set("binary_sensor.motion", "on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "when": {
+                        "state": {
+                            "kind": "is",
+                            "entity_id": "binary_sensor.motion",
+                            "states": ["on"],
+                        }
+                    },
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                }
+            ]
+        },
+    )
+    await hass.async_block_till_done()
+    assert len(calls) >= 1  # the engine auto-applied the matching state rule
+
+
+async def test_engine_torn_down_on_unload(hass: HomeAssistant, installed: MockConfigEntry) -> None:
+    hass.states.async_set("binary_sensor.motion", "on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "when": {
+                        "state": {
+                            "kind": "is",
+                            "entity_id": "binary_sensor.motion",
+                            "states": ["on"],
+                        }
+                    },
+                    "actions": [],
+                }
+            ]
+        },
+    )
+    await hass.async_block_till_done()
+    engine = hass.data[DOMAIN][DATA_ENGINE]
+    assert engine._unsubs  # subscribed to binary_sensor.motion
+    assert await hass.config_entries.async_unload(installed.entry_id)
+    await hass.async_block_till_done()
+    assert engine._unsubs == []  # async_shutdown ran on unload

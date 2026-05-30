@@ -79,6 +79,12 @@ class AutoTriggerEngine:
             if store.auto_triggers_enabled(scope_kind, scope_id)
         }
         self._index = build_index(self._build_entries())
+        # Drop flip-state for predicates that no longer exist (rules removed /
+        # reordered), so it can't grow unbounded across config edits.
+        live = self._index.all_predicates()
+        self._predicate_state = {
+            key: value for key, value in self._predicate_state.items() if key in live
+        }
 
     def _build_entries(self) -> list[tuple[PredKey, TriggerSpec]]:
         """Return (PredKey, TriggerSpec) for every non-wildcard predicate with deps."""

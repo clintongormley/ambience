@@ -23,6 +23,20 @@ type OpenSlot =
   | { kind: "action"; idx: number }
   | null;
 
+/**
+ * True for the people matcher's "X of: nothing selected" invalid shape: a
+ * predicate object carrying a `who` key that is a present-but-empty array.
+ * (An "X of:" mode with zero people ticked.) Used by both validation and save.
+ */
+function _isEmptyWhoPredicate(pred: unknown): boolean {
+  return (
+    pred != null &&
+    typeof pred === "object" &&
+    Array.isArray((pred as { who?: unknown }).who) &&
+    (pred as { who: unknown[] }).who.length === 0
+  );
+}
+
 @customElement("ambience-rule-editor")
 export class AmbienceRuleEditor extends LitElement {
   static override styles = css`
@@ -246,12 +260,7 @@ export class AmbienceRuleEditor extends LitElement {
       // People empty-selection case: an "X of:" mode (who key present) with
       // zero people ticked. Other matchers are valid by construction.
       const pred = this._draft?.when[slot.id];
-      if (
-        pred != null &&
-        typeof pred === "object" &&
-        Array.isArray((pred as { who?: unknown }).who) &&
-        (pred as { who: unknown[] }).who.length === 0
-      ) {
+      if (_isEmptyWhoPredicate(pred)) {
         return localize(this.hass, "ui.people_select_one", "Select at least one person");
       }
       return null;
@@ -674,12 +683,7 @@ export class AmbienceRuleEditor extends LitElement {
     // (a present-but-empty `who` array) and block the save if any is found,
     // re-opening the offending matcher slot with its error shown.
     for (const [id, pred] of Object.entries(this._draft.when)) {
-      if (
-        pred != null &&
-        typeof pred === "object" &&
-        Array.isArray((pred as { who?: unknown }).who) &&
-        (pred as { who: unknown[] }).who.length === 0
-      ) {
+      if (_isEmptyWhoPredicate(pred)) {
         this._showError = true;
         this._open = { kind: "matcher", id };
         return;

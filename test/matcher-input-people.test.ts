@@ -203,27 +203,95 @@ describe("ambience-people-predicate-input", () => {
     expect(err?.textContent ?? "").toContain("Select at least one person");
   });
 
-  test("selecting a person clears the empty-selection error", async () => {
+  test("selecting a person clears the empty-selection error message", async () => {
     el = await mount({ who: [], quant: "any", where: "home" });
     await setMode(el, "any");
-    // Error shown while empty.
-    expect(el.shadowRoot.querySelector(".field-error")).not.toBeNull();
+    // Error message shown while empty (container always present).
+    let err = el.shadowRoot.querySelector(".field-error") as HTMLElement | null;
+    expect(err).not.toBeNull();
+    expect(err?.textContent ?? "").toContain("Select at least one person");
     const cb = el.shadowRoot.querySelector("input[type=checkbox]") as HTMLInputElement;
     cb.checked = true;
     cb.dispatchEvent(new Event("change"));
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".field-error")).toBeNull();
+    // Container still present (reserves space) but the message is gone.
+    err = el.shadowRoot.querySelector(".field-error") as HTMLElement | null;
+    expect(err).not.toBeNull();
+    expect((err?.textContent ?? "").trim()).toBe("");
   });
 
-  test("an 'X of:' mode emits a present-but-empty who array when none ticked", async () => {
+  test("switching into 'Any of:' from a base mode defaults to all persons selected", async () => {
     el = await mount({ quant: "everyone", where: "home" });
     let emitted: PeoplePredicate | null | undefined;
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
     });
     await setMode(el, "any");
+    // Everyone is ticked by default — a valid, fully-selected starting point.
+    expect(emitted?.quant).toBe("any");
+    expect(emitted?.who).toEqual(["person.alice", "person.bob"]);
+    expect("who" in (emitted ?? {})).toBe(true);
+    // The checklist renders fully checked and shows NO error.
+    const boxes = Array.from(
+      el.shadowRoot.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
+    );
+    expect(boxes.every((c) => c.checked)).toBe(true);
+    const err = el.shadowRoot.querySelector(".field-error") as HTMLElement | null;
+    expect((err?.textContent ?? "").trim()).toBe("");
+  });
+
+  test("switching into 'Any of:' from a fresh (null) state defaults to all persons", async () => {
+    el = await mount(null);
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    await setMode(el, "any");
+    expect(emitted?.who).toEqual(["person.alice", "person.bob"]);
+  });
+
+  test("deselecting every person in an 'X of:' mode shows the error and emits empty who", async () => {
+    // Start from a base mode, switch in (defaults to all), then untick all.
+    el = await mount({ quant: "everyone", where: "home" });
+    await setMode(el, "any");
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    let boxes = Array.from(
+      el.shadowRoot.querySelectorAll<HTMLInputElement>("input[type=checkbox]:checked"),
+    );
+    for (const cb of boxes) {
+      cb.checked = false;
+      cb.dispatchEvent(new Event("change"));
+      await el.updateComplete;
+    }
     expect(emitted?.who).toEqual([]);
     expect("who" in (emitted ?? {})).toBe(true);
+    const err = el.shadowRoot.querySelector(".field-error") as HTMLElement | null;
+    expect(err?.textContent ?? "").toContain("Select at least one person");
+  });
+
+  test("the error-line container is always present in an 'X of:' mode (reserves space)", async () => {
+    // Valid (non-empty) selection: container present, text blank.
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
+    let err = el.shadowRoot.querySelector(".field-error") as HTMLElement | null;
+    expect(err).not.toBeNull();
+    expect((err?.textContent ?? "").trim()).toBe("");
+    el.remove();
+    // Empty selection: container present, message shown.
+    el = await mount({ who: [], quant: "any", where: "home" });
+    err = el.shadowRoot.querySelector(".field-error") as HTMLElement | null;
+    expect(err).not.toBeNull();
+    expect(err?.textContent ?? "").toContain("Select at least one person");
+  });
+
+  test("loaded { who:['person.alice'], quant:'any' } round-trips to exactly Alice (not everybody)", async () => {
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
+    const checkedBoxes = Array.from(
+      el.shadowRoot.querySelectorAll<HTMLInputElement>("input[type=checkbox]:checked"),
+    );
+    expect(checkedBoxes).toHaveLength(1);
   });
 
   test("changing location while in an empty 'these people' mode keeps the mode and updates where", async () => {

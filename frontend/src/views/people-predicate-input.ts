@@ -72,6 +72,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     .hint { color: var(--secondary-text-color, #888); font-size: 0.85em; }
     .field-error {
       width: 100%; color: var(--error-color, #d32f2f); font-size: 0.85em; margin-top: 0.2rem;
+      min-height: 1.2em;
     }
     select, input[type="number"], input[type="text"] {
       padding: 0.25rem; border: 1px solid var(--divider-color, #ccc);
@@ -170,8 +171,20 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     const where = cur.where ?? "home";
     const out: PeoplePredicate = { quant: MODE_QUANT[mode], where };
     if (PEOPLE_MODES.has(mode)) {
-      // Prefer the current selection; else repopulate from the last one.
-      out.who = this._hasWhoKey() ? [...this._who()] : [...this._lastSelected];
+      if (this._hasWhoKey()) {
+        // An explicit selection is already present (incl. an explicit empty
+        // who:[] from a loaded value) — keep it exactly.
+        out.who = [...this._who()];
+      } else if (this._lastSelected.length > 0) {
+        // Switching in from a base/fresh state, but we remember a prior
+        // selection — repopulate it.
+        out.who = [...this._lastSelected];
+      } else {
+        // First time into an "X of:" mode with nothing remembered: default to
+        // everyone ticked, so the list shows fully selected and valid rather
+        // than empty. Falls to [] only if there genuinely are no persons.
+        out.who = this._persons().map((p) => p.id);
+      }
     }
     if (this._hasFor(cur.for)) out.for = cur.for;
     this._emit(out);
@@ -297,9 +310,9 @@ export class AmbiencePeoplePredicateInput extends LitElement {
         />${p.name}
       </label>`)}
     </div>
-    ${who.length === 0
-      ? html`<div class="field-error">${localize(this.hass, "ui.people_select_one", "Select at least one person")}</div>`
-      : ""}`;
+    <div class="field-error">${who.length === 0
+      ? localize(this.hass, "ui.people_select_one", "Select at least one person")
+      : ""}</div>`;
   }
 
   private _renderWhere(where: string) {

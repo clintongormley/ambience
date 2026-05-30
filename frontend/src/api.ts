@@ -5,6 +5,7 @@
 import type {
   AreaConfig,
   AreaListItem,
+  AutoTriggerList,
   DayConfig,
   DryRunResult,
   ExposedAction,
@@ -300,4 +301,31 @@ export async function getScriptReferencedEntities(
   script: string,
 ): Promise<{ entities: string[] }> {
   return hass.callWS({ type: "ambience/script/referenced_entities", script });
+}
+
+export async function listAutoTriggers(
+  hass: HassConnection,
+  scope_kind: "area" | "floor" | "house",
+  scope_id?: string | null,
+): Promise<AutoTriggerList> {
+  const msg: Record<string, unknown> = { type: "ambience/auto_triggers/list", scope_kind };
+  if (scope_id != null) msg.scope_id = scope_id;
+  return hass.callWS(msg);
+}
+
+export async function setAutoTrigger(
+  hass: HassConnection,
+  scope_kind: "area" | "floor" | "house",
+  scope_id: string | null,
+  key: string,
+  enabled: boolean,
+): Promise<{ ok: true }> {
+  const msg: Record<string, unknown> = {
+    type: "ambience/auto_triggers/set_trigger",
+    scope_kind,
+    key,
+    enabled,
+  };
+  if (scope_id != null) msg.scope_id = scope_id;
+  return hass.callWS(msg);
 }

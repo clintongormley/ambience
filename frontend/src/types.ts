@@ -79,6 +79,26 @@ export type AreaConfig = {
   auto_sort: boolean;
   switch?: ScopeSwitchOverride & { off_at?: string | null };
   auto_triggers_enabled?: boolean;
+  // Trigger keys the user has disabled for this scope (see AutoTrigger.key).
+  disabled_triggers?: string[];
+};
+
+// One watch derived from a scope's rules, as returned by auto_triggers/list.
+// `kind` discriminates which structured fields are present.
+export type AutoTrigger = {
+  key: string;
+  enabled: boolean;
+} & (
+  | { kind: "entity"; entity_id: string }
+  | { kind: "clock"; hour: number; minute: number }
+  | { kind: "sun"; anchor: string; offset: number }
+  | { kind: "date_rollover" }
+  | { kind: "has_time" }
+);
+
+export type AutoTriggerList = {
+  triggers: AutoTrigger[];
+  opaque: boolean;
 };
 
 // `name` is resolved by the backend from HA's area registry, not stored.

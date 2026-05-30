@@ -15,12 +15,14 @@ def _snap(
     now: datetime | None = None,
     names: dict[str, str] | None = None,
     zone_labels: dict[str, str] | None = None,
+    in_zones: dict[str, list[str] | None] | None = None,
 ) -> PeopleSnapshot:
     return PeopleSnapshot(
         now=now or datetime(2026, 5, 25, 12, 0, tzinfo=UTC),
         persons=persons or {},
         names=names or {},
         zone_labels=zone_labels or {},
+        in_zones=in_zones or {},
     )
 
 
@@ -34,17 +36,30 @@ def test_protocol_fields() -> None:
 
 
 async def test_snapshot_captures_persons_names_and_zones(hass: HomeAssistant) -> None:
-    hass.states.async_set("person.alice", "home", {"friendly_name": "Alice"})
+    hass.states.async_set(
+        "person.alice",
+        "Work",
+        {"friendly_name": "Alice", "in_zones": ["zone.work", "zone.home"]},
+    )
     hass.states.async_set("person.bob", "not_home", {"friendly_name": "Bob"})
     hass.states.async_set("zone.home", "1", {"friendly_name": "Home"})
     hass.states.async_set("zone.work", "0", {"friendly_name": "Work"})
     snap = await PeopleMatcher().snapshot(hass)
-    assert snap.persons["person.alice"][0] == "home"
+    assert snap.persons["person.alice"][0] == "Work"
     assert isinstance(snap.persons["person.alice"][1], datetime)
     assert snap.names["person.alice"] == "Alice"
     assert snap.zone_labels["zone.home"] == "home"
     assert snap.zone_labels["zone.work"] == "Work"
     assert "person.alice" in snap.persons and "zone.work" not in snap.persons
+
+
+async def test_snapshot_captures_in_zones(hass: HomeAssistant) -> None:
+    # HA reports in_zones as a list of zone entity_ids ("zone.work").
+    hass.states.async_set("person.alice", "Work", {"in_zones": ["zone.work", "zone.home"]})
+    hass.states.async_set("person.bob", "home")  # attribute absent
+    snap = await PeopleMatcher().snapshot(hass)
+    assert snap.in_zones["person.alice"] == ["zone.work", "zone.home"]
+    assert snap.in_zones["person.bob"] is None
 
 
 def _p(state: str) -> tuple[str, datetime]:
@@ -157,6 +172,70 @@ def test_matches_zone_by_label() -> None:
     assert m.matches({"who": ["person.a"], "where": "zone.work"}, snap) is True
     # unknown zone in predicate -> no label -> False
     assert m.matches({"who": ["person.a"], "where": "zone.ghost"}, snap) is False
+
+
+# --- in_zones (overlapping zones) -----------------------------------------
+
+
+def test_matches_in_zones_overlap_matches_both_zones() -> None:
+    m = PeopleMatcher()
+    # Person resolves to "Work" by state, but in_zones says they're in BOTH
+    # work and home (overlapping zones). They match home AND work.
+    snap = _snap(
+        {"person.a": _p("Work")},
+        in_zones={"person.a": ["zone.work", "zone.home"]},
+    )
+    assert m.matches({"quant": "any", "where": "home"}, snap) is True
+    assert m.matches({"quant": "any", "where": "zone.work"}, snap) is True
+    # ...and "not at home" is therefore False for them.
+    assert m.matches({"quant": "any", "where": "home", "negate": True}, snap) is False
+
+
+def test_matches_in_zones_not_home() -> None:
+    m = PeopleMatcher()
+    snap = _snap({"person.a": _p("Work")}, in_zones={"person.a": ["zone.work"]})
+    assert m.matches({"quant": "any", "where": "home"}, snap) is False
+    assert m.matches({"quant": "any", "where": "zone.work"}, snap) is True
+
+
+def test_matches_in_zones_empty_is_in_no_zone() -> None:
+    m = PeopleMatcher()
+    # in_zones=[] -> in no zone at all.
+    snap = _snap({"person.a": _p("not_home")}, in_zones={"person.a": []})
+    assert m.matches({"quant": "any", "where": "home"}, snap) is False
+    assert m.matches({"quant": "any", "where": "home", "negate": True}, snap) is True
+
+
+def test_matches_in_zones_absent_falls_back_to_state() -> None:
+    m = PeopleMatcher()
+    # No in_zones attribute (None) -> fall back to state matching.
+    snap = _snap({"person.a": _p("home")}, in_zones={"person.a": None})
+    assert m.matches({"quant": "any", "where": "home"}, snap) is True
+    # zone fallback via label.
+    snap2 = _snap(
+        {"person.a": _p("Work")},
+        in_zones={"person.a": None},
+        zone_labels={"zone.work": "Work"},
+    )
+    assert m.matches({"quant": "any", "where": "zone.work"}, snap2) is True
+
+
+def test_matches_in_zones_unavailable_still_unobservable() -> None:
+    m = PeopleMatcher()
+    # Unavailable state is unobservable even if in_zones present/absent.
+    snap = _snap({"person.a": _p("unavailable")}, in_zones={"person.a": []})
+    assert m.matches({"quant": "any", "where": "home", "negate": True}, snap) is False
+
+
+def test_describe_counts_in_zones_overlap_as_home() -> None:
+    m = PeopleMatcher()
+    # State "Work" but in_zones includes zone.home -> counts as home.
+    snap = _snap(
+        {"person.a": _p("Work"), "person.b": _p("not_home")},
+        names={"person.a": "Alice", "person.b": "Bob"},
+        in_zones={"person.a": ["zone.work", "zone.home"]},
+    )
+    assert m.describe(snap) == "1 of 2 home (Alice)"
 
 
 def test_matches_unavailable_person_excluded() -> None:

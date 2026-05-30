@@ -26,8 +26,15 @@ class PeopleSnapshot:
     # person entity_id -> friendly name (for describe()).
     names: dict[str, str] = field(default_factory=dict)
     # zone entity_id -> the label person.state reports when in that zone
-    # (home zone -> "home"; others -> friendly name).
+    # (home zone -> "home"; others -> friendly name). Used for the state
+    # fallback when `in_zones` is unavailable.
     zone_labels: dict[str, str] = field(default_factory=dict)
+    # person entity_id -> the `in_zones` attribute: a list of zone entity_ids
+    # the person is currently inside (e.g. ["zone.work", "zone.home"]), or None
+    # when the attribute is absent (e.g. router/non-GPS trackers). Zones can
+    # overlap, so this can name several zones at once where `state` resolves to
+    # only one. Preferred over `state` for location matching.
+    in_zones: dict[str, list[str] | None] = field(default_factory=dict)
 
 
 class PeopleMatcher:
@@ -60,15 +67,22 @@ class PeopleMatcher:
     async def snapshot(self, hass: HomeAssistant) -> PeopleSnapshot:
         persons: dict[str, tuple[str, datetime]] = {}
         names: dict[str, str] = {}
+        in_zones: dict[str, list[str] | None] = {}
         for s in hass.states.async_all("person"):
             persons[s.entity_id] = (s.state, s.last_changed)
             names[s.entity_id] = s.attributes.get("friendly_name") or s.entity_id
+            raw = s.attributes.get("in_zones")
+            in_zones[s.entity_id] = [str(z) for z in raw] if raw is not None else None
         zone_labels: dict[str, str] = {}
         for z in hass.states.async_all("zone"):
             friendly = z.attributes.get("friendly_name") or z.entity_id
             zone_labels[z.entity_id] = _HOME if z.entity_id == "zone.home" else friendly
         return PeopleSnapshot(
-            now=dt_util.utcnow(), persons=persons, names=names, zone_labels=zone_labels
+            now=dt_util.utcnow(),
+            persons=persons,
+            names=names,
+            zone_labels=zone_labels,
+            in_zones=in_zones,
         )
 
     def matches(self, predicate: Any, snapshot: PeopleSnapshot) -> bool:
@@ -89,13 +103,19 @@ class PeopleMatcher:
             if cur is None:
                 return False  # named but absent -> unobservable
             state, changed = cur
-            at = self._loc_match(state, where, snapshot)
+            at = self._loc_match(state, snapshot.in_zones.get(pid), where, snapshot)
             if at is None:  # unobservable (unavailable / unknown zone)
                 return False
             if negate:  # "not at <where>" -> invert the observable location test
                 at = not at
             if at is not want_at:
                 return False
+            # NOTE: the `for` clock uses `last_changed`, which advances on STATE
+            # changes only. Because zones can overlap, entering/leaving an
+            # overlapping zone can change `in_zones` without changing `state`
+            # (the resolved zone stays the same), so a zone-membership `for` is
+            # approximate in that edge case. Same class of caveat as the
+            # last_changed-vs-last_updated note above; we do not track history.
             return not (seconds > 0 and (snapshot.now - changed).total_seconds() < seconds)
 
         if quant == "everyone":
@@ -106,21 +126,44 @@ class PeopleMatcher:
         return any(holds(p, True) for p in person_ids)
 
     @staticmethod
-    def _loc_match(state: str, where: str, snapshot: PeopleSnapshot) -> bool | None:
+    def _target_zone(where: str) -> str:
+        """The zone entity_id `where` refers to: 'home' -> 'zone.home'."""
+        return "zone.home" if where == _HOME else where
+
+    @classmethod
+    def _loc_match(
+        cls,
+        state: str,
+        in_zones: list[str] | None,
+        where: str,
+        snapshot: PeopleSnapshot,
+    ) -> bool | None:
         """Pure (un-negated) location test.
 
-        True/False if observable, None if unobservable. `where`: 'home' ->
-        state == 'home'; 'zone.*' -> state == that zone's label (None if the
-        zone is unknown). Caller applies any `negate` inversion.
+        True/False if observable, None if unobservable. Prefers the `in_zones`
+        attribute (handles overlapping zones); falls back to `state` when the
+        attribute is absent. `where`: 'home' or a 'zone.*' id. Caller applies
+        any `negate` inversion.
         """
         if state in _UNAVAILABLE:
-            return None
+            return None  # unobservable
+        if in_zones is not None:
+            # Attribute present: authoritative membership (overlaps included).
+            return cls._target_zone(where) in in_zones
+        # Fallback to state (e.g. router/non-GPS trackers, no in_zones).
         if where == _HOME:
             return state == _HOME
         label = snapshot.zone_labels.get(where)
         if label is None:
-            return None
+            return None  # unknown zone -> unobservable
         return state == label
+
+    @classmethod
+    def _is_home(cls, state: str, in_zones: list[str] | None) -> bool:
+        """Whether a person is home, preferring `in_zones` over `state`."""
+        if in_zones is not None:
+            return "zone.home" in in_zones
+        return state == _HOME
 
     def describe(self, snapshot: PeopleSnapshot) -> str | None:
         if not snapshot.persons:
@@ -129,7 +172,7 @@ class PeopleMatcher:
         home = sorted(
             snapshot.names.get(pid, pid)
             for pid, (state, _) in snapshot.persons.items()
-            if state == _HOME
+            if self._is_home(state, snapshot.in_zones.get(pid))
         )
         if home:
             return f"{len(home)} of {total} home ({', '.join(home)})"

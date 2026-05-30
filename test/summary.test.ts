@@ -73,7 +73,7 @@ describe("summariseMatcher", () => {
   test("people predicate delegates to summarisePeople (not [object Object])", () => {
     expect(
       summariseMatcher("people", { quant: "nobody", where: "home" }, { hass: noLocalize, periods }),
-    ).toBe("Nobody is Home");
+    ).toBe("Nobody is at Home");
   });
 });
 
@@ -92,18 +92,23 @@ describe("summarisePeople", () => {
     expect(summarisePeople(null)).toBe("any");
   });
 
-  test("base modes (no who key) render as 'X is Home'", () => {
-    expect(summarisePeople({ quant: "everyone", where: "home" })).toBe("Everybody is Home");
-    expect(summarisePeople({ quant: "any", where: "home" })).toBe("Anybody is Home");
-    expect(summarisePeople({ quant: "nobody", where: "home" })).toBe("Nobody is Home");
+  test("base modes (no who key) render as 'X is at Home'", () => {
+    expect(summarisePeople({ quant: "everyone", where: "home" })).toBe("Everybody is at Home");
+    expect(summarisePeople({ quant: "any", where: "home" })).toBe("Anybody is at Home");
+    expect(summarisePeople({ quant: "nobody", where: "home" })).toBe("Nobody is at Home");
   });
 
-  test("empty predicate defaults to everybody home", () => {
-    expect(summarisePeople({})).toBe("Everybody is Home");
+  test("empty predicate defaults to everybody at home", () => {
+    expect(summarisePeople({})).toBe("Everybody is at Home");
   });
 
-  test("away location", () => {
-    expect(summarisePeople({ quant: "everyone", where: "away" })).toBe("Everybody is Away");
+  test("negate renders as 'is not at <Location>'", () => {
+    expect(summarisePeople({ quant: "everyone", where: "home", negate: true })).toBe(
+      "Everybody is not at Home",
+    );
+    expect(
+      summarisePeople({ who: ["person.alice"], quant: "any", where: "zone.work", negate: true }, { hass: hassPeople }),
+    ).toBe("Any of: (Alice) is not at Work");
   });
 
   test("X-of modes show the mode label and names in parens", () => {
@@ -112,19 +117,19 @@ describe("summarisePeople", () => {
         { who: ["person.clinton"], quant: "nobody", where: "home" },
         { hass: hassPeople },
       ),
-    ).toBe("None of: (Clinton) is Home");
+    ).toBe("None of: (Clinton) is at Home");
     expect(
       summarisePeople(
         { who: ["person.alice", "person.bob"], quant: "everyone", where: "home" },
         { hass: hassPeople },
       ),
-    ).toBe("All of: (Alice, Bob) is Home");
+    ).toBe("All of: (Alice, Bob) is at Home");
     expect(
       summarisePeople(
         { who: ["person.alice", "person.bob"], quant: "any", where: "home" },
         { hass: hassPeople },
       ),
-    ).toBe("Any of: (Alice, Bob) is Home");
+    ).toBe("Any of: (Alice, Bob) is at Home");
   });
 
   test("zone location renders as 'is at <Zone>'", () => {
@@ -135,7 +140,7 @@ describe("summarisePeople", () => {
 
   test("duration suffix", () => {
     expect(summarisePeople({ quant: "everyone", where: "home", for: { h: 0, m: 10, s: 0 } }))
-      .toBe("Everybody is Home for ≥10m");
+      .toBe("Everybody is at Home for ≥10m");
   });
 
   test("falls back to humanised ids when no friendly names", () => {

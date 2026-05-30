@@ -219,7 +219,8 @@ export type PeopleQuant = "any" | "everyone" | "nobody";
 export interface PeoplePredicate {
   who?: string[];                 // person.* entity_ids; empty/absent = all persons
   quant?: PeopleQuant;            // default "any"
-  where?: string;                 // "home" | "away" | "zone.*"; default "home"
+  where?: string;                 // positive location: "home" | "zone.*"; default "home"
+  negate?: boolean;               // default false; true = NOT at `where`
   for?: { h: number; m: number; s: number } | null;
 }
 

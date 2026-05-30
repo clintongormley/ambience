@@ -130,18 +130,18 @@ function _domainEntityName(ctx: MatcherContext, entity_id: string): string {
   return local.charAt(0).toUpperCase() + local.slice(1);
 }
 
-/** The location phrase: "Home", "Away", or "at <Zone>" — capitalised to read
- *  as "… is Home" / "… is at Work", mirroring the widget's "Is" control. */
+/** The location NAME only (no "at" prefix): "Home" or the zone's friendly name
+ *  (capitalised) — the "at"/"not at" connector is built from `negate`. */
 function _whereLabel(where: string, ctx: MatcherContext): string {
   if (where === "home") return localize(ctx.hass, "people_summary.home", "Home");
-  if (where === "away") return localize(ctx.hass, "people_summary.away", "Away");
-  return `${localize(ctx.hass, "people_summary.at", "at")} ${_domainEntityName(ctx, where)}`;
+  return _domainEntityName(ctx, where);
 }
 
 /**
- * Mirror the widget's phrasing: "<Mode> is <Location>" for the base modes and
- * "<Mode>: (<names>) is <Location>" for the "X of:" modes — e.g.
- * "Everybody is Home", "None of: (Clinton) is Home", "Any of: (Alice) is at Work".
+ * Mirror the widget's phrasing: "<Mode> is at <Location>" (or "is not at" when
+ * negated) for the base modes and "<Mode>: (<names>) is [not] at <Location>"
+ * for the "X of:" modes — e.g. "Everybody is at Home", "None of: (Clinton) is
+ * at Home", "Any of: (Alice) is not at Work".
  * Mode is keyed off the presence of the `who` key (matching the input widget):
  * absent → a base mode (everyone→Everybody, nobody→Nobody); present → an
  * "X of:" mode chosen by `quant`.
@@ -173,7 +173,10 @@ export function summarisePeople(pred: PeoplePredicate, ctx: MatcherContext = {})
     const names = pred.who.map((id) => _domainEntityName(ctx, id)).join(", ");
     subject = `${label} (${names})`;
   }
-  const head = `${subject} ${localize(ctx.hass, "people_summary.is", "is")} ${_whereLabel(where, ctx)}`;
+  const connector = pred.negate
+    ? localize(ctx.hass, "people_summary.is_not_at", "is not at")
+    : localize(ctx.hass, "people_summary.is_at", "is at");
+  const head = `${subject} ${connector} ${_whereLabel(where, ctx)}`;
   if (pred.for && _hasStateDuration(pred.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
   }

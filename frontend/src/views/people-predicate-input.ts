@@ -28,12 +28,14 @@ const MODE_QUANT: Record<Mode, PeopleQuant> = {
 /**
  * Editor for a `people` predicate: a single mode dropdown (everybody / nobody /
  * any|all|none of these people), an optional person checklist (shown only for
- * the "…these people" modes), a location dropdown ("Is" home/away/zone), and an
+ * the "…these people" modes), a two-part location control (an "Is at"/"Is not
+ * at" toggle driving `negate`, plus a home/zone location dropdown), and an
  * optional per-rule `for` duration.
  *
  *   {who?: person.*[]   // empty/absent = the whole household
  *    quant?: any|everyone|nobody
- *    where?: home|away|zone.*      // default "home"
+ *    where?: home|zone.*           // the POSITIVE location, default "home"
+ *    negate?: boolean              // default false; true = NOT at `where`
  *    for?: {h,m,s}|null}
  *
  * Mirrors `state-expr-atom.ts` for the ha-form-with-native-fallback controls
@@ -178,6 +180,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     const cur = this._cur();
     const where = cur.where ?? "home";
     const out: PeoplePredicate = { quant: MODE_QUANT[mode], where };
+    if (cur.negate) out.negate = true;
     if (PEOPLE_MODES.has(mode)) {
       if (this._hasWhoKey()) {
         // An explicit selection is already present (incl. an explicit empty
@@ -216,6 +219,16 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   private _setWhere(where: string) {
     const cur = this._cur();
     const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where };
+    if (cur.negate) out.negate = true;
+    if (this._hasWhoKey()) out.who = [...this._who()];
+    if (this._hasFor(cur.for)) out.for = cur.for;
+    this._emit(out);
+  }
+
+  private _setNegate(negate: boolean) {
+    const cur = this._cur();
+    const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where: cur.where ?? "home" };
+    if (negate) out.negate = true;
     if (this._hasWhoKey()) out.who = [...this._who()];
     if (this._hasFor(cur.for)) out.for = cur.for;
     this._emit(out);
@@ -230,6 +243,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
       where: cur.where ?? "home",
       who: next,
     };
+    if (cur.negate) out.negate = true;
     if (this._hasFor(cur.for)) out.for = cur.for;
     this._emit(out);
   }
@@ -237,6 +251,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   private _setFor(dur: { h: number; m: number; s: number }) {
     const cur = this._cur();
     const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where: cur.where ?? "home" };
+    if (cur.negate) out.negate = true;
     if (this._hasWhoKey()) out.who = [...this._who()];
     if (this._hasFor(dur)) out.for = dur;
     this._emit(out);
@@ -324,11 +339,44 @@ export class AmbiencePeoplePredicateInput extends LitElement {
       : ""}</div>`;
   }
 
+  private _renderNegate(negate: boolean) {
+    const options = [
+      { value: "false", label: localize(this.hass, "ui.people_is_at", "Is at") },
+      { value: "true", label: localize(this.hass, "ui.people_is_not_at", "Is not at") },
+    ];
+    const onChange = (v: string) => this._setNegate(v === "true");
+    /* v8 ignore start -- ha-form path (real HA only) */
+    if (customElements.get("ha-form")) {
+      const schema: HaFormSchema[] = [{
+        name: "negate",
+        required: true,
+        selector: { select: { mode: "dropdown", options } },
+      }];
+      return html`<ha-form
+        class="negate"
+        .hass=${this.hass}
+        .schema=${schema}
+        .data=${{ negate: negate ? "true" : "false" }}
+        .computeLabel=${() => ""}
+        @value-changed=${(e: CustomEvent<{ value: { negate?: string } }>) => {
+          e.stopPropagation();
+          if (e.detail.value.negate != null) onChange(e.detail.value.negate);
+        }}
+      ></ha-form>`;
+    }
+    /* v8 ignore stop */
+    return html`<select
+      class="negate"
+      @change=${(e: Event) => onChange((e.target as HTMLSelectElement).value)}
+    >
+      ${options.map((o) => html`<option value=${o.value} ?selected=${o.value === (negate ? "true" : "false")}>${o.label}</option>`)}
+    </select>`;
+  }
+
   private _renderWhere(where: string) {
     const zones = this._zones().filter((z) => z.id !== "zone.home");
     const options = [
       { value: "home", label: localize(this.hass, "ui.people_where_home", "Home") },
-      { value: "away", label: localize(this.hass, "ui.people_where_away", "Away") },
       ...zones.map((z) => ({ value: z.id, label: z.name })),
     ];
     /* v8 ignore start -- ha-form path (real HA only) */
@@ -391,12 +439,13 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   override render() {
     const cur = this._cur();
     const where = cur.where ?? "home";
+    const negate = cur.negate ?? false;
     const mode = this._mode();
     return html`
       <div class="row">${this._renderMode(mode)}</div>
       ${PEOPLE_MODES.has(mode) ? this._renderPeople() : ""}
       <div class="row">
-        <span class="label">${localize(this.hass, "ui.people_is", "Is")}</span>
+        ${this._renderNegate(negate)}
         ${this._renderWhere(where)}
       </div>
       <div class="row">

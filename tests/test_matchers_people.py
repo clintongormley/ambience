@@ -108,12 +108,47 @@ def test_matches_who_names_absent_person_is_unobservable() -> None:
     assert m.matches({"who": ["person.ghost"], "quant": "nobody", "where": "home"}, snap) is False
 
 
-def test_matches_away_includes_other_zones() -> None:
+def test_matches_negate_home_includes_other_zones() -> None:
     m = PeopleMatcher()
+    # "not at home" — a person at Work (or not_home) is not at home -> matches.
     snap = _snap({"person.a": _p("work")})
-    assert m.matches({"quant": "any", "where": "away"}, snap) is True
-    snap2 = _snap({"person.a": _p("home")})
-    assert m.matches({"quant": "any", "where": "away"}, snap2) is False
+    assert m.matches({"quant": "any", "where": "home", "negate": True}, snap) is True
+    snap2 = _snap({"person.a": _p("not_home")})
+    assert m.matches({"quant": "any", "where": "home", "negate": True}, snap2) is True
+    # A person at home is NOT "not at home" -> no match.
+    snap3 = _snap({"person.a": _p("home")})
+    assert m.matches({"quant": "any", "where": "home", "negate": True}, snap3) is False
+
+
+def test_matches_negate_zone() -> None:
+    m = PeopleMatcher()
+    labels = {"zone.work": "Work"}
+    # Not at Work: person at home matches "not at Work".
+    snap = _snap({"person.a": _p("home")}, zone_labels=labels)
+    assert m.matches({"quant": "any", "where": "zone.work", "negate": True}, snap) is True
+    # At Work: does NOT match "not at Work".
+    snap2 = _snap({"person.a": _p("Work")}, zone_labels=labels)
+    assert m.matches({"quant": "any", "where": "zone.work", "negate": True}, snap2) is False
+
+
+def test_matches_negate_unobservable_still_fails() -> None:
+    m = PeopleMatcher()
+    # Unavailable -> unobservable -> fails even under negate (cannot confirm).
+    snap = _snap({"person.a": _p("unavailable")})
+    assert m.matches({"quant": "any", "where": "home", "negate": True}, snap) is False
+
+
+def test_matches_negate_for_duration() -> None:
+    m = PeopleMatcher()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    labels = {"zone.work": "Work"}
+    # Person left Work 10m ago (home since) -> "not at Work for 5m" holds.
+    snap = _snap({"person.a": ("home", now - timedelta(minutes=10))}, now=now, zone_labels=labels)
+    pred = {"quant": "any", "where": "zone.work", "negate": True, "for": {"h": 0, "m": 5, "s": 0}}
+    assert m.matches(pred, snap) is True
+    # Only 1m in the not-at-Work state -> not yet.
+    snap2 = _snap({"person.a": ("home", now - timedelta(minutes=1))}, now=now, zone_labels=labels)
+    assert m.matches(pred, snap2) is False
 
 
 def test_matches_zone_by_label() -> None:
@@ -183,7 +218,8 @@ def test_validate_accepts_none_and_valid() -> None:
         {"who": ["person.a"], "quant": "everyone", "where": "home", "for": {"h": 0, "m": 5, "s": 0}}
     )
     m.validate_predicate({"where": "zone.work"})
-    m.validate_predicate({"where": "away"})
+    m.validate_predicate({"where": "home", "negate": True})
+    m.validate_predicate({"where": "zone.x"})
 
 
 def test_validate_rejects_non_dict() -> None:
@@ -210,6 +246,17 @@ def test_validate_rejects_bad_where() -> None:
         m.validate_predicate({"where": "office"})
     with pytest.raises(ValueError, match="where"):
         m.validate_predicate({"where": 5})
+    # "away" is no longer a valid where (replaced by negate).
+    with pytest.raises(ValueError, match="where"):
+        m.validate_predicate({"where": "away"})
+
+
+def test_validate_rejects_non_bool_negate() -> None:
+    m = PeopleMatcher()
+    with pytest.raises(ValueError, match="negate"):
+        m.validate_predicate({"where": "home", "negate": "yes"})
+    with pytest.raises(ValueError, match="negate"):
+        m.validate_predicate({"where": "home", "negate": 1})
 
 
 def test_validate_rejects_bad_for() -> None:
@@ -284,8 +331,20 @@ def test_contains_nobody_disjoint_from_any() -> None:
 def test_contains_different_where_is_false() -> None:
     m = PeopleMatcher()
     inner = {"quant": "everyone", "where": "home"}
-    outer = {"quant": "any", "where": "away"}
+    outer = {"quant": "any", "where": "zone.work"}
     assert m.contains(outer, inner) is False
+
+
+def test_contains_requires_equal_negate() -> None:
+    m = PeopleMatcher()
+    inner = {"quant": "everyone", "where": "home", "negate": True}
+    outer = {"quant": "any", "where": "home", "negate": True}
+    # Same where AND same negate -> the usual quant lattice applies.
+    assert m.contains(outer, inner) is True
+    # Different negate -> not comparable -> False.
+    outer2 = {"quant": "any", "where": "home"}
+    assert m.contains(outer2, inner) is False
+    assert m.contains(inner, outer2) is False
 
 
 def test_contains_longer_for_is_subset() -> None:

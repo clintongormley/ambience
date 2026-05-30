@@ -31,6 +31,10 @@ function whereSelect(el: any): HTMLSelectElement {
   return el.shadowRoot.querySelector("select.where");
 }
 
+function negateSelect(el: any): HTMLSelectElement {
+  return el.shadowRoot.querySelector("select.negate");
+}
+
 async function setMode(el: any, mode: string): Promise<void> {
   const sel = modeSelect(el);
   sel.value = mode;
@@ -393,15 +397,72 @@ describe("ambience-people-predicate-input", () => {
     expect(emitted?.where).toBe("zone.work");
   });
 
-  test("location options include home/away/zones but not zone.home", async () => {
+  test("location options include home/zones but not away nor zone.home", async () => {
     el = await mount();
     const options = Array.from(
       whereSelect(el).querySelectorAll<HTMLOptionElement>("option"),
     ).map((o: HTMLOptionElement) => o.value);
     expect(options).toContain("home");
-    expect(options).toContain("away");
     expect(options).toContain("zone.work");
+    expect(options).not.toContain("away");
     expect(options).not.toContain("zone.home");
+  });
+
+  // --- is-at / is-not-at negate toggle -------------------------------------
+
+  test("negate toggle offers 'Is at' (false) and 'Is not at' (true)", async () => {
+    el = await mount();
+    const opts = Array.from(
+      negateSelect(el).querySelectorAll<HTMLOptionElement>("option"),
+    );
+    expect(opts.map((o) => o.value)).toEqual(["false", "true"]);
+    expect(opts.map((o) => o.textContent?.trim())).toEqual(["Is at", "Is not at"]);
+  });
+
+  test("fresh state defaults to 'Is at' (negate false)", async () => {
+    el = await mount();
+    expect(negateSelect(el).value).toBe("false");
+  });
+
+  test("selecting 'Is not at' emits negate true", async () => {
+    el = await mount({ quant: "everyone", where: "home" });
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    const neg = negateSelect(el);
+    neg.value = "true";
+    neg.dispatchEvent(new Event("change"));
+    expect(emitted?.negate).toBe(true);
+    expect(emitted?.where).toBe("home");
+  });
+
+  test("selecting 'Is at' from a negated value clears negate", async () => {
+    el = await mount({ quant: "everyone", where: "home", negate: true });
+    expect(negateSelect(el).value).toBe("true");
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    const neg = negateSelect(el);
+    neg.value = "false";
+    neg.dispatchEvent(new Event("change"));
+    // negate omitted (or false) when "Is at".
+    expect(emitted?.negate ?? false).toBe(false);
+  });
+
+  test("negate round-trips into the toggle and survives a where change", async () => {
+    el = await mount({ quant: "everyone", where: "home", negate: true });
+    expect(negateSelect(el).value).toBe("true");
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    const where = whereSelect(el);
+    where.value = "zone.work";
+    where.dispatchEvent(new Event("change"));
+    expect(emitted?.where).toBe("zone.work");
+    expect(emitted?.negate).toBe(true);
   });
 
   // --- for duration ---------------------------------------------------------

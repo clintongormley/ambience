@@ -1,4 +1,4 @@
-"""PeopleMatcher — who is home / away / in a zone, with optional `for`."""
+"""PeopleMatcher — who is (not) at home / in a zone, with optional `for`."""
 
 from __future__ import annotations
 
@@ -31,22 +31,23 @@ class PeopleSnapshot:
 
 
 class PeopleMatcher:
-    """Match on who is home / away / in a named zone.
+    """Match on who is (not) at home / in a named zone.
 
     Predicate (scoped quantifier):
       {who: [person.*]? (empty/absent = all persons),
        quant: 'any'|'everyone'|'nobody' (default 'any'),
-       where: 'home'|'away'|'zone.*' (default 'home'),
+       where: 'home'|'zone.*' (default 'home'),  # the POSITIVE location
+       negate: bool? (default false),            # true = NOT at `where`
        for?: {h,m,s}}
 
     `None` = vacuous true (no constraint).
     """
 
     name = "people"
-    description = "Matches who is home, away, or in a named zone."
+    description = "Matches who is (not) at home or in a named zone."
     predicate_help = (
         "{who: [person.*] (empty = all persons), quant: 'any'|'everyone'|"
-        "'nobody', where: 'home'|'away'|'zone.*', for?: {h,m,s}}. "
+        "'nobody', where: 'home'|'zone.*', negate?: bool, for?: {h,m,s}}. "
         "None = match-anything."
     )
     input = "people_predicate"
@@ -78,6 +79,7 @@ class PeopleMatcher:
         who = predicate.get("who") or []
         quant = predicate.get("quant") or "any"
         where = predicate.get("where") or _HOME
+        negate = bool(predicate.get("negate"))
         seconds = self._dur_seconds(predicate.get("for"))
 
         person_ids = list(who) if who else list(snapshot.persons)
@@ -87,9 +89,11 @@ class PeopleMatcher:
             if cur is None:
                 return False  # named but absent -> unobservable
             state, changed = cur
-            at = self._at_where(state, where, snapshot)
+            at = self._loc_match(state, where, snapshot)
             if at is None:  # unobservable (unavailable / unknown zone)
                 return False
+            if negate:  # "not at <where>" -> invert the observable location test
+                at = not at
             if at is not want_at:
                 return False
             return not (seconds > 0 and (snapshot.now - changed).total_seconds() < seconds)
@@ -102,18 +106,17 @@ class PeopleMatcher:
         return any(holds(p, True) for p in person_ids)
 
     @staticmethod
-    def _at_where(state: str, where: str, snapshot: PeopleSnapshot) -> bool | None:
-        """True/False if observable, None if unobservable.
+    def _loc_match(state: str, where: str, snapshot: PeopleSnapshot) -> bool | None:
+        """Pure (un-negated) location test.
 
-        `where`: 'home' -> state == 'home'; 'away' -> state != 'home';
-        'zone.*' -> state == that zone's label.
+        True/False if observable, None if unobservable. `where`: 'home' ->
+        state == 'home'; 'zone.*' -> state == that zone's label (None if the
+        zone is unknown). Caller applies any `negate` inversion.
         """
         if state in _UNAVAILABLE:
             return None
         if where == _HOME:
             return state == _HOME
-        if where == "away":
-            return state != _HOME
         label = snapshot.zone_labels.get(where)
         if label is None:
             return None
@@ -149,10 +152,12 @@ class PeopleMatcher:
             raise ValueError(f"`quant` must be one of {_QUANTS}, got {quant!r}")
         where = predicate.get("where")
         if where is not None and (
-            not isinstance(where, str)
-            or (where not in (_HOME, "away") and not where.startswith("zone."))
+            not isinstance(where, str) or (where != _HOME and not where.startswith("zone."))
         ):
-            raise ValueError(f"`where` must be 'home', 'away', or a zone.* id, got {where!r}")
+            raise ValueError(f"`where` must be 'home' or a zone.* id, got {where!r}")
+        negate = predicate.get("negate")
+        if negate is not None and not isinstance(negate, bool):
+            raise ValueError(f"`negate` must be a bool, got {negate!r}")
         dur = predicate.get("for")
         if dur is not None:
             if not isinstance(dur, dict):
@@ -172,7 +177,11 @@ class PeopleMatcher:
         (inner's match-set ⊆ outer's). Conservative: unprovable -> False."""
         if not isinstance(outer, dict) or not isinstance(inner, dict):
             return False
+        # Comparable only when the positive location AND the negate flag match:
+        # a different `negate` is a different (disjoint) match-set.
         if (outer.get("where") or _HOME) != (inner.get("where") or _HOME):
+            return False
+        if bool(outer.get("negate")) != bool(inner.get("negate")):
             return False
         # inner must hold at least as long as outer (longer for = more specific).
         if self._dur_seconds(inner.get("for")) < self._dur_seconds(outer.get("for")):

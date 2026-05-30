@@ -85,8 +85,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     }
     label.person-pill {
       display: inline-flex; align-items: center; gap: 0.25rem;
-      padding: 0.15rem 0.4rem; border-radius: 3px;
-      background: var(--secondary-background-color, #f5f5f5); cursor: pointer;
+      padding: 0.15rem 0; cursor: pointer;
     }
     .for-row { display: flex; gap: 0.25rem; align-items: center; }
     .for-row input[type='number'] { width: 3.5rem; }

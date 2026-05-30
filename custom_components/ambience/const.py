@@ -20,6 +20,11 @@ DATA_LAST_APPLIED = "last_applied"
 # Dispatcher signal — payload: tuple (scope_kind, scope_id) or None (global defaults changed)
 SIGNAL_SWITCH_CONFIG_UPDATED = "ambience_switch_config_updated"
 
+# Dispatcher signal — fired when rules / matcher config / a scope's
+# auto_triggers flag change, so the auto-trigger engine rebuilds its watch-set.
+# No payload.
+SIGNAL_CONFIG_CHANGED = "ambience_config_changed"
+
 # Defaults
 DEFAULT_SWITCH_NAME = "Ambience"
 DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 7200  # 2h; 0 = never auto-on

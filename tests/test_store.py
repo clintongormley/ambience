@@ -4,8 +4,13 @@ from __future__ import annotations
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from custom_components.ambience.const import STORAGE_KEY, STORAGE_VERSION
+from custom_components.ambience.const import (
+    SIGNAL_CONFIG_CHANGED,
+    STORAGE_KEY,
+    STORAGE_VERSION,
+)
 from custom_components.ambience.store import AmbienceStore
 
 
@@ -530,3 +535,60 @@ async def test_auto_triggers_enabled_unknown_scope_raises(hass: HomeAssistant) -
     await store.async_load()
     with pytest.raises(ValueError):
         store.auto_triggers_enabled("galaxy", "x")
+
+
+async def test_save_area_fires_config_changed(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    calls: list = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
+    await store.async_save_area("a", {"rules": []})
+    await hass.async_block_till_done()
+    unsub()
+    assert len(calls) == 1
+
+
+async def test_save_matcher_config_fires_config_changed(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    calls: list = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
+    await store.async_save_matcher_config("weather", {"entity": "weather.home"})
+    await hass.async_block_till_done()
+    unsub()
+    assert len(calls) == 1
+
+
+async def test_set_auto_triggers_enabled_fires_config_changed(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_area("a", {"rules": []})
+    calls: list = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
+    await store.async_set_auto_triggers_enabled("area", "a", False)
+    await hass.async_block_till_done()
+    unsub()
+    assert len(calls) == 1
+
+
+async def test_delete_area_fires_config_changed(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_area("a", {"rules": []})
+    calls: list = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
+    await store.async_delete_area("a")
+    await hass.async_block_till_done()
+    unsub()
+    assert len(calls) == 1
+
+
+async def test_delete_missing_area_is_silent(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    calls: list = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
+    await store.async_delete_area("nope")
+    await hass.async_block_till_done()
+    unsub()
+    assert calls == []

@@ -7,11 +7,13 @@ import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
 from .const import (
     DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
     DEFAULT_SWITCH_NAME,
+    SIGNAL_CONFIG_CHANGED,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
@@ -27,6 +29,10 @@ class AmbienceStore:
         self._hass = hass
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data: dict[str, Any] = self._empty()
+
+    def _notify_config_changed(self) -> None:
+        """Tell the auto-trigger engine to rebuild its watch-set."""
+        async_dispatcher_send(self._hass, SIGNAL_CONFIG_CHANGED)
 
     @staticmethod
     def _empty() -> dict[str, Any]:
@@ -183,11 +189,13 @@ class AmbienceStore:
         existing = self._data["areas"].get(area_id, {})
         self._data["areas"][area_id] = {**existing, **config}
         await self._store.async_save(self._data)
+        self._notify_config_changed()
 
     async def async_delete_area(self, area_id: str) -> None:
         if area_id in self._data["areas"]:
             del self._data["areas"][area_id]
             await self._store.async_save(self._data)
+            self._notify_config_changed()
 
     def floors(self) -> dict[str, dict[str, Any]]:
         return dict(self._data["floors"])
@@ -199,11 +207,13 @@ class AmbienceStore:
         existing = self._data["floors"].get(floor_id, {})
         self._data["floors"][floor_id] = {**existing, **config}
         await self._store.async_save(self._data)
+        self._notify_config_changed()
 
     async def async_delete_floor(self, floor_id: str) -> None:
         if floor_id in self._data["floors"]:
             del self._data["floors"][floor_id]
             await self._store.async_save(self._data)
+            self._notify_config_changed()
 
     def get_house(self) -> dict[str, Any]:
         return dict(self._data["house"])
@@ -212,6 +222,7 @@ class AmbienceStore:
         existing = self._data.get("house", {})
         self._data["house"] = {**existing, **config}
         await self._store.async_save(self._data)
+        self._notify_config_changed()
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict[str, Any]]]:
         """Yield (kind, scope_id, config) for every configured scope.
@@ -250,6 +261,7 @@ class AmbienceStore:
     async def async_save_matcher_config(self, name: str, config: dict[str, Any]) -> None:
         self._data.setdefault("matchers", {})[name] = config
         await self._store.async_save(self._data)
+        self._notify_config_changed()
 
     def get_periods(self) -> dict[str, Any]:
         return self.get_matcher_config("time_of_day")
@@ -393,6 +405,7 @@ class AmbienceStore:
         container = self._scope_container(scope_kind, scope_id)
         container["auto_triggers_enabled"] = bool(enabled)
         await self._store.async_save(self._data)
+        self._notify_config_changed()
 
     def get_exposed_actions(self) -> list[dict[str, Any]]:
         """Persisted list of ExposedAction entries (may be empty)."""

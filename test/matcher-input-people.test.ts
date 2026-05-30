@@ -23,6 +23,21 @@ async function mount(value: PeoplePredicate | null = null): Promise<any> {
   return el;
 }
 
+function modeSelect(el: any): HTMLSelectElement {
+  return el.shadowRoot.querySelector("select.mode");
+}
+
+function whereSelect(el: any): HTMLSelectElement {
+  return el.shadowRoot.querySelector("select.where");
+}
+
+async function setMode(el: any, mode: string): Promise<void> {
+  const sel = modeSelect(el);
+  sel.value = mode;
+  sel.dispatchEvent(new Event("change"));
+  await el.updateComplete;
+}
+
 describe("ambience-people-predicate-input", () => {
   let el: any;
   afterEach(() => el?.remove());
@@ -39,42 +54,109 @@ describe("ambience-people-predicate-input", () => {
     expect(zones).toEqual(["zone.home", "zone.work"]);
   });
 
-  test("round-trips an existing predicate into the controls", async () => {
-    el = await mount({ who: ["person.alice"], quant: "everyone", where: "home" });
-    const quant = el.shadowRoot.querySelector("select.quant");
-    expect(quant?.value).toBe("everyone");
-    const checked = Array.from(
-      el.shadowRoot.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
-    ).filter((c: HTMLInputElement) => c.checked);
-    expect(checked).toHaveLength(1);
+  // --- mode dropdown structure ---------------------------------------------
+
+  test("mode dropdown offers exactly the 5 modes in order", async () => {
+    el = await mount();
+    const opts = Array.from(
+      modeSelect(el).querySelectorAll<HTMLOptionElement>("option"),
+    ).map((o) => o.value);
+    expect(opts).toEqual(["everybody", "nobody", "any", "all", "none"]);
   });
 
-  test("emits a predicate when the quantifier changes", async () => {
+  test("fresh state shows Everybody + Home and does not emit on mount", async () => {
+    let emitted = false;
+    el = document.createElement("ambience-people-predicate-input");
+    el.hass = hass;
+    el.value = null;
+    el.addEventListener("value-changed", () => (emitted = true));
+    document.body.appendChild(el);
+    await el.updateComplete;
+    expect(modeSelect(el).value).toBe("everybody");
+    expect(whereSelect(el).value).toBe("home");
+    expect(emitted).toBe(false);
+  });
+
+  // --- the 5 modes emit the right predicate --------------------------------
+
+  test("Everybody emits {quant: everyone} with no who", async () => {
+    el = await mount({ quant: "nobody", where: "home" });
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    await setMode(el, "everybody");
+    expect(emitted?.quant).toBe("everyone");
+    expect(emitted?.who).toBeUndefined();
+    expect(emitted?.where).toBe("home");
+  });
+
+  test("Nobody emits {quant: nobody} with no who", async () => {
     el = await mount();
     let emitted: PeoplePredicate | null | undefined;
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
     });
-    const quant = el.shadowRoot.querySelector("select.quant");
-    quant.value = "nobody";
-    quant.dispatchEvent(new Event("change"));
+    await setMode(el, "nobody");
     expect(emitted?.quant).toBe("nobody");
+    expect(emitted?.who).toBeUndefined();
   });
 
-  test("emits where when the location changes", async () => {
-    el = await mount();
+  test("Any of these people emits {quant: any, who:[...]}", async () => {
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
     let emitted: PeoplePredicate | null | undefined;
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
     });
-    const where = el.shadowRoot.querySelector("select.where");
-    where.value = "zone.work";
-    where.dispatchEvent(new Event("change"));
-    expect(emitted?.where).toBe("zone.work");
+    await setMode(el, "any");
+    expect(emitted?.quant).toBe("any");
+    expect(emitted?.who).toEqual(["person.alice"]);
+  });
+
+  test("All of these people emits {quant: everyone, who:[...]}", async () => {
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    await setMode(el, "all");
+    expect(emitted?.quant).toBe("everyone");
+    expect(emitted?.who).toEqual(["person.alice"]);
+  });
+
+  test("None of these people emits {quant: nobody, who:[...]}", async () => {
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    await setMode(el, "none");
+    expect(emitted?.quant).toBe("nobody");
+    expect(emitted?.who).toEqual(["person.alice"]);
+  });
+
+  // --- person checklist visibility -----------------------------------------
+
+  test("person checklist is hidden for Everybody and Nobody", async () => {
+    el = await mount({ quant: "everyone", where: "home" });
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
+    await setMode(el, "nobody");
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
+  });
+
+  test("person checklist is shown for the three '…these people' modes", async () => {
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]").length).toBeGreaterThan(0);
+    await setMode(el, "all");
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]").length).toBeGreaterThan(0);
+    await setMode(el, "none");
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]").length).toBeGreaterThan(0);
   });
 
   test("toggling a person on adds it to who", async () => {
-    el = await mount();
+    el = await mount({ who: [], quant: "any", where: "home" });
+    // Switch into a 'these people' mode so the checklist renders.
+    await setMode(el, "any");
     let emitted: PeoplePredicate | null | undefined;
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
@@ -85,19 +167,57 @@ describe("ambience-people-predicate-input", () => {
     expect(emitted?.who).toContain("person.alice");
   });
 
-  test("matcher-input dispatches to the people widget for input=people_predicate", async () => {
-    const di: any = document.createElement("ambience-matcher-input");
-    di.matcher = { name: "people", description: "", predicate_help: "", input: "people_predicate", priority: 75 };
-    di.value = null;
-    di.hass = hass;
-    document.body.appendChild(di);
-    await di.updateComplete;
-    expect(di.shadowRoot.querySelector("ambience-people-predicate-input")).not.toBeNull();
-    di.remove();
+  // --- round-trips ----------------------------------------------------------
+
+  test("round-trips a base mode (Everybody) into the controls", async () => {
+    el = await mount({ quant: "everyone", where: "home" });
+    expect(modeSelect(el).value).toBe("everybody");
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
   });
 
+  test("round-trips Nobody base mode", async () => {
+    el = await mount({ quant: "nobody", where: "home" });
+    expect(modeSelect(el).value).toBe("nobody");
+  });
+
+  test("round-trips a 'these people' mode and ticks selected people", async () => {
+    el = await mount({ who: ["person.alice"], quant: "everyone", where: "home" });
+    expect(modeSelect(el).value).toBe("all");
+    const checked = Array.from(
+      el.shadowRoot.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
+    ).filter((c: HTMLInputElement) => c.checked);
+    expect(checked).toHaveLength(1);
+  });
+
+  // --- location dropdown ----------------------------------------------------
+
+  test("emits where when the location changes", async () => {
+    el = await mount();
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    const where = whereSelect(el);
+    where.value = "zone.work";
+    where.dispatchEvent(new Event("change"));
+    expect(emitted?.where).toBe("zone.work");
+  });
+
+  test("location options include home/away/zones but not zone.home", async () => {
+    el = await mount();
+    const options = Array.from(
+      whereSelect(el).querySelectorAll<HTMLOptionElement>("option"),
+    ).map((o: HTMLOptionElement) => o.value);
+    expect(options).toContain("home");
+    expect(options).toContain("away");
+    expect(options).toContain("zone.work");
+    expect(options).not.toContain("zone.home");
+  });
+
+  // --- for duration ---------------------------------------------------------
+
   test("round-trips a non-zero `for` into the native h/m/s inputs and emits {h,m,s}", async () => {
-    el = await mount({ quant: "any", where: "home", for: { h: 0, m: 10, s: 0 } });
+    el = await mount({ quant: "everyone", where: "home", for: { h: 0, m: 10, s: 0 } });
     const inputs = Array.from(
       el.shadowRoot.querySelectorAll<HTMLInputElement>("[data-field=for] input[type=number]"),
     );
@@ -119,43 +239,16 @@ describe("ambience-people-predicate-input", () => {
     expect(Object.keys(emitted?.for ?? {}).sort()).toEqual(["h", "m", "s"]);
   });
 
-  test("deselecting the last selected person collapses to null", async () => {
-    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
-    let emitted: PeoplePredicate | null | undefined = undefined;
-    el.addEventListener("value-changed", (e: Event) => {
-      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
-    });
-    const checked = Array.from(
-      el.shadowRoot.querySelectorAll<HTMLInputElement>("input[type=checkbox]"),
-    ).filter((c: HTMLInputElement) => c.checked);
-    expect(checked).toHaveLength(1);
-    const cb = checked[0];
-    cb.checked = false;
-    cb.dispatchEvent(new Event("change"));
-    expect(emitted).toBeNull();
-  });
+  // --- matcher-input dispatch ----------------------------------------------
 
-  test("excludes zone.home from the location dropdown options", async () => {
-    el = await mount();
-    const options = Array.from(
-      el.shadowRoot.querySelectorAll<HTMLOptionElement>("select.where option"),
-    ).map((o: HTMLOptionElement) => o.value);
-    expect(options).toContain("home");
-    expect(options).toContain("away");
-    expect(options).toContain("zone.work");
-    expect(options).not.toContain("zone.home");
-  });
-
-  test("default selection (any/home/no who/no for) emits null", async () => {
-    // Start from a non-default value, then return to the default.
-    el = await mount({ quant: "nobody", where: "home" });
-    let emitted: PeoplePredicate | null | undefined = undefined as any;
-    el.addEventListener("value-changed", (e: Event) => {
-      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
-    });
-    const quant = el.shadowRoot.querySelector("select.quant");
-    quant.value = "any";
-    quant.dispatchEvent(new Event("change"));
-    expect(emitted).toBeNull();
+  test("matcher-input dispatches to the people widget for input=people_predicate", async () => {
+    const di: any = document.createElement("ambience-matcher-input");
+    di.matcher = { name: "people", description: "", predicate_help: "", input: "people_predicate", priority: 75 };
+    di.value = null;
+    di.hass = hass;
+    document.body.appendChild(di);
+    await di.updateComplete;
+    expect(di.shadowRoot.querySelector("ambience-people-predicate-input")).not.toBeNull();
+    di.remove();
   });
 });

@@ -23,6 +23,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     DATA_EXPOSED_ACTIONS,
+    DATA_LAST_APPLIED,
     DATA_MATCHERS,
     DATA_PERIODS,
     DATA_STORE,
@@ -99,6 +100,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data = hass.data.setdefault(DOMAIN, {})
     domain_data[DATA_MATCHERS] = {}
     domain_data[DATA_SWITCHES] = {}
+    domain_data[DATA_LAST_APPLIED] = {}
 
     store = AmbienceStore(hass)
     await store.async_load()

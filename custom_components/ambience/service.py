@@ -11,6 +11,7 @@ from homeassistant.exceptions import ServiceValidationError
 
 from .const import (
     DATA_EXPOSED_ACTIONS,
+    DATA_LAST_APPLIED,
     DATA_MATCHERS,
     DATA_STORE,
     DATA_SWITCHES,
@@ -206,3 +207,13 @@ async def async_apply_scene(
     for result in results:
         if isinstance(result, BaseException):
             _LOGGER.warning("ambience: action raised: %s", result)
+
+    domain_data = hass.data[DOMAIN]
+    domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id)] = plan[
+        "matched_rule_index"
+    ]
+
+
+def get_last_applied(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> int | None:
+    """The rule index last applied to this scope, or None if never applied."""
+    return hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).get((scope_kind, scope_id))

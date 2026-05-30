@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -9,6 +11,7 @@ from pytest_homeassistant_custom_component.common import async_mock_service
 
 from custom_components.ambience.const import (
     DATA_EXPOSED_ACTIONS,
+    DATA_LAST_APPLIED,
     DATA_MATCHERS,
     DATA_STORE,
     DATA_SWITCHES,
@@ -695,3 +698,43 @@ async def test_resolve_with_snapshots_no_match(hass: HomeAssistant) -> None:
     plan = await async_resolve_with_snapshots(hass, "area", "a", {"tod": "evening"})
     assert plan["matched_rule_index"] is None
     assert plan["actions"] == []
+
+
+def _switch(on: bool) -> SimpleNamespace:
+    return SimpleNamespace(is_on=on)
+
+
+async def test_apply_scene_records_last_applied_rule(hass: HomeAssistant) -> None:
+    areas = {"a": {"rules": [{"name": "r", "when": {"tod": "evening"}, "actions": []}]}}
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {"tod": FixedMatcher("evening"), "scene": SceneMatcher()},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    await async_apply_scene(hass, "area", "a")
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0
+
+
+async def test_apply_scene_switch_off_does_not_record(hass: HomeAssistant) -> None:
+    areas = {"a": {"rules": [{"name": "r", "when": {"tod": "evening"}, "actions": []}]}}
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {"tod": FixedMatcher("evening"), "scene": SceneMatcher()},
+        DATA_SWITCHES: {("area", "a"): _switch(False)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    await async_apply_scene(hass, "area", "a")
+    assert ("area", "a") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
+async def test_apply_scene_no_match_does_not_record(hass: HomeAssistant) -> None:
+    areas = {"a": {"rules": [{"name": "r", "when": {"tod": "morning"}, "actions": []}]}}
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {"tod": FixedMatcher("evening"), "scene": SceneMatcher()},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    await async_apply_scene(hass, "area", "a")
+    assert ("area", "a") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})

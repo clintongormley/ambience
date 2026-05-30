@@ -30,9 +30,11 @@ class FakeStore:
         self,
         scopes: list[tuple[str, str | None, dict]],
         enabled: dict[tuple[str, str | None], bool] | None = None,
+        disabled: dict[tuple[str, str | None], set[str]] | None = None,
     ) -> None:
         self._scopes = scopes
         self._enabled = enabled or {}
+        self._disabled = disabled or {}
         self._by_key = {(kind, sid): cfg for kind, sid, cfg in scopes}
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict]]:
@@ -40,6 +42,9 @@ class FakeStore:
 
     def auto_triggers_enabled(self, scope_kind: str, scope_id: str | None) -> bool:
         return self._enabled.get((scope_kind, scope_id), True)
+
+    def auto_triggers_disabled(self, scope_kind: str, scope_id: str | None) -> frozenset[str]:
+        return frozenset(self._disabled.get((scope_kind, scope_id), set()))
 
     def get_area(self, area_id: str) -> dict | None:
         return self._by_key.get(("area", area_id))
@@ -64,8 +69,11 @@ class DepsMatcher:
         return predicate is None or predicate == snapshot
 
 
-def _engine(hass, scopes, matchers, enabled=None) -> AutoTriggerEngine:
-    hass.data[DOMAIN] = {DATA_STORE: FakeStore(scopes, enabled), DATA_MATCHERS: matchers}
+def _engine(hass, scopes, matchers, enabled=None, disabled=None) -> AutoTriggerEngine:
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes, enabled, disabled),
+        DATA_MATCHERS: matchers,
+    }
     return AutoTriggerEngine(hass)
 
 
@@ -86,6 +94,31 @@ async def test_rebuild_skips_disabled_scope(hass) -> None:
     engine = _engine(hass, scopes, matchers, enabled={("area", "kitchen"): False})
     engine.async_rebuild()
     assert engine.index.by_entity == {}
+
+
+async def test_rebuild_filters_disabled_trigger(hass) -> None:
+    """A disabled trigger key drops that watch but keeps the rest of the scope."""
+    scopes = [("area", "kitchen", {"rules": [{"when": {"state": "x"}}]})]
+    spec = TriggerSpec(entities=frozenset({"binary_sensor.motion", "sensor.lux"}))
+    matchers = {"state": DepsMatcher(spec)}
+    engine = _engine(
+        hass,
+        scopes,
+        matchers,
+        disabled={("area", "kitchen"): {"entity:binary_sensor.motion"}},
+    )
+    engine.async_rebuild()
+    assert "binary_sensor.motion" not in engine.index.by_entity
+    assert engine.index.by_entity["sensor.lux"] == frozenset({("area", "kitchen", 0, "state")})
+
+
+async def test_rebuild_disabling_all_watches_drops_predicate(hass) -> None:
+    scopes = [("area", "kitchen", {"rules": [{"when": {"state": "x"}}]})]
+    matchers = {"state": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.lux"})))}
+    engine = _engine(hass, scopes, matchers, disabled={("area", "kitchen"): {"entity:sensor.lux"}})
+    engine.async_rebuild()
+    assert engine.index.by_entity == {}
+    assert engine.index.all_predicates() == frozenset()
 
 
 async def test_rebuild_skips_none_predicate_and_empty_deps(hass) -> None:

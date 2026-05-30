@@ -27,6 +27,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from .matchers.time_of_day import ANCHOR_ATTR
+from .scope_triggers import filter_spec
 from .service import (
     _switch_state,
     async_execute_plan,
@@ -100,10 +101,17 @@ class AutoTriggerEngine:
         }
 
     def _build_entries(self) -> list[tuple[PredKey, TriggerSpec]]:
-        """Return (PredKey, TriggerSpec) for every non-wildcard predicate with deps."""
+        """Return (PredKey, TriggerSpec) for every non-wildcard predicate with deps.
+
+        Watches the user has disabled for a scope (``store.auto_triggers_disabled``)
+        are stripped per predicate, so a disabled entity/time stops waking the
+        scope while every other watch keeps working.
+        """
+        store = self._store()
         matchers = self._matchers()
         entries: list[tuple[PredKey, TriggerSpec]] = []
         for (scope_kind, scope_id), cfg in self._scope_cfgs.items():
+            disabled = store.auto_triggers_disabled(scope_kind, scope_id)
             for rule_index, rule in enumerate(cfg.get("rules", [])):
                 for matcher_key, predicate in rule.get("when", {}).items():
                     if predicate is None:  # wildcard — nothing to watch
@@ -113,6 +121,7 @@ class AutoTriggerEngine:
                         continue
                     trigger_deps = getattr(matcher, "trigger_deps", None)
                     spec = trigger_deps(predicate) if trigger_deps else TriggerSpec(opaque=True)
+                    spec = filter_spec(spec, disabled)
                     if spec == EMPTY:
                         continue
                     entries.append(((scope_kind, scope_id, rule_index, matcher_key), spec))

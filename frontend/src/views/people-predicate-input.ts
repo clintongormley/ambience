@@ -70,7 +70,8 @@ export class AmbiencePeoplePredicateInput extends LitElement {
       color: var(--secondary-text-color, #888); font-size: 0.9em;
     }
     .people-list {
-      display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem;
+      display: flex; flex-direction: column; align-items: flex-start;
+      gap: 0.3rem; margin-bottom: 0.6rem;
     }
     .hint { color: var(--secondary-text-color, #888); font-size: 0.85em; }
     .field-error {

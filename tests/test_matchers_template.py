@@ -238,3 +238,53 @@ async def test_snapshot_captures_entity_dependencies(hass: HomeAssistant) -> Non
     _install_store(hass, areas={"a": {"rules": [{"when": {"template": {"template": tmpl}}}]}})
     snap = await TemplateMatcher(hass=hass).snapshot(hass)
     assert "sensor.lux" in snap.deps[tmpl].entities
+
+
+# ── trigger_deps ──────────────────────────────────────────────────────────────
+
+
+async def test_trigger_deps_collects_referenced_entities(hass: HomeAssistant) -> None:
+    spec = TemplateMatcher(hass=hass).trigger_deps(
+        {"template": "{{ is_state('binary_sensor.motion', 'on') }}"}
+    )
+    assert spec.entities == frozenset({"binary_sensor.motion"})
+    assert spec.has_time is False
+    assert spec.opaque is False
+
+
+async def test_trigger_deps_keeps_entities_despite_render_error(hass: HomeAssistant) -> None:
+    # `int` on an 'unknown' state raises mid-render, but the dependency on
+    # sensor.lux was still collected — we watch it and stay non-opaque.
+    spec = TemplateMatcher(hass=hass).trigger_deps(
+        {"template": "{{ states('sensor.lux') | int > 100 }}"}
+    )
+    assert spec.entities == frozenset({"sensor.lux"})
+    assert spec.opaque is False
+
+
+async def test_trigger_deps_flags_time_dependence(hass: HomeAssistant) -> None:
+    spec = TemplateMatcher(hass=hass).trigger_deps({"template": "{{ now().hour > 18 }}"})
+    assert spec.has_time is True
+    assert spec.opaque is False
+
+
+async def test_trigger_deps_domain_wide_is_opaque(hass: HomeAssistant) -> None:
+    # Iterating a whole domain (states.sensor) can't be watched entity-by-entity.
+    spec = TemplateMatcher(hass=hass).trigger_deps(
+        {"template": "{{ states.sensor | list | count > 0 }}"}
+    )
+    assert spec.opaque is True
+
+
+def test_trigger_deps_none_or_garbage_is_empty() -> None:
+    from custom_components.ambience.triggers import EMPTY
+
+    assert TemplateMatcher().trigger_deps(None) == EMPTY
+    assert TemplateMatcher().trigger_deps("garbage") == EMPTY
+    assert TemplateMatcher().trigger_deps({}) == EMPTY
+
+
+def test_trigger_deps_without_hass_is_opaque() -> None:
+    spec = TemplateMatcher().trigger_deps({"template": "{{ true }}"})
+    assert spec.opaque is True
+    assert spec.entities == frozenset()

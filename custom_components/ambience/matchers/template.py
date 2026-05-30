@@ -22,6 +22,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.template import Template, result_as_boolean
 
+from ..triggers import EMPTY, TriggerSpec
 from ._collect import collect_scope_predicates
 
 _LOGGER = logging.getLogger(__name__)
@@ -112,6 +113,34 @@ class TemplateMatcher:
         if not isinstance(tmpl, str):
             return False
         return snapshot.results.get(tmpl, False) is True
+
+    # --- trigger dependencies ---------------------------------------------
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        if not isinstance(predicate, dict):
+            return EMPTY
+        tmpl = predicate.get("template")
+        if not isinstance(tmpl, str) or not tmpl.strip():
+            return EMPTY
+        if self._hass is None:
+            # Can't introspect the template without hass → deps unknown.
+            return TriggerSpec(opaque=True)
+        try:
+            info = Template(tmpl, self._hass).async_render_to_info()
+        except TemplateError:
+            return TriggerSpec(opaque=True)
+        # `entities`/`domains`/`all_states`/`has_time` are collected even when the
+        # render then errors (e.g. an entity is momentarily 'unknown'), so a render
+        # exception is not itself a reason to distrust the deps. Over-broadness —
+        # scanning every state (`all_states`) or iterating a whole domain
+        # (`domains`, e.g. `states.sensor`) — is: we can't watch that
+        # entity-by-entity, so flag opaque to make the engine warn and fall back.
+        over_broad = bool(info.all_states or info.domains)
+        return TriggerSpec(
+            entities=frozenset(info.entities),
+            has_time=bool(info.has_time),
+            opaque=over_broad,
+        )
 
     # --- snapshot orchestration -------------------------------------------
 

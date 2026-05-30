@@ -11,6 +11,7 @@ def test_empty_has_all_empty_fields() -> None:
     assert EMPTY.clock_times == frozenset()
     assert EMPTY.sun_events == frozenset()
     assert EMPTY.date_rollover is False
+    assert EMPTY.has_time is False
     assert EMPTY.opaque is False
 
 
@@ -37,6 +38,7 @@ def test_merge_unions_sets_and_ors_bools() -> None:
     b = TriggerSpec(
         entities=frozenset({"light.b"}),
         clock_times=frozenset({(22, 30)}),
+        has_time=True,
         opaque=True,
     )
     out = merge([a, b])
@@ -45,6 +47,7 @@ def test_merge_unions_sets_and_ors_bools() -> None:
     assert out.clock_times == frozenset({(7, 0), (22, 30)})
     assert out.sun_events == frozenset({("sunset", 0)})
     assert out.date_rollover is True
+    assert out.has_time is True
     assert out.opaque is True
 
 

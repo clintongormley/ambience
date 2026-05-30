@@ -23,6 +23,9 @@ class TriggerSpec:
     - ``sun_events``: ``(anchor, offset_min)`` — anchor is one of
       sunrise/sunset/noon/midnight/dawn/dusk.
     - ``date_rollover``: re-evaluate at local midnight (date changed).
+    - ``has_time``: the predicate's result depends on the wall clock
+      (e.g. a template using ``now()``) with no discrete boundary to schedule,
+      so it needs periodic re-evaluation — the engine picks the cadence.
     - ``opaque``: dependencies may be incomplete (e.g. script) — drives a UI
       warning; never silently trusted as complete.
     """
@@ -32,6 +35,7 @@ class TriggerSpec:
     clock_times: frozenset[tuple[int, int]] = frozenset()
     sun_events: frozenset[tuple[str, int]] = frozenset()
     date_rollover: bool = False
+    has_time: bool = False
     opaque: bool = False
 
 
@@ -45,6 +49,7 @@ def merge(specs: Iterable[TriggerSpec]) -> TriggerSpec:
     clock_times: set[tuple[int, int]] = set()
     sun_events: set[tuple[str, int]] = set()
     date_rollover = False
+    has_time = False
     opaque = False
     for spec in specs:
         entities |= spec.entities
@@ -52,6 +57,7 @@ def merge(specs: Iterable[TriggerSpec]) -> TriggerSpec:
         clock_times |= spec.clock_times
         sun_events |= spec.sun_events
         date_rollover = date_rollover or spec.date_rollover
+        has_time = has_time or spec.has_time
         opaque = opaque or spec.opaque
     return TriggerSpec(
         entities=frozenset(entities),
@@ -59,5 +65,6 @@ def merge(specs: Iterable[TriggerSpec]) -> TriggerSpec:
         clock_times=frozenset(clock_times),
         sun_events=frozenset(sun_events),
         date_rollover=date_rollover,
+        has_time=has_time,
         opaque=opaque,
     )

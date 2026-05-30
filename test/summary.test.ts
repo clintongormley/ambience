@@ -9,6 +9,7 @@ import {
   summariseSun,
   summariseState,
   summariseScript,
+  summarisePeople,
 } from "../frontend/src/summary";
 import type {
   ActionSpec,
@@ -67,6 +68,80 @@ describe("summariseMatcher", () => {
     expect(
       summariseMatcher("time_of_day", { period: "afternoon" }, { hass: noLocalize, periods }),
     ).toBe("Afternoon");
+  });
+
+  test("people predicate delegates to summarisePeople (not [object Object])", () => {
+    expect(
+      summariseMatcher("people", { quant: "nobody", where: "home" }, { hass: noLocalize, periods }),
+    ).toBe("Nobody home");
+  });
+});
+
+describe("summarisePeople", () => {
+  const hassPeople = {
+    localize: () => undefined,
+    states: {
+      "person.alice": { attributes: { friendly_name: "Alice" } },
+      "person.bob": { attributes: { friendly_name: "Bob" } },
+      "zone.work": { attributes: { friendly_name: "Work" } },
+    },
+  };
+
+  test("null predicate renders as 'any'", () => {
+    expect(summarisePeople(null)).toBe("any");
+  });
+
+  test("quantifiers over the whole household", () => {
+    expect(summarisePeople({ quant: "nobody", where: "home" })).toBe("Nobody home");
+    expect(summarisePeople({ quant: "everyone", where: "home" })).toBe("Everyone home");
+    expect(summarisePeople({ quant: "any", where: "home" })).toBe("Anyone home");
+  });
+
+  test("defaults: missing quant is 'any', missing where is 'home'", () => {
+    expect(summarisePeople({})).toBe("Anyone home");
+  });
+
+  test("away location", () => {
+    expect(summarisePeople({ quant: "any", where: "away" })).toBe("Anyone away");
+  });
+
+  test("zone location uses the zone friendly name", () => {
+    expect(summarisePeople({ who: ["person.alice"], where: "zone.work" }, { hass: hassPeople }))
+      .toBe("Alice at Work");
+  });
+
+  test("explicit people: everyone joins with &, any joins with or", () => {
+    expect(
+      summarisePeople(
+        { who: ["person.alice", "person.bob"], quant: "everyone", where: "home" },
+        { hass: hassPeople },
+      ),
+    ).toBe("Alice & Bob home");
+    expect(
+      summarisePeople(
+        { who: ["person.alice", "person.bob"], quant: "any", where: "home" },
+        { hass: hassPeople },
+      ),
+    ).toBe("Alice or Bob home");
+  });
+
+  test("explicit people with nobody", () => {
+    expect(
+      summarisePeople(
+        { who: ["person.alice", "person.bob"], quant: "nobody", where: "home" },
+        { hass: hassPeople },
+      ),
+    ).toBe("None of Alice, Bob home");
+  });
+
+  test("duration suffix", () => {
+    expect(summarisePeople({ quant: "any", where: "home", for: { h: 0, m: 10, s: 0 } }))
+      .toBe("Anyone home for ≥10m");
+  });
+
+  test("falls back to humanised ids when no friendly names", () => {
+    expect(summarisePeople({ who: ["person.carol"], quant: "any", where: "zone.gym" }))
+      .toBe("Carol at Gym");
   });
 });
 

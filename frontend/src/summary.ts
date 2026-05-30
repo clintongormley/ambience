@@ -13,6 +13,7 @@ import type {
   DayItem,
   DayPredicate,
   ExposedAction,
+  PeoplePredicate,
   PeriodStoreView,
   Rule,
   ScriptPredicate,
@@ -98,6 +99,9 @@ export function summariseMatcher(
   if (matcherName === "script") {
     return summariseScript(predicate as ScriptPredicate, ctx);
   }
+  if (matcherName === "people") {
+    return summarisePeople(predicate as PeoplePredicate, ctx);
+  }
   return String(predicate);
 }
 
@@ -112,6 +116,52 @@ export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {})
   if (keys.length === 0) return pred.script;
   const argStr = keys.map((k) => `${k}=${args[k]}`).join(", ");
   return `${pred.script}(${argStr})`;
+}
+
+/** Display name for an entity from a domain-prefixed id, falling back to a
+ *  humanised local id (`person.alice` → "Alice", `zone.gym` → "Gym") when no
+ *  friendly_name is set. */
+function _domainEntityName(ctx: MatcherContext, entity_id: string): string {
+  const states = (ctx.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
+  const name = states?.[entity_id]?.attributes?.friendly_name;
+  if (typeof name === "string" && name) return name;
+  const dot = entity_id.indexOf(".");
+  const local = dot >= 0 ? entity_id.slice(dot + 1) : entity_id;
+  return local.charAt(0).toUpperCase() + local.slice(1);
+}
+
+/** The location phrase: "home", "away", or "at <Zone>". */
+function _whereLabel(where: string, ctx: MatcherContext): string {
+  if (where === "home") return localize(ctx.hass, "people_summary.home", "home");
+  if (where === "away") return localize(ctx.hass, "people_summary.away", "away");
+  return `${localize(ctx.hass, "people_summary.at", "at")} ${_domainEntityName(ctx, where)}`;
+}
+
+export function summarisePeople(pred: PeoplePredicate, ctx: MatcherContext = {}): string {
+  if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
+  const who = pred.who ?? [];
+  const quant = pred.quant ?? "any";
+  const where = pred.where ?? "home";
+  const names = who.map((id) => _domainEntityName(ctx, id));
+  let subject: string;
+  if (names.length === 0) {
+    subject =
+      quant === "everyone"
+        ? localize(ctx.hass, "people_summary.everyone", "Everyone")
+        : quant === "nobody"
+          ? localize(ctx.hass, "people_summary.nobody", "Nobody")
+          : localize(ctx.hass, "people_summary.anyone", "Anyone");
+  } else if (quant === "nobody") {
+    subject = `${localize(ctx.hass, "people_summary.none_of", "None of")} ${names.join(", ")}`;
+  } else {
+    const sep = quant === "everyone" ? " & " : ` ${localize(ctx.hass, "people_summary.or", "or")} `;
+    subject = names.join(sep);
+  }
+  const head = `${subject} ${_whereLabel(where, ctx)}`;
+  if (pred.for && _hasStateDuration(pred.for)) {
+    return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
+  }
+  return head;
 }
 
 export function summariseDay(pred: DayPredicate, ctx: MatcherContext = {}): string {

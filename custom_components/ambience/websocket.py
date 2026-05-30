@@ -54,6 +54,9 @@ _WS_COMMANDS = (
     "ambience/house/switch/save",
     "ambience/floor/switch/save",
     "ambience/area/switch/save",
+    "ambience/auto_triggers/get",
+    "ambience/auto_triggers/set",
+    "ambience/script/referenced_entities",
 )
 
 
@@ -153,6 +156,9 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_house_switch_save)
     websocket_api.async_register_command(hass, _ws_floor_switch_save)
     websocket_api.async_register_command(hass, _ws_area_switch_save)
+    websocket_api.async_register_command(hass, _ws_auto_triggers_get)
+    websocket_api.async_register_command(hass, _ws_auto_triggers_set)
+    websocket_api.async_register_command(hass, _ws_script_referenced_entities)
 
 
 def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
@@ -1003,6 +1009,75 @@ async def _ws_area_switch_save(
         connection.send_error(msg["id"], "validation_error", f"unknown area: {area_id}")
         return
     await _save_scope_switch(hass, connection, msg, "area", area_id)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/auto_triggers/get",
+        vol.Required("scope_kind"): str,
+        vol.Optional("scope_id"): vol.Any(str, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_auto_triggers_get(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    try:
+        enabled = store.auto_triggers_enabled(msg["scope_kind"], msg.get("scope_id"))
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    connection.send_result(msg["id"], {"enabled": enabled})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/auto_triggers/set",
+        vol.Required("scope_kind"): str,
+        vol.Optional("scope_id"): vol.Any(str, None),
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def _ws_auto_triggers_set(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    try:
+        await store.async_set_auto_triggers_enabled(
+            msg["scope_kind"], msg.get("scope_id"), msg["enabled"]
+        )
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/script/referenced_entities",
+        vol.Required("script"): str,
+    }
+)
+@websocket_api.async_response
+async def _ws_script_referenced_entities(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Best-effort static entities a script references (for trigger suggestions).
+
+    May be incomplete — templated references aren't captured (the engine warns).
+    """
+    component = hass.data.get("entity_components", {}).get("script")
+    entities: list[str] = []
+    if component is not None:
+        entity = component.get_entity(msg["script"])
+        if entity is not None:
+            entities = sorted(entity.referenced_entities)
+    connection.send_result(msg["id"], {"entities": entities})
 
 
 def async_unregister_commands(hass: HomeAssistant) -> None:

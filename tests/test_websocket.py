@@ -1697,3 +1697,60 @@ async def test_house_save_round_trip(hass: HomeAssistant, installed, hass_ws_cli
 
     resp2 = await _ws_send(hass_ws_client, type="ambience/house/get")
     assert resp2["result"]["rules"][0]["name"] == "away"
+
+
+async def test_auto_triggers_get_defaults_true(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/auto_triggers/get", scope_kind="house")
+    assert resp["success"] is True
+    assert resp["result"] == {"enabled": True}
+
+
+async def test_auto_triggers_set_then_get(hass, installed, hass_ws_client) -> None:
+    set_resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/auto_triggers/set",
+        scope_kind="area",
+        scope_id="lr",
+        enabled=False,
+    )
+    assert set_resp["success"] is True
+    assert set_resp["result"] == {"ok": True}
+    get_resp = await _ws_send(
+        hass_ws_client, type="ambience/auto_triggers/get", scope_kind="area", scope_id="lr"
+    )
+    assert get_resp["result"] == {"enabled": False}
+
+
+async def test_auto_triggers_get_unknown_scope_kind_errors(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/auto_triggers/get", scope_kind="galaxy")
+    assert resp["success"] is False
+
+
+async def test_script_referenced_entities_unknown_script_is_empty(
+    hass, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/script/referenced_entities", script="script.nope"
+    )
+    assert resp["success"] is True
+    assert resp["result"] == {"entities": []}
+
+
+async def test_script_referenced_entities_returns_sorted(hass, installed, hass_ws_client) -> None:
+    from types import SimpleNamespace
+
+    entity = SimpleNamespace(referenced_entities={"person.b", "person.a"})
+    component = SimpleNamespace(get_entity=lambda eid: entity if eid == "script.s" else None)
+    hass.data.setdefault("entity_components", {})["script"] = component
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/script/referenced_entities", script="script.s"
+    )
+    assert resp["success"] is True
+    assert resp["result"] == {"entities": ["person.a", "person.b"]}
+
+
+async def test_auto_triggers_set_unknown_scope_kind_errors(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/auto_triggers/set", scope_kind="galaxy", enabled=True
+    )
+    assert resp["success"] is False

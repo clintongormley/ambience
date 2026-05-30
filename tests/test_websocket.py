@@ -1839,3 +1839,66 @@ async def test_set_trigger_unknown_scope_kind_errors(hass, installed, hass_ws_cl
         enabled=False,
     )
     assert resp["success"] is False
+
+
+async def test_auto_triggers_list_groups_time_and_sun(hass, installed, hass_ws_client) -> None:
+    """A time_of_day rule produces a single grouped 'time' row, not per-time rows."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "when": {
+                        "time_of_day": {
+                            "from": {"kind": "time", "hh": 7, "mm": 0},
+                            "to": {"kind": "time", "hh": 22, "mm": 0},
+                        }
+                    },
+                    "actions": [],
+                }
+            ]
+        },
+    )
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/auto_triggers/list", scope_kind="area", scope_id="lr"
+    )
+    triggers = resp["result"]["triggers"]
+    time_rows = [t for t in triggers if t["kind"] == "time"]
+    assert len(time_rows) == 1
+    assert time_rows[0]["key"] == "group:time"
+    clocks = {(c["hour"], c["minute"]) for c in time_rows[0]["clocks"]}
+    assert clocks == {(7, 0), (22, 0)}
+
+
+async def test_set_group_trigger_then_list_shows_disabled(hass, installed, hass_ws_client) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "when": {
+                        "time_of_day": {
+                            "from": {"kind": "time", "hh": 7, "mm": 0},
+                            "to": {"kind": "time", "hh": 22, "mm": 0},
+                        }
+                    },
+                    "actions": [],
+                }
+            ]
+        },
+    )
+    await _ws_send(
+        hass_ws_client,
+        type="ambience/auto_triggers/set_trigger",
+        scope_kind="area",
+        scope_id="lr",
+        key="group:time",
+        enabled=False,
+    )
+    list_resp = await _ws_send(
+        hass_ws_client, type="ambience/auto_triggers/list", scope_kind="area", scope_id="lr"
+    )
+    row = next(t for t in list_resp["result"]["triggers"] if t["key"] == "group:time")
+    assert row["enabled"] is False

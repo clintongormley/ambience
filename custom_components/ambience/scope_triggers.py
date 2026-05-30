@@ -2,16 +2,19 @@
 
 A scope's triggers are *derived* from its rules: each rule's ``when`` predicate
 is run through its matcher's ``trigger_deps`` and the results merged into one
-``TriggerSpec``. This module turns that merged spec into stable-keyed
-descriptors (for the UI) and filters a spec against a set of disabled keys (for
-the engine). Pure logic — matchers are passed in; no HA imports, no I/O.
+``TriggerSpec``. This module turns that merged spec into UI rows (for the panel)
+and filters a spec against a set of disabled keys (for the engine). Pure logic —
+matchers are passed in; no HA imports, no I/O.
+
+Rows are *grouped*: every watched entity is its own row, but all clock/periodic
+watches collapse into one ``Time`` group and all sun/date-rollover watches into
+one ``Sun`` group. A group is enabled/disabled as a unit — the meaningful choice
+is whether a *class* of trigger should wake the scope, not an individual time.
 
 Canonical trigger keys (shared with the frontend):
 - ``entity:<entity_id>``
-- ``clock:HH:MM`` (24h, zero-padded)
-- ``sun:<anchor>:<offset_min>``
-- ``date_rollover``
-- ``has_time``
+- ``group:time``  (all clock times + periodic wall-clock re-check)
+- ``group:sun``   (all sun events + local date rollover)
 
 ``opaque`` is a flag (script deps may be incomplete), not a disableable watch.
 """
@@ -23,65 +26,63 @@ from typing import Any
 
 from .triggers import TriggerSpec, merge
 
-DATE_ROLLOVER_KEY = "date_rollover"
-HAS_TIME_KEY = "has_time"
+GROUP_TIME_KEY = "group:time"
+GROUP_SUN_KEY = "group:sun"
 
 
 def _entity_key(entity_id: str) -> str:
     return f"entity:{entity_id}"
 
 
-def _clock_key(hour: int, minute: int) -> str:
-    return f"clock:{hour:02d}:{minute:02d}"
-
-
-def _sun_key(anchor: str, offset: int) -> str:
-    return f"sun:{anchor}:{offset}"
-
-
 def trigger_descriptors(spec: TriggerSpec) -> list[dict[str, Any]]:
-    """Enumerate a merged spec into ordered ``{key, kind, ...}`` rows.
+    """Enumerate a merged spec into grouped ``{key, kind, ...}`` rows.
 
-    Order: entities, clock times, sun events (each sorted), then date_rollover,
-    then has_time. ``opaque`` produces no row.
+    One row per entity (sorted), then a single ``time`` group row (if any clock
+    times / periodic re-check) carrying its members, then a single ``sun`` group
+    row (if any sun events / date rollover). ``opaque`` produces no row. The UI
+    is responsible for final display ordering (it sorts entities by name).
     """
     rows: list[dict[str, Any]] = []
     for entity_id in sorted(spec.entities):
         rows.append({"key": _entity_key(entity_id), "kind": "entity", "entity_id": entity_id})
-    for hour, minute in sorted(spec.clock_times):
+    if spec.clock_times or spec.has_time:
         rows.append(
-            {"key": _clock_key(hour, minute), "kind": "clock", "hour": hour, "minute": minute}
+            {
+                "key": GROUP_TIME_KEY,
+                "kind": "time",
+                "clocks": [{"hour": h, "minute": m} for h, m in sorted(spec.clock_times)],
+                "has_time": spec.has_time,
+            }
         )
-    for anchor, offset in sorted(spec.sun_events):
+    if spec.sun_events or spec.date_rollover:
         rows.append(
-            {"key": _sun_key(anchor, offset), "kind": "sun", "anchor": anchor, "offset": offset}
+            {
+                "key": GROUP_SUN_KEY,
+                "kind": "sun",
+                "suns": [{"anchor": a, "offset": o} for a, o in sorted(spec.sun_events)],
+                "date_rollover": spec.date_rollover,
+            }
         )
-    if spec.date_rollover:
-        rows.append({"key": DATE_ROLLOVER_KEY, "kind": "date_rollover"})
-    if spec.has_time:
-        rows.append({"key": HAS_TIME_KEY, "kind": "has_time"})
     return rows
 
 
 def filter_spec(spec: TriggerSpec, disabled: Collection[str]) -> TriggerSpec:
-    """Return a copy of ``spec`` with every watch whose key is in ``disabled``
-    removed. ``opaque`` is preserved (it is a flag, not a watch)."""
+    """Return a copy of ``spec`` with every watch whose group key is in
+    ``disabled`` removed. ``opaque`` is preserved (it is a flag, not a watch)."""
     if not disabled:
         return spec
     disabled = set(disabled)
+    drop_time = GROUP_TIME_KEY in disabled
+    drop_sun = GROUP_SUN_KEY in disabled
     return TriggerSpec(
         entities=frozenset(e for e in spec.entities if _entity_key(e) not in disabled),
         entity_durations=frozenset(
             (e, s) for (e, s) in spec.entity_durations if _entity_key(e) not in disabled
         ),
-        clock_times=frozenset(
-            (h, m) for (h, m) in spec.clock_times if _clock_key(h, m) not in disabled
-        ),
-        sun_events=frozenset(
-            (a, o) for (a, o) in spec.sun_events if _sun_key(a, o) not in disabled
-        ),
-        date_rollover=spec.date_rollover and DATE_ROLLOVER_KEY not in disabled,
-        has_time=spec.has_time and HAS_TIME_KEY not in disabled,
+        clock_times=frozenset() if drop_time else spec.clock_times,
+        sun_events=frozenset() if drop_sun else spec.sun_events,
+        date_rollover=spec.date_rollover and not drop_sun,
+        has_time=spec.has_time and not drop_time,
         opaque=spec.opaque,
     )
 

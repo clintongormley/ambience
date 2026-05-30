@@ -31,23 +31,47 @@ def test_descriptors_entity_rows_sorted_with_keys() -> None:
     ]
 
 
-def test_descriptors_clock_sun_rollover_hastime() -> None:
+def test_descriptors_time_group_collects_clocks_and_periodic() -> None:
+    spec = TriggerSpec(clock_times=frozenset({(18, 0), (6, 30)}), has_time=True)
+    rows = trigger_descriptors(spec)
+    assert rows == [
+        {
+            "key": "group:time",
+            "kind": "time",
+            "clocks": [{"hour": 6, "minute": 30}, {"hour": 18, "minute": 0}],
+            "has_time": True,
+        }
+    ]
+
+
+def test_descriptors_sun_group_collects_events_and_rollover() -> None:
     spec = TriggerSpec(
-        clock_times=frozenset({(18, 0), (6, 30)}),
         sun_events=frozenset({("sunset", 30), ("sunrise", -15)}),
         date_rollover=True,
-        has_time=True,
     )
     rows = trigger_descriptors(spec)
-    assert {"key": "clock:06:30", "kind": "clock", "hour": 6, "minute": 30} in rows
-    assert {"key": "clock:18:00", "kind": "clock", "hour": 18, "minute": 0} in rows
-    assert {"key": "sun:sunrise:-15", "kind": "sun", "anchor": "sunrise", "offset": -15} in rows
-    assert {"key": "sun:sunset:30", "kind": "sun", "anchor": "sunset", "offset": 30} in rows
-    assert {"key": "date_rollover", "kind": "date_rollover"} in rows
-    assert {"key": "has_time", "kind": "has_time"} in rows
-    # clock rows are sorted ascending
-    clock_keys = [r["key"] for r in rows if r["kind"] == "clock"]
-    assert clock_keys == ["clock:06:30", "clock:18:00"]
+    assert rows == [
+        {
+            "key": "group:sun",
+            "kind": "sun",
+            "suns": [{"anchor": "sunrise", "offset": -15}, {"anchor": "sunset", "offset": 30}],
+            "date_rollover": True,
+        }
+    ]
+
+
+def test_descriptors_order_entities_then_time_then_sun() -> None:
+    spec = TriggerSpec(
+        entities=frozenset({"person.bob"}),
+        clock_times=frozenset({(7, 0)}),
+        sun_events=frozenset({("dusk", 0)}),
+    )
+    assert [r["kind"] for r in trigger_descriptors(spec)] == ["entity", "time", "sun"]
+
+
+def test_descriptors_no_time_group_when_no_clocks_or_periodic() -> None:
+    spec = TriggerSpec(entities=frozenset({"a.b"}))
+    assert [r["kind"] for r in trigger_descriptors(spec)] == ["entity"]
 
 
 def test_descriptors_opaque_is_not_a_row() -> None:
@@ -67,21 +91,31 @@ def test_filter_drops_disabled_entity_and_its_duration() -> None:
     assert out.entity_durations == frozenset({("person.bob", 5.0)})
 
 
-def test_filter_drops_clock_and_sun() -> None:
+def test_filter_time_group_clears_clocks_and_hastime() -> None:
     spec = TriggerSpec(
         clock_times=frozenset({(18, 0), (6, 30)}),
-        sun_events=frozenset({("sunset", 30), ("sunrise", -15)}),
+        has_time=True,
+        sun_events=frozenset({("sunset", 30)}),
     )
-    out = filter_spec(spec, {"clock:18:00", "sun:sunrise:-15"})
-    assert out.clock_times == frozenset({(6, 30)})
+    out = filter_spec(spec, {"group:time"})
+    assert out.clock_times == frozenset()
+    assert out.has_time is False
+    # Sun group is untouched.
     assert out.sun_events == frozenset({("sunset", 30)})
 
 
-def test_filter_clears_rollover_and_hastime_keeps_opaque() -> None:
-    spec = TriggerSpec(date_rollover=True, has_time=True, opaque=True)
-    out = filter_spec(spec, {"date_rollover", "has_time"})
+def test_filter_sun_group_clears_events_and_rollover() -> None:
+    spec = TriggerSpec(
+        sun_events=frozenset({("sunset", 30), ("sunrise", -15)}),
+        date_rollover=True,
+        clock_times=frozenset({(7, 0)}),
+        opaque=True,
+    )
+    out = filter_spec(spec, {"group:sun"})
+    assert out.sun_events == frozenset()
     assert out.date_rollover is False
-    assert out.has_time is False
+    # Time group and opaque flag are untouched.
+    assert out.clock_times == frozenset({(7, 0)})
     assert out.opaque is True
 
 

@@ -130,34 +130,44 @@ function _domainEntityName(ctx: MatcherContext, entity_id: string): string {
   return local.charAt(0).toUpperCase() + local.slice(1);
 }
 
-/** The location phrase: "home", "away", or "at <Zone>". */
+/** The location phrase: "Home", "Away", or "at <Zone>" — capitalised to read
+ *  as "… is Home" / "… is at Work", mirroring the widget's "Is" control. */
 function _whereLabel(where: string, ctx: MatcherContext): string {
-  if (where === "home") return localize(ctx.hass, "people_summary.home", "home");
-  if (where === "away") return localize(ctx.hass, "people_summary.away", "away");
+  if (where === "home") return localize(ctx.hass, "people_summary.home", "Home");
+  if (where === "away") return localize(ctx.hass, "people_summary.away", "Away");
   return `${localize(ctx.hass, "people_summary.at", "at")} ${_domainEntityName(ctx, where)}`;
 }
 
+/**
+ * Mirror the widget's phrasing: "<Mode> is <Location>" for the base modes and
+ * "<Mode>: (<names>) is <Location>" for the "X of:" modes — e.g.
+ * "Everybody is Home", "None of: (Clinton) is Home", "Any of: (Alice) is at Work".
+ * Mode is keyed off the presence of the `who` key (matching the input widget):
+ * absent → a base mode (everyone→Everybody, nobody→Nobody); present → an
+ * "X of:" mode chosen by `quant`.
+ */
 export function summarisePeople(pred: PeoplePredicate, ctx: MatcherContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
-  const who = pred.who ?? [];
   const quant = pred.quant ?? "any";
   const where = pred.where ?? "home";
-  const names = who.map((id) => _domainEntityName(ctx, id));
   let subject: string;
-  if (names.length === 0) {
+  if (!Array.isArray(pred.who)) {
+    // Base mode — no name list. Anything but nobody reads as Everybody.
     subject =
-      quant === "everyone"
-        ? localize(ctx.hass, "people_summary.everyone", "Everyone")
-        : quant === "nobody"
-          ? localize(ctx.hass, "people_summary.nobody", "Nobody")
-          : localize(ctx.hass, "people_summary.anyone", "Anyone");
-  } else if (quant === "nobody") {
-    subject = `${localize(ctx.hass, "people_summary.none_of", "None of")} ${names.join(", ")}`;
+      quant === "nobody"
+        ? localize(ctx.hass, "ui.people_mode_nobody", "Nobody")
+        : localize(ctx.hass, "ui.people_mode_everybody", "Everybody");
   } else {
-    const sep = quant === "everyone" ? " & " : ` ${localize(ctx.hass, "people_summary.or", "or")} `;
-    subject = names.join(sep);
+    const label =
+      quant === "any"
+        ? localize(ctx.hass, "ui.people_mode_any", "Any of:")
+        : quant === "everyone"
+          ? localize(ctx.hass, "ui.people_mode_all", "All of:")
+          : localize(ctx.hass, "ui.people_mode_none", "None of:");
+    const names = pred.who.map((id) => _domainEntityName(ctx, id)).join(", ");
+    subject = `${label} (${names})`;
   }
-  const head = `${subject} ${_whereLabel(where, ctx)}`;
+  const head = `${subject} ${localize(ctx.hass, "people_summary.is", "is")} ${_whereLabel(where, ctx)}`;
   if (pred.for && _hasStateDuration(pred.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
   }

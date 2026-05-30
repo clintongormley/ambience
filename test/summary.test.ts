@@ -75,6 +75,16 @@ describe("summariseMatcher", () => {
       summariseMatcher("people", { quant: "nobody", where: "home" }, { hass: noLocalize, periods }),
     ).toBe("Nobody is at Home");
   });
+
+  test("template predicate renders the template string (not [object Object])", () => {
+    expect(
+      summariseMatcher("template", { template: "{{ is_state('x','on') }}" }, { hass: noLocalize, periods }),
+    ).toBe("{{ is_state('x','on') }}");
+  });
+
+  test("null template predicate renders as '(any)'", () => {
+    expect(summariseMatcher("template", null, { hass: noLocalize, periods })).toBe("(any)");
+  });
 });
 
 describe("summarisePeople", () => {

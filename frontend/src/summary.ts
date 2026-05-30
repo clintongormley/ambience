@@ -21,6 +21,7 @@ import type {
   StateExpr,
   StatePredicate,
   SunPredicate,
+  TemplatePredicate,
   TimeEndpoint,
   TimeOfDayPredicate,
   WeatherGroup,
@@ -102,7 +103,18 @@ export function summariseMatcher(
   if (matcherName === "people") {
     return summarisePeople(predicate as PeoplePredicate, ctx);
   }
+  if (matcherName === "template") {
+    return summariseTemplate(predicate as TemplatePredicate, ctx);
+  }
   return String(predicate);
+}
+
+export function summariseTemplate(pred: TemplatePredicate, ctx: MatcherContext = {}): string {
+  if (pred === null) return localize(ctx.hass, "ui.summary_any_paren", "(any)");
+  if (typeof pred !== "object" || typeof (pred as { template?: unknown }).template !== "string") {
+    return String(pred);
+  }
+  return pred.template;
 }
 
 export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {}): string {

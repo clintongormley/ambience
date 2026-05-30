@@ -1,0 +1,159 @@
+"""TemplateMatcher — evaluate a Jinja2 template (against HA state) to a boolean.
+
+The lightweight sibling of `script`: same "collect every distinct predicate
+across all scopes, pre-evaluate in snapshot(), pure dict lookup in matches()"
+shape, but it renders a Jinja template instead of calling a service. No service
+call and no TTL cache — rendering is cheap and synchronous, so each snapshot
+renders fresh.
+
+Each template is rendered via ``Template.async_render_to_info()``, which returns
+both the result AND the set of entities/flags the render touched. We coerce the
+result to a bool with ``result_as_boolean`` (HA's own truthiness rule) and stash
+the dependency info — the trigger engine can later read it for free.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from typing import Any
+
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import TemplateError
+from homeassistant.helpers.template import Template, result_as_boolean
+
+from ._collect import collect_scope_predicates
+
+_LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class TemplateDeps:
+    """What a template render touched — fuel for the auto-trigger engine.
+
+    ``entities`` are the specific entity_ids referenced; ``all_states`` is True
+    if the template scanned every state (expensive to watch); ``has_time`` is
+    True if it used ``now()``/``utcnow()`` (needs periodic re-evaluation).
+    """
+
+    entities: frozenset[str] = frozenset()
+    all_states: bool = False
+    has_time: bool = False
+
+
+@dataclass(frozen=True)
+class TemplateSnapshot:
+    """Frozen view of pre-computed template render results.
+
+    ``results[template_str]`` is the rendered value coerced to bool; any render
+    error is recorded as ``False``. ``deps`` carries the dependency info keyed
+    by the same template string.
+    """
+
+    results: dict[str, bool] = field(default_factory=dict)
+    deps: dict[str, TemplateDeps] = field(default_factory=dict)
+
+
+class TemplateMatcher:
+    """Matches by rendering a Jinja2 template against HA state to a boolean."""
+
+    name = "template"
+    description = "Matches by rendering a Jinja2 template against HA state to a boolean."
+    predicate_help = (
+        "Object {template: '{{ ... }}'}. The Jinja template is rendered against "
+        "current state; the result is coerced to a boolean the same way Home "
+        "Assistant does (true/yes/on/1/enable and nonzero numbers => match; "
+        "everything else, including unknown/none/empty, => no match). "
+        "None = wildcard."
+    )
+    input = "template_predicate"
+    # Just after script (25): both are opaque user-defined booleans. A template
+    # is an arbitrary expression, so it sorts after the slightly-more-structured
+    # named-script constraint.
+    priority = 30
+
+    def __init__(self, hass: HomeAssistant | None = None) -> None:
+        self._hass = hass
+
+    # --- protocol stubs ----------------------------------------------------
+
+    def describe(self, snapshot: Any) -> str | None:
+        return None
+
+    def order_key(self, predicate: Any) -> str:
+        if not isinstance(predicate, dict):
+            return ""
+        tmpl = predicate.get("template")
+        return tmpl if isinstance(tmpl, str) else ""
+
+    # --- validation --------------------------------------------------------
+
+    def validate_predicate(self, predicate: Any) -> None:
+        if predicate is None:
+            return
+        if not isinstance(predicate, dict):
+            raise ValueError(f"template predicate must be a dict or null: {predicate!r}")
+        tmpl = predicate.get("template")
+        if not isinstance(tmpl, str) or not tmpl.strip():
+            raise ValueError(f"template predicate `template` must be a non-empty string: {tmpl!r}")
+        try:
+            Template(tmpl, self._hass).ensure_valid()
+        except TemplateError as exc:
+            raise ValueError(f"template predicate has invalid Jinja: {exc}") from exc
+
+    # --- evaluation --------------------------------------------------------
+
+    def matches(self, predicate: Any, snapshot: TemplateSnapshot) -> bool:
+        if predicate is None:
+            return True
+        if not isinstance(predicate, dict):
+            return False
+        tmpl = predicate.get("template")
+        if not isinstance(tmpl, str):
+            return False
+        return snapshot.results.get(tmpl, False) is True
+
+    # --- snapshot orchestration -------------------------------------------
+
+    def _collect_templates(self) -> list[str]:
+        """Distinct, non-empty template strings carried by `when.template`
+        predicates across all scopes (areas, floors, house). Insertion order;
+        duplicates and malformed predicates dropped."""
+        hass = self._hass
+        if hass is None:
+            return []
+        from ..const import DATA_STORE, DOMAIN
+
+        store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+        if store is None:
+            return []
+        seen: set[str] = set()
+        templates: list[str] = []
+        for pred in collect_scope_predicates(store, "template"):
+            if not isinstance(pred, dict):
+                continue
+            tmpl = pred.get("template")
+            if not isinstance(tmpl, str) or not tmpl:
+                continue
+            if tmpl in seen:
+                continue
+            seen.add(tmpl)
+            templates.append(tmpl)
+        return templates
+
+    async def snapshot(self, hass: HomeAssistant) -> TemplateSnapshot:
+        results: dict[str, bool] = {}
+        deps: dict[str, TemplateDeps] = {}
+        for tmpl in self._collect_templates():
+            info = Template(tmpl, hass).async_render_to_info()
+            if info.exception is not None:
+                _LOGGER.warning("ambience: template %r render failed: %s", tmpl, info.exception)
+                results[tmpl] = False
+            else:
+                results[tmpl] = result_as_boolean(info.result())
+            deps[tmpl] = TemplateDeps(
+                entities=frozenset(info.entities),
+                all_states=info.all_states,
+                has_time=info.has_time,
+            )
+        return TemplateSnapshot(results=results, deps=deps)

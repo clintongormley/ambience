@@ -43,6 +43,13 @@ export type HassConnection = {
       callback: (event: T) => void,
       eventType: string,
     ): Promise<() => void>;
+    // Generic subscription (HA's `subscribeMessage`). Used for the
+    // `render_template` live preview — the same command Dev Tools → Template
+    // drives. Optional so simpler connection mocks remain valid.
+    subscribeMessage?<T>(
+      callback: (message: T) => void,
+      subscribeMessage: Record<string, unknown>,
+    ): Promise<() => void>;
   };
   [key: string]: unknown;
 };

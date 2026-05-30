@@ -29,14 +29,12 @@ class _StoreStub:
         self._floors = floors or {}
         self._house = house or {}
 
-    def areas(self) -> dict[str, dict]:
-        return self._areas
-
-    def floors(self) -> dict[str, dict]:
-        return self._floors
-
-    def get_house(self) -> dict:
-        return self._house
+    def all_scope_configs(self) -> list[tuple[str, str | None, dict]]:
+        return [
+            *(("area", aid, cfg) for aid, cfg in self._areas.items()),
+            *(("floor", fid, cfg) for fid, cfg in self._floors.items()),
+            ("house", None, self._house),
+        ]
 
 
 def _install_store(

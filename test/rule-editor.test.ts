@@ -21,6 +21,7 @@ const matchers: MatcherInfo[] = [
   { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
   { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day", priority: 200 },
   { name: "people", description: "", predicate_help: "", input: "people_predicate", priority: 75 },
+  { name: "template", description: "", predicate_help: "", input: "template_predicate", priority: 30 },
 ];
 
 const availableActions: ExposedAction[] = [
@@ -743,6 +744,114 @@ describe("ambience-rule-editor — action picker from exposed-actions list", () 
     // But a hint mentioning Settings → Actions
     expect(el2.shadowRoot.textContent.toLowerCase()).toMatch(/settings.*actions/);
     el2.remove();
+  });
+});
+
+describe("ambience-rule-editor — template render-error gate", () => {
+  let el: any;
+  afterEach(() => { el?.remove(); });
+
+  const validAction = { service: "script.foo", entity_ids: [], params: {} };
+
+  async function openTemplate(): Promise<HTMLElement> {
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
+    slot.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    return el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
+  }
+
+  function reportRenderError(slot: HTMLElement, error: string | null) {
+    slot.querySelector("ambience-matcher-input")!.dispatchEvent(
+      new CustomEvent("render-invalid-changed", {
+        detail: { error },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  test("cannot close a template slot while its template has a render error", async () => {
+    el = await mount({
+      name: "t",
+      when: { template: { template: "{{ bad }}" } },
+      actions: [validAction],
+    });
+    const slot = await openTemplate();
+    expect(slot.classList.contains("expanded")).toBe(true);
+
+    reportRenderError(slot, "UndefinedError: 'bad' is undefined");
+    await el.updateComplete;
+
+    // Click outside the slot → attempt to close.
+    (el.shadowRoot.querySelector("h3") as HTMLElement)
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+
+    const after = el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
+    expect(after.classList.contains("expanded")).toBe(true); // still open — blocked
+    expect(after.querySelector(".error")?.textContent?.toLowerCase()).toContain("error in this condition");
+  });
+
+  test("cannot collapse a template slot via its own summary while it has a render error", async () => {
+    el = await mount({
+      name: "t",
+      when: { template: { template: "{{ bad }}" } },
+      actions: [validAction],
+    });
+    const slot = await openTemplate();
+    reportRenderError(slot, "boom");
+    await el.updateComplete;
+
+    // Click the slot's OWN summary — the "minimize for now" gesture.
+    const reopened = el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
+    reopened.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+
+    const after = el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
+    expect(after.classList.contains("expanded")).toBe(true); // still open — blocked
+    expect(after.querySelector(".error")?.textContent?.toLowerCase()).toContain("error in this condition");
+  });
+
+  test("can close a template slot once the render error clears", async () => {
+    el = await mount({
+      name: "t",
+      when: { template: { template: "{{ ok }}" } },
+      actions: [validAction],
+    });
+    const slot = await openTemplate();
+    reportRenderError(slot, "boom");
+    reportRenderError(slot, null); // fixed
+    await el.updateComplete;
+
+    (el.shadowRoot.querySelector("h3") as HTMLElement)
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+
+    const after = el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
+    expect(after.classList.contains("collapsed")).toBe(true); // closed — allowed
+  });
+
+  test("save is blocked while a template has a render error", async () => {
+    el = await mount({
+      name: "t",
+      when: { template: { template: "{{ bad }}" } },
+      actions: [validAction],
+    });
+    let saved = false;
+    el.addEventListener("save-rule", () => { saved = true; });
+
+    const slot = await openTemplate();
+    reportRenderError(slot, "boom");
+    await el.updateComplete;
+
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button"))
+      .find((b: any) => /save/i.test(b.textContent ?? "")) as HTMLButtonElement;
+    saveBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+
+    expect(saved).toBe(false);
+    const after = el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
+    expect(after.classList.contains("expanded")).toBe(true); // reopened with error
   });
 });
 

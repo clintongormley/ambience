@@ -41,7 +41,8 @@
     "scene": "Scene",
     "time_of_day": "Time of day",
     "state": "Entity state",
-    "script": "Script"
+    "script": "Script",
+    "template": "Template"
   },
   "action": {},
   "anchor": {
@@ -101,6 +102,7 @@
     "save": "Save",
     "save_rule": "Save rule",
     "at_least_one_target": "At least one target is required.",
+    "condition_error": "Fix the error in this condition before continuing",
     "param_required": "{param} is required.",
     "no_rules_yet": "No rules yet.",
     "add_rule": "+ Add rule",

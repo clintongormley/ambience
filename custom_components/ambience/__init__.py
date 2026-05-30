@@ -37,6 +37,7 @@ from .matchers.scene import SceneMatcher
 from .matchers.script import ScriptMatcher
 from .matchers.state import StateMatcher
 from .matchers.sun import SunMatcher
+from .matchers.template import TemplateMatcher
 from .matchers.time_of_day import TimeOfDayMatcher
 from .matchers.weather import WeatherMatcher
 from .periods import PeriodStore
@@ -132,6 +133,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     register_matcher(hass, StateMatcher(hass=hass))
     register_matcher(hass, PeopleMatcher(hass=hass))
     register_matcher(hass, ScriptMatcher(hass=hass))
+    register_matcher(hass, TemplateMatcher(hass=hass))
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
         scene = call.data.get("scene")

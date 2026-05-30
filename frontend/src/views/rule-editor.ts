@@ -94,7 +94,10 @@ export class AmbienceRuleEditor extends LitElement {
       gap: 0.5rem;
     }
     .summary:hover { background: var(--secondary-background-color, #f5f5f5); }
-    .summary-label { flex: 1; }
+    /* min-width:0 lets the flex item shrink below its content's intrinsic
+       width; overflow-wrap breaks long unbreakable tokens (e.g. a template
+       string) so the summary wraps instead of overflowing the panel. */
+    .summary-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .slot.expanded .summary {
       background: var(--secondary-background-color, #f5f5f5);
     }
@@ -168,6 +171,20 @@ export class AmbienceRuleEditor extends LitElement {
    * action-slot emits `target-mode-changed`.
    */
   @state() private _serviceHasTarget: Map<string, boolean> = new Map();
+
+  /**
+   * Last-known error reported by a matcher's input widget, keyed by matcher
+   * name (via the `render-invalid-changed` event — the template matcher is the
+   * first emitter, but the channel is matcher-agnostic). A present entry means
+   * that condition is invalid, so closing/saving its slot is blocked until it's
+   * fixed. Not reactive: it's read during the `_showError`-gated render.
+   */
+  private _matcherError: Map<string, string> = new Map();
+
+  private _onMatcherInvalid(name: string, error: string | null) {
+    if (error) this._matcherError.set(name, error);
+    else this._matcherError.delete(name);
+  }
 
   override connectedCallback() {
     super.connectedCallback();
@@ -275,6 +292,15 @@ export class AmbienceRuleEditor extends LitElement {
       if (_isEmptyWhoPredicate(pred)) {
         return localize(this.hass, "ui.people_select_one", "Select at least one person");
       }
+      // A matcher whose input widget reports an error (e.g. a `template` whose
+      // Jinja throws) must not be left in the rule.
+      if (this._matcherError.has(slot.id)) {
+        return localize(
+          this.hass,
+          "ui.condition_error",
+          "Fix the error in this condition before continuing",
+        );
+      }
       return null;
     }
     // slot.kind === "action"
@@ -309,9 +335,13 @@ export class AmbienceRuleEditor extends LitElement {
 
   private _toggleSlot(slot: { kind: "name" } | { kind: "matcher"; id: string } | { kind: "action"; idx: number }) {
     if (this._isOpen(slot)) {
-      // Collapsing your own slot is a "minimize for now" gesture, not
-      // "leaving" — no validation, no error. Validation only fires when
-      // the user actually moves on (switch slot, click outside, +Add).
+      // Collapsing your own slot is normally a "minimize for now" gesture —
+      // no validation. The exception is a widget-reported error (e.g. a
+      // template that throws): that must be fixed, not minimized away.
+      if (slot.kind === "matcher" && this._matcherError.has(slot.id)) {
+        this._showError = true;
+        return;
+      }
       this._open = null;
       this._showError = false;
       return;
@@ -397,6 +427,7 @@ export class AmbienceRuleEditor extends LitElement {
               .dayConfig=${this.dayConfig}
               .weatherConfig=${this.weatherConfig}
               @value-changed=${(e: CustomEvent<{ value: unknown }>) => this._setPredicate(m.name, e.detail.value)}
+              @render-invalid-changed=${(e: CustomEvent<{ error: string | null }>) => this._onMatcherInvalid(m.name, e.detail.error)}
             ></ambience-matcher-input>
 
             ${this._showError && this._validationError({ kind: "matcher", id: m.name }) ? html`
@@ -478,6 +509,7 @@ export class AmbienceRuleEditor extends LitElement {
     const when = { ...this._draft.when };
     delete when[name];
     this._draft = { ...this._draft, when };
+    this._matcherError.delete(name);
     if (this._open?.kind === "matcher" && this._open.id === name) {
       this._open = null;
       this._showError = false;
@@ -703,6 +735,13 @@ export class AmbienceRuleEditor extends LitElement {
     // re-opening the offending matcher slot with its error shown.
     for (const [id, pred] of Object.entries(this._draft.when)) {
       if (_isEmptyWhoPredicate(pred)) {
+        this._showError = true;
+        this._open = { kind: "matcher", id };
+        return;
+      }
+      // A matcher whose widget reports an unresolved error must not be saved —
+      // re-open the offending slot with its error shown.
+      if (pred != null && this._matcherError.has(id)) {
         this._showError = true;
         this._open = { kind: "matcher", id };
         return;

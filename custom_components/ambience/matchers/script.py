@@ -20,6 +20,8 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ._collect import collect_scope_predicates
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -118,30 +120,23 @@ class ScriptMatcher:
         store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
         if store is None:
             return []
-        scopes: list[dict[str, Any]] = [
-            *store.areas().values(),
-            *store.floors().values(),
-            store.get_house() or {},
-        ]
         seen: set[tuple[str, str]] = set()
         pairs: list[tuple[str, str]] = []
-        for scope_cfg in scopes:
-            for rule in scope_cfg.get("rules", []):
-                pred = rule.get("when", {}).get("script")
-                if not isinstance(pred, dict):
-                    continue
-                script = pred.get("script")
-                if not isinstance(script, str):
-                    continue
-                args = pred.get("args") or {}
-                if not isinstance(args, dict):
-                    continue
-                args_json = json.dumps(args, sort_keys=True, separators=(",", ":"))
-                key = (script, args_json)
-                if key in seen:
-                    continue
-                seen.add(key)
-                pairs.append(key)
+        for pred in collect_scope_predicates(store, "script"):
+            if not isinstance(pred, dict):
+                continue
+            script = pred.get("script")
+            if not isinstance(script, str):
+                continue
+            args = pred.get("args") or {}
+            if not isinstance(args, dict):
+                continue
+            args_json = json.dumps(args, sort_keys=True, separators=(",", ":"))
+            key = (script, args_json)
+            if key in seen:
+                continue
+            seen.add(key)
+            pairs.append(key)
         return pairs
 
     # Per-call timeout for script invocations. Tests may override.

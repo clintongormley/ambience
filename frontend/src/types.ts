@@ -231,6 +231,11 @@ export type ScriptPredicate =
   | null
   | { script: string; args?: Record<string, unknown> };
 
+// --- template matcher -----------------------------------------------------
+
+/** Per-rule predicate: a Jinja template rendered to a bool. `null` = wildcard. */
+export type TemplatePredicate = null | { template: string };
+
 // --- scope ---------------------------------------------------------------
 
 // Scope = the activation surface for a rule list. Area: HA area. Floor:

@@ -9,13 +9,22 @@ top of these methods.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 
 from .const import DATA_MATCHERS, DATA_STORE, DOMAIN
+from .service import (
+    _switch_state,
+    async_execute_plan,
+    async_resolve_with_snapshots,
+    get_last_applied,
+)
 from .trigger_index import PredKey, TriggerIndex, build_index
 from .triggers import EMPTY, TriggerSpec
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class AutoTriggerEngine:
@@ -28,6 +37,7 @@ class AutoTriggerEngine:
         # Enabled-scope configs captured at the last rebuild, for predicate lookup.
         self._scope_cfgs: dict[tuple[str, str | None], dict[str, Any]] = {}
         self._index: TriggerIndex = build_index([])
+        self._snapshots: dict[str, Any] = {}
 
     @property
     def index(self) -> TriggerIndex:
@@ -102,3 +112,52 @@ class AutoTriggerEngine:
             if old_value != new_value:
                 dirty.add((key[0], key[1]))
         return dirty
+
+    async def _refresh_snapshots(self, matcher_keys: set[str]) -> None:
+        """Re-snapshot the given matchers into the cache (None on failure)."""
+        matchers = self._matchers()
+        for key in matcher_keys:
+            matcher = matchers.get(key)
+            if matcher is None:
+                continue
+            try:
+                self._snapshots[key] = await matcher.snapshot(self._hass)
+            except Exception as exc:  # noqa: BLE001 — any matcher error => None snapshot
+                _LOGGER.warning("ambience: matcher %r snapshot failed: %s", key, exc)
+                self._snapshots[key] = None
+
+    async def _refresh_all_snapshots(self) -> None:
+        await self._refresh_snapshots({k for k in self._matchers() if k != "scene"})
+
+    async def _resolve_and_apply(
+        self, scope: tuple[str, str | None], *, force: bool = False
+    ) -> None:
+        """Resolve a dirty scope from the snapshot cache and apply if the winning
+        rule changed (or `force`). Skips when the scope's switch is off."""
+        scope_kind, scope_id = scope
+        if _switch_state(self._hass, scope_kind, scope_id) == "off":
+            return
+        plan = await async_resolve_with_snapshots(self._hass, scope_kind, scope_id, self._snapshots)
+        index = plan["matched_rule_index"]
+        if index is None:
+            return
+        if not force and index == get_last_applied(self._hass, scope_kind, scope_id):
+            return
+        await async_execute_plan(self._hass, scope_kind, scope_id, plan)
+
+    async def async_evaluate(self, fired: set[PredKey]) -> None:
+        """Recompute the fired predicates (refreshing only their matchers) and
+        resolve+apply every scope whose winning rule changed."""
+        if not fired:
+            return
+        await self._refresh_snapshots({key[3] for key in fired})
+        for scope in self._recompute(fired, self._snapshots):
+            await self._resolve_and_apply(scope)
+
+    async def async_initial_sync(self) -> None:
+        """Startup 'sync to reality': snapshot everything, seed flip state, and
+        apply each enabled scope's current winner."""
+        await self._refresh_all_snapshots()
+        self._recompute(set(self._index.all_predicates()), self._snapshots)
+        for scope in self._scope_cfgs:
+            await self._resolve_and_apply(scope)

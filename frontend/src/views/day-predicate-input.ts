@@ -68,8 +68,7 @@ export class AmbienceDayPredicateInput extends LitElement {
     }
     label.day-pill {
       display: inline-flex; align-items: center; gap: 0.25rem;
-      padding: 0.15rem 0.4rem; border-radius: 3px;
-      background: var(--secondary-background-color, #f5f5f5);
+      padding: 0.15rem 0.4rem 0.15rem 0;
       cursor: pointer;
     }
   `;

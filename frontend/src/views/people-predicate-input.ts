@@ -172,6 +172,20 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     return !!dur && (dur.h !== 0 || dur.m !== 0 || dur.s !== 0);
   }
 
+  /** True for the "negative quant" modes — Nobody and None of: (quant
+   *  "nobody"). For these, combining with "Is not at" produces a confusing
+   *  double negative, so the is-at/is-not-at toggle is hidden and `negate` is
+   *  forced off. A `negate:true` carried by a loaded value is ignored. */
+  private _isNegativeQuant(): boolean {
+    return MODE_QUANT[this._mode()] === "nobody";
+  }
+
+  /** The effective `negate`, honouring the toggle only when it's shown. Always
+   *  false for Nobody / None of:. */
+  private _effectiveNegate(): boolean {
+    return !this._isNegativeQuant() && Boolean(this._cur().negate);
+  }
+
   /** Build + emit a predicate from a mode + the current where/for/people. A
    *  base mode drops `who`; an "X of:" mode ALWAYS carries a `who` key,
    *  repopulated from the last selection when switching in from a base mode.
@@ -180,7 +194,10 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     const cur = this._cur();
     const where = cur.where ?? "home";
     const out: PeoplePredicate = { quant: MODE_QUANT[mode], where };
-    if (cur.negate) out.negate = true;
+    // Drop `negate` when switching into a negative-quant mode (Nobody / None
+    // of:) — those hide the toggle and would otherwise read as a double
+    // negative.
+    if (cur.negate && MODE_QUANT[mode] !== "nobody") out.negate = true;
     if (PEOPLE_MODES.has(mode)) {
       if (this._hasWhoKey()) {
         // An explicit selection is already present (incl. an explicit empty
@@ -219,7 +236,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   private _setWhere(where: string) {
     const cur = this._cur();
     const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where };
-    if (cur.negate) out.negate = true;
+    if (this._effectiveNegate()) out.negate = true;
     if (this._hasWhoKey()) out.who = [...this._who()];
     if (this._hasFor(cur.for)) out.for = cur.for;
     this._emit(out);
@@ -243,7 +260,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
       where: cur.where ?? "home",
       who: next,
     };
-    if (cur.negate) out.negate = true;
+    if (this._effectiveNegate()) out.negate = true;
     if (this._hasFor(cur.for)) out.for = cur.for;
     this._emit(out);
   }
@@ -251,7 +268,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   private _setFor(dur: { h: number; m: number; s: number }) {
     const cur = this._cur();
     const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where: cur.where ?? "home" };
-    if (cur.negate) out.negate = true;
+    if (this._effectiveNegate()) out.negate = true;
     if (this._hasWhoKey()) out.who = [...this._who()];
     if (this._hasFor(dur)) out.for = dur;
     this._emit(out);
@@ -439,13 +456,16 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   override render() {
     const cur = this._cur();
     const where = cur.where ?? "home";
-    const negate = cur.negate ?? false;
     const mode = this._mode();
+    // Hide the is-at/is-not-at toggle for the negative-quant modes (Nobody /
+    // None of:), where it would only produce a double negative.
+    const showNegate = !this._isNegativeQuant();
+    const negate = this._effectiveNegate();
     return html`
       <div class="row">${this._renderMode(mode)}</div>
       ${PEOPLE_MODES.has(mode) ? this._renderPeople() : ""}
       <div class="row">
-        ${this._renderNegate(negate)}
+        ${showNegate ? this._renderNegate(negate) : ""}
         ${this._renderWhere(where)}
       </div>
       <div class="row">

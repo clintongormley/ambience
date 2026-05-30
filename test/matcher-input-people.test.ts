@@ -451,6 +451,72 @@ describe("ambience-people-predicate-input", () => {
     expect(emitted?.negate ?? false).toBe(false);
   });
 
+  test("the is-at/is-not-at toggle is hidden for Nobody and None of:", async () => {
+    // Base mode Nobody.
+    el = await mount({ quant: "nobody", where: "home" });
+    expect(negateSelect(el)).toBeNull();
+    el.remove();
+    // None of: (X-of mode with quant nobody).
+    el = await mount({ who: ["person.alice"], quant: "nobody", where: "home" });
+    expect(negateSelect(el)).toBeNull();
+  });
+
+  test("the is-at/is-not-at toggle still renders for Everybody/Anybody/Any of:/All of:", async () => {
+    el = await mount({ quant: "everyone", where: "home" });
+    expect(negateSelect(el)).not.toBeNull();
+    await setMode(el, "anybody");
+    expect(negateSelect(el)).not.toBeNull();
+    el.remove();
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
+    expect(negateSelect(el)).not.toBeNull();
+    await setMode(el, "all");
+    expect(negateSelect(el)).not.toBeNull();
+  });
+
+  test("switching from an 'Is not at' Anybody into Nobody resets negate (no negate:true)", async () => {
+    el = await mount({ quant: "any", where: "home", negate: true });
+    expect(negateSelect(el)?.value).toBe("true");
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    await setMode(el, "nobody");
+    expect(emitted?.quant).toBe("nobody");
+    expect(emitted?.negate ?? false).toBe(false);
+    expect("negate" in (emitted ?? {})).toBe(false);
+    // Toggle no longer rendered.
+    expect(negateSelect(el)).toBeNull();
+  });
+
+  test("switching from an 'Is not at' Any of: into None of: resets negate", async () => {
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home", negate: true });
+    expect(negateSelect(el)?.value).toBe("true");
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    await setMode(el, "none");
+    expect(emitted?.quant).toBe("nobody");
+    expect(emitted?.negate ?? false).toBe(false);
+    expect("negate" in (emitted ?? {})).toBe(false);
+    expect(negateSelect(el)).toBeNull();
+  });
+
+  test("a Nobody predicate that carries negate:true ignores it (no toggle shown)", async () => {
+    el = await mount({ quant: "nobody", where: "home", negate: true });
+    expect(negateSelect(el)).toBeNull();
+    // Changing where must not resurrect negate.
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    const where = whereSelect(el);
+    where.value = "zone.work";
+    where.dispatchEvent(new Event("change"));
+    expect(emitted?.where).toBe("zone.work");
+    expect(emitted?.negate ?? false).toBe(false);
+  });
+
   test("negate round-trips into the toggle and survives a where change", async () => {
     el = await mount({ quant: "everyone", where: "home", negate: true });
     expect(negateSelect(el).value).toBe("true");

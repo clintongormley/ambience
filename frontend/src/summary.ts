@@ -149,6 +149,24 @@ function _whereLabel(where: string, ctx: MatcherContext): string {
 export function summarisePeople(pred: PeoplePredicate, ctx: MatcherContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
   const where = pred.where ?? "home";
+
+  // Single-person list: drop the "Any of:/All of:/None of:" wrapper and read
+  // "<Name> is [not] at <Location>". The verb polarity is the XOR of the
+  // negative-quant ("nobody") and an explicit `negate`, so a double negative
+  // resolves back to a positive.
+  if (Array.isArray(pred.who) && pred.who.length === 1) {
+    const name = _domainEntityName(ctx, pred.who[0]);
+    const effectiveNot = (pred.quant === "nobody") !== Boolean(pred.negate);
+    const conn = effectiveNot
+      ? localize(ctx.hass, "people_summary.is_not_at", "is not at")
+      : localize(ctx.hass, "people_summary.is_at", "is at");
+    const head = `${name} ${conn} ${_whereLabel(where, ctx)}`;
+    if (pred.for && _hasStateDuration(pred.for)) {
+      return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
+    }
+    return head;
+  }
+
   let subject: string;
   if (!Array.isArray(pred.who)) {
     // Base mode — no name list: everyone→Everybody, any→Anybody, nobody→Nobody.

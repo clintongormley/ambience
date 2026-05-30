@@ -107,17 +107,17 @@ describe("summarisePeople", () => {
       "Everybody is not at Home",
     );
     expect(
-      summarisePeople({ who: ["person.alice"], quant: "any", where: "zone.work", negate: true }, { hass: hassPeople }),
-    ).toBe("Any of: (Alice) is not at Work");
+      summarisePeople({ who: ["person.alice", "person.bob"], quant: "any", where: "zone.work", negate: true }, { hass: hassPeople }),
+    ).toBe("Any of: (Alice, Bob) is not at Work");
   });
 
-  test("X-of modes show the mode label and names in parens", () => {
+  test("X-of modes (multi-person) show the mode label and names in parens", () => {
     expect(
       summarisePeople(
-        { who: ["person.clinton"], quant: "nobody", where: "home" },
+        { who: ["person.clinton", "person.alice"], quant: "nobody", where: "home" },
         { hass: hassPeople },
       ),
-    ).toBe("None of: (Clinton) is at Home");
+    ).toBe("None of: (Clinton, Alice) is at Home");
     expect(
       summarisePeople(
         { who: ["person.alice", "person.bob"], quant: "everyone", where: "home" },
@@ -132,10 +132,35 @@ describe("summarisePeople", () => {
     ).toBe("Any of: (Alice, Bob) is at Home");
   });
 
-  test("zone location renders as 'is at <Zone>'", () => {
+  test("single-person list drops the wrapper: '<Name> is [not] at <Location>'", () => {
+    // any: positive.
     expect(
-      summarisePeople({ who: ["person.alice"], quant: "any", where: "zone.work" }, { hass: hassPeople }),
-    ).toBe("Any of: (Alice) is at Work");
+      summarisePeople({ who: ["person.clinton"], quant: "any", where: "home" }, { hass: hassPeople }),
+    ).toBe("Clinton is at Home");
+    // nobody: effectiveNot true → "is not at".
+    expect(
+      summarisePeople({ who: ["person.clinton"], quant: "nobody", where: "home" }, { hass: hassPeople }),
+    ).toBe("Clinton is not at Home");
+    // everyone + negate:true → effectiveNot true → "is not at".
+    expect(
+      summarisePeople({ who: ["person.alice"], quant: "everyone", where: "zone.work", negate: true }, { hass: hassPeople }),
+    ).toBe("Alice is not at Work");
+    // nobody + negate:true → XOR resolves to false → "is at".
+    expect(
+      summarisePeople({ who: ["person.clinton"], quant: "nobody", where: "home", negate: true }, { hass: hassPeople }),
+    ).toBe("Clinton is at Home");
+  });
+
+  test("single-person list keeps the 'for' suffix", () => {
+    expect(
+      summarisePeople({ who: ["person.clinton"], quant: "any", where: "home", for: { h: 0, m: 10, s: 0 } }, { hass: hassPeople }),
+    ).toBe("Clinton is at Home for ≥10m");
+  });
+
+  test("zone location renders as 'is at <Zone>' (multi-person keeps wrapper)", () => {
+    expect(
+      summarisePeople({ who: ["person.alice", "person.bob"], quant: "any", where: "zone.work" }, { hass: hassPeople }),
+    ).toBe("Any of: (Alice, Bob) is at Work");
   });
 
   test("duration suffix", () => {
@@ -143,9 +168,14 @@ describe("summarisePeople", () => {
       .toBe("Everybody is at Home for ≥10m");
   });
 
-  test("falls back to humanised ids when no friendly names", () => {
+  test("falls back to humanised ids when no friendly names (multi-person keeps wrapper)", () => {
+    expect(summarisePeople({ who: ["person.carol", "person.dave"], quant: "any", where: "zone.gym" }))
+      .toBe("Any of: (Carol, Dave) is at Gym");
+  });
+
+  test("falls back to humanised ids for a single-person list too", () => {
     expect(summarisePeople({ who: ["person.carol"], quant: "any", where: "zone.gym" }))
-      .toBe("Any of: (Carol) is at Gym");
+      .toBe("Carol is at Gym");
   });
 });
 

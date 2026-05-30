@@ -7,6 +7,8 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..triggers import EMPTY, TriggerSpec
+
 _UNAVAILABLE = ("unknown", "unavailable")
 
 # 8-point compass sectors as 45°-wide (from, to) arcs; from > to wraps past 360.
@@ -66,6 +68,20 @@ class SunMatcher:
         return "azimuth" not in predicate or self._azimuth_ok(
             predicate["azimuth"], snapshot.azimuth
         )
+
+    # --- trigger dependencies -------------------------------------------
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        # The sun's elevation/azimuth live on sun.sun and vary continuously,
+        # so there is no discrete boundary to schedule — we watch sun.sun
+        # itself. sun.sun rewrites its attributes ~every minute; the engine's
+        # two-tier gating (re-resolve only when a predicate's boolean flips)
+        # absorbs those ticks so scripts/templates aren't re-run needlessly.
+        if not isinstance(predicate, dict):
+            return EMPTY
+        if "elevation" not in predicate and "azimuth" not in predicate:
+            return EMPTY
+        return TriggerSpec(entities=frozenset({"sun.sun"}))
 
     def contains(self, outer: Any, inner: Any) -> bool:
         return self._elevation_contains(

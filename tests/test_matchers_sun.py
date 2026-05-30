@@ -321,3 +321,25 @@ def test_order_key_absent_elevation_min_is_neg_inf() -> None:
     m = SunMatcher()
     assert m.order_key({"azimuth": {"sectors": ["S"]}}) == float("-inf")
     assert m.order_key({"elevation": {"max": 30}}) == float("-inf")
+
+
+# ── trigger_deps ──────────────────────────────────────────────────────────────
+
+
+def test_trigger_deps_watches_sun_entity_for_elevation() -> None:
+    spec = SunMatcher().trigger_deps({"elevation": {"min": 10}})
+    assert spec.entities == frozenset({"sun.sun"})
+    assert spec.entity_durations == frozenset()
+
+
+def test_trigger_deps_watches_sun_entity_for_azimuth() -> None:
+    spec = SunMatcher().trigger_deps({"azimuth": {"sectors": ["S"]}})
+    assert spec.entities == frozenset({"sun.sun"})
+
+
+def test_trigger_deps_none_or_garbage_is_empty() -> None:
+    from custom_components.ambience.triggers import EMPTY
+
+    assert SunMatcher().trigger_deps(None) == EMPTY
+    assert SunMatcher().trigger_deps("garbage") == EMPTY
+    assert SunMatcher().trigger_deps({}) == EMPTY

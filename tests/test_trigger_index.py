@@ -135,3 +135,35 @@ def test_distinct_sun_offsets_for_same_anchor_are_separate_keys() -> None:
     assert idx.by_sun[("sunset", -30)] == frozenset({p})
     assert idx.by_sun[("sunset", 0)] == frozenset({q})
     assert idx.sun_events == frozenset({("sunset", -30), ("sunset", 0)})
+
+
+def test_all_predicates_unions_every_bucket() -> None:
+    e = ("area", "a", 0, "state")
+    c = ("area", "a", 1, "time_of_day")
+    s = ("area", "a", 2, "sun")
+    m = ("area", "a", 3, "day")
+    h = ("area", "a", 4, "template")
+    o = ("area", "a", 5, "script")
+    d = ("area", "a", 6, "state")
+    idx = build_index(
+        [
+            (e, TriggerSpec(entities=frozenset({"sensor.x"}))),
+            (c, TriggerSpec(clock_times=frozenset({(7, 0)}))),
+            (s, TriggerSpec(sun_events=frozenset({("sunset", 0)}))),
+            (m, TriggerSpec(date_rollover=True)),
+            (h, TriggerSpec(entities=frozenset({"sensor.y"}), has_time=True)),
+            (o, TriggerSpec(opaque=True)),
+            (
+                d,
+                TriggerSpec(
+                    entities=frozenset({"sensor.z"}),
+                    entity_durations=frozenset({("sensor.z", 60.0)}),
+                ),
+            ),
+        ]
+    )
+    assert idx.all_predicates() == frozenset({e, c, s, m, h, o, d})
+
+
+def test_all_predicates_empty_index() -> None:
+    assert build_index([]).all_predicates() == frozenset()

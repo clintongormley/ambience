@@ -50,6 +50,18 @@ class TriggerIndex:
     def sun_events(self) -> frozenset[tuple[str, int]]:
         return frozenset(self.by_sun)
 
+    def all_predicates(self) -> frozenset[PredKey]:
+        """Every predicate referenced by any bucket — used to seed flip state."""
+        keys: set[PredKey] = set()
+        for preds in self.by_entity.values():
+            keys |= preds
+        for preds in self.by_clock.values():
+            keys |= preds
+        for preds in self.by_sun.values():
+            keys |= preds
+        keys |= self.midnight | self.has_time | self.opaque | set(self.durations)
+        return frozenset(keys)
+
 
 def build_index(entries: Iterable[tuple[PredKey, TriggerSpec]]) -> TriggerIndex:
     """Fold ``(PredKey, TriggerSpec)`` pairs into a frozen ``TriggerIndex``.

@@ -14,14 +14,17 @@ from homeassistant.components.frontend import (
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import Event, HomeAssistant, ServiceCall
+from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
+    DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_LAST_APPLIED,
     DATA_MATCHERS,
@@ -30,6 +33,7 @@ from .const import (
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
     DOMAIN,
+    SIGNAL_CONFIG_CHANGED,
 )
 from .exposed_actions import ExposedActionsStore
 from .matchers.day import DayMatcher
@@ -45,6 +49,7 @@ from .periods import PeriodStore
 from .registry import register_matcher
 from .service import async_apply_scene
 from .store import AmbienceStore
+from .trigger_engine import AutoTriggerEngine
 from .websocket import async_register_commands, async_unregister_commands
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -237,6 +242,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             }
         },
     )
+
+    engine = AutoTriggerEngine(hass)
+    domain_data[DATA_ENGINE] = engine
+
+    async def _engine_start(_event: object) -> None:
+        await engine.async_start()
+
+    # Build + sync once HA has finished starting (states settled). If HA is
+    # already running (e.g. integration reload), this fires immediately.
+    entry.async_on_unload(async_at_started(hass, _engine_start))
+
+    @callback
+    def _on_config_changed() -> None:
+        # Rebuild the watch-set immediately, then re-sync so an edit (new rule,
+        # newly-enabled scope) takes effect now rather than on the next fire.
+        engine.async_rebuild()
+        engine.async_subscribe()
+        hass.async_create_task(engine.async_initial_sync())
+
+    entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _on_config_changed))
+    entry.async_on_unload(engine.async_shutdown)
 
     return True
 

@@ -175,6 +175,16 @@ class AutoTriggerEngine:
         for scope in self._recompute(fired, self._snapshots):
             await self._resolve_and_apply(scope)
 
+    async def async_start(self) -> None:
+        """Build the index, subscribe, and run the startup sync pass."""
+        self.async_rebuild()
+        self.async_subscribe()
+        await self.async_initial_sync()
+
+    def async_shutdown(self) -> None:
+        """Tear down all subscriptions and timers."""
+        self._teardown()
+
     async def async_initial_sync(self) -> None:
         """Startup 'sync to reality': snapshot everything, seed flip state, and
         apply each enabled scope's current winner."""

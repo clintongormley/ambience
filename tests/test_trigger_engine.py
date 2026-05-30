@@ -515,6 +515,23 @@ async def test_for_recheck_scheduled_on_state_change(hass) -> None:
     engine._teardown()
 
 
+async def test_async_start_builds_subscribes_and_syncs(hass) -> None:
+    hass.states.async_set("binary_sensor.x", "on")
+    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_MATCHERS: {"x": StateReadMatcher()},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    await engine.async_start()  # build + subscribe + initial sync
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0
+    assert engine.index.entities == frozenset({"binary_sensor.x"})
+    engine.async_shutdown()
+    assert engine._unsubs == []
+
+
 async def test_switch_off_to_on_force_resyncs(hass) -> None:
     hass.states.async_set("binary_sensor.x", "on")
     switch = SimpleNamespace(is_on=True, entity_id="switch.ambience_a")

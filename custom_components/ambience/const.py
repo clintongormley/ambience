@@ -17,6 +17,9 @@ DATA_SWITCH_ADD_ENTITIES = "switch_add_entities"
 # Written by apply_scene; read by the auto-trigger engine's unchanged-rule guard.
 DATA_LAST_APPLIED = "last_applied"
 
+# Auto-trigger engine instance.
+DATA_ENGINE = "engine"
+
 # Dispatcher signal — payload: tuple (scope_kind, scope_id) or None (global defaults changed)
 SIGNAL_SWITCH_CONFIG_UPDATED = "ambience_switch_config_updated"
 

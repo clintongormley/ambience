@@ -10,9 +10,14 @@ top of these methods.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers.event import (
+    async_track_state_change_event,
+    async_track_time_change,
+)
 
 from .const import DATA_MATCHERS, DATA_STORE, DOMAIN
 from .service import (
@@ -38,6 +43,7 @@ class AutoTriggerEngine:
         self._scope_cfgs: dict[tuple[str, str | None], dict[str, Any]] = {}
         self._index: TriggerIndex = build_index([])
         self._snapshots: dict[str, Any] = {}
+        self._unsubs: list[Callable[[], None]] = []
 
     @property
     def index(self) -> TriggerIndex:
@@ -161,3 +167,60 @@ class AutoTriggerEngine:
         self._recompute(set(self._index.all_predicates()), self._snapshots)
         for scope in self._scope_cfgs:
             await self._resolve_and_apply(scope)
+
+    def _fire(self, fired: set[PredKey]) -> None:
+        """Schedule a re-evaluation of the given predicates (callback-safe)."""
+        if fired:
+            self._hass.async_create_task(self.async_evaluate(fired))
+
+    def _teardown(self) -> None:
+        """Cancel all subscriptions and pending timers."""
+        while self._unsubs:
+            self._unsubs.pop()()
+
+    def async_subscribe(self) -> None:
+        """(Re)create one subscription per distinct dependency in the index."""
+        self._teardown()
+        index = self._index
+        if index.entities:
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self._hass, list(index.entities), self._on_state_event
+                )
+            )
+        for clock in index.clock_times:
+            self._unsubs.append(
+                async_track_time_change(
+                    self._hass,
+                    self._make_keys_handler(index.by_clock[clock]),
+                    hour=clock[0],
+                    minute=clock[1],
+                    second=0,
+                )
+            )
+        if index.midnight:
+            self._unsubs.append(
+                async_track_time_change(
+                    self._hass,
+                    self._make_keys_handler(index.midnight),
+                    hour=0,
+                    minute=0,
+                    second=0,
+                )
+            )
+
+    @callback
+    def _on_state_event(self, event: Event) -> None:
+        preds = self._index.by_entity.get(event.data["entity_id"])
+        if preds:
+            self._fire(set(preds))
+
+    def _make_keys_handler(self, preds: frozenset[PredKey]) -> Callable[[Any], None]:
+        """A time/midnight callback that fires a fixed set of predicates."""
+        keys = set(preds)
+
+        @callback
+        def _handler(_now: Any) -> None:
+            self._fire(set(keys))
+
+        return _handler

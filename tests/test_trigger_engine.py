@@ -337,3 +337,67 @@ async def test_evaluate_does_not_refresh_unfired_matchers(hass) -> None:
     engine.async_rebuild()
     await engine.async_evaluate({("area", "a", 0, "tod")})  # fire ONLY the tod predicate
     assert script.snapshot_calls == 0
+
+
+class StateReadMatcher:
+    """A matcher whose snapshot reads binary_sensor.x's state from hass."""
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        return TriggerSpec(entities=frozenset({"binary_sensor.x"}))
+
+    async def snapshot(self, hass: Any) -> Any:
+        state = hass.states.get("binary_sensor.x")
+        return state.state if state else None
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        return predicate == snapshot
+
+    def describe(self, snapshot: Any) -> str | None:
+        return snapshot
+
+
+def _live_engine(hass) -> AutoTriggerEngine:
+    """Engine: area 'a', rule0 fires when binary_sensor.x == 'on'. Switch on."""
+    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_MATCHERS: {"x": StateReadMatcher()},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    return engine
+
+
+async def test_state_change_fires_and_applies(hass) -> None:
+    hass.states.async_set("binary_sensor.x", "off")
+    engine = _live_engine(hass)
+    engine.async_subscribe()
+    await engine.async_initial_sync()  # x=off, rule needs "on" -> no match -> no apply
+    assert ("area", "a") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+    hass.states.async_set("binary_sensor.x", "on")
+    await hass.async_block_till_done()
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0
+
+
+async def test_teardown_stops_reacting(hass) -> None:
+    hass.states.async_set("binary_sensor.x", "off")
+    engine = _live_engine(hass)
+    engine.async_subscribe()
+    await engine.async_initial_sync()
+    engine._teardown()
+    hass.states.async_set("binary_sensor.x", "on")
+    await hass.async_block_till_done()
+    assert ("area", "a") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
+async def test_unrelated_entity_change_is_ignored(hass) -> None:
+    hass.states.async_set("binary_sensor.x", "off")
+    engine = _live_engine(hass)
+    engine.async_subscribe()
+    await engine.async_initial_sync()
+    hass.states.async_set("binary_sensor.other", "on")  # not watched
+    await hass.async_block_till_done()
+    assert ("area", "a") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})

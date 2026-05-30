@@ -61,15 +61,23 @@ async def async_resolve_with_snapshots(
     scope_id: str | None,
     snapshots: dict[str, Any],
     scene: str | None = None,
+    *,
+    strip_scene: bool = True,
 ) -> dict[str, Any]:
     """Resolve a scope against a pre-built `{matcher_name: snapshot}` dict.
 
     Does NOT call any matcher's `snapshot()` — the caller supplies them (the
     engine passes its own cache). Returns {matched_rule_index, rule_name,
     actions, snapshots_described, switch_state}.
-    `scene` is handled here: when supplied, the scene matcher is included and
-    its snapshot injected; when None, scene is excluded and `when.scene`
-    predicates are stripped (treated as wildcards).
+
+    `scene` handling when no scene is supplied (`scene is None`):
+      - `strip_scene=True` (default, the service's scene-omitted path):
+        `when.scene` predicates are dropped, so scene-gated rules match as
+        wildcards.
+      - `strip_scene=False` (the auto-trigger engine): `when.scene` predicates
+        are KEPT but the scene matcher is absent, so scene-gated rules fail to
+        match — the engine never auto-applies a rule that only a scene would
+        satisfy (there is no "active scene" on the auto path).
     """
     store = hass.data[DOMAIN][DATA_STORE]
     matchers_registry: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
@@ -79,8 +87,13 @@ async def async_resolve_with_snapshots(
     if scene is not None:
         engine_matchers = dict(matchers_registry)
         snapshots["scene"] = scene
+        active_keys = set(engine_matchers)
     else:
         engine_matchers = {k: v for k, v in matchers_registry.items() if k != "scene"}
+        active_keys = set(engine_matchers)
+        if not strip_scene:
+            # Keep `when.scene` so scene-gated rules fail (scene matcher absent).
+            active_keys.add("scene")
 
     described = {
         name: engine_matchers[name].describe(snap) if snap is not None else None
@@ -88,7 +101,6 @@ async def async_resolve_with_snapshots(
         if name in engine_matchers
     }
 
-    active_keys = set(engine_matchers)
     rules = [
         {**rule, "when": {k: v for k, v in rule.get("when", {}).items() if k in active_keys}}
         for rule in scope_cfg.get("rules", [])

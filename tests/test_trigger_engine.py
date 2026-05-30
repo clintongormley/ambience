@@ -18,6 +18,7 @@ from custom_components.ambience.const import (
     DOMAIN,
 )
 from custom_components.ambience.exposed_actions import ExposedActionsStore
+from custom_components.ambience.matchers.scene import SceneMatcher
 from custom_components.ambience.trigger_engine import AutoTriggerEngine
 from custom_components.ambience.triggers import EMPTY, TriggerSpec
 
@@ -554,3 +555,19 @@ async def test_switch_off_to_on_force_resyncs(hass) -> None:
     await hass.async_block_till_done()
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0  # force-resync ran
     engine._teardown()
+
+
+async def test_initial_sync_does_not_apply_scene_gated_rule(hass) -> None:
+    # A rule gated only on a scene must NOT be auto-applied by the engine:
+    # scenes are service-driven, and there is no "active scene" on the auto path.
+    scopes = [("area", "a", {"rules": [{"when": {"scene": "movie"}, "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_MATCHERS: {"scene": SceneMatcher()},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    await engine.async_initial_sync()
+    assert ("area", "a") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})

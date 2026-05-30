@@ -158,7 +158,9 @@ class AutoTriggerEngine:
         scope_kind, scope_id = scope
         if _switch_state(self._hass, scope_kind, scope_id) == "off":
             return
-        plan = await async_resolve_with_snapshots(self._hass, scope_kind, scope_id, self._snapshots)
+        plan = await async_resolve_with_snapshots(
+            self._hass, scope_kind, scope_id, self._snapshots, strip_scene=False
+        )
         index = plan["matched_rule_index"]
         if index is None:
             return

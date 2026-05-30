@@ -175,6 +175,18 @@ export type WeatherPredicate =
   | null
   | { groups: string[]; thresholds: WeatherThreshold[] };
 
+// --- sun matcher ----------------------------------------------------------
+
+export type SunElevation = { min?: number; max?: number };
+export type SunRange = { from: number; to: number };
+export type SunAzimuth = { sectors?: string[]; ranges?: SunRange[] };
+
+/** Top-level sun predicate. `null` = no constraint (wildcard). At least one of
+ *  `elevation`/`azimuth` is present when non-null. */
+export type SunPredicate =
+  | null
+  | { elevation?: SunElevation; azimuth?: SunAzimuth };
+
 // --- state matcher --------------------------------------------------------
 
 export type StateForDuration = { h: number; m: number; s: number };

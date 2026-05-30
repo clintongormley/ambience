@@ -41,7 +41,8 @@
     "scene": "Scene",
     "time_of_day": "Time of day",
     "state": "Entity state",
-    "script": "Script"
+    "script": "Script",
+    "sun": "Sun"
   },
   "action": {},
   "anchor": {
@@ -171,6 +172,15 @@
     "weather_warning_text": "rules now reference an unconfigured weather entity:",
     "groups": "Groups",
     "add_group": "+ Add group",
+    "sun": {
+      "elevation": "Elevation",
+      "azimuth": "Azimuth",
+      "any": "Any",
+      "above": "Above",
+      "below": "Below",
+      "between": "Between",
+      "custom_range": "Custom range"
+    },
     "arguments": "Arguments",
     "form": "Form",
     "script": "Script",

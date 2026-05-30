@@ -19,6 +19,7 @@ import type {
   ServiceSchema,
   StateExpr,
   StatePredicate,
+  SunPredicate,
   TimeEndpoint,
   TimeOfDayPredicate,
   WeatherGroup,
@@ -87,6 +88,9 @@ export function summariseMatcher(
   }
   if (matcherName === "weather") {
     return summariseWeather(predicate as WeatherPredicate, ctx);
+  }
+  if (matcherName === "sun") {
+    return summariseSun(predicate as SunPredicate, ctx);
   }
   if (matcherName === "state") {
     return summariseState(predicate as StatePredicate, ctx);
@@ -198,6 +202,23 @@ export function summariseWeather(pred: WeatherPredicate, ctx: MatcherContext = {
     .map((t) => `${weatherAttrLabel(ctx.hass, t.attribute)} ${_OP_LABEL[t.op] ?? t.op} ${t.value}`)
     .join(", ");
   const parts = [groups, thr].filter((s) => s !== "");
+  return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
+}
+
+export function summariseSun(pred: SunPredicate, ctx: MatcherContext = {}): string {
+  if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
+  const parts: string[] = [];
+  const e = pred.elevation;
+  if (e) {
+    if (e.min != null && e.max != null) parts.push(`${e.min}°–${e.max}°`);
+    else if (e.min != null) parts.push(`≥${e.min}°`);
+    else if (e.max != null) parts.push(`≤${e.max}°`);
+  }
+  const az = pred.azimuth;
+  if (az) {
+    if (az.sectors?.length) parts.push(az.sectors.join("/"));
+    for (const r of az.ranges ?? []) parts.push(`${r.from}°–${r.to}°`);
+  }
   return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
 }
 

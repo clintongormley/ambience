@@ -157,6 +157,30 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(action.textContent).toContain("Set light");
   });
 
+  test("add-condition selector lists matchers alphabetically by label", async () => {
+    const el2: any = document.createElement("ambience-rule-editor");
+    // Deliberately unsorted, and not in priority order either.
+    el2.matchers = [
+      { name: "weather", description: "", predicate_help: "", input: "weather_predicate", priority: 300 },
+      { name: "day", description: "", predicate_help: "", input: "day_predicate", priority: 100 },
+      { name: "sun", description: "", predicate_help: "", input: "sun_predicate", priority: 250 },
+      { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
+    ];
+    el2.availableActions = [];
+    el2.periods = periods;
+    el2.hass = {};  // no localize → friendly fallback labels
+    el2.scope = { kind: "area", id: "living_room" };
+    el2.rule = { name: "", when: {}, actions: [] };
+    el2.open = true;
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    const opts = Array.from(el2.shadowRoot.querySelectorAll("select.add-matcher option"))
+      .map((o: Element) => o.textContent?.trim());
+    // [0] is the "+ Add condition…" placeholder.
+    expect(opts.slice(1)).toEqual(["Day", "Scene", "Sun", "Weather"]);
+    el2.remove();
+  });
+
   test("adding a new action auto-opens it", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     const addSelect = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;

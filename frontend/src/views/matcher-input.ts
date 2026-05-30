@@ -9,6 +9,7 @@ import "./script-predicate-input.js";
 import "./time-of-day-input.js";
 import "./day-predicate-input.js";
 import "./weather-predicate-input.js";
+import "./sun-predicate-input.js";
 import "./state-predicate-input.js";
 
 /**
@@ -131,6 +132,18 @@ export class AmbienceMatcherInput extends LitElement {
             this._emit(e.detail.value);
           }}
         ></ambience-weather-predicate-input>
+      `;
+    }
+    if (this.matcher.input === "sun_predicate") {
+      return html`
+        <ambience-sun-predicate-input
+          .hass=${this.hass}
+          .value=${this.value as any}
+          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
+            e.stopPropagation();
+            this._emit(e.detail.value);
+          }}
+        ></ambience-sun-predicate-input>
       `;
     }
     if (this.matcher.input === "state_predicate") {

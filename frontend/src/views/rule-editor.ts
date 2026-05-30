@@ -387,7 +387,13 @@ export class AmbienceRuleEditor extends LitElement {
 
   private _unusedMatchers(): MatcherInfo[] {
     const visible = new Set(this._visibleMatchers().map((m) => m.name));
-    return this.matchers.filter((m) => !visible.has(m.name));
+    return this.matchers
+      .filter((m) => !visible.has(m.name))
+      .sort((a, b) =>
+        matcherLabel(this.hass as any, a.name).localeCompare(
+          matcherLabel(this.hass as any, b.name),
+        ),
+      );
   }
 
   private _onAddMatcher = (e: Event) => {

@@ -6,6 +6,7 @@ import {
   summariseDay,
   summariseAction,
   summariseWeather,
+  summariseSun,
   summariseState,
   summariseScript,
 } from "../frontend/src/summary";
@@ -323,6 +324,20 @@ test("summariseWeather formats group labels + thresholds", () => {
     thresholds: [{ attribute: "humidity", op: ">=", value: 80 }],
   }, ctx)).toBe("Wet, Humidity ≥ 80");
   expect(summariseWeather(null, ctx)).toBe("any");
+});
+
+test("summariseSun formats elevation bands, azimuth sectors and ranges", () => {
+  expect(summariseSun({ elevation: { min: 0, max: 30 } })).toBe("0°–30°");
+  expect(summariseSun({ elevation: { min: 10 } })).toBe("≥10°");
+  expect(summariseSun({ elevation: { max: 30 } })).toBe("≤30°");
+  expect(summariseSun({ azimuth: { sectors: ["S", "SW"] } })).toBe("S/SW");
+  expect(summariseSun({ azimuth: { ranges: [{ from: 200, to: 250 }] } })).toBe("200°–250°");
+  expect(summariseSun({ elevation: { max: 20 }, azimuth: { sectors: ["W"] } })).toBe("≤20°, W");
+  expect(summariseSun(null)).toBe("any");
+});
+
+test("summariseMatcher dispatches the sun matcher", () => {
+  expect(summariseMatcher("sun", { azimuth: { sectors: ["W"] } }, {})).toBe("W");
 });
 
 test("summariseWeather renders dangling group ids title-cased (no '?' suffix)", () => {

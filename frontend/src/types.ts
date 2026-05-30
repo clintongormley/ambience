@@ -78,6 +78,7 @@ export type AreaConfig = {
   // When true the backend keeps `rules` sorted on every save.
   auto_sort: boolean;
   switch?: ScopeSwitchOverride & { off_at?: string | null };
+  auto_triggers_enabled?: boolean;
 };
 
 // `name` is resolved by the backend from HA's area registry, not stored.
@@ -229,7 +230,7 @@ export interface PeoplePredicate {
 /** Per-rule predicate. `null` = wildcard. */
 export type ScriptPredicate =
   | null
-  | { script: string; args?: Record<string, unknown> };
+  | { script: string; args?: Record<string, unknown>; triggers?: string[] };
 
 // --- template matcher -----------------------------------------------------
 

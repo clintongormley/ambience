@@ -12,6 +12,7 @@ import {
   saveHouseSwitch,
   saveFloorSwitch,
   saveAreaSwitch,
+  setAutoTriggersEnabled,
   type HassConnection,
 } from "../api.js";
 import { localize } from "../i18n.js";
@@ -30,6 +31,7 @@ type Row = {
   scopePrefix: string;       // raw scope name for the entity-name preview
   override: ScopeSwitchOverride;
   expanded: boolean;
+  autoTriggersEnabled: boolean;
 };
 
 function _rowKey(r: Row): string {
@@ -114,6 +116,7 @@ export class AmbienceAmbienceSettings extends LitElement {
         scopePrefix: "Global",
         override: this._toOverride((house as ScopeConfig).switch),
         expanded: false,
+        autoTriggersEnabled: (house as ScopeConfig).auto_triggers_enabled ?? true,
       };
 
       const sortedFloors = floors.slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -126,6 +129,7 @@ export class AmbienceAmbienceSettings extends LitElement {
         scopePrefix: f.name,
         override: this._toOverride((floorConfigs[i] as ScopeConfig).switch),
         expanded: false,
+        autoTriggersEnabled: (floorConfigs[i] as ScopeConfig).auto_triggers_enabled ?? true,
       }));
 
       const sortedAreas = areas.slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -138,6 +142,7 @@ export class AmbienceAmbienceSettings extends LitElement {
         scopePrefix: a.name,
         override: this._toOverride((areaConfigs[i] as ScopeConfig).switch),
         expanded: false,
+        autoTriggersEnabled: (areaConfigs[i] as ScopeConfig).auto_triggers_enabled ?? true,
       }));
 
       this._rows = [houseRow, ...floorRows, ...areaRows];
@@ -221,6 +226,16 @@ export class AmbienceAmbienceSettings extends LitElement {
     this._saveRow(this._rows[idx]);
   }
 
+  private _onAutoTriggers(idx: number, enabled: boolean) {
+    this._rows = this._rows.map((r, i) =>
+      i === idx ? { ...r, autoTriggersEnabled: enabled } : r,
+    );
+    const row = this._rows[idx];
+    void this._safeSave(() =>
+      setAutoTriggersEnabled(this.hass, row.kind, row.id, enabled),
+    );
+  }
+
   /** The entity name HA will display when no per-scope `name` override is set. */
   private _defaultDisplayName(row: Row): string {
     return `${row.scopePrefix} ${this._defaults.name}`;
@@ -262,6 +277,15 @@ export class AmbienceAmbienceSettings extends LitElement {
                   <div class="row">
                     <label>${localize(this.hass, "ui.settings_ambience_field_delay", "Auto-on delay (seconds)")}</label>
                     <input data-test=${`override-delay-${key}`} type="number" min="0" .value=${r.override.auto_on_delay_seconds === null ? "" : String(r.override.auto_on_delay_seconds)} placeholder=${String(this._defaults.auto_on_delay_seconds)} @change=${(e: Event) => this._onOverrideDelay(idx, e)} />
+                  </div>
+                  <div class="row">
+                    <label>${localize(this.hass, "ui.settings_ambience_auto_triggers", "Automatic triggers")}</label>
+                    <input
+                      data-test=${`auto-triggers-${key}`}
+                      type="checkbox"
+                      .checked=${r.autoTriggersEnabled}
+                      @change=${(e: Event) => this._onAutoTriggers(idx, (e.target as HTMLInputElement).checked)}
+                    />
                   </div>
                   <button class="reset" data-test=${`reset-${key}`} @click=${() => this._reset(idx)}>${localize(this.hass, "ui.settings_ambience_reset_to_defaults", "Reset to defaults")}</button>
                 </div>

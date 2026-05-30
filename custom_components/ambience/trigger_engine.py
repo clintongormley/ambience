@@ -15,6 +15,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_point_in_time,
@@ -40,6 +41,10 @@ _LOGGER = logging.getLogger(__name__)
 # How often wall-clock-dependent (has_time) predicates are recomputed.
 _HAS_TIME_INTERVAL = timedelta(seconds=60)
 
+# Coalesce a burst of config-changed signals (e.g. a multi-field panel save)
+# into a single rebuild + resync.
+_CONFIG_DEBOUNCE_SECONDS = 0.3
+
 
 class AutoTriggerEngine:
     """Builds the trigger index and detects predicate flips per scope."""
@@ -59,6 +64,14 @@ class AutoTriggerEngine:
         self._sun_unsubs: dict[tuple[str, int], Callable[[], None]] = {}
         self._for_handles: dict[PredKey, list[Callable[[], None]]] = {}
         self._switch_scopes: dict[str, tuple[str, str | None]] = {}
+        # Debounced full refresh, for coalescing rapid config-changed signals.
+        self._refresh_debouncer = Debouncer(
+            hass,
+            _LOGGER,
+            cooldown=_CONFIG_DEBOUNCE_SECONDS,
+            immediate=False,
+            function=self._async_refresh,
+        )
 
     @property
     def index(self) -> TriggerIndex:
@@ -183,14 +196,23 @@ class AutoTriggerEngine:
         for scope in self._recompute(fired, self._snapshots):
             await self._resolve_and_apply(scope)
 
-    async def async_start(self) -> None:
-        """Build the index, subscribe, and run the startup sync pass."""
+    async def _async_refresh(self) -> None:
+        """Full (re)build: rebuild the index, resubscribe, and sync to reality."""
         self.async_rebuild()
         self.async_subscribe()
         await self.async_initial_sync()
 
+    async def async_start(self) -> None:
+        """Build the index, subscribe, and run the startup sync pass (immediate)."""
+        await self._async_refresh()
+
+    async def async_request_refresh(self) -> None:
+        """Request a full refresh, debounced to coalesce rapid config changes."""
+        await self._refresh_debouncer.async_call()
+
     def async_shutdown(self) -> None:
-        """Tear down all subscriptions and timers."""
+        """Tear down all subscriptions, timers, and the refresh debouncer."""
+        self._refresh_debouncer.async_shutdown()
         self._teardown()
 
     async def async_initial_sync(self) -> None:

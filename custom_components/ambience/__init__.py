@@ -255,11 +255,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     @callback
     def _on_config_changed() -> None:
-        # Rebuild the watch-set immediately, then re-sync so an edit (new rule,
-        # newly-enabled scope) takes effect now rather than on the next fire.
-        engine.async_rebuild()
-        engine.async_subscribe()
-        hass.async_create_task(engine.async_initial_sync())
+        # Debounced full refresh (rebuild + resubscribe + re-sync) so an edit
+        # takes effect now, while a burst of saves coalesces into one rebuild.
+        hass.async_create_task(engine.async_request_refresh())
 
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _on_config_changed))
     entry.async_on_unload(engine.async_shutdown)

@@ -8,6 +8,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
+    async_fire_time_changed,
     async_mock_service,
 )
 
@@ -220,6 +221,9 @@ async def test_engine_auto_applies_state_rule_on_config_change(
             ]
         },
     )
+    await hass.async_block_till_done()
+    # The config-change refresh is debounced; advance past the cooldown.
+    async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=1))
     await hass.async_block_till_done()
     assert len(calls) >= 1  # the engine auto-applied the matching state rule
 

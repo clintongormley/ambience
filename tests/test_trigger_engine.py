@@ -582,3 +582,22 @@ async def test_rebuild_prunes_stale_predicate_state(hass) -> None:
     hass.data[DOMAIN][DATA_STORE] = FakeStore([("area", "a", {"rules": []})])
     engine.async_rebuild()
     assert key not in engine._predicate_state  # stale key pruned
+
+
+async def test_config_refresh_is_debounced(hass) -> None:
+    # Two rapid refresh requests coalesce into a single rebuild+sync.
+    spy = SpyMatcher(TriggerSpec(entities=frozenset({"sensor.y"})))
+    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_MATCHERS: {"x": spy},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    await engine.async_request_refresh()
+    await engine.async_request_refresh()  # within cooldown → coalesced
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=1))
+    await hass.async_block_till_done()
+    assert spy.snapshot_calls == 1  # exactly one refresh ran, not two
+    engine.async_shutdown()

@@ -54,53 +54,31 @@ def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
     return "on" if switch.is_on else "off"
 
 
-async def async_resolve_only(
+async def async_resolve_with_snapshots(
     hass: HomeAssistant,
     scope_kind: str,
     scope_id: str | None,
+    snapshots: dict[str, Any],
     scene: str | None = None,
 ) -> dict[str, Any]:
-    """Like apply_scene, but does not execute actions.
+    """Resolve a scope against a pre-built `{matcher_name: snapshot}` dict.
 
-    Returns: {matched_rule_index, rule_name, actions, snapshots_described,
-    switch_state}.  switch_state reports this scope's own switch only
-    ("on" | "off" | "unknown"); other scopes' switches are irrelevant.
-    If no rule matched, matched_rule_index/rule_name are None and actions=[].
-
-    `scope_kind` is one of "area", "floor", "house". For "house", scope_id is
-    None.
-    `scene` is optional. When omitted, the scene matcher is excluded from the
-    resolve — scene predicates on rules are stripped (treated as wildcards).
+    Does NOT call any matcher's `snapshot()` — the caller supplies them (the
+    engine passes its own cache). Returns {matched_rule_index, rule_name,
+    actions, snapshots_described, switch_state}.
+    `scene` is handled here: when supplied, the scene matcher is included and
+    its snapshot injected; when None, scene is excluded and `when.scene`
+    predicates are stripped (treated as wildcards).
     """
     store = hass.data[DOMAIN][DATA_STORE]
     matchers_registry: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
-
     scope_cfg = _scope_config(store, scope_kind, scope_id)
 
-    # Snapshot every matcher whose snapshot can be derived from `hass`.
-    # `scene`'s snapshot is injected from the service call below, so we
-    # skip it here (its `.snapshot()` is a no-op anyway).
-    snapshottable = {name: m for name, m in matchers_registry.items() if name != "scene"}
-    snapshot_results = await asyncio.gather(
-        *[m.snapshot(hass) for m in snapshottable.values()],
-        return_exceptions=True,
-    )
-    snapshots: dict[str, Any] = {}
-    for name, result in zip(snapshottable.keys(), snapshot_results, strict=True):
-        if isinstance(result, BaseException):
-            _LOGGER.warning("ambience: matcher %r snapshot failed: %s", name, result)
-            snapshots[name] = None
-        else:
-            snapshots[name] = result
-
+    snapshots = dict(snapshots)  # don't mutate the caller's dict
     if scene is not None:
-        # Scene supplied → include the scene matcher and inject the snapshot.
         engine_matchers = dict(matchers_registry)
         snapshots["scene"] = scene
     else:
-        # Scene omitted → exclude scene matcher; the active_keys filter below
-        # then strips `when.scene` predicates from each rule, so they no longer
-        # constrain matching.
         engine_matchers = {k: v for k, v in matchers_registry.items() if k != "scene"}
 
     described = {
@@ -109,9 +87,6 @@ async def async_resolve_only(
         if name in engine_matchers
     }
 
-    # Predicates for matchers absent from `engine_matchers` are dormant:
-    # drop them from each rule's `when` before resolving so they're ignored
-    # rather than failing the rule. Storage is untouched.
     active_keys = set(engine_matchers)
     rules = [
         {**rule, "when": {k: v for k, v in rule.get("when", {}).items() if k in active_keys}}
@@ -135,6 +110,34 @@ async def async_resolve_only(
         "snapshots_described": described,
         "switch_state": switch_state,
     }
+
+
+async def async_resolve_only(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    scene: str | None = None,
+) -> dict[str, Any]:
+    """Like apply_scene, but does not execute actions.
+
+    Snapshots every matcher fresh (except `scene`, whose snapshot is injected
+    by `async_resolve_with_snapshots`), then delegates. Return shape:
+    {matched_rule_index, rule_name, actions, snapshots_described, switch_state}.
+    """
+    matchers_registry: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
+    snapshottable = {name: m for name, m in matchers_registry.items() if name != "scene"}
+    snapshot_results = await asyncio.gather(
+        *[m.snapshot(hass) for m in snapshottable.values()],
+        return_exceptions=True,
+    )
+    snapshots: dict[str, Any] = {}
+    for name, result in zip(snapshottable.keys(), snapshot_results, strict=True):
+        if isinstance(result, BaseException):
+            _LOGGER.warning("ambience: matcher %r snapshot failed: %s", name, result)
+            snapshots[name] = None
+        else:
+            snapshots[name] = result
+    return await async_resolve_with_snapshots(hass, scope_kind, scope_id, snapshots, scene)
 
 
 async def async_apply_scene(

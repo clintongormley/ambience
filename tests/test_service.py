@@ -11,11 +11,16 @@ from custom_components.ambience.const import (
     DATA_EXPOSED_ACTIONS,
     DATA_MATCHERS,
     DATA_STORE,
+    DATA_SWITCHES,
     DOMAIN,
 )
 from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.matchers.scene import SceneMatcher
-from custom_components.ambience.service import async_apply_scene, async_resolve_only
+from custom_components.ambience.service import (
+    async_apply_scene,
+    async_resolve_only,
+    async_resolve_with_snapshots,
+)
 
 
 class FixedMatcher:
@@ -638,3 +643,55 @@ async def test_async_apply_scene_floor_runs_floor_actions(hass: HomeAssistant) -
     assert len(calls) == 1
     assert calls[0].data["entity_id"] == ["light.up_a"]
     assert calls[0].data["brightness_pct"] == 25
+
+
+async def test_resolve_with_snapshots_does_not_call_snapshot(hass: HomeAssistant) -> None:
+    class ExplodingSnapshot:
+        name = "tod"
+
+        async def snapshot(self, hass):
+            raise AssertionError("snapshot() must not be called by resolve_with_snapshots")
+
+        def matches(self, predicate, snapshot):
+            return predicate is None or predicate == snapshot
+
+        def describe(self, snapshot):
+            return snapshot
+
+        def validate_predicate(self, predicate):
+            return
+
+    areas = {"a": {"rules": [{"name": "r", "when": {"tod": "evening"}, "actions": []}]}}
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {"tod": ExplodingSnapshot(), "scene": SceneMatcher()},
+        DATA_SWITCHES: {},
+    }
+    plan = await async_resolve_with_snapshots(hass, "area", "a", {"tod": "evening"})
+    assert plan["matched_rule_index"] == 0
+    assert plan["rule_name"] == "r"
+    assert plan["switch_state"] == "unknown"
+
+
+async def test_resolve_with_snapshots_no_match(hass: HomeAssistant) -> None:
+    class T:
+        name = "tod"
+
+        def matches(self, predicate, snapshot):
+            return predicate is None or predicate == snapshot
+
+        def describe(self, snapshot):
+            return snapshot
+
+        def validate_predicate(self, predicate):
+            return
+
+    areas = {"a": {"rules": [{"name": "r", "when": {"tod": "morning"}, "actions": []}]}}
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {"tod": T(), "scene": SceneMatcher()},
+        DATA_SWITCHES: {},
+    }
+    plan = await async_resolve_with_snapshots(hass, "area", "a", {"tod": "evening"})
+    assert plan["matched_rule_index"] is None
+    assert plan["actions"] == []

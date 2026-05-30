@@ -11,7 +11,6 @@ from custom_components.ambience.scope_triggers import (
 )
 from custom_components.ambience.triggers import EMPTY, TriggerSpec
 
-
 # --- trigger_descriptors ----------------------------------------------------
 
 

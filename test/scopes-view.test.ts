@@ -26,6 +26,8 @@ vi.mock("../frontend/src/api", () => ({
   listPeriods: vi.fn(),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
   getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
+  listAutoTriggers: vi.fn(async () => ({ triggers: [], opaque: false })),
+  setAutoTrigger: vi.fn(async () => ({ ok: true })),
 }));
 
 import * as api from "../frontend/src/api";
@@ -245,6 +247,16 @@ describe("ambience-scopes-view", () => {
     const eventTypes = calls.map((c: any) => c[1]);
     expect(eventTypes).toContain("area_registry_updated");
     expect(eventTypes).toContain("floor_registry_updated");
+  });
+
+  test("expanded scope renders an auto-triggers section", async () => {
+    el = await mount();
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    expect(row.querySelector("ambience-auto-triggers-section")).toBeTruthy();
   });
 
   test("area_registry_updated remove clears that area's expanded/editing state", async () => {

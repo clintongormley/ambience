@@ -38,6 +38,7 @@ import type {
 } from "../types.js";
 import "./rules-list.js";
 import "./rule-editor.js";
+import "./auto-triggers-section.js";
 
 type EditingState = { scope: Scope; index: number; isNew: boolean };
 
@@ -607,6 +608,11 @@ export class AmbienceScopesView extends LitElement {
                   @toggle-autosort=${(e: CustomEvent<{ manual: boolean }>) =>
                     this._toggleAutoSort(scope, !e.detail.manual)}
                 ></ambience-rules-list>
+                <ambience-auto-triggers-section
+                  .hass=${this.hass}
+                  .scope=${scope}
+                  .rules=${cfg.rules}
+                ></ambience-auto-triggers-section>
               </div>
             `
           : ""}

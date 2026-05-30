@@ -407,6 +407,32 @@ class AmbienceStore:
         await self._store.async_save(self._data)
         self._notify_config_changed()
 
+    def auto_triggers_disabled(self, scope_kind: str, scope_id: str | None) -> frozenset[str]:
+        """Trigger keys the user has disabled for this scope. Default empty.
+
+        A trigger key (e.g. ``entity:binary_sensor.motion``, ``clock:18:00``) is
+        a watch the engine would otherwise subscribe to; disabling it stops this
+        scope from re-evaluating when that thing changes.
+        """
+        raw = self._scope_read(scope_kind, scope_id).get("disabled_triggers", [])
+        if not isinstance(raw, list):
+            return frozenset()
+        return frozenset(k for k in raw if isinstance(k, str))
+
+    async def async_set_trigger_disabled(
+        self, scope_kind: str, scope_id: str | None, key: str, disabled: bool
+    ) -> None:
+        """Add or remove a single trigger key from a scope's disabled set."""
+        container = self._scope_container(scope_kind, scope_id)
+        current = set(self.auto_triggers_disabled(scope_kind, scope_id))
+        if disabled:
+            current.add(key)
+        else:
+            current.discard(key)
+        container["disabled_triggers"] = sorted(current)
+        await self._store.async_save(self._data)
+        self._notify_config_changed()
+
     def get_exposed_actions(self) -> list[dict[str, Any]]:
         """Persisted list of ExposedAction entries (may be empty)."""
         actions = self._data.get("exposed_actions")

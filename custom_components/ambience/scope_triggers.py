@@ -13,8 +13,8 @@ is whether a *class* of trigger should wake the scope, not an individual time.
 
 Canonical trigger keys (shared with the frontend):
 - ``entity:<entity_id>``
-- ``group:time``  (all clock times + periodic wall-clock re-check)
-- ``group:sun``   (all sun events + local date rollover)
+- ``group:time``  (all clock times + local date rollover + periodic re-check)
+- ``group:sun``   (all sun events)
 
 ``opaque`` is a flag (script deps may be incomplete), not a disableable watch.
 """
@@ -45,22 +45,22 @@ def trigger_descriptors(spec: TriggerSpec) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for entity_id in sorted(spec.entities):
         rows.append({"key": _entity_key(entity_id), "kind": "entity", "entity_id": entity_id})
-    if spec.clock_times or spec.has_time:
+    if spec.clock_times or spec.has_time or spec.date_rollover:
         rows.append(
             {
                 "key": GROUP_TIME_KEY,
                 "kind": "time",
                 "clocks": [{"hour": h, "minute": m} for h, m in sorted(spec.clock_times)],
                 "has_time": spec.has_time,
+                "date_rollover": spec.date_rollover,
             }
         )
-    if spec.sun_events or spec.date_rollover:
+    if spec.sun_events:
         rows.append(
             {
                 "key": GROUP_SUN_KEY,
                 "kind": "sun",
                 "suns": [{"anchor": a, "offset": o} for a, o in sorted(spec.sun_events)],
-                "date_rollover": spec.date_rollover,
             }
         )
     return rows
@@ -81,7 +81,7 @@ def filter_spec(spec: TriggerSpec, disabled: Collection[str]) -> TriggerSpec:
         ),
         clock_times=frozenset() if drop_time else spec.clock_times,
         sun_events=frozenset() if drop_sun else spec.sun_events,
-        date_rollover=spec.date_rollover and not drop_sun,
+        date_rollover=spec.date_rollover and not drop_time,
         has_time=spec.has_time and not drop_time,
         opaque=spec.opaque,
     )

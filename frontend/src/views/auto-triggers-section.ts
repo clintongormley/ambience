@@ -180,6 +180,11 @@ export class AmbienceAutoTriggersSection extends LitElement {
         const parts = t.clocks.map(
           (c) => `${String(c.hour).padStart(2, "0")}:${String(c.minute).padStart(2, "0")}`,
         );
+        if (t.date_rollover) {
+          parts.push(
+            localize(this.hass, "ui.auto_trigger_date_rollover", "Local midnight (date rollover)"),
+          );
+        }
         if (t.has_time) {
           parts.push(localize(this.hass, "ui.auto_trigger_periodic", "periodic re-check"));
         }
@@ -190,11 +195,6 @@ export class AmbienceAutoTriggersSection extends LitElement {
       }
       case "sun": {
         const parts = t.suns.map((s) => this._sunPart(s));
-        if (t.date_rollover) {
-          parts.push(
-            localize(this.hass, "ui.auto_trigger_date_rollover", "Local midnight (date rollover)"),
-          );
-        }
         return html`<span class="label"
           ><strong>${localize(this.hass, "ui.auto_trigger_group_sun", "Sun")}:</strong>
           ${parts.join(", ")}</span

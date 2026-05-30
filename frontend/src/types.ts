@@ -92,8 +92,13 @@ export type AutoTrigger = {
   enabled: boolean;
 } & (
   | { kind: "entity"; entity_id: string }
-  | { kind: "time"; clocks: { hour: number; minute: number }[]; has_time: boolean }
-  | { kind: "sun"; suns: { anchor: string; offset: number }[]; date_rollover: boolean }
+  | {
+      kind: "time";
+      clocks: { hour: number; minute: number }[];
+      has_time: boolean;
+      date_rollover: boolean;
+    }
+  | { kind: "sun"; suns: { anchor: string; offset: number }[] }
 );
 
 export type AutoTriggerList = {

@@ -24,6 +24,7 @@ const sampleTriggers: AutoTrigger[] = [
       { hour: 22, minute: 0 },
     ],
     has_time: false,
+    date_rollover: true,
     enabled: true,
   },
   {
@@ -33,7 +34,6 @@ const sampleTriggers: AutoTrigger[] = [
       { anchor: "dawn", offset: 0 },
       { anchor: "sunset", offset: 30 },
     ],
-    date_rollover: true,
     enabled: false,
   },
 ];
@@ -74,15 +74,19 @@ describe("ambience-auto-triggers-section", () => {
     await el.updateComplete;
     expect(api.listAutoTriggers).toHaveBeenCalledWith(el.hass, "area", "lr");
     const text = el.shadowRoot.textContent;
-    // Time group lists both clock times on one row.
-    expect(text).toContain("Time:");
-    expect(text).toContain("07:00");
-    expect(text).toContain("22:00");
-    // Sun group lists sun events + the folded-in date rollover.
+    // Time group lists both clock times + the folded-in date rollover on one row.
+    const timeLabel = el.shadowRoot
+      .querySelector('[data-test="trigger-cb-group:time"]')
+      .closest("li")
+      .textContent.toLowerCase();
+    expect(timeLabel).toContain("time:");
+    expect(timeLabel).toContain("07:00");
+    expect(timeLabel).toContain("22:00");
+    expect(timeLabel).toContain("date rollover");
+    // Sun group lists sun events only.
     expect(text).toContain("Sun:");
     expect(text).toContain("Dawn");
     expect(text).toContain("Sunset +30 min");
-    expect(text.toLowerCase()).toContain("date rollover");
     // Only one checkbox per group (not per item).
     expect(el.shadowRoot.querySelectorAll('[data-test^="trigger-cb-"]').length).toBe(3);
   });
@@ -92,7 +96,7 @@ describe("ambience-auto-triggers-section", () => {
       triggers: [
         { key: "entity:z.zebra", kind: "entity", entity_id: "z.zebra", enabled: true },
         { key: "entity:a.apple", kind: "entity", entity_id: "a.apple", enabled: true },
-        { key: "group:time", kind: "time", clocks: [{ hour: 7, minute: 0 }], has_time: false, enabled: true },
+        { key: "group:time", kind: "time", clocks: [{ hour: 7, minute: 0 }], has_time: false, date_rollover: false, enabled: true },
       ] as AutoTrigger[],
       hass: {
         states: {

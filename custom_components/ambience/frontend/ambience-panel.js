@@ -24,7 +24,6 @@ var Xi=Object.defineProperty;var Zi=Object.getOwnPropertyDescriptor;var c=(t,n,e
                   ${yt(e,d(this.hass,"ui.rule_n","Rule {n}").replace("{n}",String(r+1)))}
                 </div>
                 <div class="summary">
-                  <span class="chevron">${this._expanded.has(r)?"\u25BE":"\u25B8"}</span>
                   ${this._expanded.has(r)?"":l`${this._whenSummary(e)} · <span class="action-count">${this._actionCountLabel(e)}</span>`}
                 </div>
                 ${this._expanded.has(r)?l`
@@ -123,11 +122,6 @@ var Xi=Object.defineProperty;var Zi=Object.getOwnPropertyDescriptor;var c=(t,n,e
     }
     .summary {
       font-size: 0.85em;
-      color: var(--secondary-text-color, #888);
-    }
-    .summary .chevron {
-      display: inline-block;
-      width: 0.85em;
       color: var(--secondary-text-color, #888);
     }
     .rule-detail {

@@ -63,11 +63,6 @@ export class AmbienceRulesList extends LitElement {
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
     }
-    .summary .chevron {
-      display: inline-block;
-      width: 0.85em;
-      color: var(--secondary-text-color, #888);
-    }
     .rule-detail {
       margin-top: 0.35rem;
       padding-left: 0.75rem;
@@ -309,7 +304,6 @@ export class AmbienceRulesList extends LitElement {
                   ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1)))}
                 </div>
                 <div class="summary">
-                  <span class="chevron">${this._expanded.has(i) ? "▾" : "▸"}</span>
                   ${this._expanded.has(i)
                     ? ""
                     : html`${this._whenSummary(rule)} · <span class="action-count">${this._actionCountLabel(rule)}</span>`}

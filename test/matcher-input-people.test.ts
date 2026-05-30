@@ -56,12 +56,12 @@ describe("ambience-people-predicate-input", () => {
 
   // --- mode dropdown structure ---------------------------------------------
 
-  test("mode dropdown offers exactly the 5 modes in order", async () => {
+  test("mode dropdown offers exactly the 6 modes in order", async () => {
     el = await mount();
     const opts = Array.from(
       modeSelect(el).querySelectorAll<HTMLOptionElement>("option"),
     ).map((o) => o.value);
-    expect(opts).toEqual(["everybody", "nobody", "any", "all", "none"]);
+    expect(opts).toEqual(["everybody", "anybody", "nobody", "any", "all", "none"]);
   });
 
   test("mode dropdown shows the shortened 'X of:' labels", async () => {
@@ -69,7 +69,7 @@ describe("ambience-people-predicate-input", () => {
     const labels = Array.from(
       modeSelect(el).querySelectorAll<HTMLOptionElement>("option"),
     ).map((o) => o.textContent?.trim());
-    expect(labels).toEqual(["Everybody", "Nobody", "Any of:", "All of:", "None of:"]);
+    expect(labels).toEqual(["Everybody", "Anybody", "Nobody", "Any of:", "All of:", "None of:"]);
   });
 
   test("no 'matches anyone' hint text exists anywhere", async () => {
@@ -102,6 +102,18 @@ describe("ambience-people-predicate-input", () => {
     });
     await setMode(el, "everybody");
     expect(emitted?.quant).toBe("everyone");
+    expect(emitted?.who).toBeUndefined();
+    expect(emitted?.where).toBe("home");
+  });
+
+  test("Anybody emits {quant: any} with no who", async () => {
+    el = await mount({ quant: "everyone", where: "home" });
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    await setMode(el, "anybody");
+    expect(emitted?.quant).toBe("any");
     expect(emitted?.who).toBeUndefined();
     expect(emitted?.where).toBe("home");
   });
@@ -152,8 +164,10 @@ describe("ambience-people-predicate-input", () => {
 
   // --- person checklist visibility -----------------------------------------
 
-  test("person checklist is hidden for Everybody and Nobody", async () => {
+  test("person checklist is hidden for Everybody, Anybody and Nobody", async () => {
     el = await mount({ quant: "everyone", where: "home" });
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
+    await setMode(el, "anybody");
     expect(el.shadowRoot.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
     await setMode(el, "nobody");
     expect(el.shadowRoot.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
@@ -345,9 +359,9 @@ describe("ambience-people-predicate-input", () => {
     expect(modeSelect(el).value).toBe("none");
   });
 
-  test("a stray quant 'any' with no who key round-trips to Everybody (base mode)", async () => {
+  test("quant 'any' with no who key round-trips to Anybody (base mode, not Any of: nor Everybody)", async () => {
     el = await mount({ quant: "any", where: "home" });
-    expect(modeSelect(el).value).toBe("everybody");
+    expect(modeSelect(el).value).toBe("anybody");
     expect(el.shadowRoot.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
   });
 

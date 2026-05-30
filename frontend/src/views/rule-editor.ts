@@ -37,6 +37,18 @@ function _isEmptyWhoPredicate(pred: unknown): boolean {
   );
 }
 
+/**
+ * The default predicate seeded into `when` when a matcher is added via the
+ * +Add condition dropdown. The people matcher defaults to a real
+ * "Everybody is Home" constraint (rather than the wildcard "(any)") — to get
+ * the wildcard back, the user removes the matcher. Every other matcher keeps
+ * the "(any)" default, i.e. no predicate is seeded.
+ */
+function _defaultPredicateFor(name: string): unknown {
+  if (name === "people") return { quant: "everyone", where: "home" };
+  return null;
+}
+
 @customElement("ambience-rule-editor")
 export class AmbienceRuleEditor extends LitElement {
   static override styles = css`
@@ -450,6 +462,13 @@ export class AmbienceRuleEditor extends LitElement {
     if (!name) return;
     // If a different slot is open and invalid, refuse to switch.
     if (this._open !== null && !this._tryCloseCurrent()) return;
+    // Seed a default predicate for matchers that want a real starting
+    // constraint (currently only `people` → "Everybody is Home"). Skip if the
+    // key is already present so we never clobber an existing value.
+    const def = _defaultPredicateFor(name);
+    if (def != null && this._draft && !(name in this._draft.when)) {
+      this._draft = { ...this._draft, when: { ...this._draft.when, [name]: def } };
+    }
     this._open = { kind: "matcher", id: name };
     this._showError = false;
   }

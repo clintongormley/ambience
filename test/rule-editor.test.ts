@@ -783,6 +783,30 @@ describe("ambience-rule-editor — matcher dropdown + full-height layout", () =>
     // Either no dropdown (all used) or dropdown without time_of_day — both acceptable.
   });
 
+  test("adding the people matcher seeds a default 'Everybody is Home' predicate", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;
+    select.value = "people";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    // Draft is seeded with a real Everybody-is-Home predicate.
+    expect(el._draft.when.people).toEqual({ quant: "everyone", where: "home" });
+    // The row renders open with the "Everybody is Home" summary.
+    const row = el.shadowRoot.querySelector('.slot[data-slot-id="people"]') as HTMLElement;
+    expect(row).toBeTruthy();
+    expect(row.classList.contains("expanded")).toBe(true);
+    expect(row.textContent).toContain("Everybody is Home");
+  });
+
+  test("adding a non-people matcher leaves its when entry absent (no default predicate)", async () => {
+    el = await mount({ name: "test", when: {}, actions: [] });
+    const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;
+    select.value = "time_of_day";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect("time_of_day" in el._draft.when).toBe(false);
+  });
+
   test("selecting a matcher from the dropdown adds it as an open row", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;

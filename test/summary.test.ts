@@ -94,6 +94,7 @@ describe("summarisePeople", () => {
 
   test("base modes (no who key) render as 'X is Home'", () => {
     expect(summarisePeople({ quant: "everyone", where: "home" })).toBe("Everybody is Home");
+    expect(summarisePeople({ quant: "any", where: "home" })).toBe("Anybody is Home");
     expect(summarisePeople({ quant: "nobody", where: "home" })).toBe("Nobody is Home");
   });
 

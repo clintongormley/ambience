@@ -7,17 +7,18 @@ import type { PeoplePredicate, PeopleQuant } from "../types.js";
 
 type HaFormSchema = { name: string; required?: boolean; selector: Record<string, unknown> };
 
-/** The five user-facing modes. The first two ("base") emit no `who`; the last
+/** The six user-facing modes. The first three ("base") emit no `who`; the last
  *  three ("…these people") carry the selected person ids. Each maps to a
  *  `{quant, who?}` pair on the wire (the backend predicate model is unchanged). */
-type Mode = "everybody" | "nobody" | "any" | "all" | "none";
+type Mode = "everybody" | "anybody" | "nobody" | "any" | "all" | "none";
 
-const MODES: Mode[] = ["everybody", "nobody", "any", "all", "none"];
+const MODES: Mode[] = ["everybody", "anybody", "nobody", "any", "all", "none"];
 const PEOPLE_MODES = new Set<Mode>(["any", "all", "none"]);
 
 /** Wire `quant` each mode emits. */
 const MODE_QUANT: Record<Mode, PeopleQuant> = {
   everybody: "everyone",
+  anybody: "any",
   nobody: "nobody",
   any: "any",
   all: "everyone",
@@ -40,7 +41,7 @@ const MODE_QUANT: Record<Mode, PeopleQuant> = {
  * Person/zone options are read straight from `hass.states`.
  *
  * Modes are distinguished by the PRESENCE of the `who` key, not its contents:
- *   who absent:  quant "nobody" → Nobody, else → Everybody (base modes)
+ *   who absent:  "everyone" → Everybody, "any" → Anybody, "nobody" → Nobody
  *   who present: "any" → Any of:, "everyone" → All of:, "nobody" → None of:
  *                (the array may be empty — that's an unfinished, invalid
  *                 selection, NOT a collapse back to a base mode)
@@ -147,15 +148,22 @@ export class AmbiencePeoplePredicateInput extends LitElement {
    *  selects base vs "X of:"; an empty array stays an "X of:" mode (it's just
    *  an unfinished selection). */
   private _mode(): Mode {
-    const quant = this._cur().quant ?? "any";
+    // An "X of:" mode (who key present) defaults a missing quant to "any";
+    // a base mode (no who key) defaults a missing quant to "everyone", so a
+    // fresh/`{}` value lands on Everybody rather than Anybody.
     if (this._hasWhoKey()) {
-      switch (quant) {
+      switch (this._cur().quant ?? "any") {
         case "any": return "any";
         case "everyone": return "all";
         case "nobody": return "none";
       }
     }
-    return quant === "nobody" ? "nobody" : "everybody";
+    // Base modes: everyone→Everybody, any→Anybody, nobody→Nobody.
+    switch (this._cur().quant ?? "everyone") {
+      case "nobody": return "nobody";
+      case "any": return "anybody";
+      default: return "everybody";
+    }
   }
 
   private _hasFor(dur: PeoplePredicate["for"]): boolean {
@@ -254,6 +262,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   private _modeLabel(m: Mode): string {
     switch (m) {
       case "everybody": return localize(this.hass, "ui.people_mode_everybody", "Everybody");
+      case "anybody": return localize(this.hass, "ui.people_mode_anybody", "Anybody");
       case "nobody": return localize(this.hass, "ui.people_mode_nobody", "Nobody");
       case "any": return localize(this.hass, "ui.people_mode_any", "Any of:");
       case "all": return localize(this.hass, "ui.people_mode_all", "All of:");

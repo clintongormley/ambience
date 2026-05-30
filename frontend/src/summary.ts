@@ -148,16 +148,22 @@ function _whereLabel(where: string, ctx: MatcherContext): string {
  */
 export function summarisePeople(pred: PeoplePredicate, ctx: MatcherContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
-  const quant = pred.quant ?? "any";
   const where = pred.where ?? "home";
   let subject: string;
   if (!Array.isArray(pred.who)) {
-    // Base mode — no name list. Anything but nobody reads as Everybody.
+    // Base mode — no name list: everyone→Everybody, any→Anybody, nobody→Nobody.
+    // A missing quant defaults to "everyone" (Everybody) to match the widget,
+    // so a bare `{}` reads as "Everybody is Home".
+    const quant = pred.quant ?? "everyone";
     subject =
       quant === "nobody"
         ? localize(ctx.hass, "ui.people_mode_nobody", "Nobody")
-        : localize(ctx.hass, "ui.people_mode_everybody", "Everybody");
+        : quant === "any"
+          ? localize(ctx.hass, "ui.people_mode_anybody", "Anybody")
+          : localize(ctx.hass, "ui.people_mode_everybody", "Everybody");
   } else {
+    // "X of:" mode — a missing quant defaults to "any" (Any of:).
+    const quant = pred.quant ?? "any";
     const label =
       quant === "any"
         ? localize(ctx.hass, "ui.people_mode_any", "Any of:")

@@ -21,6 +21,7 @@ from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.matchers.scene import SceneMatcher
 from custom_components.ambience.service import (
     async_apply_scene,
+    async_execute_plan,
     async_resolve_only,
     async_resolve_with_snapshots,
 )
@@ -738,3 +739,39 @@ async def test_apply_scene_no_match_does_not_record(hass: HomeAssistant) -> None
     }
     await async_apply_scene(hass, "area", "a")
     assert ("area", "a") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
+async def test_execute_plan_dispatches_actions_and_records_last_applied(
+    hass: HomeAssistant,
+) -> None:
+    calls = async_mock_service(hass, "light", "turn_on")
+    exposed = ExposedActionsStore(_FakeExposedStorage([_exposed("light.turn_on")]))
+    hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: exposed, DATA_STORE: FakeStore({})}
+    plan = {
+        "matched_rule_index": 3,
+        "actions": [
+            {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 50}}
+        ],
+    }
+    await async_execute_plan(hass, "area", "a", plan)
+    assert len(calls) == 1
+    assert calls[0].data["brightness"] == 50
+    assert calls[0].data["entity_id"] == ["light.a"]
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 3
+
+
+async def test_execute_plan_records_last_applied_even_when_all_actions_skip(
+    hass: HomeAssistant,
+) -> None:
+    # No actions exposed → every action is skipped, but the rule was still the
+    # winner, so last_applied must record it (the guard tracks selection).
+    calls = async_mock_service(hass, "light", "turn_on")
+    exposed = ExposedActionsStore(_FakeExposedStorage([]))  # nothing exposed
+    hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: exposed, DATA_STORE: FakeStore({})}
+    plan = {
+        "matched_rule_index": 2,
+        "actions": [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}],
+    }
+    await async_execute_plan(hass, "area", "a", plan)
+    assert calls == []  # action skipped (unexposed)
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 2

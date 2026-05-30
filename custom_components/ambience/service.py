@@ -154,8 +154,6 @@ async def async_apply_scene(
     `scene` is optional; when omitted, scene predicates on rules are treated
     as wildcards.
     """
-    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
-
     if _switch_state(hass, scope_kind, scope_id) == "off":
         _LOGGER.info(
             "ambience: scope=%s/%s switch is off; skipping apply_scene",
@@ -175,6 +173,22 @@ async def async_apply_scene(
         )
         return
 
+    await async_execute_plan(hass, scope_kind, scope_id, plan)
+
+
+async def async_execute_plan(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    plan: dict[str, Any],
+) -> None:
+    """Dispatch a resolved plan's actions and record it as last-applied.
+
+    The caller must have already gated on the switch and confirmed a non-None
+    `matched_rule_index`. Malformed / unexposed actions are logged and skipped;
+    a raised action is logged but does not abort the rest.
+    """
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
     coros: list = []
     for action_spec in plan["actions"]:
         service_id = action_spec.get("service")

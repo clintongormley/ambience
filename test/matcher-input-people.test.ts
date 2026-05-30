@@ -167,6 +167,46 @@ describe("ambience-people-predicate-input", () => {
     expect(emitted?.who).toContain("person.alice");
   });
 
+  test("unchecking the last person stays in the 'these people' mode with empty who and shows the hint", async () => {
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
+    expect(modeSelect(el).value).toBe("any");
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    const cb = el.shadowRoot.querySelector("input[type=checkbox]:checked") as HTMLInputElement;
+    cb.checked = false;
+    cb.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    // Checklist still rendered (mode did not collapse to a base mode).
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]").length).toBeGreaterThan(0);
+    // Emitted predicate has empty/absent who.
+    expect(emitted?.who ?? []).toEqual([]);
+    // The empty-selection hint is now shown.
+    const hints = Array.from(el.shadowRoot.querySelectorAll<HTMLElement>(".hint")).map(
+      (h: HTMLElement) => h.textContent ?? "",
+    );
+    expect(hints.some((t: string) => t.includes("No one selected"))).toBe(true);
+  });
+
+  test("changing location while in an empty 'these people' mode keeps the mode and updates where", async () => {
+    el = await mount({ who: [], quant: "any", where: "home" });
+    await setMode(el, "any");
+    expect(modeSelect(el).value).toBe("any");
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    const where = whereSelect(el);
+    where.value = "zone.work";
+    where.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    // Override survived the self-emit: still in a 'these people' mode.
+    expect(modeSelect(el).value).toBe("any");
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]").length).toBeGreaterThan(0);
+    expect(emitted?.where).toBe("zone.work");
+  });
+
   // --- round-trips ----------------------------------------------------------
 
   test("round-trips a base mode (Everybody) into the controls", async () => {
@@ -178,6 +218,16 @@ describe("ambience-people-predicate-input", () => {
   test("round-trips Nobody base mode", async () => {
     el = await mount({ quant: "nobody", where: "home" });
     expect(modeSelect(el).value).toBe("nobody");
+  });
+
+  test("round-trips 'Any of these people' (quant any + non-empty who)", async () => {
+    el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
+    expect(modeSelect(el).value).toBe("any");
+  });
+
+  test("round-trips 'None of these people' (quant nobody + non-empty who)", async () => {
+    el = await mount({ who: ["person.alice"], quant: "nobody", where: "home" });
+    expect(modeSelect(el).value).toBe("none");
   });
 
   test("round-trips a 'these people' mode and ticks selected people", async () => {

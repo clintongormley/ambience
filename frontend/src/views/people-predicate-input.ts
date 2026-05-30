@@ -99,7 +99,13 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   override willUpdate(changed: Map<string, unknown>): void {
     if (changed.has("value")) {
       const who = this.value?.who ?? [];
-      if (who.length > 0) this._who = [...who];
+      if (who.length > 0) {
+        this._who = [...who];
+      } else if (!this._selfEmitting) {
+        // A genuinely new external value with empty `who` clears any stale
+        // prior selection (so it can't reappear on a later base↔people toggle).
+        this._who = [];
+      }
       // A fresh *external* value supersedes any prior interactive override;
       // our own emits keep the override (so an empty "…these people" mode
       // doesn't snap back to a base mode).
@@ -207,8 +213,11 @@ export class AmbiencePeoplePredicateInput extends LitElement {
 
   private _togglePerson(id: string, on: boolean) {
     this._who = on ? [...this._who, id] : this._who.filter((x) => x !== id);
-    // Re-emit in the current people-mode with the updated selection.
-    this._emitMode(this._mode());
+    // Pin the current people-mode as an override so unchecking the last person
+    // (emptying `who`) doesn't let the mode round-trip back to a base mode.
+    const mode = this._mode();
+    this._modeOverride = mode;
+    this._emitMode(mode);
   }
 
   private _setFor(dur: { h: number; m: number; s: number }) {
@@ -293,7 +302,10 @@ export class AmbiencePeoplePredicateInput extends LitElement {
           @change=${(e: Event) => this._togglePerson(p.id, (e.target as HTMLInputElement).checked)}
         />${p.name}
       </label>`)}
-    </div>`;
+    </div>
+    ${this._who.length === 0
+      ? html`<div class="hint">${localize(this.hass, "ui.people_none_selected", "No one selected — matches anyone in the household")}</div>`
+      : ""}`;
   }
 
   private _renderWhere(where: string) {

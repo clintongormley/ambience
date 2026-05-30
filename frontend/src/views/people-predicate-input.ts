@@ -1,5 +1,5 @@
 import { LitElement, html, css } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
@@ -39,9 +39,14 @@ const MODE_QUANT: Record<Mode, PeopleQuant> = {
  * and `day-predicate-input.ts` for the localize + emit-on-interaction pattern.
  * Person/zone options are read straight from `hass.states`.
  *
- * Round-trip (load `value` into the controls):
- *   who empty/absent: quant "nobody" → Nobody, else → Everybody
- *   who non-empty:    "any" → Any, "everyone" → All, "nobody" → None
+ * Modes are distinguished by the PRESENCE of the `who` key, not its contents:
+ *   who absent:  quant "nobody" → Nobody, else → Everybody (base modes)
+ *   who present: "any" → Any of:, "everyone" → All of:, "nobody" → None of:
+ *                (the array may be empty — that's an unfinished, invalid
+ *                 selection, NOT a collapse back to a base mode)
+ *
+ * Because a present-but-empty `who:[]` round-trips back to its own "X of:" mode,
+ * the mode is derived purely from `value` — no reactive override machinery.
  *
  * `null` value = the matcher isn't yet constrained: we show Everybody + Home but
  * do NOT emit on mount (the rule editor removes the condition via its own
@@ -65,6 +70,9 @@ export class AmbiencePeoplePredicateInput extends LitElement {
       display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem;
     }
     .hint { color: var(--secondary-text-color, #888); font-size: 0.85em; }
+    .field-error {
+      width: 100%; color: var(--error-color, #d32f2f); font-size: 0.85em; margin-top: 0.2rem;
+    }
     select, input[type="number"], input[type="text"] {
       padding: 0.25rem; border: 1px solid var(--divider-color, #ccc);
       border-radius: 4px; background: var(--card-background-color, #fff);
@@ -82,37 +90,11 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) value: PeoplePredicate | null = null;
 
-  /** Selected people, tracked internally so switching to a base mode and back
-   *  preserves the list. Seeded from `value.who` whenever `value` changes. */
-  @state() private _who: string[] = [];
-
-  /** The display mode, tracked internally so a "…these people" mode with no
-   *  one ticked yet still shows the checklist (an empty `who` would otherwise
-   *  round-trip to a base mode). Set on user interaction; otherwise derived
-   *  from `value`. `null` = derive from `value`. */
-  @state() private _modeOverride: Mode | null = null;
-
-  /** True while a `value` change originates from our own `_emit`, so willUpdate
-   *  can tell internal updates from a fresh external value. */
-  private _selfEmitting = false;
-
-  override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has("value")) {
-      const who = this.value?.who ?? [];
-      if (who.length > 0) {
-        this._who = [...who];
-      } else if (!this._selfEmitting) {
-        // A genuinely new external value with empty `who` clears any stale
-        // prior selection (so it can't reappear on a later base↔people toggle).
-        this._who = [];
-      }
-      // A fresh *external* value supersedes any prior interactive override;
-      // our own emits keep the override (so an empty "…these people" mode
-      // doesn't snap back to a base mode).
-      if (!this._selfEmitting) this._modeOverride = null;
-    }
-    this._selfEmitting = false;
-  }
+  /** A plain memory of the last non-empty selection, used only to repopulate
+   *  the checklist when switching from a base mode into an "X of:" mode. Not
+   *  reactive and never drives the rendered selection — that comes from
+   *  `value.who`. Updated in the toggle handler. */
+  private _lastSelected: string[] = [];
 
   // --- hass entity listing (mirrors state-expr-atom's hass.states access) --
 
@@ -149,25 +131,30 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     return this.value ?? {};
   }
 
-  /** Current display mode: the interactive override if set, else derived from
-   *  the loaded `value`. */
-  private _mode(): Mode {
-    return this._modeOverride ?? this._deriveMode();
+  /** The currently-selected people, read straight from the predicate. */
+  private _who(): string[] {
+    return this.value?.who ?? [];
   }
 
-  /** Derive a display mode purely from the loaded `value`. */
-  private _deriveMode(): Mode {
-    const cur = this._cur();
-    const who = cur.who ?? [];
-    const quant = cur.quant ?? "any";
-    if (who.length === 0) {
-      return quant === "nobody" ? "nobody" : "everybody";
+  /** True when the predicate carries a `who` key (even if empty) — i.e. it's
+   *  one of the "X of:" modes rather than a base mode. */
+  private _hasWhoKey(): boolean {
+    return this.value != null && Array.isArray(this.value.who);
+  }
+
+  /** Display mode, derived purely from `value`. The PRESENCE of the `who` key
+   *  selects base vs "X of:"; an empty array stays an "X of:" mode (it's just
+   *  an unfinished selection). */
+  private _mode(): Mode {
+    const quant = this._cur().quant ?? "any";
+    if (this._hasWhoKey()) {
+      switch (quant) {
+        case "any": return "any";
+        case "everyone": return "all";
+        case "nobody": return "none";
+      }
     }
-    switch (quant) {
-      case "any": return "any";
-      case "everyone": return "all";
-      case "nobody": return "none";
-    }
+    return quant === "nobody" ? "nobody" : "everybody";
   }
 
   private _hasFor(dur: PeoplePredicate["for"]): boolean {
@@ -175,19 +162,22 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   }
 
   /** Build + emit a predicate from a mode + the current where/for/people. A
-   *  base mode drops `who`; a "…these people" mode includes the selected ids.
+   *  base mode drops `who`; an "X of:" mode ALWAYS carries a `who` key,
+   *  repopulated from the last selection when switching in from a base mode.
    *  `for` is included only when non-zero. */
   private _emitMode(mode: Mode) {
     const cur = this._cur();
     const where = cur.where ?? "home";
     const out: PeoplePredicate = { quant: MODE_QUANT[mode], where };
-    if (PEOPLE_MODES.has(mode)) out.who = [...this._who];
+    if (PEOPLE_MODES.has(mode)) {
+      // Prefer the current selection; else repopulate from the last one.
+      out.who = this._hasWhoKey() ? [...this._who()] : [...this._lastSelected];
+    }
     if (this._hasFor(cur.for)) out.for = cur.for;
     this._emit(out);
   }
 
   private _emit(value: PeoplePredicate) {
-    this._selfEmitting = true;
     this.value = value;
     this.dispatchEvent(
       new CustomEvent("value-changed", {
@@ -199,31 +189,34 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   }
 
   private _setMode(mode: Mode) {
-    this._modeOverride = mode;
     this._emitMode(mode);
   }
 
   private _setWhere(where: string) {
     const cur = this._cur();
     const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where };
-    if (cur.who && cur.who.length > 0) out.who = [...cur.who];
+    if (this._hasWhoKey()) out.who = [...this._who()];
     if (this._hasFor(cur.for)) out.for = cur.for;
     this._emit(out);
   }
 
   private _togglePerson(id: string, on: boolean) {
-    this._who = on ? [...this._who, id] : this._who.filter((x) => x !== id);
-    // Pin the current people-mode as an override so unchecking the last person
-    // (emptying `who`) doesn't let the mode round-trip back to a base mode.
-    const mode = this._mode();
-    this._modeOverride = mode;
-    this._emitMode(mode);
+    const next = on ? [...this._who(), id] : this._who().filter((x) => x !== id);
+    if (next.length > 0) this._lastSelected = [...next];
+    const cur = this._cur();
+    const out: PeoplePredicate = {
+      quant: cur.quant ?? "any",
+      where: cur.where ?? "home",
+      who: next,
+    };
+    if (this._hasFor(cur.for)) out.for = cur.for;
+    this._emit(out);
   }
 
   private _setFor(dur: { h: number; m: number; s: number }) {
     const cur = this._cur();
     const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where: cur.where ?? "home" };
-    if (cur.who && cur.who.length > 0) out.who = [...cur.who];
+    if (this._hasWhoKey()) out.who = [...this._who()];
     if (this._hasFor(dur)) out.for = dur;
     this._emit(out);
   }
@@ -249,9 +242,9 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     switch (m) {
       case "everybody": return localize(this.hass, "ui.people_mode_everybody", "Everybody");
       case "nobody": return localize(this.hass, "ui.people_mode_nobody", "Nobody");
-      case "any": return localize(this.hass, "ui.people_mode_any", "Any of these people");
-      case "all": return localize(this.hass, "ui.people_mode_all", "All of these people");
-      case "none": return localize(this.hass, "ui.people_mode_none", "None of these people");
+      case "any": return localize(this.hass, "ui.people_mode_any", "Any of:");
+      case "all": return localize(this.hass, "ui.people_mode_all", "All of:");
+      case "none": return localize(this.hass, "ui.people_mode_none", "None of:");
     }
   }
 
@@ -294,17 +287,18 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     if (persons.length === 0) {
       return html`<div class="hint">${localize(this.hass, "ui.people_none_tracked", "No people tracked")}</div>`;
     }
+    const who = this._who();
     return html`<div class="people-list">
       ${persons.map((p) => html`<label class="person-pill">
         <input
           type="checkbox"
-          .checked=${this._who.includes(p.id)}
+          .checked=${who.includes(p.id)}
           @change=${(e: Event) => this._togglePerson(p.id, (e.target as HTMLInputElement).checked)}
         />${p.name}
       </label>`)}
     </div>
-    ${this._who.length === 0
-      ? html`<div class="hint">${localize(this.hass, "ui.people_none_selected", "No one selected — matches anyone in the household")}</div>`
+    ${who.length === 0
+      ? html`<div class="field-error">${localize(this.hass, "ui.people_select_one", "Select at least one person")}</div>`
       : ""}`;
   }
 

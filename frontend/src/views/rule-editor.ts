@@ -231,7 +231,9 @@ export class AmbienceRuleEditor extends LitElement {
    * data, or null if valid.
    *
    * - Name slot: always valid (optional).
-   * - Matcher slots: predicates are valid by construction (form inputs constrain shape).
+   * - Matcher slots: predicates are valid by construction, with one exception —
+   *   the people matcher's "X of:" modes carry a `who` array that must not be
+   *   empty (an unfinished selection). A present-but-empty `who` is the error.
    * - Action slots: must have at least one target. Per-field required-ness
    *   is enforced by ha-form / native browser validation inside the slot;
    *   the rule-editor only guards the cross-cutting "you forgot to pick a
@@ -240,7 +242,20 @@ export class AmbienceRuleEditor extends LitElement {
   private _validationError(slot: OpenSlot): string | null {
     if (slot === null) return null;
     if (slot.kind === "name") return null;
-    if (slot.kind === "matcher") return null;
+    if (slot.kind === "matcher") {
+      // People empty-selection case: an "X of:" mode (who key present) with
+      // zero people ticked. Other matchers are valid by construction.
+      const pred = this._draft?.when[slot.id];
+      if (
+        pred != null &&
+        typeof pred === "object" &&
+        Array.isArray((pred as { who?: unknown }).who) &&
+        (pred as { who: unknown[] }).who.length === 0
+      ) {
+        return localize(this.hass, "ui.people_select_one", "Select at least one person");
+      }
+      return null;
+    }
     // slot.kind === "action"
     const action = this._draft?.actions[slot.idx];
     if (!action) return null;
@@ -362,6 +377,10 @@ export class AmbienceRuleEditor extends LitElement {
               .weatherConfig=${this.weatherConfig}
               @value-changed=${(e: CustomEvent<{ value: unknown }>) => this._setPredicate(m.name, e.detail.value)}
             ></ambience-matcher-input>
+
+            ${this._showError && this._validationError({ kind: "matcher", id: m.name }) ? html`
+              <div class="error">${this._validationError({ kind: "matcher", id: m.name })}</div>
+            ` : ""}
           </div>
         ` : ""}
       </div>
@@ -650,6 +669,22 @@ export class AmbienceRuleEditor extends LitElement {
 
   private _save() {
     if (!this._draft) return;
+    // A user can collapse their own invalid people slot (collapsing skips
+    // validation), so re-scan every predicate for an empty "X of:" selection
+    // (a present-but-empty `who` array) and block the save if any is found,
+    // re-opening the offending matcher slot with its error shown.
+    for (const [id, pred] of Object.entries(this._draft.when)) {
+      if (
+        pred != null &&
+        typeof pred === "object" &&
+        Array.isArray((pred as { who?: unknown }).who) &&
+        (pred as { who: unknown[] }).who.length === 0
+      ) {
+        this._showError = true;
+        this._open = { kind: "matcher", id };
+        return;
+      }
+    }
     // Defense in depth: a matcher set to "any" should not persist as a null
     // predicate in storage. _setPredicate already deletes on null for live
     // user input, but older storage / hand-edited JSON might still carry one.

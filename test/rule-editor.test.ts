@@ -20,6 +20,7 @@ import * as api from "../frontend/src/api";
 const matchers: MatcherInfo[] = [
   { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
   { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day", priority: 200 },
+  { name: "people", description: "", predicate_help: "", input: "people_predicate", priority: 75 },
 ];
 
 const availableActions: ExposedAction[] = [
@@ -1082,5 +1083,122 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
     expect(saved).toBeDefined();
     expect(saved!.actions[0].entity_ids).toEqual([]);
     el = el2;
+  });
+});
+
+describe("ambience-rule-editor — people matcher empty-selection validation", () => {
+  let el: any;
+  afterEach(() => { el?.remove(); });
+
+  // hass with one person so the people widget renders a checklist.
+  const peopleHass = {
+    ...hass,
+    states: {
+      "person.alice": { entity_id: "person.alice", state: "home", attributes: { friendly_name: "Alice" } },
+    },
+  } as any;
+
+  async function openPeople(): Promise<HTMLElement> {
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="people"]') as HTMLElement;
+    slot.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    return el.shadowRoot.querySelector('.slot[data-slot-id="people"]') as HTMLElement;
+  }
+
+  test("_validationError returns the message for a people predicate with who:[]", async () => {
+    el = await mount(
+      { name: "t", when: { people: { quant: "any", who: [], where: "home" } }, actions: [] },
+      { hass: peopleHass },
+    );
+    expect(el._validationError({ kind: "matcher", id: "people" })).toBe("Select at least one person");
+    // A non-empty who is valid.
+    expect(el._validationError({ kind: "matcher", id: "scene" })).toBeNull();
+  });
+
+  test("a non-empty (or who-less) people predicate is valid", async () => {
+    el = await mount(
+      { name: "t", when: { people: { quant: "any", who: ["person.alice"], where: "home" } }, actions: [] },
+      { hass: peopleHass },
+    );
+    expect(el._validationError({ kind: "matcher", id: "people" })).toBeNull();
+    el.remove();
+    el = await mount(
+      { name: "t", when: { people: { quant: "everyone", where: "home" } }, actions: [] },
+      { hass: peopleHass },
+    );
+    expect(el._validationError({ kind: "matcher", id: "people" })).toBeNull();
+  });
+
+  test("the open people slot renders the inline error when who is empty", async () => {
+    el = await mount(
+      { name: "t", when: { people: { quant: "any", who: [], where: "home" } }, actions: [] },
+      { hass: peopleHass },
+    );
+    const slot = await openPeople();
+    // Switching focus away (clicking outside) surfaces the error and keeps it open.
+    const h3 = el.shadowRoot.querySelector("h3") as HTMLElement;
+    h3.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    expect(slot.classList.contains("expanded")).toBe(true);
+    expect(slot.querySelector(".error")?.textContent).toContain("Select at least one person");
+  });
+
+  test("an empty people selection blocks switching to another slot", async () => {
+    el = await mount(
+      { name: "t", when: { people: { quant: "any", who: [], where: "home" }, scene: "movie" }, actions: [] },
+      { hass: peopleHass },
+    );
+    const people = await openPeople();
+    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    // People stays open; scene stays collapsed.
+    expect(people.classList.contains("expanded")).toBe(true);
+    expect(scene.classList.contains("collapsed")).toBe(true);
+  });
+
+  test("an empty people selection blocks _save and opens the offending slot", async () => {
+    el = await mount(
+      { name: "t", when: { people: { quant: "any", who: [], where: "home" } }, actions: [] },
+      { hass: peopleHass },
+    );
+    let saved: Rule | undefined;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
+      (b: any) => b.textContent.trim() === "Save rule",
+    ) as HTMLButtonElement;
+    saveBtn.click();
+    await el.updateComplete;
+    expect(saved).toBeUndefined();
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="people"]') as HTMLElement;
+    expect(slot.classList.contains("expanded")).toBe(true);
+    expect(slot.querySelector(".error")?.textContent).toContain("Select at least one person");
+  });
+
+  test("selecting a person clears the error and allows save", async () => {
+    el = await mount(
+      { name: "t", when: { people: { quant: "any", who: [], where: "home" } }, actions: [] },
+      { hass: peopleHass },
+    );
+    await openPeople();
+    // Tick Alice via the people widget's native checkbox. The widget lives one
+    // shadow root deeper, inside <ambience-matcher-input>.
+    const mi = el.shadowRoot.querySelector("ambience-matcher-input") as any;
+    const widget = mi.shadowRoot.querySelector("ambience-people-predicate-input") as any;
+    const cb = widget.shadowRoot.querySelector("input[type=checkbox]") as HTMLInputElement;
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    expect(el._validationError({ kind: "matcher", id: "people" })).toBeNull();
+
+    let saved: Rule | undefined;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
+      (b: any) => b.textContent.trim() === "Save rule",
+    ) as HTMLButtonElement;
+    saveBtn.click();
+    await el.updateComplete;
+    expect(saved).toBeDefined();
+    expect((saved!.when.people as any).who).toEqual(["person.alice"]);
   });
 });

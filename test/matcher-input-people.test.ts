@@ -64,6 +64,21 @@ describe("ambience-people-predicate-input", () => {
     expect(opts).toEqual(["everybody", "nobody", "any", "all", "none"]);
   });
 
+  test("mode dropdown shows the shortened 'X of:' labels", async () => {
+    el = await mount();
+    const labels = Array.from(
+      modeSelect(el).querySelectorAll<HTMLOptionElement>("option"),
+    ).map((o) => o.textContent?.trim());
+    expect(labels).toEqual(["Everybody", "Nobody", "Any of:", "All of:", "None of:"]);
+  });
+
+  test("no 'matches anyone' hint text exists anywhere", async () => {
+    // Even with an empty 'X of:' selection, the old accommodation hint is gone.
+    el = await mount({ who: [], quant: "any", where: "home" });
+    expect(el.shadowRoot.textContent).not.toContain("matches anyone");
+    expect(el.shadowRoot.textContent).not.toContain("No one selected");
+  });
+
   test("fresh state shows Everybody + Home and does not emit on mount", async () => {
     let emitted = false;
     el = document.createElement("ambience-people-predicate-input");
@@ -167,7 +182,7 @@ describe("ambience-people-predicate-input", () => {
     expect(emitted?.who).toContain("person.alice");
   });
 
-  test("unchecking the last person stays in the 'these people' mode with empty who and shows the hint", async () => {
+  test("unchecking the last person stays in the 'X of:' mode with empty who and shows the error", async () => {
     el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
     expect(modeSelect(el).value).toBe("any");
     let emitted: PeoplePredicate | null | undefined;
@@ -180,13 +195,35 @@ describe("ambience-people-predicate-input", () => {
     await el.updateComplete;
     // Checklist still rendered (mode did not collapse to a base mode).
     expect(el.shadowRoot.querySelectorAll("input[type=checkbox]").length).toBeGreaterThan(0);
-    // Emitted predicate has empty/absent who.
-    expect(emitted?.who ?? []).toEqual([]);
-    // The empty-selection hint is now shown.
-    const hints = Array.from(el.shadowRoot.querySelectorAll<HTMLElement>(".hint")).map(
-      (h: HTMLElement) => h.textContent ?? "",
-    );
-    expect(hints.some((t: string) => t.includes("No one selected"))).toBe(true);
+    // Emitted predicate keeps the `who` key, now an empty array.
+    expect(emitted?.who).toEqual([]);
+    expect("who" in (emitted ?? {})).toBe(true);
+    // The empty-selection error is now shown.
+    const err = el.shadowRoot.querySelector(".field-error") as HTMLElement | null;
+    expect(err?.textContent ?? "").toContain("Select at least one person");
+  });
+
+  test("selecting a person clears the empty-selection error", async () => {
+    el = await mount({ who: [], quant: "any", where: "home" });
+    await setMode(el, "any");
+    // Error shown while empty.
+    expect(el.shadowRoot.querySelector(".field-error")).not.toBeNull();
+    const cb = el.shadowRoot.querySelector("input[type=checkbox]") as HTMLInputElement;
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".field-error")).toBeNull();
+  });
+
+  test("an 'X of:' mode emits a present-but-empty who array when none ticked", async () => {
+    el = await mount({ quant: "everyone", where: "home" });
+    let emitted: PeoplePredicate | null | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
+    });
+    await setMode(el, "any");
+    expect(emitted?.who).toEqual([]);
+    expect("who" in (emitted ?? {})).toBe(true);
   });
 
   test("changing location while in an empty 'these people' mode keeps the mode and updates where", async () => {
@@ -201,7 +238,7 @@ describe("ambience-people-predicate-input", () => {
     where.value = "zone.work";
     where.dispatchEvent(new Event("change"));
     await el.updateComplete;
-    // Override survived the self-emit: still in a 'these people' mode.
+    // The `who` key (empty array) survived the where change: still in an 'X of:' mode.
     expect(modeSelect(el).value).toBe("any");
     expect(el.shadowRoot.querySelectorAll("input[type=checkbox]").length).toBeGreaterThan(0);
     expect(emitted?.where).toBe("zone.work");
@@ -223,6 +260,27 @@ describe("ambience-people-predicate-input", () => {
   test("round-trips 'Any of these people' (quant any + non-empty who)", async () => {
     el = await mount({ who: ["person.alice"], quant: "any", where: "home" });
     expect(modeSelect(el).value).toBe("any");
+  });
+
+  test("round-trips a present-but-empty who:[] into its 'X of:' mode (not a base mode)", async () => {
+    el = await mount({ who: [], quant: "any", where: "home" });
+    // Presence of the `who` key (even empty) means an 'X of:' mode, by quant.
+    expect(modeSelect(el).value).toBe("any");
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]").length).toBeGreaterThan(0);
+  });
+
+  test("round-trips who:[] with quant everyone/nobody into All/None of:", async () => {
+    el = await mount({ who: [], quant: "everyone", where: "home" });
+    expect(modeSelect(el).value).toBe("all");
+    el.remove();
+    el = await mount({ who: [], quant: "nobody", where: "home" });
+    expect(modeSelect(el).value).toBe("none");
+  });
+
+  test("a stray quant 'any' with no who key round-trips to Everybody (base mode)", async () => {
+    el = await mount({ quant: "any", where: "home" });
+    expect(modeSelect(el).value).toBe("everybody");
+    expect(el.shadowRoot.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
   });
 
   test("round-trips 'None of these people' (quant nobody + non-empty who)", async () => {

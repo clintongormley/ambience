@@ -477,9 +477,7 @@ def test_trigger_deps_explicit_who_with_for() -> None:
     pred = {"who": ["person.alice", "person.bob"], "for": {"h": 0, "m": 5, "s": 0}}
     spec = m.trigger_deps(pred)
     assert spec.entities == frozenset({"person.alice", "person.bob"})
-    assert spec.entity_durations == frozenset(
-        {("person.alice", 300.0), ("person.bob", 300.0)}
-    )
+    assert spec.entity_durations == frozenset({("person.alice", 300.0), ("person.bob", 300.0)})
 
 
 def test_trigger_deps_explicit_who_no_for() -> None:

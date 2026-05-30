@@ -147,45 +147,59 @@ export class AmbienceAutoTriggersSection extends LitElement {
     return typeof name === "string" && name ? name : entity_id;
   }
 
+  /** Display label for sorting an entity row (friendly name, case-insensitive). */
+  private _sortLabel(t: AutoTrigger): string {
+    if (t.kind === "entity") return this._entityName(t.entity_id).toLowerCase();
+    return t.kind; // groups don't participate in entity sorting
+  }
+
+  /** Entity rows sorted alphabetically by display name, then group rows in
+   *  backend order (time, then sun). */
+  private get _sortedTriggers(): AutoTrigger[] {
+    const entities = this._triggers
+      .filter((t) => t.kind === "entity")
+      .slice()
+      .sort((a, b) => this._sortLabel(a).localeCompare(this._sortLabel(b)));
+    const groups = this._triggers.filter((t) => t.kind !== "entity");
+    return [...entities, ...groups];
+  }
+
+  private _sunPart(s: { anchor: string; offset: number }): string {
+    const base = localize(this.hass, `anchor.${s.anchor}`, _SUN_FALLBACK[s.anchor] ?? s.anchor);
+    if (s.offset === 0) return base;
+    return `${base} ${s.offset > 0 ? "+" : ""}${s.offset} min`;
+  }
+
   private _label(t: AutoTrigger): unknown {
     switch (t.kind) {
       case "entity":
         return html`<span class="label"
           >${this._entityName(t.entity_id)}<span class="eid">${t.entity_id}</span></span
         >`;
-      case "clock": {
-        const hh = String(t.hour).padStart(2, "0");
-        const mm = String(t.minute).padStart(2, "0");
+      case "time": {
+        const parts = t.clocks.map(
+          (c) => `${String(c.hour).padStart(2, "0")}:${String(c.minute).padStart(2, "0")}`,
+        );
+        if (t.has_time) {
+          parts.push(localize(this.hass, "ui.auto_trigger_periodic", "periodic re-check"));
+        }
         return html`<span class="label"
-          >${localize(this.hass, "ui.auto_trigger_at", "At")} ${hh}:${mm}</span
+          ><strong>${localize(this.hass, "ui.auto_trigger_group_time", "Time")}:</strong>
+          ${parts.join(", ")}</span
         >`;
       }
       case "sun": {
-        const base = localize(this.hass, `anchor.${t.anchor}`, _SUN_FALLBACK[t.anchor] ?? t.anchor);
-        const off =
-          t.offset === 0
-            ? ""
-            : t.offset > 0
-              ? ` +${t.offset} min`
-              : ` ${t.offset} min`;
-        return html`<span class="label">${base}${off}</span>`;
+        const parts = t.suns.map((s) => this._sunPart(s));
+        if (t.date_rollover) {
+          parts.push(
+            localize(this.hass, "ui.auto_trigger_date_rollover", "Local midnight (date rollover)"),
+          );
+        }
+        return html`<span class="label"
+          ><strong>${localize(this.hass, "ui.auto_trigger_group_sun", "Sun")}:</strong>
+          ${parts.join(", ")}</span
+        >`;
       }
-      case "date_rollover":
-        return html`<span class="label"
-          >${localize(
-            this.hass,
-            "ui.auto_trigger_date_rollover",
-            "Local midnight (date rollover)",
-          )}</span
-        >`;
-      case "has_time":
-        return html`<span class="label"
-          >${localize(
-            this.hass,
-            "ui.auto_trigger_has_time",
-            "Time of day (periodic re-check)",
-          )}</span
-        >`;
     }
   }
 
@@ -219,7 +233,7 @@ export class AmbienceAutoTriggersSection extends LitElement {
             ${localize(this.hass, "ui.auto_triggers_none", "No automatic triggers.")}
           </div>`
         : html`<ul>
-            ${this._triggers.map(
+            ${this._sortedTriggers.map(
               (t) => html`<li>
                 <input
                   type="checkbox"

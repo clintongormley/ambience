@@ -16,10 +16,26 @@ const sampleTriggers: AutoTrigger[] = [
     entity_id: "binary_sensor.motion",
     enabled: true,
   },
-  { key: "clock:18:00", kind: "clock", hour: 18, minute: 0, enabled: true },
-  { key: "sun:sunset:30", kind: "sun", anchor: "sunset", offset: 30, enabled: false },
-  { key: "date_rollover", kind: "date_rollover", enabled: true },
-  { key: "has_time", kind: "has_time", enabled: true },
+  {
+    key: "group:time",
+    kind: "time",
+    clocks: [
+      { hour: 7, minute: 0 },
+      { hour: 22, minute: 0 },
+    ],
+    has_time: false,
+    enabled: true,
+  },
+  {
+    key: "group:sun",
+    kind: "sun",
+    suns: [
+      { anchor: "dawn", offset: 0 },
+      { anchor: "sunset", offset: 30 },
+    ],
+    date_rollover: true,
+    enabled: false,
+  },
 ];
 
 async function mount(opts: {
@@ -50,7 +66,7 @@ describe("ambience-auto-triggers-section", () => {
     expect(api.listAutoTriggers).not.toHaveBeenCalled();
   });
 
-  test("fetches and lists triggers when expanded", async () => {
+  test("fetches and lists grouped triggers when expanded", async () => {
     el = await mount({});
     el.shadowRoot.querySelector('[data-test="auto-triggers-header"]').click();
     await el.updateComplete;
@@ -58,8 +74,44 @@ describe("ambience-auto-triggers-section", () => {
     await el.updateComplete;
     expect(api.listAutoTriggers).toHaveBeenCalledWith(el.hass, "area", "lr");
     const text = el.shadowRoot.textContent;
-    expect(text).toContain("18:00");
-    expect(text).toContain("Sunset");
+    // Time group lists both clock times on one row.
+    expect(text).toContain("Time:");
+    expect(text).toContain("07:00");
+    expect(text).toContain("22:00");
+    // Sun group lists sun events + the folded-in date rollover.
+    expect(text).toContain("Sun:");
+    expect(text).toContain("Dawn");
+    expect(text).toContain("Sunset +30 min");
+    expect(text.toLowerCase()).toContain("date rollover");
+    // Only one checkbox per group (not per item).
+    expect(el.shadowRoot.querySelectorAll('[data-test^="trigger-cb-"]').length).toBe(3);
+  });
+
+  test("entity rows are sorted alphabetically by display name", async () => {
+    el = await mount({
+      triggers: [
+        { key: "entity:z.zebra", kind: "entity", entity_id: "z.zebra", enabled: true },
+        { key: "entity:a.apple", kind: "entity", entity_id: "a.apple", enabled: true },
+        { key: "group:time", kind: "time", clocks: [{ hour: 7, minute: 0 }], has_time: false, enabled: true },
+      ] as AutoTrigger[],
+      hass: {
+        states: {
+          "z.zebra": { attributes: { friendly_name: "Aardvark" } },
+          "a.apple": { attributes: { friendly_name: "Banana" } },
+        },
+      },
+    });
+    el.shadowRoot.querySelector('[data-test="auto-triggers-header"]').click();
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const labels = [...el.shadowRoot.querySelectorAll("li .label")].map((n: any) =>
+      n.textContent.trim(),
+    );
+    // "Aardvark" (friendly name of z.zebra) sorts before "Banana"; group last.
+    expect(labels[0]).toContain("Aardvark");
+    expect(labels[1]).toContain("Banana");
+    expect(labels[2]).toContain("Time:");
   });
 
   test("entity row uses friendly name when available", async () => {
@@ -83,8 +135,8 @@ describe("ambience-auto-triggers-section", () => {
       '[data-test="trigger-cb-entity:binary_sensor.motion"]',
     );
     expect(motion.checked).toBe(true);
-    const sunset = el.shadowRoot.querySelector('[data-test="trigger-cb-sun:sunset:30"]');
-    expect(sunset.checked).toBe(false);
+    const sun = el.shadowRoot.querySelector('[data-test="trigger-cb-group:sun"]');
+    expect(sun.checked).toBe(false);
     // toggle motion off
     motion.checked = false;
     motion.dispatchEvent(new Event("change"));

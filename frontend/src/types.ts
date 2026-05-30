@@ -83,17 +83,17 @@ export type AreaConfig = {
   disabled_triggers?: string[];
 };
 
-// One watch derived from a scope's rules, as returned by auto_triggers/list.
+// One trigger row derived from a scope's rules, as returned by
+// auto_triggers/list. Entities are one row each; clock/periodic watches collapse
+// into a single `time` group and sun/date-rollover watches into a `sun` group.
 // `kind` discriminates which structured fields are present.
 export type AutoTrigger = {
   key: string;
   enabled: boolean;
 } & (
   | { kind: "entity"; entity_id: string }
-  | { kind: "clock"; hour: number; minute: number }
-  | { kind: "sun"; anchor: string; offset: number }
-  | { kind: "date_rollover" }
-  | { kind: "has_time" }
+  | { kind: "time"; clocks: { hour: number; minute: number }[]; has_time: boolean }
+  | { kind: "sun"; suns: { anchor: string; offset: number }[]; date_rollover: boolean }
 );
 
 export type AutoTriggerList = {

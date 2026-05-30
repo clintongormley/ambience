@@ -335,10 +335,10 @@ export class AmbienceRuleEditor extends LitElement {
 
   private _toggleSlot(slot: { kind: "name" } | { kind: "matcher"; id: string } | { kind: "action"; idx: number }) {
     if (this._isOpen(slot)) {
-      // Collapsing your own slot is normally a "minimize for now" gesture —
-      // no validation. The exception is a widget-reported error (e.g. a
-      // template that throws): that must be fixed, not minimized away.
-      if (slot.kind === "matcher" && this._matcherError.has(slot.id)) {
+      // Collapsing your own slot is a "minimize for now" gesture, but a slot
+      // with a validation error can't be minimized away — same gate as leaving
+      // it. (Removing via the ✕ is always available as an escape.)
+      if (this._validationError(slot) !== null) {
         this._showError = true;
         return;
       }
@@ -729,21 +729,21 @@ export class AmbienceRuleEditor extends LitElement {
 
   private _save() {
     if (!this._draft) return;
-    // A user can collapse their own invalid people slot (collapsing skips
-    // validation), so re-scan every predicate for an empty "X of:" selection
-    // (a present-but-empty `who` array) and block the save if any is found,
-    // re-opening the offending matcher slot with its error shown.
-    for (const [id, pred] of Object.entries(this._draft.when)) {
-      if (_isEmptyWhoPredicate(pred)) {
+    // Re-validate every slot through the same gate used for closing/collapsing.
+    // Collapsed or loaded-from-storage slots are never opened, so this is the
+    // only place they're checked — block on the first error and re-open the
+    // offending slot with its message shown.
+    for (const id of Object.keys(this._draft.when)) {
+      if (this._draft.when[id] != null && this._validationError({ kind: "matcher", id }) !== null) {
         this._showError = true;
         this._open = { kind: "matcher", id };
         return;
       }
-      // A matcher whose widget reports an unresolved error must not be saved —
-      // re-open the offending slot with its error shown.
-      if (pred != null && this._matcherError.has(id)) {
+    }
+    for (let idx = 0; idx < this._draft.actions.length; idx++) {
+      if (this._validationError({ kind: "action", idx }) !== null) {
         this._showError = true;
-        this._open = { kind: "matcher", id };
+        this._open = { kind: "action", idx };
         return;
       }
     }

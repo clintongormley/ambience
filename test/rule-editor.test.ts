@@ -531,10 +531,35 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(action0.querySelector(".error")).toBeNull();
   });
 
-  test("clicking your own slot's title bar collapses it silently (no validation)", async () => {
-    // Self-toggle means "minimize this for now", not "I'm leaving / validate me".
-    // Validation should still fire when switching to another slot or clicking
-    // outside, but the user collapsing their own open slot is a no-op gesture.
+  test("cannot self-collapse a matcher slot that has a validation error", async () => {
+    // A slot with an error can't be minimized away — collapsing is gated just
+    // like clicking out / saving. (Removing via the ✕ is always available.)
+    el = await mount({
+      name: "t",
+      when: { people: { who: [] } }, // empty "X of" selection — invalid
+      actions: [{ service: "script.foo", entity_ids: [], params: {} }],
+    });
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="people"]') as HTMLElement;
+    slot.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    const open = el.shadowRoot.querySelector('.slot[data-slot-id="people"]') as HTMLElement;
+    expect(open.classList.contains("expanded")).toBe(true);
+
+    // Click its own summary to minimize.
+    open.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+
+    const after = el.shadowRoot.querySelector('.slot[data-slot-id="people"]') as HTMLElement;
+    expect(after.classList.contains("expanded")).toBe(true); // blocked
+    expect(after.querySelector(".error")?.textContent?.toLowerCase()).toContain(
+      "at least one person",
+    );
+  });
+
+  test("clicking your own slot's title bar collapses it when it has no validation error", async () => {
+    // Self-toggle is "minimize this for now" — allowed as long as the slot isn't
+    // in error. Here the action's target requirement is unknown (schema not
+    // loaded in jsdom), so there's no error to block on.
     el = await mount({
       name: "test", when: {},
       actions: [{ service: "light.turn_on", entity_ids: [], params: { brightness: 80 } }],
@@ -852,6 +877,35 @@ describe("ambience-rule-editor — template render-error gate", () => {
     expect(saved).toBe(false);
     const after = el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
     expect(after.classList.contains("expanded")).toBe(true); // reopened with error
+  });
+
+  test("save is blocked when an open action is missing a required target", async () => {
+    el = await mount({
+      name: "t",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
+    });
+    let saved = false;
+    el.addEventListener("save-rule", () => { saved = true; });
+
+    const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    // Tell the editor this service requires a target (schema loaded).
+    action.querySelector("ambience-action-slot")!.dispatchEvent(
+      new CustomEvent("target-mode-changed", { detail: { hasTarget: true }, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button"))
+      .find((b: any) => /save/i.test(b.textContent ?? "")) as HTMLButtonElement;
+    saveBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+
+    expect(saved).toBe(false);
+    const after = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    expect(after.classList.contains("expanded")).toBe(true);
+    expect(after.querySelector(".error")?.textContent?.toLowerCase()).toContain("target");
   });
 });
 

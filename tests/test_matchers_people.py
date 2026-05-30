@@ -467,3 +467,39 @@ def test_contains_non_dict_is_false() -> None:
     m = PeopleMatcher()
     assert m.contains(None, {"quant": "any"}) is False
     assert m.contains({"quant": "any"}, 5) is False
+
+
+# ── trigger_deps ──────────────────────────────────────────────────────────────
+
+
+def test_trigger_deps_explicit_who_with_for() -> None:
+    m = PeopleMatcher()
+    pred = {"who": ["person.alice", "person.bob"], "for": {"h": 0, "m": 5, "s": 0}}
+    spec = m.trigger_deps(pred)
+    assert spec.entities == frozenset({"person.alice", "person.bob"})
+    assert spec.entity_durations == frozenset(
+        {("person.alice", 300.0), ("person.bob", 300.0)}
+    )
+
+
+def test_trigger_deps_explicit_who_no_for() -> None:
+    m = PeopleMatcher()
+    spec = m.trigger_deps({"who": ["person.alice"], "quant": "nobody"})
+    assert spec.entities == frozenset({"person.alice"})
+    assert spec.entity_durations == frozenset()
+
+
+def test_trigger_deps_none_is_empty() -> None:
+    from custom_components.ambience.triggers import EMPTY
+
+    assert PeopleMatcher().trigger_deps(None) == EMPTY
+    assert PeopleMatcher().trigger_deps("garbage") == EMPTY
+
+
+async def test_trigger_deps_empty_who_watches_all_persons(hass: HomeAssistant) -> None:
+    hass.states.async_set("person.alice", "home")
+    hass.states.async_set("person.bob", "not_home")
+    m = PeopleMatcher(hass=hass)
+    spec = m.trigger_deps({"quant": "everyone"})  # who absent → all current persons
+    assert spec.entities == frozenset({"person.alice", "person.bob"})
+    assert spec.entity_durations == frozenset()

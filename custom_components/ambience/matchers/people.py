@@ -9,6 +9,8 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..triggers import EMPTY, TriggerSpec
+
 _UNAVAILABLE = {"unavailable", "unknown"}
 _HOME = "home"
 _QUANTS = ("any", "everyone", "nobody")
@@ -124,6 +126,25 @@ class PeopleMatcher:
             return all(holds(p, False) for p in person_ids)
         # "any" (default)
         return any(holds(p, True) for p in person_ids)
+
+    # --- trigger dependencies -------------------------------------------
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        if not isinstance(predicate, dict):
+            return EMPTY
+        who = predicate.get("who") or []
+        # Empty/absent `who` means "all persons": enumerate the current person.*
+        # entities the same way snapshot() does.
+        persons = [p for p in who if isinstance(p, str) and p] if who else self._all_person_ids()
+        seconds = self._dur_seconds(predicate.get("for"))
+        durations = frozenset((p, seconds) for p in persons) if seconds > 0 else frozenset()
+        return TriggerSpec(entities=frozenset(persons), entity_durations=durations)
+
+    def _all_person_ids(self) -> list[str]:
+        hass = self._hass
+        if hass is None:
+            return []
+        return [s.entity_id for s in hass.states.async_all("person")]
 
     @staticmethod
     def _target_zone(where: str) -> str:

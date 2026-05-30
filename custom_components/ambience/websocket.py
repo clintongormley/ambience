@@ -22,6 +22,7 @@ from .const import (
 )
 from .exposed_actions import ExposedActionsStore
 from .matchers.weather import WEATHER_CONDITIONS
+from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import async_resolve_only
 from .sorting import sort_rules
 
@@ -56,6 +57,8 @@ _WS_COMMANDS = (
     "ambience/area/switch/save",
     "ambience/auto_triggers/get",
     "ambience/auto_triggers/set",
+    "ambience/auto_triggers/list",
+    "ambience/auto_triggers/set_trigger",
     "ambience/script/referenced_entities",
 )
 
@@ -158,6 +161,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_area_switch_save)
     websocket_api.async_register_command(hass, _ws_auto_triggers_get)
     websocket_api.async_register_command(hass, _ws_auto_triggers_set)
+    websocket_api.async_register_command(hass, _ws_auto_triggers_list)
+    websocket_api.async_register_command(hass, _ws_auto_triggers_set_trigger)
     websocket_api.async_register_command(hass, _ws_script_referenced_entities)
 
 
@@ -1049,6 +1054,76 @@ async def _ws_auto_triggers_set(
     try:
         await store.async_set_auto_triggers_enabled(
             msg["scope_kind"], msg.get("scope_id"), msg["enabled"]
+        )
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    connection.send_result(msg["id"], {"ok": True})
+
+
+def _scope_config_for(store: Any, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
+    """Resolve a scope's stored config ({} if never saved). Raises ValueError
+    for an unknown scope kind."""
+    if scope_kind == "area":
+        return store.get_area(scope_id) or {}
+    if scope_kind == "floor":
+        return store.get_floor(scope_id) or {}
+    if scope_kind == "house":
+        return store.get_house()
+    raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/auto_triggers/list",
+        vol.Required("scope_kind"): str,
+        vol.Optional("scope_id"): vol.Any(str, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_auto_triggers_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """The watches derived from a scope's rules, each tagged enabled/disabled.
+
+    Triggers are computed live from the scope's rules (matchers' ``trigger_deps``);
+    ``enabled`` reflects whether the user has disabled that key for the scope.
+    """
+    store = hass.data[DOMAIN][DATA_STORE]
+    matchers = hass.data[DOMAIN][DATA_MATCHERS]
+    scope_kind = msg["scope_kind"]
+    scope_id = msg.get("scope_id")
+    try:
+        cfg = _scope_config_for(store, scope_kind, scope_id)
+        disabled = store.auto_triggers_disabled(scope_kind, scope_id)
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    spec = scope_trigger_spec(matchers, cfg)
+    triggers = [{**row, "enabled": row["key"] not in disabled} for row in trigger_descriptors(spec)]
+    connection.send_result(msg["id"], {"triggers": triggers, "opaque": spec.opaque})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/auto_triggers/set_trigger",
+        vol.Required("scope_kind"): str,
+        vol.Optional("scope_id"): vol.Any(str, None),
+        vol.Required("key"): str,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def _ws_auto_triggers_set_trigger(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Enable/disable a single derived trigger for a scope."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    try:
+        await store.async_set_trigger_disabled(
+            msg["scope_kind"], msg.get("scope_id"), msg["key"], not msg["enabled"]
         )
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))

@@ -1754,3 +1754,88 @@ async def test_auto_triggers_set_unknown_scope_kind_errors(hass, installed, hass
         hass_ws_client, type="ambience/auto_triggers/set", scope_kind="galaxy", enabled=True
     )
     assert resp["success"] is False
+
+
+async def _save_state_rule(hass: HomeAssistant) -> None:
+    """Save an area `lr` with one rule watching binary_sensor.motion."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "when": {
+                        "state": {
+                            "kind": "is",
+                            "entity_id": "binary_sensor.motion",
+                            "states": ["on"],
+                        }
+                    },
+                    "actions": [],
+                }
+            ]
+        },
+    )
+
+
+async def test_auto_triggers_list_returns_derived_triggers(hass, installed, hass_ws_client) -> None:
+    await _save_state_rule(hass)
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/auto_triggers/list", scope_kind="area", scope_id="lr"
+    )
+    assert resp["success"] is True
+    triggers = resp["result"]["triggers"]
+    assert {
+        "key": "entity:binary_sensor.motion",
+        "kind": "entity",
+        "entity_id": "binary_sensor.motion",
+        "enabled": True,
+    } in triggers
+    assert resp["result"]["opaque"] is False
+
+
+async def test_auto_triggers_list_empty_scope_is_empty(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/auto_triggers/list", scope_kind="area", scope_id="nope"
+    )
+    assert resp["success"] is True
+    assert resp["result"] == {"triggers": [], "opaque": False}
+
+
+async def test_auto_triggers_list_unknown_scope_kind_errors(
+    hass, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/auto_triggers/list", scope_kind="galaxy")
+    assert resp["success"] is False
+
+
+async def test_set_trigger_then_list_shows_disabled(hass, installed, hass_ws_client) -> None:
+    await _save_state_rule(hass)
+    set_resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/auto_triggers/set_trigger",
+        scope_kind="area",
+        scope_id="lr",
+        key="entity:binary_sensor.motion",
+        enabled=False,
+    )
+    assert set_resp["success"] is True
+    assert set_resp["result"] == {"ok": True}
+    list_resp = await _ws_send(
+        hass_ws_client, type="ambience/auto_triggers/list", scope_kind="area", scope_id="lr"
+    )
+    row = next(
+        t for t in list_resp["result"]["triggers"] if t["key"] == "entity:binary_sensor.motion"
+    )
+    assert row["enabled"] is False
+
+
+async def test_set_trigger_unknown_scope_kind_errors(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/auto_triggers/set_trigger",
+        scope_kind="galaxy",
+        key="entity:x.y",
+        enabled=False,
+    )
+    assert resp["success"] is False

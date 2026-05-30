@@ -461,6 +461,20 @@ describe("ambience-people-predicate-input", () => {
     expect(negateSelect(el)).toBeNull();
   });
 
+  test("the hidden toggle is replaced by static 'is at' text for Nobody/None of:", async () => {
+    el = await mount({ quant: "nobody", where: "home" });
+    expect(negateSelect(el)).toBeNull();
+    expect(el.shadowRoot.querySelector(".negate-static")?.textContent?.trim()).toBe("is at");
+    el.remove();
+    el = await mount({ who: ["person.alice"], quant: "nobody", where: "home" });
+    expect(el.shadowRoot.querySelector(".negate-static")?.textContent?.trim()).toBe("is at");
+  });
+
+  test("no static 'is at' text when the toggle is shown", async () => {
+    el = await mount({ quant: "everyone", where: "home" });
+    expect(el.shadowRoot.querySelector(".negate-static")).toBeNull();
+  });
+
   test("the is-at/is-not-at toggle still renders for Everybody/Anybody/Any of:/All of:", async () => {
     el = await mount({ quant: "everyone", where: "home" });
     expect(negateSelect(el)).not.toBeNull();

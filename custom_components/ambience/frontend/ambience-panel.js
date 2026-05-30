@@ -1457,7 +1457,7 @@ var Xi=Object.defineProperty;var Zi=Object.getOwnPropertyDescriptor;var c=(t,n,e
       <div class="row">${this._renderMode(i)}</div>
       ${Yi.has(i)?this._renderPeople():""}
       <div class="row">
-        ${s?this._renderNegate(a):""}
+        ${s?this._renderNegate(a):l`<span class="label negate-static">${d(this.hass,"ui.people_is_at_static","is at")}</span>`}
         ${this._renderWhere(r)}
       </div>
       <div class="row">

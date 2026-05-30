@@ -465,7 +465,9 @@ export class AmbiencePeoplePredicateInput extends LitElement {
       <div class="row">${this._renderMode(mode)}</div>
       ${PEOPLE_MODES.has(mode) ? this._renderPeople() : ""}
       <div class="row">
-        ${showNegate ? this._renderNegate(negate) : ""}
+        ${showNegate
+          ? this._renderNegate(negate)
+          : html`<span class="label negate-static">${localize(this.hass, "ui.people_is_at_static", "is at")}</span>`}
         ${this._renderWhere(where)}
       </div>
       <div class="row">

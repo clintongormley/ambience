@@ -171,6 +171,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if action == "remove":
             await store.async_delete_area(area_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("area", area_id), None)
+            domain_data.get(DATA_LAST_APPLIED, {}).pop(("area", area_id), None)
             ent_reg = er.async_get(hass)
             ent_id = ent_reg.async_get_entity_id(
                 "switch", DOMAIN, f"ambience_switch_area_{area_id}"
@@ -196,6 +197,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if action == "remove":
             await store.async_delete_floor(floor_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("floor", floor_id), None)
+            domain_data.get(DATA_LAST_APPLIED, {}).pop(("floor", floor_id), None)
             ent_reg = er.async_get(hass)
             ent_id = ent_reg.async_get_entity_id(
                 "switch", DOMAIN, f"ambience_switch_floor_{floor_id}"

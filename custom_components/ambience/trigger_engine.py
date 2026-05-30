@@ -78,3 +78,27 @@ class AutoTriggerEngine:
         if not 0 <= rule_index < len(rules):
             return None
         return rules[rule_index].get("when", {}).get(matcher_key)
+
+    def _recompute(
+        self, fired: set[PredKey], snapshots: dict[str, Any]
+    ) -> set[tuple[str, str | None]]:
+        """Re-evaluate the fired predicates against `snapshots`; return the
+        scopes whose boolean changed. Updates `predicate_state`. A missing/None
+        snapshot evaluates the predicate to False; a first-seen predicate counts
+        as a flip."""
+        matchers = self._matchers()
+        dirty: set[tuple[str, str | None]] = set()
+        for key in fired:
+            predicate = self._predicate_for(key)
+            if predicate is None:
+                continue
+            matcher = matchers.get(key[3])
+            if matcher is None:
+                continue
+            snap = snapshots.get(key[3])
+            new_value = bool(matcher.matches(predicate, snap)) if snap is not None else False
+            old_value = self._predicate_state.get(key)
+            self._predicate_state[key] = new_value
+            if old_value != new_value:
+                dirty.add((key[0], key[1]))
+        return dirty

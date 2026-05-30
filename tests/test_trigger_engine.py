@@ -104,3 +104,53 @@ async def test_rebuild_matcher_without_trigger_deps_is_opaque(hass) -> None:
     engine = _engine(hass, scopes, {"legacy": NoDeps()})
     engine.async_rebuild()
     assert engine.index.opaque == frozenset({("area", "a", 0, "legacy")})
+
+
+def _engine_with_state(hass) -> AutoTriggerEngine:
+    # One scope, one rule: tod predicate "evening", deps on sensor.x.
+    scopes = [
+        ("area", "a", {"rules": [{"when": {"tod": "evening"}}]}),
+    ]
+    matchers = {"tod": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.x"})))}
+    engine = _engine(hass, scopes, matchers)
+    engine.async_rebuild()
+    return engine
+
+
+async def test_recompute_first_eval_is_a_flip(hass) -> None:
+    engine = _engine_with_state(hass)
+    key = ("area", "a", 0, "tod")
+    dirty = engine._recompute({key}, {"tod": "evening"})  # matches -> True (was unset)
+    assert dirty == {("area", "a")}
+
+
+async def test_recompute_unchanged_value_is_not_a_flip(hass) -> None:
+    engine = _engine_with_state(hass)
+    key = ("area", "a", 0, "tod")
+    engine._recompute({key}, {"tod": "evening"})  # seed True
+    dirty = engine._recompute({key}, {"tod": "evening"})  # still True
+    assert dirty == set()
+
+
+async def test_recompute_changed_value_is_a_flip(hass) -> None:
+    engine = _engine_with_state(hass)
+    key = ("area", "a", 0, "tod")
+    engine._recompute({key}, {"tod": "evening"})  # True
+    dirty = engine._recompute({key}, {"tod": "morning"})  # now False
+    assert dirty == {("area", "a")}
+
+
+async def test_recompute_none_snapshot_evaluates_false(hass) -> None:
+    engine = _engine_with_state(hass)
+    key = ("area", "a", 0, "tod")
+    engine._recompute({key}, {"tod": "evening"})  # True
+    dirty = engine._recompute({key}, {"tod": None})  # snapshot None -> False -> flip
+    assert dirty == {("area", "a")}
+    assert engine._predicate_state[key] is False
+
+
+async def test_recompute_stale_key_is_ignored(hass) -> None:
+    engine = _engine_with_state(hass)
+    stale = ("area", "a", 9, "tod")  # rule index out of range
+    dirty = engine._recompute({stale}, {"tod": "evening"})
+    assert dirty == set()

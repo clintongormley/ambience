@@ -12,7 +12,7 @@ from homeassistant.util import dt as dt_util
 
 from ..triggers import TriggerSpec
 
-_ANCHOR_ATTR = {
+ANCHOR_ATTR = {
     "sunrise": "next_rising",
     "sunset": "next_setting",
     "noon": "next_noon",
@@ -62,7 +62,7 @@ class TimeOfDayMatcher:
         if state is None:
             raise RuntimeError("sun.sun unavailable")
         anchors: dict[str, datetime] = {}
-        for anchor, attr in _ANCHOR_ATTR.items():
+        for anchor, attr in ANCHOR_ATTR.items():
             raw = state.attributes.get(attr)
             if raw is None:
                 raise RuntimeError(f"sun.sun missing attribute {attr}")
@@ -129,7 +129,7 @@ class TimeOfDayMatcher:
             return local_now.replace(hour=hh, minute=mm, second=0, microsecond=0)
         if kind == "sun":
             anchor = ep.get("anchor")
-            if anchor not in _ANCHOR_ATTR:
+            if anchor not in ANCHOR_ATTR:
                 raise ValueError(f"invalid anchor: {anchor!r}")
             offset = ep.get("offset_min", 0)
             if not isinstance(offset, int):
@@ -248,7 +248,7 @@ class TimeOfDayMatcher:
         elif kind == "sun":
             anchor = endpoint.get("anchor")
             offset = endpoint.get("offset_min", 0)
-            if anchor in _ANCHOR_ATTR and isinstance(offset, int) and not isinstance(offset, bool):
+            if anchor in ANCHOR_ATTR and isinstance(offset, int) and not isinstance(offset, bool):
                 sun_events.add((anchor, offset))
 
 

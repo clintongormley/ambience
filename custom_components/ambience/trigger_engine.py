@@ -11,15 +11,20 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import (
+    async_track_point_in_time,
     async_track_state_change_event,
     async_track_time_change,
+    async_track_time_interval,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import DATA_MATCHERS, DATA_STORE, DOMAIN
+from .matchers.time_of_day import ANCHOR_ATTR
 from .service import (
     _switch_state,
     async_execute_plan,
@@ -30,6 +35,9 @@ from .trigger_index import PredKey, TriggerIndex, build_index
 from .triggers import EMPTY, TriggerSpec
 
 _LOGGER = logging.getLogger(__name__)
+
+# How often wall-clock-dependent (has_time) predicates are recomputed.
+_HAS_TIME_INTERVAL = timedelta(seconds=60)
 
 
 class AutoTriggerEngine:
@@ -44,6 +52,10 @@ class AutoTriggerEngine:
         self._index: TriggerIndex = build_index([])
         self._snapshots: dict[str, Any] = {}
         self._unsubs: list[Callable[[], None]] = []
+        # Sun-event point-in-time handles, one slot per (anchor, offset). Kept
+        # separate from _unsubs because they re-arm on each fire — the slot is
+        # replaced rather than appended, so dead handles never accumulate.
+        self._sun_unsubs: dict[tuple[str, int], Callable[[], None]] = {}
 
     @property
     def index(self) -> TriggerIndex:
@@ -177,6 +189,9 @@ class AutoTriggerEngine:
         """Cancel all subscriptions and pending timers."""
         while self._unsubs:
             self._unsubs.pop()()
+        for cancel in self._sun_unsubs.values():
+            cancel()
+        self._sun_unsubs.clear()
 
     def async_subscribe(self) -> None:
         """(Re)create one subscription per distinct dependency in the index."""
@@ -208,6 +223,16 @@ class AutoTriggerEngine:
                     second=0,
                 )
             )
+        for sun_event in index.sun_events:
+            self._schedule_sun(sun_event)
+        if index.has_time:
+            self._unsubs.append(
+                async_track_time_interval(
+                    self._hass,
+                    self._make_keys_handler(index.has_time),
+                    _HAS_TIME_INTERVAL,
+                )
+            )
 
     @callback
     def _on_state_event(self, event: Event) -> None:
@@ -224,3 +249,35 @@ class AutoTriggerEngine:
             self._fire(set(keys))
 
         return _handler
+
+    def _next_sun_fire(self, anchor: str, offset_min: int) -> Any:
+        """Next fire time for a sun anchor (+offset), from sun.sun, or None."""
+        state = self._hass.states.get("sun.sun")
+        attr = ANCHOR_ATTR.get(anchor)
+        raw = state.attributes.get(attr) if (state and attr) else None
+        parsed = dt_util.parse_datetime(raw) if raw else None
+        if parsed is None:
+            return None
+        return parsed + timedelta(minutes=offset_min)
+
+    def _schedule_sun(self, sun_event: tuple[str, int]) -> None:
+        """Schedule the next firing of a sun event, rescheduling on fire.
+
+        The handle lives in `_sun_unsubs[sun_event]`; re-arming cancels and
+        replaces the slot so fired (dead) handles never accumulate.
+        """
+        fire_at = self._next_sun_fire(sun_event[0], sun_event[1])
+        if fire_at is None:
+            return
+
+        @callback
+        def _handler(_now: Any) -> None:
+            preds = self._index.by_sun.get(sun_event)
+            if preds:
+                self._fire(set(preds))
+            self._schedule_sun(sun_event)  # arm the next occurrence
+
+        old = self._sun_unsubs.pop(sun_event, None)
+        if old is not None:
+            old()
+        self._sun_unsubs[sun_event] = async_track_point_in_time(self._hass, _handler, fire_at)

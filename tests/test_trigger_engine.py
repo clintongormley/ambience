@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any
+
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.const import (
     DATA_EXPOSED_ACTIONS,
@@ -401,3 +405,73 @@ async def test_unrelated_entity_change_is_ignored(hass) -> None:
     hass.states.async_set("binary_sensor.other", "on")  # not watched
     await hass.async_block_till_done()
     assert ("area", "a") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
+async def test_has_time_tick_fires(hass) -> None:
+    calls: list = []
+
+    class HasTimeMatcher:
+        def trigger_deps(self, predicate):
+            return TriggerSpec(entities=frozenset(), has_time=True)
+
+        async def snapshot(self, hass):
+            return "v"
+
+        def matches(self, predicate, snapshot):
+            calls.append(1)
+            return True
+
+        def describe(self, snapshot):
+            return None
+
+    scopes = [("area", "a", {"rules": [{"when": {"tmpl": "x"}, "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_MATCHERS: {"tmpl": HasTimeMatcher()},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine.async_subscribe()
+    await engine.async_initial_sync()
+    calls.clear()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=61))
+    await hass.async_block_till_done()
+    assert calls  # the has_time predicate was recomputed on the tick
+    engine._teardown()
+
+
+async def test_sun_event_scheduled_when_sun_available(hass) -> None:
+    hass.states.async_set(
+        "sun.sun",
+        "above_horizon",
+        {"next_setting": (dt_util.utcnow() + timedelta(hours=2)).isoformat()},
+    )
+
+    class SunDepMatcher:
+        def trigger_deps(self, predicate):
+            return TriggerSpec(sun_events=frozenset({("sunset", 0)}))
+
+        async def snapshot(self, hass):
+            return "v"
+
+        def matches(self, predicate, snapshot):
+            return True
+
+        def describe(self, snapshot):
+            return None
+
+    scopes = [("area", "a", {"rules": [{"when": {"sun": "x"}, "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_MATCHERS: {"sun": SunDepMatcher()},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine.async_subscribe()  # must not raise; schedules the sunset point-in-time
+    assert engine._sun_unsubs  # the sunset point-in-time was scheduled
+    engine._teardown()
+    assert engine._sun_unsubs == {}  # teardown cancels sun handles too

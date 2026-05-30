@@ -475,3 +475,65 @@ async def test_sun_event_scheduled_when_sun_available(hass) -> None:
     assert engine._sun_unsubs  # the sunset point-in-time was scheduled
     engine._teardown()
     assert engine._sun_unsubs == {}  # teardown cancels sun handles too
+
+
+async def test_for_recheck_scheduled_on_state_change(hass) -> None:
+    hass.states.async_set("binary_sensor.x", "off")
+
+    class ForMatcher:
+        def trigger_deps(self, predicate):
+            return TriggerSpec(
+                entities=frozenset({"binary_sensor.x"}),
+                entity_durations=frozenset({("binary_sensor.x", 600.0)}),
+            )
+
+        async def snapshot(self, hass):
+            state = hass.states.get("binary_sensor.x")
+            return state.state if state else None
+
+        def matches(self, predicate, snapshot):
+            return snapshot == "on"
+
+        def describe(self, snapshot):
+            return snapshot
+
+    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_MATCHERS: {"x": ForMatcher()},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine.async_subscribe()
+    await engine.async_initial_sync()
+    hass.states.async_set("binary_sensor.x", "on")
+    await hass.async_block_till_done()
+    key = ("area", "a", 0, "x")
+    assert key in engine._for_handles  # a +600s recheck was scheduled for the for: predicate
+    engine._teardown()
+
+
+async def test_switch_off_to_on_force_resyncs(hass) -> None:
+    hass.states.async_set("binary_sensor.x", "on")
+    switch = SimpleNamespace(is_on=True, entity_id="switch.ambience_a")
+    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_MATCHERS: {"x": StateReadMatcher()},
+        DATA_SWITCHES: {("area", "a"): switch},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine.async_subscribe()
+    await engine.async_initial_sync()  # applies rule 0
+    # Seed a WRONG last_applied: only a force-resync (which bypasses the
+    # unchanged-winner guard) will correct it back to 0.
+    hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] = 99
+    hass.states.async_set("switch.ambience_a", "off")
+    hass.states.async_set("switch.ambience_a", "on")  # off->on transition
+    await hass.async_block_till_done()
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0  # force-resync ran
+    engine._teardown()

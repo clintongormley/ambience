@@ -16,6 +16,7 @@ from typing import Any
 
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import (
+    async_call_later,
     async_track_point_in_time,
     async_track_state_change_event,
     async_track_time_change,
@@ -23,7 +24,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import DATA_MATCHERS, DATA_STORE, DOMAIN
+from .const import DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from .matchers.time_of_day import ANCHOR_ATTR
 from .service import (
     _switch_state,
@@ -56,6 +57,8 @@ class AutoTriggerEngine:
         # separate from _unsubs because they re-arm on each fire — the slot is
         # replaced rather than appended, so dead handles never accumulate.
         self._sun_unsubs: dict[tuple[str, int], Callable[[], None]] = {}
+        self._for_handles: dict[PredKey, list[Callable[[], None]]] = {}
+        self._switch_scopes: dict[str, tuple[str, str | None]] = {}
 
     @property
     def index(self) -> TriggerIndex:
@@ -192,6 +195,11 @@ class AutoTriggerEngine:
         for cancel in self._sun_unsubs.values():
             cancel()
         self._sun_unsubs.clear()
+        for handles in self._for_handles.values():
+            for cancel in handles:
+                cancel()
+        self._for_handles.clear()
+        self._switch_scopes.clear()
 
     def async_subscribe(self) -> None:
         """(Re)create one subscription per distinct dependency in the index."""
@@ -233,12 +241,26 @@ class AutoTriggerEngine:
                     _HAS_TIME_INTERVAL,
                 )
             )
+        self._switch_scopes = {}
+        switches = self._hass.data[DOMAIN].get(DATA_SWITCHES, {})
+        for scope_key in self._scope_cfgs:
+            entity_id = getattr(switches.get(scope_key), "entity_id", None)
+            if entity_id:
+                self._switch_scopes[entity_id] = scope_key
+        if self._switch_scopes:
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self._hass, list(self._switch_scopes), self._on_switch_event
+                )
+            )
 
     @callback
     def _on_state_event(self, event: Event) -> None:
         preds = self._index.by_entity.get(event.data["entity_id"])
-        if preds:
-            self._fire(set(preds))
+        if not preds:
+            return
+        self._fire(set(preds))
+        self._schedule_for_rechecks(preds)
 
     def _make_keys_handler(self, preds: frozenset[PredKey]) -> Callable[[Any], None]:
         """A time/midnight callback that fires a fixed set of predicates."""
@@ -249,6 +271,41 @@ class AutoTriggerEngine:
             self._fire(set(keys))
 
         return _handler
+
+    def _schedule_for_rechecks(self, preds: frozenset[PredKey]) -> None:
+        """For predicates with a `for:` duration, (re)schedule a recheck so a
+        condition that only becomes true after the delay is still caught."""
+        for key in preds:
+            durations = self._index.durations.get(key)
+            if not durations:
+                continue
+            for cancel in self._for_handles.pop(key, []):
+                cancel()
+            self._for_handles[key] = [
+                async_call_later(self._hass, seconds, self._make_for_recheck(key))
+                for seconds in durations
+            ]
+
+    def _make_for_recheck(self, key: PredKey) -> Callable[[Any], None]:
+        @callback
+        def _recheck(_now: Any) -> None:
+            self._for_handles.pop(key, None)
+            self._fire({key})
+
+        return _recheck
+
+    @callback
+    def _on_switch_event(self, event: Event) -> None:
+        """Force a resync when a scope's switch goes off->on."""
+        new_state = event.data.get("new_state")
+        old_state = event.data.get("old_state")
+        if new_state is None or new_state.state != "on":
+            return
+        if old_state is not None and old_state.state == "on":
+            return  # already on — not a transition
+        scope = self._switch_scopes.get(event.data["entity_id"])
+        if scope is not None:
+            self._hass.async_create_task(self._resolve_and_apply(scope, force=True))
 
     def _next_sun_fire(self, anchor: str, offset_min: int) -> Any:
         """Next fire time for a sun anchor (+offset), from sun.sun, or None."""

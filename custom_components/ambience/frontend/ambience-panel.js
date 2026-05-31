@@ -25,16 +25,18 @@ var an=Object.defineProperty;var on=Object.getOwnPropertyDescriptor;var c=(t,n,e
             >
               <span class="handle" title=${d(this.hass,"ui.drag_to_reorder","Drag to reorder")}>⠿</span>
               <span class="idx">${r+1}</span>
-              ${e.pinned?l`<button
-                    class="pin"
-                    title=${d(this.hass,"ui.unpin","Unpin (return to automatic order)")}
-                    aria-label=${d(this.hass,"ui.unpin","Unpin (return to automatic order)")}
-                    @click=${i=>{i.stopPropagation(),this._emit("unpin-rule",{index:r})}}
-                  >📌</button>`:""}
-              ${e.shadowed_by!=null?l`<span
-                    class="shadow-warning"
-                    title=${d(this.hass,"ui.shadowed","Never fires \u2014 shadowed by an earlier rule.")}
-                  >⚠️</span>`:""}
+              <span class="status">
+                ${e.pinned?l`<button
+                      class="pin"
+                      title=${d(this.hass,"ui.unpin","Unpin (return to automatic order)")}
+                      aria-label=${d(this.hass,"ui.unpin","Unpin (return to automatic order)")}
+                      @click=${i=>{i.stopPropagation(),this._emit("unpin-rule",{index:r})}}
+                    >📌</button>`:""}
+                ${e.shadowed_by!=null?l`<span
+                      class="shadow-warning"
+                      title=${d(this.hass,"ui.shadowed","Never fires \u2014 shadowed by an earlier rule.")}
+                    >⚠️</span>`:""}
+              </span>
               <div class="body" @click=${()=>this._toggleRule(r)}>
                 <div class="name">
                   ${$t(e,d(this.hass,"ui.rule_n","Rule {n}").replace("{n}",String(r+1)))}
@@ -191,8 +193,17 @@ var an=Object.defineProperty;var on=Object.getOwnPropertyDescriptor;var c=(t,n,e
       border-radius: 4px;
       margin-top: 0.5rem;
     }
+    /* Fixed-width status gutter so pin/warning icons never displace the rule
+       title — every row reserves the same slot whether or not it has icons.
+       Sized to hold both a pin and a warning (a rule can be both). */
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
+      flex: 0 0 2.75em;
+    }
     .pin {
-      padding: 0 0.25rem;
+      padding: 0;
     }
 <<<<<<< HEAD
   `,c([p({attribute:!1})],H.prototype,"rules",2),c([p({type:Boolean})],H.prototype,"autoSort",2),c([p({attribute:!1})],H.prototype,"periods",2),c([p({attribute:!1})],H.prototype,"weatherConfig",2),c([p({attribute:!1})],H.prototype,"hass",2),c([p({attribute:!1})],H.prototype,"matchers",2),c([p({attribute:!1})],H.prototype,"availableActions",2),c([p({attribute:!1})],H.prototype,"schemas",2),c([f()],H.prototype,"_dragFrom",2),c([f()],H.prototype,"_dragOver",2),c([f()],H.prototype,"_expanded",2),H=c([$("ambience-rules-list")],H);function ii(t,n){if(!n||n.entity==null)return[...t];let e=Array.isArray(n.entity)?n.entity:[n.entity];if(e.length===0)return[...t];let r=new Set,i=!1;for(let s of e){if(!s||typeof s!="object")continue;let a=s.domain;if(a==null){i=!0;continue}if(Array.isArray(a))for(let o of a)typeof o=="string"&&r.add(o);else typeof a=="string"&&r.add(a)}return i||r.size===0?[...t]:t.filter(s=>{let a=s.indexOf(".");return a<0?!1:r.has(s.slice(0,a))})}function ni(t,n,e=[]){let r=t;if(!r?.entities)return[];let i=r.entities,s=r.devices??{},a=r.areas??{},o=n.kind==="area"?new Set([n.id]):n.kind==="floor"?new Set(Object.values(a).filter(h=>h.floor_id===n.id).map(h=>h.area_id)):null,u=h=>{let g=h.area_id??(h.device_id?s[h.device_id]?.area_id??null:null);return g==null?!1:o===null?!0:o.has(g)};return Object.values(i).filter(u).filter(h=>e.length===0||e.includes(h.entity_id.split(".")[0])).map(h=>h.entity_id).sort()}var Q=class extends _{constructor(){super(...arguments);this.entities=[];this.value=[];this.target=null;this.label=" "}_filteredEntities(){return ii(this.entities,this.target)}connectedCallback(){super.connectedCallback(),V(this,this.hass)}_emit(e){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_onHaFormChange(e){e.stopPropagation(),this._emit(e.detail.value.entity_ids??[])}_renderHaForm(){let r=[{name:"entity_ids",selector:{entity:{multiple:!0,include_entities:this._filteredEntities()}}}],i=this.label;return l`
@@ -200,7 +211,7 @@ var an=Object.defineProperty;var on=Object.getOwnPropertyDescriptor;var c=(t,n,e
     .shadow-warning {
       color: var(--error-color, #db4437);
       cursor: help;
-      padding: 0 0.25rem;
+      line-height: 1;
     }
   `,c([p({attribute:!1})],O.prototype,"rules",2),c([p({attribute:!1})],O.prototype,"periods",2),c([p({attribute:!1})],O.prototype,"weatherConfig",2),c([p({attribute:!1})],O.prototype,"hass",2),c([p({attribute:!1})],O.prototype,"matchers",2),c([p({attribute:!1})],O.prototype,"availableActions",2),c([p({attribute:!1})],O.prototype,"schemas",2),c([g()],O.prototype,"_dragFrom",2),c([g()],O.prototype,"_dragOver",2),c([g()],O.prototype,"_expanded",2),O=c([$("ambience-rules-list")],O);function ni(t,n){if(!n||n.entity==null)return[...t];let e=Array.isArray(n.entity)?n.entity:[n.entity];if(e.length===0)return[...t];let r=new Set,i=!1;for(let s of e){if(!s||typeof s!="object")continue;let a=s.domain;if(a==null){i=!0;continue}if(Array.isArray(a))for(let o of a)typeof o=="string"&&r.add(o);else typeof a=="string"&&r.add(a)}return i||r.size===0?[...t]:t.filter(s=>{let a=s.indexOf(".");return a<0?!1:r.has(s.slice(0,a))})}function si(t,n,e=[]){let r=t;if(!r?.entities)return[];let i=r.entities,s=r.devices??{},a=r.areas??{},o=n.kind==="area"?new Set([n.id]):n.kind==="floor"?new Set(Object.values(a).filter(h=>h.floor_id===n.id).map(h=>h.area_id)):null,u=h=>{let f=h.area_id??(h.device_id?s[h.device_id]?.area_id??null:null);return f==null?!1:o===null?!0:o.has(f)};return Object.values(i).filter(u).filter(h=>e.length===0||e.includes(h.entity_id.split(".")[0])).map(h=>h.entity_id).sort()}var Q=class extends _{constructor(){super(...arguments);this.entities=[];this.value=[];this.target=null;this.label=" "}_filteredEntities(){return ni(this.entities,this.target)}connectedCallback(){super.connectedCallback(),V(this,this.hass)}_emit(e){this.dispatchEvent(new CustomEvent("value-changed",{detail:{value:e},bubbles:!0,composed:!0}))}_onHaFormChange(e){e.stopPropagation(),this._emit(e.detail.value.entity_ids??[])}_renderHaForm(){let r=[{name:"entity_ids",selector:{entity:{multiple:!0,include_entities:this._filteredEntities()}}}],i=this.label;return l`
 >>>>>>> ac124b0 (build(frontend): rebuild panel bundle)

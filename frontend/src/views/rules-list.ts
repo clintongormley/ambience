@@ -118,13 +118,22 @@ export class AmbienceRulesList extends LitElement {
       border-radius: 4px;
       margin-top: 0.5rem;
     }
+    /* Fixed-width status gutter so pin/warning icons never displace the rule
+       title — every row reserves the same slot whether or not it has icons.
+       Sized to hold both a pin and a warning (a rule can be both). */
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
+      flex: 0 0 2.75em;
+    }
     .pin {
-      padding: 0 0.25rem;
+      padding: 0;
     }
     .shadow-warning {
       color: var(--error-color, #db4437);
       cursor: help;
-      padding: 0 0.25rem;
+      line-height: 1;
     }
   `;
 
@@ -296,23 +305,25 @@ export class AmbienceRulesList extends LitElement {
             >
               <span class="handle" title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}>⠿</span>
               <span class="idx">${i + 1}</span>
-              ${rule.pinned
-                ? html`<button
-                    class="pin"
-                    title=${localize(this.hass, "ui.unpin", "Unpin (return to automatic order)")}
-                    aria-label=${localize(this.hass, "ui.unpin", "Unpin (return to automatic order)")}
-                    @click=${(e: Event) => {
-                      e.stopPropagation();
-                      this._emit("unpin-rule", { index: i });
-                    }}
-                  >📌</button>`
-                : ""}
-              ${rule.shadowed_by != null
-                ? html`<span
-                    class="shadow-warning"
-                    title=${localize(this.hass, "ui.shadowed", "Never fires — shadowed by an earlier rule.")}
-                  >⚠️</span>`
-                : ""}
+              <span class="status">
+                ${rule.pinned
+                  ? html`<button
+                      class="pin"
+                      title=${localize(this.hass, "ui.unpin", "Unpin (return to automatic order)")}
+                      aria-label=${localize(this.hass, "ui.unpin", "Unpin (return to automatic order)")}
+                      @click=${(e: Event) => {
+                        e.stopPropagation();
+                        this._emit("unpin-rule", { index: i });
+                      }}
+                    >📌</button>`
+                  : ""}
+                ${rule.shadowed_by != null
+                  ? html`<span
+                      class="shadow-warning"
+                      title=${localize(this.hass, "ui.shadowed", "Never fires — shadowed by an earlier rule.")}
+                    >⚠️</span>`
+                  : ""}
+              </span>
               <div class="body" @click=${() => this._toggleRule(i)}>
                 <div class="name">
                   ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1)))}

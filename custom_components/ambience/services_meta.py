@@ -107,7 +107,8 @@ async def _descriptions(hass: HomeAssistant) -> dict[str, dict[str, dict[str, An
 async def list_services(hass: HomeAssistant) -> list[dict[str, Any]]:
     """Flat, alpha-sorted list of every HA service.
 
-    Each entry: {id: "domain.service", description, target}. Field schemas
+    Each entry: {id: "domain.service", name, description, target}. `name` is
+    HA's predefined human label (from services.yaml/translations). Field schemas
     are omitted to keep the WS payload small — fetch per-service via
     get_service_schema when the user opens that service.
     """
@@ -115,11 +116,13 @@ async def list_services(hass: HomeAssistant) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for domain, names in descriptions.items():
         for name, spec in names.items():
+            friendly = spec.get("name") if isinstance(spec, dict) else None
             description = spec.get("description") if isinstance(spec, dict) else None
             target = spec.get("target") if isinstance(spec, dict) else None
             items.append(
                 {
                     "id": f"{domain}.{name}",
+                    "name": friendly or "",
                     "description": description or "",
                     "target": target,
                 }

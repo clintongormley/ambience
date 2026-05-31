@@ -42,8 +42,18 @@ async def test_list_services_returns_flat_list_with_domain_name_and_description(
     ids = [item["id"] for item in items]
     assert ids == ["light.turn_off", "light.turn_on"]  # alpha-sorted
     assert items[0]["target"] is None
+    assert items[0]["name"] == "Turn off"
     assert items[1]["description"] == "Turn the light on."
+    assert items[1]["name"] == "Turn on"
     assert items[1]["target"] == {"entity": [{"domain": "light"}]}
+
+
+async def test_list_services_name_defaults_to_empty_when_absent() -> None:
+    hass = _make_hass({"climate": {"set_temperature": {"description": "Set it."}}})
+
+    items = await list_services(hass)
+
+    assert items[0]["name"] == ""
 
 
 async def test_get_service_schema_returns_fields_and_target() -> None:

@@ -120,6 +120,7 @@
     "new_rule": "New rule",
     "name_optional": "Name (optional)",
     "group": "Group",
+    "destination": "Destination",
     "when_heading": "When",
     "actions_heading": "Actions",
     "target": "Target",

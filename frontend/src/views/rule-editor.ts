@@ -192,6 +192,19 @@ export class AmbienceRuleEditor extends LitElement {
       margin-top: 0.5rem;
       padding: 0.3rem 0;
     }
+    .destination {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .destination label {
+      color: var(--secondary-text-color);
+      font-size: 0.9em;
+    }
+    .destination select.destination {
+      flex: 1;
+    }
   `;
 
   @property({ type: Boolean, reflect: true }) open = false;

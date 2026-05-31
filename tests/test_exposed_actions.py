@@ -221,6 +221,48 @@ async def test_validate_against_catalog_accepts_service_with_no_fields() -> None
     )  # no exception
 
 
+def _entry(**over):
+    base = {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}
+    base.update(over)
+    return base
+
+
+def test_validate_shape_accepts_zero_and_valid_reapply():
+    store = ExposedActionsStore(_FakeStorage())
+    store.validate_shape([_entry(reapply_seconds=0)])
+    store.validate_shape([_entry(reapply_seconds=10)])
+    store.validate_shape([_entry(reapply_seconds=600)])
+
+
+def test_validate_shape_accepts_missing_reapply():
+    store = ExposedActionsStore(_FakeStorage())
+    store.validate_shape([_entry()])  # no reapply_seconds key
+
+
+def test_validate_shape_rejects_below_floor_reapply():
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="reapply_seconds"):
+        store.validate_shape([_entry(reapply_seconds=9)])
+
+
+def test_validate_shape_rejects_negative_reapply():
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="reapply_seconds"):
+        store.validate_shape([_entry(reapply_seconds=-1)])
+
+
+def test_validate_shape_rejects_non_int_reapply():
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="reapply_seconds"):
+        store.validate_shape([_entry(reapply_seconds="300")])
+
+
+def test_validate_shape_rejects_bool_reapply():
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="reapply_seconds"):
+        store.validate_shape([_entry(reapply_seconds=True)])
+
+
 async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
     """When async_get_all_descriptions raises, field validation is skipped.
 

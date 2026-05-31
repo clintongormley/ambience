@@ -2,6 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { localize } from "../i18n.js";
+import { parseReapplyMinutes, reapplySecondsToMinutes } from "../reapply.js";
 import {
   getServiceSchema,
   listExposedActions,
@@ -589,15 +590,15 @@ export class AmbienceActionsSettings extends LitElement {
   }
 
   private _setReapplyMinutes(actionId: string, rawValue: string) {
-    const minutes = rawValue.trim() === "" ? NaN : Number(rawValue);
+    const seconds = parseReapplyMinutes(rawValue);
     this._actions = this._actions.map((a) => {
       if (a.id !== actionId) return a;
-      if (isNaN(minutes) || rawValue.trim() === "") {
-        // Empty → remove the key entirely.
+      if (seconds === null) {
+        // Empty/invalid → remove the key entirely (off / inherit default off).
         const { reapply_seconds: _removed, ...rest } = a;
         return rest as typeof a;
       }
-      return { ...a, reapply_seconds: Math.max(1, Math.round(minutes)) * 60 };
+      return { ...a, reapply_seconds: seconds };
     });
     void this._autoSave();
   }
@@ -965,7 +966,7 @@ export class AmbienceActionsSettings extends LitElement {
   private _renderReapplyRow(action: ExposedAction) {
     const currentMinutes =
       typeof action.reapply_seconds === "number" && action.reapply_seconds > 0
-        ? String(Math.round(action.reapply_seconds / 60))
+        ? String(reapplySecondsToMinutes(action.reapply_seconds))
         : "";
     return html`
       <div class="reapply-row">

@@ -13,6 +13,7 @@ import type {
 import type { HassConnection } from "../api.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { localize, matcherLabel } from "../i18n.js";
+import { parseReapplyMinutes, reapplySecondsToMinutes } from "../reapply.js";
 import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
 import "./action-slot.js";
 import "./matcher-input.js";
@@ -748,30 +749,31 @@ export class AmbienceRuleEditor extends LitElement {
       }
       if (mode === "off") return { ...a, reapply_seconds: 0 };
       // custom — seed with 1 minute (60s) if no existing custom value
-      const existing = typeof a.reapply_seconds === "number" && a.reapply_seconds > 0
-        ? a.reapply_seconds : 60;
+      const existing = (a.reapply_seconds ?? 0) > 0 ? a.reapply_seconds! : 60;
       return { ...a, reapply_seconds: existing };
     });
   }
 
   private _setReapplyMinutes(idx: number, rawValue: string) {
-    const minutes = Number(rawValue);
-    if (!rawValue.trim() || isNaN(minutes) || minutes < 1) return;
-    this._updateActionAt(idx, (a) => ({ ...a, reapply_seconds: Math.round(minutes) * 60 }));
+    const seconds = parseReapplyMinutes(rawValue);
+    // null means empty / invalid input — leave the action unchanged (ignore the keystroke).
+    if (seconds === null) return;
+    this._updateActionAt(idx, (a) => ({ ...a, reapply_seconds: seconds }));
   }
 
   private _renderReapplyOverride(action: ActionSpec, idx: number) {
     const mode = this._reapplyMode(action);
     const exposed = this.availableActions.find((x) => x.id === action.service);
     const exposedSeconds = exposed?.reapply_seconds ?? 0;
-    const currentMinutes = mode === "custom" && action.reapply_seconds
-      ? String(Math.round(action.reapply_seconds / 60))
+    const currentMinutes = mode === "custom"
+      ? String(reapplySecondsToMinutes(action.reapply_seconds!))
       : "1";
 
     return html`
       <div class="reapply-override">
-        <label>${localize(this.hass, "ui.reapply_override_label", "Re-apply:")}</label>
+        <label for="reapply-mode-${idx}">${localize(this.hass, "ui.reapply_override_label", "Re-apply:")}</label>
         <select
+          id="reapply-mode-${idx}"
           data-reapply-mode
           .value=${mode}
           @change=${(e: Event) => {
@@ -797,7 +799,7 @@ export class AmbienceRuleEditor extends LitElement {
         ` : ""}
         ${mode === "inherit" && exposedSeconds > 0 ? html`
           <span class="reapply-inherit-hint" data-reapply-inherit-hint>
-            ${localize(this.hass, "ui.reapply_inherit_hint", `Inherits: every ${Math.round(exposedSeconds / 60)} min`)}
+            ${localize(this.hass, "ui.reapply_inherit_prefix", "Inherits: every")} ${reapplySecondsToMinutes(exposedSeconds)} ${localize(this.hass, "ui.reapply_minutes_unit", "min")}
           </span>
         ` : ""}
       </div>
@@ -818,7 +820,7 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "action", idx })}>
           <span class="summary-label">${summary}</span>
-          ${showBadge ? html`<span class="reapply-badge" data-reapply-badge>↺ ${Math.round(effectiveSeconds / 60)} min</span>` : ""}
+          ${showBadge ? html`<span class="reapply-badge" data-reapply-badge>↺ ${reapplySecondsToMinutes(effectiveSeconds)} min</span>` : ""}
           <button class="remove" @click=${(e: Event) => { e.stopPropagation(); this._deleteAction(idx); }} title=${localize(this.hass, "ui.remove_action", "Remove action")}>✕</button>
         </div>
         ${open ? html`

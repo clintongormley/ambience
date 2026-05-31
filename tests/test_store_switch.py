@@ -57,7 +57,7 @@ async def test_legacy_load_backfills_switch_defaults(hass: HomeAssistant) -> Non
             "version": 1,
             "areas": {},
             "floors": {},
-            "house": {"rules": [], "auto_sort": True},
+            "house": {"rules": []},
             "matchers": {},
         }
     )
@@ -82,7 +82,7 @@ async def test_scope_switch_default_is_inherit_house(hass: HomeAssistant) -> Non
 async def test_scope_switch_default_is_inherit_area(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_area("a1", {"rules": [], "auto_sort": True})
+    await store.async_save_area("a1", {"rules": []})
     assert store.get_scope_switch_config("area", "a1") == {
         "name": None,
         "auto_on_delay_seconds": None,
@@ -93,7 +93,7 @@ async def test_scope_switch_default_is_inherit_area(hass: HomeAssistant) -> None
 async def test_scope_switch_default_is_inherit_floor(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_floor("f1", {"rules": [], "auto_sort": True})
+    await store.async_save_floor("f1", {"rules": []})
     assert store.get_scope_switch_config("floor", "f1") == {
         "name": None,
         "auto_on_delay_seconds": None,
@@ -117,7 +117,7 @@ async def test_save_scope_switch_house(hass: HomeAssistant) -> None:
 async def test_save_scope_switch_floor(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_floor("f1", {"rules": [], "auto_sort": True})
+    await store.async_save_floor("f1", {"rules": []})
     await store.async_save_scope_switch(
         "floor", "f1", {"name": "Upstairs", "auto_on_delay_seconds": None}
     )
@@ -131,7 +131,7 @@ async def test_save_scope_switch_floor(hass: HomeAssistant) -> None:
 async def test_save_scope_switch_area(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_area("a1", {"rules": [], "auto_sort": True})
+    await store.async_save_area("a1", {"rules": []})
     await store.async_save_scope_switch(
         "area", "a1", {"name": "Kitchen", "auto_on_delay_seconds": 60}
     )
@@ -229,13 +229,11 @@ async def test_save_area_preserves_switch_override(hass: HomeAssistant) -> None:
     """Saving rules to a scope must not wipe its switch sub-dict."""
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_area("a1", {"rules": [], "auto_sort": True})
+    await store.async_save_area("a1", {"rules": []})
     await store.async_save_scope_switch("area", "a1", {"name": "K", "auto_on_delay_seconds": 600})
     await store.async_set_scope_switch_off_at("area", "a1", "2026-05-27T12:00:00+00:00")
     # Simulate rules-save path
-    await store.async_save_area(
-        "a1", {"rules": [{"name": "r", "when": {}, "actions": []}], "auto_sort": True}
-    )
+    await store.async_save_area("a1", {"rules": [{"name": "r", "when": {}, "actions": []}]})
     assert store.get_scope_switch_config("area", "a1") == {
         "name": "K",
         "auto_on_delay_seconds": 600,
@@ -246,11 +244,9 @@ async def test_save_area_preserves_switch_override(hass: HomeAssistant) -> None:
 async def test_save_floor_preserves_switch_override(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_floor("f1", {"rules": [], "auto_sort": True})
+    await store.async_save_floor("f1", {"rules": []})
     await store.async_save_scope_switch("floor", "f1", {"name": "Up", "auto_on_delay_seconds": 300})
-    await store.async_save_floor(
-        "f1", {"rules": [{"name": "r", "when": {}, "actions": []}], "auto_sort": True}
-    )
+    await store.async_save_floor("f1", {"rules": [{"name": "r", "when": {}, "actions": []}]})
     assert store.get_scope_switch_config("floor", "f1")["name"] == "Up"
 
 
@@ -260,7 +256,5 @@ async def test_save_house_preserves_switch_override(hass: HomeAssistant) -> None
     await store.async_save_scope_switch(
         "house", None, {"name": "All", "auto_on_delay_seconds": 300}
     )
-    await store.async_save_house(
-        {"rules": [{"name": "r", "when": {}, "actions": []}], "auto_sort": True}
-    )
+    await store.async_save_house({"rules": [{"name": "r", "when": {}, "actions": []}]})
     assert store.get_scope_switch_config("house", None)["name"] == "All"

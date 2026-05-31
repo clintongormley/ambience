@@ -123,7 +123,6 @@ def test_async_load_migrates_old_action_targets(hass: HomeAssistant) -> None:
         "areas": {
             "living_room": {
                 "matchers": [],
-                "auto_sort": True,
                 "rules": [
                     {
                         "name": "test",
@@ -165,7 +164,6 @@ def test_async_load_leaves_new_shape_unchanged(hass: HomeAssistant) -> None:
         "areas": {
             "living_room": {
                 "matchers": [],
-                "auto_sort": True,
                 "rules": [{"name": "test", "when": {}, "actions": [new_action]}],
             }
         },
@@ -182,7 +180,6 @@ def test_async_load_handles_empty_targets_dict(hass: HomeAssistant) -> None:
         "areas": {
             "living_room": {
                 "matchers": [],
-                "auto_sort": True,
                 "rules": [
                     {
                         "name": "test",
@@ -210,7 +207,6 @@ def test_migrate_one_action_passthrough_when_targets_not_dict(hass: HomeAssistan
         "areas": {
             "living_room": {
                 "matchers": [],
-                "auto_sort": True,
                 "rules": [{"name": "bad", "when": {}, "actions": [bad_action]}],
             }
         },
@@ -228,7 +224,6 @@ def test_async_load_migrates_old_period_names(hass: HomeAssistant) -> None:
         "areas": {
             "living_room": {
                 "matchers": [],
-                "auto_sort": True,
                 "rules": [
                     {
                         "name": "old",
@@ -300,7 +295,7 @@ async def test_migration_drops_area_matchers(hass: HomeAssistant) -> None:
         {
             "version": STORAGE_VERSION,
             "areas": {
-                "a1": {"matchers": ["time_of_day"], "rules": [], "auto_sort": True},
+                "a1": {"matchers": ["time_of_day"], "rules": []},
             },
             "time_of_day_periods": {"custom": {}, "hidden": []},
         }
@@ -421,13 +416,13 @@ async def test_load_empty_returns_empty_floors(hass: HomeAssistant) -> None:
 async def test_load_empty_returns_default_house(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    assert store.get_house() == {"rules": [], "auto_sort": True}
+    assert store.get_house() == {"rules": []}
 
 
 async def test_save_and_read_floor(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    config = {"rules": [{"name": "x", "when": {}, "actions": []}], "auto_sort": True}
+    config = {"rules": [{"name": "x", "when": {}, "actions": []}]}
     await store.async_save_floor("upstairs", config)
     assert store.get_floor("upstairs") == config
     assert store.floors() == {"upstairs": config}
@@ -436,7 +431,7 @@ async def test_save_and_read_floor(hass: HomeAssistant) -> None:
 async def test_delete_floor(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_floor("a", {"rules": [], "auto_sort": True})
+    await store.async_save_floor("a", {"rules": []})
     await store.async_delete_floor("a")
     assert store.get_floor("a") is None
 
@@ -450,7 +445,7 @@ async def test_delete_unknown_floor_is_noop(hass: HomeAssistant) -> None:
 async def test_save_and_read_house(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    config = {"rules": [{"name": "away", "when": {}, "actions": []}], "auto_sort": False}
+    config = {"rules": [{"name": "away", "when": {}, "actions": []}]}
     await store.async_save_house(config)
     assert store.get_house() == config
 
@@ -458,29 +453,21 @@ async def test_save_and_read_house(hass: HomeAssistant) -> None:
 async def test_persisted_floor_and_house_survive_new_store(hass: HomeAssistant) -> None:
     s1 = AmbienceStore(hass)
     await s1.async_load()
-    await s1.async_save_floor("upstairs", {"rules": [], "auto_sort": True})
-    await s1.async_save_house(
-        {"rules": [{"name": "h", "when": {}, "actions": []}], "auto_sort": True}
-    )
+    await s1.async_save_floor("upstairs", {"rules": []})
+    await s1.async_save_house({"rules": [{"name": "h", "when": {}, "actions": []}]})
 
     s2 = AmbienceStore(hass)
     await s2.async_load()
-    assert s2.get_floor("upstairs") == {"rules": [], "auto_sort": True}
+    assert s2.get_floor("upstairs") == {"rules": []}
     assert s2.get_house()["rules"][0]["name"] == "h"
 
 
 async def test_all_scope_configs_yields_every_scope(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_area(
-        "kitchen", {"rules": [{"name": "k", "when": {}, "actions": []}], "auto_sort": True}
-    )
-    await store.async_save_floor(
-        "upstairs", {"rules": [{"name": "u", "when": {}, "actions": []}], "auto_sort": True}
-    )
-    await store.async_save_house(
-        {"rules": [{"name": "h", "when": {}, "actions": []}], "auto_sort": True}
-    )
+    await store.async_save_area("kitchen", {"rules": [{"name": "k", "when": {}, "actions": []}]})
+    await store.async_save_floor("upstairs", {"rules": [{"name": "u", "when": {}, "actions": []}]})
+    await store.async_save_house({"rules": [{"name": "h", "when": {}, "actions": []}]})
 
     triples = list(store.all_scope_configs())
     by_kind = {(k, sid): cfg for (k, sid, cfg) in triples}

@@ -31,7 +31,7 @@ async def _setup_with_one_rule_per_scope(hass, mock_config_entry):
     await hass.async_block_till_done()
 
     store = hass.data[DOMAIN][DATA_STORE]
-    one_rule = {"rules": [{"name": "any", "when": {}, "actions": []}], "auto_sort": True}
+    one_rule = {"rules": [{"name": "any", "when": {}, "actions": []}]}
     await store.async_save_area(area.id, one_rule)
     await store.async_save_floor(floor.floor_id, one_rule)
     await store.async_save_house(one_rule)

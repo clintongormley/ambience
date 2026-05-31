@@ -40,7 +40,7 @@ class AmbienceStore:
             "version": STORAGE_VERSION,
             "areas": {},
             "floors": {},
-            "house": {"rules": [], "auto_sort": True},
+            "house": {"rules": []},
             "matchers": {
                 "time_of_day": {"custom": {}, "hidden": []},
                 "day": {"workday_sensor": None, "workday_calendar": None},
@@ -154,7 +154,7 @@ class AmbienceStore:
     def _ensure_scope_buckets(self) -> None:
         """Floors and house keys are additive — make sure they exist."""
         self._data.setdefault("floors", {})
-        self._data.setdefault("house", {"rules": [], "auto_sort": True})
+        self._data.setdefault("house", {"rules": []})
 
     def _ensure_switch_defaults(self) -> None:
         sd = self._data.setdefault("switch_defaults", {})
@@ -235,7 +235,7 @@ class AmbienceStore:
             triples.append(("area", area_id, cfg))
         for floor_id, cfg in self._data.get("floors", {}).items():
             triples.append(("floor", floor_id, cfg))
-        triples.append(("house", None, self._data.get("house", {"rules": [], "auto_sort": True})))
+        triples.append(("house", None, self._data.get("house", {"rules": []})))
         return triples
 
     def get_matcher_config(self, name: str) -> dict[str, Any]:
@@ -282,12 +282,12 @@ class AmbienceStore:
         sub-dict regardless of whether rules have been saved for the scope.
         """
         if scope_kind == "house":
-            self._data.setdefault("house", {"rules": [], "auto_sort": True})
+            self._data.setdefault("house", {"rules": []})
             return self._data["house"]
         if scope_kind == "floor":
-            return self._data["floors"].setdefault(scope_id, {"rules": [], "auto_sort": True})
+            return self._data["floors"].setdefault(scope_id, {"rules": []})
         if scope_kind == "area":
-            return self._data["areas"].setdefault(scope_id, {"rules": [], "auto_sort": True})
+            return self._data["areas"].setdefault(scope_id, {"rules": []})
         raise ValueError(f"unknown scope_kind: {scope_kind!r}")
 
     @staticmethod

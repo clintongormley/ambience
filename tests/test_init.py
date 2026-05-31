@@ -168,7 +168,7 @@ async def test_floor_remove_event_deletes_floor_config(
     reg = fr.async_get(hass)
     entry = reg.async_create("Upstairs")
     store = hass.data["ambience"][DATA_STORE]
-    await store.async_save_floor(entry.floor_id, {"rules": [], "auto_sort": True})
+    await store.async_save_floor(entry.floor_id, {"rules": []})
     assert store.get_floor(entry.floor_id) is not None
 
     reg.async_delete(entry.floor_id)
@@ -189,9 +189,9 @@ async def test_startup_reconciliation_drops_orphan_area(
     await raw.async_save(
         {
             "version": 1,
-            "areas": {"ghost_area": {"rules": [], "auto_sort": True}},
+            "areas": {"ghost_area": {"rules": []}},
             "floors": {},
-            "house": {"rules": [], "auto_sort": True},
+            "house": {"rules": []},
             "matchers": {},
         }
     )
@@ -219,8 +219,8 @@ async def test_startup_reconciliation_drops_orphan_floor(
         {
             "version": 1,
             "areas": {},
-            "floors": {"ghost_floor": {"rules": [], "auto_sort": True}},
-            "house": {"rules": [], "auto_sort": True},
+            "floors": {"ghost_floor": {"rules": []}},
+            "house": {"rules": []},
             "matchers": {},
         }
     )

@@ -568,7 +568,7 @@ class FakeScopeStore:
     ) -> None:
         self._areas = areas or {}
         self._floors = floors or {}
-        self._house = house or {"rules": [], "auto_sort": True}
+        self._house = house or {"rules": []}
 
     def get_area(self, area_id):
         return self._areas.get(area_id)
@@ -591,7 +591,6 @@ async def test_async_resolve_only_floor_routes_to_floor_store(hass: HomeAssistan
                     "actions": [],
                 }
             ],
-            "auto_sort": True,
         }
     }
     _install(hass, store=FakeScopeStore(floors=floors))
@@ -603,7 +602,6 @@ async def test_async_resolve_only_floor_routes_to_floor_store(hass: HomeAssistan
 async def test_async_resolve_only_house_routes_to_house_store(hass: HomeAssistant) -> None:
     house = {
         "rules": [{"name": "away", "when": {"scene": "away"}, "actions": []}],
-        "auto_sort": True,
     }
     _install(hass, store=FakeScopeStore(house=house))
 
@@ -636,7 +634,6 @@ async def test_async_apply_scene_floor_runs_floor_actions(hass: HomeAssistant) -
                     ],
                 }
             ],
-            "auto_sort": True,
         }
     }
     _install(

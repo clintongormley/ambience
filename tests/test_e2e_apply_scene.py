@@ -125,7 +125,6 @@ async def test_time_of_day_rule_matches_for_area_without_matchers_field(
                     "actions": [],
                 }
             ],
-            "auto_sort": True,
         },
     )
 
@@ -146,7 +145,7 @@ async def test_apply_scene_accepts_floor_field(
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_floor(
         "upstairs",
-        {"rules": [{"name": "x", "when": {}, "actions": []}], "auto_sort": True},
+        {"rules": [{"name": "x", "when": {}, "actions": []}]},
     )
     await hass.services.async_call(DOMAIN, "apply_scene", {"floor": "upstairs"}, blocking=True)
 

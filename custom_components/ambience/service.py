@@ -247,3 +247,23 @@ async def async_execute_plan(
 def get_last_applied(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> int | None:
     """The rule index last applied to this scope, or None if never applied."""
     return hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).get((scope_kind, scope_id))
+
+
+def effective_reapply_seconds(action: dict[str, Any], exposed_store: Any) -> int:
+    """Resolve an action's effective re-apply interval in seconds.
+
+    The action's own `reapply_seconds` wins when the key is PRESENT (so an
+    explicit 0 disables an exposed default); otherwise the exposed-action
+    entry's default applies; otherwise off (0). Values below the 10s floor,
+    or of the wrong type, are treated as off.
+    """
+    if "reapply_seconds" in action:
+        value = action["reapply_seconds"]
+    elif exposed_store is not None:
+        entry = exposed_store.get(action.get("service"))
+        value = entry.get("reapply_seconds", 0) if isinstance(entry, dict) else 0
+    else:
+        value = 0
+    if isinstance(value, bool) or not isinstance(value, int):
+        return 0
+    return value if value >= 10 else 0

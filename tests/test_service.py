@@ -24,6 +24,7 @@ from custom_components.ambience.service import (
     async_execute_plan,
     async_resolve_only,
     async_resolve_with_snapshots,
+    effective_reapply_seconds,
 )
 
 
@@ -775,3 +776,49 @@ async def test_execute_plan_records_last_applied_even_when_all_actions_skip(
     await async_execute_plan(hass, "area", "a", plan)
     assert calls == []  # action skipped (unexposed)
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 2
+
+
+class _ExposedStub:
+    def __init__(self, entries: dict[str, dict]) -> None:
+        self._entries = entries
+
+    def get(self, service_id: str):
+        return self._entries.get(service_id)
+
+
+def test_effective_reapply_uses_action_key_when_present():
+    exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
+    action = {"service": "light.turn_on", "reapply_seconds": 60}
+    assert effective_reapply_seconds(action, exposed) == 60
+
+
+def test_effective_reapply_inherits_exposed_default_when_key_absent():
+    exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
+    action = {"service": "light.turn_on"}
+    assert effective_reapply_seconds(action, exposed) == 300
+
+
+def test_effective_reapply_action_zero_overrides_exposed_default():
+    exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
+    action = {"service": "light.turn_on", "reapply_seconds": 0}
+    assert effective_reapply_seconds(action, exposed) == 0
+
+
+def test_effective_reapply_off_when_nothing_set():
+    exposed = _ExposedStub({"light.turn_on": {}})
+    action = {"service": "light.turn_on"}
+    assert effective_reapply_seconds(action, exposed) == 0
+
+
+def test_effective_reapply_below_floor_is_off():
+    assert effective_reapply_seconds({"service": "x.y", "reapply_seconds": 9}, None) == 0
+
+
+def test_effective_reapply_bool_value_is_off():
+    # bool is a subclass of int; True must not be read as the integer 1.
+    assert effective_reapply_seconds({"service": "x.y", "reapply_seconds": True}, None) == 0
+
+
+def test_effective_reapply_handles_missing_exposed_store():
+    action = {"service": "x.y", "reapply_seconds": 30}
+    assert effective_reapply_seconds(action, None) == 30

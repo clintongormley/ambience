@@ -77,6 +77,16 @@ async function mount(
   return el;
 }
 
+// Group and destination render as collapse/expand slots (like the name field):
+// the selector only exists in the DOM once its slot summary is clicked open.
+async function openSlot(el: any, slotId: string): Promise<void> {
+  const summary = el.shadowRoot.querySelector(
+    `[data-slot-id="${slotId}"] .summary`,
+  ) as HTMLElement;
+  summary.click();
+  await el.updateComplete;
+}
+
 describe("ambience-rule-editor — collapse + friendly labels", () => {
   let el: any;
   afterEach(() => { el?.remove(); });
@@ -1626,6 +1636,7 @@ describe("ambience-rule-editor — group selector", () => {
       { name: "t", when: {}, actions: [], group: "b" },
       { groups: [{ id: "a", name: "A" }, { id: "b", name: "B" }] },
     );
+    await openSlot(el, "group");
     const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
     const values = Array.from(select.options).map((o) => o.value);
     expect(values).toEqual(["a", "b"]); // no "" option
@@ -1664,6 +1675,7 @@ describe("ambience-rule-editor — group selector", () => {
 
   test("selector reflects the rule's current group", async () => {
     el = await mount({ name: "t", when: {}, actions: [], group: "blinds" }, { groups });
+    await openSlot(el, "group");
     const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
     expect(select.value).toBe("blinds");
   });
@@ -1672,12 +1684,14 @@ describe("ambience-rule-editor — group selector", () => {
     // group is required, but defend against a hand-edited/empty value: the
     // selector still always has a real value (the first group).
     el = await mount({ name: "t", when: {}, actions: [], group: "" }, { groups });
+    await openSlot(el, "group");
     const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
     expect(select.value).toBe("morning");
   });
 
   test("selecting a group sets the draft and saves it", async () => {
     el = await mount({ name: "t", when: {}, actions: [], group: "morning" }, { groups });
+    await openSlot(el, "group");
     const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
     select.value = "blinds";
     select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1703,6 +1717,18 @@ describe("ambience-rule-editor — group selector", () => {
       { name: "t", when: {}, actions: [], group: "blinds" },
       { groups: [{ id: "blinds", name: "Blinds" }] },
     );
+    await openSlot(el, "group");
+    expect(el.shadowRoot.querySelector("select.group-select")).toBeTruthy();
+  });
+
+  test("the group is collapsed by default; its summary shows the current group", async () => {
+    el = await mount({ name: "t", when: {}, actions: [], group: "blinds" }, { groups });
+    const summary = el.shadowRoot.querySelector('[data-slot-id="group"] .summary');
+    expect(summary).toBeTruthy();
+    expect(summary.textContent).toContain("Blinds");
+    // collapsed: the selector is not in the DOM until the slot is opened.
+    expect(el.shadowRoot.querySelector("select.group-select")).toBeNull();
+    await openSlot(el, "group");
     expect(el.shadowRoot.querySelector("select.group-select")).toBeTruthy();
   });
 });
@@ -1736,22 +1762,32 @@ describe("ambience-rule-editor — destination selector", () => {
 
   test("renders a destination option per scope, defaulting to the rule's scope", async () => {
     el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "bedroom" });
+    await openSlot(el, "destination");
     const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
     expect(select).toBeTruthy();
     expect(select.options.length).toBe(3);
     expect(select.options[select.selectedIndex].textContent.trim()).toBe("Area: Bedroom");
   });
 
-  test("the destination selector is rendered after the group selector", async () => {
+  test("the collapsed destination summary shows the current scope label", async () => {
+    el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "bedroom" });
+    const summary = el.shadowRoot.querySelector('[data-slot-id="destination"] .summary');
+    expect(summary).toBeTruthy();
+    expect(summary.textContent).toContain("Area: Bedroom");
+    // collapsed by default: the selector is not in the DOM until clicked open.
+    expect(el.shadowRoot.querySelector(".destination select")).toBeNull();
+  });
+
+  test("the destination slot is rendered after the group slot", async () => {
     el = await mount(
       { name: "t", when: {}, actions: [], group: "a" },
       { groups: [{ id: "a", name: "A" }], scopes },
     );
-    const group = el.shadowRoot.querySelector(".group-select");
-    const destination = el.shadowRoot.querySelector(".destination");
+    const group = el.shadowRoot.querySelector('[data-slot-id="group"]');
+    const destination = el.shadowRoot.querySelector('[data-slot-id="destination"]');
     expect(group).toBeTruthy();
     expect(destination).toBeTruthy();
-    // destination must come AFTER the group selector in document order.
+    // destination must come AFTER the group slot in document order.
     expect(
       group.compareDocumentPosition(destination) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -1783,6 +1819,7 @@ describe("ambience-rule-editor — destination selector", () => {
     await e.updateComplete;
     el = e;
 
+    await openSlot(el, "destination");
     const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
     select.value = "2"; // Area: Bedroom
     select.dispatchEvent(new Event("change"));
@@ -1796,6 +1833,7 @@ describe("ambience-rule-editor — destination selector", () => {
 
   test("save-rule carries the rule and the selected destination scope", async () => {
     el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "living_room" });
+    await openSlot(el, "destination");
     const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
     select.value = "2"; // Area: Bedroom
     select.dispatchEvent(new Event("change"));
@@ -1808,5 +1846,25 @@ describe("ambience-rule-editor — destination selector", () => {
 
     expect(saved.scope).toEqual({ kind: "area", id: "bedroom" });
     expect(saved.rule.when).toEqual({});
+  });
+
+  test("autoEditScope opens the destination slot on mount (used when duplicating)", async () => {
+    const e: any = document.createElement("ambience-rule-editor");
+    e.matchers = matchers;
+    e.availableActions = availableActions;
+    e.periods = periods;
+    e.hass = hass;
+    e.scope = { kind: "area", id: "bedroom" };
+    e.scopes = scopes;
+    e.autoEditScope = true;
+    e.rule = { when: {}, actions: [] };
+    e.open = true;
+    document.body.appendChild(e);
+    await e.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await e.updateComplete;
+    el = e;
+    // Expanded straight away: the selector is in the DOM without a click.
+    expect(el.shadowRoot.querySelector(".destination select")).toBeTruthy();
   });
 });

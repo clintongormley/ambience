@@ -472,6 +472,42 @@ describe("ambience-scopes-view", () => {
     expect(rule.pinned).toBe(true);
   });
 
+  test("duplicate makes the destination area directly editable", async () => {
+    const rule: Rule = { name: "Orig", when: {}, actions: [], group: "a" };
+    el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    rulesList.dispatchEvent(
+      new CustomEvent("duplicate-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+
+    const editor: any = el.shadowRoot.querySelector("ambience-rule-editor");
+    expect(editor.autoEditScope).toBe(true);
+  });
+
+  test("editing an existing rule does not auto-open the destination", async () => {
+    const rule: Rule = { name: "Orig", when: {}, actions: [], group: "a" };
+    el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    rulesList.dispatchEvent(
+      new CustomEvent("edit-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+
+    const editor: any = el.shadowRoot.querySelector("ambience-rule-editor");
+    expect(editor.autoEditScope).toBe(false);
+  });
+
   test("saveArea error is displayed", async () => {
     vi.mocked(api.saveArea).mockRejectedValueOnce(new Error("Save failed"));
     el = await mount({

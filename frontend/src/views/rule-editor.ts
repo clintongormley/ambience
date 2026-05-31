@@ -23,6 +23,8 @@ import "./matcher-input.js";
 
 type OpenSlot =
   | { kind: "name" }
+  | { kind: "group" }
+  | { kind: "destination" }
   | { kind: "matcher"; id: string }
   | { kind: "action"; idx: number }
   | null;
@@ -214,6 +216,9 @@ export class AmbienceRuleEditor extends LitElement {
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) scope?: Scope;
   @property({ attribute: false }) scopes: ScopeOption[] = [];
+  // When the editor opens, start with the destination slot already expanded.
+  // Set by the parent when duplicating, where retargeting the area is the point.
+  @property({ type: Boolean }) autoEditScope = false;
 
   @state() private _draft: Rule | null = null;
   @state() private _scope?: Scope;
@@ -257,7 +262,10 @@ export class AmbienceRuleEditor extends LitElement {
     if (isOpening) {
       this._draft = this.rule ? JSON.parse(JSON.stringify(this.rule)) : null;
       this._scope = this.scope;
-      this._open = null;  // new rule loaded → everything collapsed
+      // Everything collapsed by default; on a duplicate, open the destination
+      // slot so the user can retarget the area straight away.
+      this._open =
+        this.autoEditScope && this.scopes.length > 0 ? { kind: "destination" } : null;
       this._showError = false;
     }
   }
@@ -355,6 +363,30 @@ export class AmbienceRuleEditor extends LitElement {
     `;
   }
   /* v8 ignore stop */
+
+  /**
+   * The destination scope as a collapse/expand slot (like the name field): a
+   * summary of the current scope, replaced by the selector when clicked.
+   */
+  private _renderDestinationSlot() {
+    if (this.scopes.length === 0) return "";
+    if (this._isOpen({ kind: "destination" })) {
+      return html`
+        <div class="slot destination-slot expanded" data-slot-id="destination">
+          ${this._renderDestination()}
+        </div>
+      `;
+    }
+    const current =
+      this.scopes.find((o) => sameScope(o.scope, this._scope)) ?? this.scopes[0];
+    return html`
+      <div class="slot collapsed" data-slot-id="destination">
+        <div class="summary" @click=${() => this._toggleSlot({ kind: "destination" })}>
+          <span class="summary-label"><strong>${localize(this.hass, "ui.destination", "Destination")}:</strong> ${current?.label ?? ""}</span>
+        </div>
+      </div>
+    `;
+  }
 
   private _renderNameSlot() {
     const value = this._draft!.name ?? "";
@@ -469,14 +501,39 @@ export class AmbienceRuleEditor extends LitElement {
   }
   /* v8 ignore stop */
 
+  /**
+   * The group as a collapse/expand slot (like the name field): a summary of the
+   * current group, replaced by the selector when clicked.
+   */
+  private _renderGroupSlot() {
+    if (this.groups.length === 0) return "";
+    if (this._isOpen({ kind: "group" })) {
+      return html`
+        <div class="slot group-slot expanded" data-slot-id="group">
+          ${this._renderGroupSelector()}
+        </div>
+      `;
+    }
+    const current = this._draft!.group || this.groups[0].id;
+    const name = this.groups.find((g) => g.id === current)?.name ?? current;
+    return html`
+      <div class="slot collapsed" data-slot-id="group">
+        <div class="summary" @click=${() => this._toggleSlot({ kind: "group" })}>
+          <span class="summary-label"><strong>${localize(this.hass, "ui.group", "Group")}:</strong> ${name}</span>
+        </div>
+      </div>
+    `;
+  }
+
   // --- Collapse helpers ---
 
-  private _isOpen(slot: { kind: "name" } | { kind: "matcher"; id: string } | { kind: "action"; idx: number }): boolean {
-    if (this._open === null) return false;
-    if (slot.kind === "name" && this._open.kind === "name") return true;
-    if (slot.kind === "matcher" && this._open.kind === "matcher") return slot.id === this._open.id;
-    if (slot.kind === "action" && this._open.kind === "action") return slot.idx === this._open.idx;
-    return false;
+  private _isOpen(slot: Exclude<OpenSlot, null>): boolean {
+    const open = this._open;
+    if (open === null || open.kind !== slot.kind) return false;
+    if (slot.kind === "matcher" && open.kind === "matcher") return slot.id === open.id;
+    if (slot.kind === "action" && open.kind === "action") return slot.idx === open.idx;
+    // name / group / destination — a kind match is sufficient (single instance).
+    return true;
   }
 
   /**
@@ -494,7 +551,8 @@ export class AmbienceRuleEditor extends LitElement {
    */
   private _validationError(slot: OpenSlot): string | null {
     if (slot === null) return null;
-    if (slot.kind === "name") return null;
+    // Name is optional; group and destination always carry a valid value.
+    if (slot.kind === "name" || slot.kind === "group" || slot.kind === "destination") return null;
     if (slot.kind === "matcher") {
       // People empty-selection case: an "X of:" mode (who key present) with
       // zero people ticked. Other matchers are valid by construction.
@@ -543,7 +601,7 @@ export class AmbienceRuleEditor extends LitElement {
     return true;
   }
 
-  private _toggleSlot(slot: { kind: "name" } | { kind: "matcher"; id: string } | { kind: "action"; idx: number }) {
+  private _toggleSlot(slot: Exclude<OpenSlot, null>) {
     if (this._isOpen(slot)) {
       // Collapsing your own slot is a "minimize for now" gesture, but a slot
       // with a validation error can't be minimized away — same gate as leaving
@@ -1011,8 +1069,8 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="modal" @click=${this._onModalClick}>
         <div class="content">
           ${this._renderNameSlot()}
-          ${this._renderGroupSelector()}
-          ${this._renderDestination()}
+          ${this._renderGroupSlot()}
+          ${this._renderDestinationSlot()}
 
           <h3>${localize(this.hass, "ui.when_heading", "When")}</h3>
           ${visibleMatchers.map((m) => this._renderMatcherRow(m))}

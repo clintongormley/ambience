@@ -774,6 +774,7 @@ export class AmbienceScopesView extends LitElement {
         .hass=${this.hass}
         .scope=${this._editing ? this._editing.scope : undefined}
         .scopes=${this._scopeOptions}
+        .autoEditScope=${!!this._editing?.seed}
         .rule=${this._editingRule}
         .matchers=${this._editorMatchers}
         .periods=${this._periods}

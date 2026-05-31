@@ -208,7 +208,13 @@ def test_resolve_keeps_pinned_priority_and_places_it_by_number() -> None:
     matchers = {"scene": SceneLike()}
     rules = [
         _rule("a", {"scene": "a"}),
-        {"name": "pinned", "when": {"scene": "z"}, "actions": [], "priority": 999999, "pinned": True},
+        {
+            "name": "pinned",
+            "when": {"scene": "z"},
+            "actions": [],
+            "priority": 999999,
+            "pinned": True,
+        },  # noqa: E501
         _rule("b", {"scene": "b"}),
     ]
     out = resolve_order(rules, matchers)
@@ -290,4 +296,14 @@ def test_shadow_equal_match_sets_flagged() -> None:
 def test_shadow_empty_when_shadows_everything_below() -> None:
     matchers = {"scene": SceneLike()}
     ordered = [_rule("catch_all", {}), _rule("below", {"scene": "x"})]
+    assert shadowed_by(ordered, matchers) == {1: 0}
+
+
+def test_shadow_multi_key_contains_is_flagged() -> None:
+    matchers = {"tod": IntervalMatcher(), "win": IntervalMatcher()}
+    ordered = [
+        _rule("wide", {"tod": (0, 24), "win": (0, 10)}),
+        _rule("narrow", {"tod": (8, 16), "win": (3, 7)}),
+    ]
+    # "wide" is more general on BOTH dimensions via contains → shadows "narrow".
     assert shadowed_by(ordered, matchers) == {1: 0}

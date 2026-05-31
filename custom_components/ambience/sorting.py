@@ -177,13 +177,15 @@ def resolve_order(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
 
     # Renormalise if the final order isn't strictly decreasing (a gap closed).
     prios = [r["priority"] for r in rules]
-    if any(a <= b for a, b in zip(prios, prios[1:])):
+    if any(a <= b for a, b in zip(prios, prios[1:], strict=False)):
         for idx, r in enumerate(rules):
             r["priority"] = (len(rules) - idx) * GAP
     return rules
 
 
-def _superset_or_equal(outer: dict[str, Any], inner: dict[str, Any], matchers: dict[str, Any]) -> bool:
+def _superset_or_equal(
+    outer: dict[str, Any], inner: dict[str, Any], matchers: dict[str, Any]
+) -> bool:
     """True if `outer`'s match-set ⊇ `inner`'s: every world-state matching the
     inner rule also matches the outer rule. `outer`/`inner` are constrained
     `when` maps (non-None predicates only)."""

@@ -19,6 +19,8 @@ DATA_LAST_APPLIED = "last_applied"
 
 # Auto-trigger engine instance.
 DATA_ENGINE = "engine"
+# Registered TraceSink instances (see trace.py).
+DATA_TRACE_SINKS = "trace_sinks"
 
 # Dispatcher signal — payload: tuple (scope_kind, scope_id) or None (global defaults changed)
 SIGNAL_SWITCH_CONFIG_UPDATED = "ambience_switch_config_updated"

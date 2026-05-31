@@ -1,12 +1,28 @@
-import { describe, test, expect, afterEach, beforeEach, vi } from "vitest";
+import { describe, test, expect, afterEach, beforeEach, beforeAll, vi } from "vitest";
+
+// jsdom doesn't include DragEvent — polyfill it with a minimal MouseEvent subclass.
+beforeAll(() => {
+  if (typeof DragEvent === "undefined") {
+    // @ts-expect-error -- test-only polyfill
+    globalThis.DragEvent = class DragEvent extends MouseEvent {
+      constructor(type: string, init?: EventInit & { cancelable?: boolean }) {
+        super(type, { bubbles: true, cancelable: true, ...init });
+      }
+    };
+  }
+});
 
 vi.mock("../frontend/src/api.js", () => ({
   listExposedActions: vi.fn(async () => [
     { id: "light.turn_on", label: "", visible_fields: ["brightness_pct"], defaults: {} },
   ]),
   listServices: vi.fn(async () => [
-    { id: "light.turn_on", description: "Turn on", target: null },
-    { id: "light.turn_off", description: "Turn off", target: null },
+    { id: "light.turn_on", name: "Turn on light", description: "Turn on", target: null },
+    { id: "light.turn_off", name: "Turn off light", description: "Turn off", target: null },
+    // name ("Arm away") deliberately differs from the derived fallback
+    // ("Alarm arm away alarm control panel") so tests prove `name` is used.
+    { id: "alarm_control_panel.alarm_arm_away", name: "Arm away", description: "", target: null },
+    { id: "weird.svc", name: "", description: "", target: null },
   ]),
   getServiceSchema: vi.fn(async (_hass: unknown, service: string) => {
     if (service === "light.turn_on") {
@@ -25,11 +41,26 @@ vi.mock("../frontend/src/api.js", () => ({
 }));
 
 import "../frontend/src/views/actions-settings";
+import { deriveActionLabel } from "../frontend/src/views/actions-settings";
 import {
   listExposedActions,
   saveExposedActions,
   getServiceSchema,
 } from "../frontend/src/api.js";
+
+describe("deriveActionLabel", () => {
+  test.each([
+    ["light.turn_on", "Turn on light"],
+    ["light.turn_off", "Turn off light"],
+    ["cover.open_cover", "Open cover"],
+    ["climate.set_temperature", "Set temperature climate"],
+    ["switch.toggle", "Toggle switch"],
+    ["input_boolean.turn_on", "Turn on input boolean"],
+    ["toggle", "Toggle"],
+  ])("%s -> %s", (serviceId, expected) => {
+    expect(deriveActionLabel(serviceId)).toBe(expected);
+  });
+});
 
 // Helper: finds the card-header element (now a div[data-toggle]) and clicks it to toggle expand.
 function clickToggle(root: ShadowRoot) {
@@ -349,6 +380,213 @@ describe("ambience-actions-settings", () => {
         expect.objectContaining({ id: "light.turn_off" }),
       ]),
     );
+  });
+
+  test("adding a service populates the predefined HA service name as label", async () => {
+    el = await mount();
+    const addBtn = el.shadowRoot.querySelector("button[data-action='add']") as HTMLButtonElement;
+    addBtn.click();
+    await el.updateComplete;
+
+    const picker = el.shadowRoot.querySelector("select[data-add-service]") as HTMLSelectElement;
+    picker.value = "alarm_control_panel.alarm_arm_away";
+    picker.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
+    // Saved with HA's predefined name "Arm away" — NOT the id-derived fallback.
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({ id: "alarm_control_panel.alarm_arm_away", label: "Arm away" }),
+      ]),
+    );
+    const newCard = el.shadowRoot.querySelector(
+      "[data-card][data-service='alarm_control_panel.alarm_arm_away']",
+    );
+    const labelInput = newCard?.querySelector("[data-label-input]") as any;
+    expect(labelInput?.value).toBe("Arm away");
+  });
+
+  test("adding a service with no predefined name falls back to a derived label", async () => {
+    el = await mount();
+    const addBtn = el.shadowRoot.querySelector("button[data-action='add']") as HTMLButtonElement;
+    addBtn.click();
+    await el.updateComplete;
+
+    const picker = el.shadowRoot.querySelector("select[data-add-service]") as HTMLSelectElement;
+    picker.value = "weird.svc";
+    picker.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
+    // "weird.svc" has name: "" → derived "Svc weird".
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({ id: "weird.svc", label: "Svc weird" }),
+      ]),
+    );
+  });
+
+  test("each card header has a drag handle", async () => {
+    el = await mount();
+    const handle = el.shadowRoot.querySelector("[data-card] [data-drag-handle]");
+    expect(handle).not.toBeNull();
+    expect((handle as HTMLElement).getAttribute("draggable")).toBe("true");
+  });
+
+  test("dragging a card's handle reorders the actions and auto-saves", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "light.turn_on", label: "On", visible_fields: [], defaults: {} },
+      { id: "light.turn_off", label: "Off", visible_fields: [], defaults: {} },
+    ]);
+    el = await mount();
+    let cards = el.shadowRoot.querySelectorAll("[data-card]");
+    expect(cards.length).toBe(2);
+
+    const handle = cards[0].querySelector("[data-drag-handle]") as HTMLElement;
+    handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    cards[1].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true }));
+    cards[1].dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    await flush(el);
+
+    cards = el.shadowRoot.querySelectorAll("[data-card]");
+    const idsAfter = Array.from(cards).map((c: any) => c.getAttribute("data-service"));
+    expect(idsAfter).toEqual(["light.turn_off", "light.turn_on"]);
+
+    expect(saveExposedActions).toHaveBeenCalledWith(expect.anything(), [
+      expect.objectContaining({ id: "light.turn_off" }),
+      expect.objectContaining({ id: "light.turn_on" }),
+    ]);
+    // Drag state reset after drop.
+    expect(el._dragFrom).toBeNull();
+    expect(el._dragOver).toBeNull();
+  });
+
+  test("the dragged card is marked .dragging while a drag is in progress", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "light.turn_on", label: "On", visible_fields: [], defaults: {} },
+      { id: "light.turn_off", label: "Off", visible_fields: [], defaults: {} },
+    ]);
+    el = await mount();
+    let cards = el.shadowRoot.querySelectorAll("[data-card]");
+    const handle = cards[0].querySelector("[data-drag-handle]") as HTMLElement;
+    handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    await el.updateComplete;
+
+    cards = el.shadowRoot.querySelectorAll("[data-card]");
+    expect(cards[0].classList.contains("dragging")).toBe(true);
+    expect(cards[1].classList.contains("dragging")).toBe(false);
+
+    cards[0].dispatchEvent(new DragEvent("dragend", { bubbles: true }));
+    await el.updateComplete;
+    cards = el.shadowRoot.querySelectorAll("[data-card]");
+    expect(cards[0].classList.contains("dragging")).toBe(false);
+  });
+
+  test("dragend cancels the drag and resets state without reordering", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "light.turn_on", label: "On", visible_fields: [], defaults: {} },
+      { id: "light.turn_off", label: "Off", visible_fields: [], defaults: {} },
+    ]);
+    el = await mount();
+    const cards = el.shadowRoot.querySelectorAll("[data-card]");
+    const handle = cards[0].querySelector("[data-drag-handle]") as HTMLElement;
+    handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    cards[1].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true }));
+    expect(el._dragOver).toBe(1);
+    cards[0].dispatchEvent(new DragEvent("dragend", { bubbles: true }));
+    await flush(el);
+
+    expect(el._dragFrom).toBeNull();
+    expect(el._dragOver).toBeNull();
+    const idsAfter = Array.from(el.shadowRoot.querySelectorAll("[data-card]")).map(
+      (c: any) => c.getAttribute("data-service"),
+    );
+    expect(idsAfter).toEqual(["light.turn_on", "light.turn_off"]);
+    expect(saveExposedActions).not.toHaveBeenCalled();
+  });
+
+  test("dropping a card on itself is a no-op (no reorder, no save)", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "light.turn_on", label: "On", visible_fields: [], defaults: {} },
+      { id: "light.turn_off", label: "Off", visible_fields: [], defaults: {} },
+    ]);
+    el = await mount();
+    const cards = el.shadowRoot.querySelectorAll("[data-card]");
+    const handle = cards[0].querySelector("[data-drag-handle]") as HTMLElement;
+    handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    cards[0].dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    await flush(el);
+
+    const idsAfter = Array.from(el.shadowRoot.querySelectorAll("[data-card]")).map(
+      (c: any) => c.getAttribute("data-service"),
+    );
+    expect(idsAfter).toEqual(["light.turn_on", "light.turn_off"]);
+    expect(saveExposedActions).not.toHaveBeenCalled();
+  });
+
+  test("adding an unknown / partial service id is ignored (no card, no save)", async () => {
+    el = await mount();
+    await el._addService("light.tur"); // partial free-text from the combobox
+    await flush(el);
+    expect(el.shadowRoot.querySelectorAll("[data-card]").length).toBe(1);
+    expect(saveExposedActions).not.toHaveBeenCalled();
+  });
+
+  test("the add button reads 'Add action' and is styled as a primary (.add) button", async () => {
+    el = await mount();
+    const addBtn = el.shadowRoot.querySelector("button[data-action='add']") as HTMLButtonElement;
+    expect(addBtn).not.toBeNull();
+    expect(addBtn.textContent).toContain("Add action");
+    expect(addBtn.textContent).not.toContain("Add service");
+    expect(addBtn.classList.contains("add")).toBe(true);
+  });
+
+  test("clicking elsewhere in the panel collapses the open add form", async () => {
+    el = await mount();
+    el.shadowRoot.querySelector("button[data-action='add']").click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("[data-add-service]")).not.toBeNull();
+
+    document.body.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+
+    expect(el._adding).toBe(false);
+    expect(el.shadowRoot.querySelector("[data-add-service]")).toBeNull();
+    expect(el.shadowRoot.querySelector("button[data-action='add']")).not.toBeNull();
+  });
+
+  test("clicking inside the add form does not collapse it", async () => {
+    el = await mount();
+    el.shadowRoot.querySelector("button[data-action='add']").click();
+    await el.updateComplete;
+
+    const addRow = el.shadowRoot.querySelector(".add-row") as HTMLElement;
+    addRow.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    expect(el._adding).toBe(true);
+    expect(el.shadowRoot.querySelector("[data-add-service]")).not.toBeNull();
+  });
+
+  test("clicking inside the picker's overlay dropdown does not collapse the add form", async () => {
+    el = await mount();
+    el.shadowRoot.querySelector("button[data-action='add']").click();
+    await el.updateComplete;
+
+    // ha-service-picker renders its dropdown in a document-level vaadin overlay,
+    // outside our shadow tree — clicking an option must not collapse the form.
+    const overlay = document.createElement("vaadin-combo-box-overlay");
+    document.body.appendChild(overlay);
+    try {
+      overlay.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
+      await el.updateComplete;
+      expect(el._adding).toBe(true);
+    } finally {
+      overlay.remove();
+    }
   });
 
   test("auto-saves after remove service", async () => {
@@ -793,6 +1031,23 @@ describe("ambience-actions-settings", () => {
     const cards = el.shadowRoot.querySelectorAll("[data-card]");
     expect(cards.length).toBe(2);
     expect(getServiceSchema).toHaveBeenCalledWith(expect.anything(), "light.turn_off");
+  });
+
+  test("add-service picker options show the predefined name and the service id", async () => {
+    el = await mount();
+    const addBtn = el.shadowRoot.querySelector("button[data-action='add']") as HTMLButtonElement;
+    addBtn.click();
+    await el.updateComplete;
+
+    const picker = el.shadowRoot.querySelector("select[data-add-service]") as HTMLSelectElement;
+    const option = Array.from(picker.options).find(
+      (o) => o.value === "alarm_control_panel.alarm_arm_away",
+    );
+    expect(option).not.toBeUndefined();
+    // Uses HA's predefined name, not the id-derived fallback.
+    expect(option!.textContent).toContain("Arm away");
+    expect(option!.textContent).not.toContain("Alarm arm away alarm");
+    expect(option!.textContent).toContain("alarm_control_panel.alarm_arm_away");
   });
 
   test("renders warnings returned by saveExposedActions after auto-save", async () => {

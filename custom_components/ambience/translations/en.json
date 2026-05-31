@@ -122,6 +122,7 @@
     "target": "Target",
     "remove_action": "Remove action",
     "add_action": "+ Add action…",
+    "add_action_button": "Add action",
     "cancel": "Cancel",
     "save": "Save",
     "save_rule": "Save rule",

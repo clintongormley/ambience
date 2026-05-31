@@ -24,6 +24,31 @@ type HaFormSchemaEntry = {
   required?: boolean;
 };
 
+/**
+ * Derive a human-friendly label from a service id, e.g.
+ * `light.turn_on` → "Turn on light".
+ *
+ * The humanized service name is suffixed with the domain word(s), unless the
+ * service already mentions every domain word (`cover.open_cover` → "Open cover",
+ * not "Open cover cover"). The first letter is capitalized.
+ */
+export function deriveActionLabel(serviceId: string): string {
+  const dotIdx = serviceId.indexOf(".");
+  const domain = dotIdx === -1 ? "" : serviceId.slice(0, dotIdx);
+  const service = dotIdx === -1 ? serviceId : serviceId.slice(dotIdx + 1);
+  const serviceWords = service.replaceAll("_", " ").trim().toLowerCase();
+  const domainWords = domain.replaceAll("_", " ").trim().toLowerCase();
+
+  const serviceTokens = serviceWords ? serviceWords.split(" ") : [];
+  const domainTokens = domainWords ? domainWords.split(" ") : [];
+  const mentionsDomain =
+    domainTokens.length > 0 && domainTokens.every((t) => serviceTokens.includes(t));
+
+  const result =
+    !domainWords || mentionsDomain ? serviceWords : `${serviceWords} ${domainWords}`;
+  return result.charAt(0).toUpperCase() + result.slice(1);
+}
+
 @customElement("ambience-actions-settings")
 export class AmbienceActionsSettings extends LitElement {
   static override styles = css`
@@ -35,11 +60,31 @@ export class AmbienceActionsSettings extends LitElement {
       padding: 0.5rem 0.75rem;
       background: var(--card-background-color, #fff);
     }
+    .card.drag-over {
+      border-color: var(--primary-color, #03a9f4);
+    }
+    .card.dragging {
+      opacity: 0.4;
+    }
     .card-header {
       display: flex;
       align-items: center;
       gap: 0.5rem;
       cursor: pointer;
+    }
+    .drag-handle {
+      flex: 0 0 auto;
+      cursor: grab;
+      color: var(--secondary-text-color, #888);
+      user-select: none;
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .drag-handle:active {
+      cursor: grabbing;
+    }
+    .card-header:hover .drag-handle {
+      color: var(--primary-text-color, inherit);
     }
     .card-header:hover .toggle-arrow {
       color: var(--primary-color, #03a9f4);
@@ -240,6 +285,12 @@ export class AmbienceActionsSettings extends LitElement {
       gap: 0.5rem;
       align-items: center;
     }
+    /* Let the HA-native picker (ha-service-picker / ha-form) fill the row so
+       its dropdown aligns under a full-width field rather than a narrow one. */
+    .add-row .add-picker {
+      flex: 1;
+      min-width: 0;
+    }
     .warning {
       background: var(--warning-color, #ffd);
       border: 1px solid var(--warning-color, #cc9);
@@ -261,6 +312,14 @@ export class AmbienceActionsSettings extends LitElement {
       font: inherit;
       cursor: pointer;
     }
+    /* Primary "Add action" button — filled blue, matching the rules list. */
+    button.add {
+      background: var(--primary-color, #03a9f4);
+      border-color: var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+    }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
@@ -268,6 +327,12 @@ export class AmbienceActionsSettings extends LitElement {
   @state() private _services: ServiceInfo[] = [];
   @state() private _schemas: Record<string, ServiceSchema | null> = {};
   @state() private _fieldSchemas: Record<string, HaFormSchemaEntry[]> = {};
+  /** Memoised ha-form schema for the "add service" autocomplete. */
+  @state() private _addSchema: unknown[] = [];
+  /** _services indexed by id, for O(1) label lookups. */
+  private _serviceById: Map<string, ServiceInfo> = new Map();
+  /** Services not yet exposed — the add-picker's candidates. */
+  private _availableServices: ServiceInfo[] = [];
   @state() private _expanded: Set<string> = new Set();
   @state() private _adding = false;
   @state() private _warnings: ExposedActionWarning[] = [];
@@ -280,26 +345,57 @@ export class AmbienceActionsSettings extends LitElement {
   @state() private _editingOriginalValue: unknown = undefined;
   /** Whether the field had a default before entering edit mode. */
   @state() private _editingOriginalHad = false;
+  /** Index of the card currently being dragged, or null. */
+  @state() private _dragFrom: number | null = null;
+  /** Index of the card currently being dragged over, or null. */
+  @state() private _dragOver: number | null = null;
+
+  // HA pickers (ha-service-picker / ha-form combobox) render their dropdown in
+  // a document-level overlay outside our shadow tree. Clicks there must not be
+  // treated as "click away".
+  private static readonly _OVERLAY_TAG_RE = /vaadin|combo-box|overlay|listbox|menu|mwc-|md-/i;
 
   private _onDocPointerDown = (e: PointerEvent) => {
+    const path = e.composedPath();
+    this._collapseAddFormOnClickAway(path);
+    this._cancelEditingDefaultOnClickAway(path);
+  };
+
+  /** Collapse the open "add action" form when clicking outside it — but not
+   *  inside the picker's document-level overlay dropdown. */
+  private _collapseAddFormOnClickAway(path: EventTarget[]) {
+    if (!this._adding) return;
+    const addRow = this.shadowRoot?.querySelector(".add-row");
+    const insideAddRow = !!addRow && path.includes(addRow);
+    const inOverlay = path.some(
+      (n) =>
+        n instanceof Element &&
+        AmbienceActionsSettings._OVERLAY_TAG_RE.test(n.localName),
+    );
+    if (!insideAddRow && !inOverlay) {
+      this._adding = false;
+    }
+  }
+
+  /** Cancel the open default-value editor when clicking outside its row. */
+  private _cancelEditingDefaultOnClickAway(path: EventTarget[]) {
     if (this._editingDefault === null) return;
-    // Find the active editor row and check if the click was inside it.
     const editorRow = this.shadowRoot?.querySelector(
       `.field-row-editor[data-editing-key="${this._editingDefault}"]`,
     );
-    if (!editorRow) {
-      this._cancelEditingDefault();
-      return;
-    }
-    const path = e.composedPath();
-    if (!path.includes(editorRow as EventTarget)) {
+    if (!editorRow || !path.includes(editorRow as EventTarget)) {
       this._cancelEditingDefault();
     }
-  };
+  }
 
   override connectedCallback() {
     super.connectedCallback();
     document.addEventListener("pointerdown", this._onDocPointerDown);
+    // If HA registers its rich service picker lazily, re-render to pick it up.
+    /* v8 ignore next 3 -- real-HA registry timing, not jsdom */
+    if (!customElements.get("ha-service-picker")) {
+      void customElements.whenDefined("ha-service-picker").then(() => this.requestUpdate());
+    }
   }
 
   override disconnectedCallback() {
@@ -366,6 +462,35 @@ export class AmbienceActionsSettings extends LitElement {
         }
       }
       this._fieldSchemas = next;
+    }
+    if (changed.has("_services")) {
+      this._serviceById = new Map(this._services.map((s) => [s.id, s]));
+    }
+    // Memoise the add-picker candidates + schema so ha-form doesn't reinitialise
+    // the dropdown on every parent re-render. Only depends on which services are
+    // still available to add (all services minus already-exposed ones).
+    if (changed.has("_actions") || changed.has("_services")) {
+      const exposed = new Set(this._actions.map((a) => a.id));
+      this._availableServices = this._services.filter((s) => !exposed.has(s.id));
+      this._addSchema = [
+        {
+          name: "service",
+          selector: {
+            select: {
+              options: this._availableServices.map((s) => ({
+                value: s.id,
+                label: this._addOptionLabel(s.id),
+              })),
+              // custom_value lets ha-form render a *searchable* combobox
+              // (filter-as-you-type) rather than a plain dropdown menu. We
+              // still only accept real service ids — see _addService's guard.
+              custom_value: true,
+              mode: "dropdown",
+              sort: true,
+            },
+          },
+        },
+      ];
     }
   }
 
@@ -449,15 +574,56 @@ export class AmbienceActionsSettings extends LitElement {
 
   private async _addService(serviceId: string) {
     if (!serviceId) return;
+    // The searchable combobox can emit partial free text — only accept a real,
+    // known service id.
+    if (!this._services.some((s) => s.id === serviceId)) return;
     if (this._actions.some((a) => a.id === serviceId)) return;
     await this._ensureSchema(serviceId);
     this._actions = [
       ...this._actions,
-      { id: serviceId, label: "", visible_fields: [], defaults: {} },
+      { id: serviceId, label: this._labelForService(serviceId), visible_fields: [], defaults: {} },
     ];
     this._expanded = new Set([...this._expanded, serviceId]);
     this._adding = false;
     void this._autoSave();
+  }
+
+  // --- drag-to-reorder ----------------------------------------------------
+
+  private _onDragStart(e: DragEvent, i: number) {
+    this._dragFrom = i;
+    // The handle glyph is tiny, so the browser's default drag image would be
+    // just the ⠿ character. Use the whole card as the drag image instead so
+    // the user sees the card they're moving.
+    const handle = e.currentTarget as HTMLElement;
+    const card = handle.closest(".card") as HTMLElement | null;
+    if (card && e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setDragImage(card, 16, 16);
+    }
+  }
+
+  private _onDragOver(e: DragEvent, i: number) {
+    if (this._dragFrom === null || i === this._dragFrom) return;
+    e.preventDefault(); // allow drop
+    this._dragOver = i;
+  }
+
+  private _onDrop(to: number) {
+    const from = this._dragFrom;
+    this._dragFrom = null;
+    this._dragOver = null;
+    if (from === null || from === to) return;
+    const actions = [...this._actions];
+    const [moved] = actions.splice(from, 1);
+    actions.splice(to, 0, moved);
+    this._actions = actions;
+    void this._autoSave();
+  }
+
+  private _onDragEnd() {
+    this._dragFrom = null;
+    this._dragOver = null;
   }
 
   private _removeService(actionId: string) {
@@ -494,28 +660,43 @@ export class AmbienceActionsSettings extends LitElement {
       <section>
         ${this._renderWarnings()}
         ${this._saveError ? html`<div class="error">${this._saveError}</div>` : ""}
-        ${this._actions.map((a) => this._renderCard(a))}
+        ${this._actions.map((a, i) => this._renderCard(a, i))}
         ${this._renderAdd()}
       </section>
     `;
   }
 
-  private _renderCard(action: ExposedAction) {
+  private _renderCard(action: ExposedAction, index: number) {
     const schema = this._schemas[action.id];
     const isExpanded = this._expanded.has(action.id);
 
     return html`
-      <div class="card" data-card data-service=${action.id}>
+      <div
+        class="card ${this._dragOver === index ? "drag-over" : ""} ${this._dragFrom === index ? "dragging" : ""}"
+        data-card
+        data-service=${action.id}
+        @dragover=${(e: DragEvent) => this._onDragOver(e, index)}
+        @drop=${() => this._onDrop(index)}
+        @dragend=${() => this._onDragEnd()}
+      >
         <div
           class="card-header"
           data-toggle
           @click=${(e: Event) => {
             // Don't toggle if the click came from the label input or remove button.
             const target = e.target as HTMLElement;
-            if (target.closest("ha-input, input, button.remove")) return;
+            if (target.closest("ha-input, input, button.remove, .drag-handle")) return;
             this._toggleExpand(action.id);
           }}
         >
+          <span
+            class="drag-handle"
+            data-drag-handle
+            draggable="true"
+            title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}
+            @dragstart=${(e: DragEvent) => this._onDragStart(e, index)}
+            @click=${(e: Event) => e.stopPropagation()}
+          >⠿</span>
           <span class="toggle-arrow">${isExpanded ? "▾" : "▸"}</span>
           ${isExpanded
             ? html`
@@ -742,27 +923,77 @@ export class AmbienceActionsSettings extends LitElement {
   private _renderAdd() {
     if (!this._adding) {
       return html`<div class="add-row">
-        <button data-action="add" @click=${() => { this._adding = true; }}>
-          + ${localize(this.hass, "ui.add_service", "Add service")}
+        <button class="add" data-action="add" @click=${() => { this._adding = true; }}>
+          + ${localize(this.hass, "ui.add_action_button", "Add action")}
         </button>
       </div>`;
     }
-    const exposed = new Set(this._actions.map((a) => a.id));
-    const available = this._services.filter((s) => !exposed.has(s.id));
     return html`<div class="add-row">
-      <select
-        data-add-service
-        @change=${(e: Event) => this._addService((e.target as HTMLSelectElement).value)}
-      >
-        <option value="">— ${localize(this.hass, "ui.pick_service", "Pick a service")} —</option>
-        ${available.map(
-          (s) => html`<option value=${s.id}>${s.id}${s.description ? ` — ${s.description}` : ""}</option>`,
-        )}
-      </select>
+      ${this._renderAddPicker()}
       <button data-action="cancel-add" @click=${() => { this._adding = false; }}>
         ${localize(this.hass, "ui.cancel", "Cancel")}
       </button>
     </div>`;
+  }
+
+  /**
+   * Human label for a service: HA's predefined `name` when available, else a
+   * label derived from the id. ("Turn off light", "Arm away", …)
+   */
+  private _labelForService(serviceId: string): string {
+    const name = this._serviceById.get(serviceId)?.name?.trim();
+    return name || deriveActionLabel(serviceId);
+  }
+
+  /** Friendly label + service id, e.g. "Turn off light (light.turn_off)". */
+  private _addOptionLabel(serviceId: string): string {
+    return `${this._labelForService(serviceId)} (${serviceId})`;
+  }
+
+  private _renderAddPicker() {
+    /* v8 ignore start -- HA-native picker paths (real HA only, not jsdom) */
+    // Best: HA's own service picker (the Developer Tools → Actions widget) —
+    // searchable, with icon + predefined name + description + domain per row.
+    // Only available when HA has registered it in this panel's scope.
+    if (customElements.get("ha-service-picker")) {
+      return html`<ha-service-picker
+        class="add-picker"
+        data-add-service-picker
+        .hass=${this.hass}
+        @value-changed=${(e: CustomEvent<{ value?: string }>) => {
+          e.stopPropagation();
+          const id = e.detail.value;
+          if (id) void this._addService(id);
+        }}
+      ></ha-service-picker>`;
+    }
+    // Next best: a searchable ha-form combobox. ha-form lazy-loads the combobox
+    // widget internally, so this works without the removed loadCardHelpers.
+    if (customElements.get("ha-form")) {
+      return html`<ha-form
+        class="add-picker"
+        data-add-service-form
+        .hass=${this.hass}
+        .schema=${this._addSchema}
+        .data=${{ service: "" }}
+        .computeLabel=${() => localize(this.hass, "ui.pick_service", "Pick a service")}
+        @value-changed=${(e: CustomEvent<{ value: { service?: string } }>) => {
+          e.stopPropagation();
+          const id = e.detail.value.service;
+          if (id) void this._addService(id);
+        }}
+      ></ha-form>`;
+    }
+    /* v8 ignore stop */
+    return html`<select
+      data-add-service
+      @change=${(e: Event) => this._addService((e.target as HTMLSelectElement).value)}
+    >
+      <option value="">— ${localize(this.hass, "ui.pick_service", "Pick a service")} —</option>
+      ${this._availableServices.map(
+        (s) => html`<option value=${s.id}>${this._addOptionLabel(s.id)}</option>`,
+      )}
+    </select>`;
   }
 
   private _renderWarnings() {

@@ -35,6 +35,7 @@ export type ExposedAction = {
 // HA service listing for the settings UI's service picker.
 export type ServiceInfo = {
   id: string;                 // "domain.service"
+  name: string;               // HA's predefined human label (from services.yaml); "" if none
   description: string;
   target: unknown;            // HA's target metadata; passed through unchanged
 };

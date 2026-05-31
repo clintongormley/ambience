@@ -118,18 +118,21 @@ export class AmbienceRulesList extends LitElement {
       border-radius: 4px;
       margin-top: 0.5rem;
     }
-    .autosort {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin: 0.5rem 0 0.25rem 0;
-      font-size: 0.9em;
-      color: var(--secondary-text-color, #888);
+    .pin {
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      padding: 0 0.25rem;
+      font-size: 1rem;
+    }
+    .shadow-warning {
+      color: var(--error-color, #db4437);
+      cursor: help;
+      padding: 0 0.25rem;
     }
   `;
 
   @property({ attribute: false }) rules: Rule[] = [];
-  @property({ type: Boolean }) autoSort = true;
   @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
@@ -159,12 +162,12 @@ export class AmbienceRulesList extends LitElement {
     );
   }
 
-  /** Sorted list of active `when` keys (lower priority first). */
+  /** Sorted list of active `when` keys (higher priority first). */
   private _whenKeys(rule: Rule): string[] {
     const priorityOf = new Map((this.matchers ?? []).map((m) => [m.name, m.priority]));
     return Object.keys(rule.when)
       .filter((k) => rule.when[k] != null)
-      .sort((a, b) => (priorityOf.get(a) ?? Infinity) - (priorityOf.get(b) ?? Infinity));
+      .sort((a, b) => (priorityOf.get(b) ?? -Infinity) - (priorityOf.get(a) ?? -Infinity));
   }
 
   /** Inline (collapsed) "when" summary: matcher entries joined by `, ` with
@@ -289,16 +292,30 @@ export class AmbienceRulesList extends LitElement {
           (rule, i) => html`
             <li
               class=${this._dragOver === i ? "drag-over" : ""}
-              draggable=${!this.autoSort}
+              draggable="true"
               @dragstart=${() => this._onDragStart(i)}
               @dragover=${(e: DragEvent) => this._onDragOver(e, i)}
               @drop=${() => this._onDrop(i)}
               @dragend=${this._onDragEnd}
             >
-              ${!this.autoSort
-                ? html`<span class="handle" title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}>⠿</span>`
-                : ""}
+              <span class="handle" title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}>⠿</span>
               <span class="idx">${i + 1}</span>
+              ${rule.pinned
+                ? html`<button
+                    class="pin"
+                    title=${localize(this.hass, "ui.unpin", "Unpin (return to automatic order)")}
+                    @click=${(e: Event) => {
+                      e.stopPropagation();
+                      this._emit("unpin-rule", { index: i });
+                    }}
+                  >📌</button>`
+                : ""}
+              ${rule.shadowed_by != null
+                ? html`<span
+                    class="shadow-warning"
+                    title=${localize(this.hass, "ui.shadowed", "Never fires — shadowed by an earlier rule.")}
+                  >⚠️</span>`
+                : ""}
               <div class="body" @click=${() => this._toggleRule(i)}>
                 <div class="name">
                   ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1)))}
@@ -366,17 +383,6 @@ export class AmbienceRulesList extends LitElement {
           `,
         )}
       </ul>
-      <label class="autosort">
-        <input
-          type="checkbox"
-          .checked=${!this.autoSort}
-          @change=${(e: Event) =>
-            this._emit("toggle-autosort", {
-              manual: (e.target as HTMLInputElement).checked,
-            })}
-        />
-        ${localize(this.hass, "ui.order_rules_manually", "Order rules manually")}
-      </label>
       <button class="add" @click=${() => this._emit("add-rule", {})}>
         ${localize(this.hass, "ui.add_rule", "+ Add rule")}
       </button>

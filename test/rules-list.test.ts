@@ -56,13 +56,11 @@ const testHass = {
 
 async function mount(
   rules: Rule[] = [],
-  autoSort = true,
   availableActions: ExposedAction[] = [],
   schemas: Record<string, unknown> = {},
 ): Promise<any> {
   const el: any = document.createElement("ambience-rules-list");
   el.rules = rules;
-  el.autoSort = autoSort;
   el.periods = periods;
   el.matchers = matchers;
   el.hass = testHass;
@@ -180,14 +178,35 @@ describe("ambience-rules-list", () => {
     expect(get()).toBeDefined();
   });
 
-  test("shows drag handle when autoSort is false", async () => {
-    el = await mount([movieRule], false);
-    expect(el.shadowRoot.querySelector(".handle")).toBeTruthy();
+  test("every row has a drag handle", async () => {
+    el = await mount([movieRule, eveningRule]);
+    expect(el.shadowRoot.querySelectorAll(".handle").length).toBe(2);
   });
 
-  test("no drag handle when autoSort is true", async () => {
-    el = await mount([movieRule], true);
-    expect(el.shadowRoot.querySelector(".handle")).toBeFalsy();
+  test("pinned row shows a pin icon; clicking it emits unpin-rule", async () => {
+    const pinned: Rule = { ...movieRule, pinned: true, priority: 2048 };
+    el = await mount([pinned]);
+    const pin = el.shadowRoot.querySelector(".pin");
+    expect(pin).toBeTruthy();
+    const getDetail = captureEvent(el, "unpin-rule");
+    pin.click();
+    expect(getDetail()).toEqual({ index: 0 });
+  });
+
+  test("unpinned row shows no pin icon", async () => {
+    el = await mount([movieRule]);
+    expect(el.shadowRoot.querySelector(".pin")).toBeFalsy();
+  });
+
+  test("shadowed row shows a warning badge", async () => {
+    const shadowed: Rule = { ...eveningRule, shadowed_by: 0 };
+    el = await mount([movieRule, shadowed]);
+    expect(el.shadowRoot.querySelector(".shadow-warning")).toBeTruthy();
+  });
+
+  test("the manual-sort toggle is gone", async () => {
+    el = await mount([movieRule]);
+    expect(el.shadowRoot.querySelector(".autosort")).toBeFalsy();
   });
 
   test("summary shows 'any' for rule with no when predicates", async () => {
@@ -233,7 +252,7 @@ describe("ambience-rules-list", () => {
   });
 
   test("drag start sets _dragFrom index", async () => {
-    el = await mount([movieRule, eveningRule], false);
+    el = await mount([movieRule, eveningRule]);
     const items = el.shadowRoot.querySelectorAll("li");
     items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
     await el.updateComplete;
@@ -243,7 +262,7 @@ describe("ambience-rules-list", () => {
   });
 
   test("drag over a different item allows drop and sets _dragOver", async () => {
-    el = await mount([movieRule, eveningRule], false);
+    el = await mount([movieRule, eveningRule]);
     const items = el.shadowRoot.querySelectorAll("li");
     items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
 
@@ -254,7 +273,7 @@ describe("ambience-rules-list", () => {
   });
 
   test("drag over the same item is a no-op", async () => {
-    el = await mount([movieRule, eveningRule], false);
+    el = await mount([movieRule, eveningRule]);
     const items = el.shadowRoot.querySelectorAll("li");
     items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
     items[0].dispatchEvent(new DragEvent("dragover", { bubbles: true }));
@@ -263,7 +282,7 @@ describe("ambience-rules-list", () => {
   });
 
   test("drop emits reorder-rules and resets drag state", async () => {
-    el = await mount([movieRule, eveningRule], false);
+    el = await mount([movieRule, eveningRule]);
     const get = captureEvent(el, "reorder-rules");
     const items = el.shadowRoot.querySelectorAll("li");
     items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
@@ -277,7 +296,7 @@ describe("ambience-rules-list", () => {
   });
 
   test("drop on the same index is a no-op", async () => {
-    el = await mount([movieRule, eveningRule], false);
+    el = await mount([movieRule, eveningRule]);
     const get = captureEvent(el, "reorder-rules");
     const items = el.shadowRoot.querySelectorAll("li");
     items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
@@ -288,7 +307,7 @@ describe("ambience-rules-list", () => {
   });
 
   test("dragend resets drag state", async () => {
-    el = await mount([movieRule, eveningRule], false);
+    el = await mount([movieRule, eveningRule]);
     const items = el.shadowRoot.querySelectorAll("li");
     items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
     items[0].dispatchEvent(new DragEvent("dragend", { bubbles: true }));
@@ -426,7 +445,7 @@ describe("ambience-rules-list", () => {
     const availableActions: ExposedAction[] = [
       { id: "light.turn_on", label: "Set light", visible_fields: ["brightness"], defaults: {} },
     ];
-    el = await mount(rules, true, availableActions);
+    el = await mount(rules, availableActions);
     (el.shadowRoot.querySelector(".summary") as HTMLElement).click();
     await el.updateComplete;
     const item = el.shadowRoot.querySelector(".actions-detail-item");
@@ -446,7 +465,7 @@ describe("ambience-rules-list", () => {
     const availableActions: ExposedAction[] = [
       { id: "light.turn_on", label: "Set light", visible_fields: ["brightness"], defaults: {} },
     ];
-    el = await mount([movieRule], true, availableActions);
+    el = await mount([movieRule], availableActions);
     expect(el.shadowRoot.querySelector(".actions-detail")).toBeFalsy();
     const actionCount = el.shadowRoot.querySelector(".action-count") as HTMLElement;
     actionCount.click();
@@ -477,7 +496,7 @@ describe("ambience-rules-list", () => {
         defaults: {},
       },
     ];
-    el = await mount([rule], true, availableActions);
+    el = await mount([rule], availableActions);
     const actionCount = el.shadowRoot.querySelector(".action-count") as HTMLElement;
     actionCount.click();
     await el.updateComplete;
@@ -515,7 +534,7 @@ describe("ambience-rules-list", () => {
         target: null,
       },
     };
-    el = await mount([rule], true, availableActions, schemas);
+    el = await mount([rule], availableActions, schemas);
     const actionCount = el.shadowRoot.querySelector(".action-count") as HTMLElement;
     actionCount.click();
     await el.updateComplete;
@@ -548,7 +567,6 @@ describe("ambience-rules-list", () => {
     };
     const el2: any = document.createElement("ambience-rules-list");
     el2.rules = [rule];
-    el2.autoSort = true;
     el2.periods = periods;
     el2.matchers = matchers;
     el2.availableActions = [];
@@ -615,11 +633,11 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.querySelector(".entity-list")).toBeFalsy();
   });
 
-  test("summary lists matchers in priority order (scene, day, time_of_day, weather)", async () => {
+  test("summary lists matchers in priority order (weather, time_of_day, day, scene)", async () => {
     const rules: Rule[] = [{
       name: "test",
       // Deliberately interleave the `when` keys to confirm the summary does
-      // NOT follow insertion order.
+      // NOT follow insertion order. Higher priority number = more important = shown first.
       when: {
         weather: { groups: [], thresholds: [{ attribute: "temperature", op: "<", value: 5 }] },
         time_of_day: { period: "afternoon" },
@@ -635,9 +653,9 @@ describe("ambience-rules-list", () => {
     const iDay = summary.indexOf("Day:");
     const iTod = summary.indexOf("Time of day:");
     const iWeather = summary.indexOf("Weather:");
-    expect(iScene).toBeGreaterThanOrEqual(0);
-    expect(iDay).toBeGreaterThan(iScene);
-    expect(iTod).toBeGreaterThan(iDay);
-    expect(iWeather).toBeGreaterThan(iTod);
+    expect(iWeather).toBeGreaterThanOrEqual(0);
+    expect(iTod).toBeGreaterThan(iWeather);
+    expect(iDay).toBeGreaterThan(iTod);
+    expect(iScene).toBeGreaterThan(iDay);
   });
 });

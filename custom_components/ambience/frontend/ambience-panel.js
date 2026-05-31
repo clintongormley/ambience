@@ -124,8 +124,10 @@ var an=Object.defineProperty;var on=Object.getOwnPropertyDescriptor;var c=(t,n,e
     .idx {
       font-family: monospace;
       color: var(--secondary-text-color, #888);
-      margin-right: 0.5rem;
-      min-width: 2em;
+      margin-right: 0.25rem;
+      /* Wide enough for two digits — we don't expect >99 rules. */
+      min-width: 1.4em;
+      text-align: right;
     }
     .body {
       flex: 1;
@@ -206,8 +208,8 @@ var an=Object.defineProperty;var on=Object.getOwnPropertyDescriptor;var c=(t,n,e
     .warn-slot {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      flex: 0 0 1.5em;
+      justify-content: flex-start;
+      flex: 0 0 1.4em;
     }
     .pin {
       padding: 0;

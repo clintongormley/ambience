@@ -170,7 +170,15 @@
     "script_required": "Please pick a script.",
     "no_script_chosen": "(not selected)",
     "yaml_must_be_object": "Top-level value must be a mapping.",
-    "invalid_yaml": "Invalid YAML."
+    "invalid_yaml": "Invalid YAML.",
+    "reapply_label": "Re-apply periodically (min):",
+    "reapply_unit_hint": "min (empty = off)",
+    "reapply_override_label": "Re-apply:",
+    "reapply_inherit": "Inherit default",
+    "reapply_off": "Off",
+    "reapply_custom": "Custom (min)",
+    "reapply_inherit_prefix": "Inherits: every",
+    "reapply_minutes_unit": "min"
   },
   "day_summary": {
     "any": "any",

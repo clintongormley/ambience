@@ -218,11 +218,25 @@ export class AmbienceGroupsSettings extends LitElement {
   _deleteGroup() {
     if (!this._editing) return;
     const id = this._editing.id;
+    if (this._groups.length <= 1) {
+      this._modalError = localize(
+        this.hass,
+        "ui.group_delete_blocked_last",
+        "You can't delete the last group.",
+      );
+      return;
+    }
+    // Optimistic local removal, but keep the modal open until the server
+    // confirms. If the server refuses (group still has rules), restore and
+    // show the reason — do not close.
+    const previous = this._groups;
     this._groups = this._groups.filter((g) => g.id !== id);
-    this._closeModal();
-    void deleteGroup(this.hass, id).catch((e) => {
-      this._error = (e as Error).message || String(e);
-    });
+    void deleteGroup(this.hass, id)
+      .then(() => this._closeModal())
+      .catch((e) => {
+        this._groups = previous;
+        this._modalError = (e as Error).message || String(e);
+      });
   }
 
   // --- rendering ---

@@ -110,6 +110,31 @@ describe("ambience-groups-settings", () => {
     expect(el._groups.map((g: any) => g.id)).toEqual(["blinds"]);
   });
 
+  test("deleting the last group is blocked client-side with a reason", async () => {
+    el = await mount();
+    el._groups = [{ id: "only", name: "Only" }];
+    el._openEditor({ id: "only", name: "Only" });
+    await el.updateComplete;
+    (el.shadowRoot.querySelector("button.delete") as HTMLButtonElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".modal-error")?.textContent).toContain("last group");
+    expect(deleteGroup).not.toHaveBeenCalled();
+  });
+
+  test("a server delete rejection (group in use) shows the reason and restores the group", async () => {
+    (deleteGroup as any).mockRejectedValueOnce(new Error("group 'blinds' still has rules"));
+    el = await mount();
+    // ensure >1 group so the last-group guard doesn't fire
+    el._groups = [{ id: "blinds", name: "Blinds" }, { id: "lights", name: "Lights" }];
+    el._openEditor({ id: "blinds", name: "Blinds" });
+    await el.updateComplete;
+    (el.shadowRoot.querySelector("button.delete") as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".modal-error")?.textContent).toContain("still has rules");
+    expect(el._groups.some((g: any) => g.id === "blinds")).toBe(true); // restored
+  });
+
   test("a new (unsaved) group's modal has no Delete button", async () => {
     el = await mount();
     el._addGroup();

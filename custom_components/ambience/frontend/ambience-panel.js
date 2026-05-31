@@ -2670,14 +2670,20 @@ var on=Object.defineProperty;var ln=Object.getOwnPropertyDescriptor;var c=(t,n,e
         </div>
         ${s?this._renderBody(e,i):""}
       </div>
-    `}_renderBody(e,r){if(r===null)return l`<div class="body warning">${d(this.hass,"ui.service_unavailable","Service not available in this HA instance.")}</div>`;if(r===void 0)return l`<div class="body">${d(this.hass,"ui.loading","Loading\u2026")}</div>`;let i=Object.entries(r.fields).slice().sort(([s],[a])=>s.localeCompare(a));return i.length===0?l`<div class="body">${d(this.hass,"ui.service_has_no_fields","This service has no fields.")}</div>`:l`
+    `}_renderBody(e,r){return l`
       <div class="body">
-        <p class="body-help">
-          ${d(this.hass,"ui.actions_field_help","Tick a checkbox to make a field editable per rule. Set a default to pre-fill it.")}
-        </p>
-        ${i.map(([s,a])=>this._renderFieldRow(e,s,a))}
+        ${this._renderFieldsSection(e,r)}
         ${this._renderReapplyRow(e)}
       </div>
+    `}_renderFieldsSection(e,r){if(r===null)return l`<p class="body-help warning">
+        ${d(this.hass,"ui.service_unavailable","Service not available in this HA instance.")}
+      </p>`;if(r===void 0)return l`<p class="body-help">${d(this.hass,"ui.loading","Loading\u2026")}</p>`;let i=Object.entries(r.fields).slice().sort(([s],[a])=>s.localeCompare(a));return i.length===0?l`<p class="body-help">
+        ${d(this.hass,"ui.service_has_no_fields","This service has no fields.")}
+      </p>`:l`
+      <p class="body-help">
+        ${d(this.hass,"ui.actions_field_help","Tick a checkbox to make a field editable per rule. Set a default to pre-fill it.")}
+      </p>
+      ${i.map(([s,a])=>this._renderFieldRow(e,s,a))}
     `}_humanizeFieldId(e){let r=e.replaceAll("_"," ").toLowerCase();return r.charAt(0).toUpperCase()+r.slice(1)}_formatDefaultSummary(e){return e==null?"":typeof e=="object"?JSON.stringify(e):String(e)}_defaultUnitSuffix(e,r){let i=this._schemas[e]?.fields?.[r];if(!i||typeof i!="object")return"";let s=wt(i.selector);return s?` ${s}`:""}_renderFieldRow(e,r,i){let s=(e.visible_fields??[]).includes(r),a=r in(e.defaults??{}),o=`${e.id}:${r}`,u=this._editingDefault===o;return l`
       <div class="field-row">
         <!-- Row 1: [checkbox] [name] [default summary] -->

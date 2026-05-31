@@ -791,15 +791,30 @@ export class AmbienceActionsSettings extends LitElement {
   }
 
   private _renderBody(action: ExposedAction, schema: ServiceSchema | null | undefined) {
+    // The re-apply row is a property of the action itself — it does not depend
+    // on the service's fields (you can't infer what an action does from its
+    // schema). So it renders for EVERY expanded action, independent of whether
+    // the field schema is loading, unavailable, or field-less. The
+    // schema-dependent field section handles its own states above it.
+    return html`
+      <div class="body">
+        ${this._renderFieldsSection(action, schema)}
+        ${this._renderReapplyRow(action)}
+      </div>
+    `;
+  }
+
+  private _renderFieldsSection(
+    action: ExposedAction,
+    schema: ServiceSchema | null | undefined,
+  ) {
     if (schema === null) {
-      return html`<div class="body warning">${localize(
-        this.hass,
-        "ui.service_unavailable",
-        "Service not available in this HA instance.",
-      )}</div>`;
+      return html`<p class="body-help warning">
+        ${localize(this.hass, "ui.service_unavailable", "Service not available in this HA instance.")}
+      </p>`;
     }
     if (schema === undefined) {
-      return html`<div class="body">${localize(this.hass, "ui.loading", "Loading…")}</div>`;
+      return html`<p class="body-help">${localize(this.hass, "ui.loading", "Loading…")}</p>`;
     }
     // Sort fields alphabetically by field id (stable, predictable for users
     // scanning a long service like light.turn_on).
@@ -807,24 +822,19 @@ export class AmbienceActionsSettings extends LitElement {
       a.localeCompare(b),
     );
     if (fields.length === 0) {
-      return html`<div class="body">${localize(
-        this.hass,
-        "ui.service_has_no_fields",
-        "This service has no fields.",
-      )}</div>`;
+      return html`<p class="body-help">
+        ${localize(this.hass, "ui.service_has_no_fields", "This service has no fields.")}
+      </p>`;
     }
     return html`
-      <div class="body">
-        <p class="body-help">
-          ${localize(
-            this.hass,
-            "ui.actions_field_help",
-            "Tick a checkbox to make a field editable per rule. Set a default to pre-fill it.",
-          )}
-        </p>
-        ${fields.map(([name, field]) => this._renderFieldRow(action, name, field))}
-        ${this._renderReapplyRow(action)}
-      </div>
+      <p class="body-help">
+        ${localize(
+          this.hass,
+          "ui.actions_field_help",
+          "Tick a checkbox to make a field editable per rule. Set a default to pre-fill it.",
+        )}
+      </p>
+      ${fields.map(([name, field]) => this._renderFieldRow(action, name, field))}
     `;
   }
 

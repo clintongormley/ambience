@@ -1261,6 +1261,39 @@ describe("ambience-actions-settings", () => {
     expect(input.value).toBe("120");
   });
 
+  test("re-apply option is shown even for a service with no configurable fields", async () => {
+    // The re-apply default is a property of the action, independent of whether
+    // the service exposes any fields — e.g. a field-less script that adjusts
+    // covers externally (the feature's primary use case). getServiceSchema
+    // returns empty fields for anything other than light.turn_on.
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "script.adjust_covers", label: "", visible_fields: [], defaults: {} },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const cb = el.shadowRoot.querySelector(
+      "input[data-reapply-enable]",
+    ) as HTMLInputElement;
+    expect(cb).not.toBeNull();
+  });
+
+  test("re-apply option is shown even when the service is unavailable in this HA", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "script.adjust_covers", label: "", visible_fields: [], defaults: {} },
+    ]);
+    // getServiceSchema resolving to null marks the service unavailable.
+    vi.mocked(getServiceSchema).mockResolvedValueOnce(null);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    expect(
+      el.shadowRoot.querySelector("input[data-reapply-enable]"),
+    ).not.toBeNull();
+  });
+
   test("checking the checkbox seeds reapply_seconds = 300 and reveals the seconds field", async () => {
     el = await mount();
     clickToggle(el.shadowRoot);

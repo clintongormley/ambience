@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -15,9 +16,11 @@ from custom_components.ambience.const import (
     DATA_MATCHERS,
     DATA_STORE,
     DATA_SWITCHES,
+    DATA_TRACE_SINKS,
     DOMAIN,
 )
 from custom_components.ambience.exposed_actions import ExposedActionsStore
+from custom_components.ambience.trace import TraceEvent
 from custom_components.ambience.trigger_engine import AutoTriggerEngine
 from custom_components.ambience.triggers import EMPTY, TriggerSpec
 
@@ -841,6 +844,37 @@ async def test_reapply_skips_when_no_rule_active(hass):
     await hass.async_block_till_done()
     assert calls == []
     eng._teardown()
+
+
+async def test_state_change_emits_trace_event_to_sink(hass) -> None:
+    captured: list[TraceEvent] = []
+
+    class CaptureSink:
+        def emit(self, event):
+            captured.append(event)
+
+    # Use the same setup as _live_engine / test_state_change_fires_and_applies:
+    # area 'a', rule0 fires when binary_sensor.x == 'on', switch on.
+    hass.states.async_set("binary_sensor.x", "off")
+    engine = _live_engine(hass)
+    # Install the capture sink BEFORE subscribing so it is present at emit time.
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [CaptureSink()]
+    engine.async_subscribe()
+    await engine.async_initial_sync()  # x=off -> no match, no apply
+
+    trace_logger = logging.getLogger("custom_components.ambience.trace")
+    trace_logger.setLevel(logging.DEBUG)
+    try:
+        # Flip the sensor so rule0 wins and the engine ACTs.
+        hass.states.async_set("binary_sensor.x", "on")
+        await hass.async_block_till_done()
+
+        assert captured, "expected a TraceEvent to be emitted"
+        event = captured[-1]
+        assert event.cause.kind == "entity"
+        assert any(u.outcome == "acted" for u in event.units)
+    finally:
+        trace_logger.setLevel(logging.NOTSET)
 
 
 async def test_reapply_distinct_intervals_fire_independently(hass):

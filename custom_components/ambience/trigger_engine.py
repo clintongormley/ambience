@@ -46,6 +46,7 @@ from .service import (
     group_ids,
     scope_reapply_intervals,
 )
+from .trace import TraceEvent, TriggerCause, UnitTrace, emit_trace, tracing_active
 from .trigger_index import PredKey, TriggerIndex, build_index
 from .triggers import EMPTY, TriggerSpec
 
@@ -215,30 +216,71 @@ class AutoTriggerEngine:
 
     async def _resolve_and_apply(
         self, scope_kind: str, scope_id: str | None, group_id: str, *, force: bool = False
-    ) -> None:
-        """Resolve a dirty (scope, group) unit from the snapshot cache and apply
-        if the winning rule changed (or `force`). Skips when the scope's switch
-        is off."""
-        if _switch_state(self._hass, scope_kind, scope_id) == "off":
-            return
+    ) -> UnitTrace | None:
+        """Resolve a dirty (scope, group) unit and apply if the winner changed
+        (or `force`). Skips when the switch is off. Returns a UnitTrace
+        describing the outcome when tracing is active, else None."""
+        active = tracing_active()
+        switch_state = _switch_state(self._hass, scope_kind, scope_id)
+        if switch_state == "off":
+            if active:
+                return UnitTrace(
+                    scope_kind, scope_id, group_id, switch_state, "skipped_switch_off", None
+                )
+            return None
         plan = await async_resolve_with_snapshots(
-            self._hass, scope_kind, scope_id, self._snapshots, group=group_id, describe=False
+            self._hass,
+            scope_kind,
+            scope_id,
+            self._snapshots,
+            group=group_id,
+            describe=False,
+            explain=active,
         )
         index = plan["matched_rule_index"]
+        explanation = plan.get("explanation")
         if index is None:
-            return
+            if active:
+                return UnitTrace(
+                    scope_kind, scope_id, group_id, switch_state, "no_match", explanation
+                )
+            return None
         if not force and index == get_last_applied(self._hass, scope_kind, scope_id, group_id):
-            return
+            if active:
+                return UnitTrace(
+                    scope_kind,
+                    scope_id,
+                    group_id,
+                    switch_state,
+                    "no_op",
+                    explanation,
+                    winner_name=plan["rule_name"],
+                )
+            return None
         await async_execute_plan(self._hass, scope_kind, scope_id, plan, group_id)
+        if active:
+            return UnitTrace(
+                scope_kind,
+                scope_id,
+                group_id,
+                switch_state,
+                "acted",
+                explanation,
+                winner_name=plan["rule_name"],
+                actions=plan["actions"],
+            )
+        return None
 
     async def _apply_units(
         self, units: Iterable[tuple[str, str | None, str]], *, force: bool = False
-    ) -> None:
+    ) -> list[UnitTrace]:
         """Apply dirty (scope_kind, scope_id, group) units, concurrently within
-        each containment tier, tiers sequential in order areas→floors→house."""
+        each containment tier, tiers sequential in order areas→floors→house.
+        Returns the per-unit traces produced (empty when tracing is inactive)."""
         by_tier: dict[int, list[tuple[str, str | None, str]]] = defaultdict(list)
         for unit in units:
             by_tier[_TIER[unit[0]]].append(unit)
+        traces: list[UnitTrace] = []
         for tier in sorted(by_tier):
             results = await asyncio.gather(
                 *(self._resolve_and_apply(*u, force=force) for u in by_tier[tier]),
@@ -247,14 +289,20 @@ class AutoTriggerEngine:
             for res in results:
                 if isinstance(res, BaseException):
                     _LOGGER.warning("ambience: group apply failed: %s", res)
+                elif res is not None:
+                    traces.append(res)
+        return traces
 
-    async def async_evaluate(self, fired: set[PredKey]) -> None:
+    async def async_evaluate(self, fired: set[PredKey], cause: TriggerCause | None = None) -> None:
         """Recompute the fired predicates (refreshing only their matchers) and
-        resolve+apply every (scope, group) whose winning rule changed."""
+        resolve+apply every (scope, group) whose winning rule changed. Emits a
+        TraceEvent for the batch when tracing produced any unit traces."""
         if not fired:
             return
         await self._refresh_snapshots({key[3] for key in fired})
-        await self._apply_units(self._recompute(fired, self._snapshots))
+        traces = await self._apply_units(self._recompute(fired, self._snapshots))
+        if traces:
+            emit_trace(self._hass, TraceEvent(cause or TriggerCause(kind="unknown"), traces))
 
     async def _async_refresh(self) -> None:
         """Full (re)build: rebuild the index, resubscribe, and sync to reality."""
@@ -285,12 +333,14 @@ class AutoTriggerEngine:
             for (kind, sid), cfg in self._scope_cfgs.items()
             for gid in group_ids(cfg)
         ]
-        await self._apply_units(units)
+        traces = await self._apply_units(units)
+        if traces:
+            emit_trace(self._hass, TraceEvent(TriggerCause(kind="startup"), traces))
 
-    def _fire(self, fired: set[PredKey]) -> None:
+    def _fire(self, fired: set[PredKey], cause: TriggerCause | None = None) -> None:
         """Schedule a re-evaluation of the given predicates (callback-safe)."""
         if fired:
-            self._hass.async_create_task(self.async_evaluate(fired))
+            self._hass.async_create_task(self.async_evaluate(fired, cause))
 
     def _teardown(self) -> None:
         """Cancel all subscriptions and pending timers."""
@@ -319,7 +369,10 @@ class AutoTriggerEngine:
             self._unsubs.append(
                 async_track_time_change(
                     self._hass,
-                    self._make_keys_handler(index.by_clock[clock]),
+                    self._make_keys_handler(
+                        index.by_clock[clock],
+                        TriggerCause(kind="clock", detail=f"{clock[0]:02d}:{clock[1]:02d}"),
+                    ),
                     hour=clock[0],
                     minute=clock[1],
                     second=0,
@@ -329,7 +382,10 @@ class AutoTriggerEngine:
             self._unsubs.append(
                 async_track_time_change(
                     self._hass,
-                    self._make_keys_handler(index.midnight),
+                    self._make_keys_handler(
+                        index.midnight,
+                        TriggerCause(kind="clock", detail="00:00"),
+                    ),
                     hour=0,
                     minute=0,
                     second=0,
@@ -341,7 +397,10 @@ class AutoTriggerEngine:
             self._unsubs.append(
                 async_track_time_interval(
                     self._hass,
-                    self._make_keys_handler(index.has_time),
+                    self._make_keys_handler(
+                        index.has_time,
+                        TriggerCause(kind="has_time"),
+                    ),
                     _HAS_TIME_INTERVAL,
                 )
             )
@@ -371,16 +430,26 @@ class AutoTriggerEngine:
         preds = self._index.by_entity.get(event.data["entity_id"])
         if not preds:
             return
-        self._fire(set(preds))
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        cause = TriggerCause(
+            kind="entity",
+            entity_id=event.data["entity_id"],
+            old=old_state.state if old_state else None,
+            new=new_state.state if new_state else None,
+        )
+        self._fire(set(preds), cause)
         self._schedule_for_rechecks(preds)
 
-    def _make_keys_handler(self, preds: frozenset[PredKey]) -> Callable[[Any], None]:
+    def _make_keys_handler(
+        self, preds: frozenset[PredKey], cause: TriggerCause | None = None
+    ) -> Callable[[Any], None]:
         """A time/midnight callback that fires a fixed set of predicates."""
         keys = set(preds)
 
         @callback
         def _handler(_now: Any) -> None:
-            self._fire(set(keys))
+            self._fire(set(keys), cause)
 
         return _handler
 
@@ -445,7 +514,7 @@ class AutoTriggerEngine:
         @callback
         def _recheck(_now: Any) -> None:
             self._for_handles.pop(key, None)
-            self._fire({key})
+            self._fire({key}, TriggerCause(kind="has_time", detail="for"))
 
         return _recheck
 
@@ -460,15 +529,25 @@ class AutoTriggerEngine:
             return  # already on — not a transition
         scope = self._switch_scopes.get(event.data["entity_id"])
         if scope is not None:
-            self._hass.async_create_task(self._force_resync_scope(scope))
+            self._hass.async_create_task(self._force_resync_scope(scope, event.data["entity_id"]))
 
-    async def _force_resync_scope(self, scope: tuple[str, str | None]) -> None:
+    async def _force_resync_scope(
+        self, scope: tuple[str, str | None], switch_entity_id: str | None = None
+    ) -> None:
         """Force-apply every group of a scope (used on a switch off->on)."""
         scope_kind, scope_id = scope
         cfg = self._scope_cfgs.get(scope)
-        await self._apply_units(
+        traces = await self._apply_units(
             [(scope_kind, scope_id, gid) for gid in group_ids(cfg or {})], force=True
         )
+        if traces:
+            emit_trace(
+                self._hass,
+                TraceEvent(
+                    TriggerCause(kind="switch", entity_id=switch_entity_id or scope_id),
+                    traces,
+                ),
+            )
 
     def _next_sun_fire(self, anchor: str, offset_min: int) -> Any:
         """Next fire time for a sun anchor (+offset), from sun.sun, or None."""
@@ -494,7 +573,10 @@ class AutoTriggerEngine:
         def _handler(_now: Any) -> None:
             preds = self._index.by_sun.get(sun_event)
             if preds:
-                self._fire(set(preds))
+                self._fire(
+                    set(preds),
+                    TriggerCause(kind="sun", detail=f"{sun_event[0]}+{sun_event[1]}"),
+                )
             self._schedule_sun(sun_event)  # arm the next occurrence
 
         old = self._sun_unsubs.pop(sun_event, None)

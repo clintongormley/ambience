@@ -30,7 +30,7 @@ function makeFakeHass() {
       return [{ area_id: "living_room", name: "Living Room" }];
     }
     if (msg.type === "ambience/area/get") {
-      return { rules: [], auto_sort: true };
+      return { rules: [] };
     }
     if (msg.type === "ambience/area/save") {
       return { ok: true, config: msg.config };
@@ -76,14 +76,14 @@ describe("API: getArea", () => {
     const { callWS, sent } = makeFakeHass();
     const res = await getArea({ callWS } as any, "living_room");
     expect(sent[0]).toEqual({ type: "ambience/area/get", area_id: "living_room" });
-    expect(res).toEqual({ rules: [], auto_sort: true });
+    expect(res).toEqual({ rules: [] });
   });
 });
 
 describe("API: saveArea", () => {
   test("sends area config via WS and returns result", async () => {
     const { callWS, sent } = makeFakeHass();
-    const config: AreaConfig = { rules: [], auto_sort: true };
+    const config: AreaConfig = { rules: [] };
     const res = await saveArea({ callWS } as any, "living_room", config);
     expect(sent[0]).toMatchObject({
       type: "ambience/area/save",
@@ -153,7 +153,7 @@ describe("API: getServiceSchema", () => {
 describe("API: validateConfig", () => {
   test("sends config to validate endpoint", async () => {
     const { callWS, sent } = makeFakeHass();
-    const config: AreaConfig = { rules: [], auto_sort: true };
+    const config: AreaConfig = { rules: [] };
     const res = await validateConfig({ callWS } as any, config);
     expect(sent[0]).toEqual({ type: "ambience/validate", config });
     expect(res.ok).toBe(true);
@@ -252,7 +252,7 @@ test("listFloors calls ambience/floors/list", async () => {
 test("getFloor passes floor_id", async () => {
   const calls: any[] = [];
   const hass = {
-    callWS: async (msg: any) => { calls.push(msg); return { rules: [], auto_sort: true }; },
+    callWS: async (msg: any) => { calls.push(msg); return { rules: [] }; },
     connection: {} as any,
   };
   await getFloor(hass as any, "upstairs");
@@ -265,18 +265,18 @@ test("saveFloor sends config", async () => {
     callWS: async (msg: any) => { calls.push(msg); return { ok: true, config: msg.config }; },
     connection: {} as any,
   };
-  await saveFloor(hass as any, "upstairs", { rules: [], auto_sort: true });
+  await saveFloor(hass as any, "upstairs", { rules: [] });
   expect(calls[0]).toEqual({
     type: "ambience/floor/save",
     floor_id: "upstairs",
-    config: { rules: [], auto_sort: true },
+    config: { rules: [] },
   });
 });
 
 test("getHouse calls ambience/house/get", async () => {
   const calls: any[] = [];
   const hass = {
-    callWS: async (msg: any) => { calls.push(msg); return { rules: [], auto_sort: true }; },
+    callWS: async (msg: any) => { calls.push(msg); return { rules: [] }; },
     connection: {} as any,
   };
   await getHouse(hass as any);
@@ -289,9 +289,9 @@ test("saveHouse calls ambience/house/save", async () => {
     callWS: async (msg: any) => { calls.push(msg); return { ok: true, config: msg.config }; },
     connection: {} as any,
   };
-  await saveHouse(hass as any, { rules: [], auto_sort: false });
+  await saveHouse(hass as any, { rules: [] });
   expect(calls[0]).toEqual({
     type: "ambience/house/save",
-    config: { rules: [], auto_sort: false },
+    config: { rules: [] },
   });
 });

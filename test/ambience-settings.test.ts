@@ -12,11 +12,11 @@ const mocks = vi.hoisted(() => ({
   ]),
   getArea: vi.fn(async (_h: any, id: string) =>
     id === "a2"
-      ? { rules: [], auto_sort: true, switch: { name: "Kitchen lights", auto_on_delay_seconds: 1800, off_at: null } }
-      : { rules: [], auto_sort: true },
+      ? { rules: [], switch: { name: "Kitchen lights", auto_on_delay_seconds: 1800, off_at: null } }
+      : { rules: [] },
   ),
-  getFloor: vi.fn(async () => ({ rules: [], auto_sort: true })),
-  getHouse: vi.fn(async () => ({ rules: [], auto_sort: true })),
+  getFloor: vi.fn(async () => ({ rules: [] })),
+  getHouse: vi.fn(async () => ({ rules: [] })),
   saveHouseSwitch: vi.fn(async () => ({ ok: true })),
   saveFloorSwitch: vi.fn(async () => ({ ok: true })),
   saveAreaSwitch: vi.fn(async () => ({ ok: true })),

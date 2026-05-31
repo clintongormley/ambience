@@ -1925,7 +1925,6 @@ async def test_area_save_rejects_bad_action_reapply(
 ) -> None:
     """Validator rejects reapply_seconds that is not 0 or >= 10."""
     config = {
-        "auto_sort": True,
         "rules": [
             {
                 "when": {"scene": "movie"},
@@ -1956,7 +1955,6 @@ async def test_area_save_accepts_valid_action_reapply(
 ) -> None:
     """Validator accepts reapply_seconds >= 10."""
     config = {
-        "auto_sort": True,
         "rules": [
             {
                 "when": {"scene": "movie"},
@@ -1979,3 +1977,91 @@ async def test_area_save_accepts_valid_action_reapply(
     )
     assert resp["success"] is True
     assert resp["result"]["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# shadowed_by: transient response field + round-trip storage
+# ---------------------------------------------------------------------------
+
+
+async def test_area_save_response_carries_shadowed_by(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """Save response includes transient shadowed_by on each rule.
+
+    Two rules with identical `when` predicates: after sort the first is not
+    shadowed (shadowed_by=None) and the second is shadowed by the first
+    (shadowed_by=0).
+    """
+    identical_when = {"scene": "movie"}
+    config = {
+        "rules": [
+            {"name": "first", "when": identical_when, "actions": []},
+            {"name": "second", "when": identical_when, "actions": []},
+        ],
+    }
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert save["success"] is True
+    rules = save["result"]["config"]["rules"]
+    assert len(rules) == 2
+    # All rules carry the shadowed_by key in the response.
+    assert all("shadowed_by" in r for r in rules)
+    # The two rules have identical when-predicates; resolved order keeps them
+    # stable (first before second). The first is not shadowed; the second is
+    # shadowed by index 0.
+    names = [r["name"] for r in rules]
+    first_idx = names.index("first")
+    second_idx = names.index("second")
+    assert rules[first_idx]["shadowed_by"] is None
+    assert rules[second_idx]["shadowed_by"] == first_idx
+
+
+async def test_shadowed_by_not_persisted_on_round_trip(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """Rules echoed back from the frontend (including shadowed_by) must not
+    have that key written to storage. Priority and pinned must still persist."""
+    identical_when = {"scene": "movie"}
+    config = {
+        "rules": [
+            {"name": "first", "when": identical_when, "actions": []},
+            {"name": "second", "when": identical_when, "actions": []},
+        ],
+    }
+    save1 = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert save1["success"] is True
+    # The frontend echoes back the full config (including shadowed_by) on the
+    # next save — simulate that here.
+    echoed_config = save1["result"]["config"]
+    assert any("shadowed_by" in r for r in echoed_config["rules"]), (
+        "pre-condition: save response must carry shadowed_by"
+    )
+
+    save2 = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=echoed_config,
+    )
+    assert save2["success"] is True
+
+    # Read raw stored config — shadowed_by must not be present.
+    store = hass.data[DOMAIN][DATA_STORE]
+    stored = store.get_area(area_id)
+    assert stored is not None
+    for rule in stored.get("rules", []):
+        assert "shadowed_by" not in rule, f"shadowed_by leaked into storage: {rule!r}"
+        # priority and pinned are the fields that DO persist.
+        assert "priority" in rule
+        assert "pinned" in rule

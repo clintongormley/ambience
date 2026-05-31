@@ -212,10 +212,12 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
 
 
 def _canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
-    """Resolve rule order + numbers for storage. Strips legacy `auto_sort`."""
+    """Resolve rule order + numbers for storage. Strips legacy `auto_sort` and
+    the transient per-rule `shadowed_by` hint so neither is persisted."""
     matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
     out = {k: v for k, v in config.items() if k != "auto_sort"}
-    out["rules"] = resolve_order(config.get("rules", []), matchers_registry)
+    rules = [{k: v for k, v in r.items() if k != "shadowed_by"} for r in config.get("rules", [])]
+    out["rules"] = resolve_order(rules, matchers_registry)
     return out
 
 

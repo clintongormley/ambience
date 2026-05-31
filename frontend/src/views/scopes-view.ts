@@ -634,8 +634,15 @@ export class AmbienceScopesView extends LitElement {
   }
 
   private _summary(cfg: ScopeConfig): string {
-    const r = cfg.rules.length;
-    if (r === 0) return localize(this.hass, "ui.not_configured", "not configured");
+    // A genuinely empty scope reads "not configured" regardless of filter.
+    if (cfg.rules.length === 0) {
+      return localize(this.hass, "ui.not_configured", "not configured");
+    }
+    // Otherwise count the rules matching the active filter (all when "").
+    const r =
+      this._filterGroup === ""
+        ? cfg.rules.length
+        : cfg.rules.filter((rule) => rule.group === this._filterGroup).length;
     const noun =
       r === 1
         ? localize(this.hass, "ui.rule_singular", "rule")

@@ -625,6 +625,28 @@ describe("ambience-scopes-view", () => {
     expect(el.shadowRoot.querySelector(".group-filter-menu")).toBeNull();
   });
 
+  test("per-scope summary counts rules matching the active filter", async () => {
+    el = await mount();
+    const cfg = {
+      rules: [
+        { when: {}, actions: [], group: "a" },
+        { when: {}, actions: [], group: "b" },
+        { when: {}, actions: [], group: "a" },
+      ],
+    };
+    el._filterGroup = "";
+    expect(el._summary(cfg)).toBe("3 rules");
+    el._filterGroup = "a";
+    expect(el._summary(cfg)).toBe("2 rules");
+    el._filterGroup = "b";
+    expect(el._summary(cfg)).toBe("1 rule");
+    // A genuinely empty scope is always "not configured".
+    expect(el._summary({ rules: [] })).toBe("not configured");
+    // A scope with rules but none in the active filter shows "0 rules".
+    el._filterGroup = "c";
+    expect(el._summary(cfg)).toBe("0 rules");
+  });
+
   test("a new rule defaults to the active filtered group", async () => {
     el = await mount();
     el._groups = [

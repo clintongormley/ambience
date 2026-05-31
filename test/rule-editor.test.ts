@@ -1735,7 +1735,7 @@ describe("ambience-rule-editor — destination selector", () => {
 
   test("renders a destination option per scope, defaulting to the rule's scope", async () => {
     el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "bedroom" });
-    const select = el.shadowRoot.querySelector("select.destination") as HTMLSelectElement;
+    const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
     expect(select).toBeTruthy();
     expect(select.options.length).toBe(3);
     expect(select.options[select.selectedIndex].textContent.trim()).toBe("Area: Bedroom");
@@ -1767,7 +1767,7 @@ describe("ambience-rule-editor — destination selector", () => {
     await e.updateComplete;
     el = e;
 
-    const select = el.shadowRoot.querySelector("select.destination") as HTMLSelectElement;
+    const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
     select.value = "2"; // Area: Bedroom
     select.dispatchEvent(new Event("change"));
     await el.updateComplete;
@@ -1780,7 +1780,7 @@ describe("ambience-rule-editor — destination selector", () => {
 
   test("save-rule carries the rule and the selected destination scope", async () => {
     el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "living_room" });
-    const select = el.shadowRoot.querySelector("select.destination") as HTMLSelectElement;
+    const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
     select.value = "2"; // Area: Bedroom
     select.dispatchEvent(new Event("change"));
     await el.updateComplete;

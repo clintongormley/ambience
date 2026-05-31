@@ -199,10 +199,10 @@ export class AmbienceRuleEditor extends LitElement {
       margin-bottom: 0.75rem;
     }
     .destination label {
-      color: var(--secondary-text-color);
+      color: var(--secondary-text-color, #888);
       font-size: 0.9em;
     }
-    .destination select.destination {
+    .destination select {
       flex: 1;
     }
   `;
@@ -307,7 +307,6 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="destination">
         <label>${localize(this.hass, "ui.destination", "Destination")}</label>
         <select
-          class="destination"
           .value=${String(currentIdx)}
           @change=${this._onDestinationChange}
         >

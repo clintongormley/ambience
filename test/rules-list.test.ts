@@ -669,137 +669,56 @@ describe("ambience-rules-list", () => {
     expect(iWeather).toBeGreaterThan(iTod);
   });
 
-  // --- group filter --------------------------------------------------------
+  // --- group sections ------------------------------------------------------
 
-  const groups: RuleGroup[] = [
-    { id: "evening", name: "Evening" },
-    { id: "morning", name: "Morning" },
-  ];
-
-  // Four rules; deliberately ordered so that filtering changes the visible
-  // positions. The two "evening" rules sit at original indices 0 and 3, with a
-  // "morning" rule and an ungrouped rule interleaved. This lets us assert that
-  // callbacks still carry the ORIGINAL index, not the filtered one.
-  const r0: Rule = { name: "Alpha", group: "evening", when: {}, actions: [] };
-  const r1: Rule = { name: "Bravo", group: "morning", when: {}, actions: [] };
-  const r2: Rule = { name: "Charlie", when: {}, actions: [] }; // no group → ungrouped
-  const r3: Rule = { name: "Delta", group: "evening", when: {}, actions: [] };
-
-  function selectGroup(el: any, value: string) {
-    const sel = el.shadowRoot.querySelector("select.group-filter") as HTMLSelectElement;
-    sel.value = value;
-    sel.dispatchEvent(new Event("change", { bubbles: true }));
-  }
-
-  test("renders a group filter control with 'All groups' + 'Ungrouped' plus one per group", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    const sel = el.shadowRoot.querySelector("select.group-filter") as HTMLSelectElement;
-    expect(sel).toBeTruthy();
-    const optTexts = Array.from(sel.querySelectorAll("option")).map((o: any) => o.textContent?.trim());
-    expect(optTexts).toContain("All groups");
-    expect(optTexts).toContain("Ungrouped");
-    expect(optTexts).toContain("Evening");
-    expect(optTexts).toContain("Morning");
+  test("All view groups rules by group, sorted by group name, numbered per group", async () => {
+    const groups = [{ id: "b", name: "Blinds" }, { id: "a", name: "Awnings" }];
+    const rules = [
+      { when: {}, actions: [], group: "b" },   // Blinds 1
+      { when: {}, actions: [], group: "a" },   // Awnings 1
+      { when: {}, actions: [], group: "b" },   // Blinds 2
+    ];
+    el = await mount(rules, [], {}, groups);   // filterGroup defaults to "" (All)
+    const headers = Array.from(el.shadowRoot.querySelectorAll(".group-section-header"))
+      .map((h: any) => h.textContent!.trim());
+    // alphabetical by NAME: Awnings before Blinds
+    expect(headers.some((h: string) => h.includes("Awnings"))).toBe(true);
+    expect(headers.findIndex((h: string) => h.includes("Awnings"))).toBeLessThan(
+      headers.findIndex((h: string) => h.includes("Blinds")),
+    );
+    // Within the Blinds section the rows are numbered 1, 2.
+    const blindsSection = Array.from(el.shadowRoot.querySelectorAll(".group-section"))
+      .find((s: any) => s.querySelector(".group-section-header")!.textContent!.includes("Blinds"))! as Element;
+    const nums = Array.from(blindsSection.querySelectorAll(".idx")).map((n: any) => n.textContent!.trim());
+    expect(nums).toEqual(["1", "2"]);
   });
 
-  test("renders all rules initially (no filter applied)", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    const items = el.shadowRoot.querySelectorAll("li");
-    expect(items.length).toBe(4);
-  });
-
-  test("selecting a group shows only that group's rules", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    selectGroup(el, "morning");
+  test("single-group filter shows only that group, no headers, numbered 1..N", async () => {
+    const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
+    const rules = [
+      { when: {}, actions: [], group: "a" },
+      { when: {}, actions: [], group: "b" },
+    ];
+    el = await mount(rules, [], {}, groups);
+    el.filterGroup = "a";
     await el.updateComplete;
-    const items = el.shadowRoot.querySelectorAll("li");
-    expect(items.length).toBe(1);
-    expect(el.shadowRoot.textContent).toContain("Bravo");
-    expect(el.shadowRoot.textContent).not.toContain("Alpha");
-  });
-
-  test("filtering to 'Ungrouped' shows only rules with no group", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    selectGroup(el, "__ungrouped__");
-    await el.updateComplete;
-    const names = Array.from(el.shadowRoot.querySelectorAll(".name")).map((n: any) => n.textContent?.trim());
-    expect(names).toEqual(["Charlie"]);
-  });
-
-  test("selecting 'All groups' again shows everything", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    selectGroup(el, "morning");
-    await el.updateComplete;
+    expect(el.shadowRoot.querySelectorAll(".group-section-header").length).toBe(0);
     expect(el.shadowRoot.querySelectorAll("li").length).toBe(1);
-    selectGroup(el, "");
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelectorAll("li").length).toBe(4);
   });
 
-  test("edit-rule carries the ORIGINAL index when filtered", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    selectGroup(el, "morning");
-    await el.updateComplete;
-    const get = captureEvent(el, "edit-rule");
-    // Only one row visible (Bravo), but its original index is 1.
-    const btn = el.shadowRoot.querySelector("button[title='Edit']") as HTMLButtonElement;
-    btn.click();
-    expect(get()).toEqual({ index: 1 });
-  });
-
-  test("delete-rule carries the ORIGINAL index when filtered", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    selectGroup(el, "evening");
-    await el.updateComplete;
-    const get = captureEvent(el, "delete-rule");
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    // Visible: Alpha (orig 0), Delta (orig 3). Click the second row's delete.
-    const btns = el.shadowRoot.querySelectorAll("button[title='Delete']");
-    (btns[1] as HTMLButtonElement).click();
-    expect(get()).toEqual({ index: 3 });
-  });
-
-  test("duplicate-rule carries the ORIGINAL index when filtered", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    selectGroup(el, "evening");
-    await el.updateComplete;
-    const get = captureEvent(el, "duplicate-rule");
-    const btns = el.shadowRoot.querySelectorAll("button[title='Duplicate']");
-    (btns[1] as HTMLButtonElement).click();
-    expect(get()).toEqual({ index: 3 });
-  });
-
-  test("reorder-rules carries ORIGINAL indices when filtered", async () => {
-    // Manual sort (autoSort=false) so drag handles render.
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    selectGroup(el, "evening");
-    await el.updateComplete;
-    const get = captureEvent(el, "reorder-rules");
-    const items = el.shadowRoot.querySelectorAll("li");
-    // Visible: Alpha (orig 0), Delta (orig 3). Drag Delta onto Alpha.
-    items[1].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
-    items[0].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true }));
-    items[0].dispatchEvent(new DragEvent("drop", { bubbles: true }));
-    await el.updateComplete;
-    expect(get()).toEqual({ from: 3, to: 0 });
-  });
-
-  test("the displayed row number reflects the ORIGINAL index", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    selectGroup(el, "morning");
-    await el.updateComplete;
-    // Bravo is original index 1 → displayed number 2.
-    expect(el.shadowRoot.querySelector(".idx")?.textContent?.trim()).toBe("2");
-  });
-
-  test("no group filter control when no groups provided", async () => {
-    el = await mount([movieRule]);
-    expect(el.shadowRoot.querySelector("select.group-filter")).toBeFalsy();
-  });
-
-  test("group filter control IS shown when there is one group", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, [{ id: "evening", name: "Evening" }]);
-    expect(el.shadowRoot.querySelector("select.group-filter")).toBeTruthy();
+  test("editing a row in a section emits the rule's ORIGINAL index", async () => {
+    const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
+    const rules = [
+      { when: {}, actions: [], group: "b" },   // original index 0
+      { when: {}, actions: [], group: "a" },   // original index 1
+    ];
+    el = await mount(rules, [], {}, groups);
+    const events: number[] = [];
+    el.addEventListener("edit-rule", (e: any) => events.push(e.detail.index));
+    const aSection = Array.from(el.shadowRoot.querySelectorAll(".group-section"))
+      .find((s: any) => s.querySelector(".group-section-header")!.textContent!.includes("A"))! as Element;
+    (aSection.querySelector("button[title='Edit']") as HTMLButtonElement).click();
+    expect(events).toEqual([1]);
   });
 
   test("a grouped rule renders an ambience-group-chip to the right of the name", async () => {
@@ -824,24 +743,9 @@ describe("ambience-rules-list", () => {
     expect(ownText).toBe("R");
   });
 
-  test("an ungrouped rule renders no group chip", async () => {
-    const rule: Rule = { name: "R", when: {}, actions: [] };
+  test("a rule whose group doesn't resolve renders no group chip", async () => {
+    const rule: Rule = { name: "R", group: "missing", when: {}, actions: [] };
     el = await mount([rule], [], {}, [{ id: "g1", name: "Lights" }]);
     expect(el.shadowRoot.querySelector("ambience-group-chip")).toBeNull();
-  });
-
-  test("resets a stale group filter to 'All groups' when the filtered group is removed", async () => {
-    el = await mount([r0, r1, r2, r3], [], {}, groups);
-    selectGroup(el, "morning");
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelectorAll("li").length).toBe(1);
-
-    // The "morning" group is deleted — update `groups` to a list without it.
-    el.groups = [{ id: "evening", name: "Evening" }];
-    await el.updateComplete;
-
-    // Filter falls back to "all", so every rule renders again.
-    expect(el._filterGroup).toBe("");
-    expect(el.shadowRoot.querySelectorAll("li").length).toBe(4);
   });
 });

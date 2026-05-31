@@ -1,5 +1,4 @@
 import { LitElement, html, css } from "lit";
-import type { PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
@@ -150,13 +149,16 @@ export class AmbienceRulesList extends LitElement {
       cursor: help;
       line-height: 1;
     }
-    .group-filter-row {
+    .group-section-header {
+      font-weight: 600;
+      color: var(--secondary-text-color, #888);
+      margin: 0.75rem 0 0.35rem 0;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      margin: 0 0 0.5rem 0;
-      font-size: 0.9em;
-      color: var(--secondary-text-color, #888);
+      gap: 0.4rem;
+    }
+    .group-section:first-of-type .group-section-header {
+      margin-top: 0;
     }
   `;
 
@@ -176,18 +178,13 @@ export class AmbienceRulesList extends LitElement {
   // for each param key in the expanded action detail. Optional; when
   // missing, the param key is humanized (snake_case → "Title case").
   @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
-  // Available rule groups — used to populate the group filter dropdown. The
-  // filter is presentation-only: it changes which rules render, never the
-  // underlying `rules` data. Empty ⇒ no filter control rendered.
+  // Available rule groups, used to render section headers and the per-rule
+  // chip. Empty ⇒ no group sections (every rule rendered as one flat list).
   @property({ attribute: false }) groups: RuleGroup[] = [];
 
-  // Sentinel for the filter meaning "show all groups".
-  private static readonly _ALL_GROUPS = "";
-  // Sentinel for the filter meaning "show only ungrouped rules".
-  private static readonly _UNGROUPED = "__ungrouped__";
-
-  // Currently-selected filter: _ALL_GROUPS, _UNGROUPED, or a group id.
-  @state() private _filterGroup: string = AmbienceRulesList._ALL_GROUPS;
+  // The active group filter, OWNED BY THE PARENT (scopes-view): "" = All,
+  // otherwise a group id. Presentation-only.
+  @property({ attribute: false }) filterGroup: string = "";
 
   // Index of the row currently being dragged, or null.
   @state() private _dragFrom: number | null = null;
@@ -196,42 +193,35 @@ export class AmbienceRulesList extends LitElement {
   // Rule indices whose action list is expanded inline.
   @state() private _expanded = new Set<number>();
 
-  override willUpdate(changedProps: PropertyValues) {
-    // If the groups list changes and the active filter points at a group that
-    // no longer exists (e.g. the filtered group was just deleted), reset to
-    // "all groups" so the list doesn't render empty behind a stale <select>.
-    const filter = this._filterGroup;
-    const fixed = filter === AmbienceRulesList._ALL_GROUPS || filter === AmbienceRulesList._UNGROUPED;
-    if (changedProps.has("groups") && !fixed && !this.groups.some((g) => g.id === filter)) {
-      this._filterGroup = AmbienceRulesList._ALL_GROUPS;
-    }
-  }
-
-  /** The bucket a rule belongs to: its group id, or the ungrouped sentinel. */
-  private _groupOf(rule: Rule): string {
-    return rule.group ?? AmbienceRulesList._UNGROUPED;
-  }
-
-  /** The group a rule belongs to, or undefined if ungrouped / the group no
-   *  longer exists. */
+  /** The group a rule belongs to, or undefined if the group no longer exists. */
   private _groupFor(rule: Rule): RuleGroup | undefined {
     return this.groups.find((g) => g.id === rule.group);
   }
 
   /**
-   * Rules paired with their ORIGINAL index, filtered by the selected group.
-   * Filtering is presentation-only — the original index is preserved so
-   * edit/delete/duplicate/reorder callbacks always reference the correct
-   * entry in the underlying (unfiltered) `rules` array.
+   * Rules paired with their ORIGINAL index, partitioned into render sections.
+   * filterGroup="" (All) → one section per group that has rules, sorted by
+   * group name; each labelled. filterGroup=<id> → a single unlabelled section
+   * with only that group's rules. Original indices are preserved so
+   * edit/delete/duplicate/reorder reference the correct underlying entry.
    */
-  private _visibleRules(): Array<[number, Rule]> {
+  private _sections(): Array<{ group: RuleGroup | undefined; rows: Array<[number, Rule]> }> {
     const pairs = this.rules.map((rule, i) => [i, rule] as [number, Rule]);
-    if (this._filterGroup === AmbienceRulesList._ALL_GROUPS) return pairs;
-    return pairs.filter(([, rule]) => this._groupOf(rule) === this._filterGroup);
-  }
-
-  private _onFilterChange(e: Event) {
-    this._filterGroup = (e.target as HTMLSelectElement).value;
+    if (this.filterGroup !== "") {
+      return [{
+        group: this.groups.find((g) => g.id === this.filterGroup),
+        rows: pairs.filter(([, r]) => r.group === this.filterGroup),
+      }];
+    }
+    const byId = new Map<string, Array<[number, Rule]>>();
+    for (const [i, r] of pairs) {
+      const list = byId.get(r.group) ?? [];
+      list.push([i, r]);
+      byId.set(r.group, list);
+    }
+    return [...byId.entries()]
+      .map(([gid, rows]) => ({ group: this.groups.find((g) => g.id === gid), rows }))
+      .sort((a, b) => (a.group?.name ?? "").localeCompare(b.group?.name ?? ""));
   }
 
   private _emit(name: string, detail: unknown) {
@@ -348,11 +338,119 @@ export class AmbienceRulesList extends LitElement {
     this._dragOver = null;
   }
 
-  private _confirmDelete(i: number, rule: Rule) {
-    const label = rule.name || localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1));
+  private _confirmDelete(i: number, rule: Rule, displayNum: number) {
+    const label = rule.name || localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(displayNum));
     if (window.confirm(localize(this.hass, "ui.confirm_delete", 'Delete "{name}"?').replace("{name}", label))) {
       this._emit("delete-rule", { index: i });
     }
+  }
+
+  /** A single rule row. `i` is the rule's ORIGINAL index in `this.rules`
+   *  (used for every emitted event and drag handler); `displayNum` is the
+   *  1-based position WITHIN its render section. */
+  private _renderRow(i: number, rule: Rule, displayNum: number) {
+    const unpinLabel = localize(this.hass, "ui.unpin", "Unpin (return to automatic order)");
+    const group = this._groupFor(rule);
+    return html`
+      <li
+        class=${this._dragOver === i ? "drag-over" : ""}
+        draggable="true"
+        @dragstart=${() => this._onDragStart(i)}
+        @dragover=${(e: DragEvent) => this._onDragOver(e, i)}
+        @drop=${() => this._onDrop(i)}
+        @dragend=${this._onDragEnd}
+      >
+        <span class="lead">
+          ${rule.pinned
+            ? html`<button
+                class="pin"
+                title=${unpinLabel}
+                aria-label=${unpinLabel}
+                @click=${(e: Event) => {
+                  e.stopPropagation();
+                  this._emit("unpin-rule", { index: i });
+                }}
+              >📌</button>`
+            : html`<span class="handle" title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}>⠿</span>`}
+        </span>
+        <span class="idx">${displayNum}</span>
+        <span class="warn-slot">
+          ${rule.shadowed_by != null
+            ? html`<span
+                class="shadow-warning"
+                title=${localize(this.hass, "ui.shadowed", "Never fires — shadowed by an earlier rule.")}
+              >⚠️</span>`
+            : ""}
+        </span>
+        <div class="body" @click=${() => this._toggleRule(i)}>
+          <div class="name">
+            ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(displayNum)))}${
+              group
+                ? html`<ambience-group-chip .group=${group}></ambience-group-chip>`
+                : ""
+            }
+          </div>
+          <div class="summary">
+            ${this._expanded.has(i)
+              ? ""
+              : html`${this._whenSummary(rule)} · <span class="action-count">${this._actionCountLabel(rule)}</span>`}
+          </div>
+          ${this._expanded.has(i)
+            ? html`
+                <div class="rule-detail">
+                  ${this._whenStacked(rule)}
+                  ${rule.actions.length === 0
+                    ? ""
+                    : html`<div class="actions-detail">
+                        ${rule.actions.map((a) => {
+                          const params = this._actionParamsString(a);
+                          const label = this._actionLabel(a);
+                          const header = params ? `${label} · ${params}` : label;
+                          return html`
+                            <div class="actions-detail-item">
+                              <div class="action-header">${header}</div>
+                              ${a.entity_ids.length === 0
+                                ? html`<div class="no-targets">${localize(this.hass, "ui.no_targets", "(no targets)")}</div>`
+                                : html`<ul class="entity-list">
+                                    ${a.entity_ids.map((eid) => html`<li>${this._entityName(eid)}</li>`)}
+                                  </ul>`}
+                            </div>
+                          `;
+                        })}
+                      </div>`}
+                </div>
+              `
+            : ""}
+        </div>
+        <button
+          @click=${(e: Event) => {
+            e.stopPropagation();
+            this._emit("edit-rule", { index: i });
+          }}
+          title=${localize(this.hass, "ui.edit", "Edit")}
+        >
+          ✎
+        </button>
+        <button
+          @click=${(e: Event) => {
+            e.stopPropagation();
+            this._emit("duplicate-rule", { index: i });
+          }}
+          title=${localize(this.hass, "ui.duplicate", "Duplicate")}
+        >
+          ⧉
+        </button>
+        <button
+          @click=${(e: Event) => {
+            e.stopPropagation();
+            this._confirmDelete(i, rule, displayNum);
+          }}
+          title=${localize(this.hass, "ui.title_delete", "Delete")}
+        >
+          🗑
+        </button>
+      </li>
+    `;
   }
 
   override render() {
@@ -364,135 +462,24 @@ export class AmbienceRulesList extends LitElement {
         </button>
       `;
     }
-    const unpinLabel = localize(this.hass, "ui.unpin", "Unpin (return to automatic order)");
-    const visible = this._visibleRules();
+    const sections = this._sections();
+    const showHeaders = this.filterGroup === "" && this.groups.length > 0;
     return html`
-      ${this.groups.length >= 1
-        ? html`<label class="group-filter-row">
-            ${localize(this.hass, "ui.filter_by_group", "Filter by group")}
-            <select class="group-filter" .value=${this._filterGroup} @change=${this._onFilterChange}>
-              <option
-                value=${AmbienceRulesList._ALL_GROUPS}
-                ?selected=${this._filterGroup === AmbienceRulesList._ALL_GROUPS}
-              >
-                ${localize(this.hass, "ui.all_groups", "All groups")}
-              </option>
-              <option
-                value=${AmbienceRulesList._UNGROUPED}
-                ?selected=${this._filterGroup === AmbienceRulesList._UNGROUPED}
-              >
-                ${localize(this.hass, "ui.group_ungrouped", "Ungrouped")}
-              </option>
-              ${this.groups.map(
-                (g) => html`<option value=${g.id} ?selected=${g.id === this._filterGroup}>${g.name}</option>`,
-              )}
-            </select>
-          </label>`
-        : ""}
-      <ul>
-        ${visible.map(
-          ([i, rule]) => html`
-            <li
-              class=${this._dragOver === i ? "drag-over" : ""}
-              draggable="true"
-              @dragstart=${() => this._onDragStart(i)}
-              @dragover=${(e: DragEvent) => this._onDragOver(e, i)}
-              @drop=${() => this._onDrop(i)}
-              @dragend=${this._onDragEnd}
-            >
-              <span class="lead">
-                ${rule.pinned
-                  ? html`<button
-                      class="pin"
-                      title=${unpinLabel}
-                      aria-label=${unpinLabel}
-                      @click=${(e: Event) => {
-                        e.stopPropagation();
-                        this._emit("unpin-rule", { index: i });
-                      }}
-                    >📌</button>`
-                  : html`<span class="handle" title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}>⠿</span>`}
-              </span>
-              <span class="idx">${i + 1}</span>
-              <span class="warn-slot">
-                ${rule.shadowed_by != null
-                  ? html`<span
-                      class="shadow-warning"
-                      title=${localize(this.hass, "ui.shadowed", "Never fires — shadowed by an earlier rule.")}
-                    >⚠️</span>`
-                  : ""}
-              </span>
-              <div class="body" @click=${() => this._toggleRule(i)}>
-                <div class="name">
-                  ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1)))}${
-                    rule.group && this._groupFor(rule)
-                      ? html`<ambience-group-chip .group=${this._groupFor(rule)!}></ambience-group-chip>`
-                      : ""
-                  }
-                </div>
-                <div class="summary">
-                  ${this._expanded.has(i)
-                    ? ""
-                    : html`${this._whenSummary(rule)} · <span class="action-count">${this._actionCountLabel(rule)}</span>`}
-                </div>
-                ${this._expanded.has(i)
-                  ? html`
-                      <div class="rule-detail">
-                        ${this._whenStacked(rule)}
-                        ${rule.actions.length === 0
-                          ? ""
-                          : html`<div class="actions-detail">
-                              ${rule.actions.map((a) => {
-                                const params = this._actionParamsString(a);
-                                const label = this._actionLabel(a);
-                                const header = params ? `${label} · ${params}` : label;
-                                return html`
-                                  <div class="actions-detail-item">
-                                    <div class="action-header">${header}</div>
-                                    ${a.entity_ids.length === 0
-                                      ? html`<div class="no-targets">${localize(this.hass, "ui.no_targets", "(no targets)")}</div>`
-                                      : html`<ul class="entity-list">
-                                          ${a.entity_ids.map((eid) => html`<li>${this._entityName(eid)}</li>`)}
-                                        </ul>`}
-                                  </div>
-                                `;
-                              })}
-                            </div>`}
-                      </div>
-                    `
-                  : ""}
-              </div>
-              <button
-                @click=${(e: Event) => {
-                  e.stopPropagation();
-                  this._emit("edit-rule", { index: i });
-                }}
-                title=${localize(this.hass, "ui.edit", "Edit")}
-              >
-                ✎
-              </button>
-              <button
-                @click=${(e: Event) => {
-                  e.stopPropagation();
-                  this._emit("duplicate-rule", { index: i });
-                }}
-                title=${localize(this.hass, "ui.duplicate", "Duplicate")}
-              >
-                ⧉
-              </button>
-              <button
-                @click=${(e: Event) => {
-                  e.stopPropagation();
-                  this._confirmDelete(i, rule);
-                }}
-                title=${localize(this.hass, "ui.title_delete", "Delete")}
-              >
-                🗑
-              </button>
-            </li>
-          `,
-        )}
-      </ul>
+      ${sections.map(
+        (section) => html`
+          <div class="group-section">
+            ${showHeaders && section.group
+              ? html`<div class="group-section-header">
+                  <ambience-group-chip .group=${section.group}></ambience-group-chip>
+                  <span>${section.group.name}</span>
+                </div>`
+              : ""}
+            <ul>
+              ${section.rows.map(([i, rule], n) => this._renderRow(i, rule, n + 1))}
+            </ul>
+          </div>
+        `,
+      )}
       <button class="add" @click=${() => this._emit("add-rule", {})}>
         ${localize(this.hass, "ui.add_rule", "+ Add rule")}
       </button>

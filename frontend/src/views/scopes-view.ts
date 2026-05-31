@@ -132,6 +132,11 @@ export class AmbienceScopesView extends LitElement {
       padding: 0.5rem 1rem 1rem 1rem;
       border-top: 1px solid var(--divider-color, #e0e0e0);
     }
+    .group-filter-row {
+      display: flex; align-items: center; gap: 0.5rem;
+      margin: 0 0 0.75rem 0; font-size: 0.9em;
+      color: var(--secondary-text-color, #888);
+    }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
@@ -155,6 +160,9 @@ export class AmbienceScopesView extends LitElement {
   @state() private _expanded = new Set<string>();
   @state() private _error = "";
   @state() private _editing: EditingState | null = null;
+  // Global group filter shared by every scope: "" = All, else a group id.
+  // Sticky for the session (component lifetime).
+  @state() private _filterGroup = "";
   private _unsubArea?: () => void;
   private _unsubFloor?: () => void;
 
@@ -444,12 +452,24 @@ export class AmbienceScopesView extends LitElement {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
     const { from, to } = e.detail;
+    const moved = cfg.rules[from];
+    // Reorder is per-group: a drop whose target row is in a different group is
+    // rejected (groups are independent; cross-group moves aren't meaningful).
+    if (!moved || cfg.rules[to]?.group !== moved.group) return;
     const rules = [...cfg.rules];
-    const [moved] = rules.splice(from, 1);
+    rules.splice(from, 1);
     rules.splice(to, 0, moved);
-    const above = rules[to - 1]?.priority;
-    const below = rules[to + 1]?.priority;
-    const priority = _pinPriority(above, below, cfg.rules);
+    // Pin priority is computed from the nearest SAME-GROUP neighbours around the
+    // drop position (the backend keeps groups contiguous, so scanning outward
+    // finds group-mates).
+    const sameGroup = (idx: number) => rules[idx] && rules[idx].group === moved.group;
+    let a = to - 1;
+    while (a >= 0 && !sameGroup(a)) a--;
+    let b = to + 1;
+    while (b < rules.length && !sameGroup(b)) b++;
+    const above = a >= 0 ? rules[a].priority : undefined;
+    const below = b < rules.length ? rules[b].priority : undefined;
+    const priority = _pinPriority(above, below, cfg.rules.filter((r) => r.group === moved.group));
     rules[to] = { ...moved, priority, pinned: true };
     void this._mutate(scope, { ...cfg, rules });
   }
@@ -482,9 +502,17 @@ export class AmbienceScopesView extends LitElement {
 
   // --- derived -------------------------------------------------------------
 
+  /** The group a newly-added rule should default to: the active filter when a
+   *  single group is selected, otherwise the alphabetically-first group. */
+  private _defaultGroupId(): string {
+    if (this._filterGroup !== "") return this._filterGroup;
+    const sorted = [...this._groups].sort((a, b) => a.name.localeCompare(b.name));
+    return sorted[0]?.id ?? "";
+  }
+
   private get _editingRule(): Rule | null {
     if (!this._editing) return null;
-    if (this._editing.isNew) return { when: {}, actions: [] };
+    if (this._editing.isNew) return { when: {}, actions: [], group: this._defaultGroupId() };
     const cfg = this._getConfig(this._editing.scope);
     return cfg?.rules[this._editing.index] ?? null;
   }
@@ -512,6 +540,23 @@ export class AmbienceScopesView extends LitElement {
     const areaPrefix = localize(this.hass, "ui.scope_area_prefix", "Area: ");
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
+      ${this._groups.length > 1
+        ? html`<label class="group-filter-row">
+            ${localize(this.hass, "ui.filter_by_group", "Filter by group")}
+            <select
+              class="group-filter"
+              .value=${this._filterGroup}
+              @change=${(ev: Event) => { this._filterGroup = (ev.target as HTMLSelectElement).value; }}
+            >
+              <option value="" ?selected=${this._filterGroup === ""}>
+                ${localize(this.hass, "ui.all_groups", "All groups")}
+              </option>
+              ${[...this._groups]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((g) => html`<option value=${g.id} ?selected=${g.id === this._filterGroup}>${g.name}</option>`)}
+            </select>
+          </label>`
+        : ""}
       <ul>
         ${this._renderScopeRow(
           { kind: "house" },
@@ -598,6 +643,7 @@ export class AmbienceScopesView extends LitElement {
                   .availableActions=${this._actions}
                   .schemas=${this._schemas}
                   .groups=${this._groups}
+                  .filterGroup=${this._filterGroup}
                   .hass=${this.hass}
                   @add-rule=${() => this._addRule(scope)}
                   @edit-rule=${(e: CustomEvent<{ index: number }>) =>

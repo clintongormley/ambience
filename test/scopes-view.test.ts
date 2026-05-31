@@ -7,6 +7,7 @@ import type {
   MatcherInfo,
   PeriodStoreView,
   Rule,
+  RuleGroup,
   ScopeConfig,
 } from "../frontend/src/types";
 
@@ -23,6 +24,8 @@ vi.mock("../frontend/src/api", () => ({
   saveHouse: vi.fn(),
   listMatchers: vi.fn(),
   listExposedActions: vi.fn(),
+  listGroups: vi.fn(async () => []),
+  getServiceSchema: vi.fn(async () => ({})),
   listPeriods: vi.fn(),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
   getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
@@ -579,6 +582,66 @@ describe("ambience-scopes-view", () => {
     // No additional call after disconnect
     expect(vi.mocked(api.listExposedActions).mock.calls.length).toBe(callsBefore);
     el = null; // already removed, don't double-remove in afterEach
+  });
+
+  // --- global group filter ------------------------------------------------
+
+  test("renders a global group filter only when >1 group", async () => {
+    el = await mount();
+    el._groups = [
+      { id: "a", name: "Awn" },
+      { id: "b", name: "Bee" },
+    ] as RuleGroup[];
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("select.group-filter")).toBeTruthy();
+
+    el._groups = [{ id: "a", name: "Awn" }] as RuleGroup[];
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("select.group-filter")).toBeNull();
+  });
+
+  test("a new rule defaults to the active filtered group", async () => {
+    el = await mount();
+    el._groups = [
+      { id: "a", name: "Awn" },
+      { id: "b", name: "Bee" },
+    ] as RuleGroup[];
+    el._filterGroup = "b";
+    await el.updateComplete;
+    el._addRule({ kind: "house" });
+    expect(el._editingRule.group).toBe("b");
+  });
+
+  test("a new rule under All defaults to the alphabetically-first group", async () => {
+    el = await mount();
+    el._filterGroup = "";
+    el._groups = [
+      { id: "z", name: "Zed" },
+      { id: "a", name: "Awn" },
+    ] as RuleGroup[];
+    await el.updateComplete;
+    el._addRule({ kind: "house" });
+    expect(el._editingRule.group).toBe("a");
+  });
+
+  test("reorder rejects a cross-group drop (no mutation)", async () => {
+    const cfg: ScopeConfig = {
+      rules: [
+        { name: "a", when: {}, actions: [], group: "a", priority: 2048 },
+        { name: "b", when: {}, actions: [], group: "b", priority: 1024 },
+      ] as Rule[],
+    };
+    el = await mount({ houseConfig: structuredClone(cfg) });
+    vi.clearAllMocks();
+
+    el._reorderRules({ kind: "house" }, {
+      detail: { from: 0, to: 1 },
+    } as CustomEvent<{ from: number; to: number }>);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(api.saveHouse).not.toHaveBeenCalled();
+    const stored = el._getConfig({ kind: "house" });
+    expect(stored.rules.map((r: Rule) => r.name)).toEqual(["a", "b"]);
   });
 
   test("disconnectedCallback unsubscribes from both registries", async () => {

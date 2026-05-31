@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_point_in_utc_time
@@ -86,6 +87,14 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_icon = "mdi:lightbulb-multiple"
+    # All scope switches hang off one virtual "Ambience" service device so the
+    # integration card links to a single device page instead of the raw entity
+    # table. Single-instance integration, so a static identifier is safe.
+    _attr_device_info = DeviceInfo(
+        identifiers={(DOMAIN, "ambience")},
+        name="Ambience",
+        entry_type=DeviceEntryType.SERVICE,
+    )
 
     def __init__(self, scope_kind: str, scope_id: str | None, display_name: str) -> None:
         self._scope_kind = scope_kind

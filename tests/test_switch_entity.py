@@ -7,6 +7,8 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from pytest_homeassistant_custom_component.common import (
@@ -59,6 +61,31 @@ async def test_one_switch_per_floor(hass, mock_config_entry):
     await _setup(hass, mock_config_entry)
     floor_switches = {k: v for k, v in hass.data[DOMAIN][DATA_SWITCHES].items() if k[0] == "floor"}
     assert len(floor_switches) == 2
+
+
+async def test_all_switches_share_one_ambience_device(hass, mock_config_entry):
+    ar.async_get(hass).async_create("Living Room")
+    fr.async_get(hass).async_create("Upstairs")
+    await _setup(hass, mock_config_entry)
+
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
+    # Exactly one device for the config entry, named "Ambience".
+    devices = dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)
+    assert len(devices) == 1
+    device = devices[0]
+    assert device.name == "Ambience"
+
+    # Every ambience switch entity hangs off that single device.
+    switch_entities = [
+        e
+        for e in er.async_entries_for_config_entry(ent_reg, mock_config_entry.entry_id)
+        if e.domain == "switch"
+    ]
+    assert len(switch_entities) >= 3  # house + area + floor
+    for e in switch_entities:
+        assert e.device_id == device.id
 
 
 # --- behavior (use house switch; logic identical across scopes) -------------

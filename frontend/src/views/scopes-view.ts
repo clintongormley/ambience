@@ -6,7 +6,7 @@ import type {
   FloorRegistryEvent,
   HassConnection,
 } from "../api.js";
-import { groupSwatchStyle } from "../group-colors.js";
+import { groupSwatch, groupSwatchStyles } from "../group-swatch.js";
 import { scopeKey } from "../entities-for-scope.js";
 import { stripPositionMetadata } from "../rule.js";
 import { localize } from "../i18n.js";
@@ -73,7 +73,7 @@ function _pinPriority(
 
 @customElement("ambience-scopes-view")
 export class AmbienceScopesView extends LitElement {
-  static override styles = css`
+  static override styles = [groupSwatchStyles, css`
     :host {
       display: block;
       padding: 1rem;
@@ -171,17 +171,10 @@ export class AmbienceScopesView extends LitElement {
     .group-filter-option[aria-selected="true"] {
       background: var(--secondary-background-color, #eee); font-weight: 600;
     }
-    /* Square colour swatch holding the group's icon; always present so rows
-       and the trigger keep a consistent height. */
-    .group-swatch {
-      flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: 6px;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: var(--secondary-background-color, #e0e0e0);
-      color: var(--secondary-text-color, #555);
-    }
-    .group-swatch ha-icon { --mdc-icon-size: 20px; }
+    /* Swatch shell + sizing come from groupSwatchStyles (2rem default); it is
+       always present so rows and the trigger keep a consistent height. */
     .group-name { flex: 1; }
-  `;
+  `];
 
   @property({ attribute: false }) hass!: HassConnection;
 
@@ -592,14 +585,12 @@ export class AmbienceScopesView extends LitElement {
   private _renderFilterEntry(group: RuleGroup | null) {
     if (group === null) {
       return html`
-        <span class="group-swatch"><ha-icon icon="mdi:filter-variant"></ha-icon></span>
+        ${groupSwatch(undefined, "mdi:filter-variant")}
         <span class="group-name">${localize(this.hass, "ui.all_groups", "All groups")}</span>
       `;
     }
     return html`
-      <span class="group-swatch" style=${groupSwatchStyle(group.color)}>
-        ${group.icon ? html`<ha-icon icon=${group.icon}></ha-icon>` : ""}
-      </span>
+      ${groupSwatch(group.color, group.icon)}
       <span class="group-name">${group.name}</span>
     `;
   }

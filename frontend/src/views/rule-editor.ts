@@ -18,7 +18,7 @@ import { localize, matcherLabel } from "../i18n.js";
 import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
 import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
 import { entitiesForScope, scopeKey } from "../entities-for-scope.js";
-import { groupSwatchStyle } from "../group-colors.js";
+import { groupSwatch, groupSwatchStyles } from "../group-swatch.js";
 import { stripPositionMetadata } from "../rule.js";
 import "./action-slot.js";
 import "./matcher-input.js";
@@ -63,11 +63,13 @@ function sameScope(a?: Scope, b?: Scope): boolean {
 
 @customElement("ambience-rule-editor")
 export class AmbienceRuleEditor extends LitElement {
-  static override styles = css`
+  static override styles = [groupSwatchStyles, css`
     :host {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.4); z-index: 100;
       align-items: stretch; justify-content: center;
+      --group-swatch-size: 1.75rem;
+      --group-swatch-icon-size: 18px;
     }
     :host([open]) { display: flex; }
     .modal {
@@ -203,15 +205,9 @@ export class AmbienceRuleEditor extends LitElement {
       color: var(--secondary-text-color, #888);
       font-size: 0.9em;
     }
-    /* Group field: colour-coded swatch + icon, matching the rules-list filter. */
+    /* Group field: colour-coded swatch + icon (shell from groupSwatchStyles),
+       matching the rules-list filter. */
     .group-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-    .group-swatch {
-      flex: 0 0 auto; width: 1.75rem; height: 1.75rem; border-radius: 6px;
-      display: inline-flex; align-items: center; justify-content: center;
-      background: var(--secondary-background-color, #e0e0e0);
-      color: var(--secondary-text-color, #555);
-    }
-    .group-swatch ha-icon { --mdc-icon-size: 18px; }
     .group-menu { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.35rem; }
     .group-option {
       display: flex; align-items: center; gap: 0.6rem; width: 100%;
@@ -224,7 +220,7 @@ export class AmbienceRuleEditor extends LitElement {
     .group-option[aria-selected="true"] {
       background: var(--secondary-background-color, #eee); font-weight: 600;
     }
-  `;
+  `];
 
   @property({ type: Boolean, reflect: true }) open = false;
   @property({ attribute: false }) rule: Rule | null = null;
@@ -466,14 +462,6 @@ export class AmbienceRuleEditor extends LitElement {
     this._draft = { ...stripPositionMetadata(this._draft), group: id };
   }
 
-  /** A square swatch in the group's colour holding its icon — matches the
-   *  colour-coded group filter in the rules list. */
-  private _renderGroupSwatch(g: RuleGroup) {
-    return html`<span class="group-swatch" style=${groupSwatchStyle(g.color)}>
-      ${g.icon ? html`<ha-icon icon=${g.icon}></ha-icon>` : ""}
-    </span>`;
-  }
-
   /**
    * The group as a collapse/expand slot (like the name field): a swatch + name
    * summary, expanding to a colour-coded menu of swatch + name options (the same
@@ -495,7 +483,7 @@ export class AmbienceRuleEditor extends LitElement {
                 aria-selected=${g.id === currentId}
                 @click=${() => { this._setGroup(g.id); this._open = null; }}
               >
-                ${this._renderGroupSwatch(g)}
+                ${groupSwatch(g.color, g.icon)}
                 <span class="group-name">${g.name}</span>
               </button>`,
             )}
@@ -507,7 +495,7 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="slot collapsed" data-slot-id="group">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "group" })}>
           <strong>${localize(this.hass, "ui.group", "Group")}:</strong>
-          ${this._renderGroupSwatch(current)}
+          ${groupSwatch(current.color, current.icon)}
           <span class="group-name">${current.name}</span>
         </div>
       </div>

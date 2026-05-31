@@ -134,45 +134,59 @@ export class AmbienceScopesView extends LitElement {
       border-top: 1px solid var(--divider-color, #e0e0e0);
     }
     .group-filter-row {
-      display: flex; align-items: center; gap: 0.5rem;
-      margin: 0 0 0.75rem 0; font-size: 0.9em;
+      display: flex; align-items: center; gap: 0.75rem;
+      margin: 0 0 1.25rem 0;
+    }
+    .group-filter-label {
+      font-size: 0.95rem; font-weight: 500;
       color: var(--secondary-text-color, #888);
     }
-    .group-filter { position: relative; }
+    .group-filter { position: relative; min-width: 18rem; }
+    /* Trigger keeps a stable height regardless of the selection (the swatch is
+       always present), so picking a group never resizes the control. */
     .group-filter-trigger {
-      display: inline-flex; align-items: center; gap: 0.5rem;
-      padding: 0.3rem 0.6rem;
-      border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
+      display: flex; align-items: center; gap: 0.65rem; width: 100%;
+      min-height: 48px; box-sizing: border-box;
+      padding: 0.4rem 0.6rem 0.4rem 0.5rem;
+      border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px;
       background: var(--card-background-color, #fff);
       color: var(--primary-text-color, #212121);
-      cursor: pointer; font: inherit;
+      cursor: pointer; font: inherit; font-size: 1rem;
     }
-    .group-filter-trigger .caret { color: var(--secondary-text-color, #888); margin-left: 0.25rem; }
+    .group-filter-trigger:hover { background: var(--secondary-background-color, #f5f5f5); }
+    .group-filter-trigger .group-name { flex: 1; text-align: left; }
+    .group-filter-trigger .caret { color: var(--secondary-text-color, #888); flex: 0 0 auto; }
     /* Transparent full-screen catcher so any outside click closes the menu. */
     .group-filter-backdrop { position: fixed; inset: 0; z-index: 10; }
     .group-filter-menu {
-      position: absolute; top: 100%; left: 0; z-index: 11; margin-top: 2px;
-      min-width: 12rem; max-height: 60vh; overflow-y: auto;
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 11;
+      max-height: 60vh; overflow-y: auto;
       background: var(--card-background-color, #fff);
-      border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-      padding: 0.25rem;
+      border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+      padding: 0.35rem;
     }
     .group-filter-option {
-      display: flex; align-items: center; gap: 0.5rem; width: 100%;
-      padding: 0.35rem 0.5rem; border: 0; border-radius: 4px;
+      display: flex; align-items: center; gap: 0.65rem; width: 100%;
+      min-height: 44px; box-sizing: border-box;
+      padding: 0.4rem 0.6rem; border: 0; border-radius: 6px;
       background: none; color: var(--primary-text-color, #212121);
-      cursor: pointer; font: inherit; text-align: left;
+      cursor: pointer; font: inherit; font-size: 1rem; text-align: left;
     }
     .group-filter-option:hover { background: var(--secondary-background-color, #f5f5f5); }
-    .group-filter-option[aria-selected="true"] { font-weight: 600; }
-    /* Square colour swatch holding the group's icon. */
+    .group-filter-option[aria-selected="true"] {
+      background: var(--secondary-background-color, #eee); font-weight: 600;
+    }
+    /* Square colour swatch holding the group's icon; always present so rows
+       and the trigger keep a consistent height. */
     .group-swatch {
-      flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 4px;
+      flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: 6px;
       display: inline-flex; align-items: center; justify-content: center;
       background: var(--secondary-background-color, #e0e0e0);
+      color: var(--secondary-text-color, #555);
     }
-    .group-swatch ha-icon { --mdc-icon-size: 18px; }
+    .group-swatch ha-icon { --mdc-icon-size: 20px; }
+    .group-name { flex: 1; }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
@@ -545,8 +559,16 @@ export class AmbienceScopesView extends LitElement {
     this._filterOpen = false;
   }
 
-  /** A colour swatch (group colour bg + icon) followed by the group name. */
-  private _renderFilterEntry(group: RuleGroup) {
+  /** A colour swatch (group colour bg + icon) followed by the group name.
+   *  `null` renders the "All groups" entry with a neutral filter-icon swatch,
+   *  so the trigger and option rows keep a consistent height across selections. */
+  private _renderFilterEntry(group: RuleGroup | null) {
+    if (group === null) {
+      return html`
+        <span class="group-swatch"><ha-icon icon="mdi:filter-variant"></ha-icon></span>
+        <span class="group-name">${localize(this.hass, "ui.all_groups", "All groups")}</span>
+      `;
+    }
     const hex = colorHex(group.color);
     const swatchStyle = hex ? `background:${hex};color:${textColorFor(hex)}` : "";
     return html`
@@ -562,12 +584,11 @@ export class AmbienceScopesView extends LitElement {
    *  more than one group exists. */
   private _renderFilter() {
     if (this._groups.length <= 1) return "";
-    const allLabel = localize(this.hass, "ui.all_groups", "All groups");
     const sorted = [...this._groups].sort((a, b) => a.name.localeCompare(b.name));
-    const current = this._groups.find((g) => g.id === this._filterGroup);
+    const current = this._groups.find((g) => g.id === this._filterGroup) ?? null;
     return html`
       <div class="group-filter-row">
-        <span>${localize(this.hass, "ui.filter_by_group", "Filter by group")}</span>
+        <span class="group-filter-label">${localize(this.hass, "ui.filter_by_group", "Filter by group")}</span>
         <div class="group-filter">
           <button
             class="group-filter-trigger"
@@ -575,10 +596,8 @@ export class AmbienceScopesView extends LitElement {
             aria-expanded=${this._filterOpen}
             @click=${() => { this._filterOpen = !this._filterOpen; }}
           >
-            ${current
-              ? this._renderFilterEntry(current)
-              : html`<span class="group-name">${allLabel}</span>`}
-            <span class="caret">▾</span>
+            ${this._renderFilterEntry(current)}
+            <ha-icon class="caret" icon="mdi:menu-down"></ha-icon>
           </button>
           ${this._filterOpen
             ? html`
@@ -590,7 +609,7 @@ export class AmbienceScopesView extends LitElement {
                     aria-selected=${this._filterGroup === ""}
                     @click=${() => this._selectFilter("")}
                   >
-                    <span class="group-name">${allLabel}</span>
+                    ${this._renderFilterEntry(null)}
                   </button>
                   ${sorted.map(
                     (g) => html`<button

@@ -472,7 +472,9 @@ export class AmbienceRulesList extends LitElement {
       `;
     }
     const sections = this._sections();
-    const showHeaders = this.filterGroup === "" && this.groups.length > 0;
+    // Show the coloured group header for every section, including when a single
+    // group is filtered — the bar labels which group these rules belong to.
+    const showHeaders = this.groups.length > 0;
     return html`
       ${sections.map(
         (section) => html`

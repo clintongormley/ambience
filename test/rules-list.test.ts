@@ -694,7 +694,7 @@ describe("ambience-rules-list", () => {
     expect(nums).toEqual(["1", "2"]);
   });
 
-  test("single-group filter shows only that group, no headers, numbered 1..N", async () => {
+  test("single-group filter shows only that group, with its header, numbered 1..N", async () => {
     const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
     const rules = [
       { when: {}, actions: [], group: "a" },
@@ -703,7 +703,10 @@ describe("ambience-rules-list", () => {
     el = await mount(rules, [], {}, groups);
     el.filterGroup = "a";
     await el.updateComplete;
-    expect(el.shadowRoot.querySelectorAll(".group-section-header").length).toBe(0);
+    // The single visible section still shows its group header bar.
+    const headers = Array.from(el.shadowRoot.querySelectorAll(".group-section-header"));
+    expect(headers.length).toBe(1);
+    expect(headers[0].textContent).toContain("A");
     expect(el.shadowRoot.querySelectorAll("li").length).toBe(1);
   });
 

@@ -75,7 +75,7 @@ var vn=Object.defineProperty;var _n=Object.getOwnPropertyDescriptor;var c=(t,n,e
         <button class="add" @click=${()=>this._emit("add-rule",{})}>
           ${d(this.hass,"ui.add_rule","+ Add rule")}
         </button>
-      `;let e=this._sections(),r=this.filterGroup===""&&this.groups.length>0;return l`
+      `;let e=this._sections(),r=this.groups.length>0;return l`
       ${e.map(i=>l`
           <div class="group-section">
             ${r&&i.group?this._renderSectionHeader(i.group):""}
@@ -2009,14 +2009,17 @@ var vn=Object.defineProperty;var _n=Object.getOwnPropertyDescriptor;var c=(t,n,e
     .note {
       font-style: italic;
     }
-  `,c([f({attribute:!1})],j.prototype,"hass",2),c([f({attribute:!1})],j.prototype,"scope",2),c([f({attribute:!1})],j.prototype,"rules",2),c([g()],j.prototype,"_open",2),c([g()],j.prototype,"_triggers",2),c([g()],j.prototype,"_opaque",2),c([g()],j.prototype,"_loading",2),c([g()],j.prototype,"_error",2),j=c([$("ambience-auto-triggers-section")],j);function mn(t){return t.kind==="house"?"house":`${t.kind}:${t.id}`}function Dt(t){return{rules:t.rules??[]}}var $r=1024;function Mo(t,n,e){if(t!==void 0&&n!==void 0)return Math.floor((t+n)/2);let r=e.map(i=>i.priority??0);return t===void 0&&n===void 0?$r:t===void 0?Math.max(...r)+$r:Math.min(...r)-$r}var L=class extends _{constructor(){super(...arguments);this._areas=[];this._floors=[];this._areaConfigs=new Map;this._floorConfigs=new Map;this._house={rules:[]};this._matchers=[];this._actions=[];this._groups=[];this._schemas={};this._expanded=new Set;this._error="";this._editing=null;this._filterGroup="";this._filterOpen=!1;this._onExposedActionsChanged=async()=>{try{let e=await Ye(this.hass);if(!this.isConnected)return;this._actions=e,await this._refreshSchemas(e)}catch{}}}async _refreshSchemas(e){let r=await Promise.all(e.map(async s=>{try{let a=await Fe(this.hass,s.id);return[s.id,a]}catch{return[s.id,null]}}));if(!this.isConnected)return;let i={};for(let[s,a]of r)a&&(i[s]=a);this._schemas=i}async connectedCallback(){super.connectedCallback(),window.addEventListener("ambience-exposed-actions-changed",this._onExposedActionsChanged),await this._loadStatic(),await Promise.all([this._refreshAreas(),this._refreshFloors(),this._refreshHouse()]),await this._subscribe()}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("ambience-exposed-actions-changed",this._onExposedActionsChanged),this._unsubArea?.(),this._unsubArea=void 0,this._unsubFloor?.(),this._unsubFloor=void 0}async _loadStatic(){try{let[e,r,i,s,a,o]=await Promise.all([yt(this.hass),Ye(this.hass),bt(this.hass),$t(this.hass),wt(this.hass),xt(this.hass)]);if(!this.isConnected)return;this._matchers=e,this._actions=r,this._periods=i,this._dayConfig=s,this._weatherConfig=a,this._groups=o,await this._refreshSchemas(r)}catch(e){this._error=e.message||String(e)}}async _refreshAreas(){try{let e=await mt(this.hass),r=this._areaConfigs,i=new Map;if(await Promise.all(e.map(async s=>{let a=r.get(s.area_id);if(a){i.set(s.area_id,a);return}i.set(s.area_id,Dt(await ft(this.hass,s.area_id)))})),!this.isConnected)return;this._areas=e,this._areaConfigs=i}catch(e){this._error=e.message||String(e)}}async _refreshFloors(){try{let e=(await gt(this.hass)).slice().sort((s,a)=>s.name.localeCompare(a.name)),r=this._floorConfigs,i=new Map;if(await Promise.all(e.map(async s=>{let a=r.get(s.floor_id);if(a){i.set(s.floor_id,a);return}i.set(s.floor_id,Dt(await vt(this.hass,s.floor_id)))})),!this.isConnected)return;this._floors=e,this._floorConfigs=i}catch(e){this._error=e.message||String(e)}}async _refreshHouse(){try{let e=Dt(await _t(this.hass));if(!this.isConnected)return;this._house=e}catch(e){this._error=e.message||String(e)}}async _subscribe(){let e=this.hass.connection.subscribeEvents(a=>{if(a.data.action==="remove"){let o=a.data.area_id,u=new Set(this._expanded);u.delete(`area:${o}`),this._expanded=u,this._editing?.scope.kind==="area"&&this._editing.scope.id===o&&(this._editing=null)}this._refreshAreas()},"area_registry_updated"),r=this.hass.connection.subscribeEvents(a=>{if(a.data.action==="remove"){let o=a.data.floor_id,u=new Set(this._expanded);u.delete(`floor:${o}`),this._expanded=u,this._editing?.scope.kind==="floor"&&this._editing.scope.id===o&&(this._editing=null)}this._refreshFloors()},"floor_registry_updated"),[i,s]=await Promise.all([e,r]);this.isConnected?(this._unsubArea=i,this._unsubFloor=s):(i(),s())}_getConfig(e){return e.kind==="house"?this._house:e.kind==="area"?this._areaConfigs.get(e.id):this._floorConfigs.get(e.id)}_setConfig(e,r){if(e.kind==="house")this._house=r;else if(e.kind==="area"){let i=new Map(this._areaConfigs);i.set(e.id,r),this._areaConfigs=i}else{let i=new Map(this._floorConfigs);i.set(e.id,r),this._floorConfigs=i}}async _mutate(e,r){let i=this._getConfig(e);this._setConfig(e,r),this._error="";try{let s;e.kind==="house"?s=await Wr(this.hass,r):e.kind==="area"?s=await jr(this.hass,e.id,r):s=await zr(this.hass,e.id,r),this._setConfig(e,Dt(s.config))}catch(s){i&&this._setConfig(e,i),this._error=s.message||String(s)}}_toggleExpand(e){let r=mn(e),i=new Set(this._expanded);i.has(r)?i.delete(r):i.add(r),this._expanded=i}_addRule(e){let r=this._getConfig(e);r&&(this._editing={scope:e,index:r.rules.length,isNew:!0})}_editRule(e,r){this._editing={scope:e,index:r.detail.index,isNew:!1}}_duplicateRule(e,r){let i=this._getConfig(e);if(!i)return;let s=i.rules[r.detail.index];if(!s)return;let a=JSON.parse(JSON.stringify(s)),o=[...i.rules];o.splice(r.detail.index+1,0,a),this._mutate(e,{...i,rules:o})}_deleteRule(e,r){let i=this._getConfig(e);if(!i)return;let s=i.rules.filter((a,o)=>o!==r.detail.index);this._mutate(e,{...i,rules:s})}_reorderRules(e,r){let i=this._getConfig(e);if(!i)return;let{from:s,to:a}=r.detail,o=i.rules[s];if(!o||i.rules[a]?.group!==o.group)return;let u=[...i.rules];u.splice(s,1),u.splice(a,0,o);let h=x=>u[x]&&u[x].group===o.group,p=a-1;for(;p>=0&&!h(p);)p--;let m=a+1;for(;m<u.length&&!h(m);)m++;let v=p>=0?u[p].priority:void 0,y=m<u.length?u[m].priority:void 0,k=Mo(v,y,i.rules.filter(x=>x.group===o.group));u[a]={...o,priority:k,pinned:!0},this._mutate(e,{...i,rules:u})}_unpinRule(e,r){let i=this._getConfig(e);if(!i)return;let s=i.rules.map((a,o)=>o===r.detail.index?{...a,pinned:!1}:a);this._mutate(e,{...i,rules:s})}_saveRule(e){let r=this._editing;if(this._editing=null,!r)return;let i=this._getConfig(r.scope);if(!i)return;let s=[...i.rules];r.isNew?s.push(e.detail):s[r.index]=e.detail,this._mutate(r.scope,{...i,rules:s})}_cancelRule(){this._editing=null}_selectFilter(e){this._filterGroup=e,this._filterOpen=!1}_renderFilterEntry(e){let r=Pe(e.color),i=r?`background:${r};color:${pt(r)}`:"";return l`
+  `,c([f({attribute:!1})],j.prototype,"hass",2),c([f({attribute:!1})],j.prototype,"scope",2),c([f({attribute:!1})],j.prototype,"rules",2),c([g()],j.prototype,"_open",2),c([g()],j.prototype,"_triggers",2),c([g()],j.prototype,"_opaque",2),c([g()],j.prototype,"_loading",2),c([g()],j.prototype,"_error",2),j=c([$("ambience-auto-triggers-section")],j);function mn(t){return t.kind==="house"?"house":`${t.kind}:${t.id}`}function Dt(t){return{rules:t.rules??[]}}var $r=1024;function Mo(t,n,e){if(t!==void 0&&n!==void 0)return Math.floor((t+n)/2);let r=e.map(i=>i.priority??0);return t===void 0&&n===void 0?$r:t===void 0?Math.max(...r)+$r:Math.min(...r)-$r}var L=class extends _{constructor(){super(...arguments);this._areas=[];this._floors=[];this._areaConfigs=new Map;this._floorConfigs=new Map;this._house={rules:[]};this._matchers=[];this._actions=[];this._groups=[];this._schemas={};this._expanded=new Set;this._error="";this._editing=null;this._filterGroup="";this._filterOpen=!1;this._onExposedActionsChanged=async()=>{try{let e=await Ye(this.hass);if(!this.isConnected)return;this._actions=e,await this._refreshSchemas(e)}catch{}}}async _refreshSchemas(e){let r=await Promise.all(e.map(async s=>{try{let a=await Fe(this.hass,s.id);return[s.id,a]}catch{return[s.id,null]}}));if(!this.isConnected)return;let i={};for(let[s,a]of r)a&&(i[s]=a);this._schemas=i}async connectedCallback(){super.connectedCallback(),window.addEventListener("ambience-exposed-actions-changed",this._onExposedActionsChanged),await this._loadStatic(),await Promise.all([this._refreshAreas(),this._refreshFloors(),this._refreshHouse()]),await this._subscribe()}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("ambience-exposed-actions-changed",this._onExposedActionsChanged),this._unsubArea?.(),this._unsubArea=void 0,this._unsubFloor?.(),this._unsubFloor=void 0}async _loadStatic(){try{let[e,r,i,s,a,o]=await Promise.all([yt(this.hass),Ye(this.hass),bt(this.hass),$t(this.hass),wt(this.hass),xt(this.hass)]);if(!this.isConnected)return;this._matchers=e,this._actions=r,this._periods=i,this._dayConfig=s,this._weatherConfig=a,this._groups=o,await this._refreshSchemas(r)}catch(e){this._error=e.message||String(e)}}async _refreshAreas(){try{let e=await mt(this.hass),r=this._areaConfigs,i=new Map;if(await Promise.all(e.map(async s=>{let a=r.get(s.area_id);if(a){i.set(s.area_id,a);return}i.set(s.area_id,Dt(await ft(this.hass,s.area_id)))})),!this.isConnected)return;this._areas=e,this._areaConfigs=i}catch(e){this._error=e.message||String(e)}}async _refreshFloors(){try{let e=(await gt(this.hass)).slice().sort((s,a)=>s.name.localeCompare(a.name)),r=this._floorConfigs,i=new Map;if(await Promise.all(e.map(async s=>{let a=r.get(s.floor_id);if(a){i.set(s.floor_id,a);return}i.set(s.floor_id,Dt(await vt(this.hass,s.floor_id)))})),!this.isConnected)return;this._floors=e,this._floorConfigs=i}catch(e){this._error=e.message||String(e)}}async _refreshHouse(){try{let e=Dt(await _t(this.hass));if(!this.isConnected)return;this._house=e}catch(e){this._error=e.message||String(e)}}async _subscribe(){let e=this.hass.connection.subscribeEvents(a=>{if(a.data.action==="remove"){let o=a.data.area_id,u=new Set(this._expanded);u.delete(`area:${o}`),this._expanded=u,this._editing?.scope.kind==="area"&&this._editing.scope.id===o&&(this._editing=null)}this._refreshAreas()},"area_registry_updated"),r=this.hass.connection.subscribeEvents(a=>{if(a.data.action==="remove"){let o=a.data.floor_id,u=new Set(this._expanded);u.delete(`floor:${o}`),this._expanded=u,this._editing?.scope.kind==="floor"&&this._editing.scope.id===o&&(this._editing=null)}this._refreshFloors()},"floor_registry_updated"),[i,s]=await Promise.all([e,r]);this.isConnected?(this._unsubArea=i,this._unsubFloor=s):(i(),s())}_getConfig(e){return e.kind==="house"?this._house:e.kind==="area"?this._areaConfigs.get(e.id):this._floorConfigs.get(e.id)}_setConfig(e,r){if(e.kind==="house")this._house=r;else if(e.kind==="area"){let i=new Map(this._areaConfigs);i.set(e.id,r),this._areaConfigs=i}else{let i=new Map(this._floorConfigs);i.set(e.id,r),this._floorConfigs=i}}async _mutate(e,r){let i=this._getConfig(e);this._setConfig(e,r),this._error="";try{let s;e.kind==="house"?s=await Wr(this.hass,r):e.kind==="area"?s=await jr(this.hass,e.id,r):s=await zr(this.hass,e.id,r),this._setConfig(e,Dt(s.config))}catch(s){i&&this._setConfig(e,i),this._error=s.message||String(s)}}_toggleExpand(e){let r=mn(e),i=new Set(this._expanded);i.has(r)?i.delete(r):i.add(r),this._expanded=i}_addRule(e){let r=this._getConfig(e);r&&(this._editing={scope:e,index:r.rules.length,isNew:!0})}_editRule(e,r){this._editing={scope:e,index:r.detail.index,isNew:!1}}_duplicateRule(e,r){let i=this._getConfig(e);if(!i)return;let s=i.rules[r.detail.index];if(!s)return;let a=JSON.parse(JSON.stringify(s)),o=[...i.rules];o.splice(r.detail.index+1,0,a),this._mutate(e,{...i,rules:o})}_deleteRule(e,r){let i=this._getConfig(e);if(!i)return;let s=i.rules.filter((a,o)=>o!==r.detail.index);this._mutate(e,{...i,rules:s})}_reorderRules(e,r){let i=this._getConfig(e);if(!i)return;let{from:s,to:a}=r.detail,o=i.rules[s];if(!o||i.rules[a]?.group!==o.group)return;let u=[...i.rules];u.splice(s,1),u.splice(a,0,o);let h=x=>u[x]&&u[x].group===o.group,p=a-1;for(;p>=0&&!h(p);)p--;let m=a+1;for(;m<u.length&&!h(m);)m++;let v=p>=0?u[p].priority:void 0,y=m<u.length?u[m].priority:void 0,k=Mo(v,y,i.rules.filter(x=>x.group===o.group));u[a]={...o,priority:k,pinned:!0},this._mutate(e,{...i,rules:u})}_unpinRule(e,r){let i=this._getConfig(e);if(!i)return;let s=i.rules.map((a,o)=>o===r.detail.index?{...a,pinned:!1}:a);this._mutate(e,{...i,rules:s})}_saveRule(e){let r=this._editing;if(this._editing=null,!r)return;let i=this._getConfig(r.scope);if(!i)return;let s=[...i.rules];r.isNew?s.push(e.detail):s[r.index]=e.detail,this._mutate(r.scope,{...i,rules:s})}_cancelRule(){this._editing=null}_selectFilter(e){this._filterGroup=e,this._filterOpen=!1}_renderFilterEntry(e){if(e===null)return l`
+        <span class="group-swatch"><ha-icon icon="mdi:filter-variant"></ha-icon></span>
+        <span class="group-name">${d(this.hass,"ui.all_groups","All groups")}</span>
+      `;let r=Pe(e.color),i=r?`background:${r};color:${pt(r)}`:"";return l`
       <span class="group-swatch" style=${i}>
         ${e.icon?l`<ha-icon icon=${e.icon}></ha-icon>`:""}
       </span>
       <span class="group-name">${e.name}</span>
-    `}_renderFilter(){if(this._groups.length<=1)return"";let e=d(this.hass,"ui.all_groups","All groups"),r=[...this._groups].sort((s,a)=>s.name.localeCompare(a.name)),i=this._groups.find(s=>s.id===this._filterGroup);return l`
+    `}_renderFilter(){if(this._groups.length<=1)return"";let e=[...this._groups].sort((i,s)=>i.name.localeCompare(s.name)),r=this._groups.find(i=>i.id===this._filterGroup)??null;return l`
       <div class="group-filter-row">
-        <span>${d(this.hass,"ui.filter_by_group","Filter by group")}</span>
+        <span class="group-filter-label">${d(this.hass,"ui.filter_by_group","Filter by group")}</span>
         <div class="group-filter">
           <button
             class="group-filter-trigger"
@@ -2024,8 +2027,8 @@ var vn=Object.defineProperty;var _n=Object.getOwnPropertyDescriptor;var c=(t,n,e
             aria-expanded=${this._filterOpen}
             @click=${()=>{this._filterOpen=!this._filterOpen}}
           >
-            ${i?this._renderFilterEntry(i):l`<span class="group-name">${e}</span>`}
-            <span class="caret">▾</span>
+            ${this._renderFilterEntry(r)}
+            <ha-icon class="caret" icon="mdi:menu-down"></ha-icon>
           </button>
           ${this._filterOpen?l`
                 <div class="group-filter-backdrop" @click=${()=>{this._filterOpen=!1}}></div>
@@ -2036,15 +2039,15 @@ var vn=Object.defineProperty;var _n=Object.getOwnPropertyDescriptor;var c=(t,n,e
                     aria-selected=${this._filterGroup===""}
                     @click=${()=>this._selectFilter("")}
                   >
-                    <span class="group-name">${e}</span>
+                    ${this._renderFilterEntry(null)}
                   </button>
-                  ${r.map(s=>l`<button
+                  ${e.map(i=>l`<button
                       class="group-filter-option"
                       role="option"
-                      aria-selected=${this._filterGroup===s.id}
-                      @click=${()=>this._selectFilter(s.id)}
+                      aria-selected=${this._filterGroup===i.id}
+                      @click=${()=>this._selectFilter(i.id)}
                     >
-                      ${this._renderFilterEntry(s)}
+                      ${this._renderFilterEntry(i)}
                     </button>`)}
                 </div>
               `:""}
@@ -2170,45 +2173,59 @@ var vn=Object.defineProperty;var _n=Object.getOwnPropertyDescriptor;var c=(t,n,e
       border-top: 1px solid var(--divider-color, #e0e0e0);
     }
     .group-filter-row {
-      display: flex; align-items: center; gap: 0.5rem;
-      margin: 0 0 0.75rem 0; font-size: 0.9em;
+      display: flex; align-items: center; gap: 0.75rem;
+      margin: 0 0 1.25rem 0;
+    }
+    .group-filter-label {
+      font-size: 0.95rem; font-weight: 500;
       color: var(--secondary-text-color, #888);
     }
-    .group-filter { position: relative; }
+    .group-filter { position: relative; min-width: 18rem; }
+    /* Trigger keeps a stable height regardless of the selection (the swatch is
+       always present), so picking a group never resizes the control. */
     .group-filter-trigger {
-      display: inline-flex; align-items: center; gap: 0.5rem;
-      padding: 0.3rem 0.6rem;
-      border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
+      display: flex; align-items: center; gap: 0.65rem; width: 100%;
+      min-height: 48px; box-sizing: border-box;
+      padding: 0.4rem 0.6rem 0.4rem 0.5rem;
+      border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px;
       background: var(--card-background-color, #fff);
       color: var(--primary-text-color, #212121);
-      cursor: pointer; font: inherit;
+      cursor: pointer; font: inherit; font-size: 1rem;
     }
-    .group-filter-trigger .caret { color: var(--secondary-text-color, #888); margin-left: 0.25rem; }
+    .group-filter-trigger:hover { background: var(--secondary-background-color, #f5f5f5); }
+    .group-filter-trigger .group-name { flex: 1; text-align: left; }
+    .group-filter-trigger .caret { color: var(--secondary-text-color, #888); flex: 0 0 auto; }
     /* Transparent full-screen catcher so any outside click closes the menu. */
     .group-filter-backdrop { position: fixed; inset: 0; z-index: 10; }
     .group-filter-menu {
-      position: absolute; top: 100%; left: 0; z-index: 11; margin-top: 2px;
-      min-width: 12rem; max-height: 60vh; overflow-y: auto;
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 11;
+      max-height: 60vh; overflow-y: auto;
       background: var(--card-background-color, #fff);
-      border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-      padding: 0.25rem;
+      border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+      padding: 0.35rem;
     }
     .group-filter-option {
-      display: flex; align-items: center; gap: 0.5rem; width: 100%;
-      padding: 0.35rem 0.5rem; border: 0; border-radius: 4px;
+      display: flex; align-items: center; gap: 0.65rem; width: 100%;
+      min-height: 44px; box-sizing: border-box;
+      padding: 0.4rem 0.6rem; border: 0; border-radius: 6px;
       background: none; color: var(--primary-text-color, #212121);
-      cursor: pointer; font: inherit; text-align: left;
+      cursor: pointer; font: inherit; font-size: 1rem; text-align: left;
     }
     .group-filter-option:hover { background: var(--secondary-background-color, #f5f5f5); }
-    .group-filter-option[aria-selected="true"] { font-weight: 600; }
-    /* Square colour swatch holding the group's icon. */
+    .group-filter-option[aria-selected="true"] {
+      background: var(--secondary-background-color, #eee); font-weight: 600;
+    }
+    /* Square colour swatch holding the group's icon; always present so rows
+       and the trigger keep a consistent height. */
     .group-swatch {
-      flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 4px;
+      flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: 6px;
       display: inline-flex; align-items: center; justify-content: center;
       background: var(--secondary-background-color, #e0e0e0);
+      color: var(--secondary-text-color, #555);
     }
-    .group-swatch ha-icon { --mdc-icon-size: 18px; }
+    .group-swatch ha-icon { --mdc-icon-size: 20px; }
+    .group-name { flex: 1; }
   `,c([f({attribute:!1})],L.prototype,"hass",2),c([g()],L.prototype,"_areas",2),c([g()],L.prototype,"_floors",2),c([g()],L.prototype,"_areaConfigs",2),c([g()],L.prototype,"_floorConfigs",2),c([g()],L.prototype,"_house",2),c([g()],L.prototype,"_matchers",2),c([g()],L.prototype,"_actions",2),c([g()],L.prototype,"_groups",2),c([g()],L.prototype,"_schemas",2),c([g()],L.prototype,"_periods",2),c([g()],L.prototype,"_dayConfig",2),c([g()],L.prototype,"_weatherConfig",2),c([g()],L.prototype,"_expanded",2),c([g()],L.prototype,"_error",2),c([g()],L.prototype,"_editing",2),c([g()],L.prototype,"_filterGroup",2),c([g()],L.prototype,"_filterOpen",2),L=c([$("ambience-scopes-view")],L);var X=class extends _{constructor(){super(...arguments);this._groups=[];this._error="";this._editing=null;this._modalError=""}async connectedCallback(){super.connectedCallback();try{this._groups=await xt(this.hass)}catch(e){this._error=e.message||String(e)}}_sorted(){return[...this._groups].sort((e,r)=>e.name.localeCompare(r.name))}_validate(e){let r=e.name.trim();if(r==="")return d(this.hass,"ui.group_name_blank_error","Group names can't be empty.");let i=r.toLocaleLowerCase();return this._groups.some(a=>a.id!==e.id&&a.name.trim().toLocaleLowerCase()===i)?d(this.hass,"ui.group_name_duplicate_error","Two groups can't have the same name."):""}_openEditor(e){this._editing={...e},this._modalError=""}_addGroup(){let e=crypto.randomUUID().replace(/-/g,"");this._editing={id:e,name:""},this._modalError=""}_closeModal(){this._editing=null,this._modalError=""}_patchDraft(e){this._editing&&(this._editing={...this._editing,...e})}_onName(e){this._patchDraft({name:e.target.value})}_onIcon(e){this._patchDraft({icon:e||void 0})}_onColor(e){this._patchDraft({color:e})}_save(){if(!this._editing)return;let e=this._validate(this._editing);if(e){this._modalError=e;return}let r={...this._editing,name:this._editing.name.trim()},i=this._groups.some(s=>s.id===r.id);this._groups=i?this._groups.map(s=>s.id===r.id?r:s):[...this._groups,r],this._closeModal(),ei(this.hass,this._groups).catch(s=>{this._error=s.message||String(s)})}_deleteGroup(){if(!this._editing)return;let e=this._editing.id;if(this._groups.length<=1){this._modalError=d(this.hass,"ui.group_delete_blocked_last","You can't delete the last group.");return}let r=this._groups;this._groups=this._groups.filter(i=>i.id!==e),ti(this.hass,e).then(()=>this._closeModal()).catch(i=>{this._groups=r;let s=i.message||String(i);this._modalError=s.includes("still has rules")?d(this.hass,"ui.group_delete_blocked_in_use","This group still has rules \u2014 move or delete them first."):s})}_renderIconField(){return customElements.get("ha-icon-picker")?l`<ha-icon-picker
         .hass=${this.hass}
         .value=${this._editing.icon??""}

@@ -930,6 +930,58 @@ def test_scope_reapply_intervals_action_zero_suppresses_exposed():
     assert scope_reapply_intervals(cfg, exposed) == []
 
 
+async def test_resolve_with_snapshots_includes_explanation_when_explain(
+    hass: HomeAssistant,
+) -> None:
+    """When explain=True, plan['explanation'] is an Explanation with at least one rule eval."""
+    areas = {
+        "a": {
+            "rules": [
+                {
+                    "name": "r",
+                    "when": {"tod": "evening"},
+                    "actions": [],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {"tod": FixedMatcher("evening")},
+        DATA_SWITCHES: {},
+    }
+    plan = await async_resolve_with_snapshots(
+        hass, "area", "a", {"tod": "evening"}, group=None, describe=False, explain=True
+    )
+    assert plan["explanation"] is not None
+    assert len(plan["explanation"].rules) >= 1
+    assert plan["explanation"].winner_index == plan["matched_rule_index"]
+
+
+async def test_resolve_with_snapshots_omits_explanation_by_default(
+    hass: HomeAssistant,
+) -> None:
+    """When explain is not passed (default False), plan['explanation'] is None."""
+    areas = {
+        "a": {
+            "rules": [
+                {
+                    "name": "r",
+                    "when": {"tod": "evening"},
+                    "actions": [],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {"tod": FixedMatcher("evening")},
+        DATA_SWITCHES: {},
+    }
+    plan = await async_resolve_with_snapshots(hass, "area", "a", {"tod": "evening"})
+    assert plan.get("explanation") is None
+
+
 async def test_execute_actions_dispatches_and_leaves_last_applied_untouched(hass):
     calls = []
     hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))

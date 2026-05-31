@@ -21,7 +21,7 @@ from .const import (
     DATA_SWITCHES,
     DOMAIN,
 )
-from .engine import resolve
+from .engine import evaluate_explained, resolve
 from .validators import MIN_REAPPLY_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
@@ -75,12 +75,16 @@ async def async_resolve_with_snapshots(
     group: str | None = None,
     *,
     describe: bool = True,
+    explain: bool = False,
 ) -> dict[str, Any]:
     """Resolve a scope against a pre-built `{matcher_name: snapshot}` dict.
 
     Does NOT call any matcher's `snapshot()` — the caller supplies them (the
     engine passes its own cache). Returns {matched_rule_index, rule_name,
-    actions, snapshots_described, switch_state}.
+    actions, snapshots_described, switch_state, explanation}.
+
+    `explanation` is an `Explanation` (rule list relative to the resolved
+    group) when `explain=True`, else None.
 
     A `when` key naming a matcher that isn't registered (e.g. a stale config
     key) fails the rule, since `resolve()` cannot evaluate it.
@@ -101,11 +105,20 @@ async def async_resolve_with_snapshots(
 
     rules = scope_cfg.get("rules", [])
     if group is None:
+        candidates = rules
         match = resolve(rules, snapshots, matchers_registry)
     else:
         indexed = [(i, r) for i, r in enumerate(rules) if r.get("group") == group]
-        sub = resolve([r for _, r in indexed], snapshots, matchers_registry)
+        candidates = [r for _, r in indexed]
+        sub = resolve(candidates, snapshots, matchers_registry)
         match = None if sub is None else (indexed[sub[0]][0], sub[1])
+
+    explanation = (
+        evaluate_explained(candidates, snapshots, matchers_registry, describe=True)
+        if explain
+        else None
+    )
+
     switch_state = _switch_state(hass, scope_kind, scope_id)
     if match is None:
         return {
@@ -114,6 +127,7 @@ async def async_resolve_with_snapshots(
             "actions": [],
             "snapshots_described": described,
             "switch_state": switch_state,
+            "explanation": explanation,
         }
     idx, rule = match
     return {
@@ -122,6 +136,7 @@ async def async_resolve_with_snapshots(
         "actions": rule.get("actions", []),
         "snapshots_described": described,
         "switch_state": switch_state,
+        "explanation": explanation,
     }
 
 

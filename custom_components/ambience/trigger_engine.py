@@ -46,7 +46,15 @@ from .service import (
     group_ids,
     scope_reapply_intervals,
 )
-from .trace import TraceEvent, TriggerCause, UnitTrace, emit_trace, tracing_active
+from .trace import (
+    CauseKind,
+    Outcome,
+    TraceEvent,
+    TriggerCause,
+    UnitTrace,
+    emit_trace,
+    tracing_active,
+)
 from .trigger_index import PredKey, TriggerIndex, build_index
 from .triggers import EMPTY, TriggerSpec
 
@@ -225,7 +233,7 @@ class AutoTriggerEngine:
         if switch_state == "off":
             if active:
                 return UnitTrace(
-                    scope_kind, scope_id, group_id, switch_state, "skipped_switch_off", None
+                    scope_kind, scope_id, group_id, switch_state, Outcome.SKIPPED_SWITCH_OFF, None
                 )
             return None
         plan = await async_resolve_with_snapshots(
@@ -242,7 +250,7 @@ class AutoTriggerEngine:
         if index is None:
             if active:
                 return UnitTrace(
-                    scope_kind, scope_id, group_id, switch_state, "no_match", explanation
+                    scope_kind, scope_id, group_id, switch_state, Outcome.NO_MATCH, explanation
                 )
             return None
         if not force and index == get_last_applied(self._hass, scope_kind, scope_id, group_id):
@@ -252,7 +260,7 @@ class AutoTriggerEngine:
                     scope_id,
                     group_id,
                     switch_state,
-                    "no_op",
+                    Outcome.NO_OP,
                     explanation,
                     winner_name=plan["rule_name"],
                 )
@@ -264,7 +272,7 @@ class AutoTriggerEngine:
                 scope_id,
                 group_id,
                 switch_state,
-                "acted",
+                Outcome.ACTED,
                 explanation,
                 winner_name=plan["rule_name"],
                 actions=plan["actions"],
@@ -302,7 +310,9 @@ class AutoTriggerEngine:
         await self._refresh_snapshots({key[3] for key in fired})
         traces = await self._apply_units(self._recompute(fired, self._snapshots))
         if traces:
-            emit_trace(self._hass, TraceEvent(cause or TriggerCause(kind="unknown"), traces))
+            emit_trace(
+                self._hass, TraceEvent(cause or TriggerCause(kind=CauseKind.UNKNOWN), traces)
+            )
 
     async def _async_refresh(self) -> None:
         """Full (re)build: rebuild the index, resubscribe, and sync to reality."""
@@ -335,7 +345,7 @@ class AutoTriggerEngine:
         ]
         traces = await self._apply_units(units)
         if traces:
-            emit_trace(self._hass, TraceEvent(TriggerCause(kind="startup"), traces))
+            emit_trace(self._hass, TraceEvent(TriggerCause(kind=CauseKind.STARTUP), traces))
 
     def _fire(self, fired: set[PredKey], cause: TriggerCause | None = None) -> None:
         """Schedule a re-evaluation of the given predicates (callback-safe)."""
@@ -371,7 +381,7 @@ class AutoTriggerEngine:
                     self._hass,
                     self._make_keys_handler(
                         index.by_clock[clock],
-                        TriggerCause(kind="clock", detail=f"{clock[0]:02d}:{clock[1]:02d}"),
+                        TriggerCause(kind=CauseKind.CLOCK, detail=f"{clock[0]:02d}:{clock[1]:02d}"),
                     ),
                     hour=clock[0],
                     minute=clock[1],
@@ -384,7 +394,7 @@ class AutoTriggerEngine:
                     self._hass,
                     self._make_keys_handler(
                         index.midnight,
-                        TriggerCause(kind="clock", detail="00:00"),
+                        TriggerCause(kind=CauseKind.CLOCK, detail="00:00"),
                     ),
                     hour=0,
                     minute=0,
@@ -399,7 +409,7 @@ class AutoTriggerEngine:
                     self._hass,
                     self._make_keys_handler(
                         index.has_time,
-                        TriggerCause(kind="has_time"),
+                        TriggerCause(kind=CauseKind.HAS_TIME),
                     ),
                     _HAS_TIME_INTERVAL,
                 )
@@ -433,7 +443,7 @@ class AutoTriggerEngine:
         old_state = event.data.get("old_state")
         new_state = event.data.get("new_state")
         cause = TriggerCause(
-            kind="entity",
+            kind=CauseKind.ENTITY,
             entity_id=event.data["entity_id"],
             old=old_state.state if old_state else None,
             new=new_state.state if new_state else None,
@@ -514,7 +524,7 @@ class AutoTriggerEngine:
         @callback
         def _recheck(_now: Any) -> None:
             self._for_handles.pop(key, None)
-            self._fire({key}, TriggerCause(kind="has_time", detail="for"))
+            self._fire({key}, TriggerCause(kind=CauseKind.HAS_TIME, detail="for"))
 
         return _recheck
 
@@ -544,7 +554,7 @@ class AutoTriggerEngine:
             emit_trace(
                 self._hass,
                 TraceEvent(
-                    TriggerCause(kind="switch", entity_id=switch_entity_id or scope_id),
+                    TriggerCause(kind=CauseKind.SWITCH, entity_id=switch_entity_id or scope_id),
                     traces,
                 ),
             )
@@ -575,7 +585,7 @@ class AutoTriggerEngine:
             if preds:
                 self._fire(
                     set(preds),
-                    TriggerCause(kind="sun", detail=f"{sun_event[0]}+{sun_event[1]}"),
+                    TriggerCause(kind=CauseKind.SUN, detail=f"{sun_event[0]}+{sun_event[1]}"),
                 )
             self._schedule_sun(sun_event)  # arm the next occurrence
 

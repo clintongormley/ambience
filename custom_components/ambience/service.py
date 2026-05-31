@@ -22,7 +22,15 @@ from .const import (
     DOMAIN,
 )
 from .engine import evaluate_explained, resolve
-from .trace import TraceEvent, TriggerCause, UnitTrace, emit_trace, tracing_active
+from .trace import (
+    CauseKind,
+    Outcome,
+    TraceEvent,
+    TriggerCause,
+    UnitTrace,
+    emit_trace,
+    tracing_active,
+)
 from .validators import MIN_REAPPLY_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
@@ -107,18 +115,24 @@ async def async_resolve_with_snapshots(
     rules = scope_cfg.get("rules", [])
     if group is None:
         candidates = rules
-        match = resolve(rules, snapshots, matchers_registry)
+        to_full = None  # candidate index already is the full-rule index
     else:
-        indexed = [(i, r) for i, r in enumerate(rules) if r.get("group") == group]
-        candidates = [r for _, r in indexed]
-        sub = resolve(candidates, snapshots, matchers_registry)
-        match = None if sub is None else (indexed[sub[0]][0], sub[1])
+        to_full = [i for i, r in enumerate(rules) if r.get("group") == group]
+        candidates = [rules[i] for i in to_full]
 
-    explanation = (
-        evaluate_explained(candidates, snapshots, matchers_registry, describe=True)
-        if explain
-        else None
-    )
+    # Evaluate the candidate list exactly once: when explaining, derive the
+    # winner from the Explanation (resolve() is itself a thin wrapper over
+    # evaluate_explained, so calling both would walk the rules twice).
+    if explain:
+        explanation = evaluate_explained(candidates, snapshots, matchers_registry, describe=True)
+        winner = explanation.winner_index
+        match = None if winner is None else (winner, candidates[winner])
+    else:
+        explanation = None
+        match = resolve(candidates, snapshots, matchers_registry)
+
+    if match is not None and to_full is not None:
+        match = (to_full[match[0]], match[1])
 
     switch_state = _switch_state(hass, scope_kind, scope_id)
     if match is None:
@@ -243,7 +257,7 @@ async def async_apply_scene(
             )
             if active:
                 return UnitTrace(
-                    scope_kind, scope_id, group_id, switch_state, "no_match", explanation
+                    scope_kind, scope_id, group_id, switch_state, Outcome.NO_MATCH, explanation
                 )
             return None
         await async_execute_plan(hass, scope_kind, scope_id, plan, group_id)
@@ -253,7 +267,7 @@ async def async_apply_scene(
                 scope_id,
                 group_id,
                 switch_state,
-                "acted",
+                Outcome.ACTED,
                 explanation,
                 winner_name=plan["rule_name"],
                 actions=plan["actions"],
@@ -271,7 +285,7 @@ async def async_apply_scene(
         elif res is not None:
             traces.append(res)
     if traces:
-        emit_trace(hass, TraceEvent(TriggerCause(kind="manual"), traces))
+        emit_trace(hass, TraceEvent(TriggerCause(kind=CauseKind.MANUAL), traces))
 
 
 async def async_execute_actions(

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
@@ -24,32 +25,55 @@ if _NOOP_LOGGER.level == logging.NOTSET:
     _NOOP_LOGGER.setLevel(logging.WARNING)
 
 
+class CauseKind(StrEnum):
+    """What kind of event triggered an evaluation. (StrEnum: compares and
+    renders as its string value, so raw strings remain interchangeable.)"""
+
+    ENTITY = "entity"
+    CLOCK = "clock"
+    SUN = "sun"
+    HAS_TIME = "has_time"
+    SWITCH = "switch"
+    MANUAL = "manual"
+    STARTUP = "startup"
+    UNKNOWN = "unknown"
+
+
+class Outcome(StrEnum):
+    """What an evaluated (scope, group) unit did."""
+
+    ACTED = "acted"
+    NO_OP = "no_op"
+    NO_MATCH = "no_match"
+    SKIPPED_SWITCH_OFF = "skipped_switch_off"
+
+
 @dataclass(frozen=True)
 class TriggerCause:
     """What caused an evaluation."""
 
-    kind: str  # entity|clock|sun|has_time|switch|manual|startup|unknown
+    kind: CauseKind
     entity_id: str | None = None
     old: str | None = None
     new: str | None = None
     detail: str | None = None
 
     def describe(self) -> str:
-        if self.kind == "entity":
+        if self.kind == CauseKind.ENTITY:
             return f"{self.entity_id} changed {self.old!r} -> {self.new!r}"
-        if self.kind == "clock":
+        if self.kind == CauseKind.CLOCK:
             return f"clock {self.detail}"
-        if self.kind == "sun":
+        if self.kind == CauseKind.SUN:
             return f"sun {self.detail}"
-        if self.kind == "has_time":
+        if self.kind == CauseKind.HAS_TIME:
             return f"duration recheck ({self.detail})" if self.detail else "duration recheck"
-        if self.kind == "switch":
+        if self.kind == CauseKind.SWITCH:
             return f"switch {self.entity_id} on"
-        if self.kind == "manual":
+        if self.kind == CauseKind.MANUAL:
             return "manual apply_scene"
-        if self.kind == "startup":
+        if self.kind == CauseKind.STARTUP:
             return "startup sync"
-        return self.kind
+        return str(self.kind)
 
 
 @dataclass(frozen=True)
@@ -65,7 +89,7 @@ class UnitTrace:
     scope_id: str | None
     group: str
     switch_state: str
-    outcome: str  # acted|no_op|no_match|skipped_switch_off
+    outcome: Outcome
     explanation: Explanation | None
     winner_name: str | None = None
     actions: list[dict[str, Any]] = field(default_factory=list)
@@ -88,16 +112,18 @@ def format_trace_event(event: TraceEvent) -> list[str]:
     lines = [f"trigger: {event.cause.describe()}"]
     for unit in event.units:
         scope = _scope_label(unit)
-        if unit.outcome == "skipped_switch_off":
+        if unit.outcome == Outcome.SKIPPED_SWITCH_OFF:
             lines.append(f"  {scope}: skipped (switch off)")
             continue
-        winner = ""
-        if unit.explanation and unit.explanation.winner_index is not None:
-            winner = f" -> rule #{unit.explanation.winner_index} {unit.winner_name!r}"
-        lines.append(f"  {scope}: {unit.outcome}{winner}")
-        if unit.explanation is None:
+        explanation = unit.explanation
+        if explanation is None:
+            lines.append(f"  {scope}: {unit.outcome}")
             continue
-        for rule_eval in unit.explanation.rules:
+        winner = ""
+        if explanation.winner_index is not None:
+            winner = f" -> rule #{explanation.winner_index} {unit.winner_name!r}"
+        lines.append(f"  {scope}: {unit.outcome}{winner}")
+        for rule_eval in explanation.rules:
             if not rule_eval.evaluated:
                 lines.append(
                     f"      rule #{rule_eval.index} {rule_eval.name!r}: "
@@ -128,14 +154,17 @@ class LogSink:
     """
 
     def emit(self, event: TraceEvent) -> None:
-        acted = [u for u in event.units if u.outcome == "acted"]
-        other = [u for u in event.units if u.outcome != "acted"]
-        if acted and _LOGGER.isEnabledFor(logging.DEBUG):
-            for line in format_trace_event(TraceEvent(event.cause, acted)):
-                _LOGGER.debug("%s", line)
-        if other and _NOOP_LOGGER.isEnabledFor(logging.DEBUG):
-            for line in format_trace_event(TraceEvent(event.cause, other)):
-                _NOOP_LOGGER.debug("%s", line)
+        # Partition only inside each guard, so an off stream costs nothing.
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            acted = [u for u in event.units if u.outcome == Outcome.ACTED]
+            if acted:
+                for line in format_trace_event(TraceEvent(event.cause, acted)):
+                    _LOGGER.debug("%s", line)
+        if _NOOP_LOGGER.isEnabledFor(logging.DEBUG):
+            other = [u for u in event.units if u.outcome != Outcome.ACTED]
+            if other:
+                for line in format_trace_event(TraceEvent(event.cause, other)):
+                    _NOOP_LOGGER.debug("%s", line)
 
 
 def tracing_active() -> bool:

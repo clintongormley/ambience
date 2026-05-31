@@ -1684,7 +1684,7 @@ describe("ambience-rule-editor — group selector", () => {
     expect(el._draft.group).toBe("blinds");
 
     let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
       (b: any) => b.textContent.trim() === "Save rule",
     ) as HTMLButtonElement;

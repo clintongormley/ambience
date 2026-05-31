@@ -85,6 +85,8 @@
     "auto_trigger_group_sun": "Sun",
     "auto_trigger_periodic": "periodic re-check",
     "auto_trigger_date_rollover": "Local midnight (date rollover)",
+    "auto_trigger_reapply": "Re-apply",
+    "auto_trigger_every": "every",
     "loading": "Loading…",
     "any_placeholder": "(any)",
     "include": "Include",

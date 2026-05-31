@@ -106,6 +106,7 @@ export type AutoTrigger = {
       date_rollover: boolean;
     }
   | { kind: "sun"; suns: { anchor: string; offset: number }[] }
+  | { kind: "reapply"; interval_seconds: number }
 );
 
 export type AutoTriggerList = {

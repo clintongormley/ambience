@@ -26,6 +26,7 @@ from custom_components.ambience.service import (
     async_resolve_only,
     async_resolve_with_snapshots,
     effective_reapply_seconds,
+    scope_reapply_intervals,
 )
 
 
@@ -823,6 +824,66 @@ def test_effective_reapply_bool_value_is_off():
 def test_effective_reapply_handles_missing_exposed_store():
     action = {"service": "x.y", "reapply_seconds": 30}
     assert effective_reapply_seconds(action, None) == 30
+
+
+# ---------------------------------------------------------------------------
+# scope_reapply_intervals
+# ---------------------------------------------------------------------------
+
+
+def test_scope_reapply_intervals_returns_sorted_distinct():
+    cfg = {
+        "rules": [
+            {"actions": [{"service": "x.y", "reapply_seconds": 600}]},
+            {"actions": [{"service": "x.y", "reapply_seconds": 300}]},
+            {"actions": [{"service": "x.y", "reapply_seconds": 600}]},  # duplicate
+        ]
+    }
+    assert scope_reapply_intervals(cfg, None) == [300, 600]
+
+
+def test_scope_reapply_intervals_empty_when_none():
+    cfg = {
+        "rules": [
+            {"actions": [{"service": "x.y"}]},
+        ]
+    }
+    assert scope_reapply_intervals(cfg, None) == []
+
+
+def test_scope_reapply_intervals_empty_when_no_rules():
+    assert scope_reapply_intervals({}, None) == []
+
+
+def test_scope_reapply_intervals_skips_zero_and_below_floor():
+    cfg = {
+        "rules": [
+            {"actions": [{"service": "x.y", "reapply_seconds": 0}]},
+            {"actions": [{"service": "x.y", "reapply_seconds": 9}]},  # below floor
+            {"actions": [{"service": "x.y", "reapply_seconds": 300}]},
+        ]
+    }
+    assert scope_reapply_intervals(cfg, None) == [300]
+
+
+def test_scope_reapply_intervals_uses_exposed_default():
+    exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
+    cfg = {
+        "rules": [
+            {"actions": [{"service": "light.turn_on"}]},  # inherits exposed default
+        ]
+    }
+    assert scope_reapply_intervals(cfg, exposed) == [300]
+
+
+def test_scope_reapply_intervals_action_zero_suppresses_exposed():
+    exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
+    cfg = {
+        "rules": [
+            {"actions": [{"service": "light.turn_on", "reapply_seconds": 0}]},
+        ]
+    }
+    assert scope_reapply_intervals(cfg, exposed) == []
 
 
 async def test_execute_actions_dispatches_and_leaves_last_applied_untouched(hass):

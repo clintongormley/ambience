@@ -1841,6 +1841,21 @@ async def test_set_trigger_unknown_scope_kind_errors(hass, installed, hass_ws_cl
     assert resp["success"] is False
 
 
+async def test_set_trigger_rejects_reapply_key(hass, installed, hass_ws_client) -> None:
+    # reapply:* rows are read-only; the backend must refuse to disable them so
+    # the key can never pollute disabled_triggers.
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/auto_triggers/set_trigger",
+        scope_kind="area",
+        scope_id="lr",
+        key="reapply:300",
+        enabled=False,
+    )
+    assert resp["success"] is False
+    assert "re-apply" in resp["error"]["message"].lower()
+
+
 async def test_auto_triggers_list_groups_time_and_sun(hass, installed, hass_ws_client) -> None:
     """A time_of_day rule produces a single grouped 'time' row, not per-time rows."""
     store = hass.data[DOMAIN][DATA_STORE]
@@ -1902,6 +1917,56 @@ async def test_set_group_trigger_then_list_shows_disabled(hass, installed, hass_
     )
     row = next(t for t in list_resp["result"]["triggers"] if t["key"] == "group:time")
     assert row["enabled"] is False
+
+
+async def test_auto_triggers_list_includes_reapply_row(hass, installed, hass_ws_client) -> None:
+    """A scope whose rule action has reapply_seconds set yields a reapply row."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "when": {},
+                    "actions": [{"service": "light.turn_on", "reapply_seconds": 300}],
+                }
+            ]
+        },
+    )
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/auto_triggers/list", scope_kind="area", scope_id="lr"
+    )
+    assert resp["success"] is True
+    triggers = resp["result"]["triggers"]
+    reapply_rows = [t for t in triggers if t["kind"] == "reapply"]
+    assert len(reapply_rows) == 1
+    assert reapply_rows[0]["key"] == "reapply:300"
+    assert reapply_rows[0]["interval_seconds"] == 300
+    assert reapply_rows[0]["enabled"] is True
+
+
+async def test_auto_triggers_list_no_reapply_row_when_not_set(
+    hass, installed, hass_ws_client
+) -> None:
+    """A scope with no reapply_seconds in any action yields no reapply row."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "when": {},
+                    "actions": [{"service": "light.turn_on"}],
+                }
+            ]
+        },
+    )
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/auto_triggers/list", scope_kind="area", scope_id="lr"
+    )
+    assert resp["success"] is True
+    triggers = resp["result"]["triggers"]
+    assert not any(t["kind"] == "reapply" for t in triggers)
 
 
 async def test_area_save_rejects_bad_action_reapply(

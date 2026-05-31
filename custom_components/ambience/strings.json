@@ -173,7 +173,9 @@
     "invalid_yaml": "Invalid YAML.",
     "reapply_enable_label": "Re-apply periodically",
     "reapply_seconds_label": "Re-apply every (seconds)",
-    "reapply_seconds_unit": "s"
+    "reapply_seconds_unit": "s",
+    "auto_trigger_reapply": "Re-apply",
+    "auto_trigger_every": "every"
   },
   "day_summary": {
     "any": "any",

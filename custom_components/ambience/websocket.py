@@ -23,7 +23,7 @@ from .const import (
 from .exposed_actions import ExposedActionsStore
 from .matchers.weather import WEATHER_CONDITIONS
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
-from .service import async_resolve_only
+from .service import async_resolve_only, scope_reapply_intervals
 from .sorting import sort_rules
 from .validators import validate_reapply_seconds
 
@@ -1095,6 +1095,16 @@ async def _ws_auto_triggers_list(
         return
     spec = scope_trigger_spec(matchers, cfg)
     triggers = [{**row, "enabled": row["key"] not in disabled} for row in trigger_descriptors(spec)]
+    exposed = hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
+    for interval in scope_reapply_intervals(cfg, exposed):
+        triggers.append(
+            {
+                "key": f"reapply:{interval}",
+                "kind": "reapply",
+                "interval_seconds": interval,
+                "enabled": True,
+            }
+        )
     connection.send_result(msg["id"], {"triggers": triggers, "opaque": spec.opaque})
 
 
@@ -1113,6 +1123,11 @@ async def _ws_auto_triggers_set_trigger(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """Enable/disable a single derived trigger for a scope."""
+    # `reapply:*` rows are read-only/informational (re-apply is configured
+    # per-action), so they must never be written to disabled_triggers.
+    if msg["key"].startswith("reapply:"):
+        connection.send_error(msg["id"], "validation_error", "re-apply triggers are not toggleable")
+        return
     store = hass.data[DOMAIN][DATA_STORE]
     try:
         await store.async_set_trigger_disabled(

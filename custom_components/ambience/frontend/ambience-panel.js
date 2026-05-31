@@ -1974,7 +1974,7 @@ var on=Object.defineProperty;var ln=Object.getOwnPropertyDescriptor;var c=(t,n,e
       margin-top: 0.5rem;
       padding: 0.3rem 0;
     }
-  `,C._ADD_MATCHER_PLACEHOLDER="__add_matcher__",C._ADD_ACTION_PLACEHOLDER="__add_action__",c([p({type:Boolean,reflect:!0})],C.prototype,"open",2),c([p({attribute:!1})],C.prototype,"rule",2),c([p({attribute:!1})],C.prototype,"matchers",2),c([p({attribute:!1})],C.prototype,"sceneSuggestions",2),c([p({attribute:!1})],C.prototype,"periods",2),c([p({attribute:!1})],C.prototype,"dayConfig",2),c([p({attribute:!1})],C.prototype,"weatherConfig",2),c([p({attribute:!1})],C.prototype,"availableActions",2),c([p({attribute:!1})],C.prototype,"schemas",2),c([p({attribute:!1})],C.prototype,"hass",2),c([p({attribute:!1})],C.prototype,"scope",2),c([g()],C.prototype,"_draft",2),c([g()],C.prototype,"_open",2),c([g()],C.prototype,"_showError",2),c([g()],C.prototype,"_serviceHasTarget",2),C=c([$("ambience-rule-editor")],C);var Co={sunrise:"Sunrise",sunset:"Sunset",noon:"Noon",midnight:"Midnight",dawn:"Dawn",dusk:"Dusk"},j=class extends _{constructor(){super(...arguments);this.rules=[];this._open=!1;this._triggers=[];this._opaque=!1;this._loading=!1;this._error=""}willUpdate(e){super.willUpdate?.(e),this._open&&(e.has("_open")||e.has("rules")||e.has("scope"))&&this._load()}get _scopeId(){return this.scope.kind==="house"?null:this.scope.id}async _load(){this._loading=!0,this._error="";try{let e=await Qr(this.hass,this.scope.kind,this._scopeId);this._triggers=e.triggers,this._opaque=e.opaque}catch(e){this._error=e.message||String(e)}finally{this._loading=!1}}_toggleOpen(){this._open=!this._open}async _onToggle(e,r){this._triggers=this._triggers.map(i=>i.key===e.key?{...i,enabled:r}:i);try{await Jr(this.hass,this.scope.kind,this._scopeId,e.key,r)}catch(i){this._triggers=this._triggers.map(s=>s.key===e.key?{...s,enabled:!r}:s),this._error=i.message||String(i)}}_entityName(e){let r=this.hass?.states?.[e]?.attributes?.friendly_name;return typeof r=="string"&&r?r:e}_sortLabel(e){return e.kind==="entity"?this._entityName(e.entity_id).toLowerCase():e.kind}get _sortedTriggers(){let e=this._triggers.filter(i=>i.kind==="entity").slice().sort((i,s)=>this._sortLabel(i).localeCompare(this._sortLabel(s))),r=this._triggers.filter(i=>i.kind!=="entity");return[...e,...r]}_sunPart(e){let r=d(this.hass,`anchor.${e.anchor}`,Co[e.anchor]??e.anchor);return e.offset===0?r:`${r} ${e.offset>0?"+":""}${e.offset} min`}_label(e){switch(e.kind){case"entity":return l`<span class="label"
+  `,C._ADD_MATCHER_PLACEHOLDER="__add_matcher__",C._ADD_ACTION_PLACEHOLDER="__add_action__",c([p({type:Boolean,reflect:!0})],C.prototype,"open",2),c([p({attribute:!1})],C.prototype,"rule",2),c([p({attribute:!1})],C.prototype,"matchers",2),c([p({attribute:!1})],C.prototype,"sceneSuggestions",2),c([p({attribute:!1})],C.prototype,"periods",2),c([p({attribute:!1})],C.prototype,"dayConfig",2),c([p({attribute:!1})],C.prototype,"weatherConfig",2),c([p({attribute:!1})],C.prototype,"availableActions",2),c([p({attribute:!1})],C.prototype,"schemas",2),c([p({attribute:!1})],C.prototype,"hass",2),c([p({attribute:!1})],C.prototype,"scope",2),c([g()],C.prototype,"_draft",2),c([g()],C.prototype,"_open",2),c([g()],C.prototype,"_showError",2),c([g()],C.prototype,"_serviceHasTarget",2),C=c([$("ambience-rule-editor")],C);var Co={sunrise:"Sunrise",sunset:"Sunset",noon:"Noon",midnight:"Midnight",dawn:"Dawn",dusk:"Dusk"},j=class extends _{constructor(){super(...arguments);this.rules=[];this._open=!1;this._triggers=[];this._opaque=!1;this._loading=!1;this._error=""}willUpdate(e){super.willUpdate?.(e),this._open&&(e.has("_open")||e.has("rules")||e.has("scope"))&&this._load()}get _scopeId(){return this.scope.kind==="house"?null:this.scope.id}async _load(){this._loading=!0,this._error="";try{let e=await Qr(this.hass,this.scope.kind,this._scopeId);this._triggers=e.triggers,this._opaque=e.opaque}catch(e){this._error=e.message||String(e)}finally{this._loading=!1}}_toggleOpen(){this._open=!this._open}async _onToggle(e,r){this._triggers=this._triggers.map(i=>i.key===e.key?{...i,enabled:r}:i);try{await Jr(this.hass,this.scope.kind,this._scopeId,e.key,r)}catch(i){this._triggers=this._triggers.map(s=>s.key===e.key?{...s,enabled:!r}:s),this._error=i.message||String(i)}}_entityName(e){let r=this.hass?.states?.[e]?.attributes?.friendly_name;return typeof r=="string"&&r?r:e}_sortLabel(e){return e.kind==="entity"?this._entityName(e.entity_id).toLowerCase():e.kind}get _sortedTriggers(){let e=this._triggers.filter(i=>i.kind==="entity").slice().sort((i,s)=>this._sortLabel(i).localeCompare(this._sortLabel(s))),r=this._triggers.filter(i=>i.kind!=="entity");return[...e,...r]}_sunPart(e){let r=d(this.hass,`anchor.${e.anchor}`,Co[e.anchor]??e.anchor);return e.offset===0?r:`${r} ${e.offset>0?"+":""}${e.offset} min`}_formatInterval(e){return e%60===0?`${e/60} min`:e<60?`${e} sec`:`${Math.floor(e/60)} min ${e%60} sec`}_label(e){switch(e.kind){case"entity":return l`<span class="label"
           >${this._entityName(e.entity_id)}<span class="eid">${e.entity_id}</span></span
         >`;case"time":{let r=e.clocks.map(i=>`${String(i.hour).padStart(2,"0")}:${String(i.minute).padStart(2,"0")}`);return e.date_rollover&&r.push(d(this.hass,"ui.auto_trigger_date_rollover","Local midnight (date rollover)")),e.has_time&&r.push(d(this.hass,"ui.auto_trigger_periodic","periodic re-check")),l`<span class="label"
           ><strong>${d(this.hass,"ui.auto_trigger_group_time","Time")}:</strong>
@@ -1982,7 +1982,11 @@ var on=Object.defineProperty;var ln=Object.getOwnPropertyDescriptor;var c=(t,n,e
         >`}case"sun":{let r=e.suns.map(i=>this._sunPart(i));return l`<span class="label"
           ><strong>${d(this.hass,"ui.auto_trigger_group_sun","Sun")}:</strong>
           ${r.join(", ")}</span
-        >`}}}render(){return l`
+        >`}case"reapply":return l`<span class="label"
+          ><strong>${d(this.hass,"ui.auto_trigger_reapply","Re-apply")}:</strong>
+          ${d(this.hass,"ui.auto_trigger_every","every")}
+          ${this._formatInterval(e.interval_seconds)}</span
+        >`}}render(){return l`
       <div class="header" data-test="auto-triggers-header" @click=${this._toggleOpen}>
         <span class="chevron ${this._open?"open":""}">▶</span>
         <span>${d(this.hass,"ui.auto_triggers_section","Auto-triggers")}</span>
@@ -1995,15 +1999,17 @@ var on=Object.defineProperty;var ln=Object.getOwnPropertyDescriptor;var c=(t,n,e
       ${this._triggers.length===0?l`<div class="empty">
             ${d(this.hass,"ui.auto_triggers_none","No automatic triggers.")}
           </div>`:l`<ul>
-            ${this._sortedTriggers.map(e=>l`<li>
-                <input
-                  type="checkbox"
-                  data-test=${`trigger-cb-${e.key}`}
-                  .checked=${e.enabled}
-                  @change=${r=>this._onToggle(e,r.target.checked)}
-                />
-                ${this._label(e)}
-              </li>`)}
+            ${this._sortedTriggers.map(e=>e.kind==="reapply"?l`<li class="readonly" data-test=${`trigger-ro-${e.key}`}>
+                    ↺ ${this._label(e)}
+                  </li>`:l`<li>
+                    <input
+                      type="checkbox"
+                      data-test=${`trigger-cb-${e.key}`}
+                      .checked=${e.enabled}
+                      @change=${r=>this._onToggle(e,r.target.checked)}
+                    />
+                    ${this._label(e)}
+                  </li>`)}
           </ul>`}
     `}};j.styles=b`
     :host {
@@ -2038,6 +2044,10 @@ var on=Object.defineProperty;var ln=Object.getOwnPropertyDescriptor;var c=(t,n,e
       align-items: baseline;
       gap: 0.5rem;
       padding: 0.2rem 0;
+    }
+    li.readonly {
+      color: var(--secondary-text-color, #888);
+      font-style: italic;
     }
     .label {
       flex: 1;

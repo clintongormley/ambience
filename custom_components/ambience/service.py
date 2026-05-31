@@ -265,6 +265,18 @@ def get_last_applied(hass: HomeAssistant, scope_kind: str, scope_id: str | None)
     return hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).get((scope_kind, scope_id))
 
 
+def scope_reapply_intervals(cfg: dict[str, Any], exposed_store: Any) -> list[int]:
+    """Distinct, sorted effective re-apply intervals (seconds) across a scope's
+    rule actions. Empty when no action re-applies."""
+    intervals: set[int] = set()
+    for rule in cfg.get("rules", []):
+        for action in rule.get("actions", []):
+            seconds = effective_reapply_seconds(action, exposed_store)
+            if seconds:
+                intervals.add(seconds)
+    return sorted(intervals)
+
+
 def effective_reapply_seconds(action: dict[str, Any], exposed_store: Any) -> int:
     """Resolve an action's effective re-apply interval in seconds.
 

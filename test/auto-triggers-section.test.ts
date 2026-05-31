@@ -171,4 +171,76 @@ describe("ambience-auto-triggers-section", () => {
     await el.updateComplete;
     expect(el.shadowRoot.textContent.toLowerCase()).toContain("script");
   });
+
+  test("reapply row renders read-only with interval and no checkbox", async () => {
+    el = await mount({
+      triggers: [
+        ...sampleTriggers,
+        {
+          key: "reapply:300",
+          kind: "reapply",
+          interval_seconds: 300,
+          enabled: true,
+        } as AutoTrigger,
+      ],
+    });
+    el.shadowRoot.querySelector('[data-test="auto-triggers-header"]').click();
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // Read-only marker element exists
+    const roEl = el.shadowRoot.querySelector('[data-test="trigger-ro-reapply:300"]');
+    expect(roEl).not.toBeNull();
+
+    // Interval text is present (5 min = 300 sec)
+    expect(roEl.textContent).toContain("5 min");
+
+    // No checkbox for the reapply row
+    expect(
+      el.shadowRoot.querySelector('[data-test="trigger-cb-reapply:300"]'),
+    ).toBeNull();
+  });
+
+  test("reapply row with sub-minute interval renders seconds", async () => {
+    el = await mount({
+      triggers: [
+        {
+          key: "reapply:30",
+          kind: "reapply",
+          interval_seconds: 30,
+          enabled: true,
+        } as AutoTrigger,
+      ],
+    });
+    el.shadowRoot.querySelector('[data-test="auto-triggers-header"]').click();
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const roEl = el.shadowRoot.querySelector('[data-test="trigger-ro-reapply:30"]');
+    expect(roEl).not.toBeNull();
+    expect(roEl.textContent).toContain("30 sec");
+  });
+
+  test("reapply row with mixed interval renders min + sec", async () => {
+    el = await mount({
+      triggers: [
+        {
+          key: "reapply:90",
+          kind: "reapply",
+          interval_seconds: 90,
+          enabled: true,
+        } as AutoTrigger,
+      ],
+    });
+    el.shadowRoot.querySelector('[data-test="auto-triggers-header"]').click();
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const roEl = el.shadowRoot.querySelector('[data-test="trigger-ro-reapply:90"]');
+    expect(roEl).not.toBeNull();
+    expect(roEl.textContent).toContain("1 min 30 sec");
+  });
 });

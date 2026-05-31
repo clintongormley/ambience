@@ -60,6 +60,10 @@ export class AmbienceAutoTriggersSection extends LitElement {
       gap: 0.5rem;
       padding: 0.2rem 0;
     }
+    li.readonly {
+      color: var(--secondary-text-color, #888);
+      font-style: italic;
+    }
     .label {
       flex: 1;
     }
@@ -154,7 +158,7 @@ export class AmbienceAutoTriggersSection extends LitElement {
   }
 
   /** Entity rows sorted alphabetically by display name, then group rows in
-   *  backend order (time, then sun). */
+   *  backend order (time, sun, then read-only re-apply rows). */
   private get _sortedTriggers(): AutoTrigger[] {
     const entities = this._triggers
       .filter((t) => t.kind === "entity")
@@ -168,6 +172,12 @@ export class AmbienceAutoTriggersSection extends LitElement {
     const base = localize(this.hass, `anchor.${s.anchor}`, _SUN_FALLBACK[s.anchor] ?? s.anchor);
     if (s.offset === 0) return base;
     return `${base} ${s.offset > 0 ? "+" : ""}${s.offset} min`;
+  }
+
+  private _formatInterval(sec: number): string {
+    if (sec % 60 === 0) return `${sec / 60} min`;
+    if (sec < 60) return `${sec} sec`;
+    return `${Math.floor(sec / 60)} min ${sec % 60} sec`;
   }
 
   private _label(t: AutoTrigger): unknown {
@@ -200,6 +210,12 @@ export class AmbienceAutoTriggersSection extends LitElement {
           ${parts.join(", ")}</span
         >`;
       }
+      case "reapply":
+        return html`<span class="label"
+          ><strong>${localize(this.hass, "ui.auto_trigger_reapply", "Re-apply")}:</strong>
+          ${localize(this.hass, "ui.auto_trigger_every", "every")}
+          ${this._formatInterval(t.interval_seconds)}</span
+        >`;
     }
   }
 
@@ -233,17 +249,21 @@ export class AmbienceAutoTriggersSection extends LitElement {
             ${localize(this.hass, "ui.auto_triggers_none", "No automatic triggers.")}
           </div>`
         : html`<ul>
-            ${this._sortedTriggers.map(
-              (t) => html`<li>
-                <input
-                  type="checkbox"
-                  data-test=${`trigger-cb-${t.key}`}
-                  .checked=${t.enabled}
-                  @change=${(e: Event) =>
-                    this._onToggle(t, (e.target as HTMLInputElement).checked)}
-                />
-                ${this._label(t)}
-              </li>`,
+            ${this._sortedTriggers.map((t) =>
+              t.kind === "reapply"
+                ? html`<li class="readonly" data-test=${`trigger-ro-${t.key}`}>
+                    ↺ ${this._label(t)}
+                  </li>`
+                : html`<li>
+                    <input
+                      type="checkbox"
+                      data-test=${`trigger-cb-${t.key}`}
+                      .checked=${t.enabled}
+                      @change=${(e: Event) =>
+                        this._onToggle(t, (e.target as HTMLInputElement).checked)}
+                    />
+                    ${this._label(t)}
+                  </li>`,
             )}
           </ul>`}
     `;

@@ -181,3 +181,35 @@ def resolve_order(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
         for idx, r in enumerate(rules):
             r["priority"] = (len(rules) - idx) * GAP
     return rules
+
+
+def _superset_or_equal(outer: dict[str, Any], inner: dict[str, Any], matchers: dict[str, Any]) -> bool:
+    """True if `outer`'s match-set ⊇ `inner`'s: every world-state matching the
+    inner rule also matches the outer rule. `outer`/`inner` are constrained
+    `when` maps (non-None predicates only)."""
+    if not outer.keys() <= inner.keys():
+        return False
+    for key, o_pred in outer.items():
+        i_pred = inner[key]
+        if o_pred == i_pred:
+            continue
+        contains = getattr(matchers.get(key), "contains", None)
+        if callable(contains) and contains(o_pred, i_pred):
+            continue
+        return False
+    return True
+
+
+def shadowed_by(ordered_rules: list[Rule], matchers: dict[str, Any]) -> dict[int, int]:
+    """For rules already in final (resolved) order, map the index of each
+    shadowed rule to the index of the earliest rule that shadows it — an
+    earlier rule whose match-set is a superset-or-equal, so under
+    first-match-wins the later rule can never fire."""
+    constrained = [_constrained(r) for r in ordered_rules]
+    result: dict[int, int] = {}
+    for j in range(len(ordered_rules)):
+        for i in range(j):
+            if _superset_or_equal(constrained[i], constrained[j], matchers):
+                result[j] = i
+                break
+    return result

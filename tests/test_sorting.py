@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from custom_components.ambience.sorting import resolve_order, sort_rules
+from custom_components.ambience.sorting import resolve_order, shadowed_by, sort_rules
 
 
 class IntervalMatcher:
@@ -261,3 +261,33 @@ def test_resolve_renormalises_on_duplicate_pin_values() -> None:
     assert prios == sorted(prios, reverse=True), "must be strictly decreasing"
     assert len(set(prios)) == len(prios), "no ties"
     assert 500 not in prios, "renorm must have reassigned all values"
+
+
+def test_shadow_general_above_specific_is_flagged() -> None:
+    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    ordered = [
+        _rule("general", {"scene": "movie"}),
+        _rule("specific", {"scene": "movie", "tod": (12, 13)}),
+    ]
+    assert shadowed_by(ordered, matchers) == {1: 0}
+
+
+def test_shadow_specific_above_general_is_not_flagged() -> None:
+    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    ordered = [
+        _rule("specific", {"scene": "movie", "tod": (12, 13)}),
+        _rule("general", {"scene": "movie"}),
+    ]
+    assert shadowed_by(ordered, matchers) == {}
+
+
+def test_shadow_equal_match_sets_flagged() -> None:
+    matchers = {"scene": SceneLike()}
+    ordered = [_rule("first", {"scene": "x"}), _rule("dup", {"scene": "x"})]
+    assert shadowed_by(ordered, matchers) == {1: 0}
+
+
+def test_shadow_empty_when_shadows_everything_below() -> None:
+    matchers = {"scene": SceneLike()}
+    ordered = [_rule("catch_all", {}), _rule("below", {"scene": "x"})]
+    assert shadowed_by(ordered, matchers) == {1: 0}

@@ -2642,10 +2642,14 @@ var an=Object.defineProperty;var on=Object.getOwnPropertyDescriptor;var c=(t,n,e
     }
     .warnings ul { margin: 0.3rem 0 0 0; padding-left: 1.2rem; }
 <<<<<<< HEAD
+<<<<<<< HEAD
   `,c([p({attribute:!1})],oe.prototype,"hass",2),c([f()],oe.prototype,"_config",2),c([f()],oe.prototype,"_warnings",2),c([f()],oe.prototype,"_expanded",2),oe=c([$("ambience-weather-config")],oe);var Ao=new Set(["time_of_day","day","weather"]),me=class extends _{constructor(){super(...arguments);this._matchers=[];this._error=""}async connectedCallback(){super.connectedCallback();try{this._matchers=await vt(this.hass)}catch(e){this._error=e.message||String(e)}}render(){let e=this._matchers.filter(r=>Ao.has(r.name)).slice().sort((r,i)=>r.priority-i.priority);return l`
 =======
   `,c([p({attribute:!1})],oe.prototype,"hass",2),c([g()],oe.prototype,"_config",2),c([g()],oe.prototype,"_warnings",2),c([g()],oe.prototype,"_expanded",2),oe=c([$("ambience-weather-config")],oe);var Fo=new Set(["time_of_day","day","weather"]),me=class extends _{constructor(){super(...arguments);this._matchers=[];this._error=""}async connectedCallback(){super.connectedCallback();try{this._matchers=await vt(this.hass)}catch(e){this._error=e.message||String(e)}}render(){let e=this._matchers.filter(r=>Fo.has(r.name)).slice().sort((r,i)=>r.priority-i.priority);return l`
 >>>>>>> ac124b0 (build(frontend): rebuild panel bundle)
+=======
+  `,c([p({attribute:!1})],oe.prototype,"hass",2),c([g()],oe.prototype,"_config",2),c([g()],oe.prototype,"_warnings",2),c([g()],oe.prototype,"_expanded",2),oe=c([$("ambience-weather-config")],oe);var Fo=new Set(["time_of_day","day","weather"]),me=class extends _{constructor(){super(...arguments);this._matchers=[];this._error=""}async connectedCallback(){super.connectedCallback();try{this._matchers=await vt(this.hass)}catch(e){this._error=e.message||String(e)}}render(){let e=this._matchers.filter(r=>Fo.has(r.name)).slice().sort((r,i)=>i.priority-r.priority);return l`
+>>>>>>> 7f3fff6 (fix(matchers-settings): sort cards by descending priority (restore order after renumber))
       ${this._error?l`<p class="error">${this._error}</p>`:""}
       ${e.map(r=>l`
         <ambience-matcher-card .hass=${this.hass} .matcherName=${r.name} .matcherDescription=${r.description}>

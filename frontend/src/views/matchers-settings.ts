@@ -34,7 +34,7 @@ export class AmbienceMatchersSettings extends LitElement {
     const configurable = this._matchers
       .filter((m) => CONFIGURABLE_MATCHERS.has(m.name))
       .slice()
-      .sort((a, b) => a.priority - b.priority);
+      .sort((a, b) => b.priority - a.priority);
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
       ${configurable.map((m) => html`

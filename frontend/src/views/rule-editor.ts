@@ -945,7 +945,9 @@ export class AmbienceRuleEditor extends LitElement {
       Object.entries(this._draft.when).filter(([, v]) => v != null),
     );
     this.dispatchEvent(new CustomEvent("save-rule", {
-      detail: { ...this._draft, when }, bubbles: true, composed: true,
+      detail: { rule: { ...this._draft, when }, scope: this._scope },
+      bubbles: true,
+      composed: true,
     }));
   }
 

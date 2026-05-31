@@ -536,16 +536,42 @@ export class AmbienceScopesView extends LitElement {
     void this._mutate(scope, { ...cfg, rules });
   }
 
-  private _saveRule(e: CustomEvent<Rule>) {
+  private async _saveRule(e: CustomEvent<{ rule: Rule; scope: Scope }>) {
     const editing = this._editing;
     this._editing = null;
     if (!editing) return;
-    const cfg = this._getConfig(editing.scope);
-    if (!cfg) return;
-    const rules = [...cfg.rules];
-    if (editing.isNew) rules.push(e.detail);
-    else rules[editing.index] = e.detail;
-    void this._mutate(editing.scope, { ...cfg, rules });
+    const { rule, scope: target } = e.detail;
+
+    if (_scopeKey(target) === _scopeKey(editing.scope)) {
+      // Same scope: replace in place, or append a new rule.
+      const cfg = this._getConfig(target);
+      if (!cfg) return;
+      const rules = [...cfg.rules];
+      if (editing.isNew) rules.push(rule);
+      else rules[editing.index] = rule;
+      await this._mutate(target, { ...cfg, rules });
+      return;
+    }
+
+    // Different scope: the rule lands fresh. Strip ordering metadata so the
+    // backend assigns a new priority.
+    const fresh: Rule = { ...rule };
+    delete fresh.priority;
+    delete fresh.pinned;
+    delete fresh.shadowed_by;
+    const targetCfg = this._getConfig(target);
+    if (targetCfg) {
+      await this._mutate(target, { ...targetCfg, rules: [...targetCfg.rules, fresh] });
+    }
+
+    // Moving an existing rule also removes it from its original scope.
+    if (!editing.isNew) {
+      const srcCfg = this._getConfig(editing.scope);
+      if (srcCfg) {
+        const rules = srcCfg.rules.filter((_, i) => i !== editing.index);
+        await this._mutate(editing.scope, { ...srcCfg, rules });
+      }
+    }
   }
 
   private _cancelRule() {

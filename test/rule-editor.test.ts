@@ -232,7 +232,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   test("emits save-rule with the draft", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
       (b: any) => b.textContent.trim() === "Save rule"
     ) as HTMLButtonElement;
@@ -339,7 +339,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
 
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     expect(saved?.name).toBe("renamed");
   });
@@ -418,7 +418,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
 
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     expect(saved?.when?.mode).toBe("relaxed");
   });
@@ -652,7 +652,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
     // Sanity: saving should emit the edited name, not the refetched one.
     let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
       (b: any) => b.textContent.trim() === "Save rule"
     ) as HTMLButtonElement;
@@ -1016,7 +1016,7 @@ describe("ambience-rule-editor — matcher dropdown + full-height layout", () =>
     (tod.querySelector(".remove") as HTMLButtonElement).click();
     await el.updateComplete;
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     (Array.from(el.shadowRoot.querySelectorAll("button.primary")) as HTMLButtonElement[])
       .find((b) => b.textContent?.trim() === "Save rule")!
       .click();
@@ -1051,7 +1051,7 @@ describe("ambience-rule-editor — matcher dropdown + full-height layout", () =>
   test("save strips null predicates from `when`", async () => {
     el = await mount({ name: "test", when: { time_of_day: null, mode: "movie" }, actions: [] });
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
       (b: any) => b.textContent.trim() === "Save rule"
     ) as HTMLButtonElement;
@@ -1169,7 +1169,7 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
 
     // Save should succeed (no validation error)
     let saved: Rule | undefined;
-    el2.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el2.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     el2.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
 
     // Rule was saved
@@ -1249,7 +1249,7 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
 
     // Even with empty entity_ids and unknown hasTarget, validation must NOT block save.
     let saved: Rule | undefined;
-    el2.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el2.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     el2.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
 
     expect(saved).toBeDefined();
@@ -1335,7 +1335,7 @@ describe("ambience-rule-editor — people matcher empty-selection validation", (
       { hass: peopleHass },
     );
     let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
       (b: any) => b.textContent.trim() === "Save rule",
     ) as HTMLButtonElement;
@@ -1364,7 +1364,7 @@ describe("ambience-rule-editor — people matcher empty-selection validation", (
     expect(el._validationError({ kind: "matcher", id: "people" })).toBeNull();
 
     let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
       (b: any) => b.textContent.trim() === "Save rule",
     ) as HTMLButtonElement;
@@ -1589,7 +1589,7 @@ describe("ambience-rule-editor — reapply interval override", () => {
       actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {} }],
     });
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     await el.updateComplete;
     expect(saved).toBeDefined();
@@ -1603,7 +1603,7 @@ describe("ambience-rule-editor — reapply interval override", () => {
       actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {}, reapply_seconds: 0 }],
     });
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     await el.updateComplete;
     expect(saved).toBeDefined();
@@ -1776,5 +1776,21 @@ describe("ambience-rule-editor — destination selector", () => {
     expect(el._draft.actions[0].entity_ids).toEqual([]);
     // Matcher entity reference is left untouched.
     expect(el._draft.when.state.atom.entity_id).toBe("light.lamp_a");
+  });
+
+  test("save-rule carries the rule and the selected destination scope", async () => {
+    el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "living_room" });
+    const select = el.shadowRoot.querySelector("select.destination") as HTMLSelectElement;
+    select.value = "2"; // Area: Bedroom
+    select.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    (el.shadowRoot.querySelector("button.primary") as HTMLElement).click();
+    await el.updateComplete;
+
+    expect(saved.scope).toEqual({ kind: "area", id: "bedroom" });
+    expect(saved.rule.when).toEqual({});
   });
 });

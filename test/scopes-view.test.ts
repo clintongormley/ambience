@@ -8,6 +8,7 @@ import type {
   PeriodStoreView,
   Rule,
   RuleGroup,
+  Scope,
   ScopeConfig,
 } from "../frontend/src/types";
 
@@ -180,6 +181,7 @@ describe("ambience-scopes-view", () => {
 
   async function expandAndAddRuleToScope(
     scopeRowSelector: string,
+    scope: Scope,
   ): Promise<void> {
     const row = el.shadowRoot.querySelector(scopeRowSelector) as HTMLElement;
     const header = row.querySelector(".scope-header") as HTMLElement;
@@ -193,7 +195,7 @@ describe("ambience-scopes-view", () => {
     const editor = el.shadowRoot.querySelector("ambience-rule-editor")!;
     editor.dispatchEvent(
       new CustomEvent("save-rule", {
-        detail: { name: "New rule", when: {}, actions: [] },
+        detail: { rule: { name: "New rule", when: {}, actions: [] }, scope },
         bubbles: true,
         composed: true,
       }),
@@ -203,7 +205,7 @@ describe("ambience-scopes-view", () => {
 
   test("save-rule on an area routes to saveArea", async () => {
     el = await mount();
-    await expandAndAddRuleToScope(".scope-row.area[data-id='living_room']");
+    await expandAndAddRuleToScope(".scope-row.area[data-id='living_room']", { kind: "area", id: "living_room" });
     expect(api.saveArea).toHaveBeenCalledWith(
       expect.anything(),
       "living_room",
@@ -217,7 +219,7 @@ describe("ambience-scopes-view", () => {
 
   test("save-rule on a floor routes to saveFloor", async () => {
     el = await mount();
-    await expandAndAddRuleToScope(".scope-row.floor[data-id='ground']");
+    await expandAndAddRuleToScope(".scope-row.floor[data-id='ground']", { kind: "floor", id: "ground" });
     expect(api.saveFloor).toHaveBeenCalledWith(
       expect.anything(),
       "ground",
@@ -231,7 +233,7 @@ describe("ambience-scopes-view", () => {
 
   test("save-rule on the house routes to saveHouse", async () => {
     el = await mount();
-    await expandAndAddRuleToScope(".scope-row.house");
+    await expandAndAddRuleToScope(".scope-row.house", { kind: "house" });
     expect(api.saveHouse).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -240,6 +242,67 @@ describe("ambience-scopes-view", () => {
     );
     expect(api.saveArea).not.toHaveBeenCalled();
     expect(api.saveFloor).not.toHaveBeenCalled();
+  });
+
+  // --- cross-scope move ---------------------------------------------------
+
+  async function editRuleViaEditor(
+    scopeRowSelector: string,
+    index: number,
+    detail: { rule: Rule; scope: Scope },
+  ): Promise<void> {
+    const row = el.shadowRoot.querySelector(scopeRowSelector) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    rulesList.dispatchEvent(
+      new CustomEvent("edit-rule", { detail: { index }, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+    const editor = el.shadowRoot.querySelector("ambience-rule-editor")!;
+    editor.dispatchEvent(
+      new CustomEvent("save-rule", { detail, bubbles: true, composed: true }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  test("editing a rule to a different scope adds to the new and removes from the old", async () => {
+    const rule: Rule = { name: "R", when: {}, actions: [] };
+    el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
+    await editRuleViaEditor(
+      ".scope-row.area[data-id='living_room']",
+      0,
+      { rule, scope: { kind: "area", id: "bedroom" } },
+    );
+    // Added to bedroom...
+    expect(api.saveArea).toHaveBeenCalledWith(
+      expect.anything(),
+      "bedroom",
+      expect.objectContaining({ rules: [expect.objectContaining({ name: "R" })] }),
+    );
+    // ...and removed from living_room.
+    expect(api.saveArea).toHaveBeenCalledWith(
+      expect.anything(),
+      "living_room",
+      expect.objectContaining({ rules: [] }),
+    );
+  });
+
+  test("a rule moved to a new scope has its ordering metadata stripped", async () => {
+    const rule: Rule = {
+      name: "R", when: {}, actions: [], priority: 50, pinned: true, shadowed_by: 1,
+    };
+    el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
+    await editRuleViaEditor(
+      ".scope-row.area[data-id='living_room']",
+      0,
+      { rule, scope: { kind: "house" } },
+    );
+    const houseCall = vi.mocked(api.saveHouse).mock.calls.at(-1)!;
+    const landed = (houseCall[1] as ScopeConfig).rules[0] as Rule;
+    expect(landed.priority).toBeUndefined();
+    expect(landed.pinned).toBeUndefined();
+    expect(landed.shadowed_by).toBeUndefined();
   });
 
   // --- subscriptions ------------------------------------------------------

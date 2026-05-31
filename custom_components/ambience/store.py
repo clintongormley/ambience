@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from typing import Any
@@ -227,6 +228,10 @@ class AmbienceStore:
         self._ensure_groups()
         self._migrate_groups()
         self._ensure_switch_defaults()
+
+    def as_dict(self) -> dict[str, Any]:
+        """A deep copy of the full persisted payload, for diagnostics dumps."""
+        return copy.deepcopy(self._data)
 
     def areas(self) -> dict[str, dict[str, Any]]:
         return dict(self._data["areas"])

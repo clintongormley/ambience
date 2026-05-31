@@ -1061,18 +1061,6 @@ async def _ws_auto_triggers_set(
     connection.send_result(msg["id"], {"ok": True})
 
 
-def _scope_config_for(store: Any, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
-    """Resolve a scope's stored config ({} if never saved). Raises ValueError
-    for an unknown scope kind."""
-    if scope_kind == "area":
-        return store.get_area(scope_id) or {}
-    if scope_kind == "floor":
-        return store.get_floor(scope_id) or {}
-    if scope_kind == "house":
-        return store.get_house()
-    raise ValueError(f"unknown scope_kind: {scope_kind!r}")
-
-
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
@@ -1095,7 +1083,7 @@ async def _ws_auto_triggers_list(
     scope_kind = msg["scope_kind"]
     scope_id = msg.get("scope_id")
     try:
-        cfg = _scope_config_for(store, scope_kind, scope_id)
+        cfg = store.scope_config(scope_kind, scope_id)
         disabled = store.auto_triggers_disabled(scope_kind, scope_id)
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))

@@ -21,7 +21,7 @@ Canonical trigger keys (shared with the frontend):
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Iterator
 from typing import Any
 
 from .triggers import TriggerSpec, merge
@@ -87,15 +87,18 @@ def filter_spec(spec: TriggerSpec, disabled: Collection[str]) -> TriggerSpec:
     )
 
 
-def scope_trigger_spec(matchers: dict[str, Any], cfg: dict[str, Any]) -> TriggerSpec:
-    """Merge every rule predicate's ``trigger_deps`` in ``cfg`` into one spec.
+def iter_predicate_specs(
+    matchers: dict[str, Any], cfg: dict[str, Any]
+) -> Iterator[tuple[int, str, TriggerSpec]]:
+    """Yield ``(rule_index, matcher_key, TriggerSpec)`` for every watchable
+    predicate in ``cfg``'s rules.
 
-    Mirrors the engine's per-predicate logic: a ``None`` predicate (wildcard) and
-    an unknown matcher contribute nothing; a matcher without ``trigger_deps`` is
-    treated as opaque.
+    The single source of the "what does a predicate watch?" policy, shared by
+    the UI (``scope_trigger_spec``) and the engine (``_build_entries``): a
+    ``None`` predicate (wildcard) and an unknown matcher contribute nothing; a
+    matcher without ``trigger_deps`` is treated as opaque.
     """
-    specs: list[TriggerSpec] = []
-    for rule in cfg.get("rules", []):
+    for rule_index, rule in enumerate(cfg.get("rules", [])):
         for matcher_key, predicate in rule.get("when", {}).items():
             if predicate is None:
                 continue
@@ -103,5 +106,10 @@ def scope_trigger_spec(matchers: dict[str, Any], cfg: dict[str, Any]) -> Trigger
             if matcher is None:
                 continue
             trigger_deps = getattr(matcher, "trigger_deps", None)
-            specs.append(trigger_deps(predicate) if trigger_deps else TriggerSpec(opaque=True))
-    return merge(specs)
+            spec = trigger_deps(predicate) if trigger_deps else TriggerSpec(opaque=True)
+            yield rule_index, matcher_key, spec
+
+
+def scope_trigger_spec(matchers: dict[str, Any], cfg: dict[str, Any]) -> TriggerSpec:
+    """Merge every rule predicate's ``trigger_deps`` in ``cfg`` into one spec."""
+    return merge(spec for _, _, spec in iter_predicate_specs(matchers, cfg))

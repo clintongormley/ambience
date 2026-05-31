@@ -27,7 +27,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from .matchers.time_of_day import ANCHOR_ATTR
-from .scope_triggers import filter_spec
+from .scope_triggers import filter_spec, iter_predicate_specs
 from .service import (
     _switch_state,
     async_execute_plan,
@@ -112,19 +112,11 @@ class AutoTriggerEngine:
         entries: list[tuple[PredKey, TriggerSpec]] = []
         for (scope_kind, scope_id), cfg in self._scope_cfgs.items():
             disabled = store.auto_triggers_disabled(scope_kind, scope_id)
-            for rule_index, rule in enumerate(cfg.get("rules", [])):
-                for matcher_key, predicate in rule.get("when", {}).items():
-                    if predicate is None:  # wildcard — nothing to watch
-                        continue
-                    matcher = matchers.get(matcher_key)
-                    if matcher is None:  # unknown matcher — can't watch
-                        continue
-                    trigger_deps = getattr(matcher, "trigger_deps", None)
-                    spec = trigger_deps(predicate) if trigger_deps else TriggerSpec(opaque=True)
-                    spec = filter_spec(spec, disabled)
-                    if spec == EMPTY:
-                        continue
-                    entries.append(((scope_kind, scope_id, rule_index, matcher_key), spec))
+            for rule_index, matcher_key, spec in iter_predicate_specs(matchers, cfg):
+                spec = filter_spec(spec, disabled)
+                if spec == EMPTY:
+                    continue
+                entries.append(((scope_kind, scope_id, rule_index, matcher_key), spec))
         return entries
 
     def _predicate_for(self, key: PredKey) -> Any:
@@ -187,7 +179,7 @@ class AutoTriggerEngine:
         if _switch_state(self._hass, scope_kind, scope_id) == "off":
             return
         plan = await async_resolve_with_snapshots(
-            self._hass, scope_kind, scope_id, self._snapshots, strip_scene=False
+            self._hass, scope_kind, scope_id, self._snapshots, strip_scene=False, describe=False
         )
         index = plan["matched_rule_index"]
         if index is None:

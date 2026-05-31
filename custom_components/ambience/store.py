@@ -385,7 +385,7 @@ class AmbienceStore:
         sw["off_at"] = off_at
         await self._store.async_save(self._data)
 
-    def _scope_read(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
+    def scope_config(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
         """Read-only per-scope config dict ({} if absent). Does not create."""
         if scope_kind == "house":
             return self._data.get("house", {})
@@ -397,7 +397,7 @@ class AmbienceStore:
 
     def auto_triggers_enabled(self, scope_kind: str, scope_id: str | None) -> bool:
         """Whether the auto-trigger engine should watch this scope. Default True."""
-        return bool(self._scope_read(scope_kind, scope_id).get("auto_triggers_enabled", True))
+        return bool(self.scope_config(scope_kind, scope_id).get("auto_triggers_enabled", True))
 
     async def async_set_auto_triggers_enabled(
         self, scope_kind: str, scope_id: str | None, enabled: bool
@@ -414,7 +414,7 @@ class AmbienceStore:
         a watch the engine would otherwise subscribe to; disabling it stops this
         scope from re-evaluating when that thing changes.
         """
-        raw = self._scope_read(scope_kind, scope_id).get("disabled_triggers", [])
+        raw = self.scope_config(scope_kind, scope_id).get("disabled_triggers", [])
         if not isinstance(raw, list):
             return frozenset()
         return frozenset(k for k in raw if isinstance(k, str))

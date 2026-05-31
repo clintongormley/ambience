@@ -63,6 +63,7 @@ async def async_resolve_with_snapshots(
     scene: str | None = None,
     *,
     strip_scene: bool = True,
+    describe: bool = True,
 ) -> dict[str, Any]:
     """Resolve a scope against a pre-built `{matcher_name: snapshot}` dict.
 
@@ -83,23 +84,25 @@ async def async_resolve_with_snapshots(
     matchers_registry: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
     scope_cfg = _scope_config(store, scope_kind, scope_id)
 
-    snapshots = dict(snapshots)  # don't mutate the caller's dict
     if scene is not None:
         engine_matchers = dict(matchers_registry)
-        snapshots["scene"] = scene
-        active_keys = set(engine_matchers)
+        snapshots = {**snapshots, "scene": scene}  # copy: don't mutate caller's dict
     else:
         engine_matchers = {k: v for k, v in matchers_registry.items() if k != "scene"}
-        active_keys = set(engine_matchers)
-        if not strip_scene:
-            # Keep `when.scene` so scene-gated rules fail (scene matcher absent).
-            active_keys.add("scene")
+    active_keys = set(engine_matchers)
+    if scene is None and not strip_scene:
+        # Keep `when.scene` so scene-gated rules fail (scene matcher absent).
+        active_keys.add("scene")
 
-    described = {
-        name: engine_matchers[name].describe(snap) if snap is not None else None
-        for name, snap in snapshots.items()
-        if name in engine_matchers
-    }
+    described = (
+        {
+            name: engine_matchers[name].describe(snap) if snap is not None else None
+            for name, snap in snapshots.items()
+            if name in engine_matchers
+        }
+        if describe
+        else {}
+    )
 
     rules = [
         {**rule, "when": {k: v for k, v in rule.get("when", {}).items() if k in active_keys}}

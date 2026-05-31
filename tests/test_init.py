@@ -59,8 +59,8 @@ async def test_setup_seeds_registries_and_store(
 
     data = hass.data[DOMAIN]
     assert DATA_STORE in data
-    assert "scene" in data[DATA_MATCHERS]
     assert "time_of_day" in data[DATA_MATCHERS]
+    assert "scene" not in data[DATA_MATCHERS]
     # ExposedActionsStore is wired up; fresh setup starts empty.
     assert DATA_EXPOSED_ACTIONS in data
     assert data[DATA_EXPOSED_ACTIONS].list() == []
@@ -144,7 +144,7 @@ async def test_area_registry_removal_deletes_ambience_config(
     await hass.async_block_till_done()
 
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(area.id, {"scenes": [], "matchers": [], "rules": []})
+    await store.async_save_area(area.id, {"extra": [], "matchers": [], "rules": []})
     assert store.get_area(area.id) is not None
 
     ar.async_get(hass).async_delete(area.id)

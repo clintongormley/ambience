@@ -36,7 +36,7 @@ function makeFakeHass() {
       return { ok: true, config: msg.config };
     }
     if (msg.type === "ambience/matchers/list") {
-      return [{ name: "scene" }];
+      return [{ name: "time_of_day" }];
     }
     if (msg.type === "ambience/exposed_actions/list") {
       return [
@@ -99,7 +99,7 @@ describe("API: listMatchers", () => {
     const { callWS, sent } = makeFakeHass();
     const res = await listMatchers({ callWS } as any);
     expect(sent[0]).toEqual({ type: "ambience/matchers/list" });
-    expect(res).toEqual([{ name: "scene" }]);
+    expect(res).toEqual([{ name: "time_of_day" }]);
   });
 });
 
@@ -161,22 +161,7 @@ describe("API: validateConfig", () => {
 });
 
 describe("API: dryRun", () => {
-  test("sends area_id and scene to dry_run endpoint", async () => {
-    const { callWS, sent } = makeFakeHass();
-    const res = await dryRun(
-      { callWS } as any,
-      { kind: "area", id: "living_room" },
-      "movie",
-    );
-    expect(sent[0]).toEqual({
-      type: "ambience/dry_run",
-      area_id: "living_room",
-      scene: "movie",
-    });
-    expect(res).toEqual({ matched_rule_index: null, rule_name: null, actions: [] });
-  });
-
-  test("dryRun omits the scene field when called without one", async () => {
+  test("sends area_id to dry_run endpoint", async () => {
     const { callWS, sent } = makeFakeHass();
     const res = await dryRun(
       { callWS } as any,
@@ -185,21 +170,6 @@ describe("API: dryRun", () => {
     expect(sent[0]).toEqual({
       type: "ambience/dry_run",
       area_id: "living_room",
-    });
-    expect(res).toEqual({ matched_rule_index: null, rule_name: null, actions: [] });
-  });
-
-  test("dryRun includes the scene field when given", async () => {
-    const { callWS, sent } = makeFakeHass();
-    const res = await dryRun(
-      { callWS } as any,
-      { kind: "area", id: "living_room" },
-      "movie_night",
-    );
-    expect(sent[0]).toEqual({
-      type: "ambience/dry_run",
-      area_id: "living_room",
-      scene: "movie_night",
     });
     expect(res).toEqual({ matched_rule_index: null, rule_name: null, actions: [] });
   });
@@ -220,11 +190,10 @@ describe("API: dryRun", () => {
       callWS: async (msg: any) => { calls.push(msg); return {}; },
       connection: {} as any,
     };
-    await dryRun(hass as any, { kind: "floor", id: "upstairs" }, "movie");
+    await dryRun(hass as any, { kind: "floor", id: "upstairs" });
     expect(calls[0]).toEqual({
       type: "ambience/dry_run",
       floor_id: "upstairs",
-      scene: "movie",
     });
   });
 

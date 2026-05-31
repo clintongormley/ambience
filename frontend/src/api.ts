@@ -148,13 +148,11 @@ export async function validateConfig(
 export async function dryRun(
   hass: HassConnection,
   scope: Scope,
-  scene?: string,
 ): Promise<DryRunResult> {
   const msg: Record<string, unknown> = { type: "ambience/dry_run" };
   if (scope.kind === "area") msg.area_id = scope.id;
   else if (scope.kind === "floor") msg.floor_id = scope.id;
   else msg.house = true;
-  if (scene !== undefined) msg.scene = scene;
   return hass.callWS(msg);
 }
 

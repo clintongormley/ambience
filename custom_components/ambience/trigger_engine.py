@@ -185,7 +185,7 @@ class AutoTriggerEngine:
                 self._snapshots[key] = None
 
     async def _refresh_all_snapshots(self) -> None:
-        await self._refresh_snapshots({k for k in self._matchers() if k != "scene"})
+        await self._refresh_snapshots(set(self._matchers()))
 
     async def _resolve_and_apply(
         self, scope: tuple[str, str | None], *, force: bool = False
@@ -196,7 +196,7 @@ class AutoTriggerEngine:
         if _switch_state(self._hass, scope_kind, scope_id) == "off":
             return
         plan = await async_resolve_with_snapshots(
-            self._hass, scope_kind, scope_id, self._snapshots, strip_scene=False, describe=False
+            self._hass, scope_kind, scope_id, self._snapshots, describe=False
         )
         index = plan["matched_rule_index"]
         if index is None:

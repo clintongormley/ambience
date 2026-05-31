@@ -1,4 +1,8 @@
-"""ambience.apply_scene service handler."""
+"""ambience.apply_scene service handler.
+
+`apply_scene` is the service name; it resolves a scope's rules against the
+current world (matcher snapshots) and dispatches the winning rule's actions.
+"""
 
 from __future__ import annotations
 
@@ -62,9 +66,7 @@ async def async_resolve_with_snapshots(
     scope_kind: str,
     scope_id: str | None,
     snapshots: dict[str, Any],
-    scene: str | None = None,
     *,
-    strip_scene: bool = True,
     describe: bool = True,
 ) -> dict[str, Any]:
     """Resolve a scope against a pre-built `{matcher_name: snapshot}` dict.
@@ -73,44 +75,25 @@ async def async_resolve_with_snapshots(
     engine passes its own cache). Returns {matched_rule_index, rule_name,
     actions, snapshots_described, switch_state}.
 
-    `scene` handling when no scene is supplied (`scene is None`):
-      - `strip_scene=True` (default, the service's scene-omitted path):
-        `when.scene` predicates are dropped, so scene-gated rules match as
-        wildcards.
-      - `strip_scene=False` (the auto-trigger engine): `when.scene` predicates
-        are KEPT but the scene matcher is absent, so scene-gated rules fail to
-        match — the engine never auto-applies a rule that only a scene would
-        satisfy (there is no "active scene" on the auto path).
+    A `when` key naming a matcher that isn't registered (e.g. a stale config
+    key) fails the rule, since `resolve()` cannot evaluate it.
     """
     store = hass.data[DOMAIN][DATA_STORE]
     matchers_registry: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
     scope_cfg = _scope_config(store, scope_kind, scope_id)
 
-    if scene is not None:
-        engine_matchers = dict(matchers_registry)
-        snapshots = {**snapshots, "scene": scene}  # copy: don't mutate caller's dict
-    else:
-        engine_matchers = {k: v for k, v in matchers_registry.items() if k != "scene"}
-    active_keys = set(engine_matchers)
-    if scene is None and not strip_scene:
-        # Keep `when.scene` so scene-gated rules fail (scene matcher absent).
-        active_keys.add("scene")
-
     described = (
         {
-            name: engine_matchers[name].describe(snap) if snap is not None else None
+            name: matchers_registry[name].describe(snap) if snap is not None else None
             for name, snap in snapshots.items()
-            if name in engine_matchers
+            if name in matchers_registry
         }
         if describe
         else {}
     )
 
-    rules = [
-        {**rule, "when": {k: v for k, v in rule.get("when", {}).items() if k in active_keys}}
-        for rule in scope_cfg.get("rules", [])
-    ]
-    match = resolve(rules, snapshots, engine_matchers)
+    rules = scope_cfg.get("rules", [])
+    match = resolve(rules, snapshots, matchers_registry)
     switch_state = _switch_state(hass, scope_kind, scope_id)
     if match is None:
         return {
@@ -134,42 +117,36 @@ async def async_resolve_only(
     hass: HomeAssistant,
     scope_kind: str,
     scope_id: str | None,
-    scene: str | None = None,
 ) -> dict[str, Any]:
     """Like apply_scene, but does not execute actions.
 
-    Snapshots every matcher fresh (except `scene`, whose snapshot is injected
-    by `async_resolve_with_snapshots`), then delegates. Return shape:
+    Snapshots every matcher fresh, then delegates. Return shape:
     {matched_rule_index, rule_name, actions, snapshots_described, switch_state}.
     """
     matchers_registry: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
-    snapshottable = {name: m for name, m in matchers_registry.items() if name != "scene"}
     snapshot_results = await asyncio.gather(
-        *[m.snapshot(hass) for m in snapshottable.values()],
+        *[m.snapshot(hass) for m in matchers_registry.values()],
         return_exceptions=True,
     )
     snapshots: dict[str, Any] = {}
-    for name, result in zip(snapshottable.keys(), snapshot_results, strict=True):
+    for name, result in zip(matchers_registry.keys(), snapshot_results, strict=True):
         if isinstance(result, BaseException):
             _LOGGER.warning("ambience: matcher %r snapshot failed: %s", name, result)
             snapshots[name] = None
         else:
             snapshots[name] = result
-    return await async_resolve_with_snapshots(hass, scope_kind, scope_id, snapshots, scene)
+    return await async_resolve_with_snapshots(hass, scope_kind, scope_id, snapshots)
 
 
 async def async_apply_scene(
     hass: HomeAssistant,
     scope_kind: str,
     scope_id: str | None,
-    scene: str | None = None,
 ) -> None:
     """Apply a scene at the given scope according to configured rules.
 
     `scope_kind` is one of "area", "floor", "house". For "house", scope_id is
     None.
-    `scene` is optional; when omitted, scene predicates on rules are treated
-    as wildcards.
     """
     if _switch_state(hass, scope_kind, scope_id) == "off":
         _LOGGER.info(
@@ -179,13 +156,12 @@ async def async_apply_scene(
         )
         return
 
-    plan = await async_resolve_only(hass, scope_kind, scope_id, scene)
+    plan = await async_resolve_only(hass, scope_kind, scope_id)
     if plan["matched_rule_index"] is None:
         _LOGGER.info(
-            "ambience: no rule matched for scope=%s/%s scene=%s snapshots=%s",
+            "ambience: no rule matched for scope=%s/%s snapshots=%s",
             scope_kind,
             scope_id,
-            scene,
             plan["snapshots_described"],
         )
         return

@@ -168,6 +168,6 @@ async def test_area_switch_save_rejects_unknown_area(hass, installed, hass_ws_cl
 
 
 async def test_dry_run_includes_switch_state_for_house(hass, installed, hass_ws_client):
-    resp = await _ws_send(hass_ws_client, type="ambience/dry_run", house=True, scene="x")
+    resp = await _ws_send(hass_ws_client, type="ambience/dry_run", house=True)
     assert resp["success"]
     assert resp["result"]["switch_state"] in ("on", "off", "unknown")

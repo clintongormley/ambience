@@ -4,7 +4,6 @@ import { customElement, property } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
 import type { DayConfig, MatcherInfo, PeriodStoreView } from "../types.js";
-import "./scene-combobox.js";
 import "./script-predicate-input.js";
 import "./time-of-day-input.js";
 import "./day-predicate-input.js";
@@ -18,7 +17,6 @@ import "./template-predicate-input.js";
  * Dispatcher element for one matcher's predicate input. Given a matcher's
  * `input` hint and the current predicate value, renders the right widget:
  *
- *   "scene_combobox" -> <ambience-scene-combobox>
  *   "text" / unknown -> free-text input + the matcher's predicate_help
  *
  * Emits `value-changed` with `{ value: unknown }`. A `null` value means the
@@ -49,7 +47,6 @@ export class AmbienceMatcherInput extends LitElement {
 
   @property({ attribute: false }) matcher!: MatcherInfo;
   @property({ attribute: false }) value: unknown = null;
-  @property({ attribute: false }) sceneSuggestions: string[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) dayConfig?: DayConfig;
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
@@ -82,19 +79,6 @@ export class AmbienceMatcherInput extends LitElement {
             this._emit(e.detail.value);
           }}
         ></ambience-time-of-day-input>
-      `;
-    }
-    if (this.matcher.input === "scene_combobox") {
-      return html`
-        <ambience-scene-combobox
-          .hass=${this.hass}
-          .value=${(this.value as string | null) ?? null}
-          .suggestions=${this.sceneSuggestions}
-          @value-changed=${(e: CustomEvent<{ value: string | null }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
-        ></ambience-scene-combobox>
       `;
     }
     if (this.matcher.input === "script_predicate") {

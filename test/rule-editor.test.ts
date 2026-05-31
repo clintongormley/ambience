@@ -18,7 +18,7 @@ import type { ExposedAction, MatcherInfo, Rule, Scope } from "../frontend/src/ty
 import * as api from "../frontend/src/api";
 
 const matchers: MatcherInfo[] = [
-  { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
+  { name: "mode", description: "", predicate_help: "", input: "text", priority: 0 },
   { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day", priority: 200 },
   { name: "people", description: "", predicate_help: "", input: "people_predicate", priority: 75 },
   { name: "template", description: "", predicate_help: "", input: "template_predicate", priority: 30 },
@@ -43,7 +43,7 @@ const periods = { builtins: {}, custom: {}, hidden: [] };
 
 const hass = {
   localize: (k: string) => {
-    if (k === "component.ambience.matcher.scene") return "Scene";
+    if (k === "component.ambience.matcher.mode") return "Mode";
     if (k === "component.ambience.matcher.time_of_day") return "Time of day";
     return undefined;
   },
@@ -84,46 +84,46 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     // matchers without a value are now hidden behind the add-condition dropdown).
     el = await mount({
       name: "test",
-      when: { scene: "movie", time_of_day: { period: "afternoon" } },
+      when: { mode: "movie", time_of_day: { period: "afternoon" } },
       actions: [],
     });
     const rows = el.shadowRoot.querySelectorAll(".slot.collapsed");
-    expect(rows.length).toBe(3);  // name + scene + time_of_day
+    expect(rows.length).toBe(3);  // name + mode + time_of_day
   });
 
   test("clicking a collapsed matcher summary expands it", async () => {
-    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
-    const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    el = await mount({ name: "test", when: { mode: "movie" }, actions: [] });
+    const modeRow = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    modeRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
     // Re-query: Lit replaces the collapsed element with a new expanded element
-    const expanded = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    const expanded = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
     expect(expanded.classList.contains("expanded")).toBe(true);
   });
 
   test("opening a second matcher collapses the first", async () => {
     el = await mount({
       name: "test",
-      when: { scene: "movie", time_of_day: { period: "afternoon" } },  // seed so both rows exist
+      when: { mode: "movie", time_of_day: { period: "afternoon" } },  // seed so both rows exist
       actions: [],
     });
-    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const mode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    mode.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    // Re-query tod after scene expansion (Lit replaces the scene element, tod may shift)
+    // Re-query tod after mode expansion (Lit replaces the mode element, tod may shift)
     const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
     tod.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
     // Re-query both after renders settle
-    const sceneAfter = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+    const modeAfter = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
     const todAfter = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
-    expect(sceneAfter.classList.contains("collapsed")).toBe(true);
+    expect(modeAfter.classList.contains("collapsed")).toBe(true);
     expect(todAfter.classList.contains("expanded")).toBe(true);
   });
 
   test("clicking an already-expanded summary collapses it", async () => {
-    // Use time_of_day (non-combobox) for this test: it keeps its .summary when expanded
-    // so the second click can target it. Scene (combobox) drops chrome when expanded.
+    // Use time_of_day for this test: it keeps its .summary when expanded
+    // so the second click can target it.
     // Seed time_of_day in `when` so the row is rendered (toggleable matchers
     // without a value now appear only behind the add-condition dropdown).
     el = await mount({
@@ -143,10 +143,10 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   });
 
   test("matcher row labels use friendly names from i18n", async () => {
-    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
-    const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    expect(sceneRow.textContent).toContain("Scene");
-    expect(sceneRow.textContent).toContain("movie");
+    el = await mount({ name: "test", when: { mode: "movie" }, actions: [] });
+    const modeRow = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    expect(modeRow.textContent).toContain("Mode");
+    expect(modeRow.textContent).toContain("movie");
   });
 
   test("action rows render as collapsed summaries", async () => {
@@ -166,7 +166,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
       { name: "weather", description: "", predicate_help: "", input: "weather_predicate", priority: 300 },
       { name: "day", description: "", predicate_help: "", input: "day_predicate", priority: 100 },
       { name: "sun", description: "", predicate_help: "", input: "sun_predicate", priority: 250 },
-      { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
+      { name: "mode", description: "", predicate_help: "", input: "text", priority: 0 },
     ];
     el2.availableActions = [];
     el2.periods = periods;
@@ -179,7 +179,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     const opts = Array.from(el2.shadowRoot.querySelectorAll("select.add-matcher option"))
       .map((o: Element) => o.textContent?.trim());
     // [0] is the "+ Add condition…" placeholder.
-    expect(opts.slice(1)).toEqual(["Day", "Scene", "Sun", "Weather"]);
+    expect(opts.slice(1)).toEqual(["Day", "Mode", "Sun", "Weather"]);
     el2.remove();
   });
 
@@ -356,14 +356,14 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(nameRow.textContent).toContain("New rule");
   });
 
-  test("name slot ignores scene — shows 'New rule' when rule name is empty", async () => {
-    el = await mount({ name: "", when: { scene: "Cozy evening" }, actions: [] });
+  test("name slot ignores mode — shows 'New rule' when rule name is empty", async () => {
+    el = await mount({ name: "", when: { mode: "Cozy evening" }, actions: [] });
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
     expect(nameRow.textContent).toContain("New rule");
   });
 
-  test("name slot prefers explicit name over scene", async () => {
-    el = await mount({ name: "My rule", when: { scene: "Cozy evening" }, actions: [] });
+  test("name slot prefers explicit name over mode", async () => {
+    el = await mount({ name: "My rule", when: { mode: "Cozy evening" }, actions: [] });
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
     expect(nameRow.textContent).toContain("My rule");
   });
@@ -380,35 +380,35 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   });
 
   test("opening name slot collapses an open matcher row", async () => {
-    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
-    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    el = await mount({ name: "test", when: { mode: "movie" }, actions: [] });
+    const mode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    mode.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    // Re-query: Lit replaces the collapsed element with a new expanded (chrome-free) element
-    const sceneExpanded = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    expect(sceneExpanded.classList.contains("expanded")).toBe(true);
+    // Re-query: Lit replaces the collapsed element with a new expanded element
+    const modeExpanded = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    expect(modeExpanded.classList.contains("expanded")).toBe(true);
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
     nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    // Re-query: Lit replaces the expanded scene element with a new collapsed element
-    const sceneCollapsed = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    expect(sceneCollapsed.classList.contains("collapsed")).toBe(true);
+    // Re-query: Lit replaces the expanded mode element with a new collapsed element
+    const modeCollapsed = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    expect(modeCollapsed.classList.contains("collapsed")).toBe(true);
     // Re-query: Lit replaces the collapsed element with a new expanded element
     const expandedNameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
     expect(expandedNameRow.classList.contains("expanded")).toBe(true);
   });
 
   test("matcher input value-changed event calls _setPredicate", async () => {
-    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
-    // Expand the scene matcher
-    const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    el = await mount({ name: "test", when: { mode: "movie" }, actions: [] });
+    // Expand the mode matcher
+    const modeRow = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    modeRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
 
-    // Re-query: Lit replaces the collapsed element with a new expanded (chrome-free) element
-    const expandedScene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    // Fire value-changed from ambience-matcher-input (directly inside the slot, no .body wrapper)
-    const matcherInput = expandedScene.querySelector("ambience-matcher-input")!;
+    // Re-query: Lit replaces the collapsed element with a new expanded element
+    const expandedMode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    // Fire value-changed from ambience-matcher-input
+    const matcherInput = expandedMode.querySelector("ambience-matcher-input")!;
     matcherInput.dispatchEvent(new CustomEvent("value-changed", {
       detail: { value: "relaxed" },
       bubbles: true,
@@ -419,25 +419,25 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     let saved: any;
     el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
-    expect(saved?.when?.scene).toBe("relaxed");
+    expect(saved?.when?.mode).toBe("relaxed");
   });
 
   test("clicking outside an open slot collapses it when valid", async () => {
-    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
-    const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    // Open scene slot
-    sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    el = await mount({ name: "test", when: { mode: "movie" }, actions: [] });
+    const modeRow = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    // Open mode slot
+    modeRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    // Re-query: Lit replaces the collapsed element with a new expanded (chrome-free) element
-    const expandedScene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    expect(expandedScene.classList.contains("expanded")).toBe(true);
+    // Re-query: Lit replaces the collapsed element with a new expanded element
+    const expandedMode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    expect(expandedMode.classList.contains("expanded")).toBe(true);
     // Click on a non-slot region inside the modal (h3 header)
     const h3 = el.shadowRoot.querySelector("h3") as HTMLElement;
     h3.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
     // Re-query: Lit replaces the expanded element with a new collapsed element
-    const collapsedScene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    expect(collapsedScene.classList.contains("collapsed")).toBe(true);
+    const collapsedMode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    expect(collapsedMode.classList.contains("collapsed")).toBe(true);
   });
 
   test("clicking outside an action slot with no targets keeps it open and shows an error", async () => {
@@ -471,7 +471,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("clicking another slot's summary while current is invalid keeps current open", async () => {
     el = await mount({
-      name: "test", when: { scene: "movie" },
+      name: "test", when: { mode: "movie" },
       actions: [{ service: "light.turn_on", entity_ids: [], params: { brightness: 80 } }],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
@@ -485,11 +485,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
       composed: true,
     }));
     await el.updateComplete;
-    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const mode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    mode.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
     expect(action.classList.contains("expanded")).toBe(true);
-    expect(scene.classList.contains("collapsed")).toBe(true);
+    expect(mode.classList.contains("collapsed")).toBe(true);
   });
 
   test("picking from the +Add action dropdown while current is invalid keeps current open with error", async () => {
@@ -589,22 +589,6 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(expanded.querySelector("label")).toBeNull();
     // But the input IS rendered
     expect(expanded.querySelector('input[type="text"]')).toBeTruthy();
-  });
-
-  test("expanded scene slot renders just the matcher-input — no summary header", async () => {
-    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
-    const sceneRow = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    // Click to expand
-    sceneRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await el.updateComplete;
-    // Re-query because the expanded element is a fresh template
-    const expanded = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    // No .summary child
-    expect(expanded.querySelector(".summary")).toBeNull();
-    // No .body wrapper either
-    expect(expanded.querySelector(".body")).toBeNull();
-    // But the matcher-input is rendered
-    expect(expanded.querySelector("ambience-matcher-input")).toBeTruthy();
   });
 
   test("time-of-day slot keeps the summary header when expanded", async () => {
@@ -915,8 +899,8 @@ describe("ambience-rule-editor — matcher dropdown + full-height layout", () =>
 
   test("does not render a row for a toggleable matcher that is not used in the rule", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
-    // scene is toggleable and not in `when` → no row
-    expect(el.shadowRoot.querySelector('.slot[data-slot-id="scene"]')).toBeNull();
+    // mode is toggleable and not in `when` → no row
+    expect(el.shadowRoot.querySelector('.slot[data-slot-id="mode"]')).toBeNull();
     // time_of_day is toggleable and not in `when` → no row
     expect(el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]')).toBeNull();
   });
@@ -932,8 +916,8 @@ describe("ambience-rule-editor — matcher dropdown + full-height layout", () =>
     expect(select).toBeTruthy();
     const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
     expect(values).toContain("time_of_day");
-    // scene is now toggleable → also in the dropdown when not used
-    expect(values).toContain("scene");
+    // mode is now toggleable → also in the dropdown when not used
+    expect(values).toContain("mode");
   });
 
   test("the add-matcher dropdown excludes matchers that are already used", async () => {
@@ -1038,20 +1022,20 @@ describe("ambience-rule-editor — matcher dropdown + full-height layout", () =>
     expect("time_of_day" in saved.when).toBe(false);
   });
 
-  test("scene appears in the +Add condition dropdown when not used in the rule", async () => {
+  test("mode appears in the +Add condition dropdown when not used in the rule", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     const select = el.shadowRoot.querySelector("select.add-matcher") as HTMLSelectElement;
     const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
-    expect(values).toContain("scene");   // scene is now toggleable like the others
+    expect(values).toContain("mode");   // mode is now toggleable like the others
     expect(values).toContain("time_of_day");
   });
 
-  test("scene row has a remove button now that it's toggleable", async () => {
-    el = await mount({ name: "test", when: { scene: "movie" }, actions: [] });
-    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
+  test("mode row has a remove button now that it's toggleable", async () => {
+    el = await mount({ name: "test", when: { mode: "movie" }, actions: [] });
+    const mode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
     // The matcher row keeps its summary chrome when toggleable (.summary is dropped
     // only in the expanded-combobox special case).
-    expect(scene.querySelector(".remove")).toBeTruthy();
+    expect(mode.querySelector(".remove")).toBeTruthy();
   });
 
   test("a matcher with a null (any) predicate is hidden — appears in the dropdown instead of as a row", async () => {
@@ -1064,7 +1048,7 @@ describe("ambience-rule-editor — matcher dropdown + full-height layout", () =>
   });
 
   test("save strips null predicates from `when`", async () => {
-    el = await mount({ name: "test", when: { time_of_day: null, scene: "movie" }, actions: [] });
+    el = await mount({ name: "test", when: { time_of_day: null, mode: "movie" }, actions: [] });
     let saved: any;
     el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
@@ -1072,7 +1056,7 @@ describe("ambience-rule-editor — matcher dropdown + full-height layout", () =>
     ) as HTMLButtonElement;
     saveBtn.click();
     expect("time_of_day" in saved.when).toBe(false);
-    expect(saved.when.scene).toBe("movie");
+    expect(saved.when.mode).toBe("movie");
   });
 
   test("modal has a separate scrollable content area and a non-scrolling actions-bar", async () => {
@@ -1299,7 +1283,7 @@ describe("ambience-rule-editor — people matcher empty-selection validation", (
     );
     expect(el._validationError({ kind: "matcher", id: "people" })).toBe("Select at least one person");
     // A non-empty who is valid.
-    expect(el._validationError({ kind: "matcher", id: "scene" })).toBeNull();
+    expect(el._validationError({ kind: "matcher", id: "mode" })).toBeNull();
   });
 
   test("a non-empty (or who-less) people predicate is valid", async () => {
@@ -1332,16 +1316,16 @@ describe("ambience-rule-editor — people matcher empty-selection validation", (
 
   test("an empty people selection blocks switching to another slot", async () => {
     el = await mount(
-      { name: "t", when: { people: { quant: "any", who: [], where: "home" }, scene: "movie" }, actions: [] },
+      { name: "t", when: { people: { quant: "any", who: [], where: "home" }, mode: "movie" }, actions: [] },
       { hass: peopleHass },
     );
     const people = await openPeople();
-    const scene = el.shadowRoot.querySelector('.slot[data-slot-id="scene"]') as HTMLElement;
-    scene.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const mode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
+    mode.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    // People stays open; scene stays collapsed.
+    // People stays open; mode stays collapsed.
     expect(people.classList.contains("expanded")).toBe(true);
-    expect(scene.classList.contains("collapsed")).toBe(true);
+    expect(mode.classList.contains("collapsed")).toBe(true);
   });
 
   test("an empty people selection blocks _save and opens the offending slot", async () => {

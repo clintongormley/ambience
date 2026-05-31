@@ -593,7 +593,6 @@ def _house_must_be_true(v: Any) -> bool:
         vol.Optional("area_id"): str,
         vol.Optional("floor_id"): str,
         vol.Optional("house"): _house_must_be_true,
-        vol.Optional("scene"): str,
     }
 )
 @websocket_api.async_response
@@ -617,7 +616,7 @@ async def _ws_dry_run(
     else:
         scope_kind, scope_id = "house", None
     try:
-        result = await async_resolve_only(hass, scope_kind, scope_id, msg.get("scene"))
+        result = await async_resolve_only(hass, scope_kind, scope_id)
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return

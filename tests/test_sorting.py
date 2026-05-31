@@ -21,9 +21,9 @@ class IntervalMatcher:
         return predicate[0]
 
 
-class SceneLike:
-    """Test double for an always-on string-equality matcher (like `scene`):
-    `order_key` only, no `contains` (equality is handled generically)."""
+class StringMatcher:
+    """Test double for an always-on string-equality matcher: `order_key`
+    only, no `contains` (equality is handled generically)."""
 
     priority = 1000
 
@@ -45,55 +45,55 @@ def _names(rules: list[dict[str, Any]]) -> list[str]:
 
 def test_empty_and_single_returned_as_is() -> None:
     assert sort_rules([], {}) == []
-    one = [_rule("only", {"scene": "movie"})]
-    assert sort_rules(one, {"scene": SceneLike()}) == one
+    one = [_rule("only", {"mode": "movie"})]
+    assert sort_rules(one, {"mode": StringMatcher()}) == one
 
 
 def test_contained_rule_precedes_its_container() -> None:
-    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    matchers = {"mode": StringMatcher(), "tod": IntervalMatcher()}
     rules = [
-        _rule("wide", {"scene": "movie", "tod": (10, 14)}),
-        _rule("narrow", {"scene": "movie", "tod": (12, 13)}),
+        _rule("wide", {"mode": "movie", "tod": (10, 14)}),
+        _rule("narrow", {"mode": "movie", "tod": (12, 13)}),
     ]
     assert _names(sort_rules(rules, matchers)) == ["narrow", "wide"]
 
 
 def test_extra_constrained_dimension_is_more_specific() -> None:
-    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    matchers = {"mode": StringMatcher(), "tod": IntervalMatcher()}
     rules = [
-        _rule("scene-only", {"scene": "movie"}),
-        _rule("scene-and-tod", {"scene": "movie", "tod": (10, 14)}),
+        _rule("value-only", {"mode": "movie"}),
+        _rule("value-and-tod", {"mode": "movie", "tod": (10, 14)}),
     ]
-    assert _names(sort_rules(rules, matchers)) == ["scene-and-tod", "scene-only"]
+    assert _names(sort_rules(rules, matchers)) == ["value-and-tod", "value-only"]
 
 
-def test_named_scene_precedes_scene_any() -> None:
-    matchers = {"scene": SceneLike()}
+def test_named_value_precedes_wildcard() -> None:
+    matchers = {"mode": StringMatcher()}
     rules = [
-        _rule("catchall", {"scene": None}),
-        _rule("movie", {"scene": "movie"}),
-        _rule("no-scene-key", {}),
+        _rule("catchall", {"mode": None}),
+        _rule("movie", {"mode": "movie"}),
+        _rule("no-mode-key", {}),
     ]
     out = _names(sort_rules(rules, matchers))
     assert out[0] == "movie"
-    assert set(out[1:]) == {"catchall", "no-scene-key"}
+    assert set(out[1:]) == {"catchall", "no-mode-key"}
 
 
-def test_scene_grouping_via_linearisation() -> None:
-    matchers = {"scene": SceneLike()}
+def test_string_grouping_via_linearisation() -> None:
+    matchers = {"mode": StringMatcher()}
     rules = [
-        _rule("r-reading", {"scene": "Reading"}),
-        _rule("r-movie", {"scene": "movie"}),
-        _rule("r-arcade", {"scene": "arcade"}),
+        _rule("r-reading", {"mode": "Reading"}),
+        _rule("r-movie", {"mode": "movie"}),
+        _rule("r-arcade", {"mode": "arcade"}),
     ]
     assert _names(sort_rules(rules, matchers)) == ["r-arcade", "r-movie", "r-reading"]
 
 
 def test_disjoint_ranges_linearise_chronologically() -> None:
-    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    matchers = {"mode": StringMatcher(), "tod": IntervalMatcher()}
     rules = [
-        _rule("evening", {"scene": "movie", "tod": (18, 19)}),
-        _rule("morning", {"scene": "movie", "tod": (8, 10)}),
+        _rule("evening", {"mode": "movie", "tod": (18, 19)}),
+        _rule("morning", {"mode": "movie", "tod": (8, 10)}),
     ]
     assert _names(sort_rules(rules, matchers)) == ["morning", "evening"]
 
@@ -153,18 +153,18 @@ def test_hard_edges_override_linearisation_no_loop() -> None:
 
 
 def test_stable_on_full_ties() -> None:
-    matchers = {"scene": SceneLike()}
+    matchers = {"mode": StringMatcher()}
     rules = [
-        _rule("a", {"scene": "movie"}),
-        _rule("b", {"scene": "movie"}),
-        _rule("c", {"scene": "movie"}),
+        _rule("a", {"mode": "movie"}),
+        _rule("b", {"mode": "movie"}),
+        _rule("c", {"mode": "movie"}),
     ]
     assert _names(sort_rules(rules, matchers)) == ["a", "b", "c"]
 
 
 def test_does_not_mutate_input() -> None:
-    matchers = {"scene": SceneLike()}
-    rules = [_rule("b", {"scene": "b"}), _rule("a", {"scene": "a"})]
+    matchers = {"mode": StringMatcher()}
+    rules = [_rule("b", {"mode": "b"}), _rule("a", {"mode": "a"})]
     sort_rules(rules, matchers)
     assert _names(rules) == ["b", "a"]
 
@@ -193,10 +193,10 @@ def _by_name_priorities(rules: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def test_resolve_assigns_decreasing_priorities_in_topological_order() -> None:
-    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    matchers = {"mode": StringMatcher(), "tod": IntervalMatcher()}
     rules = [
-        _rule("wide", {"scene": "movie", "tod": (10, 14)}),
-        _rule("narrow", {"scene": "movie", "tod": (12, 13)}),
+        _rule("wide", {"mode": "movie", "tod": (10, 14)}),
+        _rule("narrow", {"mode": "movie", "tod": (12, 13)}),
     ]
     out = resolve_order(rules, matchers)
     assert _names(out) == ["narrow", "wide"]
@@ -205,17 +205,17 @@ def test_resolve_assigns_decreasing_priorities_in_topological_order() -> None:
 
 
 def test_resolve_keeps_pinned_priority_and_places_it_by_number() -> None:
-    matchers = {"scene": SceneLike()}
+    matchers = {"mode": StringMatcher()}
     rules = [
-        _rule("a", {"scene": "a"}),
+        _rule("a", {"mode": "a"}),
         {
             "name": "pinned",
-            "when": {"scene": "z"},
+            "when": {"mode": "z"},
             "actions": [],
             "priority": 999999,
             "pinned": True,
         },  # noqa: E501
-        _rule("b", {"scene": "b"}),
+        _rule("b", {"mode": "b"}),
     ]
     out = resolve_order(rules, matchers)
     assert out[0]["name"] == "pinned"
@@ -223,9 +223,9 @@ def test_resolve_keeps_pinned_priority_and_places_it_by_number() -> None:
 
 
 def test_resolve_gap_insertion_preserves_other_numbers() -> None:
-    matchers = {"scene": SceneLike()}
+    matchers = {"mode": StringMatcher()}
     seeded = resolve_order(
-        [_rule("a", {"scene": "a"}), _rule("b", {"scene": "b"}), _rule("c", {"scene": "c"})],
+        [_rule("a", {"mode": "a"}), _rule("b", {"mode": "b"}), _rule("c", {"mode": "c"})],
         matchers,
     )
     nums = _by_name_priorities(seeded)
@@ -233,7 +233,7 @@ def test_resolve_gap_insertion_preserves_other_numbers() -> None:
         if r["name"] == "c":
             r["pinned"] = True
     pinned_c = nums["c"]
-    seeded.append(_rule("aa", {"scene": "aa"}))
+    seeded.append(_rule("aa", {"mode": "aa"}))
     out = resolve_order(seeded, matchers)
     out_nums = _by_name_priorities(out)
     assert out_nums["a"] == nums["a"]
@@ -244,11 +244,11 @@ def test_resolve_gap_insertion_preserves_other_numbers() -> None:
 
 
 def test_resolve_renormalises_when_a_gap_closes() -> None:
-    matchers = {"scene": SceneLike()}
+    matchers = {"mode": StringMatcher()}
     rules = [
-        {"name": "hi", "when": {"scene": "a"}, "actions": [], "priority": 11, "pinned": True},
-        {"name": "lo", "when": {"scene": "b"}, "actions": [], "priority": 10, "pinned": True},
-        _rule("mid", {"scene": "ab"}),
+        {"name": "hi", "when": {"mode": "a"}, "actions": [], "priority": 11, "pinned": True},
+        {"name": "lo", "when": {"mode": "b"}, "actions": [], "priority": 10, "pinned": True},
+        _rule("mid", {"mode": "ab"}),
     ]
     out = resolve_order(rules, matchers)
     prios = [r["priority"] for r in out]
@@ -257,10 +257,10 @@ def test_resolve_renormalises_when_a_gap_closes() -> None:
 
 
 def test_resolve_renormalises_on_duplicate_pin_values() -> None:
-    matchers = {"scene": SceneLike()}
+    matchers = {"mode": StringMatcher()}
     rules = [
-        {"name": "a", "when": {"scene": "a"}, "actions": [], "priority": 500, "pinned": True},
-        {"name": "b", "when": {"scene": "b"}, "actions": [], "priority": 500, "pinned": True},
+        {"name": "a", "when": {"mode": "a"}, "actions": [], "priority": 500, "pinned": True},
+        {"name": "b", "when": {"mode": "b"}, "actions": [], "priority": 500, "pinned": True},
     ]
     out = resolve_order(rules, matchers)
     prios = [r["priority"] for r in out]
@@ -270,32 +270,32 @@ def test_resolve_renormalises_on_duplicate_pin_values() -> None:
 
 
 def test_shadow_general_above_specific_is_flagged() -> None:
-    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    matchers = {"mode": StringMatcher(), "tod": IntervalMatcher()}
     ordered = [
-        _rule("general", {"scene": "movie"}),
-        _rule("specific", {"scene": "movie", "tod": (12, 13)}),
+        _rule("general", {"mode": "movie"}),
+        _rule("specific", {"mode": "movie", "tod": (12, 13)}),
     ]
     assert shadowed_by(ordered, matchers) == {1: 0}
 
 
 def test_shadow_specific_above_general_is_not_flagged() -> None:
-    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    matchers = {"mode": StringMatcher(), "tod": IntervalMatcher()}
     ordered = [
-        _rule("specific", {"scene": "movie", "tod": (12, 13)}),
-        _rule("general", {"scene": "movie"}),
+        _rule("specific", {"mode": "movie", "tod": (12, 13)}),
+        _rule("general", {"mode": "movie"}),
     ]
     assert shadowed_by(ordered, matchers) == {}
 
 
 def test_shadow_equal_match_sets_flagged() -> None:
-    matchers = {"scene": SceneLike()}
-    ordered = [_rule("first", {"scene": "x"}), _rule("dup", {"scene": "x"})]
+    matchers = {"mode": StringMatcher()}
+    ordered = [_rule("first", {"mode": "x"}), _rule("dup", {"mode": "x"})]
     assert shadowed_by(ordered, matchers) == {1: 0}
 
 
 def test_shadow_empty_when_shadows_everything_below() -> None:
-    matchers = {"scene": SceneLike()}
-    ordered = [_rule("catch_all", {}), _rule("below", {"scene": "x"})]
+    matchers = {"mode": StringMatcher()}
+    ordered = [_rule("catch_all", {}), _rule("below", {"mode": "x"})]
     assert shadowed_by(ordered, matchers) == {1: 0}
 
 

@@ -38,7 +38,6 @@ from .const import (
 from .exposed_actions import ExposedActionsStore
 from .matchers.day import DayMatcher
 from .matchers.people import PeopleMatcher
-from .matchers.scene import SceneMatcher
 from .matchers.script import ScriptMatcher
 from .matchers.state import StateMatcher
 from .matchers.sun import SunMatcher
@@ -82,7 +81,6 @@ _APPLY_SCENE_SCHEMA = vol.All(
             vol.Optional("area"): cv.string,
             vol.Optional("floor"): cv.string,
             vol.Optional("house"): _house_must_be_true,
-            vol.Optional("scene"): cv.string,
         }
     ),
     _exactly_one_scope,
@@ -132,7 +130,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     period_store = PeriodStore(store)
     domain_data[DATA_PERIODS] = period_store
 
-    register_matcher(hass, SceneMatcher())
     register_matcher(hass, TimeOfDayMatcher(period_lookup=period_store.effective))
     register_matcher(hass, DayMatcher(hass=hass))
     register_matcher(hass, WeatherMatcher(hass=hass))
@@ -143,13 +140,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     register_matcher(hass, TemplateMatcher(hass=hass))
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
-        scene = call.data.get("scene")
         if "area" in call.data:
-            await async_apply_scene(hass, "area", call.data["area"], scene)
+            await async_apply_scene(hass, "area", call.data["area"])
         elif "floor" in call.data:
-            await async_apply_scene(hass, "floor", call.data["floor"], scene)
+            await async_apply_scene(hass, "floor", call.data["floor"])
         else:  # house
-            await async_apply_scene(hass, "house", None, scene)
+            await async_apply_scene(hass, "house", None)
 
     hass.services.async_register(
         DOMAIN,

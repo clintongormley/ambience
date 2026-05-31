@@ -24,7 +24,7 @@ async def test_save_and_read_area(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
     config = {
-        "scenes": ["movie"],
+        "extra": ["movie"],
         "matchers": ["time_of_day"],
         "rules": [],
     }
@@ -42,7 +42,7 @@ async def test_get_area_unknown_returns_none(hass: HomeAssistant) -> None:
 async def test_delete_area(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_area("a", {"scenes": [], "matchers": [], "rules": []})
+    await store.async_save_area("a", {"extra": [], "matchers": [], "rules": []})
     await store.async_delete_area("a")
     assert store.get_area("a") is None
 
@@ -73,7 +73,7 @@ async def test_persisted_data_survives_new_store_instance(hass: HomeAssistant) -
     """Save with one AmbienceStore, then load with a fresh one — data must survive."""
     s1 = AmbienceStore(hass)
     await s1.async_load()
-    config = {"scenes": ["welcome"], "rules": []}
+    config = {"extra": ["welcome"], "rules": []}
     await s1.async_save_area("hall", config)
 
     s2 = AmbienceStore(hass)

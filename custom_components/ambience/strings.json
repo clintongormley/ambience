@@ -38,7 +38,6 @@
     "last_workday": "Last workday of month"
   },
   "matcher": {
-    "scene": "Scene",
     "time_of_day": "Time of day",
     "state": "Entity state",
     "script": "Script",
@@ -139,9 +138,6 @@
     "unit_hour_abbr": "h",
     "unit_min_abbr": "m",
     "no_matching_entities": "No matching entities in this area.",
-    "scene_name": "Scene name",
-    "show_scene_suggestions": "Show scene suggestions",
-    "no_scenes_yet": "No scenes yet — type to create one",
     "field_kind": "Kind",
     "field_days_of_month": "Days of month",
     "field_month": "Month",

@@ -5,7 +5,7 @@
 
 export type Rule = {
   name?: string;
-  // Uniform {matcher_name: predicate} map. `scene` is just another key.
+  // Uniform {matcher_name: predicate} map.
   // An absent key or `null` value is a wildcard for that matcher.
   when: { [matcher: string]: unknown };
   actions: ActionSpec[];
@@ -129,9 +129,9 @@ export type MatcherInfo = {
   name: string;
   description: string;
   predicate_help: string;
-  // Widget hint for the rule editor: "scene_combobox" | "text" | ...
+  // Widget hint for the rule editor: "time_of_day" | "state_predicate" | "text" | ...
   input: string;
-  // Linearisation-slot order; higher sorts earlier. Default 0, `scene` is 1000.
+  // Linearisation-slot order; higher sorts earlier. Default 0.
   priority: number;
 };
 

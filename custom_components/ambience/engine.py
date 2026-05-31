@@ -16,7 +16,7 @@ def resolve(
 ) -> tuple[int, Rule] | None:
     """Return (index, rule) for the first matching rule, or None.
 
-    Every key in a rule's `when` is a matcher name (including "scene").
+    Every key in a rule's `when` is a matcher name.
     A key whose predicate is None — or that is absent — is a wildcard.
     A matcher missing from `matchers`, or whose snapshot is None, fails the rule.
     """

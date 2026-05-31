@@ -15,7 +15,6 @@ function _resolve(hass: HassLike | undefined, key: string, fallback: string): st
 
 /**
  * Convert a snake_case identifier into a friendly display string:
- *   "scene"       → "Scene"
  *   "time_of_day" → "Time of day"
  *   "light.turn_on" → "Light.turn on"
  *

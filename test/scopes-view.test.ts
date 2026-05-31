@@ -45,7 +45,7 @@ const baseFloors: FloorListItem[] = [
 const baseConfig: ScopeConfig = { rules: [] };
 
 const matchers: MatcherInfo[] = [
-  { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
+  { name: "mode", description: "", predicate_help: "", input: "text", priority: 0 },
   { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day", priority: 200 },
 ];
 

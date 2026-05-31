@@ -56,13 +56,13 @@ describe("periodLabel", () => {
 describe("matcherLabel", () => {
   test("returns translated label when hass.localize hits", () => {
     const hass = { localize: (k: string) =>
-      k === "component.ambience.matcher.scene" ? "Scene" : undefined };
-    expect(matcherLabel(hass, "scene")).toBe("Scene");
+      k === "component.ambience.matcher.mode" ? "Mode" : undefined };
+    expect(matcherLabel(hass, "mode")).toBe("Mode");
   });
 
   test("falls back to friendly form of name when hass.localize misses", () => {
     const hass = { localize: () => undefined };
-    expect(matcherLabel(hass, "scene")).toBe("Scene");
+    expect(matcherLabel(hass, "mode")).toBe("Mode");
   });
 
   test("falls back to friendly form for multi-word ids", () => {
@@ -75,7 +75,7 @@ describe("matcherLabel", () => {
   });
 
   test("works with undefined hass", () => {
-    expect(matcherLabel(undefined, "scene")).toBe("Scene");
+    expect(matcherLabel(undefined, "mode")).toBe("Mode");
   });
 });
 
@@ -87,7 +87,7 @@ describe("actionLabel", () => {
   });
 
   test("falls back to friendly form of name", () => {
-    expect(actionLabel(undefined, "scene_activated")).toBe("Scene activated");
+    expect(actionLabel(undefined, "media_played")).toBe("Media played");
   });
 });
 

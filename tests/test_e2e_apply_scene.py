@@ -67,10 +67,10 @@ async def test_service_call_invokes_light_turn_on(
     await store.async_save_area(
         "lr",
         {
-            "matchers": [],  # no matchers ⇒ rule matches purely on scene
+            "matchers": [],
             "rules": [
                 {
-                    "when": {"scene": "movie"},
+                    "when": {},  # wildcard rule ⇒ always matches
                     "actions": [
                         {
                             "service": "light.turn_on",
@@ -86,7 +86,7 @@ async def test_service_call_invokes_light_turn_on(
     await hass.services.async_call(
         DOMAIN,
         "apply_scene",
-        {"area": "lr", "scene": "movie"},
+        {"area": "lr"},
         blocking=True,
     )
 
@@ -116,7 +116,6 @@ async def test_time_of_day_rule_matches_for_area_without_matchers_field(
                     # Full-day range (00:00 -> 00:00) is always active regardless of
                     # the real clock, so the assertion is deterministic.
                     "when": {
-                        "scene": "movie",
                         "time_of_day": {
                             "from": {"kind": "time", "hh": 0, "mm": 0},
                             "to": {"kind": "time", "hh": 0, "mm": 0},
@@ -128,7 +127,7 @@ async def test_time_of_day_rule_matches_for_area_without_matchers_field(
         },
     )
 
-    result = await async_resolve_only(hass, "area", "lr", "movie")
+    result = await async_resolve_only(hass, "area", "lr")
 
     # The time_of_day matcher must have been activated (snapshot captured)...
     assert "time_of_day" in result["snapshots_described"]
@@ -163,7 +162,19 @@ async def test_apply_scene_rejects_zero_scope_fields(
     import voluptuous as vol
 
     with pytest.raises(vol.Invalid):
-        await hass.services.async_call(DOMAIN, "apply_scene", {"scene": "movie"}, blocking=True)
+        await hass.services.async_call(DOMAIN, "apply_scene", {}, blocking=True)
+
+
+async def test_apply_scene_rejects_scene_field(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """The `scene` field has been removed from apply_scene; it must be rejected."""
+    import voluptuous as vol
+
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN, "apply_scene", {"area": "lr", "scene": "movie"}, blocking=True
+        )
 
 
 async def test_apply_scene_rejects_multiple_scope_fields(

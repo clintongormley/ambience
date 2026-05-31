@@ -15,7 +15,7 @@ import "../frontend/src/views/rules-list";
 import type { ExposedAction, MatcherInfo, Rule, PeriodStoreView } from "../frontend/src/types";
 
 const matchers: MatcherInfo[] = [
-  { name: "scene",       description: "", predicate_help: "", input: "scene_combobox",    priority: 1000 },
+  { name: "mode",       description: "", predicate_help: "", input: "text",    priority: 1000 },
   { name: "day",         description: "", predicate_help: "", input: "day_predicate",     priority: 900 },
   { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day",       priority: 800 },
   { name: "weather",     description: "", predicate_help: "", input: "weather_predicate", priority: 700 },
@@ -34,7 +34,7 @@ const periods: PeriodStoreView = {
 
 const movieRule: Rule = {
   name: "Movie rule",
-  when: { scene: "movie" },
+  when: { mode: "movie" },
   actions: [{ service: "light.turn_on", entity_ids: ["light.lamp"], params: { brightness: 30 } }],
 };
 
@@ -46,7 +46,7 @@ const eveningRule: Rule = {
 
 const testHass = {
   localize: (k: string) => {
-    if (k === "component.ambience.matcher.scene") return "Scene";
+    if (k === "component.ambience.matcher.mode") return "Mode";
     if (k === "component.ambience.matcher.time_of_day") return "Time of day";
     if (k === "component.ambience.matcher.day") return "Day";
     if (k === "component.ambience.matcher.weather") return "Weather";
@@ -222,7 +222,7 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.querySelector(".summary")?.textContent).toContain("any");
   });
 
-  test("summary shows scene predicate value", async () => {
+  test("summary shows mode predicate value", async () => {
     el = await mount([movieRule]);
     expect(el.shadowRoot.querySelector(".summary")?.textContent).toContain("movie");
   });
@@ -355,15 +355,15 @@ describe("ambience-rules-list", () => {
     expect(summary).toContain("Sunrise");
   });
 
-  test("rules-list shows 'Rule 1' when rule name is empty, even if scene is set", async () => {
+  test("rules-list shows 'Rule 1' when rule name is empty, even if mode is set", async () => {
     el = await mount([
-      { name: "", when: { scene: "Cozy evening" }, actions: [] },
+      { name: "", when: { mode: "Cozy evening" }, actions: [] },
     ]);
     const name = el.shadowRoot.querySelector(".name")?.textContent?.trim();
     expect(name).toBe("Rule 1");
   });
 
-  test("rules-list shows default Rule N when both name and scene are empty", async () => {
+  test("rules-list shows default Rule N when both name and mode are empty", async () => {
     el = await mount([
       { name: "", when: {}, actions: [] },
     ]);
@@ -371,9 +371,9 @@ describe("ambience-rules-list", () => {
     expect(name).toBe("Rule 1");
   });
 
-  test("rules-list prefers explicit name over scene", async () => {
+  test("rules-list prefers explicit name over mode", async () => {
     el = await mount([
-      { name: "My rule", when: { scene: "Cozy evening" }, actions: [] },
+      { name: "My rule", when: { mode: "Cozy evening" }, actions: [] },
     ]);
     const name = el.shadowRoot.querySelector(".name")?.textContent?.trim();
     expect(name).toBe("My rule");
@@ -382,21 +382,21 @@ describe("ambience-rules-list", () => {
   test("summary uses friendly matcher labels", async () => {
     const rules: Rule[] = [{
       name: "test",
-      when: { time_of_day: { period: "afternoon" }, scene: "movie" },
+      when: { time_of_day: { period: "afternoon" }, mode: "movie" },
       actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: { brightness: 80 } }],
     }];
     el = await mount(rules);
     const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
     expect(summary).toContain("Time of day:");
     expect(summary).toContain("Afternoon");
-    expect(summary).toContain("Scene:");
+    expect(summary).toContain("Mode:");
     expect(summary).toContain("movie");
   });
 
   test("matcher labels in the summary are wrapped in <strong>", async () => {
     const rules: Rule[] = [{
       name: "test",
-      when: { time_of_day: { period: "afternoon" }, scene: "movie" },
+      when: { time_of_day: { period: "afternoon" }, mode: "movie" },
       actions: [],
     }];
     el = await mount(rules);
@@ -404,13 +404,13 @@ describe("ambience-rules-list", () => {
       el.shadowRoot.querySelectorAll(".summary strong"),
     ).map((s: any) => s.textContent?.trim());
     expect(strongs).toContain("Time of day:");
-    expect(strongs).toContain("Scene:");
+    expect(strongs).toContain("Mode:");
   });
 
   test("clicking the summary expands the whole rule", async () => {
     const rules: Rule[] = [{
       name: "r",
-      when: { time_of_day: { period: "afternoon" }, scene: "movie" },
+      when: { time_of_day: { period: "afternoon" }, mode: "movie" },
       actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: {} }],
     }];
     el = await mount(rules);
@@ -424,7 +424,7 @@ describe("ambience-rules-list", () => {
   test("expanded rule renders each matcher on its own line", async () => {
     const rules: Rule[] = [{
       name: "r",
-      when: { time_of_day: { period: "afternoon" }, scene: "movie" },
+      when: { time_of_day: { period: "afternoon" }, mode: "movie" },
       actions: [],
     }];
     el = await mount(rules);
@@ -435,7 +435,7 @@ describe("ambience-rules-list", () => {
     );
     expect(lines.length).toBe(2);
     const texts = lines.map((n: any) => n.textContent?.trim() ?? "");
-    expect(texts.some((t: string) => t.startsWith("Scene:"))).toBe(true);
+    expect(texts.some((t: string) => t.startsWith("Mode:"))).toBe(true);
     expect(texts.some((t: string) => t.startsWith("Time of day:"))).toBe(true);
   });
 
@@ -640,7 +640,7 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.querySelector(".entity-list")).toBeFalsy();
   });
 
-  test("summary lists matchers in priority order (scene, day, time_of_day, weather)", async () => {
+  test("summary lists matchers in priority order (mode, day, time_of_day, weather)", async () => {
     const rules: Rule[] = [{
       name: "test",
       // Deliberately interleave the `when` keys to confirm the summary does
@@ -648,7 +648,7 @@ describe("ambience-rules-list", () => {
       when: {
         weather: { groups: [], thresholds: [{ attribute: "temperature", op: "<", value: 5 }] },
         time_of_day: { period: "afternoon" },
-        scene: "movie",
+        mode: "movie",
         day: [{ kind: "weekday", days: [0] }],
       },
       actions: [],
@@ -656,13 +656,13 @@ describe("ambience-rules-list", () => {
     el = await mount(rules);
     await el.updateComplete;
     const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
-    const iScene = summary.indexOf("Scene:");
+    const iMode = summary.indexOf("Mode:");
     const iDay = summary.indexOf("Day:");
     const iTod = summary.indexOf("Time of day:");
     const iWeather = summary.indexOf("Weather:");
-    // Most-important matcher (scene=1000) must appear first; least-important (weather=700) last.
-    expect(iScene).toBeGreaterThanOrEqual(0);
-    expect(iDay).toBeGreaterThan(iScene);
+    // Most-important matcher (mode=1000) must appear first; least-important (weather=700) last.
+    expect(iMode).toBeGreaterThanOrEqual(0);
+    expect(iDay).toBeGreaterThan(iMode);
     expect(iTod).toBeGreaterThan(iDay);
     expect(iWeather).toBeGreaterThan(iTod);
   });

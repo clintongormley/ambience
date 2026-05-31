@@ -49,19 +49,19 @@ describe("ruleDisplayName", () => {
     expect(ruleDisplayName({ name: "   ", when: {}, actions: [] })).toBe("New rule");
   });
 
-  test("ignores a scene predicate — name is the only identifier", () => {
-    expect(ruleDisplayName({ name: "", when: { scene: "movie" }, actions: [] }))
+  test("ignores a mode predicate — name is the only identifier", () => {
+    expect(ruleDisplayName({ name: "", when: { mode: "movie" }, actions: [] }))
       .toBe("New rule");
   });
 });
 
 describe("summariseMatcher", () => {
   test("null predicate renders as '(any)'", () => {
-    expect(summariseMatcher("scene", null, { hass: noLocalize, periods })).toBe("(any)");
+    expect(summariseMatcher("mode", null, { hass: noLocalize, periods })).toBe("(any)");
   });
 
-  test("scene predicate renders as the raw string", () => {
-    expect(summariseMatcher("scene", "movie", { hass: noLocalize, periods })).toBe("movie");
+  test("mode predicate renders as the raw string", () => {
+    expect(summariseMatcher("mode", "movie", { hass: noLocalize, periods })).toBe("movie");
   });
 
   test("time_of_day predicate delegates to summariseTimeOfDay", () => {

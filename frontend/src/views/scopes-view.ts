@@ -484,21 +484,6 @@ export class AmbienceScopesView extends LitElement {
     return cfg?.rules[this._editing.index] ?? null;
   }
 
-  /** Scene names already used by the editing scope's rules, case-insensitive sorted. */
-  private get _sceneSuggestions(): string[] {
-    if (!this._editing) return [];
-    const cfg = this._getConfig(this._editing.scope);
-    if (!cfg) return [];
-    const names = new Set<string>();
-    for (const r of cfg.rules) {
-      const s = r.when["scene"];
-      if (typeof s === "string" && s) names.add(s);
-    }
-    return [...names].sort((a, b) =>
-      a.toLowerCase().localeCompare(b.toLowerCase()),
-    );
-  }
-
   /** Matcher rows for the rule editor — sorted by `priority` (higher first). */
   private get _editorMatchers(): MatcherInfo[] {
     if (!this._editing) return [];
@@ -567,7 +552,6 @@ export class AmbienceScopesView extends LitElement {
         .scope=${this._editing ? this._editing.scope : undefined}
         .rule=${this._editingRule}
         .matchers=${this._editorMatchers}
-        .sceneSuggestions=${this._sceneSuggestions}
         .periods=${this._periods}
         .dayConfig=${this._dayConfig}
         .weatherConfig=${this._weatherConfig}

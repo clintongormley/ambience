@@ -55,7 +55,7 @@ class ScriptMatcher:
         "entities to re-evaluate on, since the script itself is opaque."
     )
     input = "script_predicate"
-    # Between scene (1000) and state (950): a named script + named args is a
+    # The highest priority (sorts earliest): a named script + named args is a
     # deliberate, opaque user constraint — semantically very specific.
     priority = 975
 

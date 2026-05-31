@@ -140,10 +140,8 @@ async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> 
     assert resp["success"] is True
     by_name = {m["name"]: m for m in resp["result"]}
 
-    # scene matches the activating scene, has its own input widget, priority 1000
-    assert "toggleable" not in by_name["scene"]
-    assert by_name["scene"]["input"] == "scene_combobox"
-    assert by_name["scene"]["priority"] == 1000
+    # the scene matcher has been removed; it must not appear in the list.
+    assert "scene" not in by_name
 
     # day sorts before time_of_day in the linearisation tiebreaker.
     day = by_name["day"]
@@ -307,7 +305,7 @@ async def test_exposed_actions_save_warns_on_removed_service(
             "rules": [
                 {
                     "name": "movie",
-                    "when": {"scene": "movie"},
+                    "when": {},
                     "actions": [
                         {
                             "service": "light.turn_on",
@@ -366,7 +364,7 @@ async def test_exposed_actions_save_warns_on_param_not_currently_exposed(
             "rules": [
                 {
                     "name": "movie",
-                    "when": {"scene": "movie"},
+                    "when": {},
                     "actions": [
                         {
                             "service": "light.turn_on",
@@ -433,7 +431,7 @@ async def test_exposed_actions_save_no_warning_when_param_in_defaults_only(
             "rules": [
                 {
                     "name": "movie",
-                    "when": {"scene": "movie"},
+                    "when": {},
                     "actions": [
                         {
                             "service": "light.turn_on",
@@ -477,7 +475,7 @@ async def test_area_save_accepts_valid_script_action(
     config = {
         "rules": [
             {
-                "when": {"scene": "movie"},
+                "when": {},
                 "actions": [
                     {
                         "service": "script.foo",
@@ -505,7 +503,7 @@ async def test_area_save_rejects_missing_service(
     config = {
         "rules": [
             {
-                "when": {"scene": "movie"},
+                "when": {},
                 "actions": [{"entity_ids": [], "params": {}}],
             }
         ],
@@ -528,7 +526,7 @@ async def test_area_save_rejects_malformed_service(
     config = {
         "rules": [
             {
-                "when": {"scene": "movie"},
+                "when": {},
                 "actions": [{"service": "no_dot", "entity_ids": [], "params": {}}],
             }
         ],
@@ -551,7 +549,7 @@ async def test_area_save_rejects_unexposed_service(
     config = {
         "rules": [
             {
-                "when": {"scene": "movie"},
+                "when": {},
                 "actions": [
                     {
                         "service": "switch.turn_on",
@@ -579,7 +577,7 @@ async def test_area_save_rejects_non_list_entity_ids(
     config = {
         "rules": [
             {
-                "when": {"scene": "movie"},
+                "when": {},
                 "actions": [
                     {
                         "service": "light.turn_on",
@@ -606,7 +604,7 @@ async def test_area_save_rejects_non_dict_params(
     config = {
         "rules": [
             {
-                "when": {"scene": "movie"},
+                "when": {},
                 "actions": [
                     {
                         "service": "light.turn_on",
@@ -636,7 +634,7 @@ async def test_area_save_accepts_param_not_in_visible_fields(
     config = {
         "rules": [
             {
-                "when": {"scene": "movie"},
+                "when": {},
                 "actions": [
                     {
                         "service": "light.turn_on",
@@ -679,7 +677,7 @@ async def test_area_save_then_get(
     config = {
         "rules": [
             {
-                "when": {"scene": "movie", "time_of_day": {"period": "evening"}},
+                "when": {"time_of_day": {"period": "evening"}},
                 "actions": [
                     {
                         "service": "light.turn_on",
@@ -729,7 +727,7 @@ async def test_area_save_rejects_invalid_predicate(
         "matchers": ["time_of_day"],
         "rules": [
             {
-                "when": {"scene": "movie", "time_of_day": "garbage_predicate"},
+                "when": {"time_of_day": "garbage_predicate"},
                 "actions": [],
             }
         ],
@@ -754,21 +752,6 @@ async def test_validate_ok(hass: HomeAssistant, installed, hass_ws_client) -> No
     assert resp["result"] == {"ok": True}
 
 
-async def test_validate_rejects_bad_scene_predicate(
-    hass: HomeAssistant, installed, hass_ws_client
-) -> None:
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/validate",
-        config={
-            "matchers": [],
-            "rules": [{"when": {"scene": ""}, "actions": []}],
-        },
-    )
-    assert resp["success"] is False
-    assert "scene" in resp["error"]["message"]
-
-
 async def test_dry_run_returns_matched_rule(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
@@ -781,7 +764,7 @@ async def test_dry_run_returns_matched_rule(
             "rules": [
                 {
                     "name": "movie default",
-                    "when": {"scene": "movie"},
+                    "when": {},
                     "actions": [
                         {
                             "service": "light.turn_on",
@@ -799,7 +782,6 @@ async def test_dry_run_returns_matched_rule(
         id=2,
         type="ambience/dry_run",
         area_id=area_id,
-        scene="movie",
     )
     assert resp["success"] is True
     assert resp["result"]["matched_rule_index"] == 0
@@ -822,51 +804,10 @@ async def test_dry_run_no_match(hass: HomeAssistant, installed, area_id, hass_ws
         id=2,
         type="ambience/dry_run",
         area_id=area_id,
-        scene="movie",
     )
     assert resp["success"] is True
     assert resp["result"]["matched_rule_index"] is None
     assert resp["result"]["actions"] == []
-
-
-async def test_dry_run_accepts_missing_scene(
-    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
-) -> None:
-    """The dry_run WS command should accept a payload without `scene`."""
-    save = await _ws_send(
-        hass_ws_client,
-        type="ambience/area/save",
-        area_id=area_id,
-        config={
-            "matchers": [],
-            "rules": [
-                {
-                    "name": "scene-constrained rule",
-                    "when": {"scene": "movie"},
-                    "actions": [
-                        {
-                            "service": "light.turn_on",
-                            "entity_ids": ["light.lamp"],
-                            "params": {"brightness_pct": 50},
-                        }
-                    ],
-                }
-            ],
-        },
-    )
-    assert save["success"] is True
-    # Omitting `scene` from the payload — no validation_error, scene predicate stripped.
-    resp = await _ws_send(
-        hass_ws_client,
-        id=2,
-        type="ambience/dry_run",
-        area_id=area_id,
-    )
-    assert resp["success"] is True
-    assert resp["result"]["matched_rule_index"] == 0
-    assert resp["result"]["rule_name"] == "scene-constrained rule"
-    assert "actions" in resp["result"]
-    assert "snapshots_described" in resp["result"]
 
 
 async def test_dry_run_with_floor_resolves_against_floor_rules(
@@ -876,14 +817,13 @@ async def test_dry_run_with_floor_resolves_against_floor_rules(
     await store.async_save_floor(
         floor_id,
         {
-            "rules": [{"name": "movie", "when": {"scene": "movie"}, "actions": []}],
+            "rules": [{"name": "movie", "when": {}, "actions": []}],
         },
     )
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/dry_run",
         floor_id=floor_id,
-        scene="movie",
     )
     assert resp["success"] is True
     assert resp["result"]["rule_name"] == "movie"
@@ -895,10 +835,10 @@ async def test_dry_run_with_house_resolves_against_house_rules(
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_house(
         {
-            "rules": [{"name": "away", "when": {"scene": "away"}, "actions": []}],
+            "rules": [{"name": "away", "when": {}, "actions": []}],
         },
     )
-    resp = await _ws_send(hass_ws_client, type="ambience/dry_run", house=True, scene="away")
+    resp = await _ws_send(hass_ws_client, type="ambience/dry_run", house=True)
     assert resp["success"] is True
     assert resp["result"]["rule_name"] == "away"
 
@@ -930,8 +870,8 @@ async def test_area_save_sorts_rules_by_specificity(
     config = {
         "matchers": ["time_of_day"],
         "rules": [
-            {"when": {"scene": "movie", "time_of_day": wide}, "actions": []},
-            {"when": {"scene": "movie", "time_of_day": narrow}, "actions": []},
+            {"when": {"time_of_day": wide}, "actions": []},
+            {"when": {"time_of_day": narrow}, "actions": []},
         ],
     }
     save = await _ws_send(
@@ -970,42 +910,6 @@ async def test_unload_deregisters_ws_commands(
     assert resp["success"] is False
 
 
-async def test_sorted_rules_resolve_named_scene_over_catchall(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
-) -> None:
-    """A catch-all (scene=any) rule submitted first must not shadow a named-scene
-    rule after auto-sort: the named rule sorts ahead and wins in dry_run."""
-    config = {
-        "matchers": [],
-        "rules": [
-            {"name": "catchall", "when": {"scene": None}, "actions": []},
-            {"name": "movie-rule", "when": {"scene": "movie"}, "actions": []},
-        ],
-    }
-    save = await _ws_send(
-        hass_ws_client,
-        type="ambience/area/save",
-        area_id=area_id,
-        config=config,
-    )
-    assert save["success"] is True
-    # The named-scene rule comes before the catch-all.
-    assert [r["name"] for r in save["result"]["config"]["rules"]] == [
-        "movie-rule",
-        "catchall",
-    ]
-
-    dry = await _ws_send(
-        hass_ws_client,
-        id=2,
-        type="ambience/dry_run",
-        area_id=area_id,
-        scene="movie",
-    )
-    assert dry["success"] is True
-    assert dry["result"]["rule_name"] == "movie-rule"
-
-
 async def test_area_save_pins_and_resolves(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
@@ -1015,13 +919,12 @@ async def test_area_save_pins_and_resolves(
         "rules": [
             {
                 "name": "general",
-                "when": {"scene": "movie"},
+                "when": {},
                 "actions": [],
             },
             {
                 "name": "specific",
                 "when": {
-                    "scene": "movie",
                     "time_of_day": {"period": "evening"},
                 },
                 "actions": [],
@@ -1299,7 +1202,7 @@ async def test_day_config_save_emits_warnings_when_clearing_sensor(
 
 
 # ---------------------------------------------------------------------------
-# C2: Scene as regular matcher + other validation
+# C2: rule + config validation
 # ---------------------------------------------------------------------------
 
 
@@ -1927,7 +1830,7 @@ async def test_area_save_rejects_bad_action_reapply(
     config = {
         "rules": [
             {
-                "when": {"scene": "movie"},
+                "when": {},
                 "actions": [
                     {
                         "service": "light.turn_on",
@@ -1957,7 +1860,7 @@ async def test_area_save_accepts_valid_action_reapply(
     config = {
         "rules": [
             {
-                "when": {"scene": "movie"},
+                "when": {},
                 "actions": [
                     {
                         "service": "light.turn_on",
@@ -1993,7 +1896,7 @@ async def test_area_save_response_carries_shadowed_by(
     shadowed (shadowed_by=None) and the second is shadowed by the first
     (shadowed_by=0).
     """
-    identical_when = {"scene": "movie"}
+    identical_when = {}
     config = {
         "rules": [
             {"name": "first", "when": identical_when, "actions": []},
@@ -2026,7 +1929,7 @@ async def test_shadowed_by_not_persisted_on_round_trip(
 ) -> None:
     """Rules echoed back from the frontend (including shadowed_by) must not
     have that key written to storage. Priority and pinned must still persist."""
-    identical_when = {"scene": "movie"}
+    identical_when = {}
     config = {
         "rules": [
             {"name": "first", "when": identical_when, "actions": []},

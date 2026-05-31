@@ -2,7 +2,7 @@ import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
   listMatchers: vi.fn(async () => ([
-    { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 1000 },
+    { name: "mode", description: "", predicate_help: "", input: "text", priority: 1000 },
     { name: "weather", description: "W", predicate_help: "", input: "weather_predicate", priority: 700 },
     { name: "time_of_day", description: "TOD", predicate_help: "", input: "time_of_day", priority: 800 },
     { name: "day", description: "Day", predicate_help: "", input: "day_predicate", priority: 900 },

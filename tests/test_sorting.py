@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from custom_components.ambience.sorting import sort_rules
+from custom_components.ambience.sorting import resolve_order, sort_rules
 
 
 class IntervalMatcher:
@@ -186,3 +186,65 @@ def test_cyclic_contains_does_not_loop() -> None:
     rules = [_rule("a", {"m": 3}), _rule("b", {"m": 1}), _rule("c", {"m": 2})]
     out = sort_rules(rules, matchers)
     assert sorted(_names(out)) == ["a", "b", "c"]
+
+
+def _by_name_priorities(rules: list[dict[str, Any]]) -> dict[str, int]:
+    return {r["name"]: r["priority"] for r in rules}
+
+
+def test_resolve_assigns_decreasing_priorities_in_topological_order() -> None:
+    matchers = {"scene": SceneLike(), "tod": IntervalMatcher()}
+    rules = [
+        _rule("wide", {"scene": "movie", "tod": (10, 14)}),
+        _rule("narrow", {"scene": "movie", "tod": (12, 13)}),
+    ]
+    out = resolve_order(rules, matchers)
+    assert _names(out) == ["narrow", "wide"]
+    assert out[0]["priority"] > out[1]["priority"]
+    assert out[0]["pinned"] is False and out[1]["pinned"] is False
+
+
+def test_resolve_keeps_pinned_priority_and_places_it_by_number() -> None:
+    matchers = {"scene": SceneLike()}
+    rules = [
+        _rule("a", {"scene": "a"}),
+        {"name": "pinned", "when": {"scene": "z"}, "actions": [], "priority": 999999, "pinned": True},
+        _rule("b", {"scene": "b"}),
+    ]
+    out = resolve_order(rules, matchers)
+    assert out[0]["name"] == "pinned"
+    assert out[0]["priority"] == 999999
+
+
+def test_resolve_gap_insertion_preserves_other_numbers() -> None:
+    matchers = {"scene": SceneLike()}
+    seeded = resolve_order(
+        [_rule("a", {"scene": "a"}), _rule("b", {"scene": "b"}), _rule("c", {"scene": "c"})],
+        matchers,
+    )
+    nums = _by_name_priorities(seeded)
+    for r in seeded:
+        if r["name"] == "c":
+            r["pinned"] = True
+    pinned_c = nums["c"]
+    seeded.append(_rule("aa", {"scene": "aa"}))
+    out = resolve_order(seeded, matchers)
+    out_nums = _by_name_priorities(out)
+    assert out_nums["a"] == nums["a"]
+    assert out_nums["b"] == nums["b"]
+    assert out_nums["c"] == pinned_c
+    assert nums["b"] < out_nums["aa"] < nums["a"]
+    assert _names(out) == ["a", "aa", "b", "c"]
+
+
+def test_resolve_renormalises_when_a_gap_closes() -> None:
+    matchers = {"scene": SceneLike()}
+    rules = [
+        {"name": "hi", "when": {"scene": "a"}, "actions": [], "priority": 11, "pinned": True},
+        {"name": "lo", "when": {"scene": "b"}, "actions": [], "priority": 10, "pinned": True},
+        _rule("mid", {"scene": "ab"}),
+    ]
+    out = resolve_order(rules, matchers)
+    prios = [r["priority"] for r in out]
+    assert prios == sorted(prios, reverse=True)
+    assert len(set(prios)) == len(prios)

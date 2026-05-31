@@ -105,3 +105,78 @@ def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
         remaining.discard(nxt)
 
     return [rules[i] for i in emitted]
+
+
+GAP = 1024  # spacing between auto-assigned priorities; generous room for inserts
+
+
+def _slot(upper: int | None, lower: int | None, k: int, m: int) -> int:
+    """The k-th of m strictly-decreasing values placed between `lower` and
+    `upper` (both exclusive; None means open)."""
+    if upper is None and lower is None:
+        return (m - k) * GAP
+    if upper is None:
+        return lower + (m - k) * GAP
+    if lower is None:
+        return upper - (k + 1) * GAP
+    step = (upper - lower) // (m + 1)
+    return upper - (k + 1) * step  # step may be 0; resolve_order renormalises
+
+
+def _fill(order: list[Rule]) -> None:
+    """Assign every rule whose `priority` is None, gap-inserting between the
+    surrounding kept numbers. `order` is most-important-first."""
+    n = len(order)
+    i = 0
+    while i < n:
+        if order[i]["priority"] is not None:
+            i += 1
+            continue
+        j = i
+        while j < n and order[j]["priority"] is None:
+            j += 1
+        upper = order[i - 1]["priority"] if i > 0 else None
+        lower = order[j]["priority"] if j < n else None
+        m = j - i
+        for k in range(m):
+            order[i + k]["priority"] = _slot(upper, lower, k, m)
+        i = j
+
+
+def resolve_order(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
+    """Canonicalise a scope's rules: maintain unpinned rules' priority numbers
+    against the topological auto order (gap insertion preserves untouched
+    numbers), keep pinned numbers fixed, then sort all rules by priority
+    descending (higher = more important). Returns new rule dicts."""
+    rules = [dict(r) for r in rules]
+    for r in rules:
+        r["pinned"] = bool(r.get("pinned", False))
+        if not isinstance(r.get("priority"), int):
+            r["priority"] = None
+
+    unpinned = [r for r in rules if not r["pinned"]]
+    order = sort_rules(unpinned, matchers)  # desired auto order, most important first
+
+    # Keep existing numbers that already decrease down `order`; clear the rest.
+    hi: int | None = None
+    for r in order:
+        p = r["priority"]
+        if isinstance(p, int) and (hi is None or p < hi):
+            hi = p
+        else:
+            r["priority"] = None
+    _fill(order)
+
+    # Pinned rules with no number yet (shouldn't happen via the UI) get one.
+    for r in rules:
+        if r["priority"] is None:
+            r["priority"] = 0
+
+    rules.sort(key=lambda r: r["priority"], reverse=True)
+
+    # Renormalise if the final order isn't strictly decreasing (a gap closed).
+    prios = [r["priority"] for r in rules]
+    if any(a <= b for a, b in zip(prios, prios[1:])):
+        for idx, r in enumerate(rules):
+            r["priority"] = (len(rules) - idx) * GAP
+    return rules

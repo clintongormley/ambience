@@ -2,11 +2,94 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from .protocols import Matcher
 
 Rule = dict[str, Any]
+
+
+@dataclass(frozen=True)
+class PredicateResult:
+    """One predicate's evaluation within a rule."""
+
+    matcher_key: str
+    passed: bool
+    detail: str | None = None
+
+
+@dataclass(frozen=True)
+class RuleEval:
+    """One rule's evaluation: its predicate results and whether it matched.
+
+    `evaluated` is False for rules after the winner — they are never checked,
+    mirroring this function's own short-circuit semantics.
+    """
+
+    index: int
+    name: str | None
+    predicates: list[PredicateResult]
+    matched: bool
+    evaluated: bool
+
+
+@dataclass(frozen=True)
+class Explanation:
+    """The full evaluation of a rule list: the winner and every rule's eval."""
+
+    winner_index: int | None
+    rules: list[RuleEval]
+
+
+def evaluate_explained(
+    rules: list[Rule],
+    snapshots: dict[str, Any],
+    matchers: dict[str, Matcher],
+    *,
+    describe: bool = False,
+) -> Explanation:
+    """Evaluate `rules`, recording every predicate result and the winner.
+
+    Same matching semantics as `resolve()`: a `when` key whose predicate is
+    None (or absent) is a wildcard; a matcher missing from `matchers`, or whose
+    snapshot is None, fails the rule; evaluation short-circuits on the first
+    failing predicate and stops at the first matching rule.
+
+    When `describe` is True, each successfully evaluated predicate's `detail`
+    is filled from the matcher's `describe(snapshot)` (extra cost — callers
+    pass True only when tracing). Predicates that cannot be evaluated (missing
+    matcher or None snapshot) always carry ``detail="unavailable"`` regardless
+    of this flag.
+    """
+    rule_evals: list[RuleEval] = []
+    winner: int | None = None
+    for idx, rule in enumerate(rules):
+        if winner is not None:
+            rule_evals.append(RuleEval(idx, rule.get("name"), [], False, False))
+            continue
+        when = rule.get("when", {})
+        predicates: list[PredicateResult] = []
+        ok = True
+        for key, predicate in when.items():
+            if predicate is None:
+                continue
+            matcher = matchers.get(key)
+            snap = snapshots.get(key)
+            if matcher is None or snap is None:
+                predicates.append(PredicateResult(key, False, "unavailable"))
+                ok = False
+                break
+            passed = bool(matcher.matches(predicate, snap))
+            detail = matcher.describe(snap) if describe else None
+            predicates.append(PredicateResult(key, passed, detail))
+            if not passed:
+                ok = False
+                break
+        rule_evals.append(RuleEval(idx, rule.get("name"), predicates, ok, True))
+        if ok:
+            winner = idx
+    return Explanation(winner, rule_evals)
 
 
 def resolve(
@@ -16,24 +99,10 @@ def resolve(
 ) -> tuple[int, Rule] | None:
     """Return (index, rule) for the first matching rule, or None.
 
-    Every key in a rule's `when` is a matcher name.
-    A key whose predicate is None — or that is absent — is a wildcard.
-    A matcher missing from `matchers`, or whose snapshot is None, fails the rule.
+    Thin derivation over `evaluate_explained()` so the matching logic has a
+    single source of truth shared with traces.
     """
-    for idx, rule in enumerate(rules):
-        when = rule.get("when", {})
-        ok = True
-        for key, predicate in when.items():
-            if predicate is None:
-                continue
-            matcher = matchers.get(key)
-            snap = snapshots.get(key)
-            if matcher is None or snap is None:
-                ok = False
-                break
-            if not matcher.matches(predicate, snap):
-                ok = False
-                break
-        if ok:
-            return idx, rule
-    return None
+    explanation = evaluate_explained(rules, snapshots, matchers)
+    if explanation.winner_index is None:
+        return None
+    return explanation.winner_index, rules[explanation.winner_index]

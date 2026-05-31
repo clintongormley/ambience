@@ -15,10 +15,10 @@ import "../frontend/src/views/rules-list";
 import type { ExposedAction, MatcherInfo, Rule, PeriodStoreView } from "../frontend/src/types";
 
 const matchers: MatcherInfo[] = [
-  { name: "scene",       description: "", predicate_help: "", input: "scene_combobox",    priority: 0 },
-  { name: "day",         description: "", predicate_help: "", input: "day_predicate",     priority: 100 },
-  { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day",       priority: 200 },
-  { name: "weather",     description: "", predicate_help: "", input: "weather_predicate", priority: 300 },
+  { name: "scene",       description: "", predicate_help: "", input: "scene_combobox",    priority: 1000 },
+  { name: "day",         description: "", predicate_help: "", input: "day_predicate",     priority: 900 },
+  { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day",       priority: 800 },
+  { name: "weather",     description: "", predicate_help: "", input: "weather_predicate", priority: 700 },
 ];
 
 const periods: PeriodStoreView = {
@@ -633,7 +633,7 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.querySelector(".entity-list")).toBeFalsy();
   });
 
-  test("summary lists matchers in priority order (weather, time_of_day, day, scene)", async () => {
+  test("summary lists matchers in priority order (scene, day, time_of_day, weather)", async () => {
     const rules: Rule[] = [{
       name: "test",
       // Deliberately interleave the `when` keys to confirm the summary does
@@ -653,9 +653,10 @@ describe("ambience-rules-list", () => {
     const iDay = summary.indexOf("Day:");
     const iTod = summary.indexOf("Time of day:");
     const iWeather = summary.indexOf("Weather:");
-    expect(iWeather).toBeGreaterThanOrEqual(0);
-    expect(iTod).toBeGreaterThan(iWeather);
-    expect(iDay).toBeGreaterThan(iTod);
-    expect(iScene).toBeGreaterThan(iDay);
+    // Most-important matcher (scene=1000) must appear first; least-important (weather=700) last.
+    expect(iScene).toBeGreaterThanOrEqual(0);
+    expect(iDay).toBeGreaterThan(iScene);
+    expect(iTod).toBeGreaterThan(iDay);
+    expect(iWeather).toBeGreaterThan(iTod);
   });
 });

@@ -441,3 +441,6 @@ class AmbienceStore:
     async def async_save_exposed_actions(self, actions: list[dict[str, Any]]) -> None:
         self._data["exposed_actions"] = list(actions)
         await self._store.async_save(self._data)
+        # Exposed-action defaults feed the engine's re-apply intervals, so a
+        # change here must rebuild the watch-set like any other config save.
+        self._notify_config_changed()

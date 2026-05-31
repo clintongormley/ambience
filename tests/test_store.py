@@ -618,6 +618,21 @@ async def test_set_auto_triggers_enabled_fires_config_changed(hass: HomeAssistan
     assert len(calls) == 1
 
 
+async def test_save_exposed_actions_fires_config_changed(hass: HomeAssistant) -> None:
+    # Exposed-action defaults feed the engine's re-apply intervals, so saving
+    # them must rebuild the watch-set like any other config save.
+    store = AmbienceStore(hass)
+    await store.async_load()
+    calls: list = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
+    await store.async_save_exposed_actions(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    await hass.async_block_till_done()
+    unsub()
+    assert len(calls) == 1
+
+
 async def test_delete_area_fires_config_changed(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()

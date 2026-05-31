@@ -204,6 +204,17 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
             # to the user; the engine treats them as overrides.
             # `exposed` is used here only for the existence check above.
             _ = exposed
+            if "reapply_seconds" in action_spec:
+                value = action_spec["reapply_seconds"]
+                if isinstance(value, bool) or not isinstance(value, int):
+                    raise ValueError(
+                        f"rule {rule_idx} action {action_idx}: reapply_seconds must be an integer"
+                    )
+                if value != 0 and value < 10:
+                    raise ValueError(
+                        f"rule {rule_idx} action {action_idx}:"
+                        " reapply_seconds must be 0 or at least 10"
+                    )
 
 
 @websocket_api.require_admin

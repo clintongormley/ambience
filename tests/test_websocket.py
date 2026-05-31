@@ -1902,3 +1902,64 @@ async def test_set_group_trigger_then_list_shows_disabled(hass, installed, hass_
     )
     row = next(t for t in list_resp["result"]["triggers"] if t["key"] == "group:time")
     assert row["enabled"] is False
+
+
+async def test_validate_scope_config_rejects_bad_action_reapply(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    """Validator rejects reapply_seconds that is not 0 or >= 10."""
+    config = {
+        "auto_sort": True,
+        "rules": [
+            {
+                "when": {"scene": "movie"},
+                "actions": [
+                    {
+                        "service": "light.turn_on",
+                        "entity_ids": [],
+                        "params": {},
+                        "reapply_seconds": 9,
+                    }
+                ],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "reapply_seconds" in resp["error"]["message"]
+
+
+async def test_validate_scope_config_accepts_valid_action_reapply(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    """Validator accepts reapply_seconds >= 10."""
+    config = {
+        "auto_sort": True,
+        "rules": [
+            {
+                "when": {"scene": "movie"},
+                "actions": [
+                    {
+                        "service": "light.turn_on",
+                        "entity_ids": [],
+                        "params": {},
+                        "reapply_seconds": 300,
+                    }
+                ],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert resp["success"] is True
+    assert resp["result"]["ok"] is True

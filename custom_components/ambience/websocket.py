@@ -488,9 +488,11 @@ async def _ws_area_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    config = _canonicalise(hass, msg["config"])
+    # Coerce groups BEFORE canonicalising so each rule is ordered in its final
+    # (post-coercion) group bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    _coerce_rule_groups(store, config)
+    _coerce_rule_groups(store, msg["config"])
+    config = _canonicalise(hass, msg["config"])
     await store.async_save_area(area_id, config)
     connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
 
@@ -544,9 +546,11 @@ async def _ws_floor_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    config = _canonicalise(hass, msg["config"])
+    # Coerce groups BEFORE canonicalising so each rule is ordered in its final
+    # (post-coercion) group bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    _coerce_rule_groups(store, config)
+    _coerce_rule_groups(store, msg["config"])
+    config = _canonicalise(hass, msg["config"])
     await store.async_save_floor(floor_id, config)
     connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
 
@@ -582,9 +586,11 @@ async def _ws_house_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    config = _canonicalise(hass, msg["config"])
+    # Coerce groups BEFORE canonicalising so each rule is ordered in its final
+    # (post-coercion) group bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    _coerce_rule_groups(store, config)
+    _coerce_rule_groups(store, msg["config"])
+    config = _canonicalise(hass, msg["config"])
     await store.async_save_house(config)
     connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
 

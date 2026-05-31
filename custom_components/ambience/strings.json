@@ -184,6 +184,7 @@
     "group_name_blank_error": "Group names can't be empty.",
     "group_name_duplicate_error": "Two groups can't have the same name.",
     "group_delete_blocked_last": "You can't delete the last group.",
+    "group_delete_blocked_in_use": "This group still has rules — move or delete them first.",
     "group_edit_title": "Edit group",
     "group_add_title": "Add group",
     "group_color_none": "No colour",

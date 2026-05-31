@@ -1620,14 +1620,24 @@ describe("ambience-rule-editor — group selector", () => {
     { id: "blinds", name: "Blinds" },
   ];
 
-  test("renders a group selector listing (No group) plus every group", async () => {
-    el = await mount({ name: "t", when: {}, actions: [] }, { groups });
+  test("group selector has no empty option and preselects the rule's group", async () => {
+    el = await mount(
+      { name: "t", when: {}, actions: [], group: "b" },
+      { groups: [{ id: "a", name: "A" }, { id: "b", name: "B" }] },
+    );
     const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
-    expect(select).toBeTruthy();
-    const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
-    expect(values).toEqual(["", "morning", "blinds"]);
-    const labels = Array.from(select.querySelectorAll("option")).map((o: any) => o.textContent?.trim());
-    expect(labels).toEqual(["(No group)", "Morning", "Blinds"]);
+    const values = Array.from(select.options).map((o) => o.value);
+    expect(values).toEqual(["a", "b"]); // no "" option
+    expect(select.value).toBe("b");
+  });
+
+  test("changing the group sets a real id (never undefined)", async () => {
+    el = await mount(
+      { name: "t", when: {}, actions: [], group: "a" },
+      { groups: [{ id: "a", name: "A" }] },
+    );
+    el._setGroup("a");
+    expect(el._draft.group).toBe("a");
   });
 
   test("selector reflects the rule's current group", async () => {
@@ -1636,14 +1646,16 @@ describe("ambience-rule-editor — group selector", () => {
     expect(select.value).toBe("blinds");
   });
 
-  test("a rule with no group defaults the selector to the (No group) option", async () => {
-    el = await mount({ name: "t", when: {}, actions: [] }, { groups });
+  test("a rule with an unset group defaults the selector to the first group", async () => {
+    // group is required, but defend against a hand-edited/empty value: the
+    // selector still always has a real value (the first group).
+    el = await mount({ name: "t", when: {}, actions: [], group: "" }, { groups });
     const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
-    expect(select.value).toBe("");
+    expect(select.value).toBe("morning");
   });
 
   test("selecting a group sets the draft and saves it", async () => {
-    el = await mount({ name: "t", when: {}, actions: [] }, { groups });
+    el = await mount({ name: "t", when: {}, actions: [], group: "morning" }, { groups });
     const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
     select.value = "blinds";
     select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1659,30 +1671,16 @@ describe("ambience-rule-editor — group selector", () => {
     expect(saved?.group).toBe("blinds");
   });
 
-  test("selecting the (No group) option clears rule.group", async () => {
-    el = await mount({ name: "t", when: {}, actions: [], group: "blinds" }, { groups });
-    const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
-    select.value = "";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    await el.updateComplete;
-    expect(el._draft.group).toBeUndefined();
-
-    let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
-    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
-      (b: any) => b.textContent.trim() === "Save rule",
-    ) as HTMLButtonElement;
-    saveBtn.click();
-    expect(saved?.group).toBeUndefined();
-  });
-
   test("no selector rendered when there are no groups", async () => {
-    el = await mount({ name: "t", when: {}, actions: [] });
+    el = await mount({ name: "t", when: {}, actions: [], group: "morning" });
     expect(el.shadowRoot.querySelector("select.group-select")).toBeNull();
   });
 
   test("selector IS rendered when there is one group", async () => {
-    el = await mount({ name: "t", when: {}, actions: [] }, { groups: [{ id: "blinds", name: "Blinds" }] });
+    el = await mount(
+      { name: "t", when: {}, actions: [], group: "blinds" },
+      { groups: [{ id: "blinds", name: "Blinds" }] },
+    );
     expect(el.shadowRoot.querySelector("select.group-select")).toBeTruthy();
   });
 });

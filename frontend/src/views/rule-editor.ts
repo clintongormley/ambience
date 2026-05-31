@@ -300,13 +300,12 @@ export class AmbienceRuleEditor extends LitElement {
 
   // --- Group field ---
 
-  // A rule's group is optional: an absent `group` key means "ungrouped". The
-  // selector's empty-string option ("(No group)") maps back to absent.
+  // A rule's group is required: the selector always has a value and there is
+  // no "no group" option.
 
   private _setGroup(id: string) {
-    if (!this._draft) return;
-    const group = id || undefined;
-    this._draft = { ...this._draft, group };
+    if (!this._draft || !id) return;
+    this._draft = { ...this._draft, group: id };
   }
 
   private _onGroupChange = (e: Event) => {
@@ -321,18 +320,15 @@ export class AmbienceRuleEditor extends LitElement {
   /* v8 ignore stop */
 
   private _renderGroupSelector() {
-    // Shown once at least one group exists; rules may also be left ungrouped.
     if (this.groups.length === 0) return "";
-    const current = this._draft!.group ?? "";
-    const noGroup = localize(this.hass, "ui.group_none", "(No group)");
+    const current = this._draft!.group || this.groups[0].id;
     /* v8 ignore next 3 -- ha-form not registered in jsdom; jsdom hits the native fallback below */
     if (customElements.get("ha-form")) {
-      return this._renderGroupSelectorHaForm(current, noGroup);
+      return this._renderGroupSelectorHaForm(current);
     }
     return html`
       <label>${localize(this.hass, "ui.group", "Group")}</label>
       <select class="group-select" .value=${current} @change=${this._onGroupChange}>
-        <option value="" ?selected=${current === ""}>${noGroup}</option>
         ${this.groups.map(
           (g) => html`<option value=${g.id} ?selected=${g.id === current}>${g.name}</option>`,
         )}
@@ -341,16 +337,13 @@ export class AmbienceRuleEditor extends LitElement {
   }
 
   /* v8 ignore start -- ha-form path (real HA only) */
-  private _renderGroupSelectorHaForm(current: string, noGroup: string) {
+  private _renderGroupSelectorHaForm(current: string) {
     const schema = [{
       name: "group",
       selector: {
         select: {
           mode: "dropdown",
-          options: [
-            { value: "", label: noGroup },
-            ...this.groups.map((g) => ({ value: g.id, label: g.name })),
-          ],
+          options: this.groups.map((g) => ({ value: g.id, label: g.name })),
         },
       },
     }];

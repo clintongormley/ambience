@@ -21,5 +21,4 @@
   <circle cx="98" cy="24" r="10" fill="#F0A52E"/>
   <!-- stylised A -->
   <path d="M32 96 L60 28 L88 96" fill="none" stroke="url(#a)" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"/>
-  <line x1="45" y1="72" x2="75" y2="72" stroke="url(#a)" stroke-width="13" stroke-linecap="round"/>
 </svg>

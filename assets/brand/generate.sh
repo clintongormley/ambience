@@ -36,7 +36,9 @@ render_logo logo-dark.svg  "$OUT/dark_logo.png"     256
 render_logo logo-dark.svg  "$OUT/dark_logo@2x.png"  512
 
 # Lossless optimise + Adam7 interlace + strip non-essential metadata.
-oxipng -o max --interlace 1 --strip safe "$OUT"/*.png
+# --force: keep interlacing even when it marginally increases size (the HA
+# brands spec prefers interlaced; oxipng otherwise reverts it to save bytes).
+oxipng -o max --interlace 1 --force --strip safe "$OUT"/*.png
 
 # Publish the logo PNGs alongside the panel bundle (a static-served directory)
 # so the frontend can load them via new URL("./logo.png", import.meta.url).

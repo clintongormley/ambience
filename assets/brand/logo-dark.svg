@@ -28,7 +28,6 @@
   <circle cx="98" cy="24" r="10" fill="#FFCB6A"/>
   <!-- stylised A -->
   <path d="M32 96 L60 28 L88 96" fill="none" stroke="url(#a)" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"/>
-  <line x1="45" y1="72" x2="75" y2="72" stroke="url(#a)" stroke-width="13" stroke-linecap="round"/>
   <!-- mbience -->
   <text x="104" y="96" font-family="Avenir Next" font-weight="600" font-size="80" letter-spacing="-1" fill="url(#spec)">mbience</text>
 </svg>

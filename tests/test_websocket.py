@@ -126,7 +126,7 @@ async def test_areas_list_returns_all_ha_areas(
     bedroom = reg.async_create("Bedroom")
     # Only one has Ambience config — both must still be listed, sorted by name.
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(kitchen.id, {"matchers": [], "rules": [], "auto_sort": True})
+    await store.async_save_area(kitchen.id, {"matchers": [], "rules": []})
     resp = await _ws_send(hass_ws_client, type="ambience/areas/list")
     assert resp["success"] is True
     assert resp["result"] == [
@@ -304,7 +304,6 @@ async def test_exposed_actions_save_warns_on_removed_service(
         type="ambience/area/save",
         area_id=area_id,
         config={
-            "auto_sort": True,
             "rules": [
                 {
                     "name": "movie",
@@ -364,7 +363,6 @@ async def test_exposed_actions_save_warns_on_param_not_currently_exposed(
         type="ambience/area/save",
         area_id=area_id,
         config={
-            "auto_sort": True,
             "rules": [
                 {
                     "name": "movie",
@@ -432,7 +430,6 @@ async def test_exposed_actions_save_no_warning_when_param_in_defaults_only(
         type="ambience/area/save",
         area_id=area_id,
         config={
-            "auto_sort": True,
             "rules": [
                 {
                     "name": "movie",
@@ -478,7 +475,6 @@ async def test_area_save_accepts_valid_script_action(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
     config = {
-        "auto_sort": True,
         "rules": [
             {
                 "when": {"scene": "movie"},
@@ -507,7 +503,6 @@ async def test_area_save_rejects_missing_service(
 ) -> None:
     """Validator rejects an action that has no `service` key."""
     config = {
-        "auto_sort": True,
         "rules": [
             {
                 "when": {"scene": "movie"},
@@ -531,7 +526,6 @@ async def test_area_save_rejects_malformed_service(
 ) -> None:
     """Validator rejects an action whose `service` has no dot."""
     config = {
-        "auto_sort": True,
         "rules": [
             {
                 "when": {"scene": "movie"},
@@ -555,7 +549,6 @@ async def test_area_save_rejects_unexposed_service(
     """Validator rejects a service that exists in HA but is not exposed."""
     # switch.turn_on is not in our seeded exposed list.
     config = {
-        "auto_sort": True,
         "rules": [
             {
                 "when": {"scene": "movie"},
@@ -584,7 +577,6 @@ async def test_area_save_rejects_non_list_entity_ids(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
     config = {
-        "auto_sort": True,
         "rules": [
             {
                 "when": {"scene": "movie"},
@@ -612,7 +604,6 @@ async def test_area_save_rejects_non_dict_params(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
     config = {
-        "auto_sort": True,
         "rules": [
             {
                 "when": {"scene": "movie"},
@@ -643,7 +634,6 @@ async def test_area_save_accepts_param_not_in_visible_fields(
     extra params (e.g. left over from a settings edit) are accepted; the
     dispatcher still sends them at execution."""
     config = {
-        "auto_sort": True,
         "rules": [
             {
                 "when": {"scene": "movie"},
@@ -680,14 +670,13 @@ async def test_area_get_unconfigured_returns_empty_config(
     """Opening a real HA area with no stored Ambience config yields a blank config."""
     resp = await _ws_send(hass_ws_client, type="ambience/area/get", area_id=area_id)
     assert resp["success"] is True
-    assert resp["result"] == {"rules": [], "auto_sort": True}
+    assert resp["result"] == {"rules": []}
 
 
 async def test_area_save_then_get(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
     config = {
-        "auto_sort": False,
         "rules": [
             {
                 "when": {"scene": "movie", "time_of_day": {"period": "evening"}},
@@ -709,11 +698,13 @@ async def test_area_save_then_get(
     )
     assert save["success"] is True
     assert save["result"]["ok"] is True
-    assert save["result"]["config"] == config
+    assert "auto_sort" not in save["result"]["config"]
+    assert len(save["result"]["config"]["rules"]) == 1
 
     get = await _ws_send(hass_ws_client, id=2, type="ambience/area/get", area_id=area_id)
     assert get["success"] is True
-    assert get["result"] == config
+    assert "auto_sort" not in get["result"]
+    assert len(get["result"]["rules"]) == 1
 
 
 async def test_area_save_rejects_area_id_not_in_registry(
@@ -724,7 +715,7 @@ async def test_area_save_rejects_area_id_not_in_registry(
         hass_ws_client,
         type="ambience/area/save",
         area_id="not_a_real_area",
-        config={"matchers": [], "rules": [], "auto_sort": True},
+        config={"matchers": [], "rules": []},
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
@@ -736,7 +727,6 @@ async def test_area_save_rejects_invalid_predicate(
 ) -> None:
     config = {
         "matchers": ["time_of_day"],
-        "auto_sort": True,
         "rules": [
             {
                 "when": {"scene": "movie", "time_of_day": "garbage_predicate"},
@@ -758,7 +748,7 @@ async def test_validate_ok(hass: HomeAssistant, installed, hass_ws_client) -> No
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/validate",
-        config={"matchers": [], "auto_sort": True, "rules": []},
+        config={"matchers": [], "rules": []},
     )
     assert resp["success"] is True
     assert resp["result"] == {"ok": True}
@@ -772,7 +762,6 @@ async def test_validate_rejects_bad_scene_predicate(
         type="ambience/validate",
         config={
             "matchers": [],
-            "auto_sort": True,
             "rules": [{"when": {"scene": ""}, "actions": []}],
         },
     )
@@ -888,7 +877,6 @@ async def test_dry_run_with_floor_resolves_against_floor_rules(
         floor_id,
         {
             "rules": [{"name": "movie", "when": {"scene": "movie"}, "actions": []}],
-            "auto_sort": True,
         },
     )
     resp = await _ws_send(
@@ -908,7 +896,6 @@ async def test_dry_run_with_house_resolves_against_house_rules(
     await store.async_save_house(
         {
             "rules": [{"name": "away", "when": {"scene": "away"}, "actions": []}],
-            "auto_sort": True,
         },
     )
     resp = await _ws_send(hass_ws_client, type="ambience/dry_run", house=True, scene="away")
@@ -928,10 +915,10 @@ async def test_dry_run_rejects_multiple_scope_fields(
     assert resp["success"] is False
 
 
-async def test_area_save_sorts_rules_when_auto_sort_on(
+async def test_area_save_sorts_rules_by_specificity(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
-    """With auto_sort on, the stored rules come back sorted (narrower predicate first)."""
+    """Rules always come back sorted narrower predicate first."""
     wide = {
         "from": {"kind": "time", "hh": 10, "mm": 0},
         "to": {"kind": "time", "hh": 14, "mm": 0},
@@ -942,7 +929,6 @@ async def test_area_save_sorts_rules_when_auto_sort_on(
     }
     config = {
         "matchers": ["time_of_day"],
-        "auto_sort": True,
         "rules": [
             {"when": {"scene": "movie", "time_of_day": wide}, "actions": []},
             {"when": {"scene": "movie", "time_of_day": narrow}, "actions": []},
@@ -959,38 +945,6 @@ async def test_area_save_sorts_rules_when_auto_sort_on(
     # narrower predicate (12:00-13:00) sorts first
     assert sorted_rules[0]["when"]["time_of_day"] == narrow
     assert sorted_rules[1]["when"]["time_of_day"] == wide
-
-
-async def test_area_save_preserves_order_when_auto_sort_off(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
-) -> None:
-    """With auto_sort off, the stored rule order is preserved as submitted."""
-    wide = {
-        "from": {"kind": "time", "hh": 10, "mm": 0},
-        "to": {"kind": "time", "hh": 14, "mm": 0},
-    }
-    narrow = {
-        "from": {"kind": "time", "hh": 12, "mm": 0},
-        "to": {"kind": "time", "hh": 13, "mm": 0},
-    }
-    config = {
-        "matchers": ["time_of_day"],
-        "auto_sort": False,
-        "rules": [
-            {"when": {"scene": "movie", "time_of_day": wide}, "actions": []},
-            {"when": {"scene": "movie", "time_of_day": narrow}, "actions": []},
-        ],
-    }
-    save = await _ws_send(
-        hass_ws_client,
-        type="ambience/area/save",
-        area_id=area_id,
-        config=config,
-    )
-    assert save["success"] is True
-    rules = save["result"]["config"]["rules"]
-    assert rules[0]["when"]["time_of_day"] == wide
-    assert rules[1]["when"]["time_of_day"] == narrow
 
 
 async def test_unload_deregisters_ws_commands(
@@ -1016,37 +970,6 @@ async def test_unload_deregisters_ws_commands(
     assert resp["success"] is False
 
 
-async def test_area_save_sorts_by_default_when_auto_sort_absent(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
-) -> None:
-    """A config submitted without `auto_sort` is sorted (default on)."""
-    wide = {
-        "from": {"kind": "time", "hh": 10, "mm": 0},
-        "to": {"kind": "time", "hh": 14, "mm": 0},
-    }
-    narrow = {
-        "from": {"kind": "time", "hh": 12, "mm": 0},
-        "to": {"kind": "time", "hh": 13, "mm": 0},
-    }
-    config = {
-        "matchers": ["time_of_day"],
-        "rules": [
-            {"when": {"scene": "movie", "time_of_day": wide}, "actions": []},
-            {"when": {"scene": "movie", "time_of_day": narrow}, "actions": []},
-        ],
-    }
-    save = await _ws_send(
-        hass_ws_client,
-        type="ambience/area/save",
-        area_id=area_id,
-        config=config,
-    )
-    assert save["success"] is True
-    sorted_rules = save["result"]["config"]["rules"]
-    assert sorted_rules[0]["when"]["time_of_day"] == narrow
-    assert sorted_rules[1]["when"]["time_of_day"] == wide
-
-
 async def test_sorted_rules_resolve_named_scene_over_catchall(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
@@ -1054,7 +977,6 @@ async def test_sorted_rules_resolve_named_scene_over_catchall(
     rule after auto-sort: the named rule sorts ahead and wins in dry_run."""
     config = {
         "matchers": [],
-        "auto_sort": True,
         "rules": [
             {"name": "catchall", "when": {"scene": None}, "actions": []},
             {"name": "movie-rule", "when": {"scene": "movie"}, "actions": []},
@@ -1067,7 +989,7 @@ async def test_sorted_rules_resolve_named_scene_over_catchall(
         config=config,
     )
     assert save["success"] is True
-    # After auto-sort the named-scene rule comes before the catch-all.
+    # The named-scene rule comes before the catch-all.
     assert [r["name"] for r in save["result"]["config"]["rules"]] == [
         "movie-rule",
         "catchall",
@@ -1082,6 +1004,43 @@ async def test_sorted_rules_resolve_named_scene_over_catchall(
     )
     assert dry["success"] is True
     assert dry["result"]["rule_name"] == "movie-rule"
+
+
+async def test_area_save_pins_and_resolves(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """Save assigns integer priority + pinned=False and returns rules in resolved order
+    (more-specific predicate first). No auto_sort in the returned config."""
+    config = {
+        "rules": [
+            {
+                "name": "general",
+                "when": {"scene": "movie"},
+                "actions": [],
+            },
+            {
+                "name": "specific",
+                "when": {
+                    "scene": "movie",
+                    "time_of_day": {"period": "evening"},
+                },
+                "actions": [],
+            },
+        ],
+    }
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert save["success"] is True
+    cfg = save["result"]["config"]
+    rules = cfg["rules"]
+    assert all(isinstance(r["priority"], int) for r in rules)
+    assert all(r["pinned"] is False for r in rules)
+    assert [r["name"] for r in rules] == ["specific", "general"]
+    assert "auto_sort" not in cfg
 
 
 # ---------------------------------------------------------------------------
@@ -1167,7 +1126,6 @@ async def test_ws_periods_save_returns_warnings_for_dangling_refs(
             "area_id": area.id,
             "config": {
                 "matchers": ["time_of_day"],
-                "auto_sort": False,
                 "rules": [
                     {
                         "name": "Evening rule",
@@ -1218,7 +1176,6 @@ async def test_periods_save_warnings_include_floor_scope(
                     "actions": [],
                 }
             ],
-            "auto_sort": True,
         },
     )
     # Save periods with no `supper` entry → reference is dangling.
@@ -1325,7 +1282,6 @@ async def test_day_config_save_emits_warnings_when_clearing_sensor(
                     "actions": [],
                 }
             ],
-            "auto_sort": True,
         },
     )
     resp = await _ws_send(
@@ -1357,7 +1313,6 @@ async def test_area_save_ignores_legacy_matchers_field(
         config={
             "matchers": ["time_of_day"],  # legacy field — ignored
             "rules": [],
-            "auto_sort": True,
         },
     )
     assert resp["success"] is True
@@ -1430,7 +1385,6 @@ async def test_weather_config_save_warns_when_clearing_referenced_entity(
                     "actions": [],
                 }
             ],
-            "auto_sort": True,
         },
     )
     resp = await _ws_send(
@@ -1471,7 +1425,6 @@ async def test_weather_config_save_warns_when_deleting_referenced_group(
                     "actions": [],
                 }
             ],
-            "auto_sort": True,
         },
     )
     # Save with `wet` removed.
@@ -1640,7 +1593,7 @@ async def test_floor_get_returns_default_when_no_config(
 ) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/floor/get", floor_id=floor_id)
     assert resp["success"] is True
-    assert resp["result"] == {"rules": [], "auto_sort": True}
+    assert resp["result"] == {"rules": []}
 
 
 async def test_floor_get_unknown_returns_error(
@@ -1656,7 +1609,6 @@ async def test_floor_save_round_trip(
 ) -> None:
     config = {
         "rules": [{"name": "movie", "when": {}, "actions": []}],
-        "auto_sort": False,
     }
     resp = await _ws_send(
         hass_ws_client, type="ambience/floor/save", floor_id=floor_id, config=config
@@ -1675,7 +1627,7 @@ async def test_floor_save_unknown_floor_is_validation_error(
         hass_ws_client,
         type="ambience/floor/save",
         floor_id="nope",
-        config={"rules": [], "auto_sort": True},
+        config={"rules": []},
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
@@ -1684,13 +1636,12 @@ async def test_floor_save_unknown_floor_is_validation_error(
 async def test_house_get_returns_default(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/house/get")
     assert resp["success"] is True
-    assert resp["result"] == {"rules": [], "auto_sort": True}
+    assert resp["result"] == {"rules": []}
 
 
 async def test_house_save_round_trip(hass: HomeAssistant, installed, hass_ws_client) -> None:
     config = {
         "rules": [{"name": "away", "when": {}, "actions": []}],
-        "auto_sort": False,
     }
     resp = await _ws_send(hass_ws_client, type="ambience/house/save", config=config)
     assert resp["success"] is True

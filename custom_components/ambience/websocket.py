@@ -24,7 +24,7 @@ from .exposed_actions import ExposedActionsStore
 from .matchers.weather import WEATHER_CONDITIONS
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import async_resolve_only, scope_reapply_intervals
-from .sorting import sort_rules
+from .sorting import resolve_order, shadowed_by
 from .validators import validate_reapply_seconds
 
 _WS_COMMANDS = (
@@ -209,6 +209,25 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
                 validate_reapply_seconds(
                     f"rule {rule_idx} action {action_idx}", action_spec["reapply_seconds"]
                 )
+
+
+def _canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
+    """Resolve rule order + numbers for storage. Strips legacy `auto_sort`."""
+    matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
+    out = {k: v for k, v in config.items() if k != "auto_sort"}
+    out["rules"] = resolve_order(config.get("rules", []), matchers_registry)
+    return out
+
+
+def _with_shadows(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy whose rules carry a transient `shadowed_by` index (or None).
+    Not persisted — only sent to the frontend."""
+    matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
+    rules = config.get("rules", [])
+    shadows = shadowed_by(rules, matchers_registry)
+    out = {k: v for k, v in config.items() if k != "auto_sort"}
+    out["rules"] = [{**r, "shadowed_by": shadows.get(idx)} for idx, r in enumerate(rules)]
+    return out
 
 
 @websocket_api.require_admin
@@ -408,8 +427,8 @@ async def _ws_area_get(
         connection.send_error(msg["id"], "unknown_area", "area not found")
         return
     store = hass.data[DOMAIN][DATA_STORE]
-    area = store.get_area(area_id) or {"rules": [], "auto_sort": True}
-    connection.send_result(msg["id"], area)
+    area = store.get_area(area_id) or {"rules": []}
+    connection.send_result(msg["id"], _with_shadows(hass, area))
 
 
 @websocket_api.require_admin
@@ -439,16 +458,10 @@ async def _ws_area_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    config = msg["config"]
-    if config.get("auto_sort", True):
-        matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
-        config = {
-            **config,
-            "rules": sort_rules(config.get("rules", []), matchers_registry),
-        }
+    config = _canonicalise(hass, msg["config"])
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_area(area_id, config)
-    connection.send_result(msg["id"], {"ok": True, "config": config})
+    connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
 
 
 @websocket_api.require_admin
@@ -469,8 +482,8 @@ async def _ws_floor_get(
         connection.send_error(msg["id"], "unknown_floor", "floor not found")
         return
     store = hass.data[DOMAIN][DATA_STORE]
-    cfg = store.get_floor(floor_id) or {"rules": [], "auto_sort": True}
-    connection.send_result(msg["id"], cfg)
+    cfg = store.get_floor(floor_id) or {"rules": []}
+    connection.send_result(msg["id"], _with_shadows(hass, cfg))
 
 
 @websocket_api.require_admin
@@ -500,16 +513,10 @@ async def _ws_floor_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    config = msg["config"]
-    if config.get("auto_sort", True):
-        matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
-        config = {
-            **config,
-            "rules": sort_rules(config.get("rules", []), matchers_registry),
-        }
+    config = _canonicalise(hass, msg["config"])
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_floor(floor_id, config)
-    connection.send_result(msg["id"], {"ok": True, "config": config})
+    connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
 
 
 @websocket_api.require_admin
@@ -521,7 +528,8 @@ async def _ws_house_get(
     msg: dict[str, Any],
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    connection.send_result(msg["id"], store.get_house())
+    house = store.get_house() or {"rules": []}
+    connection.send_result(msg["id"], _with_shadows(hass, house))
 
 
 @websocket_api.require_admin
@@ -542,16 +550,10 @@ async def _ws_house_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    config = msg["config"]
-    if config.get("auto_sort", True):
-        matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
-        config = {
-            **config,
-            "rules": sort_rules(config.get("rules", []), matchers_registry),
-        }
+    config = _canonicalise(hass, msg["config"])
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_house(config)
-    connection.send_result(msg["id"], {"ok": True, "config": config})
+    connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
 
 
 @websocket_api.require_admin

@@ -1631,16 +1631,28 @@ describe("ambience-rule-editor — group selector", () => {
     { id: "blinds", name: "Blinds" },
   ];
 
+  // Group option rows after opening the group slot: their names and which is
+  // marked selected (aria-selected="true").
+  function groupOptions(el: any): { names: string[]; selected: string | undefined } {
+    const opts = Array.from(
+      el.shadowRoot.querySelectorAll(".group-option"),
+    ) as HTMLElement[];
+    const names = opts.map((o) => o.querySelector(".group-name")!.textContent!.trim());
+    const selected = opts
+      .find((o) => o.getAttribute("aria-selected") === "true")
+      ?.querySelector(".group-name")!.textContent!.trim();
+    return { names, selected };
+  }
+
   test("group selector has no empty option and preselects the rule's group", async () => {
     el = await mount(
       { name: "t", when: {}, actions: [], group: "b" },
       { groups: [{ id: "a", name: "A" }, { id: "b", name: "B" }] },
     );
     await openSlot(el, "group");
-    const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
-    const values = Array.from(select.options).map((o) => o.value);
-    expect(values).toEqual(["a", "b"]); // no "" option
-    expect(select.value).toBe("b");
+    const { names, selected } = groupOptions(el);
+    expect(names).toEqual(["A", "B"]); // no empty option
+    expect(selected).toBe("B");
   });
 
   test("changing the group sets a real id (never undefined)", async () => {
@@ -1673,30 +1685,32 @@ describe("ambience-rule-editor — group selector", () => {
     expect(el._draft.priority).toBe(4096);
   });
 
-  test("selector reflects the rule's current group", async () => {
+  test("selector marks the rule's current group as selected", async () => {
     el = await mount({ name: "t", when: {}, actions: [], group: "blinds" }, { groups });
     await openSlot(el, "group");
-    const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
-    expect(select.value).toBe("blinds");
+    expect(groupOptions(el).selected).toBe("Blinds");
   });
 
-  test("a rule with an unset group defaults the selector to the first group", async () => {
+  test("a rule with an unset group defaults to the alphabetically-first group", async () => {
     // group is required, but defend against a hand-edited/empty value: the
-    // selector still always has a real value (the first group).
+    // current selection still resolves to a real group (the first by name).
     el = await mount({ name: "t", when: {}, actions: [], group: "" }, { groups });
     await openSlot(el, "group");
-    const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
-    expect(select.value).toBe("morning");
+    // groups = Morning, Blinds → sorted by name: Blinds first.
+    expect(groupOptions(el).selected).toBe("Blinds");
   });
 
-  test("selecting a group sets the draft and saves it", async () => {
+  test("selecting a group option sets the draft and saves it", async () => {
     el = await mount({ name: "t", when: {}, actions: [], group: "morning" }, { groups });
     await openSlot(el, "group");
-    const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;
-    select.value = "blinds";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    const blinds = Array.from(el.shadowRoot.querySelectorAll(".group-option")).find(
+      (o: any) => o.querySelector(".group-name").textContent.trim() === "Blinds",
+    ) as HTMLButtonElement;
+    blinds.click();
     await el.updateComplete;
     expect(el._draft.group).toBe("blinds");
+    // picking an option collapses the slot again
+    expect(el.shadowRoot.querySelector(".group-option")).toBeNull();
 
     let saved: Rule | undefined;
     el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
@@ -1707,18 +1721,33 @@ describe("ambience-rule-editor — group selector", () => {
     expect(saved?.group).toBe("blinds");
   });
 
-  test("no selector rendered when there are no groups", async () => {
-    el = await mount({ name: "t", when: {}, actions: [], group: "morning" });
-    expect(el.shadowRoot.querySelector("select.group-select")).toBeNull();
+  test("group options show the icon on the group's colour (like the filter)", async () => {
+    el = await mount(
+      { name: "t", when: {}, actions: [], group: "g1" },
+      { groups: [{ id: "g1", name: "G1", color: "red", icon: "mdi:weather-sunny" }] },
+    );
+    // The collapsed summary already shows the coloured swatch + icon.
+    const swatch = el.shadowRoot.querySelector(
+      '[data-slot-id="group"] .group-swatch',
+    ) as HTMLElement;
+    expect(swatch).toBeTruthy();
+    expect(swatch.getAttribute("style") || "").toContain("#f44336"); // red
+    expect(swatch.querySelector("ha-icon")?.getAttribute("icon")).toBe("mdi:weather-sunny");
   });
 
-  test("selector IS rendered when there is one group", async () => {
+  test("no group field rendered when there are no groups", async () => {
+    el = await mount({ name: "t", when: {}, actions: [], group: "morning" });
+    expect(el.shadowRoot.querySelector('[data-slot-id="group"]')).toBeNull();
+  });
+
+  test("group field IS rendered when there is one group", async () => {
     el = await mount(
       { name: "t", when: {}, actions: [], group: "blinds" },
       { groups: [{ id: "blinds", name: "Blinds" }] },
     );
+    expect(el.shadowRoot.querySelector('[data-slot-id="group"]')).toBeTruthy();
     await openSlot(el, "group");
-    expect(el.shadowRoot.querySelector("select.group-select")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".group-option")).toBeTruthy();
   });
 
   test("the group is collapsed by default; its summary shows the current group", async () => {
@@ -1726,10 +1755,10 @@ describe("ambience-rule-editor — group selector", () => {
     const summary = el.shadowRoot.querySelector('[data-slot-id="group"] .summary');
     expect(summary).toBeTruthy();
     expect(summary.textContent).toContain("Blinds");
-    // collapsed: the selector is not in the DOM until the slot is opened.
-    expect(el.shadowRoot.querySelector("select.group-select")).toBeNull();
+    // collapsed: the option menu is not in the DOM until the slot is opened.
+    expect(el.shadowRoot.querySelector(".group-option")).toBeNull();
     await openSlot(el, "group");
-    expect(el.shadowRoot.querySelector("select.group-select")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".group-option")).toBeTruthy();
   });
 });
 

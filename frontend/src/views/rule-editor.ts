@@ -18,6 +18,7 @@ import { localize, matcherLabel } from "../i18n.js";
 import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
 import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
 import { entitiesForScope } from "../entities-for-scope.js";
+import { groupSwatchStyle } from "../group-colors.js";
 import "./action-slot.js";
 import "./matcher-input.js";
 
@@ -201,6 +202,27 @@ export class AmbienceRuleEditor extends LitElement {
       display: block;
       color: var(--secondary-text-color, #888);
       font-size: 0.9em;
+    }
+    /* Group field: colour-coded swatch + icon, matching the rules-list filter. */
+    .group-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .group-swatch {
+      flex: 0 0 auto; width: 1.75rem; height: 1.75rem; border-radius: 6px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--secondary-background-color, #e0e0e0);
+      color: var(--secondary-text-color, #555);
+    }
+    .group-swatch ha-icon { --mdc-icon-size: 18px; }
+    .group-menu { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.35rem; }
+    .group-option {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%;
+      min-height: 40px; box-sizing: border-box;
+      padding: 0.3rem 0.5rem; border: 0; border-radius: 6px;
+      background: none; color: var(--primary-text-color, inherit);
+      cursor: pointer; font: inherit; font-size: 1rem; text-align: left;
+    }
+    .group-option:hover { background: var(--secondary-background-color, #f5f5f5); }
+    .group-option[aria-selected="true"] {
+      background: var(--secondary-background-color, #eee); font-weight: 600;
     }
   `;
 
@@ -445,81 +467,49 @@ export class AmbienceRuleEditor extends LitElement {
     this._draft = { ...rest, group: id };
   }
 
-  private _onGroupChange = (e: Event) => {
-    this._setGroup((e.target as HTMLSelectElement).value);
-  };
-
-  /* v8 ignore start -- ha-form not registered in jsdom; jsdom hits the native fallback */
-  private _onGroupChangeHaForm = (e: CustomEvent<{ value: { group: string } }>) => {
-    e.stopPropagation();
-    this._setGroup(e.detail.value.group);
-  };
-  /* v8 ignore stop */
-
-  private _renderGroupSelector() {
-    if (this.groups.length === 0) return "";
-    const current = this._draft!.group || this.groups[0].id;
-    /* v8 ignore next 3 -- ha-form not registered in jsdom; jsdom hits the native fallback below */
-    if (customElements.get("ha-form")) {
-      return this._renderGroupSelectorHaForm(current);
-    }
-    return html`
-      <label>${localize(this.hass, "ui.group", "Group")}</label>
-      <select class="group-select" .value=${current} @change=${this._onGroupChange}>
-        ${this.groups.map(
-          (g) => html`<option value=${g.id} ?selected=${g.id === current}>${g.name}</option>`,
-        )}
-      </select>
-    `;
+  /** A square swatch in the group's colour holding its icon — matches the
+   *  colour-coded group filter in the rules list. */
+  private _renderGroupSwatch(g: RuleGroup) {
+    return html`<span class="group-swatch" style=${groupSwatchStyle(g.color)}>
+      ${g.icon ? html`<ha-icon icon=${g.icon}></ha-icon>` : ""}
+    </span>`;
   }
-
-  /* v8 ignore start -- ha-form path (real HA only) */
-  private _renderGroupSelectorHaForm(current: string) {
-    const schema = [{
-      name: "group",
-      // Required so the dropdown offers no clear/empty affordance — a rule
-      // must always have a group.
-      required: true,
-      selector: {
-        select: {
-          mode: "dropdown",
-          options: this.groups.map((g) => ({ value: g.id, label: g.name })),
-        },
-      },
-    }];
-    return html`
-      <div class="group-select">
-        <ha-form
-          .hass=${this.hass}
-          .schema=${schema}
-          .data=${{ group: current }}
-          .computeLabel=${() => localize(this.hass, "ui.group", "Group")}
-          @value-changed=${this._onGroupChangeHaForm}
-        ></ha-form>
-      </div>
-    `;
-  }
-  /* v8 ignore stop */
 
   /**
-   * The group as a collapse/expand slot (like the name field): a summary of the
-   * current group, replaced by the selector when clicked.
+   * The group as a collapse/expand slot (like the name field): a swatch + name
+   * summary, expanding to a colour-coded menu of swatch + name options (the same
+   * visual language as the rules-list group filter).
    */
   private _renderGroupSlot() {
     if (this.groups.length === 0) return "";
+    const sorted = [...this.groups].sort((a, b) => a.name.localeCompare(b.name));
+    const currentId = this._draft!.group || sorted[0].id;
+    const current = this.groups.find((g) => g.id === currentId) ?? sorted[0];
     if (this._isOpen({ kind: "group" })) {
       return html`
         <div class="slot group-slot expanded" data-slot-id="group">
-          ${this._renderGroupSelector()}
+          <div class="group-menu" role="listbox">
+            ${sorted.map(
+              (g) => html`<button
+                class="group-option"
+                role="option"
+                aria-selected=${g.id === currentId}
+                @click=${() => { this._setGroup(g.id); this._open = null; }}
+              >
+                ${this._renderGroupSwatch(g)}
+                <span class="group-name">${g.name}</span>
+              </button>`,
+            )}
+          </div>
         </div>
       `;
     }
-    const current = this._draft!.group || this.groups[0].id;
-    const name = this.groups.find((g) => g.id === current)?.name ?? current;
     return html`
       <div class="slot collapsed" data-slot-id="group">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "group" })}>
-          <span class="summary-label"><strong>${localize(this.hass, "ui.group", "Group")}:</strong> ${name}</span>
+          <strong>${localize(this.hass, "ui.group", "Group")}:</strong>
+          ${this._renderGroupSwatch(current)}
+          <span class="group-name">${current.name}</span>
         </div>
       </div>
     `;

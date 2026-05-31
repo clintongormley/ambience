@@ -14,16 +14,24 @@ function _resolve(hass: HassLike | undefined, key: string, fallback: string): st
 }
 
 /**
- * Convert a snake_case identifier into a friendly display string:
+ * Convert a snake_case identifier into a friendly display string by replacing
+ * underscores with spaces and capitalising the first letter:
  *   "time_of_day" → "Time of day"
- *   "light.turn_on" → "Light.turn on"
+ *   "light.turn_on" → "Light.turn on"  (dots are preserved)
  *
- * Used as the fallback for matcher/action labels when hass.localize
- * doesn't have a translation for the key.
+ * The shared humanisation primitive: used wherever a raw id needs a readable
+ * label — field ids (via {@link humanizeFieldId} in summary.ts), matcher/action
+ * ids (here), and so on.
  */
-function _friendlyFallback(id: string): string {
+export function humanizeId(id: string): string {
   const spaced = id.replaceAll("_", " ").toLowerCase();
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/** Fallback label for matcher/action ids when hass.localize has no
+ *  translation for the key. */
+function _friendlyFallback(id: string): string {
+  return humanizeId(id);
 }
 
 export function matcherLabel(hass: HassLike | undefined, name: string): string {

@@ -10,7 +10,8 @@ import {
   saveExposedActions,
   type HassConnection,
 } from "../api.js";
-import { selectorUnit } from "../summary.js";
+import { humanizeFieldId, selectorUnit } from "../summary.js";
+import { DragReorderController } from "../drag-reorder.js";
 import type {
   ExposedAction,
   ExposedActionWarning,
@@ -18,12 +19,7 @@ import type {
   ServiceInfo,
   ServiceSchema,
 } from "../types.js";
-
-type HaFormSchemaEntry = {
-  name: string;
-  selector?: unknown;
-  required?: boolean;
-};
+import type { HaFormSchemaEntry } from "../ha-form.js";
 
 /**
  * Derive a human-friendly label from a service id, e.g.
@@ -376,10 +372,15 @@ export class AmbienceActionsSettings extends LitElement {
   @state() private _editingOriginalValue: unknown = undefined;
   /** Whether the field had a default before entering edit mode. */
   @state() private _editingOriginalHad = false;
-  /** Index of the card currently being dragged, or null. */
-  @state() private _dragFrom: number | null = null;
-  /** Index of the card currently being dragged over, or null. */
-  @state() private _dragOver: number | null = null;
+  // Drag-to-reorder controller. On drop it moves the action locally and
+  // persists via auto-save.
+  private _drag = new DragReorderController(this, (from, to) => {
+    const actions = [...this._actions];
+    const [moved] = actions.splice(from, 1);
+    actions.splice(to, 0, moved);
+    this._actions = actions;
+    void this._autoSave();
+  });
 
   // HA pickers (ha-service-picker / ha-form combobox) render their dropdown in
   // a document-level overlay outside our shadow tree. Clicks there must not be
@@ -645,44 +646,6 @@ export class AmbienceActionsSettings extends LitElement {
     void this._autoSave();
   }
 
-  // --- drag-to-reorder ----------------------------------------------------
-
-  private _onDragStart(e: DragEvent, i: number) {
-    this._dragFrom = i;
-    // The handle glyph is tiny, so the browser's default drag image would be
-    // just the ⠿ character. Use the whole card as the drag image instead so
-    // the user sees the card they're moving.
-    const handle = e.currentTarget as HTMLElement;
-    const card = handle.closest(".card") as HTMLElement | null;
-    if (card && e.dataTransfer) {
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setDragImage(card, 16, 16);
-    }
-  }
-
-  private _onDragOver(e: DragEvent, i: number) {
-    if (this._dragFrom === null || i === this._dragFrom) return;
-    e.preventDefault(); // allow drop
-    this._dragOver = i;
-  }
-
-  private _onDrop(to: number) {
-    const from = this._dragFrom;
-    this._dragFrom = null;
-    this._dragOver = null;
-    if (from === null || from === to) return;
-    const actions = [...this._actions];
-    const [moved] = actions.splice(from, 1);
-    actions.splice(to, 0, moved);
-    this._actions = actions;
-    void this._autoSave();
-  }
-
-  private _onDragEnd() {
-    this._dragFrom = null;
-    this._dragOver = null;
-  }
-
   private _removeService(actionId: string) {
     this._actions = this._actions.filter((a) => a.id !== actionId);
     const next = new Set(this._expanded);
@@ -729,12 +692,12 @@ export class AmbienceActionsSettings extends LitElement {
 
     return html`
       <div
-        class="card ${this._dragOver === index ? "drag-over" : ""} ${this._dragFrom === index ? "dragging" : ""}"
+        class="card ${this._drag.over === index ? "drag-over" : ""} ${this._drag.from === index ? "dragging" : ""}"
         data-card
         data-service=${action.id}
-        @dragover=${(e: DragEvent) => this._onDragOver(e, index)}
-        @drop=${() => this._onDrop(index)}
-        @dragend=${() => this._onDragEnd()}
+        @dragover=${(e: DragEvent) => this._drag.dragOver(e, index)}
+        @drop=${() => this._drag.drop(index)}
+        @dragend=${() => this._drag.end()}
       >
         <div
           class="card-header"
@@ -751,7 +714,12 @@ export class AmbienceActionsSettings extends LitElement {
             data-drag-handle
             draggable="true"
             title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}
-            @dragstart=${(e: DragEvent) => this._onDragStart(e, index)}
+            @dragstart=${(e: DragEvent) =>
+              this._drag.start(
+                index,
+                e,
+                (e.currentTarget as HTMLElement).closest<HTMLElement>(".card"),
+              )}
             @click=${(e: Event) => e.stopPropagation()}
           >⠿</span>
           <span class="toggle-arrow">${isExpanded ? "▾" : "▸"}</span>
@@ -840,11 +808,6 @@ export class AmbienceActionsSettings extends LitElement {
     `;
   }
 
-  private _humanizeFieldId(fieldName: string): string {
-    const spaced = fieldName.replaceAll("_", " ").toLowerCase();
-    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-  }
-
   private _formatDefaultSummary(value: unknown): string {
     if (value === null || value === undefined) return "";
     if (typeof value === "object") return JSON.stringify(value);
@@ -890,7 +853,7 @@ export class AmbienceActionsSettings extends LitElement {
             />
           </div>
           <span class="name">
-            ${field.name || this._humanizeFieldId(name)}
+            ${field.name || humanizeFieldId(name)}
             ${field.name ? html` <small class="field-id">(${name})</small>` : ""}
             ${field.description ? html` <small>— ${field.description}</small>` : ""}
           </span>

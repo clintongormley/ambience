@@ -20,7 +20,13 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html"],
       include: ["frontend/src/**/*.ts"],
-      exclude: ["frontend/src/**/*.d.ts", "frontend/src/main.ts", "frontend/src/types.ts"],
+      exclude: [
+        "frontend/src/**/*.d.ts",
+        "frontend/src/main.ts",
+        // Type-only modules emit no runtime code, so they'd otherwise report 0%.
+        "frontend/src/types.ts",
+        "frontend/src/ha-form.ts",
+      ],
       thresholds: {
         lines: 90,
         functions: 90,

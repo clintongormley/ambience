@@ -5,6 +5,7 @@ import type { HassConnection } from "../api.js";
 import { isValidDaySpec } from "../day-spec.js";
 import { dayItemKindLabel, localize, monthLabel, weekdayLabel } from "../i18n.js";
 import type { DayConfig, DayItem, DayPredicate } from "../types.js";
+import type { HaFormSchema } from "../ha-form.js";
 
 const KINDS: DayItem["kind"][] = [
   "weekday", "day_of_month", "date", "date_range",
@@ -21,9 +22,6 @@ const _DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 function _daysInMonth(month: number): number {
   return _DAYS_IN_MONTH[month - 1] ?? 31;
 }
-
-/** Loose ha-form schema item — the selector is passed through to HA. */
-type HaFormSchema = { name: string; required?: boolean; selector: Record<string, unknown> };
 
 /** Parts of a date / date_range item that an ha-form field can set. */
 type DatePart = "month" | "day" | "from_month" | "from_day" | "to_month" | "to_day";

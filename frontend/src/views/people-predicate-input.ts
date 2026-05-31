@@ -4,8 +4,7 @@ import { customElement, property } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
 import type { PeoplePredicate, PeopleQuant } from "../types.js";
-
-type HaFormSchema = { name: string; required?: boolean; selector: Record<string, unknown> };
+import type { HaFormSchema } from "../ha-form.js";
 
 /** The six user-facing modes. The first three ("base") emit no `who`; the last
  *  three ("…these people") carry the selected person ids. Each maps to a

@@ -1,6 +1,7 @@
 import {
   actionLabel,
   anchorLabel,
+  humanizeId,
   localize,
   monthLabel,
   periodLabel,
@@ -254,8 +255,7 @@ const _OP_LABEL: Record<string, string> = { "<": "<", "<=": "≤", ">": ">", ">=
 /** Humanize a field id: replace underscores with spaces and capitalize first letter.
  *  "brightness_pct" → "Brightness pct", "transition" → "Transition" */
 export function humanizeFieldId(fieldId: string): string {
-  const spaced = fieldId.replaceAll("_", " ").toLowerCase();
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return humanizeId(fieldId);
 }
 
 /** Format a param value for display: primitives as-is, arrays/objects via

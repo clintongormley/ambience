@@ -8,16 +8,10 @@ import {
 } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
-import { formatParamValue, selectorUnit } from "../summary.js";
+import { formatParamValue, humanizeFieldId, selectorUnit } from "../summary.js";
 import type { ExposedAction, Scope, ServiceSchema } from "../types.js";
 import "./target-picker.js";
-
-type HaFormSchemaEntry = {
-  name: string;
-  selector?: unknown;
-  required?: boolean;
-  description?: { suggested_value?: unknown } | string;
-};
+import type { HaFormSchemaEntry } from "../ha-form.js";
 
 /**
  * Body of an action slot. The action is identified by `exposed` (the
@@ -312,12 +306,7 @@ export class AmbienceActionSlot extends LitElement {
     const field = this._schema?.fields[fieldName];
     if (field?.name) return field.name;
     // Humanize: "brightness_pct" → "Brightness pct", "transition" → "Transition"
-    const spaced = fieldName.replaceAll("_", " ").toLowerCase();
-    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-  }
-
-  private _fieldLabel(key: string): string {
-    return this._humanizeFieldLabel(key);
+    return humanizeFieldId(fieldName);
   }
 
   private _clearField(name: string) {
@@ -461,7 +450,7 @@ export class AmbienceActionSlot extends LitElement {
               <div class="field-row">
                 <div class="field-header">
                   <span class="field-label-group">
-                    <label class="field-label">${this._fieldLabel(entry.name)}${entry.required ? " *" : ""}</label>${hint
+                    <label class="field-label">${this._humanizeFieldLabel(entry.name)}${entry.required ? " *" : ""}</label>${hint
                       ? html`<span class="field-default-hint">${hint}</span>`
                       : ""}
                   </span>

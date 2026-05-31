@@ -4,6 +4,7 @@ import { customElement, property } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { localize, weatherAttrLabel, weatherAttrUnit } from "../i18n.js";
 import type { WeatherGroup, WeatherPredicate, WeatherThreshold } from "../types.js";
+import type { HaFormSchema } from "../ha-form.js";
 
 const ATTRIBUTES = ["temperature", "apparent_temperature", "humidity", "wind_speed", "pressure"];
 const OPS: WeatherThreshold["op"][] = ["<", "<=", ">", ">="];
@@ -11,8 +12,6 @@ const OPS: WeatherThreshold["op"][] = ["<", "<=", ">", ">="];
 const OP_LABEL: Record<WeatherThreshold["op"], string> = {
   "<": "<", "<=": "≤", ">": ">", ">=": "≥",
 };
-
-type HaFormSchema = { name: string; required?: boolean; selector: Record<string, unknown> };
 
 @customElement("ambience-weather-predicate-input")
 export class AmbienceWeatherPredicateInput extends LitElement {

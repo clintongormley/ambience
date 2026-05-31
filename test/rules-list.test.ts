@@ -268,7 +268,7 @@ describe("ambience-rules-list", () => {
     await el.updateComplete;
     // _dragFrom should be 0 — verified indirectly by drop emitting reorder
     // (we can't read private state directly, but we can test the side effect)
-    expect(el._dragFrom).toBe(0);
+    expect(el._drag.from).toBe(0);
   });
 
   test("drag over a different item allows drop and sets _dragOver", async () => {
@@ -279,7 +279,7 @@ describe("ambience-rules-list", () => {
     const dragOverEvent = new DragEvent("dragover", { bubbles: true, cancelable: true });
     items[1].dispatchEvent(dragOverEvent);
     await el.updateComplete;
-    expect(el._dragOver).toBe(1);
+    expect(el._drag.over).toBe(1);
   });
 
   test("drag over the same item is a no-op", async () => {
@@ -288,7 +288,7 @@ describe("ambience-rules-list", () => {
     items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
     items[0].dispatchEvent(new DragEvent("dragover", { bubbles: true }));
     await el.updateComplete;
-    expect(el._dragOver).toBeNull();
+    expect(el._drag.over).toBeNull();
   });
 
   test("drop emits reorder-rules and resets drag state", async () => {
@@ -301,8 +301,8 @@ describe("ambience-rules-list", () => {
     await el.updateComplete;
 
     expect(get()).toEqual({ from: 0, to: 1 });
-    expect(el._dragFrom).toBeNull();
-    expect(el._dragOver).toBeNull();
+    expect(el._drag.from).toBeNull();
+    expect(el._drag.over).toBeNull();
   });
 
   test("drop on the same index is a no-op", async () => {
@@ -322,8 +322,8 @@ describe("ambience-rules-list", () => {
     items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
     items[0].dispatchEvent(new DragEvent("dragend", { bubbles: true }));
     await el.updateComplete;
-    expect(el._dragFrom).toBeNull();
-    expect(el._dragOver).toBeNull();
+    expect(el._drag.from).toBeNull();
+    expect(el._drag.over).toBeNull();
   });
 
   test("time range predicate renders arrow format in summary", async () => {

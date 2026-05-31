@@ -4,8 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { getKnownStates, type HassConnection } from "../api.js";
 import { localize, stateOpLabel } from "../i18n.js";
 import type { StateAtom, StateForDuration } from "../types.js";
-
-type HaFormSchema = { name: string; required?: boolean; selector: Record<string, unknown> };
+import type { HaFormSchema } from "../ha-form.js";
 
 /**
  * Single atom of a state-predicate tree, laid out like HA's automation State

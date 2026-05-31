@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { groupSwatchStyle } from "../group-colors.js";
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
 import { formatParamValue, paramLabel, ruleDisplayName, summariseMatcher } from "../summary.js";
+import { DragReorderController } from "../drag-reorder.js";
 import type {
   ActionSpec,
   ExposedAction,
@@ -193,10 +194,11 @@ export class AmbienceRulesList extends LitElement {
   // otherwise a group id. Presentation-only.
   @property({ attribute: false }) filterGroup: string = "";
 
-  // Index of the row currently being dragged, or null.
-  @state() private _dragFrom: number | null = null;
-  // Index of the row a drag is currently hovering over, or null.
-  @state() private _dragOver: number | null = null;
+  // Drag-to-reorder controller. On drop it emits "reorder-rules" {from,to};
+  // the parent (scopes-view) performs the actual move.
+  private _drag = new DragReorderController(this, (from, to) =>
+    this._emit("reorder-rules", { from, to }),
+  );
   // Rule indices whose action list is expanded inline.
   @state() private _expanded = new Set<number>();
 
@@ -327,29 +329,6 @@ export class AmbienceRulesList extends LitElement {
     return actionLabel(this.hass as any, action.service);
   }
 
-  private _onDragStart(i: number) {
-    this._dragFrom = i;
-  }
-
-  private _onDragOver(e: DragEvent, i: number) {
-    if (this._dragFrom === null || i === this._dragFrom) return;
-    e.preventDefault(); // allow drop
-    this._dragOver = i;
-  }
-
-  private _onDrop(i: number) {
-    const from = this._dragFrom;
-    this._dragFrom = null;
-    this._dragOver = null;
-    if (from === null || from === i) return;
-    this._emit("reorder-rules", { from, to: i });
-  }
-
-  private _onDragEnd() {
-    this._dragFrom = null;
-    this._dragOver = null;
-  }
-
   private _confirmDelete(i: number, rule: Rule, displayNum: number) {
     const label = rule.name || localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(displayNum));
     if (window.confirm(localize(this.hass, "ui.confirm_delete", 'Delete "{name}"?').replace("{name}", label))) {
@@ -364,12 +343,12 @@ export class AmbienceRulesList extends LitElement {
     const unpinLabel = localize(this.hass, "ui.unpin", "Unpin (return to automatic order)");
     return html`
       <li
-        class=${this._dragOver === i ? "drag-over" : ""}
+        class=${this._drag.over === i ? "drag-over" : ""}
         draggable="true"
-        @dragstart=${() => this._onDragStart(i)}
-        @dragover=${(e: DragEvent) => this._onDragOver(e, i)}
-        @drop=${() => this._onDrop(i)}
-        @dragend=${this._onDragEnd}
+        @dragstart=${() => this._drag.start(i)}
+        @dragover=${(e: DragEvent) => this._drag.dragOver(e, i)}
+        @drop=${() => this._drag.drop(i)}
+        @dragend=${() => this._drag.end()}
       >
         <span class="lead">
           ${rule.pinned

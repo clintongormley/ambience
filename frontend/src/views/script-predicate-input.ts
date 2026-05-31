@@ -6,6 +6,7 @@ import type { HassConnection } from "../api.js";
 import { getScriptReferencedEntities } from "../api.js";
 import { localize } from "../i18n.js";
 import type { ScriptPredicate } from "../types.js";
+import type { HaFormSchema } from "../ha-form.js";
 
 type ScriptField = {
   name?: string;
@@ -16,12 +17,6 @@ type ScriptField = {
 };
 
 type ScriptDef = { fields?: Record<string, ScriptField> };
-
-type HaFormSchema = {
-  name: string;
-  required?: boolean;
-  selector: Record<string, unknown>;
-};
 
 @customElement("ambience-script-predicate-input")
 export class AmbienceScriptPredicateInput extends LitElement {

@@ -458,8 +458,8 @@ describe("ambience-actions-settings", () => {
       expect.objectContaining({ id: "light.turn_on" }),
     ]);
     // Drag state reset after drop.
-    expect(el._dragFrom).toBeNull();
-    expect(el._dragOver).toBeNull();
+    expect(el._drag.from).toBeNull();
+    expect(el._drag.over).toBeNull();
   });
 
   test("the dragged card is marked .dragging while a drag is in progress", async () => {
@@ -493,12 +493,12 @@ describe("ambience-actions-settings", () => {
     const handle = cards[0].querySelector("[data-drag-handle]") as HTMLElement;
     handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
     cards[1].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true }));
-    expect(el._dragOver).toBe(1);
+    expect(el._drag.over).toBe(1);
     cards[0].dispatchEvent(new DragEvent("dragend", { bubbles: true }));
     await flush(el);
 
-    expect(el._dragFrom).toBeNull();
-    expect(el._dragOver).toBeNull();
+    expect(el._drag.from).toBeNull();
+    expect(el._drag.over).toBeNull();
     const idsAfter = Array.from(el.shadowRoot.querySelectorAll("[data-card]")).map(
       (c: any) => c.getAttribute("data-service"),
     );

@@ -440,8 +440,11 @@ export class AmbienceScopesView extends LitElement {
    * Not serialised per scope: overlapping saves could revert to a stale
    * intermediate config on error. In practice the UI serialises mutations
    * (one modal / one interaction at a time), so this is acceptable.
+   *
+   * @returns `true` if the save succeeded, `false` if it errored (in which case
+   *   the optimistic update has been reverted and `_error` set).
    */
-  private async _mutate(scope: Scope, next: ScopeConfig) {
+  private async _mutate(scope: Scope, next: ScopeConfig): Promise<boolean> {
     const prev = this._getConfig(scope);
     this._setConfig(scope, next);
     this._error = "";
@@ -452,9 +455,11 @@ export class AmbienceScopesView extends LitElement {
         result = await saveArea(this.hass, scope.id, next);
       else result = await saveFloor(this.hass, scope.id, next);
       this._setConfig(scope, _normalize(result.config));
+      return true;
     } catch (e) {
       if (prev) this._setConfig(scope, prev);
       this._error = (e as Error).message || String(e);
+      return false;
     }
   }
 
@@ -555,17 +560,19 @@ export class AmbienceScopesView extends LitElement {
 
     // Different scope: the rule lands fresh. Strip ordering metadata so the
     // backend assigns a new priority.
-    const fresh: Rule = { ...rule };
-    delete fresh.priority;
-    delete fresh.pinned;
-    delete fresh.shadowed_by;
+    const { priority: _p, pinned: _pin, shadowed_by: _s, ...fresh } = rule;
     const targetCfg = this._getConfig(target);
-    if (targetCfg) {
-      await this._mutate(target, { ...targetCfg, rules: [...targetCfg.rules, fresh] });
-    }
+    if (!targetCfg) return;
+    const added = await this._mutate(target, {
+      ...targetCfg,
+      rules: [...targetCfg.rules, fresh],
+    });
 
-    // Moving an existing rule also removes it from its original scope.
-    if (!editing.isNew) {
+    // Only remove the original once it is safely in the new scope — otherwise a
+    // failed add would lose the rule entirely. (A failed removal after a
+    // successful add merely leaves a duplicate, which is the accepted
+    // non-atomic outcome.)
+    if (added && !editing.isNew) {
       const srcCfg = this._getConfig(editing.scope);
       if (srcCfg) {
         const rules = srcCfg.rules.filter((_, i) => i !== editing.index);

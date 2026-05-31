@@ -288,6 +288,22 @@ describe("ambience-scopes-view", () => {
     );
   });
 
+  test("a failed move to a new scope leaves the rule in its original scope", async () => {
+    const rule: Rule = { name: "R", when: {}, actions: [] };
+    el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
+    // Target (house) save fails.
+    vi.mocked(api.saveHouse).mockRejectedValueOnce(new Error("boom"));
+    await editRuleViaEditor(
+      ".scope-row.area[data-id='living_room']",
+      0,
+      { rule, scope: { kind: "house" } },
+    );
+    // Target add was attempted...
+    expect(api.saveHouse).toHaveBeenCalledTimes(1);
+    // ...but since it failed, the source rule was NOT removed (no saveArea call).
+    expect(api.saveArea).not.toHaveBeenCalled();
+  });
+
   test("a rule moved to a new scope has its ordering metadata stripped", async () => {
     const rule: Rule = {
       name: "R", when: {}, actions: [], priority: 50, pinned: true, shadowed_by: 1,

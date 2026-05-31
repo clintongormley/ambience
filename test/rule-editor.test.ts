@@ -1640,6 +1640,27 @@ describe("ambience-rule-editor — group selector", () => {
     expect(el._draft.group).toBe("a");
   });
 
+  test("changing the group resets the rule's pinned priority", async () => {
+    el = await mount(
+      { name: "t", when: {}, actions: [], group: "a", pinned: true, priority: 4096 },
+      { groups: [{ id: "a", name: "A" }, { id: "b", name: "B" }] },
+    );
+    el._setGroup("b");
+    expect(el._draft.group).toBe("b");
+    expect(el._draft.pinned).toBeUndefined();
+    expect(el._draft.priority).toBeUndefined();
+  });
+
+  test("re-selecting the same group keeps the pin", async () => {
+    el = await mount(
+      { name: "t", when: {}, actions: [], group: "a", pinned: true, priority: 4096 },
+      { groups: [{ id: "a", name: "A" }, { id: "b", name: "B" }] },
+    );
+    el._setGroup("a");
+    expect(el._draft.pinned).toBe(true);
+    expect(el._draft.priority).toBe(4096);
+  });
+
   test("selector reflects the rule's current group", async () => {
     el = await mount({ name: "t", when: {}, actions: [], group: "blinds" }, { groups });
     const select = el.shadowRoot.querySelector("select.group-select") as HTMLSelectElement;

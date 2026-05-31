@@ -304,8 +304,12 @@ export class AmbienceRuleEditor extends LitElement {
   // no "no group" option.
 
   private _setGroup(id: string) {
-    if (!this._draft || !id) return;
-    this._draft = { ...this._draft, group: id };
+    if (!this._draft || !id || id === this._draft.group) return;
+    // Pin position and priority are per-group, so moving a rule to a different
+    // group invalidates them — drop both so it falls back to automatic ordering
+    // within the new group.
+    const { priority: _priority, pinned: _pinned, ...rest } = this._draft;
+    this._draft = { ...rest, group: id };
   }
 
   private _onGroupChange = (e: Event) => {

@@ -705,16 +705,19 @@ async def test_area_save_then_get(
     assert len(get["result"]["rules"]) == 1
 
 
-async def test_scope_save_drops_unknown_group(
+async def test_scope_save_coerces_unknown_group_to_general(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
-    """A rule referencing a group id not in the groups list has its group dropped."""
+    """A rule referencing a group id not in the groups list (or with no group key)
+    is rewritten to the General group — rules are always grouped."""
+    from custom_components.ambience.const import GENERAL_GROUP_ID
+
     config = {
         "auto_sort": False,
         "rules": [
             {
                 "name": "ghost rule",
-                "group": "ghost",
+                "group": "nonexistent",
                 "when": {},
                 "actions": [
                     {
@@ -723,7 +726,18 @@ async def test_scope_save_drops_unknown_group(
                         "params": {"brightness_pct": 30},
                     }
                 ],
-            }
+            },
+            {
+                "name": "no group key",
+                "when": {},
+                "actions": [
+                    {
+                        "service": "light.turn_off",
+                        "entity_ids": ["light.lamp"],
+                        "params": {},
+                    }
+                ],
+            },
         ],
     }
     save = await _ws_send(
@@ -732,11 +746,13 @@ async def test_scope_save_drops_unknown_group(
         area_id=area_id,
         config=config,
     )
-    assert save["success"] is True
+    assert save["success"] is True, save
 
     get = await _ws_send(hass_ws_client, id=2, type="ambience/area/get", area_id=area_id)
     assert get["success"] is True
-    assert "group" not in get["result"]["rules"][0]
+    rules = get["result"]["rules"]
+    assert rules[0]["group"] == GENERAL_GROUP_ID
+    assert rules[1]["group"] == GENERAL_GROUP_ID
 
 
 async def test_area_save_rejects_area_id_not_in_registry(
@@ -2134,3 +2150,53 @@ async def test_groups_delete_unknown_is_noop(hass, installed, hass_ws_client) ->
     assert resp["success"] is True, resp
     list_resp = await _ws_send(hass_ws_client, type="ambience/groups/list")
     assert {g["id"] for g in list_resp["result"]["groups"]} == {"a", "b"}
+
+
+async def test_groups_delete_blocked_in_use_returns_validation_error(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    """Deleting a group that still has rules returns a clean validation_error."""
+    await _ws_send(
+        hass_ws_client,
+        type="ambience/groups/save",
+        groups=[{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
+    )
+    save = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={
+            "rules": [
+                {
+                    "name": "in group a",
+                    "group": "a",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.lamp"],
+                            "params": {},
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    assert save["success"] is True, save
+
+    resp = await _ws_send(hass_ws_client, id=3, type="ambience/groups/delete", group_id="a")
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "still has rules" in resp["error"]["message"]
+
+
+async def test_groups_delete_blocked_last_returns_validation_error(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """Deleting the only remaining group returns a clean validation_error."""
+    # A fresh install seeds exactly one group ("general").
+    resp = await _ws_send(hass_ws_client, type="ambience/groups/delete", group_id="general")
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "last group" in resp["error"]["message"]

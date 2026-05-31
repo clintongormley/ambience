@@ -19,6 +19,7 @@ from .const import (
     DATA_PERIODS,
     DATA_STORE,
     DOMAIN,
+    GENERAL_GROUP_ID,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from .exposed_actions import ExposedActionsStore
@@ -243,17 +244,20 @@ def _with_shadows(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]
 
 
 def _coerce_rule_groups(store, config: dict) -> None:
-    """Drop any rule's group id that isn't a known group (making it ungrouped),
-    logging once. Mutates `config` in place."""
+    """Rewrite any rule group id that isn't a known group to the General group
+    (rules are always grouped), logging once. Mutates `config` in place.
+
+    The store always seeds and preserves General, so it is the unconditional
+    home for orphaned rules (mirrors store._migrate_groups)."""
     known = {g["id"] for g in store.groups()}
     coerced = False
     for rule in config.get("rules", []):
         gid = rule.get("group")
-        if gid is not None and gid not in known:
-            rule.pop("group", None)
+        if gid is None or gid not in known:
+            rule["group"] = GENERAL_GROUP_ID
             coerced = True
     if coerced:
-        _LOGGER.warning("ambience: scope save referenced unknown group(s); left ungrouped")
+        _LOGGER.warning("ambience: scope save had ungrouped/unknown-group rule(s); set to General")
 
 
 @websocket_api.require_admin
@@ -1271,9 +1275,12 @@ async def _ws_groups_delete(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    group_id = msg["group_id"]
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_delete_group(group_id)
+    try:
+        await store.async_delete_group(msg["group_id"])
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
     connection.send_result(msg["id"])
 
 

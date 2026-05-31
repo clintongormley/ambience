@@ -164,12 +164,14 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     async def async_turn_on(self, **_: Any) -> None:
         await self._apply_on()
         for sw in self._descendant_switches():
-            await sw._apply_on()
+            if not sw.is_on:
+                await sw._apply_on()
 
     async def async_turn_off(self, **_: Any) -> None:
         await self._apply_off()
         for sw in self._descendant_switches():
-            await sw._apply_off()
+            if sw.is_on:
+                await sw._apply_off()
 
     async def _apply_on(self) -> None:
         """Turn this switch on locally (no cascade)."""

@@ -1,6 +1,12 @@
 import type { HassConnection } from "./api.js";
 import type { Scope } from "./types.js";
 
+/** Stable identity string for a scope: "house", or "<kind>:<id>". The single
+ *  definition of scope equality used across the frontend. */
+export function scopeKey(scope: Scope): string {
+  return scope.kind === "house" ? "house" : `${scope.kind}:${scope.id}`;
+}
+
 /**
  * HA service target metadata. Mirrors the shape of the `target` field in
  * HA's services.yaml descriptions (and what HA returns from

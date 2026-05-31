@@ -17,8 +17,9 @@ import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { localize, matcherLabel } from "../i18n.js";
 import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
 import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
-import { entitiesForScope } from "../entities-for-scope.js";
+import { entitiesForScope, scopeKey } from "../entities-for-scope.js";
 import { groupSwatchStyle } from "../group-colors.js";
+import { stripPositionMetadata } from "../rule.js";
 import "./action-slot.js";
 import "./matcher-input.js";
 
@@ -57,8 +58,7 @@ function _defaultPredicateFor(name: string): unknown {
 }
 
 function sameScope(a?: Scope, b?: Scope): boolean {
-  if (!a || !b || a.kind !== b.kind) return false;
-  return a.kind === "house" || (a as { id: string }).id === (b as { id: string }).id;
+  return !!a && !!b && scopeKey(a) === scopeKey(b);
 }
 
 @customElement("ambience-rule-editor")
@@ -461,10 +461,9 @@ export class AmbienceRuleEditor extends LitElement {
   private _setGroup(id: string) {
     if (!this._draft || !id || id === this._draft.group) return;
     // Pin position and priority are per-group, so moving a rule to a different
-    // group invalidates them — drop both so it falls back to automatic ordering
-    // within the new group.
-    const { priority: _priority, pinned: _pinned, ...rest } = this._draft;
-    this._draft = { ...rest, group: id };
+    // group invalidates them — drop the fixed-position fields so it falls back
+    // to automatic ordering within the new group.
+    this._draft = { ...stripPositionMetadata(this._draft), group: id };
   }
 
   /** A square swatch in the group's colour holding its icon — matches the

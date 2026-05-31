@@ -7,6 +7,8 @@ import type {
   HassConnection,
 } from "../api.js";
 import { groupSwatchStyle } from "../group-colors.js";
+import { scopeKey } from "../entities-for-scope.js";
+import { stripPositionMetadata } from "../rule.js";
 import { localize } from "../i18n.js";
 import {
   getArea,
@@ -45,15 +47,6 @@ import "./rule-editor.js";
 import "./auto-triggers-section.js";
 
 type EditingState = { scope: Scope; index: number; isNew: boolean; seed?: Rule };
-
-/**
- * Stable key for a scope, used in `_expanded` and for `data-id` attributes.
- * `area:<id>` | `floor:<id>` | `house`
- */
-function _scopeKey(scope: Scope): string {
-  if (scope.kind === "house") return "house";
-  return `${scope.kind}:${scope.id}`;
-}
 
 function _normalize(cfg: ScopeConfig): ScopeConfig {
   return { rules: cfg.rules ?? [] };
@@ -466,7 +459,7 @@ export class AmbienceScopesView extends LitElement {
   // --- expand --------------------------------------------------------------
 
   private _toggleExpand(scope: Scope) {
-    const key = _scopeKey(scope);
+    const key = scopeKey(scope);
     const next = new Set(this._expanded);
     if (next.has(key)) next.delete(key);
     else next.add(key);
@@ -490,12 +483,9 @@ export class AmbienceScopesView extends LitElement {
     if (!cfg) return;
     const original = cfg.rules[e.detail.index];
     if (!original) return;
-    const seed: Rule = JSON.parse(JSON.stringify(original));
     // A duplicate is a fresh rule: drop the original's fixed position so it
     // doesn't inherit the pin/priority slot (the backend assigns a new one).
-    delete seed.pinned;
-    delete seed.priority;
-    delete seed.shadowed_by;
+    const seed = stripPositionMetadata(JSON.parse(JSON.stringify(original)));
     this._editing = { scope, index: cfg.rules.length, isNew: true, seed };
   }
 
@@ -550,7 +540,7 @@ export class AmbienceScopesView extends LitElement {
     if (!editing) return;
     const { rule, scope: target } = e.detail;
 
-    if (_scopeKey(target) === _scopeKey(editing.scope)) {
+    if (scopeKey(target) === scopeKey(editing.scope)) {
       // Same scope: replace in place, or append a new rule.
       const cfg = this._getConfig(target);
       if (!cfg) return;
@@ -563,7 +553,7 @@ export class AmbienceScopesView extends LitElement {
 
     // Different scope: the rule lands fresh. Strip ordering metadata so the
     // backend assigns a new priority.
-    const { priority: _p, pinned: _pin, shadowed_by: _s, ...fresh } = rule;
+    const fresh = stripPositionMetadata(rule);
     const targetCfg = this._getConfig(target);
     if (!targetCfg) return;
     const added = await this._mutate(target, {
@@ -795,7 +785,7 @@ export class AmbienceScopesView extends LitElement {
     cfg: ScopeConfig,
     rowClass: "house" | "floor" | "area",
   ) {
-    const open = this._expanded.has(_scopeKey(scope));
+    const open = this._expanded.has(scopeKey(scope));
     const dataId = scope.kind === "house" ? "" : scope.id;
     return html`
       <li

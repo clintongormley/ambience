@@ -69,8 +69,8 @@ class TemplateMatcher:
     )
     input = "template_predicate"
     # Just below script (975): both are opaque user-defined booleans. A template
-    # is an arbitrary expression, so it sorts after the slightly-more-structured
-    # named-script constraint.
+    # is an arbitrary expression, so it has a lower priority than the
+    # slightly-more-structured named-script constraint.
     priority = 970
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:

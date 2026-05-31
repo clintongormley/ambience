@@ -103,7 +103,7 @@ class WeatherMatcher:
         "threshold holds. Operators: < <= > >=."
     )
     input = "weather_predicate"
-    priority = 300
+    priority = 700
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass

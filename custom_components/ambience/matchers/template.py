@@ -68,10 +68,10 @@ class TemplateMatcher:
         "None = wildcard."
     )
     input = "template_predicate"
-    # Just after script (25): both are opaque user-defined booleans. A template
+    # Just below script (975): both are opaque user-defined booleans. A template
     # is an arbitrary expression, so it sorts after the slightly-more-structured
     # named-script constraint.
-    priority = 30
+    priority = 970
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass

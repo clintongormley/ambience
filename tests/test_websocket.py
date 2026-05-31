@@ -140,21 +140,21 @@ async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> 
     assert resp["success"] is True
     by_name = {m["name"]: m for m in resp["result"]}
 
-    # scene matches the activating scene, has its own input widget, priority 0
+    # scene matches the activating scene, has its own input widget, priority 1000
     assert "toggleable" not in by_name["scene"]
     assert by_name["scene"]["input"] == "scene_combobox"
-    assert by_name["scene"]["priority"] == 0
+    assert by_name["scene"]["priority"] == 1000
 
-    # day fires before time_of_day in the linearisation tiebreaker.
+    # day sorts before time_of_day in the linearisation tiebreaker.
     day = by_name["day"]
     assert "toggleable" not in day
     assert day["input"] == "day_predicate"
-    assert day["priority"] == 100
+    assert day["priority"] == 900
 
     tod = by_name["time_of_day"]
     assert "toggleable" not in tod
     assert tod["input"] == "time_of_day"
-    assert tod["priority"] == 200
+    assert tod["priority"] == 800
     assert tod["description"].strip() != ""
     assert tod["predicate_help"].strip() != ""
 
@@ -1371,7 +1371,7 @@ async def test_matchers_list_includes_weather(
     weather = by_name["weather"]
     assert "toggleable" not in weather
     assert weather["input"] == "weather_predicate"
-    assert weather["priority"] == 300
+    assert weather["priority"] == 700
 
 
 async def test_matchers_list_includes_state(hass: HomeAssistant, installed, hass_ws_client) -> None:
@@ -1381,7 +1381,7 @@ async def test_matchers_list_includes_state(hass: HomeAssistant, installed, hass
     state = by_name["state"]
     assert "toggleable" not in state
     assert state["input"] == "state_predicate"
-    assert state["priority"] == 50
+    assert state["priority"] == 950
     assert state["description"].strip() != ""
     assert state["predicate_help"].strip() != ""
 

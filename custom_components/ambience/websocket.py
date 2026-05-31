@@ -258,7 +258,7 @@ async def _ws_matchers_list(
             "description": m.description,
             "predicate_help": m.predicate_help,
             "input": getattr(m, "input", "text"),
-            "priority": getattr(m, "priority", 1000),
+            "priority": getattr(m, "priority", 0),
         }
         for m in matchers.values()
     ]

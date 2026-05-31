@@ -82,9 +82,9 @@ class DayMatcher:
         "{kind: 'first_workday'}, {kind: 'last_workday'}."
     )
     input = "day_predicate"
-    # Lower than time_of_day: day fires first as a linearisation tiebreaker
+    # Higher than time_of_day: day sorts first as a linearisation tiebreaker
     # (which date the rule's about disambiguates before which hour).
-    priority = 100
+    priority = 900
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass

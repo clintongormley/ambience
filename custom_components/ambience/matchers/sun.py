@@ -42,7 +42,7 @@ class SunMatcher:
         "(from > to wraps past 360). At least one of elevation/azimuth is required."
     )
     input = "sun_predicate"
-    priority = 250
+    priority = 750
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass

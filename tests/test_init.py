@@ -74,7 +74,7 @@ async def test_script_matcher_is_registered(
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
     matchers = hass.data[DOMAIN][DATA_MATCHERS]
     assert "script" in matchers
-    assert matchers["script"].priority == 25
+    assert matchers["script"].priority == 975
 
 
 async def test_setup_registers_apply_scene_service(

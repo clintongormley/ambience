@@ -30,7 +30,7 @@ def test_protocol_fields() -> None:
     m = PeopleMatcher()
     assert m.name == "people"
     assert m.input == "people_predicate"
-    assert m.priority == 75
+    assert m.priority == 925
     assert m.description.strip() != ""
     assert m.predicate_help.strip() != ""
 

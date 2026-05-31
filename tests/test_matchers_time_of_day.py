@@ -365,7 +365,7 @@ def test_matcher_exposes_description() -> None:
 
 
 def test_priority() -> None:
-    assert _matcher().priority == 200
+    assert _matcher().priority == 800
 
 
 def test_trigger_deps_absolute_range_yields_clock_times() -> None:

@@ -60,8 +60,8 @@ class PeopleMatcher:
         "None = match-anything."
     )
     input = "people_predicate"
-    # Between state (50) and day (100): a moderately specific world-fact.
-    priority = 75
+    # Between state (950) and day (900): a moderately specific world-fact.
+    priority = 925
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass

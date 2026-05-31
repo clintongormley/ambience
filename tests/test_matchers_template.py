@@ -53,7 +53,7 @@ def test_protocol_fields() -> None:
     m = TemplateMatcher()
     assert m.name == "template"
     assert m.input == "template_predicate"
-    assert m.priority == 30
+    assert m.priority == 970
     assert m.description.strip() != ""
     assert m.predicate_help.strip() != ""
 

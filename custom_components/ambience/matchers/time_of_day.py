@@ -49,7 +49,7 @@ class TimeOfDayMatcher:
         "Endpoints are {kind: 'time', hh, mm} or {kind: 'sun', anchor, offset_min}."
     )
     input = "time_of_day"
-    priority = 200
+    priority = 800
 
     def __init__(
         self,

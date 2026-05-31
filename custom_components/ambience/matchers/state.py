@@ -53,9 +53,9 @@ class StateMatcher:
         "match-anything."
     )
     input = "state_predicate"
-    # Between scene (0) and day (100): state is the most specific world-fact
-    # a rule can name, so it fires earliest in the linearisation tiebreaker.
-    priority = 50
+    # Between scene (1000) and day (900): state is the most specific world-fact
+    # a rule can name, so it sorts highest in the linearisation tiebreaker.
+    priority = 950
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass

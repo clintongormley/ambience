@@ -36,7 +36,7 @@ def test_protocol_fields() -> None:
     assert m.name == "state"
     assert not hasattr(m, "toggleable")
     assert m.input == "state_predicate"
-    assert m.priority == 50
+    assert m.priority == 950
     assert m.description.strip() != ""
     assert m.predicate_help.strip() != ""
 

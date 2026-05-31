@@ -50,7 +50,7 @@ def test_protocol_fields() -> None:
     m = ScriptMatcher()
     assert m.name == "script"
     assert m.input == "script_predicate"
-    assert m.priority == 25
+    assert m.priority == 975
     assert m.description.strip() != ""
     assert m.predicate_help.strip() != ""
 

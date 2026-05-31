@@ -50,7 +50,7 @@ def test_protocol_fields() -> None:
     assert m.name == "weather"
     assert not hasattr(m, "toggleable")
     assert m.input == "weather_predicate"
-    assert m.priority == 300
+    assert m.priority == 700
     assert m.description.strip() != ""
     assert m.predicate_help.strip() != ""
 

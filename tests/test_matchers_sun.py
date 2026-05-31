@@ -19,7 +19,7 @@ def test_protocol_fields() -> None:
     m = SunMatcher()
     assert m.name == "sun"
     assert m.input == "sun_predicate"
-    assert m.priority == 250
+    assert m.priority == 750
     assert m.description.strip() != ""
     assert m.predicate_help.strip() != ""
 

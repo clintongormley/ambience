@@ -22,7 +22,7 @@ class SceneMatcher:
     description = "Matches the scene that triggered apply_scene."
     predicate_help = "A scene name, e.g. 'movie_night'."
     input = "scene_combobox"
-    priority = 0
+    priority = 1000
 
     async def snapshot(self, hass: HomeAssistant) -> Any:
         return None

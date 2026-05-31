@@ -22,6 +22,7 @@ from .const import (
     DOMAIN,
 )
 from .engine import evaluate_explained, resolve
+from .trace import TraceEvent, TriggerCause, UnitTrace, emit_trace, tracing_active
 from .validators import MIN_REAPPLY_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
@@ -179,7 +180,7 @@ async def _resolve_all_groups(
     snapshots: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
     """Resolve every group of a scope against a shared snapshots dict, returning
-    {group_id: plan}."""
+    {group_id: plan}. Used by async_resolve_groups_only (the dry-run path)."""
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = _scope_config(store, scope_kind, scope_id)
     return {
@@ -208,7 +209,8 @@ async def async_apply_scene(
     `scope_kind` is one of "area", "floor", "house". For "house", scope_id is
     None.
     """
-    if _switch_state(hass, scope_kind, scope_id) == "off":
+    switch_state = _switch_state(hass, scope_kind, scope_id)
+    if switch_state == "off":
         _LOGGER.info(
             "ambience: scope=%s/%s switch is off; skipping apply_scene",
             scope_kind,
@@ -218,10 +220,19 @@ async def async_apply_scene(
 
     # Snapshot once, then apply every group's winner concurrently (groups are
     # independent by construction).
+    active = tracing_active()
     snapshots = await _snapshot_all(hass)
-    plans = await _resolve_all_groups(hass, scope_kind, scope_id, snapshots)
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = _scope_config(store, scope_kind, scope_id)
 
-    async def _apply_group(group_id: str, plan: dict[str, Any]) -> None:
+    # Mirrors trigger_engine._resolve_and_apply but deliberately simpler: the
+    # manual path always executes matched groups (no switch-off/no-op/last-applied
+    # gating), so the two are intentionally not unified.
+    async def _apply_group(group_id: str) -> UnitTrace | None:
+        plan = await async_resolve_with_snapshots(
+            hass, scope_kind, scope_id, snapshots, group=group_id, explain=active
+        )
+        explanation = plan.get("explanation")
         if plan["matched_rule_index"] is None:
             _LOGGER.info(
                 "ambience: no rule matched for scope=%s/%s group=%s snapshots=%s",
@@ -230,16 +241,37 @@ async def async_apply_scene(
                 group_id,
                 plan["snapshots_described"],
             )
-            return
+            if active:
+                return UnitTrace(
+                    scope_kind, scope_id, group_id, switch_state, "no_match", explanation
+                )
+            return None
         await async_execute_plan(hass, scope_kind, scope_id, plan, group_id)
+        if active:
+            return UnitTrace(
+                scope_kind,
+                scope_id,
+                group_id,
+                switch_state,
+                "acted",
+                explanation,
+                winner_name=plan["rule_name"],
+                actions=plan["actions"],
+            )
+        return None
 
     results = await asyncio.gather(
-        *(_apply_group(gid, plan) for gid, plan in plans.items()),
+        *(_apply_group(gid) for gid in group_ids(cfg)),
         return_exceptions=True,
     )
+    traces: list[UnitTrace] = []
     for res in results:
         if isinstance(res, BaseException):
             _LOGGER.warning("ambience: group apply failed: %s", res)
+        elif res is not None:
+            traces.append(res)
+    if traces:
+        emit_trace(hass, TraceEvent(TriggerCause(kind="manual"), traces))
 
 
 async def async_execute_actions(

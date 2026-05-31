@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -15,6 +16,7 @@ from custom_components.ambience.const import (
     DATA_MATCHERS,
     DATA_STORE,
     DATA_SWITCHES,
+    DATA_TRACE_SINKS,
     DOMAIN,
 )
 from custom_components.ambience.exposed_actions import ExposedActionsStore
@@ -28,6 +30,7 @@ from custom_components.ambience.service import (
     group_ids,
     scope_reapply_intervals,
 )
+from custom_components.ambience.trace import TraceEvent
 
 
 def test_group_ids_returns_only_real_ids():
@@ -928,6 +931,88 @@ def test_scope_reapply_intervals_action_zero_suppresses_exposed():
         ]
     }
     assert scope_reapply_intervals(cfg, exposed) == []
+
+
+async def test_apply_scene_emits_manual_trace_event(hass: HomeAssistant) -> None:
+    """apply_scene must emit a manual-cause TraceEvent with at least one acted unit."""
+    # Mirror setup from test_apply_scene_records_last_applied_rule: area 'a',
+    # one lighting rule that matches tod=evening, switch on.
+    areas = {
+        "a": {
+            "rules": [
+                {
+                    "name": "evening-lights",
+                    "group": "lighting",
+                    "when": {"tod": "evening"},
+                    "actions": [],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {"tod": FixedMatcher("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+
+    captured: list[TraceEvent] = []
+
+    class CaptureSink:
+        def emit(self, event: TraceEvent) -> None:
+            captured.append(event)
+
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [CaptureSink()]
+    trace_logger = logging.getLogger("custom_components.ambience.trace")
+    trace_logger.setLevel(logging.DEBUG)
+    try:
+        await async_apply_scene(hass, "area", "a")
+        assert captured, "expected a manual TraceEvent"
+        assert captured[-1].cause.kind == "manual"
+        assert any(u.outcome == "acted" for u in captured[-1].units)
+    finally:
+        trace_logger.setLevel(logging.NOTSET)
+
+
+async def test_apply_scene_manual_trace_includes_no_match_group(hass: HomeAssistant) -> None:
+    """apply_scene must emit a manual TraceEvent with a no_match unit when no rule wins."""
+    # Area 'b' has one lighting rule that requires tod=morning, but the matcher
+    # returns 'evening', so resolution yields no winner → no_match unit.
+    areas = {
+        "b": {
+            "rules": [
+                {
+                    "name": "morning-lights",
+                    "group": "lighting",
+                    "when": {"tod": "morning"},
+                    "actions": [],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {"tod": FixedMatcher("evening")},
+        DATA_SWITCHES: {("area", "b"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+
+    captured: list[TraceEvent] = []
+
+    class CaptureSink:
+        def emit(self, event: TraceEvent) -> None:
+            captured.append(event)
+
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [CaptureSink()]
+    trace_logger = logging.getLogger("custom_components.ambience.trace")
+    trace_logger.setLevel(logging.DEBUG)
+    try:
+        await async_apply_scene(hass, "area", "b")
+        assert captured, "expected a manual TraceEvent"
+        assert captured[-1].cause.kind == "manual"
+        assert any(u.outcome == "no_match" for u in captured[-1].units)
+    finally:
+        trace_logger.setLevel(logging.NOTSET)
 
 
 async def test_resolve_with_snapshots_includes_explanation_when_explain(

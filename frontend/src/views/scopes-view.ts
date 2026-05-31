@@ -51,18 +51,24 @@ function _scopeKey(scope: Scope): string {
   return `${scope.kind}:${scope.id}`;
 }
 
-/**
- * Normalise so `cfg.auto_sort` is always a defined boolean. Older stored
- * configs predate the field; without this, `!undefined === true` would render
- * the "Order rules manually" checkbox as checked, AND sends to *-save would
- * drop the undefined key so the backend's own default (True) would re-sort
- * the rules — silently undoing manual reorders.
- */
 function _normalize(cfg: ScopeConfig): ScopeConfig {
-  return {
-    rules: cfg.rules ?? [],
-    auto_sort: cfg.auto_sort ?? true,
-  };
+  return { rules: cfg.rules ?? [] };
+}
+
+const PIN_GAP = 1024;
+
+/** Pick a priority for a rule dropped between `above` and `below` (either may be
+ *  undefined at the list ends). `all` is the current rule set for end fallbacks. */
+function _pinPriority(
+  above: number | undefined,
+  below: number | undefined,
+  all: Rule[],
+): number {
+  const nums = all.map((r) => r.priority ?? 0);
+  if (above === undefined && below === undefined) return PIN_GAP;
+  if (above === undefined) return Math.max(...nums) + PIN_GAP; // top slot
+  if (below === undefined) return Math.min(...nums) - PIN_GAP; // bottom slot
+  return Math.floor((above + below) / 2);
 }
 
 @customElement("ambience-scopes-view")
@@ -129,7 +135,7 @@ export class AmbienceScopesView extends LitElement {
   @state() private _floors: FloorListItem[] = [];
   @state() private _areaConfigs = new Map<string, ScopeConfig>();
   @state() private _floorConfigs = new Map<string, ScopeConfig>();
-  @state() private _house: ScopeConfig = { rules: [], auto_sort: true };
+  @state() private _house: ScopeConfig = { rules: [] };
   @state() private _matchers: MatcherInfo[] = [];
   @state() private _actions: ExposedAction[] = [];
   // Per-service schemas, keyed by service id. Loaded after _actions so the
@@ -393,14 +399,6 @@ export class AmbienceScopesView extends LitElement {
     this._expanded = next;
   }
 
-  // --- auto_sort -----------------------------------------------------------
-
-  private _toggleAutoSort(scope: Scope, on: boolean) {
-    const cfg = this._getConfig(scope);
-    if (!cfg) return;
-    void this._mutate(scope, { ...cfg, auto_sort: on });
-  }
-
   // --- rules ---------------------------------------------------------------
 
   private _addRule(scope: Scope) {
@@ -441,6 +439,19 @@ export class AmbienceScopesView extends LitElement {
     const rules = [...cfg.rules];
     const [moved] = rules.splice(from, 1);
     rules.splice(to, 0, moved);
+    const above = rules[to - 1]?.priority;
+    const below = rules[to + 1]?.priority;
+    const priority = _pinPriority(above, below, cfg.rules);
+    rules[to] = { ...moved, priority, pinned: true };
+    void this._mutate(scope, { ...cfg, rules });
+  }
+
+  private _unpinRule(scope: Scope, e: CustomEvent<{ index: number }>) {
+    const cfg = this._getConfig(scope);
+    if (!cfg) return;
+    const rules = cfg.rules.map((r, i) =>
+      i === e.detail.index ? { ...r, pinned: false } : r,
+    );
     void this._mutate(scope, { ...cfg, rules });
   }
 
@@ -485,10 +496,10 @@ export class AmbienceScopesView extends LitElement {
     );
   }
 
-  /** Matcher rows for the rule editor — sorted by `priority` (lower first). */
+  /** Matcher rows for the rule editor — sorted by `priority` (higher first). */
   private get _editorMatchers(): MatcherInfo[] {
     if (!this._editing) return [];
-    return this._matchers.slice().sort((a, b) => a.priority - b.priority);
+    return this._matchers.slice().sort((a, b) => b.priority - a.priority);
   }
 
   private _summary(cfg: ScopeConfig): string {
@@ -588,7 +599,6 @@ export class AmbienceScopesView extends LitElement {
               <div class="scope-body">
                 <ambience-rules-list
                   .rules=${cfg.rules}
-                  .autoSort=${cfg.auto_sort}
                   .periods=${this._periods}
                   .weatherConfig=${this._weatherConfig}
                   .matchers=${this._matchers}
@@ -605,8 +615,8 @@ export class AmbienceScopesView extends LitElement {
                   @reorder-rules=${(
                     e: CustomEvent<{ from: number; to: number }>,
                   ) => this._reorderRules(scope, e)}
-                  @toggle-autosort=${(e: CustomEvent<{ manual: boolean }>) =>
-                    this._toggleAutoSort(scope, !e.detail.manual)}
+                  @unpin-rule=${(e: CustomEvent<{ index: number }>) =>
+                    this._unpinRule(scope, e)}
                 ></ambience-rules-list>
                 <ambience-auto-triggers-section
                   .hass=${this.hass}

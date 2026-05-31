@@ -42,7 +42,7 @@ const baseFloors: FloorListItem[] = [
   { floor_id: "upstairs", name: "Upstairs" },
 ];
 
-const baseConfig: ScopeConfig = { rules: [], auto_sort: true };
+const baseConfig: ScopeConfig = { rules: [] };
 
 const matchers: MatcherInfo[] = [
   { name: "scene", description: "", predicate_help: "", input: "scene_combobox", priority: 0 },
@@ -315,7 +315,6 @@ describe("ambience-scopes-view", () => {
         { name: "Rule A", when: {}, actions: [] },
         { name: "Rule B", when: {}, actions: [] },
       ],
-      auto_sort: false,
     };
     el = await mount({ areaConfigs: { living_room: cfg } });
 
@@ -346,7 +345,11 @@ describe("ambience-scopes-view", () => {
 
   test("saveArea error is displayed", async () => {
     vi.mocked(api.saveArea).mockRejectedValueOnce(new Error("Save failed"));
-    el = await mount();
+    el = await mount({
+      areaConfigs: {
+        living_room: { rules: [{ name: "Rule A", when: {}, actions: [] }] },
+      },
+    });
 
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
@@ -354,13 +357,10 @@ describe("ambience-scopes-view", () => {
     (row.querySelector(".scope-header") as HTMLElement).click();
     await el.updateComplete;
 
-    // The autosort checkbox now lives inside <ambience-rules-list>'s shadow
-    // DOM. Dispatch the public toggle-autosort event on the rules-list
-    // element directly — that's what scopes-view listens for.
     const rulesList = row.querySelector("ambience-rules-list")!;
     rulesList.dispatchEvent(
-      new CustomEvent("toggle-autosort", {
-        detail: { manual: true },
+      new CustomEvent("delete-rule", {
+        detail: { index: 0 },
         bubbles: true,
         composed: true,
       }),
@@ -369,6 +369,46 @@ describe("ambience-scopes-view", () => {
     await el.updateComplete;
 
     expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+  });
+
+  test("dropping a rule pins it with a midpoint priority and saves", async () => {
+    const cfg: ScopeConfig = {
+      rules: [
+        { name: "a", when: {}, actions: [], priority: 3072, pinned: false },
+        { name: "b", when: {}, actions: [], priority: 2048, pinned: false },
+        { name: "c", when: {}, actions: [], priority: 1024, pinned: false },
+      ],
+    };
+    vi.mocked(api.saveArea).mockImplementation(async (_hass, _areaId, saved) => ({
+      ok: true,
+      config: saved,
+    }));
+    el = await mount({ areaConfigs: { living_room: cfg } });
+
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    // Move rule at index 2 ("c") to index 0 (the top slot)
+    rulesList.dispatchEvent(
+      new CustomEvent("reorder-rules", {
+        detail: { from: 2, to: 0 },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(api.saveArea).toHaveBeenCalled();
+    const savedConfig: ScopeConfig = vi.mocked(api.saveArea).mock.calls.at(-1)![2];
+    const movedRule = savedConfig.rules[0];
+    expect(movedRule.name).toBe("c");
+    expect(movedRule.pinned).toBe(true);
+    // Top slot → priority should be max(3072, 2048, 1024) + 1024 = 4096
+    expect(movedRule.priority).toBeGreaterThan(3072);
   });
 
   test("editor receives a Scope object (kind + id) for an area", async () => {

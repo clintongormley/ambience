@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { listAutoTriggers, setAutoTrigger, type HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
+import { formatReapplyInterval } from "../reapply.js";
 import type { AutoTrigger, Rule, Scope } from "../types.js";
 
 // Fallbacks mirror the shared `anchor.*` translation object (reused here so
@@ -174,12 +175,6 @@ export class AmbienceAutoTriggersSection extends LitElement {
     return `${base} ${s.offset > 0 ? "+" : ""}${s.offset} min`;
   }
 
-  private _formatInterval(sec: number): string {
-    if (sec % 60 === 0) return `${sec / 60} min`;
-    if (sec < 60) return `${sec} sec`;
-    return `${Math.floor(sec / 60)} min ${sec % 60} sec`;
-  }
-
   private _label(t: AutoTrigger): unknown {
     switch (t.kind) {
       case "entity":
@@ -214,7 +209,7 @@ export class AmbienceAutoTriggersSection extends LitElement {
         return html`<span class="label"
           ><strong>${localize(this.hass, "ui.auto_trigger_reapply", "Re-apply")}:</strong>
           ${localize(this.hass, "ui.auto_trigger_every", "every")}
-          ${this._formatInterval(t.interval_seconds)}</span
+          ${formatReapplyInterval(t.interval_seconds)}</span
         >`;
     }
   }

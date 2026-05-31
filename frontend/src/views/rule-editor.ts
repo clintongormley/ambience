@@ -13,7 +13,7 @@ import type {
 import type { HassConnection } from "../api.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { localize, matcherLabel } from "../i18n.js";
-import { parseReapplyOverrideSeconds } from "../reapply.js";
+import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
 import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
 import "./action-slot.js";
 import "./matcher-input.js";
@@ -719,17 +719,6 @@ export class AmbienceRuleEditor extends LitElement {
     this._serviceHasTarget = new Map(this._serviceHasTarget).set(service, hasTarget);
   }
 
-  /**
-   * Effective re-apply seconds: override if key present, else exposed default.
-   * Returns 0 if both are absent or 0.
-   * IMPORTANT: uses key-presence (`"reapply_seconds" in action`), not
-   * truthiness, so an explicit 0 does NOT fall back to the inherited default.
-   */
-  private _effectiveReapplySeconds(action: ActionSpec, exposedSeconds: number): number {
-    if ("reapply_seconds" in action) return action.reapply_seconds ?? 0;
-    return exposedSeconds;
-  }
-
   private _setReapplyOverride(idx: number, rawValue: string) {
     const s = parseReapplyOverrideSeconds(rawValue);
     this._updateActionAt(idx, (a) => {
@@ -743,10 +732,7 @@ export class AmbienceRuleEditor extends LitElement {
     });
   }
 
-  private _renderReapplyOverride(action: ActionSpec, idx: number) {
-    const exposed = this.availableActions.find((x) => x.id === action.service);
-    const exposedSeconds = exposed?.reapply_seconds ?? 0;
-
+  private _renderReapplyOverride(action: ActionSpec, idx: number, exposedSeconds: number) {
     // Only render when the exposed action has re-apply enabled.
     if (exposedSeconds <= 0) return html``;
 
@@ -786,7 +772,7 @@ export class AmbienceRuleEditor extends LitElement {
       exposedActions: this.availableActions,
       schemas: this.schemas,
     });
-    const effectiveSeconds = this._effectiveReapplySeconds(action, exposedSeconds);
+    const effectiveSeconds = effectiveReapplySeconds(action, exposedSeconds);
     const showBadge = exposedSeconds > 0 && effectiveSeconds > 0;
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">
@@ -817,7 +803,7 @@ export class AmbienceRuleEditor extends LitElement {
               }}
             ></ambience-action-slot>
 
-            ${this._renderReapplyOverride(action, idx)}
+            ${this._renderReapplyOverride(action, idx, exposedSeconds)}
 
             ${this._showError && this._validationError({ kind: "action", idx }) ? html`
               <div class="error">${this._validationError({ kind: "action", idx })}</div>

@@ -2,7 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { localize } from "../i18n.js";
-import { parseReapplyConfigSeconds } from "../reapply.js";
+import { DEFAULT_REAPPLY_SECONDS, parseReapplyConfigSeconds } from "../reapply.js";
 import {
   getServiceSchema,
   listExposedActions,
@@ -600,9 +600,8 @@ export class AmbienceActionsSettings extends LitElement {
         const { reapply_seconds: _removed, ...rest } = a;
         return rest as typeof a;
       }
-      // Check → seed 300s default if not already enabled.
-      const current = a.reapply_seconds ?? 0;
-      return { ...a, reapply_seconds: current > 0 ? current : 300 };
+      // Check → seed the default interval (the key was absent while unchecked).
+      return { ...a, reapply_seconds: DEFAULT_REAPPLY_SECONDS };
     });
     void this._autoSave();
   }

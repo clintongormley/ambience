@@ -9,6 +9,7 @@ top of these methods.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import timedelta
@@ -35,6 +36,7 @@ from .service import (
     async_resolve_with_snapshots,
     effective_reapply_seconds,
     get_last_applied,
+    scope_reapply_intervals,
 )
 from .trigger_index import PredKey, TriggerIndex, build_index
 from .triggers import EMPTY, TriggerSpec
@@ -130,11 +132,8 @@ class AutoTriggerEngine:
         exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
         by_interval: dict[int, set[tuple[str, str | None]]] = {}
         for scope_key, cfg in self._scope_cfgs.items():
-            for rule in cfg.get("rules", []):
-                for action in rule.get("actions", []):
-                    interval = effective_reapply_seconds(action, exposed)
-                    if interval:
-                        by_interval.setdefault(interval, set()).add(scope_key)
+            for interval in scope_reapply_intervals(cfg, exposed):
+                by_interval.setdefault(interval, set()).add(scope_key)
         return by_interval
 
     def _predicate_for(self, key: PredKey) -> Any:
@@ -351,8 +350,8 @@ class AutoTriggerEngine:
         return _handler
 
     async def _reapply_tick(self, interval: int, scopes: set[tuple[str, str | None]]) -> None:
-        for scope in scopes:
-            await self._reapply_scope(scope, interval)
+        # Scopes are independent — re-apply them concurrently.
+        await asyncio.gather(*(self._reapply_scope(scope, interval) for scope in scopes))
 
     async def _reapply_scope(self, scope: tuple[str, str | None], interval: int) -> None:
         """Re-fire the current winning rule's actions due at `interval`.

@@ -112,6 +112,30 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     def scope_key(self) -> tuple[str, str | None]:
         return (self._scope_kind, self._scope_id)
 
+    def _descendant_switches(self) -> list[AmbienceScopeSwitch]:
+        """Switch entities below this scope in the house>floor>area hierarchy.
+
+        - house: every other switch (all floors + all areas).
+        - floor: area switches whose area is on this floor.
+        - area:  none (leaf).
+        """
+        switches: dict[tuple[str, str | None], AmbienceScopeSwitch] = self.hass.data[DOMAIN].get(
+            DATA_SWITCHES, {}
+        )
+        if self._scope_kind == "house":
+            return [sw for key, sw in switches.items() if key != self.scope_key]
+        if self._scope_kind == "floor":
+            area_reg = ar.async_get(self.hass)
+            result: list[AmbienceScopeSwitch] = []
+            for (kind, sid), sw in switches.items():
+                if kind != "area":
+                    continue
+                area = area_reg.async_get_area(sid)
+                if area is not None and area.floor_id == self._scope_id:
+                    result.append(sw)
+            return result
+        return []
+
     # ---- HA lifecycle ----
 
     async def async_added_to_hass(self) -> None:
@@ -139,9 +163,13 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
 
     async def async_turn_on(self, **_: Any) -> None:
         await self._apply_on()
+        for sw in self._descendant_switches():
+            await sw._apply_on()
 
     async def async_turn_off(self, **_: Any) -> None:
         await self._apply_off()
+        for sw in self._descendant_switches():
+            await sw._apply_off()
 
     async def _apply_on(self) -> None:
         """Turn this switch on locally (no cascade)."""

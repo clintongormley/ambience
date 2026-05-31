@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
-import pytest
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -23,18 +21,6 @@ from custom_components.ambience.const import (
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
-
-
-@pytest.fixture
-def fixed_utcnow(monkeypatch):
-    base = datetime(2026, 5, 27, 12, 0, 0, tzinfo=UTC)
-    holder = {"now": base}
-
-    def fake_utcnow() -> datetime:
-        return holder["now"]
-
-    monkeypatch.setattr(dt_util, "utcnow", fake_utcnow)
-    return holder
 
 
 async def _setup(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> None:

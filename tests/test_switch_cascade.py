@@ -7,29 +7,14 @@ because gating reads only a scope's own switch.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
-from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import DATA_STORE, DATA_SWITCHES, DOMAIN
-
-
-@pytest.fixture
-def fixed_utcnow(monkeypatch):
-    base = datetime(2026, 5, 27, 12, 0, 0, tzinfo=UTC)
-    holder = {"now": base}
-
-    def fake_utcnow() -> datetime:
-        return holder["now"]
-
-    monkeypatch.setattr(dt_util, "utcnow", fake_utcnow)
-    return holder
 
 
 async def _setup_hierarchy(hass: HomeAssistant, entry: MockConfigEntry) -> dict[str, Any]:

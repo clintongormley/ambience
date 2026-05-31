@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import time as _time_module
 from collections.abc import Generator
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import DOMAIN
@@ -53,6 +55,18 @@ class _MonotonicFromZero:
 def _fake_time() -> _MonotonicFromZero:
     """Provide a near-zero monotonic time.time() replacement."""
     return _MonotonicFromZero()
+
+
+@pytest.fixture
+def fixed_utcnow(monkeypatch):
+    base = datetime(2026, 5, 27, 12, 0, 0, tzinfo=UTC)
+    holder = {"now": base}
+
+    def fake_utcnow() -> datetime:
+        return holder["now"]
+
+    monkeypatch.setattr(dt_util, "utcnow", fake_utcnow)
+    return holder
 
 
 @pytest.fixture(autouse=True)

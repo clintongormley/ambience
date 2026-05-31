@@ -78,7 +78,7 @@ async def test_area_off_blocks_area_apply(hass, mock_config_entry, caplog):
     assert "switch is off" in caplog.text.lower()
 
 
-# --- no cascade: other scopes' switches are irrelevant ---------------------
+# --- cascade: parent off propagates to descendants ------------------------
 
 
 async def test_house_off_cascades_and_blocks_area_apply(hass, mock_config_entry, caplog):

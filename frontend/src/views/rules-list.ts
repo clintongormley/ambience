@@ -471,7 +471,10 @@ export class AmbienceRulesList extends LitElement {
         </button>
       `;
     }
-    const sections = this._sections();
+    // Only render sections that actually have rules — when filtering to a
+    // single group, a scope with no rules in that group shows nothing (no
+    // empty header bar).
+    const sections = this._sections().filter((section) => section.rows.length > 0);
     // Show the coloured group header for every section, including when a single
     // group is filtered — the bar labels which group these rules belong to.
     const showHeaders = this.groups.length > 0;

@@ -710,6 +710,16 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.querySelectorAll("li").length).toBe(1);
   });
 
+  test("filtering to a group with no rules in this scope shows no header bar", async () => {
+    const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
+    const rules = [{ when: {}, actions: [], group: "a" }];
+    el = await mount(rules, [], {}, groups);
+    el.filterGroup = "b"; // scope has no group-b rules
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelectorAll(".group-section-header").length).toBe(0);
+    expect(el.shadowRoot.querySelectorAll("li").length).toBe(0);
+  });
+
   test("editing a row in a section emits the rule's ORIGINAL index", async () => {
     const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
     const rules = [

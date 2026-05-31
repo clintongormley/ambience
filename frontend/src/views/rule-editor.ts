@@ -10,6 +10,7 @@ import type {
   Rule,
   RuleGroup,
   Scope,
+  ScopeOption,
 } from "../types.js";
 import type { HassConnection } from "../api.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
@@ -49,6 +50,11 @@ function _isEmptyWhoPredicate(pred: unknown): boolean {
 function _defaultPredicateFor(name: string): unknown {
   if (name === "people") return { quant: "everyone", where: "home" };
   return null;
+}
+
+function sameScope(a?: Scope, b?: Scope): boolean {
+  if (!a || !b || a.kind !== b.kind) return false;
+  return a.kind === "house" || (a as { id: string }).id === (b as { id: string }).id;
 }
 
 @customElement("ambience-rule-editor")
@@ -198,8 +204,10 @@ export class AmbienceRuleEditor extends LitElement {
   @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) scope?: Scope;
+  @property({ attribute: false }) scopes: ScopeOption[] = [];
 
   @state() private _draft: Rule | null = null;
+  @state() private _scope?: Scope;
   @state() private _open: OpenSlot = null;
   @state() private _showError = false;
   /**
@@ -239,6 +247,7 @@ export class AmbienceRuleEditor extends LitElement {
     const isOpening = changed.has("open") && this.open;
     if (isOpening) {
       this._draft = this.rule ? JSON.parse(JSON.stringify(this.rule)) : null;
+      this._scope = this.scope;
       this._open = null;  // new rule loaded → everything collapsed
       this._showError = false;
     }
@@ -254,6 +263,36 @@ export class AmbienceRuleEditor extends LitElement {
   private _onNameInput = (e: Event) => {
     this._setName((e.target as HTMLElement & { value: string }).value);
   };
+
+  private _onDestinationChange = (e: Event) => {
+    const idx = Number((e.target as HTMLSelectElement).value);
+    const opt = this.scopes[idx];
+    if (!opt) return;
+    this._scope = opt.scope;
+  };
+
+  private _renderDestination() {
+    if (this.scopes.length === 0) return "";
+    const currentIdx = Math.max(
+      0,
+      this.scopes.findIndex((o) => sameScope(o.scope, this._scope)),
+    );
+    return html`
+      <div class="destination">
+        <label>${localize(this.hass, "ui.destination", "Destination")}</label>
+        <select
+          class="destination"
+          .value=${String(currentIdx)}
+          @change=${this._onDestinationChange}
+        >
+          ${this.scopes.map(
+            (o, i) =>
+              html`<option value=${i} ?selected=${i === currentIdx}>${o.label}</option>`,
+          )}
+        </select>
+      </div>
+    `;
+  }
 
   private _renderNameSlot() {
     const value = this._draft!.name ?? "";
@@ -835,7 +874,7 @@ export class AmbienceRuleEditor extends LitElement {
           <div class="body">
             <ambience-action-slot
               .hass=${this.hass}
-              .scope=${this.scope}
+              .scope=${this._scope}
               .exposed=${exposed}
               .entityIds=${action.entity_ids}
               .params=${action.params}
@@ -907,6 +946,7 @@ export class AmbienceRuleEditor extends LitElement {
     return html`
       <div class="modal" @click=${this._onModalClick}>
         <div class="content">
+          ${this._renderDestination()}
           ${this._renderNameSlot()}
           ${this._renderGroupSelector()}
 

@@ -1705,3 +1705,39 @@ describe("ambience-rule-editor — group selector", () => {
     expect(el.shadowRoot.querySelector("select.group-select")).toBeTruthy();
   });
 });
+
+describe("ambience-rule-editor — destination selector", () => {
+  let el: any;
+  afterEach(() => { el?.remove(); });
+
+  const scopes = [
+    { scope: { kind: "house" }, label: "Global" },
+    { scope: { kind: "area", id: "living_room" }, label: "Area: Living Room" },
+    { scope: { kind: "area", id: "bedroom" }, label: "Area: Bedroom" },
+  ];
+
+  async function mountWithScopes(rule: Rule, scope: Scope): Promise<any> {
+    const e: any = document.createElement("ambience-rule-editor");
+    e.matchers = matchers;
+    e.availableActions = availableActions;
+    e.periods = periods;
+    e.hass = hass;
+    e.scope = scope;
+    e.scopes = scopes;
+    e.rule = rule;
+    e.open = true;
+    document.body.appendChild(e);
+    await e.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await e.updateComplete;
+    return e;
+  }
+
+  test("renders a destination option per scope, defaulting to the rule's scope", async () => {
+    el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "bedroom" });
+    const select = el.shadowRoot.querySelector("select.destination") as HTMLSelectElement;
+    expect(select).toBeTruthy();
+    expect(select.options.length).toBe(3);
+    expect(select.options[select.selectedIndex].textContent.trim()).toBe("Area: Bedroom");
+  });
+});

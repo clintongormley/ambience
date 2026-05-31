@@ -36,6 +36,7 @@ import type {
   RuleGroup,
   Scope,
   ScopeConfig,
+  ScopeOption,
   ServiceSchema,
   WeatherConfig,
 } from "../types.js";
@@ -650,6 +651,23 @@ export class AmbienceScopesView extends LitElement {
     return this._matchers.slice().sort((a, b) => b.priority - a.priority);
   }
 
+  /** Selectable destinations for the rule editor: house, then floors, then areas. */
+  private get _scopeOptions(): ScopeOption[] {
+    const floorPrefix = localize(this.hass, "ui.scope_floor_prefix", "Floor: ");
+    const areaPrefix = localize(this.hass, "ui.scope_area_prefix", "Area: ");
+    return [
+      { scope: { kind: "house" }, label: localize(this.hass, "ui.scope_global", "Global") },
+      ...this._floors.map((f) => ({
+        scope: { kind: "floor" as const, id: f.floor_id },
+        label: `${floorPrefix}${f.name}`,
+      })),
+      ...this._areas.map((a) => ({
+        scope: { kind: "area" as const, id: a.area_id },
+        label: `${areaPrefix}${a.name}`,
+      })),
+    ];
+  }
+
   private _summary(cfg: ScopeConfig): string {
     // A genuinely empty scope reads "not configured" regardless of filter.
     if (cfg.rules.length === 0) {
@@ -718,6 +736,7 @@ export class AmbienceScopesView extends LitElement {
         ?open=${this._editing !== null}
         .hass=${this.hass}
         .scope=${this._editing ? this._editing.scope : undefined}
+        .scopes=${this._scopeOptions}
         .rule=${this._editingRule}
         .matchers=${this._editorMatchers}
         .periods=${this._periods}

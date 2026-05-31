@@ -292,6 +292,9 @@ export type Scope =
   | { kind: "floor"; id: string }
   | { kind: "house" };
 
+// A selectable destination for a rule in the editor: a scope plus a display label.
+export type ScopeOption = { scope: Scope; label: string };
+
 export type FloorListItem = {
   floor_id: string;
   name: string;

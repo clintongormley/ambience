@@ -659,7 +659,7 @@ async def test_apply_scene_records_last_applied_rule(hass: HomeAssistant) -> Non
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
     await async_apply_scene(hass, "area", "a")
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 0
 
 
 async def test_apply_scene_switch_off_does_not_record(hass: HomeAssistant) -> None:
@@ -698,11 +698,92 @@ async def test_execute_plan_dispatches_actions_and_records_last_applied(
             {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 50}}
         ],
     }
-    await async_execute_plan(hass, "area", "a", plan)
+    await async_execute_plan(hass, "area", "a", plan, None)
     assert len(calls) == 1
     assert calls[0].data["brightness"] == 50
     assert calls[0].data["entity_id"] == ["light.a"]
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 3
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 3
+
+
+async def test_resolve_with_snapshots_group_filters_to_group_rules(
+    hass: HomeAssistant,
+) -> None:
+    """Resolving with group= returns the first match within that group only,
+    and matched_rule_index is the GLOBAL index in the scope's rules list."""
+    areas = {
+        "lr": {
+            "rules": [
+                {
+                    "name": "lighting-rule",
+                    "group": "lighting",
+                    "when": {},
+                    "actions": [],
+                },
+                {
+                    "name": "blinds-rule",
+                    "group": "blinds",
+                    "when": {},
+                    "actions": [],
+                },
+            ],
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {},
+        DATA_SWITCHES: {},
+    }
+
+    plan_blinds = await async_resolve_with_snapshots(hass, "area", "lr", {}, group="blinds")
+    assert plan_blinds["matched_rule_index"] == 1
+    assert plan_blinds["rule_name"] == "blinds-rule"
+
+    plan_lighting = await async_resolve_with_snapshots(hass, "area", "lr", {}, group="lighting")
+    assert plan_lighting["matched_rule_index"] == 0
+    assert plan_lighting["rule_name"] == "lighting-rule"
+
+
+async def test_resolve_with_snapshots_no_group_returns_first_overall_match(
+    hass: HomeAssistant,
+) -> None:
+    """Without a group argument, the first overall match wins (existing behavior)."""
+    areas = {
+        "lr": {
+            "rules": [
+                {
+                    "name": "lighting-rule",
+                    "group": "lighting",
+                    "when": {},
+                    "actions": [],
+                },
+                {
+                    "name": "blinds-rule",
+                    "group": "blinds",
+                    "when": {},
+                    "actions": [],
+                },
+            ],
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_MATCHERS: {},
+        DATA_SWITCHES: {},
+    }
+
+    plan = await async_resolve_with_snapshots(hass, "area", "lr", {})
+    assert plan["matched_rule_index"] == 0
+    assert plan["rule_name"] == "lighting-rule"
+
+
+async def test_last_applied_is_keyed_by_group(hass: HomeAssistant) -> None:
+    from custom_components.ambience.const import DATA_LAST_APPLIED, DOMAIN
+    from custom_components.ambience.service import get_last_applied
+
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][DATA_LAST_APPLIED] = {("area", "lr", "lighting"): 3}
+    assert get_last_applied(hass, "area", "lr", "lighting") == 3
+    assert get_last_applied(hass, "area", "lr", "blinds") is None
 
 
 async def test_execute_plan_records_last_applied_even_when_all_actions_skip(
@@ -717,9 +798,9 @@ async def test_execute_plan_records_last_applied_even_when_all_actions_skip(
         "matched_rule_index": 2,
         "actions": [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}],
     }
-    await async_execute_plan(hass, "area", "a", plan)
+    await async_execute_plan(hass, "area", "a", plan, None)
     assert calls == []  # action skipped (unexposed)
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 2
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 2
 
 
 class _ExposedStub:
@@ -834,7 +915,7 @@ async def test_execute_actions_dispatches_and_leaves_last_applied_untouched(hass
     entry = {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}
     hass.data[DOMAIN] = {
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage([entry])),
-        DATA_LAST_APPLIED: {("area", "kitchen"): 2},
+        DATA_LAST_APPLIED: {("area", "kitchen", None): 2},
     }
 
     await async_execute_actions(
@@ -848,4 +929,4 @@ async def test_execute_actions_dispatches_and_leaves_last_applied_untouched(hass
     assert len(calls) == 1
     assert calls[0]["brightness"] == 5
     # Re-apply must NOT change the dedup state.
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED] == {("area", "kitchen"): 2}
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED] == {("area", "kitchen", None): 2}

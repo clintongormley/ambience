@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -23,9 +24,11 @@ from .const import (
 from .exposed_actions import ExposedActionsStore
 from .matchers.weather import WEATHER_CONDITIONS
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
-from .service import async_resolve_only, scope_reapply_intervals
+from .service import async_resolve_groups_only, async_resolve_only, scope_reapply_intervals
 from .sorting import matcher_priority, resolve_order, shadowed_by
 from .validators import validate_reapply_seconds
+
+_LOGGER = logging.getLogger(__name__)
 
 _WS_COMMANDS = (
     "ambience/areas/list",
@@ -61,6 +64,9 @@ _WS_COMMANDS = (
     "ambience/auto_triggers/list",
     "ambience/auto_triggers/set_trigger",
     "ambience/script/referenced_entities",
+    "ambience/groups/list",
+    "ambience/groups/save",
+    "ambience/groups/delete",
 )
 
 
@@ -165,6 +171,9 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_auto_triggers_list)
     websocket_api.async_register_command(hass, _ws_auto_triggers_set_trigger)
     websocket_api.async_register_command(hass, _ws_script_referenced_entities)
+    websocket_api.async_register_command(hass, _ws_groups_list)
+    websocket_api.async_register_command(hass, _ws_groups_save)
+    websocket_api.async_register_command(hass, _ws_groups_delete)
 
 
 def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
@@ -231,6 +240,20 @@ def _with_shadows(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]
         **config,
         "rules": [{**r, "shadowed_by": shadows.get(idx)} for idx, r in enumerate(rules)],
     }
+
+
+def _coerce_rule_groups(store, config: dict) -> None:
+    """Drop any rule's group id that isn't a known group (making it ungrouped),
+    logging once. Mutates `config` in place."""
+    known = {g["id"] for g in store.groups()}
+    coerced = False
+    for rule in config.get("rules", []):
+        gid = rule.get("group")
+        if gid is not None and gid not in known:
+            rule.pop("group", None)
+            coerced = True
+    if coerced:
+        _LOGGER.warning("ambience: scope save referenced unknown group(s); left ungrouped")
 
 
 @websocket_api.require_admin
@@ -463,6 +486,7 @@ async def _ws_area_save(
         return
     config = _canonicalise(hass, msg["config"])
     store = hass.data[DOMAIN][DATA_STORE]
+    _coerce_rule_groups(store, config)
     await store.async_save_area(area_id, config)
     connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
 
@@ -518,6 +542,7 @@ async def _ws_floor_save(
         return
     config = _canonicalise(hass, msg["config"])
     store = hass.data[DOMAIN][DATA_STORE]
+    _coerce_rule_groups(store, config)
     await store.async_save_floor(floor_id, config)
     connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
 
@@ -555,6 +580,7 @@ async def _ws_house_save(
         return
     config = _canonicalise(hass, msg["config"])
     store = hass.data[DOMAIN][DATA_STORE]
+    _coerce_rule_groups(store, config)
     await store.async_save_house(config)
     connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
 
@@ -617,6 +643,7 @@ async def _ws_dry_run(
         scope_kind, scope_id = "house", None
     try:
         result = await async_resolve_only(hass, scope_kind, scope_id)
+        result["groups"] = await async_resolve_groups_only(hass, scope_kind, scope_id)
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
@@ -1165,6 +1192,89 @@ async def _ws_script_referenced_entities(
         if entity is not None:
             entities = sorted(entity.referenced_entities)
     connection.send_result(msg["id"], {"entities": entities})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/groups/list"})
+@websocket_api.async_response
+async def _ws_groups_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    connection.send_result(msg["id"], {"groups": store.groups()})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/groups/save",
+        vol.Required("groups"): [
+            {
+                vol.Required("id"): str,
+                vol.Required("name"): str,
+                vol.Optional("icon"): vol.Any(str, None),
+                vol.Optional("color"): vol.Any(str, None),
+            }
+        ],
+    }
+)
+@websocket_api.async_response
+async def _ws_groups_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    groups = msg["groups"]
+    seen_ids: set[str] = set()
+    seen_names: set[str] = set()
+    for group in groups:
+        gid = group.get("id")
+        name = group.get("name")
+        if not isinstance(gid, str) or not gid.strip():
+            connection.send_error(
+                msg["id"], "invalid_groups", "group id must be a non-empty string"
+            )
+            return
+        if gid in seen_ids:
+            connection.send_error(msg["id"], "invalid_groups", f"duplicate group id: {gid!r}")
+            return
+        seen_ids.add(gid)
+        if not isinstance(name, str) or not name.strip():
+            connection.send_error(
+                msg["id"], "invalid_groups", f"group {gid!r} name must be a non-empty string"
+            )
+            return
+        key = name.strip().casefold()
+        if key in seen_names:
+            connection.send_error(
+                msg["id"], "invalid_groups", f"duplicate group name: {name.strip()!r}"
+            )
+            return
+        seen_names.add(key)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_groups(groups)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/groups/delete",
+        vol.Required("group_id"): str,
+    }
+)
+@websocket_api.async_response
+async def _ws_groups_delete(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    group_id = msg["group_id"]
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_delete_group(group_id)
+    connection.send_result(msg["id"])
 
 
 def async_unregister_commands(hass: HomeAssistant) -> None:

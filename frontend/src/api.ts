@@ -14,6 +14,7 @@ import type {
   MatcherInfo,
   PeriodDef,
   PeriodStoreView,
+  RuleGroup,
   Scope,
   ScopeConfig,
   ServiceInfo,
@@ -292,6 +293,27 @@ export async function setAutoTriggersEnabled(
   const msg: Record<string, unknown> = { type: "ambience/auto_triggers/set", scope_kind, enabled };
   if (scope_id != null) msg.scope_id = scope_id;
   return hass.callWS(msg);
+}
+
+export async function listGroups(hass: HassConnection): Promise<RuleGroup[]> {
+  const res = await hass.callWS<{ groups: RuleGroup[] }>({
+    type: "ambience/groups/list",
+  });
+  return res.groups;
+}
+
+export async function saveGroups(
+  hass: HassConnection,
+  groups: RuleGroup[],
+): Promise<{ ok: true }> {
+  return hass.callWS({ type: "ambience/groups/save", groups });
+}
+
+export async function deleteGroup(
+  hass: HassConnection,
+  group_id: string,
+): Promise<{ ok: true }> {
+  return hass.callWS({ type: "ambience/groups/delete", group_id });
 }
 
 export async function getScriptReferencedEntities(

@@ -1,4 +1,5 @@
 import { LitElement, html, css } from "lit";
+import type { PropertyValues } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
@@ -9,7 +10,9 @@ import type {
   MatcherInfo,
   PeriodStoreView,
   Rule,
+  RuleGroup,
 } from "../types.js";
+import "./group-chip.js";
 
 @customElement("ambience-rules-list")
 export class AmbienceRulesList extends LitElement {
@@ -59,6 +62,10 @@ export class AmbienceRulesList extends LitElement {
     }
     .name {
       font-weight: 600;
+    }
+    .name ambience-group-chip {
+      margin-left: 0.4rem;
+      vertical-align: middle;
     }
     .summary {
       font-size: 0.85em;
@@ -143,6 +150,14 @@ export class AmbienceRulesList extends LitElement {
       cursor: help;
       line-height: 1;
     }
+    .group-filter-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0 0 0.5rem 0;
+      font-size: 0.9em;
+      color: var(--secondary-text-color, #888);
+    }
   `;
 
   @property({ attribute: false }) rules: Rule[] = [];
@@ -161,6 +176,18 @@ export class AmbienceRulesList extends LitElement {
   // for each param key in the expanded action detail. Optional; when
   // missing, the param key is humanized (snake_case → "Title case").
   @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
+  // Available rule groups — used to populate the group filter dropdown. The
+  // filter is presentation-only: it changes which rules render, never the
+  // underlying `rules` data. Empty ⇒ no filter control rendered.
+  @property({ attribute: false }) groups: RuleGroup[] = [];
+
+  // Sentinel for the filter meaning "show all groups".
+  private static readonly _ALL_GROUPS = "";
+  // Sentinel for the filter meaning "show only ungrouped rules".
+  private static readonly _UNGROUPED = "__ungrouped__";
+
+  // Currently-selected filter: _ALL_GROUPS, _UNGROUPED, or a group id.
+  @state() private _filterGroup: string = AmbienceRulesList._ALL_GROUPS;
 
   // Index of the row currently being dragged, or null.
   @state() private _dragFrom: number | null = null;
@@ -168,6 +195,44 @@ export class AmbienceRulesList extends LitElement {
   @state() private _dragOver: number | null = null;
   // Rule indices whose action list is expanded inline.
   @state() private _expanded = new Set<number>();
+
+  override willUpdate(changedProps: PropertyValues) {
+    // If the groups list changes and the active filter points at a group that
+    // no longer exists (e.g. the filtered group was just deleted), reset to
+    // "all groups" so the list doesn't render empty behind a stale <select>.
+    const filter = this._filterGroup;
+    const fixed = filter === AmbienceRulesList._ALL_GROUPS || filter === AmbienceRulesList._UNGROUPED;
+    if (changedProps.has("groups") && !fixed && !this.groups.some((g) => g.id === filter)) {
+      this._filterGroup = AmbienceRulesList._ALL_GROUPS;
+    }
+  }
+
+  /** The bucket a rule belongs to: its group id, or the ungrouped sentinel. */
+  private _groupOf(rule: Rule): string {
+    return rule.group ?? AmbienceRulesList._UNGROUPED;
+  }
+
+  /** The group a rule belongs to, or undefined if ungrouped / the group no
+   *  longer exists. */
+  private _groupFor(rule: Rule): RuleGroup | undefined {
+    return this.groups.find((g) => g.id === rule.group);
+  }
+
+  /**
+   * Rules paired with their ORIGINAL index, filtered by the selected group.
+   * Filtering is presentation-only — the original index is preserved so
+   * edit/delete/duplicate/reorder callbacks always reference the correct
+   * entry in the underlying (unfiltered) `rules` array.
+   */
+  private _visibleRules(): Array<[number, Rule]> {
+    const pairs = this.rules.map((rule, i) => [i, rule] as [number, Rule]);
+    if (this._filterGroup === AmbienceRulesList._ALL_GROUPS) return pairs;
+    return pairs.filter(([, rule]) => this._groupOf(rule) === this._filterGroup);
+  }
+
+  private _onFilterChange(e: Event) {
+    this._filterGroup = (e.target as HTMLSelectElement).value;
+  }
 
   private _emit(name: string, detail: unknown) {
     this.dispatchEvent(
@@ -300,10 +365,33 @@ export class AmbienceRulesList extends LitElement {
       `;
     }
     const unpinLabel = localize(this.hass, "ui.unpin", "Unpin (return to automatic order)");
+    const visible = this._visibleRules();
     return html`
+      ${this.groups.length >= 1
+        ? html`<label class="group-filter-row">
+            ${localize(this.hass, "ui.filter_by_group", "Filter by group")}
+            <select class="group-filter" .value=${this._filterGroup} @change=${this._onFilterChange}>
+              <option
+                value=${AmbienceRulesList._ALL_GROUPS}
+                ?selected=${this._filterGroup === AmbienceRulesList._ALL_GROUPS}
+              >
+                ${localize(this.hass, "ui.all_groups", "All groups")}
+              </option>
+              <option
+                value=${AmbienceRulesList._UNGROUPED}
+                ?selected=${this._filterGroup === AmbienceRulesList._UNGROUPED}
+              >
+                ${localize(this.hass, "ui.group_ungrouped", "Ungrouped")}
+              </option>
+              ${this.groups.map(
+                (g) => html`<option value=${g.id} ?selected=${g.id === this._filterGroup}>${g.name}</option>`,
+              )}
+            </select>
+          </label>`
+        : ""}
       <ul>
-        ${this.rules.map(
-          (rule, i) => html`
+        ${visible.map(
+          ([i, rule]) => html`
             <li
               class=${this._dragOver === i ? "drag-over" : ""}
               draggable="true"
@@ -336,7 +424,11 @@ export class AmbienceRulesList extends LitElement {
               </span>
               <div class="body" @click=${() => this._toggleRule(i)}>
                 <div class="name">
-                  ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1)))}
+                  ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(i + 1)))}${
+                    rule.group && this._groupFor(rule)
+                      ? html`<ambience-group-chip .group=${this._groupFor(rule)!}></ambience-group-chip>`
+                      : ""
+                  }
                 </div>
                 <div class="summary">
                   ${this._expanded.has(i)

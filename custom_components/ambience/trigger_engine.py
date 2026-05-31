@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections import defaultdict
+from collections.abc import Callable, Iterable
 from datetime import timedelta
 from typing import Any
 
@@ -26,7 +27,13 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import DATA_EXPOSED_ACTIONS, DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
+from .const import (
+    DATA_EXPOSED_ACTIONS,
+    DATA_MATCHERS,
+    DATA_STORE,
+    DATA_SWITCHES,
+    DOMAIN,
+)
 from .matchers.time_of_day import ANCHOR_ATTR
 from .scope_triggers import filter_spec, iter_predicate_specs
 from .service import (
@@ -36,6 +43,7 @@ from .service import (
     async_resolve_with_snapshots,
     effective_reapply_seconds,
     get_last_applied,
+    group_ids,
     scope_reapply_intervals,
 )
 from .trigger_index import PredKey, TriggerIndex, build_index
@@ -49,6 +57,10 @@ _HAS_TIME_INTERVAL = timedelta(seconds=60)
 # Coalesce a burst of config-changed signals (e.g. a multi-field panel save)
 # into a single rebuild + resync.
 _CONFIG_DEBOUNCE_SECONDS = 0.3
+
+# Containment tiers, applied in order: areas → floors → house. House applies
+# last so it wins on entities shared across scopes (preserves prior behavior).
+_TIER = {"area": 0, "floor": 1, "house": 2}
 
 
 class AutoTriggerEngine:
@@ -147,15 +159,26 @@ class AutoTriggerEngine:
             return None
         return rules[rule_index].get("when", {}).get(matcher_key)
 
+    def _group_for(self, scope_kind: str, scope_id: str | None, rule_index: int) -> str | None:
+        """The group a rule belongs to, or None for the ungrouped bucket (also
+        None if the scope/rule no longer exists)."""
+        cfg = self._scope_cfgs.get((scope_kind, scope_id))
+        if cfg is None:
+            return None
+        rules = cfg.get("rules", [])
+        if 0 <= rule_index < len(rules):
+            return rules[rule_index].get("group")
+        return None
+
     def _recompute(
         self, fired: set[PredKey], snapshots: dict[str, Any]
-    ) -> set[tuple[str, str | None]]:
+    ) -> set[tuple[str, str | None, str | None]]:
         """Re-evaluate the fired predicates against `snapshots`; return the
-        scopes whose boolean changed. Updates `predicate_state`. A missing/None
-        snapshot evaluates the predicate to False; a first-seen predicate counts
-        as a flip."""
+        (scope_kind, scope_id, group) units whose boolean changed. Updates
+        `predicate_state`. A missing/None snapshot evaluates the predicate to
+        False; a first-seen predicate counts as a flip."""
         matchers = self._matchers()
-        dirty: set[tuple[str, str | None]] = set()
+        dirty: set[tuple[str, str | None, str | None]] = set()
         for key in fired:
             predicate = self._predicate_for(key)
             if predicate is None:
@@ -168,7 +191,7 @@ class AutoTriggerEngine:
             old_value = self._predicate_state.get(key)
             self._predicate_state[key] = new_value
             if old_value != new_value:
-                dirty.add((key[0], key[1]))
+                dirty.add((key[0], key[1], self._group_for(key[0], key[1], key[2])))
         return dirty
 
     async def _refresh_snapshots(self, matcher_keys: set[str]) -> None:
@@ -188,31 +211,47 @@ class AutoTriggerEngine:
         await self._refresh_snapshots(set(self._matchers()))
 
     async def _resolve_and_apply(
-        self, scope: tuple[str, str | None], *, force: bool = False
+        self, scope_kind: str, scope_id: str | None, group_id: str, *, force: bool = False
     ) -> None:
-        """Resolve a dirty scope from the snapshot cache and apply if the winning
-        rule changed (or `force`). Skips when the scope's switch is off."""
-        scope_kind, scope_id = scope
+        """Resolve a dirty (scope, group) unit from the snapshot cache and apply
+        if the winning rule changed (or `force`). Skips when the scope's switch
+        is off."""
         if _switch_state(self._hass, scope_kind, scope_id) == "off":
             return
         plan = await async_resolve_with_snapshots(
-            self._hass, scope_kind, scope_id, self._snapshots, describe=False
+            self._hass, scope_kind, scope_id, self._snapshots, group=group_id, describe=False
         )
         index = plan["matched_rule_index"]
         if index is None:
             return
-        if not force and index == get_last_applied(self._hass, scope_kind, scope_id):
+        if not force and index == get_last_applied(self._hass, scope_kind, scope_id, group_id):
             return
-        await async_execute_plan(self._hass, scope_kind, scope_id, plan)
+        await async_execute_plan(self._hass, scope_kind, scope_id, plan, group_id)
+
+    async def _apply_units(
+        self, units: Iterable[tuple[str, str | None, str | None]], *, force: bool = False
+    ) -> None:
+        """Apply dirty (scope_kind, scope_id, group) units, concurrently within
+        each containment tier, tiers sequential in order areas→floors→house."""
+        by_tier: dict[int, list[tuple[str, str | None, str | None]]] = defaultdict(list)
+        for unit in units:
+            by_tier[_TIER[unit[0]]].append(unit)
+        for tier in sorted(by_tier):
+            results = await asyncio.gather(
+                *(self._resolve_and_apply(*u, force=force) for u in by_tier[tier]),
+                return_exceptions=True,
+            )
+            for res in results:
+                if isinstance(res, BaseException):
+                    _LOGGER.warning("ambience: group apply failed: %s", res)
 
     async def async_evaluate(self, fired: set[PredKey]) -> None:
         """Recompute the fired predicates (refreshing only their matchers) and
-        resolve+apply every scope whose winning rule changed."""
+        resolve+apply every (scope, group) whose winning rule changed."""
         if not fired:
             return
         await self._refresh_snapshots({key[3] for key in fired})
-        for scope in self._recompute(fired, self._snapshots):
-            await self._resolve_and_apply(scope)
+        await self._apply_units(self._recompute(fired, self._snapshots))
 
     async def _async_refresh(self) -> None:
         """Full (re)build: rebuild the index, resubscribe, and sync to reality."""
@@ -238,8 +277,12 @@ class AutoTriggerEngine:
         apply each enabled scope's current winner."""
         await self._refresh_all_snapshots()
         self._recompute(set(self._index.all_predicates()), self._snapshots)
-        for scope in self._scope_cfgs:
-            await self._resolve_and_apply(scope)
+        units = [
+            (kind, sid, gid)
+            for (kind, sid), cfg in self._scope_cfgs.items()
+            for gid in group_ids(cfg)
+        ]
+        await self._apply_units(units)
 
     def _fire(self, fired: set[PredKey]) -> None:
         """Schedule a re-evaluation of the given predicates (callback-safe)."""
@@ -354,32 +397,32 @@ class AutoTriggerEngine:
         await asyncio.gather(*(self._reapply_scope(scope, interval) for scope in scopes))
 
     async def _reapply_scope(self, scope: tuple[str, str | None], interval: int) -> None:
-        """Re-fire the current winning rule's actions due at `interval`.
+        """Re-fire each group's current winning rule's actions due at `interval`.
 
-        Uses last-applied (kept current by the watch system) rather than
-        re-resolving, and never mutates last-applied. Skips when the switch is
-        off, no rule is active, or the stored index is out of range.
+        Uses last-applied per (scope, group) (kept current by the watch system)
+        rather than re-resolving, and never mutates last-applied. Skips when the
+        switch is off, a group has no active rule, or its stored index is out of
+        range.
         """
         scope_kind, scope_id = scope
         if _switch_state(self._hass, scope_kind, scope_id) == "off":
-            return
-        index = get_last_applied(self._hass, scope_kind, scope_id)
-        if index is None:
             return
         cfg = self._scope_cfgs.get(scope)
         if cfg is None:
             return
         rules = cfg.get("rules", [])
-        if not 0 <= index < len(rules):
-            return
         exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
-        due = [
-            action
-            for action in rules[index].get("actions", [])
-            if effective_reapply_seconds(action, exposed) == interval
-        ]
-        if due:
-            await async_execute_actions(self._hass, scope_kind, scope_id, due, rule_index=index)
+        for group_id in group_ids(cfg):
+            index = get_last_applied(self._hass, scope_kind, scope_id, group_id)
+            if index is None or not 0 <= index < len(rules):
+                continue
+            due = [
+                action
+                for action in rules[index].get("actions", [])
+                if effective_reapply_seconds(action, exposed) == interval
+            ]
+            if due:
+                await async_execute_actions(self._hass, scope_kind, scope_id, due, rule_index=index)
 
     def _schedule_for_rechecks(self, preds: frozenset[PredKey]) -> None:
         """For predicates with a `for:` duration, (re)schedule a recheck so a
@@ -414,7 +457,15 @@ class AutoTriggerEngine:
             return  # already on — not a transition
         scope = self._switch_scopes.get(event.data["entity_id"])
         if scope is not None:
-            self._hass.async_create_task(self._resolve_and_apply(scope, force=True))
+            self._hass.async_create_task(self._force_resync_scope(scope))
+
+    async def _force_resync_scope(self, scope: tuple[str, str | None]) -> None:
+        """Force-apply every group of a scope (used on a switch off->on)."""
+        scope_kind, scope_id = scope
+        cfg = self._scope_cfgs.get(scope)
+        await self._apply_units(
+            [(scope_kind, scope_id, gid) for gid in group_ids(cfg or {})], force=True
+        )
 
     def _next_sun_fire(self, anchor: str, offset_min: int) -> Any:
         """Next fire time for a sun anchor (+offset), from sun.sun, or None."""

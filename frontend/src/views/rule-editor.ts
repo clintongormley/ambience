@@ -8,6 +8,7 @@ import type {
   MatcherInfo,
   PeriodStoreView,
   Rule,
+  RuleGroup,
   Scope,
 } from "../types.js";
 import type { HassConnection } from "../api.js";
@@ -193,6 +194,7 @@ export class AmbienceRuleEditor extends LitElement {
   @property({ attribute: false }) dayConfig?: DayConfig;
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) availableActions: ExposedAction[] = [];
+  @property({ attribute: false }) groups: RuleGroup[] = [];
   @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) scope?: Scope;
@@ -295,6 +297,76 @@ export class AmbienceRuleEditor extends LitElement {
     }
     return html`<input type="text" .value=${value} @input=${this._onNameInput} />`;
   }
+
+  // --- Group field ---
+
+  // A rule's group is optional: an absent `group` key means "ungrouped". The
+  // selector's empty-string option ("(No group)") maps back to absent.
+
+  private _setGroup(id: string) {
+    if (!this._draft) return;
+    const group = id || undefined;
+    this._draft = { ...this._draft, group };
+  }
+
+  private _onGroupChange = (e: Event) => {
+    this._setGroup((e.target as HTMLSelectElement).value);
+  };
+
+  /* v8 ignore start -- ha-form not registered in jsdom; jsdom hits the native fallback */
+  private _onGroupChangeHaForm = (e: CustomEvent<{ value: { group: string } }>) => {
+    e.stopPropagation();
+    this._setGroup(e.detail.value.group);
+  };
+  /* v8 ignore stop */
+
+  private _renderGroupSelector() {
+    // Shown once at least one group exists; rules may also be left ungrouped.
+    if (this.groups.length === 0) return "";
+    const current = this._draft!.group ?? "";
+    const noGroup = localize(this.hass, "ui.group_none", "(No group)");
+    /* v8 ignore next 3 -- ha-form not registered in jsdom; jsdom hits the native fallback below */
+    if (customElements.get("ha-form")) {
+      return this._renderGroupSelectorHaForm(current, noGroup);
+    }
+    return html`
+      <label>${localize(this.hass, "ui.group", "Group")}</label>
+      <select class="group-select" .value=${current} @change=${this._onGroupChange}>
+        <option value="" ?selected=${current === ""}>${noGroup}</option>
+        ${this.groups.map(
+          (g) => html`<option value=${g.id} ?selected=${g.id === current}>${g.name}</option>`,
+        )}
+      </select>
+    `;
+  }
+
+  /* v8 ignore start -- ha-form path (real HA only) */
+  private _renderGroupSelectorHaForm(current: string, noGroup: string) {
+    const schema = [{
+      name: "group",
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: [
+            { value: "", label: noGroup },
+            ...this.groups.map((g) => ({ value: g.id, label: g.name })),
+          ],
+        },
+      },
+    }];
+    return html`
+      <div class="group-select">
+        <ha-form
+          .hass=${this.hass}
+          .schema=${schema}
+          .data=${{ group: current }}
+          .computeLabel=${() => localize(this.hass, "ui.group", "Group")}
+          @value-changed=${this._onGroupChangeHaForm}
+        ></ha-form>
+      </div>
+    `;
+  }
+  /* v8 ignore stop */
 
   // --- Collapse helpers ---
 
@@ -836,6 +908,7 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="modal" @click=${this._onModalClick}>
         <div class="content">
           ${this._renderNameSlot()}
+          ${this._renderGroupSelector()}
 
           <h3>${localize(this.hass, "ui.when_heading", "When")}</h3>
           ${visibleMatchers.map((m) => this._renderMatcherRow(m))}

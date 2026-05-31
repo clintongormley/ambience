@@ -17,6 +17,7 @@ import {
   getServiceSchema,
   listExposedActions,
   listFloors,
+  listGroups,
   listMatchers,
   listPeriods,
   saveArea,
@@ -31,6 +32,7 @@ import type {
   MatcherInfo,
   PeriodStoreView,
   Rule,
+  RuleGroup,
   Scope,
   ScopeConfig,
   ServiceSchema,
@@ -141,6 +143,7 @@ export class AmbienceScopesView extends LitElement {
   @state() private _house: ScopeConfig = { rules: [] };
   @state() private _matchers: MatcherInfo[] = [];
   @state() private _actions: ExposedAction[] = [];
+  @state() private _groups: RuleGroup[] = [];
   // Per-service schemas, keyed by service id. Loaded after _actions so the
   // summary functions can show HA's `field.name` instead of the humanized
   // field id. Best-effort: services whose schema fetch fails are omitted.
@@ -213,12 +216,13 @@ export class AmbienceScopesView extends LitElement {
 
   private async _loadStatic() {
     try {
-      const [matchers, actions, periods, dayConfig, weatherConfig] = await Promise.all([
+      const [matchers, actions, periods, dayConfig, weatherConfig, groups] = await Promise.all([
         listMatchers(this.hass),
         listExposedActions(this.hass),
         listPeriods(this.hass),
         getDayConfig(this.hass),
         getWeatherConfig(this.hass),
+        listGroups(this.hass),
       ]);
       if (!this.isConnected) return;
       this._matchers = matchers;
@@ -226,6 +230,7 @@ export class AmbienceScopesView extends LitElement {
       this._periods = periods;
       this._dayConfig = dayConfig;
       this._weatherConfig = weatherConfig;
+      this._groups = groups;
       await this._refreshSchemas(actions);
     } catch (e) {
       this._error = (e as Error).message || String(e);
@@ -557,6 +562,7 @@ export class AmbienceScopesView extends LitElement {
         .weatherConfig=${this._weatherConfig}
         .availableActions=${this._actions}
         .schemas=${this._schemas}
+        .groups=${this._groups}
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}
       ></ambience-rule-editor>
@@ -591,6 +597,7 @@ export class AmbienceScopesView extends LitElement {
                   .matchers=${this._matchers}
                   .availableActions=${this._actions}
                   .schemas=${this._schemas}
+                  .groups=${this._groups}
                   .hass=${this.hass}
                   @add-rule=${() => this._addRule(scope)}
                   @edit-rule=${(e: CustomEvent<{ index: number }>) =>

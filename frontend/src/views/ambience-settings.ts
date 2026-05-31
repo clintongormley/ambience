@@ -16,6 +16,7 @@ import {
   type HassConnection,
 } from "../api.js";
 import { localize } from "../i18n.js";
+import "./groups-settings.js";
 import type {
   AreaListItem,
   FloorListItem,
@@ -293,6 +294,11 @@ export class AmbienceAmbienceSettings extends LitElement {
             </div>
           `;
         })}
+      </div>
+
+      <div class="card">
+        <h3>${localize(this.hass, "ui.settings_tab_groups", "Rule groups")}</h3>
+        <ambience-groups-settings .hass=${this.hass}></ambience-groups-settings>
       </div>
     `;
   }

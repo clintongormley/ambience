@@ -96,6 +96,56 @@ async def test_service_call_invokes_light_turn_on(
     assert on_calls[0].data["transition"] == 2.0  # passed straight through
 
 
+async def test_apply_scene_applies_all_groups(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """apply_scene applies every group's winner concurrently and records each."""
+    from custom_components.ambience.service import async_apply_scene, get_last_applied
+
+    light_calls = async_mock_service(hass, "light", "turn_on")
+    cover_calls = async_mock_service(hass, "cover", "open_cover")
+    store = hass.data[DOMAIN][DATA_STORE]
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [
+            {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
+            {"id": "cover.open_cover", "label": "", "visible_fields": [], "defaults": {}},
+        ]
+    )
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "group": "lighting",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                },
+                {
+                    "group": "blinds",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "cover.open_cover",
+                            "entity_ids": ["cover.blind"],
+                            "params": {},
+                        }
+                    ],
+                },
+            ],
+        },
+    )
+
+    await async_apply_scene(hass, "area", "lr")
+
+    assert get_last_applied(hass, "area", "lr", "lighting") is not None
+    assert get_last_applied(hass, "area", "lr", "blinds") is not None
+    assert len(light_calls) == 1
+    assert len(cover_calls) == 1
+
+
 async def test_time_of_day_rule_matches_for_area_without_matchers_field(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:

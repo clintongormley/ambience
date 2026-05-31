@@ -46,7 +46,7 @@ from .matchers.time_of_day import TimeOfDayMatcher
 from .matchers.weather import WeatherMatcher
 from .periods import PeriodStore
 from .registry import register_matcher
-from .service import async_apply_scene
+from .service import async_apply_scene, clear_last_applied
 from .store import AmbienceStore
 from .trigger_engine import AutoTriggerEngine
 from .websocket import async_register_commands, async_unregister_commands
@@ -172,7 +172,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if action == "remove":
             await store.async_delete_area(area_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("area", area_id), None)
-            domain_data.get(DATA_LAST_APPLIED, {}).pop(("area", area_id), None)
+            clear_last_applied(hass, "area", area_id)
             ent_reg = er.async_get(hass)
             ent_id = ent_reg.async_get_entity_id(
                 "switch", DOMAIN, f"ambience_switch_area_{area_id}"
@@ -198,7 +198,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if action == "remove":
             await store.async_delete_floor(floor_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("floor", floor_id), None)
-            domain_data.get(DATA_LAST_APPLIED, {}).pop(("floor", floor_id), None)
+            clear_last_applied(hass, "floor", floor_id)
             ent_reg = er.async_get(hass)
             ent_id = ent_reg.async_get_entity_id(
                 "switch", DOMAIN, f"ambience_switch_floor_{floor_id}"

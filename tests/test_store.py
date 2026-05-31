@@ -641,3 +641,58 @@ async def test_delete_missing_area_is_silent(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
     unsub()
     assert calls == []
+
+
+async def test_load_empty_has_no_groups(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.groups() == []
+
+
+async def test_ensure_groups_is_idempotent_and_preserves_user_groups(
+    hass: HomeAssistant,
+) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_groups([{"id": "blinds", "name": "Blinds"}])
+    # Reload simulates a second startup: ensure must not clobber existing groups
+    # nor prepend any default group.
+    store2 = AmbienceStore(hass)
+    await store2.async_load()
+    assert store2.groups() == [{"id": "blinds", "name": "Blinds"}]
+
+
+async def test_save_groups_fires_config_changed(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    calls: list = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
+    await store.async_save_groups([{"id": "blinds", "name": "Blinds"}])
+    await hass.async_block_till_done()
+    unsub()
+    assert len(calls) == 1
+
+
+async def test_migrate_leaves_explicit_group_untouched(hass: HomeAssistant) -> None:
+    """Rules that already have a 'group' key are not overwritten by the migration."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_area(
+        "lr",
+        {"rules": [{"when": {}, "actions": [], "group": "blinds"}], "auto_sort": True},
+    )
+    store2 = AmbienceStore(hass)
+    await store2.async_load()
+    assert store2.get_area("lr")["rules"][0]["group"] == "blinds"
+
+
+async def test_delete_group_makes_rules_ungrouped(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_groups([{"id": "b", "name": "Blinds"}])
+    await store.async_save_area(
+        "lr", {"rules": [{"when": {}, "actions": [], "group": "b"}], "auto_sort": True}
+    )
+    await store.async_delete_group("b")
+    assert store.groups() == []
+    assert "group" not in store.get_area("lr")["rules"][0]

@@ -38,6 +38,7 @@ class AmbienceStore:
     def _empty() -> dict[str, Any]:
         return {
             "version": STORAGE_VERSION,
+            "groups": [],
             "areas": {},
             "floors": {},
             "house": {"rules": []},
@@ -156,6 +157,11 @@ class AmbienceStore:
         self._data.setdefault("floors", {})
         self._data.setdefault("house", {"rules": []})
 
+    def _ensure_groups(self) -> None:
+        """Ensure the (initially empty) groups list exists. Rules carry no group
+        by default; there is no reserved/default group."""
+        self._data.setdefault("groups", [])
+
     def _ensure_switch_defaults(self) -> None:
         sd = self._data.setdefault("switch_defaults", {})
         sd.setdefault("name", DEFAULT_SWITCH_NAME)
@@ -177,6 +183,7 @@ class AmbienceStore:
         self._migrate_relocate_periods()
         self._ensure_matchers_namespace()
         self._ensure_scope_buckets()
+        self._ensure_groups()
         self._ensure_switch_defaults()
 
     def areas(self) -> dict[str, dict[str, Any]]:
@@ -237,6 +244,30 @@ class AmbienceStore:
             triples.append(("floor", floor_id, cfg))
         triples.append(("house", None, self._data.get("house", {"rules": []})))
         return triples
+
+    def groups(self) -> list[dict[str, Any]]:
+        """The global ordered groups list (a copy)."""
+        return [dict(g) for g in self._data.get("groups", [])]
+
+    async def async_save_groups(self, groups: list[dict[str, Any]]) -> None:
+        """Replace the whole groups list. Caller (websocket) validates shape."""
+        self._data["groups"] = [dict(g) for g in groups]
+        await self._store.async_save(self._data)
+        self._notify_config_changed()
+
+    async def async_delete_group(self, group_id: str) -> None:
+        """Remove a group; every rule referencing it becomes ungrouped.
+
+        Cascades across all scopes (dropping the rule's `group` key), then
+        persists and notifies the engine.
+        """
+        self._data["groups"] = [g for g in self._data.get("groups", []) if g.get("id") != group_id]
+        for _kind, _id, cfg in self.all_scope_configs():
+            for rule in cfg.get("rules", []):
+                if rule.get("group") == group_id:
+                    rule.pop("group", None)
+        await self._store.async_save(self._data)
+        self._notify_config_changed()
 
     def get_matcher_config(self, name: str) -> dict[str, Any]:
         """Return per-matcher config dict, with defaults applied for missing keys."""

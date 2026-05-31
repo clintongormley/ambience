@@ -26,6 +26,10 @@ from .validators import MIN_REAPPLY_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
 
+# Sentinel distinguishing "resolve the whole rule list, ignoring groups" from
+# resolving a specific group bucket (where None is a real key meaning ungrouped).
+_NO_GROUP_FILTER: Any = object()
+
 
 def _scope_config(store, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
     """Resolve a (scope_kind, scope_id) pair to its persisted config dict.
@@ -48,6 +52,13 @@ def _scope_config(store, scope_kind: str, scope_id: str | None) -> dict[str, Any
     raise ServiceValidationError(f"unknown_scope_kind: {scope_kind!r}")
 
 
+def group_ids(cfg: dict[str, Any]) -> set[str | None]:
+    """The distinct group buckets a scope's rules fall into. `None` represents
+    the ungrouped bucket (rules with no `group`). Empty when the scope has no
+    rules."""
+    return {r.get("group") for r in cfg.get("rules", [])}
+
+
 def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
     """Return the on/off state of the scope's own switch.
 
@@ -66,6 +77,7 @@ async def async_resolve_with_snapshots(
     scope_kind: str,
     scope_id: str | None,
     snapshots: dict[str, Any],
+    group: Any = _NO_GROUP_FILTER,
     *,
     describe: bool = True,
 ) -> dict[str, Any]:
@@ -93,7 +105,13 @@ async def async_resolve_with_snapshots(
     )
 
     rules = scope_cfg.get("rules", [])
-    match = resolve(rules, snapshots, matchers_registry)
+    if group is _NO_GROUP_FILTER:
+        match = resolve(rules, snapshots, matchers_registry)
+    else:
+        # `group` is a specific bucket; None means the ungrouped bucket.
+        indexed = [(i, r) for i, r in enumerate(rules) if r.get("group") == group]
+        sub = resolve([r for _, r in indexed], snapshots, matchers_registry)
+        match = None if sub is None else (indexed[sub[0]][0], sub[1])
     switch_state = _switch_state(hass, scope_kind, scope_id)
     if match is None:
         return {
@@ -113,16 +131,8 @@ async def async_resolve_with_snapshots(
     }
 
 
-async def async_resolve_only(
-    hass: HomeAssistant,
-    scope_kind: str,
-    scope_id: str | None,
-) -> dict[str, Any]:
-    """Like apply_scene, but does not execute actions.
-
-    Snapshots every matcher fresh, then delegates. Return shape:
-    {matched_rule_index, rule_name, actions, snapshots_described, switch_state}.
-    """
+async def _snapshot_all(hass: HomeAssistant) -> dict[str, Any]:
+    """Snapshot every registered matcher fresh; failures become None."""
     matchers_registry: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
     snapshot_results = await asyncio.gather(
         *[m.snapshot(hass) for m in matchers_registry.values()],
@@ -135,7 +145,48 @@ async def async_resolve_only(
             snapshots[name] = None
         else:
             snapshots[name] = result
-    return await async_resolve_with_snapshots(hass, scope_kind, scope_id, snapshots)
+    return snapshots
+
+
+async def async_resolve_only(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    group: Any = _NO_GROUP_FILTER,
+) -> dict[str, Any]:
+    """Like apply_scene, but does not execute actions.
+
+    Snapshots every matcher fresh, then delegates. Return shape:
+    {matched_rule_index, rule_name, actions, snapshots_described, switch_state}.
+    """
+    snapshots = await _snapshot_all(hass)
+    return await async_resolve_with_snapshots(hass, scope_kind, scope_id, snapshots, group=group)
+
+
+async def _resolve_all_groups(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    snapshots: dict[str, Any],
+) -> dict[str | None, dict[str, Any]]:
+    """Resolve every group of a scope against a shared snapshots dict, returning
+    {group_id: plan}."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = _scope_config(store, scope_kind, scope_id)
+    return {
+        gid: await async_resolve_with_snapshots(hass, scope_kind, scope_id, snapshots, group=gid)
+        for gid in group_ids(cfg)
+    }
+
+
+async def async_resolve_groups_only(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+) -> dict[str | None, dict[str, Any]]:
+    """Per-group dry-run: snapshot once, resolve every group. {group_id: plan}."""
+    snapshots = await _snapshot_all(hass)
+    return await _resolve_all_groups(hass, scope_kind, scope_id, snapshots)
 
 
 async def async_apply_scene(
@@ -156,17 +207,30 @@ async def async_apply_scene(
         )
         return
 
-    plan = await async_resolve_only(hass, scope_kind, scope_id)
-    if plan["matched_rule_index"] is None:
-        _LOGGER.info(
-            "ambience: no rule matched for scope=%s/%s snapshots=%s",
-            scope_kind,
-            scope_id,
-            plan["snapshots_described"],
-        )
-        return
+    # Snapshot once, then apply every group's winner concurrently (groups are
+    # independent by construction).
+    snapshots = await _snapshot_all(hass)
+    plans = await _resolve_all_groups(hass, scope_kind, scope_id, snapshots)
 
-    await async_execute_plan(hass, scope_kind, scope_id, plan)
+    async def _apply_group(group_id: str, plan: dict[str, Any]) -> None:
+        if plan["matched_rule_index"] is None:
+            _LOGGER.info(
+                "ambience: no rule matched for scope=%s/%s group=%s snapshots=%s",
+                scope_kind,
+                scope_id,
+                group_id,
+                plan["snapshots_described"],
+            )
+            return
+        await async_execute_plan(hass, scope_kind, scope_id, plan, group_id)
+
+    results = await asyncio.gather(
+        *(_apply_group(gid, plan) for gid, plan in plans.items()),
+        return_exceptions=True,
+    )
+    for res in results:
+        if isinstance(res, BaseException):
+            _LOGGER.warning("ambience: group apply failed: %s", res)
 
 
 async def async_execute_actions(
@@ -223,22 +287,34 @@ async def async_execute_plan(
     scope_kind: str,
     scope_id: str | None,
     plan: dict[str, Any],
+    group_id: str | None = None,
 ) -> None:
     """Dispatch a resolved plan's actions and record it as last-applied.
 
     The caller must have already gated on the switch and confirmed a non-None
     `matched_rule_index`. Malformed / unexposed actions are logged and skipped;
-    a raised action is logged but does not abort the rest.
+    a raised action is logged but does not abort the rest. `last_applied` is
+    keyed per (scope_kind, scope_id, group_id); group_id is None for the
+    ungrouped bucket.
     """
     index = plan["matched_rule_index"]
     await async_execute_actions(hass, scope_kind, scope_id, plan["actions"], rule_index=index)
     domain_data = hass.data[DOMAIN]
-    domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id)] = index
+    domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id, group_id)] = index
 
 
-def get_last_applied(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> int | None:
-    """The rule index last applied to this scope, or None if never applied."""
-    return hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).get((scope_kind, scope_id))
+def get_last_applied(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None, group_id: str | None = None
+) -> int | None:
+    """The rule index last applied to this (scope, group), or None if never applied."""
+    return hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).get((scope_kind, scope_id, group_id))
+
+
+def clear_last_applied(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> None:
+    """Drop all last-applied entries for a scope (every group), e.g. on delete."""
+    la = hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+    for key in [k for k in la if k[0] == scope_kind and k[1] == scope_id]:
+        la.pop(key, None)
 
 
 def scope_reapply_intervals(cfg: dict[str, Any], exposed_store: Any) -> list[int]:

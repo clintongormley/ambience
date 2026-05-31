@@ -12,7 +12,7 @@ beforeAll(() => {
   }
 });
 import "../frontend/src/views/rules-list";
-import type { ExposedAction, MatcherInfo, Rule, PeriodStoreView } from "../frontend/src/types";
+import type { ExposedAction, MatcherInfo, Rule, RuleGroup, PeriodStoreView } from "../frontend/src/types";
 
 const matchers: MatcherInfo[] = [
   { name: "mode",       description: "", predicate_help: "", input: "text",    priority: 1000 },
@@ -58,6 +58,7 @@ async function mount(
   rules: Rule[] = [],
   availableActions: ExposedAction[] = [],
   schemas: Record<string, unknown> = {},
+  groups: RuleGroup[] = [],
 ): Promise<any> {
   const el: any = document.createElement("ambience-rules-list");
   el.rules = rules;
@@ -66,6 +67,7 @@ async function mount(
   el.hass = testHass;
   el.availableActions = availableActions;
   el.schemas = schemas;
+  el.groups = groups;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
@@ -665,5 +667,181 @@ describe("ambience-rules-list", () => {
     expect(iDay).toBeGreaterThan(iMode);
     expect(iTod).toBeGreaterThan(iDay);
     expect(iWeather).toBeGreaterThan(iTod);
+  });
+
+  // --- group filter --------------------------------------------------------
+
+  const groups: RuleGroup[] = [
+    { id: "evening", name: "Evening" },
+    { id: "morning", name: "Morning" },
+  ];
+
+  // Four rules; deliberately ordered so that filtering changes the visible
+  // positions. The two "evening" rules sit at original indices 0 and 3, with a
+  // "morning" rule and an ungrouped rule interleaved. This lets us assert that
+  // callbacks still carry the ORIGINAL index, not the filtered one.
+  const r0: Rule = { name: "Alpha", group: "evening", when: {}, actions: [] };
+  const r1: Rule = { name: "Bravo", group: "morning", when: {}, actions: [] };
+  const r2: Rule = { name: "Charlie", when: {}, actions: [] }; // no group → ungrouped
+  const r3: Rule = { name: "Delta", group: "evening", when: {}, actions: [] };
+
+  function selectGroup(el: any, value: string) {
+    const sel = el.shadowRoot.querySelector("select.group-filter") as HTMLSelectElement;
+    sel.value = value;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  test("renders a group filter control with 'All groups' + 'Ungrouped' plus one per group", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    const sel = el.shadowRoot.querySelector("select.group-filter") as HTMLSelectElement;
+    expect(sel).toBeTruthy();
+    const optTexts = Array.from(sel.querySelectorAll("option")).map((o: any) => o.textContent?.trim());
+    expect(optTexts).toContain("All groups");
+    expect(optTexts).toContain("Ungrouped");
+    expect(optTexts).toContain("Evening");
+    expect(optTexts).toContain("Morning");
+  });
+
+  test("renders all rules initially (no filter applied)", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    const items = el.shadowRoot.querySelectorAll("li");
+    expect(items.length).toBe(4);
+  });
+
+  test("selecting a group shows only that group's rules", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    selectGroup(el, "morning");
+    await el.updateComplete;
+    const items = el.shadowRoot.querySelectorAll("li");
+    expect(items.length).toBe(1);
+    expect(el.shadowRoot.textContent).toContain("Bravo");
+    expect(el.shadowRoot.textContent).not.toContain("Alpha");
+  });
+
+  test("filtering to 'Ungrouped' shows only rules with no group", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    selectGroup(el, "__ungrouped__");
+    await el.updateComplete;
+    const names = Array.from(el.shadowRoot.querySelectorAll(".name")).map((n: any) => n.textContent?.trim());
+    expect(names).toEqual(["Charlie"]);
+  });
+
+  test("selecting 'All groups' again shows everything", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    selectGroup(el, "morning");
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelectorAll("li").length).toBe(1);
+    selectGroup(el, "");
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelectorAll("li").length).toBe(4);
+  });
+
+  test("edit-rule carries the ORIGINAL index when filtered", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    selectGroup(el, "morning");
+    await el.updateComplete;
+    const get = captureEvent(el, "edit-rule");
+    // Only one row visible (Bravo), but its original index is 1.
+    const btn = el.shadowRoot.querySelector("button[title='Edit']") as HTMLButtonElement;
+    btn.click();
+    expect(get()).toEqual({ index: 1 });
+  });
+
+  test("delete-rule carries the ORIGINAL index when filtered", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    selectGroup(el, "evening");
+    await el.updateComplete;
+    const get = captureEvent(el, "delete-rule");
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    // Visible: Alpha (orig 0), Delta (orig 3). Click the second row's delete.
+    const btns = el.shadowRoot.querySelectorAll("button[title='Delete']");
+    (btns[1] as HTMLButtonElement).click();
+    expect(get()).toEqual({ index: 3 });
+  });
+
+  test("duplicate-rule carries the ORIGINAL index when filtered", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    selectGroup(el, "evening");
+    await el.updateComplete;
+    const get = captureEvent(el, "duplicate-rule");
+    const btns = el.shadowRoot.querySelectorAll("button[title='Duplicate']");
+    (btns[1] as HTMLButtonElement).click();
+    expect(get()).toEqual({ index: 3 });
+  });
+
+  test("reorder-rules carries ORIGINAL indices when filtered", async () => {
+    // Manual sort (autoSort=false) so drag handles render.
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    selectGroup(el, "evening");
+    await el.updateComplete;
+    const get = captureEvent(el, "reorder-rules");
+    const items = el.shadowRoot.querySelectorAll("li");
+    // Visible: Alpha (orig 0), Delta (orig 3). Drag Delta onto Alpha.
+    items[1].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    items[0].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true }));
+    items[0].dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    await el.updateComplete;
+    expect(get()).toEqual({ from: 3, to: 0 });
+  });
+
+  test("the displayed row number reflects the ORIGINAL index", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    selectGroup(el, "morning");
+    await el.updateComplete;
+    // Bravo is original index 1 → displayed number 2.
+    expect(el.shadowRoot.querySelector(".idx")?.textContent?.trim()).toBe("2");
+  });
+
+  test("no group filter control when no groups provided", async () => {
+    el = await mount([movieRule]);
+    expect(el.shadowRoot.querySelector("select.group-filter")).toBeFalsy();
+  });
+
+  test("group filter control IS shown when there is one group", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, [{ id: "evening", name: "Evening" }]);
+    expect(el.shadowRoot.querySelector("select.group-filter")).toBeTruthy();
+  });
+
+  test("a grouped rule renders an ambience-group-chip to the right of the name", async () => {
+    const groupsWithStyle: RuleGroup[] = [{ id: "g1", name: "Lights", color: "green", icon: "mdi:lightbulb" }];
+    const rule: Rule = { name: "R", group: "g1", when: {}, actions: [] };
+    el = await mount([rule], [], {}, groupsWithStyle);
+    const nameEl = el.shadowRoot.querySelector(".name") as HTMLElement;
+    const chip = nameEl.querySelector("ambience-group-chip") as any;
+    expect(chip).toBeTruthy();
+    // The chip carries the matching group.
+    expect(chip.group).toEqual(groupsWithStyle[0]);
+    // The chip appears AFTER the rule name text within .name: the name text is
+    // present, and the chip is the last element child of .name.
+    expect(nameEl.textContent).toContain("R");
+    expect(nameEl.lastElementChild).toBe(chip);
+    // The visible name text (excluding the chip's own contents) reads "R".
+    const ownText = Array.from(nameEl.childNodes)
+      .filter((n) => n.nodeType === Node.TEXT_NODE)
+      .map((n) => n.textContent ?? "")
+      .join("")
+      .trim();
+    expect(ownText).toBe("R");
+  });
+
+  test("an ungrouped rule renders no group chip", async () => {
+    const rule: Rule = { name: "R", when: {}, actions: [] };
+    el = await mount([rule], [], {}, [{ id: "g1", name: "Lights" }]);
+    expect(el.shadowRoot.querySelector("ambience-group-chip")).toBeNull();
+  });
+
+  test("resets a stale group filter to 'All groups' when the filtered group is removed", async () => {
+    el = await mount([r0, r1, r2, r3], [], {}, groups);
+    selectGroup(el, "morning");
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelectorAll("li").length).toBe(1);
+
+    // The "morning" group is deleted — update `groups` to a list without it.
+    el.groups = [{ id: "evening", name: "Evening" }];
+    await el.updateComplete;
+
+    // Filter falls back to "all", so every rule renders again.
+    expect(el._filterGroup).toBe("");
+    expect(el.shadowRoot.querySelectorAll("li").length).toBe(4);
   });
 });

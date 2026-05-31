@@ -705,6 +705,40 @@ async def test_area_save_then_get(
     assert len(get["result"]["rules"]) == 1
 
 
+async def test_scope_save_drops_unknown_group(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    """A rule referencing a group id not in the groups list has its group dropped."""
+    config = {
+        "auto_sort": False,
+        "rules": [
+            {
+                "name": "ghost rule",
+                "group": "ghost",
+                "when": {},
+                "actions": [
+                    {
+                        "service": "light.turn_on",
+                        "entity_ids": ["light.lamp"],
+                        "params": {"brightness_pct": 30},
+                    }
+                ],
+            }
+        ],
+    }
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert save["success"] is True
+
+    get = await _ws_send(hass_ws_client, id=2, type="ambience/area/get", area_id=area_id)
+    assert get["success"] is True
+    assert "group" not in get["result"]["rules"][0]
+
+
 async def test_area_save_rejects_area_id_not_in_registry(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
@@ -787,6 +821,60 @@ async def test_dry_run_returns_matched_rule(
     assert resp["result"]["matched_rule_index"] == 0
     assert resp["result"]["rule_name"] == "movie default"
     assert resp["result"]["actions"][0]["service"] == "light.turn_on"
+
+
+async def test_dry_run_returns_per_group_results(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    groups_resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/groups/save",
+        groups=[
+            {"id": "lighting", "name": "Lighting"},
+            {"id": "blinds", "name": "Blinds"},
+        ],
+    )
+    assert groups_resp["success"] is True
+    save = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config={
+            "matchers": [],
+            "rules": [
+                {
+                    "name": "lights movie",
+                    "group": "lighting",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.lamp"],
+                            "params": {"brightness_pct": 30},
+                        }
+                    ],
+                },
+                {
+                    "name": "blinds movie",
+                    "group": "blinds",
+                    "when": {},
+                    "actions": [],
+                },
+            ],
+        },
+    )
+    assert save["success"] is True
+    resp = await _ws_send(
+        hass_ws_client,
+        id=2,
+        type="ambience/dry_run",
+        area_id=area_id,
+    )
+    assert resp["success"] is True
+    result = resp["result"]
+    assert "groups" in result
+    assert result["groups"]["lighting"]["matched_rule_index"] == 0
+    assert result["groups"]["blinds"]["matched_rule_index"] == 1
 
 
 async def test_dry_run_no_match(hass: HomeAssistant, installed, area_id, hass_ws_client) -> None:
@@ -1968,3 +2056,71 @@ async def test_shadowed_by_not_persisted_on_round_trip(
         # priority and pinned are the fields that DO persist.
         assert "priority" in rule
         assert "pinned" in rule
+
+
+async def test_groups_list_empty_by_default(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/groups/list")
+    assert resp["success"] is True
+    assert resp["result"]["groups"] == []
+
+
+async def test_groups_save_round_trip(hass, installed, hass_ws_client) -> None:
+    groups = [{"id": "lights", "name": "Lights"}, {"id": "blinds", "name": "Blinds"}]
+    resp = await _ws_send(hass_ws_client, type="ambience/groups/save", groups=groups)
+    assert resp["success"] is True, resp
+    list_resp = await _ws_send(hass_ws_client, type="ambience/groups/list")
+    assert list_resp["result"]["groups"] == groups
+
+
+async def test_groups_save_rejects_duplicate_ids(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/groups/save",
+        groups=[
+            {"id": "x", "name": "Lights"},
+            {"id": "x", "name": "Blinds"},
+        ],
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "invalid_groups"
+
+
+async def test_groups_save_rejects_empty_name(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/groups/save",
+        groups=[{"id": "x", "name": ""}],
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "invalid_groups"
+
+
+async def test_groups_save_rejects_duplicate_names(hass, installed, hass_ws_client) -> None:
+    # Same name (case-insensitive, trimmed) on two distinct ids is rejected.
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/groups/save",
+        groups=[
+            {"id": "a", "name": "Lights"},
+            {"id": "b", "name": "  lights "},
+        ],
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "invalid_groups"
+
+
+async def test_groups_delete_removes_user_group(hass, installed, hass_ws_client) -> None:
+    await _ws_send(
+        hass_ws_client,
+        type="ambience/groups/save",
+        groups=[{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
+    )
+    resp = await _ws_send(hass_ws_client, type="ambience/groups/delete", group_id="b")
+    assert resp["success"] is True, resp
+    list_resp = await _ws_send(hass_ws_client, type="ambience/groups/list")
+    assert {g["id"] for g in list_resp["result"]["groups"]} == {"a"}
+
+
+async def test_groups_delete_unknown_is_noop(hass, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/groups/delete", group_id="nope")
+    assert resp["success"] is True, resp

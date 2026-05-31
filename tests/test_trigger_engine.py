@@ -175,7 +175,7 @@ async def test_recompute_first_eval_is_a_flip(hass) -> None:
     engine = _engine_with_state(hass)
     key = ("area", "a", 0, "tod")
     dirty = engine._recompute({key}, {"tod": "evening"})  # matches -> True (was unset)
-    assert dirty == {("area", "a")}
+    assert dirty == {("area", "a", None)}
 
 
 async def test_recompute_unchanged_value_is_not_a_flip(hass) -> None:
@@ -191,7 +191,7 @@ async def test_recompute_changed_value_is_a_flip(hass) -> None:
     key = ("area", "a", 0, "tod")
     engine._recompute({key}, {"tod": "evening"})  # True
     dirty = engine._recompute({key}, {"tod": "morning"})  # now False
-    assert dirty == {("area", "a")}
+    assert dirty == {("area", "a", None)}
 
 
 async def test_recompute_none_snapshot_evaluates_false(hass) -> None:
@@ -199,7 +199,7 @@ async def test_recompute_none_snapshot_evaluates_false(hass) -> None:
     key = ("area", "a", 0, "tod")
     engine._recompute({key}, {"tod": "evening"})  # True
     dirty = engine._recompute({key}, {"tod": None})  # snapshot None -> False -> flip
-    assert dirty == {("area", "a")}
+    assert dirty == {("area", "a", None)}
     assert engine._predicate_state[key] is False
 
 
@@ -222,7 +222,51 @@ async def test_recompute_one_flip_among_two_predicates_marks_scope_once(hass) ->
     k1 = ("area", "a", 1, "tod")
     engine._recompute({k0, k1}, {"tod": "evening"})  # seed: k0 True, k1 False
     dirty = engine._recompute({k0, k1}, {"tod": "night"})  # k0 True→False, k1 False→True
-    assert dirty == {("area", "a")}
+    assert dirty == {("area", "a", None)}
+
+
+async def test_recompute_marks_only_flipped_groups_dirty(hass) -> None:
+    # Two rules in two groups; flip ONLY the predicate of rule idx0 (group
+    # "lighting"). The dirty unit set must name only that scope+group.
+    scopes = [
+        (
+            "area",
+            "lr",
+            {
+                "rules": [
+                    {"when": {"tod": "evening"}, "group": "lighting"},
+                    {"when": {"tod": "night"}, "group": "blinds"},
+                ]
+            },
+        ),
+    ]
+    matchers = {"tod": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.x"})))}
+    engine = _engine(hass, scopes, matchers)
+    engine.async_rebuild()
+    k0 = ("area", "lr", 0, "tod")
+    k1 = ("area", "lr", 1, "tod")
+    engine._recompute({k0, k1}, {"tod": "morning"})  # seed: both False
+    dirty = engine._recompute({k0, k1}, {"tod": "evening"})  # k0 flips True; k1 unchanged
+    assert dirty == {("area", "lr", "lighting")}
+
+
+async def test_tier_executor_applies_areas_then_floors_then_house(hass) -> None:
+    scopes = [("area", "a", {"rules": []})]
+    matchers: dict = {}
+    engine = _engine(hass, scopes, matchers)
+    recorded: list[str] = []
+
+    async def _spy(scope_kind, scope_id, group_id, *, force=False):
+        recorded.append(scope_kind)
+
+    engine._resolve_and_apply = _spy  # type: ignore[assignment]
+    units = [
+        ("house", None, None),
+        ("area", "a", None),
+        ("floor", "f", None),
+    ]
+    await engine._apply_units(units)
+    assert recorded == ["area", "floor", "house"]
 
 
 async def test_recompute_key_for_removed_scope_is_ignored(hass) -> None:
@@ -293,15 +337,15 @@ def _apply_engine(hass, *, switch_on: bool = True):
 async def test_initial_sync_applies_winning_rule(hass) -> None:
     engine, _tod = _apply_engine(hass)
     await engine.async_initial_sync()  # tod="evening" -> rule 0 wins
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 0
 
 
 async def test_evaluate_no_flip_does_not_reapply(hass) -> None:
     engine, _tod = _apply_engine(hass)
     await engine.async_initial_sync()
-    hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] = 99  # sentinel
+    hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] = 99  # sentinel
     await engine.async_evaluate({("area", "a", 0, "tod"), ("area", "a", 1, "tod")})
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 99  # untouched (no flip)
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 99  # untouched (no flip)
 
 
 async def test_evaluate_flip_to_other_rule_reapplies(hass) -> None:
@@ -309,7 +353,7 @@ async def test_evaluate_flip_to_other_rule_reapplies(hass) -> None:
     await engine.async_initial_sync()
     tod.value = "morning"  # rule 1 now wins
     await engine.async_evaluate({("area", "a", 0, "tod"), ("area", "a", 1, "tod")})
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 1
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 1
 
 
 async def test_evaluate_switch_off_does_not_apply(hass) -> None:
@@ -321,9 +365,9 @@ async def test_evaluate_switch_off_does_not_apply(hass) -> None:
 async def test_resolve_and_apply_force_reapplies_unchanged_winner(hass) -> None:
     engine, _tod = _apply_engine(hass)
     await engine.async_initial_sync()
-    hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] = 0
-    await engine._resolve_and_apply(("area", "a"), force=True)
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0
+    hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] = 0
+    await engine._resolve_and_apply("area", "a", None, force=True)
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 0
 
 
 class SpyMatcher:
@@ -416,7 +460,7 @@ async def test_state_change_fires_and_applies(hass) -> None:
 
     hass.states.async_set("binary_sensor.x", "on")
     await hass.async_block_till_done()
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 0
 
 
 async def test_teardown_stops_reacting(hass) -> None:
@@ -559,7 +603,7 @@ async def test_async_start_builds_subscribes_and_syncs(hass) -> None:
     }
     engine = AutoTriggerEngine(hass)
     await engine.async_start()  # build + subscribe + initial sync
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 0
     assert engine.index.entities == frozenset({"binary_sensor.x"})
     engine.async_shutdown()
     assert engine._unsubs == []
@@ -581,11 +625,11 @@ async def test_switch_off_to_on_force_resyncs(hass) -> None:
     await engine.async_initial_sync()  # applies rule 0
     # Seed a WRONG last_applied: only a force-resync (which bypasses the
     # unchanged-winner guard) will correct it back to 0.
-    hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] = 99
+    hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] = 99
     hass.states.async_set("switch.ambience_a", "off")
     hass.states.async_set("switch.ambience_a", "on")  # off->on transition
     await hass.async_block_till_done()
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a")] == 0  # force-resync ran
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 0  # force-resync ran
     engine._teardown()
 
 
@@ -657,7 +701,7 @@ async def test_reapply_fires_due_action_for_winning_rule(hass):
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
         DATA_MATCHERS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
-        DATA_LAST_APPLIED: {("area", "k"): 0},
+        DATA_LAST_APPLIED: {("area", "k", None): 0},
         DATA_SWITCHES: {},
     }
     eng = AutoTriggerEngine(hass)
@@ -689,7 +733,7 @@ async def test_reapply_skips_when_switch_off(hass):
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
         DATA_MATCHERS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
-        DATA_LAST_APPLIED: {("area", "k"): 0},
+        DATA_LAST_APPLIED: {("area", "k", None): 0},
         DATA_SWITCHES: {("area", "k"): SimpleNamespace(is_on=False)},
     }
     eng = AutoTriggerEngine(hass)
@@ -722,7 +766,8 @@ async def test_reapply_skips_when_rule_is_not_the_winner(hass):
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule0, rule1]})]),
         DATA_MATCHERS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
-        DATA_LAST_APPLIED: {("area", "k"): 0},  # winner is rule 0; re-applying action is in rule 1
+        # winner is rule 0; the re-applying action lives in rule 1
+        DATA_LAST_APPLIED: {("area", "k", None): 0},
         DATA_SWITCHES: {},
     }
     eng = AutoTriggerEngine(hass)
@@ -789,7 +834,7 @@ async def test_reapply_distinct_intervals_fire_independently(hass):
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
         DATA_MATCHERS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on", "light.turn_off"),
-        DATA_LAST_APPLIED: {("area", "k"): 0},
+        DATA_LAST_APPLIED: {("area", "k", None): 0},
         DATA_SWITCHES: {},
     }
     eng = AutoTriggerEngine(hass)

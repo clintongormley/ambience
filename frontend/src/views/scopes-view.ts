@@ -491,6 +491,11 @@ export class AmbienceScopesView extends LitElement {
     const original = cfg.rules[e.detail.index];
     if (!original) return;
     const seed: Rule = JSON.parse(JSON.stringify(original));
+    // A duplicate is a fresh rule: drop the original's fixed position so it
+    // doesn't inherit the pin/priority slot (the backend assigns a new one).
+    delete seed.pinned;
+    delete seed.priority;
+    delete seed.shadowed_by;
     this._editing = { scope, index: cfg.rules.length, isNew: true, seed };
   }
 

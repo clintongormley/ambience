@@ -448,6 +448,30 @@ describe("ambience-scopes-view", () => {
     expect(api.saveArea).not.toHaveBeenCalled();
   });
 
+  test("duplicating a pinned rule drops the pin and its fixed priority", async () => {
+    const rule: Rule = {
+      name: "Pinned", when: {}, actions: [], group: "a", pinned: true, priority: 4096,
+    };
+    el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    rulesList.dispatchEvent(
+      new CustomEvent("duplicate-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+
+    const editor: any = el.shadowRoot.querySelector("ambience-rule-editor");
+    expect(editor.rule.pinned).toBeUndefined();
+    expect(editor.rule.priority).toBeUndefined();
+    expect(editor.rule.group).toBe("a"); // group is preserved
+    // the original is untouched
+    expect(rule.pinned).toBe(true);
+  });
+
   test("saveArea error is displayed", async () => {
     vi.mocked(api.saveArea).mockRejectedValueOnce(new Error("Save failed"));
     el = await mount({

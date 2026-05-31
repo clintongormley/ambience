@@ -9,6 +9,13 @@ export type Rule = {
   // An absent key or `null` value is a wildcard for that matcher.
   when: { [matcher: string]: unknown };
   actions: ActionSpec[];
+  // Sole sort key; higher = more important. Maintained by the backend.
+  priority?: number;
+  // True when the user fixed this rule's position by dragging it.
+  pinned?: boolean;
+  // Transient (response-only): index of an earlier rule that shadows this one,
+  // or null/absent. Never persisted.
+  shadowed_by?: number | null;
 };
 
 export type ActionSpec = {
@@ -82,8 +89,6 @@ export type ScopeSwitchOverride = {
 export type AreaConfig = {
   // Ordered list — array order is authoritative for the engine.
   rules: Rule[];
-  // When true the backend keeps `rules` sorted on every save.
-  auto_sort: boolean;
   switch?: ScopeSwitchOverride & { off_at?: string | null };
   auto_triggers_enabled?: boolean;
   // Trigger keys the user has disabled for this scope (see AutoTrigger.key).
@@ -126,7 +131,7 @@ export type MatcherInfo = {
   predicate_help: string;
   // Widget hint for the rule editor: "scene_combobox" | "text" | ...
   input: string;
-  // Linearisation-slot order; lower sorts earlier. Default 1000, `scene` is 0.
+  // Linearisation-slot order; higher sorts earlier. Default 0, `scene` is 1000.
   priority: number;
 };
 

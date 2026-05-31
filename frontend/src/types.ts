@@ -5,8 +5,9 @@
 
 export type Rule = {
   name?: string;
-  // Optional group this rule belongs to (RuleGroup.id).
-  group?: string;
+  // The group this rule belongs to (RuleGroup.id). Required — every rule is
+  // grouped; a fresh install seeds a "General" group.
+  group: string;
   // Uniform {matcher_name: predicate} map.
   // An absent key or `null` value is a wildcard for that matcher.
   when: { [matcher: string]: unknown };
@@ -21,8 +22,8 @@ export type Rule = {
 };
 
 // A user-defined grouping of rules. Stored separately; rules reference it by id.
-// A rule with no `group` is "ungrouped" (resolves in its own implicit bucket).
-// `icon` is an mdi name (e.g. "mdi:lightbulb"); `color` is a CSS color string.
+// Every rule belongs to exactly one group; at least one group always exists.
+// `icon` is an mdi name (e.g. "mdi:lightbulb"); `color` is a GROUP_COLORS id.
 export type RuleGroup = { id: string; name: string; icon?: string; color?: string };
 
 export type ActionSpec = {

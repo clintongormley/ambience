@@ -254,8 +254,8 @@ class CacheMatcher:
 
 
 class _FakeExposedStorage:
-    def __init__(self) -> None:
-        self._actions: list[dict] = []
+    def __init__(self, initial: list[dict] | None = None) -> None:
+        self._actions: list[dict] = list(initial or [])
 
     def get_exposed_actions(self) -> list[dict]:
         return list(self._actions)
@@ -634,3 +634,171 @@ async def test_config_refresh_is_debounced(hass) -> None:
     await hass.async_block_till_done()
     assert spy.snapshot_calls == 1  # exactly one refresh ran, not two
     engine.async_shutdown()
+
+
+def _exposed_store_with(*service_ids):
+    return ExposedActionsStore(
+        _FakeExposedStorage(
+            [{"id": sid, "label": "", "visible_fields": [], "defaults": {}} for sid in service_ids]
+        )
+    )
+
+
+async def test_reapply_fires_due_action_for_winning_rule(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    action = {
+        "service": "light.turn_on",
+        "entity_ids": ["light.a"],
+        "params": {"brightness": 7},
+        "reapply_seconds": 10,
+    }
+    rule = {"when": {}, "actions": [action]}
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_MATCHERS: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {("area", "k"): 0},
+        DATA_SWITCHES: {},
+    }
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1 and calls[0]["brightness"] == 7
+    eng._teardown()
+
+
+async def test_reapply_skips_when_switch_off(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    rule = {
+        "when": {},
+        "actions": [
+            {
+                "service": "light.turn_on",
+                "entity_ids": ["light.a"],
+                "params": {},
+                "reapply_seconds": 10,
+            }
+        ],
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_MATCHERS: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {("area", "k"): 0},
+        DATA_SWITCHES: {("area", "k"): SimpleNamespace(is_on=False)},
+    }
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
+    await hass.async_block_till_done()
+
+    assert calls == []
+    eng._teardown()
+
+
+async def test_reapply_skips_when_rule_is_not_the_winner(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    rule0 = {"when": {}, "actions": []}
+    rule1 = {
+        "when": {},
+        "actions": [
+            {
+                "service": "light.turn_on",
+                "entity_ids": ["light.a"],
+                "params": {},
+                "reapply_seconds": 10,
+            }
+        ],
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "k", {"rules": [rule0, rule1]})]),
+        DATA_MATCHERS: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {("area", "k"): 0},  # winner is rule 0; re-applying action is in rule 1
+        DATA_SWITCHES: {},
+    }
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
+    await hass.async_block_till_done()
+    assert calls == []
+    eng._teardown()
+
+
+async def test_reapply_skips_when_no_rule_active(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    rule = {
+        "when": {},
+        "actions": [
+            {
+                "service": "light.turn_on",
+                "entity_ids": ["light.a"],
+                "params": {},
+                "reapply_seconds": 10,
+            }
+        ],
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_MATCHERS: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {},  # nothing applied
+        DATA_SWITCHES: {},
+    }
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
+    await hass.async_block_till_done()
+    assert calls == []
+    eng._teardown()
+
+
+async def test_reapply_distinct_intervals_fire_independently(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda c: calls.append(("on", c.data)))
+    hass.services.async_register("light", "turn_off", lambda c: calls.append(("off", c.data)))
+    rule = {
+        "when": {},
+        "actions": [
+            {
+                "service": "light.turn_on",
+                "entity_ids": ["light.a"],
+                "params": {},
+                "reapply_seconds": 10,
+            },
+            {
+                "service": "light.turn_off",
+                "entity_ids": ["light.b"],
+                "params": {},
+                "reapply_seconds": 20,
+            },
+        ],
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_MATCHERS: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on", "light.turn_off"),
+        DATA_LAST_APPLIED: {("area", "k"): 0},
+        DATA_SWITCHES: {},
+    }
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
+    await hass.async_block_till_done()
+    kinds = [c[0] for c in calls]
+    assert "on" in kinds and "off" not in kinds
+    eng._teardown()

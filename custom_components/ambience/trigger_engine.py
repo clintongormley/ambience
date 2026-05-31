@@ -25,13 +25,15 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
-from .const import DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
+from .const import DATA_EXPOSED_ACTIONS, DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from .matchers.time_of_day import ANCHOR_ATTR
 from .scope_triggers import filter_spec, iter_predicate_specs
 from .service import (
     _switch_state,
+    async_execute_actions,
     async_execute_plan,
     async_resolve_with_snapshots,
+    effective_reapply_seconds,
     get_last_applied,
 )
 from .trigger_index import PredKey, TriggerIndex, build_index
@@ -65,6 +67,7 @@ class AutoTriggerEngine:
         self._sun_unsubs: dict[tuple[str, int], Callable[[], None]] = {}
         self._for_handles: dict[PredKey, list[Callable[[], None]]] = {}
         self._switch_scopes: dict[str, tuple[str, str | None]] = {}
+        self._reapply_intervals: dict[int, set[tuple[str, str | None]]] = {}
         # Debounced full refresh, for coalescing rapid config-changed signals.
         self._refresh_debouncer = Debouncer(
             hass,
@@ -99,6 +102,7 @@ class AutoTriggerEngine:
         self._predicate_state = {
             key: value for key, value in self._predicate_state.items() if key in live
         }
+        self._reapply_intervals = self._build_reapply_intervals()
 
     def _build_entries(self) -> list[tuple[PredKey, TriggerSpec]]:
         """Return (PredKey, TriggerSpec) for every non-wildcard predicate with deps.
@@ -118,6 +122,20 @@ class AutoTriggerEngine:
                     continue
                 entries.append(((scope_kind, scope_id, rule_index, matcher_key), spec))
         return entries
+
+    def _build_reapply_intervals(self) -> dict[int, set[tuple[str, str | None]]]:
+        """Map each distinct re-apply interval to the enabled scopes that have
+        at least one action using it. `_scope_cfgs` already excludes scopes with
+        auto-triggers disabled, so those never get scheduled."""
+        exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
+        by_interval: dict[int, set[tuple[str, str | None]]] = {}
+        for scope_key, cfg in self._scope_cfgs.items():
+            for rule in cfg.get("rules", []):
+                for action in rule.get("actions", []):
+                    interval = effective_reapply_seconds(action, exposed)
+                    if interval:
+                        by_interval.setdefault(interval, set()).add(scope_key)
+        return by_interval
 
     def _predicate_for(self, key: PredKey) -> Any:
         """The stored predicate for a PredKey, or None if it no longer exists."""
@@ -282,6 +300,14 @@ class AutoTriggerEngine:
                     _HAS_TIME_INTERVAL,
                 )
             )
+        for interval, scopes in self._reapply_intervals.items():
+            self._unsubs.append(
+                async_track_time_interval(
+                    self._hass,
+                    self._make_reapply_handler(interval, scopes),
+                    timedelta(seconds=interval),
+                )
+            )
         self._switch_scopes = {}
         switches = self._hass.data[DOMAIN].get(DATA_SWITCHES, {})
         for scope_key in self._scope_cfgs:
@@ -312,6 +338,49 @@ class AutoTriggerEngine:
             self._fire(set(keys))
 
         return _handler
+
+    def _make_reapply_handler(
+        self, interval: int, scopes: set[tuple[str, str | None]]
+    ) -> Callable[[Any], None]:
+        scope_set = set(scopes)
+
+        @callback
+        def _handler(_now: Any) -> None:
+            self._hass.async_create_task(self._reapply_tick(interval, scope_set))
+
+        return _handler
+
+    async def _reapply_tick(self, interval: int, scopes: set[tuple[str, str | None]]) -> None:
+        for scope in scopes:
+            await self._reapply_scope(scope, interval)
+
+    async def _reapply_scope(self, scope: tuple[str, str | None], interval: int) -> None:
+        """Re-fire the current winning rule's actions due at `interval`.
+
+        Uses last-applied (kept current by the watch system) rather than
+        re-resolving, and never mutates last-applied. Skips when the switch is
+        off, no rule is active, or the stored index is out of range.
+        """
+        scope_kind, scope_id = scope
+        if _switch_state(self._hass, scope_kind, scope_id) == "off":
+            return
+        index = get_last_applied(self._hass, scope_kind, scope_id)
+        if index is None:
+            return
+        cfg = self._scope_cfgs.get(scope)
+        if cfg is None:
+            return
+        rules = cfg.get("rules", [])
+        if not 0 <= index < len(rules):
+            return
+        exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
+        due = [
+            action
+            for action in rules[index].get("actions", [])
+            if effective_reapply_seconds(action, exposed) == interval
+        ]
+        if due:
+            await async_execute_actions(self._hass, scope_kind, scope_id, due, rule_index=index)
 
     def _schedule_for_rechecks(self, preds: frozenset[PredKey]) -> None:
         """For predicates with a `for:` duration, (re)schedule a recheck so a

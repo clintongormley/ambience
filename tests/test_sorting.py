@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from typing import Any
 
 from custom_components.ambience.sorting import resolve_order, shadowed_by, sort_rules
@@ -307,3 +308,42 @@ def test_shadow_multi_key_contains_is_flagged() -> None:
     ]
     # "wide" is more general on BOTH dimensions via contains → shadows "narrow".
     assert shadowed_by(ordered, matchers) == {1: 0}
+
+
+def test_resolve_order_keeps_groups_contiguous_and_orders_within_group() -> None:
+    matchers = {"tod": IntervalMatcher()}
+    # Values chosen so the OLD whole-list sort would INTERLEAVE the groups
+    # (broad b, narrow a, narrow b, broad a → ["b","a","a","b"]). Per-group
+    # canonicalisation must instead keep each group contiguous.
+    rules = [
+        {"when": {"tod": (0, 24)}, "actions": [], "group": "a"},  # broad a
+        {"when": {"tod": (8, 16)}, "actions": [], "group": "b"},  # narrow b
+        {"when": {"tod": (0, 24)}, "actions": [], "group": "b"},  # broad b
+        {"when": {"tod": (8, 16)}, "actions": [], "group": "a"},  # narrow a
+    ]
+    out = resolve_order(rules, matchers)
+    groups = [r["group"] for r in out]
+    # No group's rules are interleaved: each group forms one contiguous run.
+    assert [g for g, _ in itertools.groupby(groups)] == list(dict.fromkeys(groups))
+    # Within each group the narrower rule precedes the broad catch-all.
+    for gid in ("a", "b"):
+        g_rules = [r for r in out if r["group"] == gid]
+        assert g_rules[0]["when"] == {"tod": (8, 16)}
+        assert g_rules[1]["when"] == {"tod": (0, 24)}
+
+
+def test_shadowed_by_is_per_group() -> None:
+    matchers = {"tod": IntervalMatcher()}
+    # Broad-then-narrow IN THE SAME group: the broad rule shadows the narrow one.
+    same_group = [
+        {"when": {}, "actions": [], "group": "a"},  # idx 0: broad, group a
+        {"when": {"tod": (8, 16)}, "actions": [], "group": "a"},  # idx 1: narrow, group a
+    ]
+    assert shadowed_by(same_group, matchers) == {1: 0}
+    # The SAME pair across DIFFERENT groups must NOT shadow — positive control
+    # proving the group guard (not the predicates) is what suppresses the flag.
+    cross_group = [
+        {"when": {}, "actions": [], "group": "a"},  # idx 0: broad, group a
+        {"when": {"tod": (8, 16)}, "actions": [], "group": "b"},  # idx 1: narrow, group b
+    ]
+    assert shadowed_by(cross_group, matchers) == {}

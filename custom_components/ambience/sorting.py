@@ -149,8 +149,8 @@ def _fill(order: list[Rule]) -> None:
         i = j
 
 
-def resolve_order(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
-    """Canonicalise a scope's rules: maintain unpinned rules' priority numbers
+def _resolve_order_one_group(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
+    """Canonicalise one group's rules: maintain unpinned rules' priority numbers
     against the topological auto order (gap insertion preserves untouched
     numbers), keep pinned numbers fixed, then sort all rules by priority
     descending (higher = more important). Returns new rule dicts."""
@@ -189,6 +189,21 @@ def resolve_order(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
     return rules
 
 
+def resolve_order(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
+    """Canonicalise a scope's rules per group: partition by `group` (preserving
+    each group's first-appearance order), canonicalise each partition
+    independently, then concatenate so each group stays contiguous. Groups are
+    independent buckets, so order and priority are only meaningful within a
+    group."""
+    buckets: dict[str | None, list[Rule]] = {}
+    for r in rules:
+        buckets.setdefault(r.get("group"), []).append(r)
+    out: list[Rule] = []
+    for bucket in buckets.values():
+        out.extend(_resolve_order_one_group(bucket, matchers))
+    return out
+
+
 def _superset_or_equal(
     outer: dict[str, Any], inner: dict[str, Any], matchers: dict[str, Any]
 ) -> bool:
@@ -210,13 +225,15 @@ def _superset_or_equal(
 
 def shadowed_by(ordered_rules: list[Rule], matchers: dict[str, Any]) -> dict[int, int]:
     """For rules already in final (resolved) order, map the index of each
-    shadowed rule to the index of the earliest rule that shadows it — an
-    earlier rule whose match-set is a superset-or-equal, so under
-    first-match-wins the later rule can never fire."""
+    shadowed rule to the index of the earliest rule IN THE SAME GROUP that
+    shadows it. Groups resolve independently, so a rule can only be shadowed by
+    an earlier rule in its own group."""
     constrained = [_constrained(r) for r in ordered_rules]
     result: dict[int, int] = {}
     for j in range(len(ordered_rules)):
         for i in range(j):
+            if ordered_rules[i].get("group") != ordered_rules[j].get("group"):
+                continue
             if _superset_or_equal(constrained[i], constrained[j], matchers):
                 result[j] = i
                 break

@@ -148,3 +148,24 @@ async def test_cascade_off_preserves_already_off_child_off_at(
     # Kitchen was on -> now off at the later time.
     assert store.get_scope_switch_config("area", ids["kitchen"])["off_at"] is not None
     assert store.get_scope_switch_config("area", ids["kitchen"])["off_at"] != t0
+
+
+async def test_house_on_overrides_individually_off_child(hass, mock_config_entry, fixed_utcnow):
+    """Turning a parent ON cascades on, re-enabling a child that was
+    individually turned off earlier (the symmetric on-cascade)."""
+    ids = await _setup_hierarchy(hass, mock_config_entry)
+
+    # Individually turn one area off; the house stays on.
+    bedroom = _switch(hass, "area", ids["bedroom"])
+    await bedroom.async_turn_off()
+    await hass.async_block_till_done()
+    assert bedroom.is_on is False
+    assert _switch(hass, "house", None).is_on is True
+
+    # Turning the house ON cascades on and overrides the individual off.
+    await _switch(hass, "house", None).async_turn_on()
+    await hass.async_block_till_done()
+    assert bedroom.is_on is True
+    assert bedroom._timer is None
+    # A sibling that was already on is unaffected.
+    assert _switch(hass, "area", ids["kitchen"]).is_on is True

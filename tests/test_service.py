@@ -25,8 +25,13 @@ from custom_components.ambience.service import (
     async_resolve_only,
     async_resolve_with_snapshots,
     effective_reapply_seconds,
+    group_ids,
     scope_reapply_intervals,
 )
+
+
+def test_group_ids_returns_only_real_ids():
+    assert group_ids({"rules": [{"group": "a"}, {"group": "b"}, {"group": "a"}]}) == {"a", "b"}
 
 
 class FixedMatcher:
@@ -125,6 +130,7 @@ async def test_happy_path_calls_service_for_matching_rule(hass: HomeAssistant) -
         "lr": {
             "rules": [
                 {
+                    "group": "lighting",
                     "when": {"tod": "morning"},
                     "actions": [
                         {
@@ -135,6 +141,7 @@ async def test_happy_path_calls_service_for_matching_rule(hass: HomeAssistant) -
                     ],
                 },
                 {
+                    "group": "lighting",
                     "when": {"tod": "evening"},
                     "actions": [
                         {
@@ -168,6 +175,7 @@ async def test_defaults_merged_with_rule_params(hass: HomeAssistant) -> None:
         "lr": {
             "rules": [
                 {
+                    "group": "lighting",
                     "when": {},
                     "actions": [
                         {
@@ -206,6 +214,7 @@ async def test_rule_params_override_defaults(hass: HomeAssistant) -> None:
         "lr": {
             "rules": [
                 {
+                    "group": "lighting",
                     "when": {},
                     "actions": [
                         {
@@ -259,6 +268,7 @@ async def test_snapshot_failure_treats_matcher_as_unresolved(
         "lr": {
             "rules": [
                 {
+                    "group": "lighting",
                     "when": {"weather": "rainy"},
                     "actions": [
                         {
@@ -269,6 +279,7 @@ async def test_snapshot_failure_treats_matcher_as_unresolved(
                     ],
                 },
                 {
+                    "group": "lighting",
                     "when": {},
                     "actions": [
                         {
@@ -303,6 +314,7 @@ async def test_malformed_action_skipped_other_actions_run(
         "lr": {
             "rules": [
                 {
+                    "group": "lighting",
                     "when": {},
                     "actions": [
                         # Missing dot in service id → malformed.
@@ -342,6 +354,7 @@ async def test_unexposed_service_skipped_with_warning(
         "lr": {
             "rules": [
                 {
+                    "group": "lighting",
                     "when": {},
                     "actions": [
                         {
@@ -381,6 +394,7 @@ async def test_action_failure_does_not_block_other_actions(
         "lr": {
             "rules": [
                 {
+                    "group": "lighting",
                     "when": {},
                     "actions": [
                         {
@@ -441,6 +455,7 @@ async def test_cancellation_treated_as_failure_isolation(
         "lr": {
             "rules": [
                 {
+                    "group": "lighting",
                     "when": {},
                     "actions": [
                         {
@@ -476,6 +491,7 @@ async def test_apply_scene_with_no_entity_ids_omits_target(
         "lr": {
             "rules": [
                 {
+                    "group": "scripts",
                     "when": {},
                     "actions": [
                         {
@@ -569,6 +585,7 @@ async def test_async_apply_scene_floor_runs_floor_actions(hass: HomeAssistant) -
             "rules": [
                 {
                     "name": "movie",
+                    "group": "lighting",
                     "when": {},
                     "actions": [
                         {
@@ -651,7 +668,11 @@ def _switch(on: bool) -> SimpleNamespace:
 
 
 async def test_apply_scene_records_last_applied_rule(hass: HomeAssistant) -> None:
-    areas = {"a": {"rules": [{"name": "r", "when": {"tod": "evening"}, "actions": []}]}}
+    areas = {
+        "a": {
+            "rules": [{"name": "r", "group": "lighting", "when": {"tod": "evening"}, "actions": []}]
+        }
+    }
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(areas),
         DATA_MATCHERS: {"tod": FixedMatcher("evening")},
@@ -659,7 +680,7 @@ async def test_apply_scene_records_last_applied_rule(hass: HomeAssistant) -> Non
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
     await async_apply_scene(hass, "area", "a")
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 0
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 0
 
 
 async def test_apply_scene_switch_off_does_not_record(hass: HomeAssistant) -> None:
@@ -698,11 +719,11 @@ async def test_execute_plan_dispatches_actions_and_records_last_applied(
             {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 50}}
         ],
     }
-    await async_execute_plan(hass, "area", "a", plan, None)
+    await async_execute_plan(hass, "area", "a", plan, "lighting")
     assert len(calls) == 1
     assert calls[0].data["brightness"] == 50
     assert calls[0].data["entity_id"] == ["light.a"]
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 3
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 3
 
 
 async def test_resolve_with_snapshots_group_filters_to_group_rules(
@@ -798,9 +819,9 @@ async def test_execute_plan_records_last_applied_even_when_all_actions_skip(
         "matched_rule_index": 2,
         "actions": [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}],
     }
-    await async_execute_plan(hass, "area", "a", plan, None)
+    await async_execute_plan(hass, "area", "a", plan, "lighting")
     assert calls == []  # action skipped (unexposed)
-    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", None)] == 2
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 2
 
 
 class _ExposedStub:

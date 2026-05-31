@@ -70,6 +70,7 @@ async def test_service_call_invokes_light_turn_on(
             "matchers": [],
             "rules": [
                 {
+                    "group": "lighting",
                     "when": {},  # wildcard rule ⇒ always matches
                     "actions": [
                         {
@@ -267,6 +268,7 @@ async def test_engine_auto_applies_state_rule_on_config_change(
         {
             "rules": [
                 {
+                    "group": "lighting",
                     "when": {
                         "state": {
                             "kind": "is",

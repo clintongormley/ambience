@@ -126,14 +126,12 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             return [sw for key, sw in switches.items() if key != self.scope_key]
         if self._scope_kind == "floor":
             area_reg = ar.async_get(self.hass)
-            result: list[AmbienceScopeSwitch] = []
-            for (kind, sid), sw in switches.items():
-                if kind != "area":
-                    continue
-                area = area_reg.async_get_area(sid)
-                if area is not None and area.floor_id == self._scope_id:
-                    result.append(sw)
-            return result
+            floor_area_ids = {a.id for a in ar.async_entries_for_floor(area_reg, self._scope_id)}
+            return [
+                sw
+                for (kind, sid), sw in switches.items()
+                if kind == "area" and sid in floor_area_ids
+            ]
         return []
 
     # ---- HA lifecycle ----

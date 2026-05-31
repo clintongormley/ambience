@@ -47,7 +47,8 @@ def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
     """Return the on/off state of the scope's own switch.
 
     Returns 'on', 'off', or 'unknown' (entity not yet registered).
-    No cascade: each scope's switch gates only its own apply_scene calls.
+    Gating reads only the scope's own switch; parent toggles cascade state
+    onto descendant switches at turn-on/off time (see switch.py), not here.
     """
     switch = hass.data[DOMAIN].get(DATA_SWITCHES, {}).get((scope_kind, scope_id))
     if switch is None:

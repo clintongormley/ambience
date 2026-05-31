@@ -49,6 +49,17 @@ def _switch(hass: HomeAssistant, kind: str, sid: str | None) -> Any:
     return hass.data[DOMAIN][DATA_SWITCHES][(kind, sid)]
 
 
+def _all_descendants(ids: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    """Every (kind, sid) below the house switch, as set up by _setup_hierarchy."""
+    return (
+        ("floor", ids["upstairs"]),
+        ("floor", ids["downstairs"]),
+        ("area", ids["bedroom"]),
+        ("area", ids["kitchen"]),
+        ("area", ids["garage"]),
+    )
+
+
 async def test_house_off_cascades_all_switches_off(hass, mock_config_entry, fixed_utcnow):
     ids = await _setup_hierarchy(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
@@ -56,13 +67,7 @@ async def test_house_off_cascades_all_switches_off(hass, mock_config_entry, fixe
     await _switch(hass, "house", None).async_turn_off()
     await hass.async_block_till_done()
 
-    for kind, sid in (
-        ("floor", ids["upstairs"]),
-        ("floor", ids["downstairs"]),
-        ("area", ids["bedroom"]),
-        ("area", ids["kitchen"]),
-        ("area", ids["garage"]),
-    ):
+    for kind, sid in _all_descendants(ids):
         ent = _switch(hass, kind, sid)
         assert ent.is_on is False, (kind, sid)
         assert store.get_scope_switch_config(kind, sid)["off_at"] is not None, (kind, sid)
@@ -78,13 +83,7 @@ async def test_house_on_cascades_all_switches_on(hass, mock_config_entry, fixed_
     await house.async_turn_on()
     await hass.async_block_till_done()
 
-    for kind, sid in (
-        ("floor", ids["upstairs"]),
-        ("floor", ids["downstairs"]),
-        ("area", ids["bedroom"]),
-        ("area", ids["kitchen"]),
-        ("area", ids["garage"]),
-    ):
+    for kind, sid in _all_descendants(ids):
         ent = _switch(hass, kind, sid)
         assert ent.is_on is True, (kind, sid)
         assert ent._timer is None, (kind, sid)

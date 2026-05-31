@@ -1,8 +1,10 @@
 """apply_scene short-circuits when the scope's OWN switch is off.
 
-Each switch gates only its own scope's apply_scene calls. No cascade:
-a floor switch being off does not affect rooms on that floor, and the
-house switch only affects house-scope rules.
+Gating reads only a scope's own switch (service._switch_state). Toggling a
+parent switch CASCADES the same state onto descendant switches (house ->
+all floors+areas, floor -> its areas), so after a cascade a descendant's
+own switch is off and its apply_scene is blocked. A descendant can be turned
+back on individually to unblock it.
 """
 
 from __future__ import annotations
@@ -79,7 +81,7 @@ async def test_area_off_blocks_area_apply(hass, mock_config_entry, caplog):
 # --- no cascade: other scopes' switches are irrelevant ---------------------
 
 
-async def test_house_off_does_not_block_area_apply(hass, mock_config_entry, caplog):
+async def test_house_off_cascades_and_blocks_area_apply(hass, mock_config_entry, caplog):
     area_id, _ = await _setup_with_one_rule_per_scope(hass, mock_config_entry)
     house = await _switch(hass, "house", None)
     await house.async_turn_off()
@@ -87,10 +89,10 @@ async def test_house_off_does_not_block_area_apply(hass, mock_config_entry, capl
 
     caplog.set_level("INFO", logger="custom_components.ambience.service")
     await async_apply_scene(hass, "area", area_id, "x")
-    assert "switch is off" not in caplog.text.lower()
+    assert "switch is off" in caplog.text.lower()
 
 
-async def test_house_off_does_not_block_floor_apply(hass, mock_config_entry, caplog):
+async def test_house_off_cascades_and_blocks_floor_apply(hass, mock_config_entry, caplog):
     _, floor_id = await _setup_with_one_rule_per_scope(hass, mock_config_entry)
     house = await _switch(hass, "house", None)
     await house.async_turn_off()
@@ -98,11 +100,11 @@ async def test_house_off_does_not_block_floor_apply(hass, mock_config_entry, cap
 
     caplog.set_level("INFO", logger="custom_components.ambience.service")
     await async_apply_scene(hass, "floor", floor_id, "x")
-    assert "switch is off" not in caplog.text.lower()
+    assert "switch is off" in caplog.text.lower()
 
 
-async def test_floor_off_does_not_block_area_on_that_floor(hass, mock_config_entry, caplog):
-    """A floor switch being off must NOT affect rooms on that floor."""
+async def test_floor_off_cascades_and_blocks_area_on_that_floor(hass, mock_config_entry, caplog):
+    """A floor switch being turned off now cascades the rooms on that floor off."""
     area_id, floor_id = await _setup_with_one_rule_per_scope(hass, mock_config_entry)
     floor_switch = await _switch(hass, "floor", floor_id)
     await floor_switch.async_turn_off()
@@ -110,7 +112,7 @@ async def test_floor_off_does_not_block_area_on_that_floor(hass, mock_config_ent
 
     caplog.set_level("INFO", logger="custom_components.ambience.service")
     await async_apply_scene(hass, "area", area_id, "x")
-    assert "switch is off" not in caplog.text.lower()
+    assert "switch is off" in caplog.text.lower()
 
 
 async def test_area_off_does_not_block_floor_or_house_apply(hass, mock_config_entry, caplog):
@@ -157,11 +159,18 @@ async def test_resolve_only_reports_own_switch_state(hass, mock_config_entry):
     assert res["switch_state"] == "off"
 
 
-async def test_resolve_only_ignores_other_scope_switches(hass, mock_config_entry):
-    """House off must not show up as switch_state=off for an area dry_run."""
+async def test_resolve_only_reflects_cascade_then_individual_override(hass, mock_config_entry):
+    """House off cascades the area off (switch_state=off); turning the area
+    back on overrides it (switch_state=on) even while house stays off."""
     area_id, _ = await _setup_with_one_rule_per_scope(hass, mock_config_entry)
     house = await _switch(hass, "house", None)
     await house.async_turn_off()
+    await hass.async_block_till_done()
+    res = await async_resolve_only(hass, "area", area_id, "x")
+    assert res["switch_state"] == "off"
+
+    area_switch = await _switch(hass, "area", area_id)
+    await area_switch.async_turn_on()
     await hass.async_block_till_done()
     res = await async_resolve_only(hass, "area", area_id, "x")
     assert res["switch_state"] == "on"
@@ -183,3 +192,27 @@ async def test_resolve_only_still_resolves_rule_when_off(hass, mock_config_entry
     assert res["matched_rule_index"] == 0
     assert res["rule_name"] == "any"
     assert res["switch_state"] == "off"
+
+
+async def test_global_off_then_area_on_unblocks_area_apply(hass, mock_config_entry, caplog):
+    """Turn the global switch off (cascades the area off), then turn the area
+    back on — its apply_scene must no longer be blocked, even though house
+    is still off."""
+    area_id, _ = await _setup_with_one_rule_per_scope(hass, mock_config_entry)
+    house = await _switch(hass, "house", None)
+    await house.async_turn_off()
+    await hass.async_block_till_done()
+
+    # Cascade turned the area off too.
+    area_switch = await _switch(hass, "area", area_id)
+    assert area_switch.is_on is False
+
+    # Individually turn the area back on.
+    await area_switch.async_turn_on()
+    await hass.async_block_till_done()
+    assert area_switch.is_on is True
+    assert house.is_on is False  # house stays off
+
+    caplog.set_level("INFO", logger="custom_components.ambience.service")
+    await async_apply_scene(hass, "area", area_id, "x")
+    assert "switch is off" not in caplog.text.lower()

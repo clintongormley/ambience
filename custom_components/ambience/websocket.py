@@ -27,6 +27,7 @@ from .matchers.weather import WEATHER_CONDITIONS
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import async_resolve_groups_only, async_resolve_only, scope_reapply_intervals
 from .sorting import matcher_priority, resolve_order, shadowed_by
+from .store import GroupInUseError, LastGroupError, reassign_orphan_rules
 from .validators import validate_reapply_seconds
 
 _LOGGER = logging.getLogger(__name__)
@@ -244,19 +245,12 @@ def _with_shadows(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]
 
 
 def _coerce_rule_groups(store, config: dict) -> None:
-    """Rewrite any rule group id that isn't a known group to the General group
-    (rules are always grouped), logging once. Mutates `config` in place.
-
-    The store always seeds and preserves General, so it is the unconditional
-    home for orphaned rules (mirrors store._migrate_groups)."""
+    """Point any rule with no group / an unknown group at General (or, if General
+    was deleted, the first existing group), logging once. Mutates `config`.
+    Shares the per-rule reassignment with store._migrate_groups."""
     known = {g["id"] for g in store.groups()}
-    coerced = False
-    for rule in config.get("rules", []):
-        gid = rule.get("group")
-        if gid is None or gid not in known:
-            rule["group"] = GENERAL_GROUP_ID
-            coerced = True
-    if coerced:
+    target = GENERAL_GROUP_ID if GENERAL_GROUP_ID in known else next(iter(known), GENERAL_GROUP_ID)
+    if reassign_orphan_rules(config.get("rules", []), known, target):
         _LOGGER.warning("ambience: scope save had ungrouped/unknown-group rule(s); set to General")
 
 
@@ -1284,6 +1278,12 @@ async def _ws_groups_delete(
     store = hass.data[DOMAIN][DATA_STORE]
     try:
         await store.async_delete_group(msg["group_id"])
+    except LastGroupError as exc:
+        connection.send_error(msg["id"], "group_last", str(exc))
+        return
+    except GroupInUseError as exc:
+        connection.send_error(msg["id"], "group_in_use", str(exc))
+        return
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return

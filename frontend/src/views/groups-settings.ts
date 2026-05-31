@@ -235,17 +235,16 @@ export class AmbienceGroupsSettings extends LitElement {
       .then(() => this._closeModal())
       .catch((e) => {
         this._groups = previous;
-        // The only expected rejection for a non-last group is "still has rules"
-        // (we already guarded the last-group case above) — show the localized
-        // reason; fall back to the raw message for anything unexpected.
-        const raw = (e as Error).message || String(e);
-        this._modalError = raw.includes("still has rules")
+        // The backend tags an in-use refusal with a stable error code; show the
+        // localized reason for it, and the raw message for anything unexpected.
+        const code = (e as { code?: string }).code;
+        this._modalError = code === "group_in_use"
           ? localize(
               this.hass,
               "ui.group_delete_blocked_in_use",
               "This group still has rules — move or delete them first.",
             )
-          : raw;
+          : (e as Error).message || String(e);
       });
   }
 

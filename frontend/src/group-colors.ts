@@ -39,3 +39,11 @@ export function textColorFor(hex: string): "#000000" | "#ffffff" {
   const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
   return L > 0.5 ? "#000000" : "#ffffff";
 }
+
+// Inline style for a coloured group swatch: the group's colour as background
+// with an auto-contrast foreground, or "" when the group has no colour (callers
+// fall back to a neutral CSS class). Keeps the bg/fg contrast pairing in one place.
+export function groupSwatchStyle(color: string | undefined): string {
+  const hex = colorHex(color);
+  return hex ? `background:${hex};color:${textColorFor(hex)}` : "";
+}

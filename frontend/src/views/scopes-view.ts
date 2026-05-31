@@ -6,7 +6,7 @@ import type {
   FloorRegistryEvent,
   HassConnection,
 } from "../api.js";
-import { colorHex, textColorFor } from "../group-colors.js";
+import { groupSwatchStyle } from "../group-colors.js";
 import { localize } from "../i18n.js";
 import {
   getArea,
@@ -569,10 +569,8 @@ export class AmbienceScopesView extends LitElement {
         <span class="group-name">${localize(this.hass, "ui.all_groups", "All groups")}</span>
       `;
     }
-    const hex = colorHex(group.color);
-    const swatchStyle = hex ? `background:${hex};color:${textColorFor(hex)}` : "";
     return html`
-      <span class="group-swatch" style=${swatchStyle}>
+      <span class="group-swatch" style=${groupSwatchStyle(group.color)}>
         ${group.icon ? html`<ha-icon icon=${group.icon}></ha-icon>` : ""}
       </span>
       <span class="group-name">${group.name}</span>

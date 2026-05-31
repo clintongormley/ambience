@@ -2152,10 +2152,10 @@ async def test_groups_delete_unknown_is_noop(hass, installed, hass_ws_client) ->
     assert {g["id"] for g in list_resp["result"]["groups"]} == {"a", "b"}
 
 
-async def test_groups_delete_blocked_in_use_returns_validation_error(
+async def test_groups_delete_blocked_in_use_returns_group_in_use(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
-    """Deleting a group that still has rules returns a clean validation_error."""
+    """Deleting a group that still has rules returns a stable group_in_use code."""
     await _ws_send(
         hass_ws_client,
         type="ambience/groups/save",
@@ -2187,16 +2187,16 @@ async def test_groups_delete_blocked_in_use_returns_validation_error(
 
     resp = await _ws_send(hass_ws_client, id=3, type="ambience/groups/delete", group_id="a")
     assert resp["success"] is False
-    assert resp["error"]["code"] == "validation_error"
+    assert resp["error"]["code"] == "group_in_use"
     assert "still has rules" in resp["error"]["message"]
 
 
-async def test_groups_delete_blocked_last_returns_validation_error(
+async def test_groups_delete_blocked_last_returns_group_last(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
-    """Deleting the only remaining group returns a clean validation_error."""
+    """Deleting the only remaining group returns a stable group_last code."""
     # A fresh install seeds exactly one group ("general").
     resp = await _ws_send(hass_ws_client, type="ambience/groups/delete", group_id="general")
     assert resp["success"] is False
-    assert resp["error"]["code"] == "validation_error"
+    assert resp["error"]["code"] == "group_last"
     assert "last group" in resp["error"]["message"]

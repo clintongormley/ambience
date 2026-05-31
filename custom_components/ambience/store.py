@@ -24,6 +24,27 @@ from .matchers.weather import DEFAULT_WEATHER_GROUPS
 _LOGGER = logging.getLogger(__name__)
 
 
+class LastGroupError(ValueError):
+    """Raised when deleting the only remaining group."""
+
+
+class GroupInUseError(ValueError):
+    """Raised when deleting a group that still has rules in some scope."""
+
+
+def reassign_orphan_rules(rules: list[dict[str, Any]], known: set[str], target: str) -> bool:
+    """Point any rule with no group or an unknown group at `target`. Mutates the
+    rules in place; returns True if anything was changed. Shared by the store's
+    load-time migration and the websocket's save-time coercion."""
+    changed = False
+    for rule in rules:
+        gid = rule.get("group")
+        if gid is None or gid not in known:
+            rule["group"] = target
+            changed = True
+    return changed
+
+
 class AmbienceStore:
     """Typed wrapper over HA's Store for Ambience data."""
 
@@ -166,26 +187,21 @@ class AmbienceStore:
             self._data["groups"] = [dict(GENERAL_GROUP)]
 
     def _migrate_groups(self) -> None:
-        """Every rule must reference an existing group. Rules that are ungrouped
-        or point at a deleted group are reassigned to General, which is seeded
-        on demand if any such rule exists and General is not already present."""
-        if not self._data.get("groups"):
-            self._data["groups"] = [dict(GENERAL_GROUP)]
-        known = {g["id"] for g in self._data["groups"]}
-        orphans = [
-            rule
-            for _kind, _id, cfg in self.all_scope_configs()
-            for rule in cfg.get("rules", [])
-            if rule.get("group") is None or rule.get("group") not in known
+        """Reassign every ungrouped / unknown-group rule to General, seeding
+        General on demand if a store with other groups never had one.
+        `_ensure_groups` runs first, so at least one group already exists."""
+        known = {g["id"] for g in self._data.get("groups", [])}
+        rules = [
+            rule for _kind, _id, cfg in self.all_scope_configs() for rule in cfg.get("rules", [])
         ]
-        if not orphans:
+        if not any(r.get("group") is None or r.get("group") not in known for r in rules):
             return
-        # Orphaned rules need a home. Prefer the General group, seeding it if a
-        # store with other groups never had one.
+        # Orphaned rules need a home: seed General if a store with other groups
+        # never had one, then point them all at it.
         if GENERAL_GROUP_ID not in known:
             self._data["groups"].append(dict(GENERAL_GROUP))
-        for rule in orphans:
-            rule["group"] = GENERAL_GROUP_ID
+            known = known | {GENERAL_GROUP_ID}
+        reassign_orphan_rules(rules, known, GENERAL_GROUP_ID)
 
     def _ensure_switch_defaults(self) -> None:
         sd = self._data.setdefault("switch_defaults", {})
@@ -287,14 +303,14 @@ class AmbienceStore:
         and at least one group must always exist)."""
         groups = self._data.get("groups", [])
         if len(groups) <= 1:
-            raise ValueError("cannot delete the last group")
+            raise LastGroupError("cannot delete the last group")
         in_use = any(
             rule.get("group") == group_id
             for _kind, _id, cfg in self.all_scope_configs()
             for rule in cfg.get("rules", [])
         )
         if in_use:
-            raise ValueError(f"group {group_id!r} still has rules")
+            raise GroupInUseError(f"group {group_id!r} still has rules")
         self._data["groups"] = [g for g in groups if g.get("id") != group_id]
         await self._store.async_save(self._data)
         self._notify_config_changed()

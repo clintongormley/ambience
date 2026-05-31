@@ -1,7 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { colorHex, textColorFor } from "../group-colors.js";
+import { groupSwatchStyle } from "../group-colors.js";
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
 import { formatParamValue, paramLabel, ruleDisplayName, summariseMatcher } from "../summary.js";
 import type {
@@ -185,8 +185,8 @@ export class AmbienceRulesList extends LitElement {
   // for each param key in the expanded action detail. Optional; when
   // missing, the param key is humanized (snake_case → "Title case").
   @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
-  // Available rule groups, used to render section headers and the per-rule
-  // chip. Empty ⇒ no group sections (every rule rendered as one flat list).
+  // Available rule groups, used to render the section header bars. Empty ⇒ no
+  // group sections (every rule rendered as one flat list).
   @property({ attribute: false }) groups: RuleGroup[] = [];
 
   // The active group filter, OWNED BY THE PARENT (scopes-view): "" = All,
@@ -204,9 +204,7 @@ export class AmbienceRulesList extends LitElement {
    *  as background (auto-contrast text), its icon, then its name. Falls back to
    *  neutral theme colours when the group has no colour. */
   private _renderSectionHeader(group: RuleGroup) {
-    const hex = colorHex(group.color);
-    const style = hex ? `background:${hex};color:${textColorFor(hex)}` : "";
-    return html`<div class="group-section-header" style=${style}>
+    return html`<div class="group-section-header" style=${groupSwatchStyle(group.color)}>
       ${group.icon ? html`<ha-icon icon=${group.icon}></ha-icon>` : ""}
       <span>${group.name}</span>
     </div>`;

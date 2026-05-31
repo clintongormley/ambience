@@ -122,7 +122,8 @@ describe("ambience-groups-settings", () => {
   });
 
   test("a server delete rejection (group in use) shows the reason and restores the group", async () => {
-    (deleteGroup as any).mockRejectedValueOnce(new Error("group 'blinds' still has rules"));
+    // The backend rejects with a stable code; the UI localizes the in-use message.
+    (deleteGroup as any).mockRejectedValueOnce({ code: "group_in_use", message: "group 'blinds' still has rules" });
     el = await mount();
     // ensure >1 group so the last-group guard doesn't fire
     el._groups = [{ id: "blinds", name: "Blinds" }, { id: "lights", name: "Lights" }];

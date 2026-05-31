@@ -20,7 +20,7 @@ from typing import Any
 
 Rule = dict[str, Any]
 
-_DEFAULT_PRIORITY = 1000
+_DEFAULT_PRIORITY = 0
 
 
 def _priority(matcher: Any) -> int:
@@ -46,7 +46,7 @@ def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
     # (ties broken by name for determinism).
     slot_names = sorted(
         {name for rule in rules for name in rule.get("when", {})},
-        key=lambda name: (_priority(matchers.get(name)), name),
+        key=lambda name: (-_priority(matchers.get(name)), name),
     )
 
     def lin_key(rule: Rule) -> tuple:

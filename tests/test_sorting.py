@@ -25,7 +25,7 @@ class SceneLike:
     """Test double for an always-on string-equality matcher (like `scene`):
     `order_key` only, no `contains` (equality is handled generically)."""
 
-    priority = 0
+    priority = 1000
 
     def order_key(self, predicate: Any) -> str:
         return predicate.lower()
@@ -109,12 +109,12 @@ def test_partial_overlap_neither_contains_uses_start_time() -> None:
 
 
 def test_wildcard_slot_sorts_last() -> None:
-    # tod has higher priority (lower number) than weather; the two rules are
+    # tod has higher priority (higher number) than weather; the two rules are
     # incomparable, so the highest-priority slot decides — and the rule that
     # leaves `tod` unconstrained (a wildcard) sorts after the one that sets it.
     matchers = {
-        "tod": IntervalMatcher(priority=100),
-        "weather": IntervalMatcher(priority=200),
+        "tod": IntervalMatcher(priority=200),
+        "weather": IntervalMatcher(priority=100),
     }
     rules = [
         _rule("weather-only", {"weather": (0, 5)}),

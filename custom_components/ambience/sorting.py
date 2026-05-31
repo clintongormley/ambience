@@ -151,7 +151,8 @@ def resolve_order(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
     rules = [dict(r) for r in rules]
     for r in rules:
         r["pinned"] = bool(r.get("pinned", False))
-        if not isinstance(r.get("priority"), int):
+        p = r.get("priority")
+        if not isinstance(p, int) or isinstance(p, bool):
             r["priority"] = None
 
     unpinned = [r for r in rules if not r["pinned"]]

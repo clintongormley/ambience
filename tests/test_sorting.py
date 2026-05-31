@@ -248,3 +248,16 @@ def test_resolve_renormalises_when_a_gap_closes() -> None:
     prios = [r["priority"] for r in out]
     assert prios == sorted(prios, reverse=True)
     assert len(set(prios)) == len(prios)
+
+
+def test_resolve_renormalises_on_duplicate_pin_values() -> None:
+    matchers = {"scene": SceneLike()}
+    rules = [
+        {"name": "a", "when": {"scene": "a"}, "actions": [], "priority": 500, "pinned": True},
+        {"name": "b", "when": {"scene": "b"}, "actions": [], "priority": 500, "pinned": True},
+    ]
+    out = resolve_order(rules, matchers)
+    prios = [r["priority"] for r in out]
+    assert prios == sorted(prios, reverse=True), "must be strictly decreasing"
+    assert len(set(prios)) == len(prios), "no ties"
+    assert 500 not in prios, "renorm must have reassigned all values"

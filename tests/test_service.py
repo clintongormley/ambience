@@ -21,6 +21,7 @@ from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.matchers.scene import SceneMatcher
 from custom_components.ambience.service import (
     async_apply_scene,
+    async_execute_actions,
     async_execute_plan,
     async_resolve_only,
     async_resolve_with_snapshots,
@@ -822,3 +823,26 @@ def test_effective_reapply_bool_value_is_off():
 def test_effective_reapply_handles_missing_exposed_store():
     action = {"service": "x.y", "reapply_seconds": 30}
     assert effective_reapply_seconds(action, None) == 30
+
+
+async def test_execute_actions_dispatches_and_leaves_last_applied_untouched(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    entry = {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}
+    hass.data[DOMAIN] = {
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage([entry])),
+        DATA_LAST_APPLIED: {("area", "kitchen"): 2},
+    }
+
+    await async_execute_actions(
+        hass,
+        "area",
+        "kitchen",
+        [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 5}}],
+    )
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
+    assert calls[0]["brightness"] == 5
+    # Re-apply must NOT change the dedup state.
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED] == {("area", "kitchen"): 2}

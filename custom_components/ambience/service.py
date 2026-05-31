@@ -192,26 +192,28 @@ async def async_apply_scene(
     await async_execute_plan(hass, scope_kind, scope_id, plan)
 
 
-async def async_execute_plan(
+async def async_execute_actions(
     hass: HomeAssistant,
     scope_kind: str,
     scope_id: str | None,
-    plan: dict[str, Any],
+    actions: list[dict[str, Any]],
+    rule_index: int | None = None,
 ) -> None:
-    """Dispatch a resolved plan's actions and record it as last-applied.
+    """Dispatch a list of action specs.
 
-    The caller must have already gated on the switch and confirmed a non-None
-    `matched_rule_index`. Malformed / unexposed actions are logged and skipped;
-    a raised action is logged but does not abort the rest.
+    Malformed / unexposed actions are logged and skipped; a raised action is
+    logged but does not abort the rest. Does NOT record last-applied — callers
+    that represent a full apply do that themselves. `rule_index` is used only
+    for log context.
     """
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
     coros: list = []
-    for action_spec in plan["actions"]:
+    for action_spec in actions:
         service_id = action_spec.get("service")
         if not service_id or "." not in service_id:
             _LOGGER.warning(
-                "ambience: rule %d in scope=%s/%s has malformed action %r; skipping",
-                plan["matched_rule_index"],
+                "ambience: rule %s in scope=%s/%s has malformed action %r; skipping",
+                rule_index,
                 scope_kind,
                 scope_id,
                 action_spec,
@@ -220,9 +222,9 @@ async def async_execute_plan(
         exposed = exposed_store.get(service_id)
         if exposed is None:
             _LOGGER.warning(
-                "ambience: service %r not exposed; skipping (rule %d, scope=%s/%s)",
+                "ambience: service %r not exposed; skipping (rule %s, scope=%s/%s)",
                 service_id,
-                plan["matched_rule_index"],
+                rule_index,
                 scope_kind,
                 scope_id,
             )
@@ -238,10 +240,23 @@ async def async_execute_plan(
         if isinstance(result, BaseException):
             _LOGGER.warning("ambience: action raised: %s", result)
 
+
+async def async_execute_plan(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    plan: dict[str, Any],
+) -> None:
+    """Dispatch a resolved plan's actions and record it as last-applied.
+
+    The caller must have already gated on the switch and confirmed a non-None
+    `matched_rule_index`. Malformed / unexposed actions are logged and skipped;
+    a raised action is logged but does not abort the rest.
+    """
+    index = plan["matched_rule_index"]
+    await async_execute_actions(hass, scope_kind, scope_id, plan["actions"], rule_index=index)
     domain_data = hass.data[DOMAIN]
-    domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id)] = plan[
-        "matched_rule_index"
-    ]
+    domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id)] = index
 
 
 def get_last_applied(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> int | None:

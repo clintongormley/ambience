@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16.5 0 108.5 108.5">
+  <defs>
+    <linearGradient id="a" x1="25.5" y1="0" x2="94.5" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4A3E9E"/>
+      <stop offset="35%" stop-color="#8A3FA0"/>
+      <stop offset="62%" stop-color="#D43F6B"/>
+      <stop offset="100%" stop-color="#E8901E"/>
+    </linearGradient>
+  </defs>
+  <!-- sun -->
+  <g stroke="#E0890F" stroke-width="3" stroke-linecap="round">
+    <line x1="98" y1="11" x2="98" y2="6"/>
+    <line x1="98" y1="37" x2="98" y2="42"/>
+    <line x1="85" y1="24" x2="80" y2="24"/>
+    <line x1="111" y1="24" x2="116" y2="24"/>
+    <line x1="107.19" y1="14.81" x2="110.73" y2="11.27"/>
+    <line x1="88.81" y1="14.81" x2="85.27" y2="11.27"/>
+    <line x1="107.19" y1="33.19" x2="110.73" y2="36.73"/>
+    <line x1="88.81" y1="33.19" x2="85.27" y2="36.73"/>
+  </g>
+  <circle cx="98" cy="24" r="10" fill="#F0A52E"/>
+  <!-- stylised A -->
+  <path d="M32 96 L60 28 L88 96" fill="none" stroke="url(#a)" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"/>
+  <line x1="45" y1="72" x2="75" y2="72" stroke="url(#a)" stroke-width="13" stroke-linecap="round"/>
+</svg>

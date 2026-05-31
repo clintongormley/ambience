@@ -8,6 +8,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import type { HassConnection } from "./api.js";
 import { localize } from "./i18n.js";
+import { renderLogo } from "./logo.js";
 import { watchHaComponents } from "./ha-components.js";
 import "./views/scopes-view.js";
 import "./views/settings-view.js";
@@ -33,8 +34,16 @@ export class AmbiencePanel extends LitElement {
     }
     h1 {
       margin: 0;
-      font-size: 1.4rem;
       flex: 1;
+      display: flex;
+      align-items: center;
+      /* visually replaced by the logo; keep for document outline only */
+      font-size: 0;
+    }
+    h1 .ambience-logo {
+      display: block;
+      height: 2rem;
+      width: auto;
     }
     nav {
       display: flex;
@@ -70,7 +79,15 @@ export class AmbiencePanel extends LitElement {
   override render() {
     return html`
       <header>
-        <h1>${localize(this.hass, "ui.panel_title", "Ambience")}</h1>
+        <h1>
+          ${renderLogo({
+            dark: Boolean(
+              (this.hass as { themes?: { darkMode?: boolean } }).themes
+                ?.darkMode,
+            ),
+            title: localize(this.hass, "ui.panel_title", "Ambience"),
+          })}
+        </h1>
         <nav>
           <button
             class=${this._view === "areas" ? "active" : ""}

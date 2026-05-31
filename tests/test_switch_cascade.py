@@ -135,14 +135,16 @@ async def test_cascade_off_preserves_already_off_child_off_at(
     await _switch(hass, "area", ids["bedroom"]).async_turn_off()
     await hass.async_block_till_done()
     t0 = store.get_scope_switch_config("area", ids["bedroom"])["off_at"]
+    assert t0 is not None
 
     # Advance the clock, then turn the house off (cascades).
     fixed_utcnow["now"] += timedelta(minutes=30)
     await _switch(hass, "house", None).async_turn_off()
     await hass.async_block_till_done()
 
-    # Bedroom was already off -> its off_at must be untouched (not re-stamped).
+    # Bedroom was already off -> its off_at AND timer must be untouched.
     assert store.get_scope_switch_config("area", ids["bedroom"])["off_at"] == t0
+    assert _switch(hass, "area", ids["bedroom"])._timer is not None
     # Kitchen was on -> now off at the later time.
     assert store.get_scope_switch_config("area", ids["kitchen"])["off_at"] is not None
     assert store.get_scope_switch_config("area", ids["kitchen"])["off_at"] != t0

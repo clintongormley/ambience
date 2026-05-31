@@ -193,17 +193,12 @@ export class AmbienceRuleEditor extends LitElement {
       padding: 0.3rem 0;
     }
     .destination {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
       margin-bottom: 0.75rem;
     }
     .destination label {
+      display: block;
       color: var(--secondary-text-color, #888);
       font-size: 0.9em;
-    }
-    .destination select {
-      flex: 1;
     }
   `;
 
@@ -278,8 +273,7 @@ export class AmbienceRuleEditor extends LitElement {
     this._setName((e.target as HTMLElement & { value: string }).value);
   };
 
-  private _onDestinationChange = (e: Event) => {
-    const idx = Number((e.target as HTMLSelectElement).value);
+  private _setDestination(idx: number) {
     const opt = this.scopes[idx];
     if (!opt || !this._draft) return;
     this._scope = opt.scope;
@@ -295,7 +289,18 @@ export class AmbienceRuleEditor extends LitElement {
         entity_ids: a.entity_ids.filter((id) => inScope.has(id)),
       })),
     };
+  }
+
+  private _onDestinationChange = (e: Event) => {
+    this._setDestination(Number((e.target as HTMLSelectElement).value));
   };
+
+  /* v8 ignore start -- ha-form not registered in jsdom; jsdom hits the native fallback */
+  private _onDestinationChangeHaForm = (e: CustomEvent<{ value: { destination: string } }>) => {
+    e.stopPropagation();
+    this._setDestination(Number(e.detail.value.destination));
+  };
+  /* v8 ignore stop */
 
   private _renderDestination() {
     if (this.scopes.length === 0) return "";
@@ -303,6 +308,10 @@ export class AmbienceRuleEditor extends LitElement {
       0,
       this.scopes.findIndex((o) => sameScope(o.scope, this._scope)),
     );
+    /* v8 ignore next 3 -- ha-form not registered in jsdom; jsdom hits the native fallback below */
+    if (customElements.get("ha-form")) {
+      return this._renderDestinationHaForm(currentIdx);
+    }
     return html`
       <div class="destination">
         <label>${localize(this.hass, "ui.destination", "Destination")}</label>
@@ -318,6 +327,34 @@ export class AmbienceRuleEditor extends LitElement {
       </div>
     `;
   }
+
+  /* v8 ignore start -- ha-form path (real HA only) */
+  private _renderDestinationHaForm(currentIdx: number) {
+    const schema = [{
+      name: "destination",
+      // Required so the dropdown offers no clear/empty affordance — a rule
+      // always has a destination scope.
+      required: true,
+      selector: {
+        select: {
+          mode: "dropdown",
+          options: this.scopes.map((o, i) => ({ value: String(i), label: o.label })),
+        },
+      },
+    }];
+    return html`
+      <div class="destination">
+        <ha-form
+          .hass=${this.hass}
+          .schema=${schema}
+          .data=${{ destination: String(currentIdx) }}
+          .computeLabel=${() => localize(this.hass, "ui.destination", "Destination")}
+          @value-changed=${this._onDestinationChangeHaForm}
+        ></ha-form>
+      </div>
+    `;
+  }
+  /* v8 ignore stop */
 
   private _renderNameSlot() {
     const value = this._draft!.name ?? "";
@@ -973,9 +1010,9 @@ export class AmbienceRuleEditor extends LitElement {
     return html`
       <div class="modal" @click=${this._onModalClick}>
         <div class="content">
-          ${this._renderDestination()}
           ${this._renderNameSlot()}
           ${this._renderGroupSelector()}
+          ${this._renderDestination()}
 
           <h3>${localize(this.hass, "ui.when_heading", "When")}</h3>
           ${visibleMatchers.map((m) => this._renderMatcherRow(m))}

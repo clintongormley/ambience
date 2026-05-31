@@ -14,7 +14,7 @@ vi.mock("../frontend/src/api", () => ({
 }));
 
 import "../frontend/src/views/rule-editor";
-import type { ExposedAction, MatcherInfo, Rule, RuleGroup, Scope } from "../frontend/src/types";
+import type { ExposedAction, MatcherInfo, Rule, RuleGroup, Scope, ScopeOption } from "../frontend/src/types";
 import * as api from "../frontend/src/api";
 
 const matchers: MatcherInfo[] = [
@@ -55,7 +55,7 @@ const hass = {
 
 async function mount(
   rule: Rule | null,
-  opts: { scope?: Scope; hass?: any; groups?: RuleGroup[] } = {},
+  opts: { scope?: Scope; hass?: any; groups?: RuleGroup[]; scopes?: ScopeOption[] } = {},
 ): Promise<any> {
   const el: any = document.createElement("ambience-rule-editor");
   el.matchers = matchers;
@@ -64,6 +64,7 @@ async function mount(
   el.hass = opts.hass ?? hass;
   el.scope = opts.scope ?? { kind: "area", id: "living_room" };
   if (opts.groups) el.groups = opts.groups;
+  if (opts.scopes) el.scopes = opts.scopes;
   el.rule = rule;
   el.open = true;
   document.body.appendChild(el);
@@ -1739,6 +1740,21 @@ describe("ambience-rule-editor — destination selector", () => {
     expect(select).toBeTruthy();
     expect(select.options.length).toBe(3);
     expect(select.options[select.selectedIndex].textContent.trim()).toBe("Area: Bedroom");
+  });
+
+  test("the destination selector is rendered after the group selector", async () => {
+    el = await mount(
+      { name: "t", when: {}, actions: [], group: "a" },
+      { groups: [{ id: "a", name: "A" }], scopes },
+    );
+    const group = el.shadowRoot.querySelector(".group-select");
+    const destination = el.shadowRoot.querySelector(".destination");
+    expect(group).toBeTruthy();
+    expect(destination).toBeTruthy();
+    // destination must come AFTER the group selector in document order.
+    expect(
+      group.compareDocumentPosition(destination) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   test("changing destination clears out-of-scope action targets, keeps matchers", async () => {

@@ -371,7 +371,7 @@ describe("ambience-scopes-view", () => {
     expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
   });
 
-  test("dropping a rule pins it with a midpoint priority and saves", async () => {
+  test("dropping a rule to the top slot pins it above the max priority", async () => {
     const cfg: ScopeConfig = {
       rules: [
         { name: "a", when: {}, actions: [], priority: 3072, pinned: false },
@@ -407,8 +407,94 @@ describe("ambience-scopes-view", () => {
     const movedRule = savedConfig.rules[0];
     expect(movedRule.name).toBe("c");
     expect(movedRule.pinned).toBe(true);
-    // Top slot → priority should be max(3072, 2048, 1024) + 1024 = 4096
+    // Top slot: above=undefined, below=3072 → max(3072,2048,1024) + 1024 = 4096
+    expect(movedRule.priority).toBe(4096);
     expect(movedRule.priority).toBeGreaterThan(3072);
+  });
+
+  test("dropping a rule to a middle slot pins it at the midpoint priority", async () => {
+    const cfg: ScopeConfig = {
+      rules: [
+        { name: "a", when: {}, actions: [], priority: 3072, pinned: false },
+        { name: "b", when: {}, actions: [], priority: 2048, pinned: false },
+        { name: "c", when: {}, actions: [], priority: 1024, pinned: false },
+      ],
+    };
+    vi.mocked(api.saveArea).mockImplementation(async (_hass, _areaId, saved) => ({
+      ok: true,
+      config: saved,
+    }));
+    el = await mount({ areaConfigs: { living_room: cfg } });
+
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    // Move rule at index 2 ("c") to index 1.
+    // After splice: [a:3072, c, b:2048] → above=rules[0].priority=3072, below=rules[2].priority=2048
+    // _pinPriority(3072, 2048, original) → Math.floor((3072+2048)/2) = 2560
+    rulesList.dispatchEvent(
+      new CustomEvent("reorder-rules", {
+        detail: { from: 2, to: 1 },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(api.saveArea).toHaveBeenCalled();
+    const savedConfig: ScopeConfig = vi.mocked(api.saveArea).mock.calls.at(-1)![2];
+    const movedRule = savedConfig.rules[1];
+    expect(movedRule.name).toBe("c");
+    expect(movedRule.pinned).toBe(true);
+    // Midpoint between a(3072) and b(2048): Math.floor((3072+2048)/2) = 2560
+    expect(movedRule.priority).toBe(2560);
+  });
+
+  test("dropping a rule to the bottom slot pins it below the min priority", async () => {
+    const cfg: ScopeConfig = {
+      rules: [
+        { name: "a", when: {}, actions: [], priority: 3072, pinned: false },
+        { name: "b", when: {}, actions: [], priority: 2048, pinned: false },
+        { name: "c", when: {}, actions: [], priority: 1024, pinned: false },
+      ],
+    };
+    vi.mocked(api.saveArea).mockImplementation(async (_hass, _areaId, saved) => ({
+      ok: true,
+      config: saved,
+    }));
+    el = await mount({ areaConfigs: { living_room: cfg } });
+
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    // Move rule at index 0 ("a") to index 2 (the bottom slot).
+    // After splice(0,1): [b:2048, c:1024], then splice(2,0,a): [b:2048, c:1024, a]
+    // above=rules[1].priority=1024, below=rules[3]=undefined
+    // _pinPriority(1024, undefined, original) → min(3072,2048,1024) - 1024 = 0
+    rulesList.dispatchEvent(
+      new CustomEvent("reorder-rules", {
+        detail: { from: 0, to: 2 },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(api.saveArea).toHaveBeenCalled();
+    const savedConfig: ScopeConfig = vi.mocked(api.saveArea).mock.calls.at(-1)![2];
+    const movedRule = savedConfig.rules[2];
+    expect(movedRule.name).toBe("a");
+    expect(movedRule.pinned).toBe(true);
+    // Bottom slot: above=1024, below=undefined → min(3072,2048,1024) - 1024 = 0
+    expect(movedRule.priority).toBe(0);
   });
 
   test("editor receives a Scope object (kind + id) for an area", async () => {

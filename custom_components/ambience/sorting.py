@@ -7,8 +7,8 @@ See spec §5. Rule order has two parts:
     shadow P);
   * a linearisation — among rules the partial order leaves free, the one with
     the smaller linearisation key (a per-matcher tuple of `order_key` values,
-    the slots ordered by matcher `priority`; a slot a rule does not constrain
-    sorts last).
+    the slots ordered by matcher `priority` DESCENDING — higher priority =
+    more important = sorts earlier; a slot a rule does not constrain sorts last).
 
 The result is a stable topological sort: rules tying on everything keep their
 original relative order.
@@ -20,7 +20,7 @@ from typing import Any
 
 Rule = dict[str, Any]
 
-_DEFAULT_PRIORITY = 0
+_DEFAULT_PRIORITY = 0  # Fallback for matchers without a priority — lowest, so they sort last.
 
 
 def _priority(matcher: Any) -> int:
@@ -43,7 +43,8 @@ def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
 
     # --- linearisation key per rule --------------------------------------
     # One slot per matcher named anywhere in a `when`, ordered by `priority`
-    # (ties broken by name for determinism).
+    # DESCENDING (higher priority = more important = sorts earlier; ties broken
+    # by name for determinism).
     slot_names = sorted(
         {name for rule in rules for name in rule.get("when", {})},
         key=lambda name: (-_priority(matchers.get(name)), name),

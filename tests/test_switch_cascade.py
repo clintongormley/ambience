@@ -87,3 +87,32 @@ async def test_house_on_cascades_all_switches_on(hass, mock_config_entry, fixed_
         ent = _switch(hass, kind, sid)
         assert ent.is_on is True, (kind, sid)
         assert ent._timer is None, (kind, sid)
+
+
+async def test_floor_off_cascades_only_its_own_areas(hass, mock_config_entry, fixed_utcnow):
+    ids = await _setup_hierarchy(hass, mock_config_entry)
+
+    await _switch(hass, "floor", ids["upstairs"]).async_turn_off()
+    await hass.async_block_till_done()
+
+    # Bedroom is on Upstairs -> off.
+    assert _switch(hass, "area", ids["bedroom"]).is_on is False
+    # Kitchen (Downstairs), Garage (floorless), the other floor, and the
+    # house switch are all untouched.
+    assert _switch(hass, "area", ids["kitchen"]).is_on is True
+    assert _switch(hass, "area", ids["garage"]).is_on is True
+    assert _switch(hass, "floor", ids["downstairs"]).is_on is True
+    assert _switch(hass, "house", None).is_on is True
+
+
+async def test_floor_on_cascades_only_its_own_areas(hass, mock_config_entry, fixed_utcnow):
+    ids = await _setup_hierarchy(hass, mock_config_entry)
+    upstairs = _switch(hass, "floor", ids["upstairs"])
+    await upstairs.async_turn_off()
+    await hass.async_block_till_done()
+
+    await upstairs.async_turn_on()
+    await hass.async_block_till_done()
+
+    assert _switch(hass, "area", ids["bedroom"]).is_on is True
+    assert _switch(hass, "area", ids["bedroom"])._timer is None

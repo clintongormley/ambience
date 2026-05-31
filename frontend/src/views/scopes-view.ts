@@ -44,7 +44,7 @@ import "./rules-list.js";
 import "./rule-editor.js";
 import "./auto-triggers-section.js";
 
-type EditingState = { scope: Scope; index: number; isNew: boolean };
+type EditingState = { scope: Scope; index: number; isNew: boolean; seed?: Rule };
 
 /**
  * Stable key for a scope, used in `_expanded` and for `data-id` attributes.
@@ -490,10 +490,8 @@ export class AmbienceScopesView extends LitElement {
     if (!cfg) return;
     const original = cfg.rules[e.detail.index];
     if (!original) return;
-    const copy: Rule = JSON.parse(JSON.stringify(original));
-    const rules = [...cfg.rules];
-    rules.splice(e.detail.index + 1, 0, copy);
-    void this._mutate(scope, { ...cfg, rules });
+    const seed: Rule = JSON.parse(JSON.stringify(original));
+    this._editing = { scope, index: cfg.rules.length, isNew: true, seed };
   }
 
   private _deleteRule(scope: Scope, e: CustomEvent<{ index: number }>) {
@@ -673,6 +671,7 @@ export class AmbienceScopesView extends LitElement {
 
   private get _editingRule(): Rule | null {
     if (!this._editing) return null;
+    if (this._editing.seed) return this._editing.seed;
     if (this._editing.isNew) return { when: {}, actions: [], group: this._defaultGroupId() };
     const cfg = this._getConfig(this._editing.scope);
     return cfg?.rules[this._editing.index] ?? null;

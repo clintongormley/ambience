@@ -425,6 +425,29 @@ describe("ambience-scopes-view", () => {
     );
   });
 
+  // --- duplicate ----------------------------------------------------------
+
+  test("duplicate opens the editor with a clone and saves nothing until confirmed", async () => {
+    const rule: Rule = { name: "Orig", when: {}, actions: [] };
+    el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    rulesList.dispatchEvent(
+      new CustomEvent("duplicate-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+
+    const editor: any = el.shadowRoot.querySelector("ambience-rule-editor");
+    expect(editor.open).toBe(true);
+    expect(editor.rule).toEqual(rule);   // equal-by-value clone
+    expect(editor.rule).not.toBe(rule);  // but not the same object
+    expect(api.saveArea).not.toHaveBeenCalled();
+  });
+
   test("saveArea error is displayed", async () => {
     vi.mocked(api.saveArea).mockRejectedValueOnce(new Error("Save failed"));
     el = await mount({

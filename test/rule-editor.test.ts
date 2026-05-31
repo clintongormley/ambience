@@ -1740,4 +1740,41 @@ describe("ambience-rule-editor — destination selector", () => {
     expect(select.options.length).toBe(3);
     expect(select.options[select.selectedIndex].textContent.trim()).toBe("Area: Bedroom");
   });
+
+  test("changing destination clears out-of-scope action targets, keeps matchers", async () => {
+    const hass2 = {
+      ...hass,
+      entities: {
+        "light.lamp_a": { entity_id: "light.lamp_a", area_id: "living_room" },
+        "light.bed": { entity_id: "light.bed", area_id: "bedroom" },
+      },
+    } as any;
+    const e: any = document.createElement("ambience-rule-editor");
+    e.matchers = matchers;
+    e.availableActions = availableActions;
+    e.periods = periods;
+    e.hass = hass2;
+    e.scope = { kind: "area", id: "living_room" };
+    e.scopes = scopes;
+    e.rule = {
+      when: { state: { atom: { kind: "is", entity_id: "light.lamp_a", states: ["on"] } } },
+      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {} }],
+    };
+    e.open = true;
+    document.body.appendChild(e);
+    await e.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await e.updateComplete;
+    el = e;
+
+    const select = el.shadowRoot.querySelector("select.destination") as HTMLSelectElement;
+    select.value = "2"; // Area: Bedroom
+    select.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+
+    // light.lamp_a is in living_room, not bedroom → action target cleared.
+    expect(el._draft.actions[0].entity_ids).toEqual([]);
+    // Matcher entity reference is left untouched.
+    expect(el._draft.when.state.atom.entity_id).toBe("light.lamp_a");
+  });
 });

@@ -17,6 +17,7 @@ import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { localize, matcherLabel } from "../i18n.js";
 import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
 import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
+import { entitiesForScope } from "../entities-for-scope.js";
 import "./action-slot.js";
 import "./matcher-input.js";
 
@@ -267,8 +268,20 @@ export class AmbienceRuleEditor extends LitElement {
   private _onDestinationChange = (e: Event) => {
     const idx = Number((e.target as HTMLSelectElement).value);
     const opt = this.scopes[idx];
-    if (!opt) return;
+    if (!opt || !this._draft) return;
     this._scope = opt.scope;
+    if (!this.hass) return;
+    // Re-check action targets against the new scope. Pruning is destructive:
+    // switching back to the old scope does NOT restore cleared refs. Matcher
+    // predicates may legitimately reference other scopes, so they're untouched.
+    const inScope = new Set(entitiesForScope(this.hass, this._scope, []));
+    this._draft = {
+      ...this._draft,
+      actions: this._draft.actions.map((a) => ({
+        ...a,
+        entity_ids: a.entity_ids.filter((id) => inScope.has(id)),
+      })),
+    };
   };
 
   private _renderDestination() {

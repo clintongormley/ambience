@@ -114,5 +114,11 @@ async def test_floor_on_cascades_only_its_own_areas(hass, mock_config_entry, fix
     await upstairs.async_turn_on()
     await hass.async_block_till_done()
 
-    assert _switch(hass, "area", ids["bedroom"]).is_on is True
-    assert _switch(hass, "area", ids["bedroom"])._timer is None
+    bedroom_sw = _switch(hass, "area", ids["bedroom"])
+    assert bedroom_sw.is_on is True
+    assert bedroom_sw._timer is None
+    # Isolation: the on-cascade must not have touched anything off this floor.
+    assert _switch(hass, "area", ids["kitchen"]).is_on is True
+    assert _switch(hass, "area", ids["garage"]).is_on is True
+    assert _switch(hass, "floor", ids["downstairs"]).is_on is True
+    assert _switch(hass, "house", None).is_on is True

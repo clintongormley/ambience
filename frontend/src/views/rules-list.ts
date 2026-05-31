@@ -119,11 +119,7 @@ export class AmbienceRulesList extends LitElement {
       margin-top: 0.5rem;
     }
     .pin {
-      background: transparent;
-      border: 0;
-      cursor: pointer;
       padding: 0 0.25rem;
-      font-size: 1rem;
     }
     .shadow-warning {
       color: var(--error-color, #db4437);
@@ -137,7 +133,7 @@ export class AmbienceRulesList extends LitElement {
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
   // Matcher registry — used to sort `when` keys by `priority` in the summary
-  // so it reads in the same order as the linearisation tiebreaker (lower
+  // so it reads in the same order as the linearisation tiebreaker (higher
   // priority first). Undefined → falls back to `when`-dict insertion order.
   @property({ attribute: false }) matchers?: MatcherInfo[];
   // Exposed-actions registry — used to resolve a friendly label for each
@@ -304,6 +300,7 @@ export class AmbienceRulesList extends LitElement {
                 ? html`<button
                     class="pin"
                     title=${localize(this.hass, "ui.unpin", "Unpin (return to automatic order)")}
+                    aria-label=${localize(this.hass, "ui.unpin", "Unpin (return to automatic order)")}
                     @click=${(e: Event) => {
                       e.stopPropagation();
                       this._emit("unpin-rule", { index: i });

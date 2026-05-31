@@ -204,6 +204,11 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.querySelector(".shadow-warning")).toBeTruthy();
   });
 
+  test("unshadowed row shows no warning badge", async () => {
+    el = await mount([movieRule]);
+    expect(el.shadowRoot.querySelector(".shadow-warning")).toBeFalsy();
+  });
+
   test("the manual-sort toggle is gone", async () => {
     el = await mount([movieRule]);
     expect(el.shadowRoot.querySelector(".autosort")).toBeFalsy();

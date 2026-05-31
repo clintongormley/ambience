@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from custom_components.ambience.const import (
+    GENERAL_GROUP_ID,
     SIGNAL_CONFIG_CHANGED,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -643,10 +644,11 @@ async def test_delete_missing_area_is_silent(hass: HomeAssistant) -> None:
     assert calls == []
 
 
-async def test_load_empty_has_no_groups(hass: HomeAssistant) -> None:
+async def test_load_empty_seeds_general_group(hass: HomeAssistant) -> None:
+    # Groups are required: a fresh store seeds the General group.
     store = AmbienceStore(hass)
     await store.async_load()
-    assert store.groups() == []
+    assert [g["id"] for g in store.groups()] == [GENERAL_GROUP_ID]
 
 
 async def test_ensure_groups_is_idempotent_and_preserves_user_groups(
@@ -656,7 +658,7 @@ async def test_ensure_groups_is_idempotent_and_preserves_user_groups(
     await store.async_load()
     await store.async_save_groups([{"id": "blinds", "name": "Blinds"}])
     # Reload simulates a second startup: ensure must not clobber existing groups
-    # nor prepend any default group.
+    # nor prepend the General group when at least one group already exists.
     store2 = AmbienceStore(hass)
     await store2.async_load()
     assert store2.groups() == [{"id": "blinds", "name": "Blinds"}]
@@ -674,9 +676,10 @@ async def test_save_groups_fires_config_changed(hass: HomeAssistant) -> None:
 
 
 async def test_migrate_leaves_explicit_group_untouched(hass: HomeAssistant) -> None:
-    """Rules that already have a 'group' key are not overwritten by the migration."""
+    """Rules referencing an existing group are not overwritten by the migration."""
     store = AmbienceStore(hass)
     await store.async_load()
+    await store.async_save_groups([{"id": "blinds", "name": "Blinds"}])
     await store.async_save_area(
         "lr",
         {"rules": [{"when": {}, "actions": [], "group": "blinds"}], "auto_sort": True},
@@ -686,13 +689,91 @@ async def test_migrate_leaves_explicit_group_untouched(hass: HomeAssistant) -> N
     assert store2.get_area("lr")["rules"][0]["group"] == "blinds"
 
 
-async def test_delete_group_makes_rules_ungrouped(hass: HomeAssistant) -> None:
+async def test_fresh_store_seeds_general_group(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()  # no persisted data
+    groups = store.groups()
+    assert [g["id"] for g in groups] == [GENERAL_GROUP_ID]
+    assert groups[0]["name"] == "General"
+    assert groups[0]["icon"] == "mdi:home"
+    assert groups[0]["color"] == "blue-grey"
+
+
+async def test_load_migrates_ungrouped_and_unknown_rules_to_general(
+    hass: HomeAssistant, hass_storage
+) -> None:
+    hass_storage[STORAGE_KEY] = {
+        "version": STORAGE_VERSION,
+        "data": {
+            "version": STORAGE_VERSION,
+            "groups": [{"id": "blinds", "name": "Blinds"}],
+            "areas": {
+                "a1": {
+                    "rules": [
+                        {"when": {}, "actions": []},  # ungrouped
+                        {"when": {}, "actions": [], "group": "gone"},  # unknown id
+                        {"when": {}, "actions": [], "group": "blinds"},
+                    ]
+                }
+            },
+            "floors": {},
+            "house": {"rules": []},
+        },
+    }
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_groups([{"id": "b", "name": "Blinds"}])
-    await store.async_save_area(
-        "lr", {"rules": [{"when": {}, "actions": [], "group": "b"}], "auto_sort": True}
-    )
-    await store.async_delete_group("b")
-    assert store.groups() == []
-    assert "group" not in store.get_area("lr")["rules"][0]
+    assert any(g["id"] == GENERAL_GROUP_ID for g in store.groups())
+    groups_on_rules = [r.get("group") for r in store.get_area("a1")["rules"]]
+    assert groups_on_rules == [GENERAL_GROUP_ID, GENERAL_GROUP_ID, "blinds"]
+
+
+async def test_delete_group_blocked_when_it_has_members(hass: HomeAssistant, hass_storage) -> None:
+    hass_storage[STORAGE_KEY] = {
+        "version": STORAGE_VERSION,
+        "data": {
+            "version": STORAGE_VERSION,
+            "groups": [{"id": "blinds", "name": "Blinds"}, {"id": "lights", "name": "Lights"}],
+            "areas": {"a1": {"rules": [{"when": {}, "actions": [], "group": "blinds"}]}},
+            "floors": {},
+            "house": {"rules": []},
+        },
+    }
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with pytest.raises(ValueError, match="still has rules"):
+        await store.async_delete_group("blinds")
+    assert any(g["id"] == "blinds" for g in store.groups())
+
+
+async def test_delete_group_blocked_when_last(hass: HomeAssistant, hass_storage) -> None:
+    hass_storage[STORAGE_KEY] = {
+        "version": STORAGE_VERSION,
+        "data": {
+            "version": STORAGE_VERSION,
+            "groups": [{"id": "only", "name": "Only"}],
+            "areas": {},
+            "floors": {},
+            "house": {"rules": []},
+        },
+    }
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with pytest.raises(ValueError, match="last group"):
+        await store.async_delete_group("only")
+
+
+async def test_delete_empty_non_last_group_succeeds(hass: HomeAssistant, hass_storage) -> None:
+    hass_storage[STORAGE_KEY] = {
+        "version": STORAGE_VERSION,
+        "data": {
+            "version": STORAGE_VERSION,
+            "groups": [{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
+            "areas": {},
+            "floors": {},
+            "house": {"rules": []},
+        },
+    }
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_delete_group("a")
+    assert [g["id"] for g in store.groups()] == ["b"]

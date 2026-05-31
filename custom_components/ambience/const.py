@@ -31,3 +31,13 @@ SIGNAL_CONFIG_CHANGED = "ambience_config_changed"
 # Defaults
 DEFAULT_SWITCH_NAME = "Ambience"
 DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 7200  # 2h; 0 = never auto-on
+
+# The group seeded on a fresh install. It is an ordinary group (renameable,
+# deletable when it is not the last group) — these are only its initial values.
+GENERAL_GROUP_ID = "general"
+GENERAL_GROUP = {
+    "id": GENERAL_GROUP_ID,
+    "name": "General",
+    "icon": "mdi:home",
+    "color": "blue-grey",
+}

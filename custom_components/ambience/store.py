@@ -13,6 +13,8 @@ from homeassistant.helpers.storage import Store
 from .const import (
     DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
     DEFAULT_SWITCH_NAME,
+    GENERAL_GROUP,
+    GENERAL_GROUP_ID,
     SIGNAL_CONFIG_CHANGED,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -38,7 +40,7 @@ class AmbienceStore:
     def _empty() -> dict[str, Any]:
         return {
             "version": STORAGE_VERSION,
-            "groups": [],
+            "groups": [dict(GENERAL_GROUP)],
             "areas": {},
             "floors": {},
             "house": {"rules": []},
@@ -158,9 +160,32 @@ class AmbienceStore:
         self._data.setdefault("house", {"rules": []})
 
     def _ensure_groups(self) -> None:
-        """Ensure the (initially empty) groups list exists. Rules carry no group
-        by default; there is no reserved/default group."""
-        self._data.setdefault("groups", [])
+        """Seed the General group when no groups exist. Groups are required: a
+        store must always have at least one (see _migrate_groups)."""
+        if not self._data.get("groups"):
+            self._data["groups"] = [dict(GENERAL_GROUP)]
+
+    def _migrate_groups(self) -> None:
+        """Every rule must reference an existing group. Rules that are ungrouped
+        or point at a deleted group are reassigned to General, which is seeded
+        on demand if any such rule exists and General is not already present."""
+        if not self._data.get("groups"):
+            self._data["groups"] = [dict(GENERAL_GROUP)]
+        known = {g["id"] for g in self._data["groups"]}
+        orphans = [
+            rule
+            for _kind, _id, cfg in self.all_scope_configs()
+            for rule in cfg.get("rules", [])
+            if rule.get("group") is None or rule.get("group") not in known
+        ]
+        if not orphans:
+            return
+        # Orphaned rules need a home. Prefer the General group, seeding it if a
+        # store with other groups never had one.
+        if GENERAL_GROUP_ID not in known:
+            self._data["groups"].append(dict(GENERAL_GROUP))
+        for rule in orphans:
+            rule["group"] = GENERAL_GROUP_ID
 
     def _ensure_switch_defaults(self) -> None:
         sd = self._data.setdefault("switch_defaults", {})
@@ -184,6 +209,7 @@ class AmbienceStore:
         self._ensure_matchers_namespace()
         self._ensure_scope_buckets()
         self._ensure_groups()
+        self._migrate_groups()
         self._ensure_switch_defaults()
 
     def areas(self) -> dict[str, dict[str, Any]]:
@@ -256,16 +282,20 @@ class AmbienceStore:
         self._notify_config_changed()
 
     async def async_delete_group(self, group_id: str) -> None:
-        """Remove a group; every rule referencing it becomes ungrouped.
-
-        Cascades across all scopes (dropping the rule's `group` key), then
-        persists and notifies the engine.
-        """
-        self._data["groups"] = [g for g in self._data.get("groups", []) if g.get("id") != group_id]
-        for _kind, _id, cfg in self.all_scope_configs():
-            for rule in cfg.get("rules", []):
-                if rule.get("group") == group_id:
-                    rule.pop("group", None)
+        """Remove a group. Refused when the group still has rules in any scope,
+        or when it is the last remaining group (a rule must always have a group
+        and at least one group must always exist)."""
+        groups = self._data.get("groups", [])
+        if len(groups) <= 1:
+            raise ValueError("cannot delete the last group")
+        in_use = any(
+            rule.get("group") == group_id
+            for _kind, _id, cfg in self.all_scope_configs()
+            for rule in cfg.get("rules", [])
+        )
+        if in_use:
+            raise ValueError(f"group {group_id!r} still has rules")
+        self._data["groups"] = [g for g in groups if g.get("id") != group_id]
         await self._store.async_save(self._data)
         self._notify_config_changed()
 

@@ -2058,10 +2058,11 @@ async def test_shadowed_by_not_persisted_on_round_trip(
         assert "pinned" in rule
 
 
-async def test_groups_list_empty_by_default(hass, installed, hass_ws_client) -> None:
+async def test_groups_list_seeds_general_by_default(hass, installed, hass_ws_client) -> None:
+    # Groups are required: a fresh install seeds the General group.
     resp = await _ws_send(hass_ws_client, type="ambience/groups/list")
     assert resp["success"] is True
-    assert resp["result"]["groups"] == []
+    assert [g["id"] for g in resp["result"]["groups"]] == ["general"]
 
 
 async def test_groups_save_round_trip(hass, installed, hass_ws_client) -> None:
@@ -2122,5 +2123,14 @@ async def test_groups_delete_removes_user_group(hass, installed, hass_ws_client)
 
 
 async def test_groups_delete_unknown_is_noop(hass, installed, hass_ws_client) -> None:
+    # Seed two groups so the last-group guard does not fire; deleting an unknown
+    # id then removes nothing but still succeeds.
+    await _ws_send(
+        hass_ws_client,
+        type="ambience/groups/save",
+        groups=[{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
+    )
     resp = await _ws_send(hass_ws_client, type="ambience/groups/delete", group_id="nope")
     assert resp["success"] is True, resp
+    list_resp = await _ws_send(hass_ws_client, type="ambience/groups/list")
+    assert {g["id"] for g in list_resp["result"]["groups"]} == {"a", "b"}

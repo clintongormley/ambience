@@ -178,16 +178,18 @@ describe("ambience-rules-list", () => {
     expect(get()).toBeDefined();
   });
 
-  test("every row has a drag handle", async () => {
+  test("unpinned rows show a drag handle", async () => {
     el = await mount([movieRule, eveningRule]);
     expect(el.shadowRoot.querySelectorAll(".handle").length).toBe(2);
   });
 
-  test("pinned row shows a pin icon; clicking it emits unpin-rule", async () => {
+  test("pinned row shows a pin in place of the drag handle; clicking it emits unpin-rule", async () => {
     const pinned: Rule = { ...movieRule, pinned: true, priority: 2048 };
     el = await mount([pinned]);
     const pin = el.shadowRoot.querySelector(".pin");
     expect(pin).toBeTruthy();
+    // The pin replaces the drag handle on a pinned row.
+    expect(el.shadowRoot.querySelector(".handle")).toBeFalsy();
     const getDetail = captureEvent(el, "unpin-rule");
     pin.click();
     expect(getDetail()).toEqual({ index: 0 });

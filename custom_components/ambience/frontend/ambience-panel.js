@@ -23,15 +23,16 @@ var an=Object.defineProperty;var on=Object.getOwnPropertyDescriptor;var c=(t,n,e
               @drop=${()=>this._onDrop(r)}
               @dragend=${this._onDragEnd}
             >
-              <span class="handle" title=${d(this.hass,"ui.drag_to_reorder","Drag to reorder")}>⠿</span>
-              <span class="idx">${r+1}</span>
-              <span class="status">
+              <span class="lead">
                 ${e.pinned?l`<button
                       class="pin"
                       title=${d(this.hass,"ui.unpin","Unpin (return to automatic order)")}
                       aria-label=${d(this.hass,"ui.unpin","Unpin (return to automatic order)")}
                       @click=${i=>{i.stopPropagation(),this._emit("unpin-rule",{index:r})}}
-                    >📌</button>`:""}
+                    >📌</button>`:l`<span class="handle" title=${d(this.hass,"ui.drag_to_reorder","Drag to reorder")}>⠿</span>`}
+              </span>
+              <span class="idx">${r+1}</span>
+              <span class="warn-slot">
                 ${e.shadowed_by!=null?l`<span
                       class="shadow-warning"
                       title=${d(this.hass,"ui.shadowed","Never fires \u2014 shadowed by an earlier rule.")}
@@ -118,7 +119,6 @@ var an=Object.defineProperty;var on=Object.getOwnPropertyDescriptor;var c=(t,n,e
     .handle {
       cursor: grab;
       color: var(--secondary-text-color, #888);
-      padding: 0 0.25rem;
       user-select: none;
     }
     .idx {
@@ -193,14 +193,21 @@ var an=Object.defineProperty;var on=Object.getOwnPropertyDescriptor;var c=(t,n,e
       border-radius: 4px;
       margin-top: 0.5rem;
     }
-    /* Fixed-width status gutter so pin/warning icons never displace the rule
-       title — every row reserves the same slot whether or not it has icons.
-       Sized to hold both a pin and a warning (a rule can be both). */
-    .status {
+    /* The lead slot holds either the drag handle (unpinned) or the pin button
+       (pinned) — one fixed width, so swapping them never shifts the row. */
+    .lead {
       display: inline-flex;
       align-items: center;
-      gap: 0.15rem;
-      flex: 0 0 2.75em;
+      justify-content: center;
+      flex: 0 0 1.5em;
+    }
+    /* Fixed-width slot for the shadow warning so the title aligns whether or
+       not a row is shadowed. */
+    .warn-slot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 1.5em;
     }
     .pin {
       padding: 0;

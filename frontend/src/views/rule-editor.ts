@@ -13,7 +13,7 @@ import type {
 import type { HassConnection } from "../api.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { localize, matcherLabel } from "../i18n.js";
-import { parseReapplyMinutes, reapplySecondsToMinutes } from "../reapply.js";
+import { parseReapplyOverrideSeconds } from "../reapply.js";
 import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
 import "./action-slot.js";
 import "./matcher-input.js";
@@ -155,12 +155,8 @@ export class AmbienceRuleEditor extends LitElement {
       flex: 0 0 auto;
       color: var(--secondary-text-color, #888);
     }
-    .reapply-override select[data-reapply-mode] {
-      width: auto;
-      box-sizing: border-box;
-    }
-    .reapply-override input[data-reapply-minutes] {
-      width: 4rem;
+    .reapply-override input[data-reapply-override] {
+      width: 5rem;
       box-sizing: border-box;
       padding: 0.25rem 0.4rem;
       border: 1px solid var(--divider-color, #ccc);
@@ -169,10 +165,9 @@ export class AmbienceRuleEditor extends LitElement {
       color: var(--primary-text-color, inherit);
       font: inherit;
     }
-    .reapply-override .reapply-inherit-hint {
+    .reapply-override .reapply-unit {
       color: var(--secondary-text-color, #888);
-      font-style: italic;
-      font-size: 0.85rem;
+      flex: 0 0 auto;
     }
     .reapply-badge {
       font-size: 0.75rem;
@@ -724,103 +719,80 @@ export class AmbienceRuleEditor extends LitElement {
     this._serviceHasTarget = new Map(this._serviceHasTarget).set(service, hasTarget);
   }
 
-  /** Determine the re-apply mode for an action: "off" | "custom" | "inherit" */
-  private _reapplyMode(action: ActionSpec): "off" | "custom" | "inherit" {
-    if (!("reapply_seconds" in action)) return "inherit";
-    if (action.reapply_seconds === 0) return "off";
-    return "custom";
-  }
-
   /**
    * Effective re-apply seconds: override if key present, else exposed default.
    * Returns 0 if both are absent or 0.
+   * IMPORTANT: uses key-presence (`"reapply_seconds" in action`), not
+   * truthiness, so an explicit 0 does NOT fall back to the inherited default.
    */
-  private _effectiveReapplySeconds(action: ActionSpec): number {
+  private _effectiveReapplySeconds(action: ActionSpec, exposedSeconds: number): number {
     if ("reapply_seconds" in action) return action.reapply_seconds ?? 0;
-    const exposed = this.availableActions.find((x) => x.id === action.service);
-    return exposed?.reapply_seconds ?? 0;
+    return exposedSeconds;
   }
 
-  private _setReapplyMode(idx: number, mode: "inherit" | "off" | "custom") {
+  private _setReapplyOverride(idx: number, rawValue: string) {
+    const s = parseReapplyOverrideSeconds(rawValue);
     this._updateActionAt(idx, (a) => {
-      if (mode === "inherit") {
+      if (s === null) {
+        // Empty/invalid → REMOVE the key (inherit exposed default).
         const { reapply_seconds: _removed, ...rest } = a;
         return rest as ActionSpec;
       }
-      if (mode === "off") return { ...a, reapply_seconds: 0 };
-      // custom — seed with 1 minute (60s) if no existing custom value
-      const existing = (a.reapply_seconds ?? 0) > 0 ? a.reapply_seconds! : 60;
-      return { ...a, reapply_seconds: existing };
+      // 0 = disable for this rule; >0 = custom seconds.
+      return { ...a, reapply_seconds: s };
     });
   }
 
-  private _setReapplyMinutes(idx: number, rawValue: string) {
-    const seconds = parseReapplyMinutes(rawValue);
-    // null means empty / invalid input — leave the action unchanged (ignore the keystroke).
-    if (seconds === null) return;
-    this._updateActionAt(idx, (a) => ({ ...a, reapply_seconds: seconds }));
-  }
-
   private _renderReapplyOverride(action: ActionSpec, idx: number) {
-    const mode = this._reapplyMode(action);
     const exposed = this.availableActions.find((x) => x.id === action.service);
     const exposedSeconds = exposed?.reapply_seconds ?? 0;
-    const currentMinutes = mode === "custom"
-      ? String(reapplySecondsToMinutes(action.reapply_seconds!))
-      : "1";
+
+    // Only render when the exposed action has re-apply enabled.
+    if (exposedSeconds <= 0) return html``;
+
+    // Empty field (key absent) → inheriting; explicit value (incl. 0) → shown.
+    const fieldValue = "reapply_seconds" in action
+      ? String(action.reapply_seconds)
+      : "";
 
     return html`
       <div class="reapply-override">
-        <label for="reapply-mode-${idx}">${localize(this.hass, "ui.reapply_override_label", "Re-apply:")}</label>
-        <select
-          id="reapply-mode-${idx}"
-          data-reapply-mode
-          .value=${mode}
-          @change=${(e: Event) => {
+        <label for="reapply-override-${idx}">
+          ${localize(this.hass, "ui.reapply_seconds_label", "Re-apply every (seconds)")}
+        </label>
+        <input
+          id="reapply-override-${idx}"
+          type="number"
+          min="0"
+          data-reapply-override
+          placeholder=${String(exposedSeconds)}
+          .value=${fieldValue}
+          @input=${(e: Event) => {
             e.stopPropagation();
-            this._setReapplyMode(idx, (e.target as HTMLSelectElement).value as "inherit" | "off" | "custom");
+            this._setReapplyOverride(idx, (e.target as HTMLInputElement).value);
           }}
-        >
-          <option value="inherit">${localize(this.hass, "ui.reapply_inherit", "Inherit default")}</option>
-          <option value="off">${localize(this.hass, "ui.reapply_off", "Off")}</option>
-          <option value="custom">${localize(this.hass, "ui.reapply_custom", "Custom (min)")}</option>
-        </select>
-        ${mode === "custom" ? html`
-          <input
-            type="number"
-            min="1"
-            data-reapply-minutes
-            .value=${currentMinutes}
-            @input=${(e: Event) => {
-              e.stopPropagation();
-              this._setReapplyMinutes(idx, (e.target as HTMLInputElement).value);
-            }}
-          />
-        ` : ""}
-        ${mode === "inherit" && exposedSeconds > 0 ? html`
-          <span class="reapply-inherit-hint" data-reapply-inherit-hint>
-            ${localize(this.hass, "ui.reapply_inherit_prefix", "Inherits: every")} ${reapplySecondsToMinutes(exposedSeconds)} ${localize(this.hass, "ui.reapply_minutes_unit", "min")}
-          </span>
-        ` : ""}
+        />
+        <span class="reapply-unit">${localize(this.hass, "ui.reapply_seconds_unit", "s")}</span>
       </div>
     `;
   }
 
   private _renderActionRow(action: ActionSpec, idx: number) {
     const exposed = this.availableActions.find((x) => x.id === action.service);
+    const exposedSeconds = exposed?.reapply_seconds ?? 0;
     const open = this._isOpen({ kind: "action", idx });
     const summary = summariseAction(action, {
       hass: this.hass as any,
       exposedActions: this.availableActions,
       schemas: this.schemas,
     });
-    const effectiveSeconds = this._effectiveReapplySeconds(action);
-    const showBadge = effectiveSeconds > 0;
+    const effectiveSeconds = this._effectiveReapplySeconds(action, exposedSeconds);
+    const showBadge = exposedSeconds > 0 && effectiveSeconds > 0;
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "action", idx })}>
           <span class="summary-label">${summary}</span>
-          ${showBadge ? html`<span class="reapply-badge" data-reapply-badge>↺ ${reapplySecondsToMinutes(effectiveSeconds)} min</span>` : ""}
+          ${showBadge ? html`<span class="reapply-badge" data-reapply-badge>↺ ${effectiveSeconds}s</span>` : ""}
           <button class="remove" @click=${(e: Event) => { e.stopPropagation(); this._deleteAction(idx); }} title=${localize(this.hass, "ui.remove_action", "Remove action")}>✕</button>
         </div>
         ${open ? html`

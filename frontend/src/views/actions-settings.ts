@@ -2,7 +2,7 @@ import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { localize } from "../i18n.js";
-import { parseReapplyMinutes, reapplySecondsToMinutes } from "../reapply.js";
+import { parseReapplyConfigSeconds } from "../reapply.js";
 import {
   getServiceSchema,
   listExposedActions,
@@ -589,15 +589,28 @@ export class AmbienceActionsSettings extends LitElement {
     this._actions = this._actions.map((a) => (a.id === actionId ? { ...a, label } : a));
   }
 
-  private _setReapplyMinutes(actionId: string, rawValue: string) {
-    const seconds = parseReapplyMinutes(rawValue);
+  private _setReapplyEnabled(actionId: string, enabled: boolean) {
     this._actions = this._actions.map((a) => {
       if (a.id !== actionId) return a;
-      if (seconds === null) {
-        // Empty/invalid → remove the key entirely (off / inherit default off).
+      if (!enabled) {
+        // Uncheck → remove the key entirely.
         const { reapply_seconds: _removed, ...rest } = a;
         return rest as typeof a;
       }
+      // Check → seed 300s default if not already enabled.
+      const current = a.reapply_seconds ?? 0;
+      return { ...a, reapply_seconds: current > 0 ? current : 300 };
+    });
+    void this._autoSave();
+  }
+
+  private _setReapplySeconds(actionId: string, rawValue: string) {
+    const seconds = parseReapplyConfigSeconds(rawValue);
+    // null means empty/invalid — leave the stored value unchanged (don't
+    // drop the enabled state; the checkbox owns enable/disable).
+    if (seconds === null) return;
+    this._actions = this._actions.map((a) => {
+      if (a.id !== actionId) return a;
       return { ...a, reapply_seconds: seconds };
     });
     void this._autoSave();
@@ -964,28 +977,38 @@ export class AmbienceActionsSettings extends LitElement {
   }
 
   private _renderReapplyRow(action: ExposedAction) {
-    const currentMinutes =
-      typeof action.reapply_seconds === "number" && action.reapply_seconds > 0
-        ? String(reapplySecondsToMinutes(action.reapply_seconds))
-        : "";
+    const enabled = typeof action.reapply_seconds === "number" && action.reapply_seconds > 0;
+    const currentSeconds = enabled ? String(action.reapply_seconds) : "";
     return html`
       <div class="reapply-row">
-        <label for="reapply-${action.id}">
-          ${localize(this.hass, "ui.reapply_label", "Re-apply periodically (min):")}
-        </label>
         <input
-          id="reapply-${action.id}"
-          type="number"
-          min="1"
-          data-reapply-input
-          .value=${currentMinutes}
-          @input=${(e: Event) => {
-            this._setReapplyMinutes(action.id, (e.target as HTMLInputElement).value);
+          id="reapply-enable-${action.id}"
+          type="checkbox"
+          data-reapply-enable
+          .checked=${enabled}
+          @change=${(e: Event) => {
+            this._setReapplyEnabled(action.id, (e.target as HTMLInputElement).checked);
           }}
         />
-        <span class="reapply-unit">
-          ${localize(this.hass, "ui.reapply_unit_hint", "min (empty = off)")}
-        </span>
+        <label for="reapply-enable-${action.id}">
+          ${localize(this.hass, "ui.reapply_enable_label", "Re-apply periodically")}
+        </label>
+        ${enabled ? html`
+          <input
+            id="reapply-${action.id}"
+            type="number"
+            min="10"
+            data-reapply-input
+            aria-label=${localize(this.hass, "ui.reapply_seconds_label", "Re-apply every (seconds)")}
+            .value=${currentSeconds}
+            @input=${(e: Event) => {
+              this._setReapplySeconds(action.id, (e.target as HTMLInputElement).value);
+            }}
+          />
+          <span class="reapply-unit">
+            ${localize(this.hass, "ui.reapply_seconds_unit", "s")}
+          </span>
+        ` : ""}
       </div>
     `;
   }

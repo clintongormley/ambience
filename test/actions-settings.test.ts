@@ -1211,9 +1211,127 @@ describe("ambience-actions-settings", () => {
     );
   });
 
-  // --- Re-apply interval tests ---
+  // --- Re-apply interval tests (checkbox + seconds field) ---
 
-  test("reapply input is present in the expanded card body", async () => {
+  test("reapply enable checkbox is present in the expanded card body", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const cb = el.shadowRoot.querySelector(
+      "input[data-reapply-enable]",
+    ) as HTMLInputElement;
+    expect(cb).not.toBeNull();
+  });
+
+  test("checkbox is unchecked when reapply_seconds is absent", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const cb = el.shadowRoot.querySelector(
+      "input[data-reapply-enable]",
+    ) as HTMLInputElement;
+    expect(cb.checked).toBe(false);
+  });
+
+  test("checkbox is checked and seconds field shows value when reapply_seconds > 0", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: [],
+        defaults: {},
+        reapply_seconds: 120,
+      },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const cb = el.shadowRoot.querySelector(
+      "input[data-reapply-enable]",
+    ) as HTMLInputElement;
+    expect(cb.checked).toBe(true);
+
+    const input = el.shadowRoot.querySelector(
+      "input[data-reapply-input]",
+    ) as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(input.value).toBe("120");
+  });
+
+  test("checking the checkbox seeds reapply_seconds = 300 and reveals the seconds field", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const cb = el.shadowRoot.querySelector(
+      "input[data-reapply-enable]",
+    ) as HTMLInputElement;
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          reapply_seconds: 300,
+        }),
+      ]),
+    );
+
+    // Seconds field should now be visible showing 300
+    const input = el.shadowRoot.querySelector(
+      "input[data-reapply-input]",
+    ) as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(input.value).toBe("300");
+  });
+
+  test("unchecking the checkbox removes reapply_seconds from the action", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: {},
+        reapply_seconds: 300,
+      },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const cb = el.shadowRoot.querySelector(
+      "input[data-reapply-enable]",
+    ) as HTMLInputElement;
+    expect(cb.checked).toBe(true);
+
+    cb.checked = false;
+    cb.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
+    const calls = vi.mocked(saveExposedActions).mock.calls;
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall[1][0]).not.toHaveProperty("reapply_seconds");
+
+    // Seconds field should be hidden
+    expect(el.shadowRoot.querySelector("input[data-reapply-input]")).toBeNull();
+  });
+
+  test("editing the seconds field stores the value (seconds, not minutes)", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: [],
+        defaults: {},
+        reapply_seconds: 300,
+      },
+    ]);
     el = await mount();
     clickToggle(el.shadowRoot);
     await el.updateComplete;
@@ -1221,10 +1339,31 @@ describe("ambience-actions-settings", () => {
     const input = el.shadowRoot.querySelector(
       "input[data-reapply-input]",
     ) as HTMLInputElement;
-    expect(input).not.toBeNull();
+    input.value = "60";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await flush(el);
+
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          reapply_seconds: 60,
+        }),
+      ]),
+    );
   });
 
-  test("setting a re-apply minutes value saves reapply_seconds = minutes * 60", async () => {
+  test("a sub-floor seconds entry clamps up to the 10s floor when stored", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: [],
+        defaults: {},
+        reapply_seconds: 300,
+      },
+    ]);
     el = await mount();
     clickToggle(el.shadowRoot);
     await el.updateComplete;
@@ -1239,20 +1378,17 @@ describe("ambience-actions-settings", () => {
     expect(saveExposedActions).toHaveBeenCalledWith(
       expect.anything(),
       expect.arrayContaining([
-        expect.objectContaining({
-          id: "light.turn_on",
-          reapply_seconds: 300,
-        }),
+        expect.objectContaining({ id: "light.turn_on", reapply_seconds: 10 }),
       ]),
     );
   });
 
-  test("clearing the re-apply input removes reapply_seconds from the action", async () => {
+  test("clearing the seconds field does NOT remove reapply_seconds (checkbox owns enable)", async () => {
     vi.mocked(listExposedActions).mockResolvedValueOnce([
       {
         id: "light.turn_on",
         label: "",
-        visible_fields: ["brightness_pct"],
+        visible_fields: [],
         defaults: {},
         reapply_seconds: 300,
       },
@@ -1264,36 +1400,38 @@ describe("ambience-actions-settings", () => {
     const input = el.shadowRoot.querySelector(
       "input[data-reapply-input]",
     ) as HTMLInputElement;
-    // Should be pre-populated with the existing value (300s = 5 min)
-    expect(input.value).toBe("5");
-
-    // Clear it
     input.value = "";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await flush(el);
 
-    const calls = vi.mocked(saveExposedActions).mock.calls;
-    const lastCall = calls[calls.length - 1];
-    expect(lastCall[1][0]).not.toHaveProperty("reapply_seconds");
+    // saveExposedActions should NOT have been called (empty → parse returns null → no-op)
+    expect(saveExposedActions).not.toHaveBeenCalled();
   });
 
-  test("existing reapply_seconds is shown as minutes in the input", async () => {
-    vi.mocked(listExposedActions).mockResolvedValueOnce([
-      {
-        id: "light.turn_on",
-        label: "",
-        visible_fields: [],
-        defaults: {},
-        reapply_seconds: 120,
-      },
-    ]);
+  test("checking then immediately unchecking produces an enabled-then-disabled round trip", async () => {
     el = await mount();
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const input = el.shadowRoot.querySelector(
-      "input[data-reapply-input]",
+    const cb = el.shadowRoot.querySelector(
+      "input[data-reapply-enable]",
     ) as HTMLInputElement;
-    expect(input.value).toBe("2");
+
+    // Enable
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+    expect(saveExposedActions).toHaveBeenCalledTimes(1);
+
+    // Disable
+    const cb2 = el.shadowRoot.querySelector(
+      "input[data-reapply-enable]",
+    ) as HTMLInputElement;
+    cb2.checked = false;
+    cb2.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
+    const lastCall = vi.mocked(saveExposedActions).mock.calls.at(-1)!;
+    expect(lastCall[1][0]).not.toHaveProperty("reapply_seconds");
   });
 });

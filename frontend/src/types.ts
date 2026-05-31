@@ -15,6 +15,9 @@ export type ActionSpec = {
   service: string;            // "domain.service"
   entity_ids: string[];
   params: Record<string, unknown>;
+  // Per-rule override: absent = inherit exposed default; 0 = explicitly off;
+  // >= 10 = re-apply every N seconds (frontend shows minutes, stores seconds).
+  reapply_seconds?: number;
 };
 
 // One entry in the user's exposed-actions list (Configuration → Actions).
@@ -30,6 +33,9 @@ export type ExposedAction = {
   label: string;              // user-friendly display name; "" allowed
   visible_fields: string[];   // shown in the rule editor
   defaults: Record<string, unknown>; // applied at execution; rule params override
+  // Default re-apply interval in seconds. 0/absent = off; >= 10 = enabled.
+  // Rules may override this per-use via ActionSpec.reapply_seconds.
+  reapply_seconds?: number;
 };
 
 // HA service listing for the settings UI's service picker.

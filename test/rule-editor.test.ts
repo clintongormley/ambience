@@ -1389,3 +1389,196 @@ describe("ambience-rule-editor — people matcher empty-selection validation", (
     expect((saved!.when.people as any).who).toEqual(["person.alice"]);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Re-apply interval override in rule-editor action rows
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("ambience-rule-editor — reapply interval override", () => {
+  let el: any;
+  afterEach(() => { el?.remove(); vi.mocked(api.getServiceSchema).mockReset(); });
+
+  const reapplyActions: ExposedAction[] = [
+    {
+      id: "light.turn_on",
+      label: "Set light",
+      visible_fields: [],
+      defaults: {},
+      reapply_seconds: 300, // 5 minutes exposed default
+    },
+    {
+      id: "script.foo",
+      label: "Run foo script",
+      visible_fields: [],
+      defaults: {},
+      // no reapply_seconds
+    },
+  ];
+
+  async function mountWithReapply(rule: import("../frontend/src/types").Rule): Promise<any> {
+    const editorEl: any = document.createElement("ambience-rule-editor");
+    editorEl.matchers = matchers;
+    editorEl.availableActions = reapplyActions;
+    editorEl.periods = periods;
+    editorEl.hass = hass;
+    editorEl.scope = { kind: "area", id: "living_room" };
+    editorEl.rule = rule;
+    editorEl.open = true;
+    document.body.appendChild(editorEl);
+    await editorEl.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await editorEl.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await editorEl.updateComplete;
+    return editorEl;
+  }
+
+  async function openActionSlot(editorEl: any, idx = 0) {
+    const action = editorEl.shadowRoot.querySelector(
+      `.slot[data-slot-id="action-${idx}"]`,
+    ) as HTMLElement;
+    action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await editorEl.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await editorEl.updateComplete;
+    return editorEl.shadowRoot.querySelector(`.slot[data-slot-id="action-${idx}"]`) as HTMLElement;
+  }
+
+  test("action row shows reapply override control when expanded", async () => {
+    el = await mountWithReapply({
+      name: "t",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
+    });
+    const slot = await openActionSlot(el);
+    expect(slot.querySelector("[data-reapply-mode]")).not.toBeNull();
+  });
+
+  test("selecting 'Off' writes reapply_seconds: 0 to the draft", async () => {
+    el = await mountWithReapply({
+      name: "t",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
+    });
+    const slot = await openActionSlot(el);
+    const select = slot.querySelector("[data-reapply-mode]") as HTMLSelectElement;
+    select.value = "off";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(el._draft.actions[0].reapply_seconds).toBe(0);
+  });
+
+  test("selecting 'Inherit' removes reapply_seconds key from the draft", async () => {
+    el = await mountWithReapply({
+      name: "t",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: [], params: {}, reapply_seconds: 0 }],
+    });
+    const slot = await openActionSlot(el);
+    const select = slot.querySelector("[data-reapply-mode]") as HTMLSelectElement;
+    select.value = "inherit";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect("reapply_seconds" in el._draft.actions[0]).toBe(false);
+  });
+
+  test("setting custom minutes writes reapply_seconds = N * 60 to the draft", async () => {
+    el = await mountWithReapply({
+      name: "t",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
+    });
+    const slot = await openActionSlot(el);
+
+    // Switch to custom mode
+    const select = slot.querySelector("[data-reapply-mode]") as HTMLSelectElement;
+    select.value = "custom";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+
+    // Re-query after update
+    const slotAfter = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    const minutesInput = slotAfter.querySelector("[data-reapply-minutes]") as HTMLInputElement;
+    expect(minutesInput).not.toBeNull();
+    minutesInput.value = "3";
+    minutesInput.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+
+    expect(el._draft.actions[0].reapply_seconds).toBe(180);
+  });
+
+  test("effective badge appears when effective interval > 0 (inheriting exposed default)", async () => {
+    el = await mountWithReapply({
+      name: "t",
+      when: {},
+      // reapply_seconds absent → inherits exposed default (300s)
+      actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
+    });
+    // Badge should be visible in the collapsed summary
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    expect(slot.querySelector("[data-reapply-badge]")).not.toBeNull();
+  });
+
+  test("effective badge does NOT appear when effective interval is 0 (no-default action)", async () => {
+    el = await mountWithReapply({
+      name: "t",
+      when: {},
+      // script.foo has no reapply_seconds default; action also has no override
+      actions: [{ service: "script.foo", entity_ids: [], params: {} }],
+    });
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    expect(slot.querySelector("[data-reapply-badge]")).toBeNull();
+  });
+
+  test("effective badge does NOT appear when override is explicitly Off (0)", async () => {
+    el = await mountWithReapply({
+      name: "t",
+      when: {},
+      // Override is 0 = explicitly off, overriding the 300s exposed default
+      actions: [{ service: "light.turn_on", entity_ids: [], params: {}, reapply_seconds: 0 }],
+    });
+    const slot = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    expect(slot.querySelector("[data-reapply-badge]")).toBeNull();
+  });
+
+  test("inherit mode shows the inherited value as context text", async () => {
+    el = await mountWithReapply({
+      name: "t",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
+    });
+    const slot = await openActionSlot(el);
+    // The inherit hint should show 5 min (300s)
+    const inheritHint = slot.querySelector("[data-reapply-inherit-hint]") as HTMLElement;
+    expect(inheritHint).not.toBeNull();
+    expect(inheritHint.textContent).toContain("5");
+  });
+
+  test("saved rule preserves absent reapply_seconds (inherit) in the emitted payload", async () => {
+    el = await mountWithReapply({
+      name: "t",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {} }],
+    });
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    await el.updateComplete;
+    expect(saved).toBeDefined();
+    expect("reapply_seconds" in saved.actions[0]).toBe(false);
+  });
+
+  test("saved rule preserves reapply_seconds: 0 (explicitly off) — key must NOT be stripped", async () => {
+    el = await mountWithReapply({
+      name: "t",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {}, reapply_seconds: 0 }],
+    });
+    let saved: any;
+    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    await el.updateComplete;
+    expect(saved).toBeDefined();
+    expect(saved.actions[0].reapply_seconds).toBe(0);
+  });
+});

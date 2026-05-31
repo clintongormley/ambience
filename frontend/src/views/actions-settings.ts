@@ -279,6 +279,33 @@ export class AmbienceActionsSettings extends LitElement {
       color: var(--primary-text-color, inherit);
       font: inherit;
     }
+    .reapply-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0;
+      margin-top: 0.25rem;
+      border-top: 1px dotted var(--divider-color, #eee);
+      font-size: 0.9rem;
+    }
+    .reapply-row label {
+      color: var(--primary-text-color, inherit);
+      flex: 0 0 auto;
+    }
+    .reapply-row input[data-reapply-input] {
+      width: 5rem;
+      box-sizing: border-box;
+      padding: 0.25rem 0.4rem;
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--primary-text-color, inherit);
+      font: inherit;
+    }
+    .reapply-row .reapply-unit {
+      color: var(--secondary-text-color, #888);
+      flex: 0 0 auto;
+    }
     .add-row {
       margin: 0.75rem 0;
       display: flex;
@@ -561,6 +588,20 @@ export class AmbienceActionsSettings extends LitElement {
     this._actions = this._actions.map((a) => (a.id === actionId ? { ...a, label } : a));
   }
 
+  private _setReapplyMinutes(actionId: string, rawValue: string) {
+    const minutes = rawValue.trim() === "" ? NaN : Number(rawValue);
+    this._actions = this._actions.map((a) => {
+      if (a.id !== actionId) return a;
+      if (isNaN(minutes) || rawValue.trim() === "") {
+        // Empty → remove the key entirely.
+        const { reapply_seconds: _removed, ...rest } = a;
+        return rest as typeof a;
+      }
+      return { ...a, reapply_seconds: Math.max(1, Math.round(minutes)) * 60 };
+    });
+    void this._autoSave();
+  }
+
   private _toggleExpand(actionId: string) {
     const next = new Set(this._expanded);
     if (next.has(actionId)) {
@@ -768,6 +809,7 @@ export class AmbienceActionsSettings extends LitElement {
           )}
         </p>
         ${fields.map(([name, field]) => this._renderFieldRow(action, name, field))}
+        ${this._renderReapplyRow(action)}
       </div>
     `;
   }
@@ -918,6 +960,33 @@ export class AmbienceActionsSettings extends LitElement {
       @input=${(e: Event) =>
         this._setDefault(action.id, fieldName, (e.target as HTMLInputElement).value)}
     />`;
+  }
+
+  private _renderReapplyRow(action: ExposedAction) {
+    const currentMinutes =
+      typeof action.reapply_seconds === "number" && action.reapply_seconds > 0
+        ? String(Math.round(action.reapply_seconds / 60))
+        : "";
+    return html`
+      <div class="reapply-row">
+        <label for="reapply-${action.id}">
+          ${localize(this.hass, "ui.reapply_label", "Re-apply periodically (min):")}
+        </label>
+        <input
+          id="reapply-${action.id}"
+          type="number"
+          min="1"
+          data-reapply-input
+          .value=${currentMinutes}
+          @input=${(e: Event) => {
+            this._setReapplyMinutes(action.id, (e.target as HTMLInputElement).value);
+          }}
+        />
+        <span class="reapply-unit">
+          ${localize(this.hass, "ui.reapply_unit_hint", "min (empty = off)")}
+        </span>
+      </div>
+    `;
   }
 
   private _renderAdd() {

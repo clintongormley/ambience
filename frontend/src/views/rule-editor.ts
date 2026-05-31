@@ -140,6 +140,49 @@ export class AmbienceRuleEditor extends LitElement {
       margin: 0.5rem 0;
       padding: 0.5rem 0;
     }
+    .reapply-override {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px dotted var(--divider-color, #eee);
+      font-size: 0.9rem;
+      flex-wrap: wrap;
+    }
+    .reapply-override label {
+      flex: 0 0 auto;
+      color: var(--secondary-text-color, #888);
+    }
+    .reapply-override select[data-reapply-mode] {
+      width: auto;
+      box-sizing: border-box;
+    }
+    .reapply-override input[data-reapply-minutes] {
+      width: 4rem;
+      box-sizing: border-box;
+      padding: 0.25rem 0.4rem;
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--primary-text-color, inherit);
+      font: inherit;
+    }
+    .reapply-override .reapply-inherit-hint {
+      color: var(--secondary-text-color, #888);
+      font-style: italic;
+      font-size: 0.85rem;
+    }
+    .reapply-badge {
+      font-size: 0.75rem;
+      background: var(--secondary-background-color, #f5f5f5);
+      border: 1px solid var(--divider-color, #ddd);
+      border-radius: 3px;
+      color: var(--secondary-text-color, #888);
+      padding: 0.1rem 0.35rem;
+      white-space: nowrap;
+      flex: 0 0 auto;
+    }
     .error {
       color: var(--error-color, #c62828);
       font-size: 0.9em;
@@ -680,6 +723,87 @@ export class AmbienceRuleEditor extends LitElement {
     this._serviceHasTarget = new Map(this._serviceHasTarget).set(service, hasTarget);
   }
 
+  /** Determine the re-apply mode for an action: "off" | "custom" | "inherit" */
+  private _reapplyMode(action: ActionSpec): "off" | "custom" | "inherit" {
+    if (!("reapply_seconds" in action)) return "inherit";
+    if (action.reapply_seconds === 0) return "off";
+    return "custom";
+  }
+
+  /**
+   * Effective re-apply seconds: override if key present, else exposed default.
+   * Returns 0 if both are absent or 0.
+   */
+  private _effectiveReapplySeconds(action: ActionSpec): number {
+    if ("reapply_seconds" in action) return action.reapply_seconds ?? 0;
+    const exposed = this.availableActions.find((x) => x.id === action.service);
+    return exposed?.reapply_seconds ?? 0;
+  }
+
+  private _setReapplyMode(idx: number, mode: "inherit" | "off" | "custom") {
+    this._updateActionAt(idx, (a) => {
+      if (mode === "inherit") {
+        const { reapply_seconds: _removed, ...rest } = a;
+        return rest as ActionSpec;
+      }
+      if (mode === "off") return { ...a, reapply_seconds: 0 };
+      // custom — seed with 1 minute (60s) if no existing custom value
+      const existing = typeof a.reapply_seconds === "number" && a.reapply_seconds > 0
+        ? a.reapply_seconds : 60;
+      return { ...a, reapply_seconds: existing };
+    });
+  }
+
+  private _setReapplyMinutes(idx: number, rawValue: string) {
+    const minutes = Number(rawValue);
+    if (!rawValue.trim() || isNaN(minutes) || minutes < 1) return;
+    this._updateActionAt(idx, (a) => ({ ...a, reapply_seconds: Math.round(minutes) * 60 }));
+  }
+
+  private _renderReapplyOverride(action: ActionSpec, idx: number) {
+    const mode = this._reapplyMode(action);
+    const exposed = this.availableActions.find((x) => x.id === action.service);
+    const exposedSeconds = exposed?.reapply_seconds ?? 0;
+    const currentMinutes = mode === "custom" && action.reapply_seconds
+      ? String(Math.round(action.reapply_seconds / 60))
+      : "1";
+
+    return html`
+      <div class="reapply-override">
+        <label>${localize(this.hass, "ui.reapply_override_label", "Re-apply:")}</label>
+        <select
+          data-reapply-mode
+          .value=${mode}
+          @change=${(e: Event) => {
+            e.stopPropagation();
+            this._setReapplyMode(idx, (e.target as HTMLSelectElement).value as "inherit" | "off" | "custom");
+          }}
+        >
+          <option value="inherit">${localize(this.hass, "ui.reapply_inherit", "Inherit default")}</option>
+          <option value="off">${localize(this.hass, "ui.reapply_off", "Off")}</option>
+          <option value="custom">${localize(this.hass, "ui.reapply_custom", "Custom (min)")}</option>
+        </select>
+        ${mode === "custom" ? html`
+          <input
+            type="number"
+            min="1"
+            data-reapply-minutes
+            .value=${currentMinutes}
+            @input=${(e: Event) => {
+              e.stopPropagation();
+              this._setReapplyMinutes(idx, (e.target as HTMLInputElement).value);
+            }}
+          />
+        ` : ""}
+        ${mode === "inherit" && exposedSeconds > 0 ? html`
+          <span class="reapply-inherit-hint" data-reapply-inherit-hint>
+            ${localize(this.hass, "ui.reapply_inherit_hint", `Inherits: every ${Math.round(exposedSeconds / 60)} min`)}
+          </span>
+        ` : ""}
+      </div>
+    `;
+  }
+
   private _renderActionRow(action: ActionSpec, idx: number) {
     const exposed = this.availableActions.find((x) => x.id === action.service);
     const open = this._isOpen({ kind: "action", idx });
@@ -688,10 +812,13 @@ export class AmbienceRuleEditor extends LitElement {
       exposedActions: this.availableActions,
       schemas: this.schemas,
     });
+    const effectiveSeconds = this._effectiveReapplySeconds(action);
+    const showBadge = effectiveSeconds > 0;
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "action", idx })}>
           <span class="summary-label">${summary}</span>
+          ${showBadge ? html`<span class="reapply-badge" data-reapply-badge>↺ ${Math.round(effectiveSeconds / 60)} min</span>` : ""}
           <button class="remove" @click=${(e: Event) => { e.stopPropagation(); this._deleteAction(idx); }} title=${localize(this.hass, "ui.remove_action", "Remove action")}>✕</button>
         </div>
         ${open ? html`
@@ -715,6 +842,8 @@ export class AmbienceRuleEditor extends LitElement {
                 this._onTargetModeChanged(action.service, e.detail.hasTarget);
               }}
             ></ambience-action-slot>
+
+            ${this._renderReapplyOverride(action, idx)}
 
             ${this._showError && this._validationError({ kind: "action", idx }) ? html`
               <div class="error">${this._validationError({ kind: "action", idx })}</div>

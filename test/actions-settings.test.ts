@@ -1210,4 +1210,90 @@ describe("ambience-actions-settings", () => {
       ]),
     );
   });
+
+  // --- Re-apply interval tests ---
+
+  test("reapply input is present in the expanded card body", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const input = el.shadowRoot.querySelector(
+      "input[data-reapply-input]",
+    ) as HTMLInputElement;
+    expect(input).not.toBeNull();
+  });
+
+  test("setting a re-apply minutes value saves reapply_seconds = minutes * 60", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const input = el.shadowRoot.querySelector(
+      "input[data-reapply-input]",
+    ) as HTMLInputElement;
+    input.value = "5";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await flush(el);
+
+    expect(saveExposedActions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "light.turn_on",
+          reapply_seconds: 300,
+        }),
+      ]),
+    );
+  });
+
+  test("clearing the re-apply input removes reapply_seconds from the action", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: {},
+        reapply_seconds: 300,
+      },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const input = el.shadowRoot.querySelector(
+      "input[data-reapply-input]",
+    ) as HTMLInputElement;
+    // Should be pre-populated with the existing value (300s = 5 min)
+    expect(input.value).toBe("5");
+
+    // Clear it
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await flush(el);
+
+    const calls = vi.mocked(saveExposedActions).mock.calls;
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall[1][0]).not.toHaveProperty("reapply_seconds");
+  });
+
+  test("existing reapply_seconds is shown as minutes in the input", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: [],
+        defaults: {},
+        reapply_seconds: 120,
+      },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const input = el.shadowRoot.querySelector(
+      "input[data-reapply-input]",
+    ) as HTMLInputElement;
+    expect(input.value).toBe("2");
+  });
 });

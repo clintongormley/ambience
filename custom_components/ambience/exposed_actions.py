@@ -23,14 +23,7 @@ from typing import Any, Protocol
 from homeassistant.core import HomeAssistant
 
 from .services_meta import _descriptions_with_status, _flatten_field_groups
-
-
-def _validate_reapply_seconds(context: str, value: Any) -> None:
-    """`reapply_seconds`, when present, must be an int that is 0 or >= 10."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"{context}: reapply_seconds must be an integer")
-    if value != 0 and value < 10:
-        raise ValueError(f"{context}: reapply_seconds must be 0 or at least 10")
+from .validators import validate_reapply_seconds
 
 
 class _StorageLike(Protocol):
@@ -82,7 +75,7 @@ class ExposedActionsStore:
             if not isinstance(defaults, dict) or not all(isinstance(k, str) for k in defaults):
                 raise ValueError(f"{sid}: defaults must be an object keyed by string")
             if "reapply_seconds" in entry:
-                _validate_reapply_seconds(sid, entry["reapply_seconds"])
+                validate_reapply_seconds(sid, entry["reapply_seconds"])
 
     async def validate_against_catalog(
         self,

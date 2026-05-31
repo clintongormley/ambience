@@ -1904,7 +1904,7 @@ async def test_set_group_trigger_then_list_shows_disabled(hass, installed, hass_
     assert row["enabled"] is False
 
 
-async def test_validate_scope_config_rejects_bad_action_reapply(
+async def test_area_save_rejects_bad_action_reapply(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
     """Validator rejects reapply_seconds that is not 0 or >= 10."""
@@ -1935,7 +1935,7 @@ async def test_validate_scope_config_rejects_bad_action_reapply(
     assert "reapply_seconds" in resp["error"]["message"]
 
 
-async def test_validate_scope_config_accepts_valid_action_reapply(
+async def test_area_save_accepts_valid_action_reapply(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
     """Validator accepts reapply_seconds >= 10."""

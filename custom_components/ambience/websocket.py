@@ -25,6 +25,7 @@ from .matchers.weather import WEATHER_CONDITIONS
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import async_resolve_only
 from .sorting import sort_rules
+from .validators import validate_reapply_seconds
 
 _WS_COMMANDS = (
     "ambience/areas/list",
@@ -205,16 +206,9 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
             # `exposed` is used here only for the existence check above.
             _ = exposed
             if "reapply_seconds" in action_spec:
-                value = action_spec["reapply_seconds"]
-                if isinstance(value, bool) or not isinstance(value, int):
-                    raise ValueError(
-                        f"rule {rule_idx} action {action_idx}: reapply_seconds must be an integer"
-                    )
-                if value != 0 and value < 10:
-                    raise ValueError(
-                        f"rule {rule_idx} action {action_idx}:"
-                        " reapply_seconds must be 0 or at least 10"
-                    )
+                validate_reapply_seconds(
+                    f"rule {rule_idx} action {action_idx}", action_spec["reapply_seconds"]
+                )
 
 
 @websocket_api.require_admin

@@ -18,6 +18,7 @@ from .const import (
     DOMAIN,
 )
 from .engine import resolve
+from .validators import MIN_REAPPLY_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -269,8 +270,8 @@ def effective_reapply_seconds(action: dict[str, Any], exposed_store: Any) -> int
 
     The action's own `reapply_seconds` wins when the key is PRESENT (so an
     explicit 0 disables an exposed default); otherwise the exposed-action
-    entry's default applies; otherwise off (0). Values below the 10s floor,
-    or of the wrong type, are treated as off.
+    entry's default applies; otherwise off (0). Values below the floor, or of
+    the wrong type, are treated as off.
     """
     if "reapply_seconds" in action:
         value = action["reapply_seconds"]
@@ -281,4 +282,4 @@ def effective_reapply_seconds(action: dict[str, Any], exposed_store: Any) -> int
         value = 0
     if isinstance(value, bool) or not isinstance(value, int):
         return 0
-    return value if value >= 10 else 0
+    return value if value >= MIN_REAPPLY_SECONDS else 0

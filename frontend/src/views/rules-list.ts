@@ -299,6 +299,7 @@ export class AmbienceRulesList extends LitElement {
         </button>
       `;
     }
+    const unpinLabel = localize(this.hass, "ui.unpin", "Unpin (return to automatic order)");
     return html`
       <ul>
         ${this.rules.map(
@@ -315,8 +316,8 @@ export class AmbienceRulesList extends LitElement {
                 ${rule.pinned
                   ? html`<button
                       class="pin"
-                      title=${localize(this.hass, "ui.unpin", "Unpin (return to automatic order)")}
-                      aria-label=${localize(this.hass, "ui.unpin", "Unpin (return to automatic order)")}
+                      title=${unpinLabel}
+                      aria-label=${unpinLabel}
                       @click=${(e: Event) => {
                         e.stopPropagation();
                         this._emit("unpin-rule", { index: i });

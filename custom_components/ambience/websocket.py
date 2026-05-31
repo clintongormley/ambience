@@ -24,7 +24,7 @@ from .exposed_actions import ExposedActionsStore
 from .matchers.weather import WEATHER_CONDITIONS
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import async_resolve_only, scope_reapply_intervals
-from .sorting import resolve_order, shadowed_by
+from .sorting import matcher_priority, resolve_order, shadowed_by
 from .validators import validate_reapply_seconds
 
 _WS_COMMANDS = (
@@ -227,9 +227,10 @@ def _with_shadows(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]
     matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
     rules = config.get("rules", [])
     shadows = shadowed_by(rules, matchers_registry)
-    out = {k: v for k, v in config.items() if k != "auto_sort"}
-    out["rules"] = [{**r, "shadowed_by": shadows.get(idx)} for idx, r in enumerate(rules)]
-    return out
+    return {
+        **config,
+        "rules": [{**r, "shadowed_by": shadows.get(idx)} for idx, r in enumerate(rules)],
+    }
 
 
 @websocket_api.require_admin
@@ -279,7 +280,7 @@ async def _ws_matchers_list(
             "description": m.description,
             "predicate_help": m.predicate_help,
             "input": getattr(m, "input", "text"),
-            "priority": getattr(m, "priority", 0),
+            "priority": matcher_priority(m),
         }
         for m in matchers.values()
     ]

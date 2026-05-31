@@ -23,7 +23,10 @@ Rule = dict[str, Any]
 _DEFAULT_PRIORITY = 0  # Fallback for matchers without a priority — lowest, so they sort last.
 
 
-def _priority(matcher: Any) -> int:
+def matcher_priority(matcher: Any) -> int:
+    """A matcher's linearisation priority (higher = more important), defaulting
+    to `_DEFAULT_PRIORITY` when absent or non-int. Shared with the websocket
+    `matchers/list` handler so both treat priority identically."""
     value = getattr(matcher, "priority", _DEFAULT_PRIORITY)
     return value if isinstance(value, int) else _DEFAULT_PRIORITY
 
@@ -47,7 +50,7 @@ def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
     # by name for determinism).
     slot_names = sorted(
         {name for rule in rules for name in rule.get("when", {})},
-        key=lambda name: (-_priority(matchers.get(name)), name),
+        key=lambda name: (-matcher_priority(matchers.get(name)), name),
     )
 
     def lin_key(rule: Rule) -> tuple:
@@ -107,7 +110,10 @@ def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
     return [rules[i] for i in emitted]
 
 
-GAP = 1024  # spacing between auto-assigned priorities; generous room for inserts
+# Spacing between auto-assigned priorities; generous room for inserts.
+# Keep in sync with PIN_GAP in frontend/src/views/scopes-view.ts (the drag
+# midpoint math relies on the same scale).
+GAP = 1024
 
 
 def _slot(upper: int | None, lower: int | None, k: int, m: int) -> int:

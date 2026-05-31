@@ -55,6 +55,8 @@ function _normalize(cfg: ScopeConfig): ScopeConfig {
   return { rules: cfg.rules ?? [] };
 }
 
+// Must stay in sync with GAP in custom_components/ambience/sorting.py — the
+// midpoint math below assumes the backend spaces auto priorities by this much.
 const PIN_GAP = 1024;
 
 /** Pick a priority for a rule dropped between `above` and `below` (either may be
@@ -64,11 +66,12 @@ function _pinPriority(
   below: number | undefined,
   all: Rule[],
 ): number {
+  // Common case: dropped between two rules — no need to scan the whole list.
+  if (above !== undefined && below !== undefined) return Math.floor((above + below) / 2);
   const nums = all.map((r) => r.priority ?? 0);
   if (above === undefined && below === undefined) return PIN_GAP;
   if (above === undefined) return Math.max(...nums) + PIN_GAP; // top slot
-  if (below === undefined) return Math.min(...nums) - PIN_GAP; // bottom slot
-  return Math.floor((above + below) / 2);
+  return Math.min(...nums) - PIN_GAP; // bottom slot
 }
 
 @customElement("ambience-scopes-view")

@@ -161,9 +161,9 @@ async def test_rebuild_matcher_without_trigger_deps_is_opaque(hass) -> None:
 
 
 def _engine_with_state(hass) -> AutoTriggerEngine:
-    # One scope, one rule: tod predicate "evening", deps on sensor.x.
+    # One scope, one rule in group "g": tod predicate "evening", deps on sensor.x.
     scopes = [
-        ("area", "a", {"rules": [{"when": {"tod": "evening"}}]}),
+        ("area", "a", {"rules": [{"when": {"tod": "evening"}, "group": "g"}]}),
     ]
     matchers = {"tod": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.x"})))}
     engine = _engine(hass, scopes, matchers)
@@ -175,7 +175,7 @@ async def test_recompute_first_eval_is_a_flip(hass) -> None:
     engine = _engine_with_state(hass)
     key = ("area", "a", 0, "tod")
     dirty = engine._recompute({key}, {"tod": "evening"})  # matches -> True (was unset)
-    assert dirty == {("area", "a", None)}
+    assert dirty == {("area", "a", "g")}
 
 
 async def test_recompute_unchanged_value_is_not_a_flip(hass) -> None:
@@ -191,7 +191,7 @@ async def test_recompute_changed_value_is_a_flip(hass) -> None:
     key = ("area", "a", 0, "tod")
     engine._recompute({key}, {"tod": "evening"})  # True
     dirty = engine._recompute({key}, {"tod": "morning"})  # now False
-    assert dirty == {("area", "a", None)}
+    assert dirty == {("area", "a", "g")}
 
 
 async def test_recompute_none_snapshot_evaluates_false(hass) -> None:
@@ -199,7 +199,7 @@ async def test_recompute_none_snapshot_evaluates_false(hass) -> None:
     key = ("area", "a", 0, "tod")
     engine._recompute({key}, {"tod": "evening"})  # True
     dirty = engine._recompute({key}, {"tod": None})  # snapshot None -> False -> flip
-    assert dirty == {("area", "a", None)}
+    assert dirty == {("area", "a", "g")}
     assert engine._predicate_state[key] is False
 
 
@@ -211,9 +211,18 @@ async def test_recompute_stale_key_is_ignored(hass) -> None:
 
 
 async def test_recompute_one_flip_among_two_predicates_marks_scope_once(hass) -> None:
-    # Two predicates in one scope; only one flips → scope appears once in dirty.
+    # Two predicates in one scope+group; only one flips → unit appears once.
     scopes = [
-        ("area", "a", {"rules": [{"when": {"tod": "evening"}}, {"when": {"tod": "night"}}]}),
+        (
+            "area",
+            "a",
+            {
+                "rules": [
+                    {"when": {"tod": "evening"}, "group": "g"},
+                    {"when": {"tod": "night"}, "group": "g"},
+                ]
+            },
+        ),
     ]
     matchers = {"tod": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.x"})))}
     engine = _engine(hass, scopes, matchers)
@@ -222,7 +231,7 @@ async def test_recompute_one_flip_among_two_predicates_marks_scope_once(hass) ->
     k1 = ("area", "a", 1, "tod")
     engine._recompute({k0, k1}, {"tod": "evening"})  # seed: k0 True, k1 False
     dirty = engine._recompute({k0, k1}, {"tod": "night"})  # k0 True→False, k1 False→True
-    assert dirty == {("area", "a", None)}
+    assert dirty == {("area", "a", "g")}
 
 
 async def test_recompute_marks_only_flipped_groups_dirty(hass) -> None:
@@ -261,9 +270,9 @@ async def test_tier_executor_applies_areas_then_floors_then_house(hass) -> None:
 
     engine._resolve_and_apply = _spy  # type: ignore[assignment]
     units = [
-        ("house", None, None),
-        ("area", "a", None),
-        ("floor", "f", None),
+        ("house", None, "g"),
+        ("area", "a", "g"),
+        ("floor", "f", "g"),
     ]
     await engine._apply_units(units)
     assert recorded == ["area", "floor", "house"]
@@ -273,6 +282,28 @@ async def test_recompute_key_for_removed_scope_is_ignored(hass) -> None:
     engine = _engine_with_state(hass)
     gone = ("area", "ghost", 0, "tod")  # scope not in _scope_cfgs
     dirty = engine._recompute({gone}, {"tod": "evening"})
+    assert dirty == set()
+
+
+async def test_group_for_returns_rule_group(hass) -> None:
+    engine = _engine_with_state(hass)  # area a, rule0 in group "g"
+    assert engine._group_for("area", "a", 0) == "g"
+
+
+async def test_recompute_drops_units_for_missing_rule(hass) -> None:
+    # A flipping predicate whose rule resolves to a None group (here: a rule
+    # with no group, but the same holds for a stale/out-of-range rule) must be
+    # DROPPED, never added as a (kind, id, None) unit — a None group would
+    # wrongly resolve the whole list in the apply path.
+    scopes = [
+        ("area", "a", {"rules": [{"when": {"tod": "evening"}}]}),  # no group on the rule
+    ]
+    matchers = {"tod": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.x"})))}
+    engine = _engine(hass, scopes, matchers)
+    engine.async_rebuild()
+    key = ("area", "a", 0, "tod")  # live predicate, flips True; group is None
+    dirty = engine._recompute({key}, {"tod": "evening"})
+    assert all(unit[2] is not None for unit in dirty)
     assert dirty == set()
 
 

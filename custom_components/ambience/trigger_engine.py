@@ -160,8 +160,9 @@ class AutoTriggerEngine:
         return rules[rule_index].get("when", {}).get(matcher_key)
 
     def _group_for(self, scope_kind: str, scope_id: str | None, rule_index: int) -> str | None:
-        """The group a rule belongs to, or None for the ungrouped bucket (also
-        None if the scope/rule no longer exists)."""
+        """The group id a rule belongs to (always a real id for a live rule);
+        None only when the scope/rule no longer exists, in which case the caller
+        must drop the unit (a None group must never reach the apply path)."""
         cfg = self._scope_cfgs.get((scope_kind, scope_id))
         if cfg is None:
             return None
@@ -172,13 +173,13 @@ class AutoTriggerEngine:
 
     def _recompute(
         self, fired: set[PredKey], snapshots: dict[str, Any]
-    ) -> set[tuple[str, str | None, str | None]]:
+    ) -> set[tuple[str, str | None, str]]:
         """Re-evaluate the fired predicates against `snapshots`; return the
         (scope_kind, scope_id, group) units whose boolean changed. Updates
         `predicate_state`. A missing/None snapshot evaluates the predicate to
         False; a first-seen predicate counts as a flip."""
         matchers = self._matchers()
-        dirty: set[tuple[str, str | None, str | None]] = set()
+        dirty: set[tuple[str, str | None, str]] = set()
         for key in fired:
             predicate = self._predicate_for(key)
             if predicate is None:
@@ -191,7 +192,9 @@ class AutoTriggerEngine:
             old_value = self._predicate_state.get(key)
             self._predicate_state[key] = new_value
             if old_value != new_value:
-                dirty.add((key[0], key[1], self._group_for(key[0], key[1], key[2])))
+                group = self._group_for(key[0], key[1], key[2])
+                if group is not None:
+                    dirty.add((key[0], key[1], group))
         return dirty
 
     async def _refresh_snapshots(self, matcher_keys: set[str]) -> None:
@@ -229,11 +232,11 @@ class AutoTriggerEngine:
         await async_execute_plan(self._hass, scope_kind, scope_id, plan, group_id)
 
     async def _apply_units(
-        self, units: Iterable[tuple[str, str | None, str | None]], *, force: bool = False
+        self, units: Iterable[tuple[str, str | None, str]], *, force: bool = False
     ) -> None:
         """Apply dirty (scope_kind, scope_id, group) units, concurrently within
         each containment tier, tiers sequential in order areas→floors→house."""
-        by_tier: dict[int, list[tuple[str, str | None, str | None]]] = defaultdict(list)
+        by_tier: dict[int, list[tuple[str, str | None, str]]] = defaultdict(list)
         for unit in units:
             by_tier[_TIER[unit[0]]].append(unit)
         for tier in sorted(by_tier):

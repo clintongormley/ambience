@@ -340,6 +340,9 @@ export class AmbienceRuleEditor extends LitElement {
   private _renderGroupSelectorHaForm(current: string) {
     const schema = [{
       name: "group",
+      // Required so the dropdown offers no clear/empty affordance — a rule
+      // must always have a group.
+      required: true,
       selector: {
         select: {
           mode: "dropdown",

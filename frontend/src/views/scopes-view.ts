@@ -6,6 +6,7 @@ import type {
   FloorRegistryEvent,
   HassConnection,
 } from "../api.js";
+import { colorHex, textColorFor } from "../group-colors.js";
 import { localize } from "../i18n.js";
 import {
   getArea,
@@ -137,6 +138,41 @@ export class AmbienceScopesView extends LitElement {
       margin: 0 0 0.75rem 0; font-size: 0.9em;
       color: var(--secondary-text-color, #888);
     }
+    .group-filter { position: relative; }
+    .group-filter-trigger {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.3rem 0.6rem;
+      border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color, #212121);
+      cursor: pointer; font: inherit;
+    }
+    .group-filter-trigger .caret { color: var(--secondary-text-color, #888); margin-left: 0.25rem; }
+    /* Transparent full-screen catcher so any outside click closes the menu. */
+    .group-filter-backdrop { position: fixed; inset: 0; z-index: 10; }
+    .group-filter-menu {
+      position: absolute; top: 100%; left: 0; z-index: 11; margin-top: 2px;
+      min-width: 12rem; max-height: 60vh; overflow-y: auto;
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      padding: 0.25rem;
+    }
+    .group-filter-option {
+      display: flex; align-items: center; gap: 0.5rem; width: 100%;
+      padding: 0.35rem 0.5rem; border: 0; border-radius: 4px;
+      background: none; color: var(--primary-text-color, #212121);
+      cursor: pointer; font: inherit; text-align: left;
+    }
+    .group-filter-option:hover { background: var(--secondary-background-color, #f5f5f5); }
+    .group-filter-option[aria-selected="true"] { font-weight: 600; }
+    /* Square colour swatch holding the group's icon. */
+    .group-swatch {
+      flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 4px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--secondary-background-color, #e0e0e0);
+    }
+    .group-swatch ha-icon { --mdc-icon-size: 18px; }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
@@ -163,6 +199,8 @@ export class AmbienceScopesView extends LitElement {
   // Global group filter shared by every scope: "" = All, else a group id.
   // Sticky for the session (component lifetime).
   @state() private _filterGroup = "";
+  // Whether the colour-coded filter dropdown menu is open.
+  @state() private _filterOpen = false;
   private _unsubArea?: () => void;
   private _unsubFloor?: () => void;
 
@@ -500,6 +538,78 @@ export class AmbienceScopesView extends LitElement {
     this._editing = null;
   }
 
+  // --- group filter --------------------------------------------------------
+
+  private _selectFilter(id: string) {
+    this._filterGroup = id;
+    this._filterOpen = false;
+  }
+
+  /** A colour swatch (group colour bg + icon) followed by the group name. */
+  private _renderFilterEntry(group: RuleGroup) {
+    const hex = colorHex(group.color);
+    const swatchStyle = hex ? `background:${hex};color:${textColorFor(hex)}` : "";
+    return html`
+      <span class="group-swatch" style=${swatchStyle}>
+        ${group.icon ? html`<ha-icon icon=${group.icon}></ha-icon>` : ""}
+      </span>
+      <span class="group-name">${group.name}</span>
+    `;
+  }
+
+  /** The colour-coded global group filter: a trigger showing the current
+   *  selection and a dropdown of swatch+icon+name options. Shown only when
+   *  more than one group exists. */
+  private _renderFilter() {
+    if (this._groups.length <= 1) return "";
+    const allLabel = localize(this.hass, "ui.all_groups", "All groups");
+    const sorted = [...this._groups].sort((a, b) => a.name.localeCompare(b.name));
+    const current = this._groups.find((g) => g.id === this._filterGroup);
+    return html`
+      <div class="group-filter-row">
+        <span>${localize(this.hass, "ui.filter_by_group", "Filter by group")}</span>
+        <div class="group-filter">
+          <button
+            class="group-filter-trigger"
+            aria-haspopup="listbox"
+            aria-expanded=${this._filterOpen}
+            @click=${() => { this._filterOpen = !this._filterOpen; }}
+          >
+            ${current
+              ? this._renderFilterEntry(current)
+              : html`<span class="group-name">${allLabel}</span>`}
+            <span class="caret">▾</span>
+          </button>
+          ${this._filterOpen
+            ? html`
+                <div class="group-filter-backdrop" @click=${() => { this._filterOpen = false; }}></div>
+                <div class="group-filter-menu" role="listbox">
+                  <button
+                    class="group-filter-option"
+                    role="option"
+                    aria-selected=${this._filterGroup === ""}
+                    @click=${() => this._selectFilter("")}
+                  >
+                    <span class="group-name">${allLabel}</span>
+                  </button>
+                  ${sorted.map(
+                    (g) => html`<button
+                      class="group-filter-option"
+                      role="option"
+                      aria-selected=${this._filterGroup === g.id}
+                      @click=${() => this._selectFilter(g.id)}
+                    >
+                      ${this._renderFilterEntry(g)}
+                    </button>`,
+                  )}
+                </div>
+              `
+            : ""}
+        </div>
+      </div>
+    `;
+  }
+
   // --- derived -------------------------------------------------------------
 
   /** The group a newly-added rule should default to: the active filter when a
@@ -540,23 +650,7 @@ export class AmbienceScopesView extends LitElement {
     const areaPrefix = localize(this.hass, "ui.scope_area_prefix", "Area: ");
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
-      ${this._groups.length > 1
-        ? html`<label class="group-filter-row">
-            ${localize(this.hass, "ui.filter_by_group", "Filter by group")}
-            <select
-              class="group-filter"
-              .value=${this._filterGroup}
-              @change=${(ev: Event) => { this._filterGroup = (ev.target as HTMLSelectElement).value; }}
-            >
-              <option value="" ?selected=${this._filterGroup === ""}>
-                ${localize(this.hass, "ui.all_groups", "All groups")}
-              </option>
-              ${[...this._groups]
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((g) => html`<option value=${g.id} ?selected=${g.id === this._filterGroup}>${g.name}</option>`)}
-            </select>
-          </label>`
-        : ""}
+      ${this._renderFilter()}
       <ul>
         ${this._renderScopeRow(
           { kind: "house" },

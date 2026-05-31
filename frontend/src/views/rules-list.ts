@@ -1,6 +1,7 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
+import { colorHex, textColorFor } from "../group-colors.js";
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
 import { formatParamValue, paramLabel, ruleDisplayName, summariseMatcher } from "../summary.js";
 import type {
@@ -11,7 +12,6 @@ import type {
   Rule,
   RuleGroup,
 } from "../types.js";
-import "./group-chip.js";
 
 @customElement("ambience-rules-list")
 export class AmbienceRulesList extends LitElement {
@@ -61,10 +61,6 @@ export class AmbienceRulesList extends LitElement {
     }
     .name {
       font-weight: 600;
-    }
-    .name ambience-group-chip {
-      margin-left: 0.4rem;
-      vertical-align: middle;
     }
     .summary {
       font-size: 0.85em;
@@ -149,16 +145,27 @@ export class AmbienceRulesList extends LitElement {
       cursor: help;
       line-height: 1;
     }
+    /* Full-width coloured bar before each group's rules. The colour + text
+       colour are set inline per group; this rule carries layout + the neutral
+       fallback used when a group has no colour. */
     .group-section-header {
-      font-weight: 600;
-      color: var(--secondary-text-color, #888);
-      margin: 0.75rem 0 0.35rem 0;
       display: flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.5rem;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.4rem 0.75rem;
+      margin: 0.75rem 0 0.5rem 0;
+      border-radius: 4px;
+      font-weight: 600;
+      background: var(--secondary-background-color, #e0e0e0);
+      color: var(--primary-text-color, #212121);
     }
     .group-section:first-of-type .group-section-header {
       margin-top: 0;
+    }
+    .group-section-header ha-icon {
+      --mdc-icon-size: 20px;
     }
   `;
 
@@ -193,9 +200,16 @@ export class AmbienceRulesList extends LitElement {
   // Rule indices whose action list is expanded inline.
   @state() private _expanded = new Set<number>();
 
-  /** The group a rule belongs to, or undefined if the group no longer exists. */
-  private _groupFor(rule: Rule): RuleGroup | undefined {
-    return this.groups.find((g) => g.id === rule.group);
+  /** A full-width coloured header bar for a group's section: the group's colour
+   *  as background (auto-contrast text), its icon, then its name. Falls back to
+   *  neutral theme colours when the group has no colour. */
+  private _renderSectionHeader(group: RuleGroup) {
+    const hex = colorHex(group.color);
+    const style = hex ? `background:${hex};color:${textColorFor(hex)}` : "";
+    return html`<div class="group-section-header" style=${style}>
+      ${group.icon ? html`<ha-icon icon=${group.icon}></ha-icon>` : ""}
+      <span>${group.name}</span>
+    </div>`;
   }
 
   /**
@@ -350,7 +364,6 @@ export class AmbienceRulesList extends LitElement {
    *  1-based position WITHIN its render section. */
   private _renderRow(i: number, rule: Rule, displayNum: number) {
     const unpinLabel = localize(this.hass, "ui.unpin", "Unpin (return to automatic order)");
-    const group = this._groupFor(rule);
     return html`
       <li
         class=${this._dragOver === i ? "drag-over" : ""}
@@ -384,11 +397,7 @@ export class AmbienceRulesList extends LitElement {
         </span>
         <div class="body" @click=${() => this._toggleRule(i)}>
           <div class="name">
-            ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(displayNum)))}${
-              group
-                ? html`<ambience-group-chip .group=${group}></ambience-group-chip>`
-                : ""
-            }
+            ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(displayNum)))}
           </div>
           <div class="summary">
             ${this._expanded.has(i)
@@ -468,12 +477,7 @@ export class AmbienceRulesList extends LitElement {
       ${sections.map(
         (section) => html`
           <div class="group-section">
-            ${showHeaders && section.group
-              ? html`<div class="group-section-header">
-                  <ambience-group-chip .group=${section.group}></ambience-group-chip>
-                  <span>${section.group.name}</span>
-                </div>`
-              : ""}
+            ${showHeaders && section.group ? this._renderSectionHeader(section.group) : ""}
             <ul>
               ${section.rows.map(([i, rule], n) => this._renderRow(i, rule, n + 1))}
             </ul>

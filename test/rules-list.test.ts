@@ -12,6 +12,7 @@ beforeAll(() => {
   }
 });
 import "../frontend/src/views/rules-list";
+import { colorHex } from "../frontend/src/group-colors";
 import type { ExposedAction, MatcherInfo, Rule, RuleGroup, PeriodStoreView } from "../frontend/src/types";
 
 const matchers: MatcherInfo[] = [
@@ -721,31 +722,32 @@ describe("ambience-rules-list", () => {
     expect(events).toEqual([1]);
   });
 
-  test("a grouped rule renders an ambience-group-chip to the right of the name", async () => {
-    const groupsWithStyle: RuleGroup[] = [{ id: "g1", name: "Lights", color: "green", icon: "mdi:lightbulb" }];
+  test("rules no longer render a per-row group lozenge", async () => {
     const rule: Rule = { name: "R", group: "g1", when: {}, actions: [] };
-    el = await mount([rule], [], {}, groupsWithStyle);
+    el = await mount([rule], [], {}, [{ id: "g1", name: "Lights", color: "green", icon: "mdi:lightbulb" }]);
+    expect(el.shadowRoot.querySelector("ambience-group-chip")).toBeNull();
     const nameEl = el.shadowRoot.querySelector(".name") as HTMLElement;
-    const chip = nameEl.querySelector("ambience-group-chip") as any;
-    expect(chip).toBeTruthy();
-    // The chip carries the matching group.
-    expect(chip.group).toEqual(groupsWithStyle[0]);
-    // The chip appears AFTER the rule name text within .name: the name text is
-    // present, and the chip is the last element child of .name.
-    expect(nameEl.textContent).toContain("R");
-    expect(nameEl.lastElementChild).toBe(chip);
-    // The visible name text (excluding the chip's own contents) reads "R".
-    const ownText = Array.from(nameEl.childNodes)
-      .filter((n) => n.nodeType === Node.TEXT_NODE)
-      .map((n) => n.textContent ?? "")
-      .join("")
-      .trim();
-    expect(ownText).toBe("R");
+    expect(nameEl.querySelector("ambience-group-chip")).toBeNull();
+    expect(nameEl.textContent!.trim()).toBe("R");
   });
 
-  test("a rule whose group doesn't resolve renders no group chip", async () => {
-    const rule: Rule = { name: "R", group: "missing", when: {}, actions: [] };
-    el = await mount([rule], [], {}, [{ id: "g1", name: "Lights" }]);
-    expect(el.shadowRoot.querySelector("ambience-group-chip")).toBeNull();
+  test("the group section header is a full-width coloured bar with the group's colour, icon and name", async () => {
+    const group: RuleGroup = { id: "g1", name: "Lights", color: "green", icon: "mdi:lightbulb" };
+    el = await mount([{ name: "R", group: "g1", when: {}, actions: [] }], [], {}, [group]);
+    const header = el.shadowRoot.querySelector(".group-section-header") as HTMLElement;
+    expect(header).toBeTruthy();
+    // Group colour applied inline as the bar background.
+    expect(header.getAttribute("style") || "").toContain(colorHex("green")!);
+    // Icon + name rendered inside the bar.
+    expect(header.querySelector('ha-icon[icon="mdi:lightbulb"]')).toBeTruthy();
+    expect(header.textContent).toContain("Lights");
+  });
+
+  test("a colourless group renders a header with no inline background (neutral fallback)", async () => {
+    const group: RuleGroup = { id: "g1", name: "Plain" };
+    el = await mount([{ name: "R", group: "g1", when: {}, actions: [] }], [], {}, [group]);
+    const header = el.shadowRoot.querySelector(".group-section-header") as HTMLElement;
+    expect(header.getAttribute("style") || "").toBe("");
+    expect(header.textContent).toContain("Plain");
   });
 });

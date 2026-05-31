@@ -593,11 +593,36 @@ describe("ambience-scopes-view", () => {
       { id: "b", name: "Bee" },
     ] as RuleGroup[];
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector("select.group-filter")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".group-filter-trigger")).toBeTruthy();
 
     el._groups = [{ id: "a", name: "Awn" }] as RuleGroup[];
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector("select.group-filter")).toBeNull();
+    expect(el.shadowRoot.querySelector(".group-filter-trigger")).toBeNull();
+  });
+
+  test("the filter dropdown lists colour-coded swatch+icon+name options and selecting one sets the filter", async () => {
+    el = await mount();
+    el._groups = [
+      { id: "a", name: "Awn", color: "green", icon: "mdi:blinds" },
+      { id: "b", name: "Bee" },
+    ] as RuleGroup[];
+    await el.updateComplete;
+    // Open the menu.
+    (el.shadowRoot.querySelector(".group-filter-trigger") as HTMLButtonElement).click();
+    await el.updateComplete;
+    const options = Array.from(el.shadowRoot.querySelectorAll(".group-filter-option")) as HTMLElement[];
+    // All groups + 2 groups.
+    expect(options.length).toBe(3);
+    // The "Awn" option carries a coloured swatch with its icon.
+    const awn = options.find((o) => o.textContent!.includes("Awn"))!;
+    const swatch = awn.querySelector(".group-swatch") as HTMLElement;
+    expect((swatch.getAttribute("style") || "")).toContain("#4caf50");
+    expect(swatch.querySelector('ha-icon[icon="mdi:blinds"]')).toBeTruthy();
+    // Selecting it sets the filter and closes the menu.
+    awn.click();
+    await el.updateComplete;
+    expect(el._filterGroup).toBe("a");
+    expect(el.shadowRoot.querySelector(".group-filter-menu")).toBeNull();
   });
 
   test("a new rule defaults to the active filtered group", async () => {

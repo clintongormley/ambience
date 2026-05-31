@@ -3047,6 +3047,9 @@ var on=Object.defineProperty;var ln=Object.getOwnPropertyDescriptor;var c=(t,n,e
       margin-top: 0.25rem;
       border-top: 1px dotted var(--divider-color, #eee);
       font-size: 0.9rem;
+      /* Reserve the height of the seconds input so the row doesn't grow when
+         the field appears/disappears as the checkbox is toggled. */
+      min-height: 2rem;
     }
     .reapply-row label {
       color: var(--primary-text-color, inherit);

@@ -138,6 +138,13 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     # ---- on/off ----
 
     async def async_turn_on(self, **_: Any) -> None:
+        await self._apply_on()
+
+    async def async_turn_off(self, **_: Any) -> None:
+        await self._apply_off()
+
+    async def _apply_on(self) -> None:
+        """Turn this switch on locally (no cascade)."""
         if self._timer is not None:
             self._timer.cancel()
             self._timer = None
@@ -145,7 +152,8 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         await self._store().async_set_scope_switch_off_at(self._scope_kind, self._scope_id, None)
         self.async_write_ha_state()
 
-    async def async_turn_off(self, **_: Any) -> None:
+    async def _apply_off(self) -> None:
+        """Turn this switch off locally (no cascade)."""
         self._attr_is_on = False
         await self._store().async_set_scope_switch_off_at(
             self._scope_kind, self._scope_id, dt_util.utcnow().isoformat()

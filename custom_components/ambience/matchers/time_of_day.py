@@ -57,7 +57,7 @@ class TimeOfDayMatcher:
     ) -> None:
         self._period_lookup = period_lookup or (lambda: {})
 
-    async def snapshot(self, hass: HomeAssistant) -> TimeOfDaySnapshot:
+    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> TimeOfDaySnapshot:
         state = hass.states.get("sun.sun")
         if state is None:
             raise RuntimeError("sun.sun unavailable")
@@ -71,7 +71,7 @@ class TimeOfDayMatcher:
                 raise RuntimeError(f"sun.sun attribute {attr} unparseable: {raw!r}")
             anchors[anchor] = parsed
         return TimeOfDaySnapshot(
-            now=dt_util.utcnow(),
+            now=now or dt_util.utcnow(),
             sunrise=anchors["sunrise"],
             sunset=anchors["sunset"],
             noon=anchors["noon"],

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -47,7 +48,7 @@ class SunMatcher:
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
 
-    async def snapshot(self, hass: HomeAssistant) -> SunSnapshot:
+    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> SunSnapshot:
         state = hass.states.get("sun.sun")
         if state is None or state.state in _UNAVAILABLE:
             return SunSnapshot(elevation=None, azimuth=None)

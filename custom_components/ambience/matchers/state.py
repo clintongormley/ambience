@@ -61,7 +61,7 @@ class StateMatcher:
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
 
-    async def snapshot(self, hass: HomeAssistant) -> StateSnapshot:
+    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> StateSnapshot:
         states: dict[str, tuple[str, datetime, datetime]] = {}
         attributes: dict[str, dict[str, Any]] = {}
         for s in hass.states.async_all():
@@ -69,7 +69,7 @@ class StateMatcher:
             # `s.attributes` is a Mapping; copy into a plain dict so the
             # snapshot stays detached from HA's live state object.
             attributes[s.entity_id] = dict(s.attributes)
-        return StateSnapshot(now=dt_util.utcnow(), states=states, attributes=attributes)
+        return StateSnapshot(now=now or dt_util.utcnow(), states=states, attributes=attributes)
 
     def matches(self, predicate: Any, snapshot: StateSnapshot) -> bool:
         if predicate is None:

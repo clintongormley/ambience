@@ -66,7 +66,7 @@ class PeopleMatcher:
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
 
-    async def snapshot(self, hass: HomeAssistant) -> PeopleSnapshot:
+    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> PeopleSnapshot:
         persons: dict[str, tuple[str, datetime]] = {}
         names: dict[str, str] = {}
         in_zones: dict[str, list[str] | None] = {}
@@ -80,7 +80,7 @@ class PeopleMatcher:
             friendly = z.attributes.get("friendly_name") or z.entity_id
             zone_labels[z.entity_id] = _HOME if z.entity_id == "zone.home" else friendly
         return PeopleSnapshot(
-            now=dt_util.utcnow(),
+            now=now or dt_util.utcnow(),
             persons=persons,
             names=names,
             zone_labels=zone_labels,

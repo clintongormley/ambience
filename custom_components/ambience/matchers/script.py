@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from time import monotonic as _monotonic
 from typing import Any
 
@@ -159,15 +160,15 @@ class ScriptMatcher:
     # Per-call timeout for script invocations. Tests may override.
     _timeout_seconds: float = 5.0
 
-    async def snapshot(self, hass: HomeAssistant) -> ScriptSnapshot:
+    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> ScriptSnapshot:
         pairs = self._collect_pairs()
         results: dict[str, bool] = {}
         misses: list[tuple[str, str, str]] = []  # (script, args_json, cache_key)
-        now = _monotonic()
+        now_mono = _monotonic()
         for script, args_json in pairs:
             key = _cache_key(script, json.loads(args_json))
             cached = self._cache.get(key)
-            if cached is not None and cached[1] > now:
+            if cached is not None and cached[1] > now_mono:
                 results[key] = cached[0]
             else:
                 misses.append((script, args_json, key))

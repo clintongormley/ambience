@@ -99,12 +99,12 @@ class DayMatcher:
             return {"workday_sensor": None, "workday_calendar": None}
         return store.get_matcher_config("day")
 
-    async def snapshot(self, hass: HomeAssistant) -> DaySnapshot:
+    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> DaySnapshot:
         from ..const import DATA_STORE, DOMAIN  # local import to avoid cycles
 
         store = hass.data[DOMAIN][DATA_STORE]
         cfg = store.get_matcher_config("day")
-        today = dt_util.now().date()
+        today = dt_util.as_local(now).date() if now is not None else dt_util.now().date()
         workday_state = self._read_workday_sensor(hass, cfg.get("workday_sensor"))
         month_workdays = await self._fetch_month_workdays(hass, cfg.get("workday_calendar"), today)
         return DaySnapshot(

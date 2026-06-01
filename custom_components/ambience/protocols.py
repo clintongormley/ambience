@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
@@ -25,8 +26,13 @@ class Matcher(Protocol):
     description: str
     predicate_help: str
 
-    async def snapshot(self, hass: HomeAssistant) -> Any:
-        """Capture all state needed to evaluate predicates."""
+    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> Any:
+        """Capture all state needed to evaluate predicates.
+
+        `now` overrides the wall-clock the snapshot is taken at (used by the
+        what-if simulator to time-travel). When None, the matcher reads the
+        real current time. Time-insensitive matchers accept and ignore it.
+        """
         ...
 
     def matches(self, predicate: Any, snapshot: Any) -> bool:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -119,7 +120,7 @@ class WeatherMatcher:
             return None
         return store.get_matcher_config("weather").get("entity")
 
-    async def snapshot(self, hass: HomeAssistant) -> WeatherSnapshot:
+    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> WeatherSnapshot:
         from ..const import DATA_STORE, DOMAIN
 
         store = hass.data[DOMAIN][DATA_STORE]

@@ -13,6 +13,7 @@ from enum import StrEnum
 from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .const import DATA_TRACE_BUFFER, DATA_TRACE_SINKS, DOMAIN
 from .engine import Explanation
@@ -113,12 +114,14 @@ class TraceEvent:
 
     `event_id` is a short correlation tag assigned by `emit_trace`; every log
     line of the event carries it as a `[id]` prefix, so a tool that splits the
-    record can still reconstruct which lines belong together.
+    record can still reconstruct which lines belong together. `timestamp` is an
+    ISO-8601 UTC string, also assigned by `emit_trace`, for the ring buffer.
     """
 
     cause: TriggerCause
     units: list[UnitTrace]
     event_id: str | None = None
+    timestamp: str | None = None
 
 
 def _scope_label(unit: UnitTrace) -> str:
@@ -254,6 +257,6 @@ def emit_trace(hass: HomeAssistant, event: TraceEvent) -> None:
     if not sinks:
         return
     event = _resolve_names(hass, event)
-    event = replace(event, event_id=secrets.token_hex(3))
+    event = replace(event, event_id=secrets.token_hex(3), timestamp=dt_util.utcnow().isoformat())
     for sink in sinks:
         sink.emit(event)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from custom_components.ambience.const import DATA_STORE, DATA_TRACE_BUFFER, DATA_TRACE_SINKS, DOMAIN
 from custom_components.ambience.engine import (
@@ -282,3 +283,16 @@ def test_tracing_active_true_when_buffer_registered():
 def test_tracing_active_false_with_no_buffer_and_no_debug():
     hass = _Hass({DOMAIN: {}})
     assert tracing_active(hass) is False
+
+
+def test_emit_trace_assigns_a_timestamp():
+    received = []
+
+    class CaptureSink:
+        def emit(self, event):
+            received.append(event)
+
+    hass = _Hass({DOMAIN: {DATA_TRACE_SINKS: [CaptureSink()]}})
+    emit_trace(hass, TraceEvent(TriggerCause(kind="manual"), []))
+    # A parseable ISO-8601 timestamp was assigned (not just any truthy string).
+    datetime.fromisoformat(received[0].timestamp)

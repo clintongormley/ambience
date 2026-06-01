@@ -628,8 +628,9 @@ export class AmbienceScopesView extends LitElement {
     this._error = "";
     try {
       await runRuleActions(this.hass, scope, e.detail.index);
-    } catch (e) {
-      this._error = (e as Error).message || String(e);
+    } catch (err) {
+      // `err`, not `e` — `e` is the event parameter above.
+      this._error = (err as Error).message || String(err);
     }
   }
 

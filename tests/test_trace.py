@@ -296,3 +296,75 @@ def test_emit_trace_assigns_a_timestamp():
     emit_trace(hass, TraceEvent(TriggerCause(kind="manual"), []))
     # A parseable ISO-8601 timestamp was assigned (not just any truthy string).
     datetime.fromisoformat(received[0].timestamp)
+
+
+# ---------------------------------------------------------------------------
+# BufferSink tests
+# ---------------------------------------------------------------------------
+
+from custom_components.ambience.const import TRACE_BUFFER_SIZE  # noqa: E402
+from custom_components.ambience.trace import BufferSink  # noqa: E402
+
+
+def _event(cause_detail, units, event_id="e", ts="2026-06-01T00:00:00"):
+    return TraceEvent(
+        TriggerCause(kind="clock", detail=cause_detail), units, event_id=event_id, timestamp=ts
+    )
+
+
+def test_buffersink_splits_event_into_per_scope_group_buckets():
+    sink = BufferSink()
+    u_kitchen = UnitTrace("area", "kitchen", "General", "on", "acted", None, winner_name="a")
+    u_hall = UnitTrace("area", "hall", "General", "on", "acted", None, winner_name="b")
+    sink.emit(_event("08:00", [u_kitchen, u_hall]))
+    records = sink.records()
+    assert {(r.unit.scope_id, r.unit.group) for r in records} == {
+        ("kitchen", "General"),
+        ("hall", "General"),
+    }
+    # Each record carries the event's trigger context.
+    assert all(r.event_id == "e" and r.cause.detail == "08:00" for r in records)
+
+
+def test_buffersink_bounds_each_bucket_at_trace_buffer_size():
+    sink = BufferSink()
+    for i in range(TRACE_BUFFER_SIZE + 3):
+        unit = UnitTrace("area", "kitchen", "General", "on", "acted", None, winner_name=f"r{i}")
+        ts = f"2026-06-01T00:00:{str(i).zfill(2)}"
+        sink.emit(_event("08:00", [unit], event_id=f"e{i}", ts=ts))
+    records = sink.records()
+    assert len(records) == TRACE_BUFFER_SIZE  # only one bucket, capped
+    # The oldest were evicted; the newest survive.
+    assert records[0].unit.winner_name == f"r{TRACE_BUFFER_SIZE + 2}"
+
+
+def test_buffersink_records_newest_first_across_buckets():
+    sink = BufferSink()
+    sink.emit(
+        _event(
+            "08:00",
+            [UnitTrace("area", "kitchen", "General", "on", "acted", None)],
+            ts="2026-06-01T00:00:00",
+        )
+    )
+    sink.emit(
+        _event(
+            "09:00",
+            [UnitTrace("area", "hall", "General", "on", "acted", None)],
+            ts="2026-06-01T00:00:05",
+        )
+    )
+    records = sink.records()
+    assert records[0].cause.detail == "09:00"  # newest first
+    assert records[1].cause.detail == "08:00"
+
+
+def test_buffersink_records_empty_when_fresh():
+    assert BufferSink().records() == []
+
+
+def test_buffersink_clear_empties_all_buckets():
+    sink = BufferSink()
+    sink.emit(_event("08:00", [UnitTrace("area", "kitchen", "General", "on", "acted", None)]))
+    sink.clear()
+    assert sink.records() == []

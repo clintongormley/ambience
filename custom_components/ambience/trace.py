@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+from collections import deque
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any, Protocol
@@ -15,7 +16,7 @@ from typing import Any, Protocol
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .const import DATA_TRACE_BUFFER, DATA_TRACE_SINKS, DOMAIN
+from .const import DATA_TRACE_BUFFER, DATA_TRACE_SINKS, DOMAIN, TRACE_BUFFER_SIZE
 from .engine import Explanation
 from .naming import group_names, scope_display_name
 
@@ -122,6 +123,46 @@ class TraceEvent:
     units: list[UnitTrace]
     event_id: str | None = None
     timestamp: str | None = None
+
+
+@dataclass(frozen=True)
+class BufferedUnit:
+    """One unit's evaluation as retained in the ring buffer, with the trigger
+    context needed to display and correlate it."""
+
+    event_id: str | None
+    timestamp: str | None
+    cause: TriggerCause
+    unit: UnitTrace
+
+
+# (scope_kind, scope_id, group) — the per-bucket key, the analog of one HA automation.
+BucketKey = tuple[str, str | None, str]
+
+
+class BufferSink:
+    """A trace sink that retains the last `TRACE_BUFFER_SIZE` evaluations per
+    `(scope, group)`. Always-on; in-memory; lost on restart. Single-threaded
+    event loop => no locking."""
+
+    def __init__(self) -> None:
+        self._buckets: dict[BucketKey, deque[BufferedUnit]] = {}
+
+    def emit(self, event: TraceEvent) -> None:
+        for unit in event.units:
+            key: BucketKey = (unit.scope_kind, unit.scope_id, unit.group)
+            bucket = self._buckets.get(key)
+            if bucket is None:
+                bucket = self._buckets[key] = deque(maxlen=TRACE_BUFFER_SIZE)
+            bucket.append(BufferedUnit(event.event_id, event.timestamp, event.cause, unit))
+
+    def records(self) -> list[BufferedUnit]:
+        """All buffered units across buckets, newest-first (by timestamp)."""
+        everything = [record for bucket in self._buckets.values() for record in bucket]
+        return sorted(everything, key=lambda r: r.timestamp or "", reverse=True)
+
+    def clear(self) -> None:
+        self._buckets.clear()
 
 
 def _scope_label(unit: UnitTrace) -> str:

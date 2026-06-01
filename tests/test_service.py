@@ -81,6 +81,9 @@ class FakeStore:
     def get_area(self, area_id):
         return self._areas.get(area_id)
 
+    def groups(self):
+        return []
+
 
 class _FakeExposedStorage:
     """Minimal storage backing for ExposedActionsStore in tests."""
@@ -543,6 +546,9 @@ class FakeScopeStore:
     def get_house(self):
         return dict(self._house)
 
+    def groups(self):
+        return []
+
 
 async def test_async_resolve_only_floor_routes_to_floor_store(hass: HomeAssistant) -> None:
     """Calling with scope_kind='floor' resolves against the floor's rules."""
@@ -718,6 +724,7 @@ async def test_execute_plan_dispatches_actions_and_records_last_applied(
     hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: exposed, DATA_STORE: FakeStore({})}
     plan = {
         "matched_rule_index": 3,
+        "rule_name": None,
         "actions": [
             {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 50}}
         ],
@@ -820,6 +827,7 @@ async def test_execute_plan_records_last_applied_even_when_all_actions_skip(
     hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: exposed, DATA_STORE: FakeStore({})}
     plan = {
         "matched_rule_index": 2,
+        "rule_name": None,
         "actions": [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}],
     }
     await async_execute_plan(hass, "area", "a", plan, "lighting")

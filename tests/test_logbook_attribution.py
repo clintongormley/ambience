@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import async_mock_service
+from datetime import UTC, datetime, timedelta
 
-from custom_components.ambience.const import DOMAIN
+import pytest
+from homeassistant.const import EVENT_LOGBOOK_ENTRY
+from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_capture_events,
+    async_mock_service,
+)
+
+from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
 from custom_components.ambience.service import _compose_apply_message
 
 
@@ -130,3 +138,91 @@ async def test_execute_actions_passes_context_to_service_calls(
 
     assert len(calls) == 1
     assert calls[0].context.id == ctx.id
+
+
+# --- Behavioral: initial apply via the installed integration ------------------
+
+
+async def _setup_with_sun(hass: HomeAssistant) -> None:
+    now = datetime.now(UTC)
+    hass.states.async_set(
+        "sun.sun",
+        "above_horizon",
+        {
+            "next_rising": (now + timedelta(hours=1)).isoformat(),
+            "next_setting": (now + timedelta(hours=12)).isoformat(),
+            "next_dawn": (now + timedelta(minutes=30)).isoformat(),
+            "next_dusk": (now + timedelta(hours=13)).isoformat(),
+            "next_noon": (now + timedelta(hours=6)).isoformat(),
+            "next_midnight": (now + timedelta(hours=18)).isoformat(),
+        },
+    )
+
+
+@pytest.fixture
+async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> MockConfigEntry:
+    await _setup_with_sun(hass)
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    return mock_config_entry
+
+
+async def test_apply_fires_ambience_entry_and_shares_context(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
+    cover_calls = async_mock_service(hass, "cover", "open_cover")
+    store = hass.data[DOMAIN][DATA_STORE]
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [{"id": "cover.open_cover", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "name": "Evening",
+                    "group": "general",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "cover.open_cover",
+                            "entity_ids": ["cover.blind"],
+                            "params": {},
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    await hass.services.async_call(DOMAIN, "apply_scene", {"area": "lr"}, blocking=True)
+    await hass.async_block_till_done()
+
+    ambience_entries = [e for e in entries if e.data.get("name") == "Ambience"]
+    assert len(ambience_entries) == 1
+    entry = ambience_entries[0]
+    assert entry.data["domain"] == "ambience"
+    # Single configured group ⇒ no "(group)" suffix; "lr" is not a real area ⇒
+    # the scope label falls back to the raw id.
+    assert entry.data["message"] == "applied 'Evening' in lr"
+    assert len(cover_calls) == 1
+    assert cover_calls[0].context.id == entry.context.id
+
+
+async def test_apply_with_empty_actions_logs_nothing(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {"rules": [{"name": "Empty", "group": "general", "when": {}, "actions": []}]},
+    )
+
+    await hass.services.async_call(DOMAIN, "apply_scene", {"area": "lr"}, blocking=True)
+    await hass.async_block_till_done()
+
+    assert [e for e in entries if e.data.get("name") == "Ambience"] == []

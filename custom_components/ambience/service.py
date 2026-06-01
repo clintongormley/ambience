@@ -12,6 +12,8 @@ from typing import Any
 
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import floor_registry as fr
 
 from .const import (
     DATA_EXPOSED_ACTIONS,
@@ -311,6 +313,62 @@ def _compose_apply_message(
     return message
 
 
+def _scope_label(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
+    """Human label for a scope: area/floor name, or 'Global' for house.
+
+    Falls back to the raw scope_id when the registry entry is missing (e.g. in
+    tests or for a deleted area/floor)."""
+    if scope_kind == "house":
+        return "Global"
+    if scope_kind == "floor":
+        floor = fr.async_get(hass).async_get_floor(scope_id)
+        return floor.name if floor is not None else (scope_id or "floor")
+    area = ar.async_get(hass).async_get_area(scope_id)
+    return area.name if area is not None else (scope_id or "area")
+
+
+def _group_label(hass: HomeAssistant, group_id: str) -> str | None:
+    """The configured display name for a group id, or None if unknown."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    for group in store.groups():
+        if group.get("id") == group_id:
+            return group.get("name")
+    return None
+
+
+def _log_apply(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    group_id: str,
+    rule_name: str | None,
+    rule_index: int,
+    *,
+    reapplied: bool,
+) -> Context:
+    """Fire an "Ambience" logbook entry for an apply and return a fresh Context.
+
+    Callers MUST pass the returned Context to async_execute_actions so the
+    resulting device state changes share it and trace back to this entry in the
+    logbook. Imported lazily so service.py does not depend on logbook at import
+    time; the entry is a harmless no-op if the logbook integration is unloaded.
+    """
+    from homeassistant.components.logbook import async_log_entry
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    message = _compose_apply_message(
+        reapplied=reapplied,
+        rule_name=rule_name,
+        rule_index=rule_index,
+        scope_label=_scope_label(hass, scope_kind, scope_id),
+        group_label=_group_label(hass, group_id),
+        group_count=len(store.groups()),
+    )
+    context = Context()
+    async_log_entry(hass, "Ambience", message, domain=DOMAIN, context=context)
+    return context
+
+
 async def async_execute_actions(
     hass: HomeAssistant,
     scope_kind: str,
@@ -380,7 +438,15 @@ async def async_execute_plan(
     keyed per (scope_kind, scope_id, group_id); group_id is always a real group.
     """
     index = plan["matched_rule_index"]
-    await async_execute_actions(hass, scope_kind, scope_id, plan["actions"], rule_index=index)
+    actions = plan["actions"]
+    context = (
+        _log_apply(hass, scope_kind, scope_id, group_id, plan["rule_name"], index, reapplied=False)
+        if actions
+        else None
+    )
+    await async_execute_actions(
+        hass, scope_kind, scope_id, actions, rule_index=index, context=context
+    )
     domain_data = hass.data[DOMAIN]
     domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id, group_id)] = index
 

@@ -96,7 +96,30 @@ def test_emit_trace_fans_out_to_registered_sinks():
     hass = _Hass({DOMAIN: {DATA_TRACE_SINKS: [CaptureSink()]}})
     event = TraceEvent(TriggerCause(kind="manual"), [])
     emit_trace(hass, event)
-    assert received == [event]
+    assert len(received) == 1
+    assert received[0].cause == event.cause
+    assert received[0].event_id  # emit_trace tagged it with a correlation id
+
+
+def test_emit_trace_assigns_distinct_event_ids():
+    received = []
+
+    class CaptureSink:
+        def emit(self, event):
+            received.append(event)
+
+    hass = _Hass({DOMAIN: {DATA_TRACE_SINKS: [CaptureSink()]}})
+    emit_trace(hass, TraceEvent(TriggerCause(kind="manual"), []))
+    emit_trace(hass, TraceEvent(TriggerCause(kind="manual"), []))
+    assert received[0].event_id != received[1].event_id
+
+
+def test_format_prefixes_every_line_with_event_id():
+    unit = UnitTrace("area", "kitchen", "General", "on", "acted", None, winner_name="r")
+    event = TraceEvent(TriggerCause(kind="manual"), [unit], event_id="ab12cd")
+    lines = format_trace_event(event)
+    assert lines  # non-empty
+    assert all(line.startswith("[ab12cd] ") for line in lines)
 
 
 def test_emit_trace_no_sinks_is_noop():

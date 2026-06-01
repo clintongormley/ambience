@@ -7,6 +7,7 @@ ring buffer (Increment B) plugs into without re-instrumenting the engine.
 from __future__ import annotations
 
 import logging
+import secrets
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any, Protocol
@@ -106,10 +107,16 @@ class UnitTrace:
 
 @dataclass(frozen=True)
 class TraceEvent:
-    """One trigger event: a cause and every unit that re-evaluated."""
+    """One trigger event: a cause and every unit that re-evaluated.
+
+    `event_id` is a short correlation tag assigned by `emit_trace`; every log
+    line of the event carries it as a `[id]` prefix, so a tool that splits the
+    record can still reconstruct which lines belong together.
+    """
 
     cause: TriggerCause
     units: list[UnitTrace]
+    event_id: str | None = None
 
 
 def _scope_label(unit: UnitTrace) -> str:
@@ -161,6 +168,8 @@ def format_trace_event(event: TraceEvent) -> list[str]:
                     lines.append(f"          {pred.matcher_key}: {pmark}{detail}")
         for action in unit.actions:
             lines.append(f"      → {_format_action(action)}")
+    if event.event_id:
+        lines = [f"[{event.event_id}] {line}" for line in lines]
     return lines
 
 
@@ -220,10 +229,12 @@ def _resolve_group_names(hass: HomeAssistant, event: TraceEvent) -> TraceEvent:
 
 
 def emit_trace(hass: HomeAssistant, event: TraceEvent) -> None:
-    """Fan a trace event out to every registered sink."""
+    """Tag the event with a correlation id, resolve group names, and fan it out
+    to every registered sink."""
     sinks = hass.data.get(DOMAIN, {}).get(DATA_TRACE_SINKS, ())
     if not sinks:
         return
     event = _resolve_group_names(hass, event)
+    event = replace(event, event_id=secrets.token_hex(3))
     for sink in sinks:
         sink.emit(event)

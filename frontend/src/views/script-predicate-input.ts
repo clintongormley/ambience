@@ -188,6 +188,13 @@ export class AmbienceScriptPredicateInput extends LitElement {
     return services?.script?.[name]?.fields;
   }
 
+  /** Fields of the currently-picked script (or undefined). */
+  private _currentFields(): Record<string, ScriptField> | undefined {
+    return this._fieldsFor(
+      this.value && typeof this.value === "object" ? this.value.script : null,
+    );
+  }
+
   /** Seed an args dict from a script's field defaults. */
   private _defaultArgs(scriptEntityId: string): Record<string, unknown> {
     const fields = this._fieldsFor(scriptEntityId) ?? {};
@@ -223,23 +230,27 @@ export class AmbienceScriptPredicateInput extends LitElement {
   /** Friendly label for an args field: prefers the script field's `name`
    *  alias, else humanizes the raw key. Mirrors summary.ts:paramLabel. */
   _computeFieldLabel = (schema: { name: string }): string => {
-    const fields = this._fieldsFor(
-      this.value && typeof this.value === "object" ? this.value.script : null,
-    );
+    const fields = this._currentFields();
     const alias = fields?.[schema.name]?.name;
     return typeof alias === "string" && alias ? alias : humanizeFieldId(schema.name);
   };
 
+  /** Helper text for an args field: the script field's `description`, or "". */
+  _computeFieldHelper = (schema: { name: string }): string => {
+    const fields = this._currentFields();
+    const desc = fields?.[schema.name]?.description;
+    return typeof desc === "string" ? desc : "";
+  };
+
   /** Build an ha-form schema reflecting the picked script's fields. */
   _argsSchema(): HaFormSchema[] {
-    const fields = this._fieldsFor(this.value && typeof this.value === "object" ? this.value.script : null);
+    const fields = this._currentFields();
     if (!fields) return [];
     return Object.entries(fields).map(([name, f]) => ({
       name,
       required: f.required,
-      description: f.description ? { suffix: f.description } : undefined,
       selector: f.selector ?? { text: {} },
-    } as HaFormSchema & { description?: { suffix: string } }));
+    } as HaFormSchema));
   }
 
   /** Merge edited args into the predicate and emit. */
@@ -375,6 +386,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
         .schema=${schema}
         .data=${args}
         .computeLabel=${this._computeFieldLabel}
+        .computeHelper=${this._computeFieldHelper}
         @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => {
           e.stopPropagation();
           this._updateArgs(e.detail.value);

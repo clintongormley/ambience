@@ -118,13 +118,11 @@ describe("ambience-script-predicate-input — auto-form", () => {
       {
         name: "temp",
         required: true,
-        description: { suffix: "Trigger above this temperature" },
         selector: { number: { min: 0, max: 100 } },
       },
       {
         name: "zone",
         required: undefined,
-        description: undefined,
         selector: { text: {} },
       },
     ]);
@@ -292,5 +290,30 @@ describe("ambience-script-predicate-input — field labels", () => {
   test("_computeFieldLabel falls back to humanized key when no script is picked", async () => {
     el = await mount(null, { services: { script: {} } });
     expect(el._computeFieldLabel({ name: "target_brightness" })).toBe("Target brightness");
+  });
+
+  test("_computeFieldHelper returns empty string when no script is picked", async () => {
+    el = await mount(null, { services: { script: {} } });
+    expect(el._computeFieldHelper({ name: "temp" })).toBe("");
+  });
+
+  test("_computeFieldHelper returns the field description", async () => {
+    el = await mount(
+      { script: "script.foo", args: {} },
+      { services: { script: { foo: { fields: {
+        temp: { description: "Target temperature in °C", selector: { number: {} } },
+      } } } } },
+    );
+    expect(el._computeFieldHelper({ name: "temp" })).toBe("Target temperature in °C");
+  });
+
+  test("_argsSchema no longer carries a description suffix", async () => {
+    el = await mount(
+      { script: "script.foo", args: {} },
+      { services: { script: { foo: { fields: {
+        temp: { description: "Target temperature", selector: { number: {} } },
+      } } } } },
+    );
+    expect(el._argsSchema()[0].description).toBeUndefined();
   });
 });

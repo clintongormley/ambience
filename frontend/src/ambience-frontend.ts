@@ -7,9 +7,10 @@
  */
 
 import { LitElement, html, css } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 
 import type { HassConnection } from "./api.js";
+import { defineElement } from "./define-element.js";
 import { localize } from "./i18n.js";
 import { renderLogo } from "./logo.js";
 import { watchHaComponents } from "./ha-components.js";
@@ -18,7 +19,6 @@ import "./views/settings-view.js";
 
 type PanelView = "areas" | "settings";
 
-@customElement("ambience-frontend")
 export class AmbienceFrontend extends LitElement {
   static override styles = css`
     :host {
@@ -105,3 +105,5 @@ export class AmbienceFrontend extends LitElement {
     `;
   }
 }
+
+defineElement("ambience-frontend", AmbienceFrontend);

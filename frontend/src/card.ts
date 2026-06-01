@@ -7,6 +7,7 @@
  * <ambience-frontend> chunk on first use.
  */
 
+import { defineElement } from "./define-element.js";
 import { loadFrontend } from "./lazy-frontend.js";
 
 interface CardConfig {
@@ -66,9 +67,7 @@ class AmbienceCard extends HTMLElement {
   }
 }
 
-if (!customElements.get("ambience-card")) {
-  customElements.define("ambience-card", AmbienceCard);
-}
+defineElement("ambience-card", AmbienceCard);
 
 interface CustomCardEntry {
   type: string;

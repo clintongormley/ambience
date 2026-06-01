@@ -6,11 +6,11 @@
  */
 
 import { LitElement, html, css } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { property } from "lit/decorators.js";
 
+import { defineElement } from "./define-element.js";
 import { loadFrontend } from "./lazy-frontend.js";
 
-@customElement("ambience-panel")
 export class AmbiencePanel extends LitElement {
   static override styles = css`
     :host {
@@ -34,3 +34,5 @@ export class AmbiencePanel extends LitElement {
     return html`<ambience-frontend .hass=${this.hass}></ambience-frontend>`;
   }
 }
+
+defineElement("ambience-panel", AmbiencePanel);

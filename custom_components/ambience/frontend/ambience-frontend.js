@@ -2183,7 +2183,7 @@ var Fn=Object.defineProperty;var On=Object.getOwnPropertyDescriptor;var u=(t,n,e
   .action-block { font-family: monospace; font-size: 0.8rem; line-height: 1.6; margin-bottom: 0.3rem; }
   .action-head { color: var(--primary-text-color, #ddd); }
   .action-block .entity { padding-left: 1rem; color: var(--secondary-text-color, #aaa); }
-`;function il(t){return t.kind==="entity"?`${t.entity_id} ${t.old} \u2192 ${t.new}`:t.detail?`${Ae(t.kind)} ${t.detail}`:Ae(t.kind)}function nl(t){let n=t.params&&Object.keys(t.params).length?` ${JSON.stringify(t.params)}`:"";return`${t.service}${n}`}function sl(t){return t.reduce((n,e)=>n+(e.entity_ids?.length??0),0)}function al(t){return t.evaluated?l`
+`;function il(t){return t.kind==="entity"?`${t.entity_id} ${t.old} \u2192 ${t.new}`:t.detail?`${Ae(t.kind)} ${t.detail}`:Ae(t.kind)}function nl(t){let n=t.params&&Object.keys(t.params).length?` ${JSON.stringify(t.params)}`:"";return`${t.service}${n}`}function sl(t){return t.reduce((n,e)=>n+(e.entity_ids?.length??0),0)}function al(t){return t.disabled?l`<div class="rule disabled">rule #${t.index} ${t.name??"\u2014"}: disabled</div>`:t.evaluated?l`
     <div class="rule ${t.matched?"won":""}">rule #${t.index} ${t.name??"\u2014"}: ${t.matched?"WON":"no"}</div>
     ${t.predicates.map(n=>l`
         <div class="pred ${n.passed?"pass":"fail"}" style="padding-left:1rem">

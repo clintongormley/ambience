@@ -310,3 +310,49 @@ export type FloorListItem = {
 
 // Storage shape is identical for area, floor, and house: alias for clarity.
 export type ScopeConfig = AreaConfig;
+
+// --- trace viewer (mirrors custom_components/ambience/trace.py buffered_unit_to_dict) ---
+
+export type TraceCause = {
+  kind:
+    | "entity"
+    | "clock"
+    | "sun"
+    | "has_time"
+    | "switch"
+    | "manual"
+    | "startup"
+    | "reapply"
+    | "unknown";
+  entity_id: string | null;
+  old: string | null;
+  new: string | null;
+  detail: string | null;
+};
+export type TracePredicate = { matcher_key: string; passed: boolean; detail: string | null };
+export type TraceRuleEval = {
+  index: number;
+  name: string | null;
+  matched: boolean;
+  evaluated: boolean;
+  predicates: TracePredicate[];
+};
+export type TraceExplanation = { winner_index: number | null; rules: TraceRuleEval[] };
+export type TraceOutcome = "acted" | "no_op" | "no_match" | "skipped_switch_off" | "reapplied";
+export type BufferedUnit = {
+  event_id: string | null;
+  timestamp: string | null;
+  cause: TraceCause;
+  scope_kind: "area" | "floor" | "house";
+  scope_id: string | null;
+  scope_name: string | null;
+  group: string;
+  group_name: string | null;
+  switch_state: string;
+  outcome: TraceOutcome;
+  winner_name: string | null;
+  // Backend serialises raw engine action dicts, which match ActionSpec's shape.
+  actions: ActionSpec[];
+  explanation: TraceExplanation | null;
+};
+export type TraceSummary = { count: number; latest: string | null };

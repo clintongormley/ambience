@@ -155,15 +155,19 @@ export async function validateConfig(
   return hass.callWS({ type: "ambience/validate", config });
 }
 
+/** The websocket scope selector for a scope: `{area_id}`, `{floor_id}`, or
+ *  `{house: true}`. Spread into a command message. */
+function scopeFields(scope: Scope): Record<string, unknown> {
+  if (scope.kind === "area") return { area_id: scope.id };
+  if (scope.kind === "floor") return { floor_id: scope.id };
+  return { house: true };
+}
+
 export async function dryRun(
   hass: HassConnection,
   scope: Scope,
 ): Promise<DryRunResult> {
-  const msg: Record<string, unknown> = { type: "ambience/dry_run" };
-  if (scope.kind === "area") msg.area_id = scope.id;
-  else if (scope.kind === "floor") msg.floor_id = scope.id;
-  else msg.house = true;
-  return hass.callWS(msg);
+  return hass.callWS({ type: "ambience/dry_run", ...scopeFields(scope) });
 }
 
 export async function applyRules(
@@ -171,10 +175,7 @@ export async function applyRules(
   scope: Scope,
   groupId?: string,
 ): Promise<{ ok: true }> {
-  const msg: Record<string, unknown> = { type: "ambience/apply" };
-  if (scope.kind === "area") msg.area_id = scope.id;
-  else if (scope.kind === "floor") msg.floor_id = scope.id;
-  else msg.house = true;
+  const msg: Record<string, unknown> = { type: "ambience/apply", ...scopeFields(scope) };
   if (groupId !== undefined) msg.group_id = groupId;
   return hass.callWS(msg);
 }
@@ -184,14 +185,11 @@ export async function runRuleActions(
   scope: Scope,
   ruleIndex: number,
 ): Promise<{ ran: number; rule_name: string | null }> {
-  const msg: Record<string, unknown> = {
+  return hass.callWS({
     type: "ambience/rule/run_actions",
     rule_index: ruleIndex,
-  };
-  if (scope.kind === "area") msg.area_id = scope.id;
-  else if (scope.kind === "floor") msg.floor_id = scope.id;
-  else msg.house = true;
-  return hass.callWS(msg);
+    ...scopeFields(scope),
+  });
 }
 
 export async function listPeriods(hass: HassConnection): Promise<PeriodStoreView> {

@@ -629,6 +629,24 @@ def _house_must_be_true(v: Any) -> bool:
     return v
 
 
+def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
+    """Map a ws message's scope selector to (scope_kind, scope_id).
+
+    Raises ServiceValidationError (named for `command`, so the client sees which
+    request failed) when not exactly one of area_id/floor_id/house is present.
+    """
+    present = [k for k in ("area_id", "floor_id", "house") if k in msg]
+    if len(present) != 1:
+        raise ServiceValidationError(
+            f"{command} requires exactly one of area_id/floor_id/house, got: {present!r}"
+        )
+    if "area_id" in msg:
+        return "area", msg["area_id"]
+    if "floor_id" in msg:
+        return "floor", msg["floor_id"]
+    return "house", None
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
@@ -644,44 +662,14 @@ async def _ws_dry_run(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    # Intentionally inlines scope parsing rather than using _parse_scope (see
-    # _ws_apply / _ws_run_rule_actions for the shared helper) — left untouched.
-    present = [k for k in ("area_id", "floor_id", "house") if k in msg]
-    if len(present) != 1:
-        connection.send_error(
-            msg["id"],
-            "validation_error",
-            f"dry_run requires exactly one of area_id/floor_id/house, got: {present!r}",
-        )
-        return
-    if "area_id" in msg:
-        scope_kind, scope_id = "area", msg["area_id"]
-    elif "floor_id" in msg:
-        scope_kind, scope_id = "floor", msg["floor_id"]
-    else:
-        scope_kind, scope_id = "house", None
     try:
+        scope_kind, scope_id = _parse_scope(msg, "dry_run")
         result = await async_resolve_only(hass, scope_kind, scope_id)
         result["groups"] = await async_resolve_groups_only(hass, scope_kind, scope_id)
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
     connection.send_result(msg["id"], result)
-
-
-def _parse_scope(msg: dict[str, Any]) -> tuple[str, str | None] | None:
-    """Map a ws message's scope selector to (scope_kind, scope_id).
-
-    Returns None when not exactly one of area_id/floor_id/house is present.
-    """
-    present = [k for k in ("area_id", "floor_id", "house") if k in msg]
-    if len(present) != 1:
-        return None
-    if "area_id" in msg:
-        return "area", msg["area_id"]
-    if "floor_id" in msg:
-        return "floor", msg["floor_id"]
-    return "house", None
 
 
 @websocket_api.require_admin
@@ -700,17 +688,8 @@ async def _ws_apply(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    scope = _parse_scope(msg)
-    if scope is None:
-        present = [k for k in ("area_id", "floor_id", "house") if k in msg]
-        connection.send_error(
-            msg["id"],
-            "validation_error",
-            f"apply requires exactly one of area_id/floor_id/house, got: {present!r}",
-        )
-        return
-    scope_kind, scope_id = scope
     try:
+        scope_kind, scope_id = _parse_scope(msg, "apply")
         await async_apply_scene(hass, scope_kind, scope_id, group=msg.get("group_id"), force=True)
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
@@ -734,17 +713,8 @@ async def _ws_run_rule_actions(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    scope = _parse_scope(msg)
-    if scope is None:
-        present = [k for k in ("area_id", "floor_id", "house") if k in msg]
-        connection.send_error(
-            msg["id"],
-            "validation_error",
-            f"run_actions requires exactly one of area_id/floor_id/house, got: {present!r}",
-        )
-        return
-    scope_kind, scope_id = scope
     try:
+        scope_kind, scope_id = _parse_scope(msg, "run_actions")
         result = await async_run_rule_actions(hass, scope_kind, scope_id, msg["rule_index"])
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))

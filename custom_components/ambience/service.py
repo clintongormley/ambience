@@ -318,6 +318,21 @@ def _compose_apply_message(
     return message
 
 
+def _log_entry(hass: HomeAssistant, message: str) -> Context:
+    """Fire an "Ambience" logbook entry and return a fresh Context.
+
+    Callers MUST pass the returned Context to async_execute_actions so the
+    resulting device state changes share it and trace back to this entry in the
+    logbook. Imported lazily so service.py does not depend on logbook at import
+    time; the entry is a harmless no-op if the logbook integration is unloaded.
+    """
+    from homeassistant.components.logbook import async_log_entry
+
+    context = Context()
+    async_log_entry(hass, "Ambience", message, domain=DOMAIN, context=context)
+    return context
+
+
 def _log_apply(
     hass: HomeAssistant,
     scope_kind: str,
@@ -328,27 +343,19 @@ def _log_apply(
     *,
     reapplied: bool,
 ) -> Context:
-    """Fire an "Ambience" logbook entry for an apply and return a fresh Context.
-
-    Callers MUST pass the returned Context to async_execute_actions so the
-    resulting device state changes share it and trace back to this entry in the
-    logbook. Imported lazily so service.py does not depend on logbook at import
-    time; the entry is a harmless no-op if the logbook integration is unloaded.
-    """
-    from homeassistant.components.logbook import async_log_entry
-
+    """Fire the logbook entry for an apply and return its Context."""
     groups = group_names(hass)
-    message = _compose_apply_message(
-        reapplied=reapplied,
-        rule_name=rule_name,
-        rule_index=rule_index,
-        scope_label=scope_display_name(hass, scope_kind, scope_id),
-        group_label=groups.get(group_id),
-        group_count=len(groups),
+    return _log_entry(
+        hass,
+        _compose_apply_message(
+            reapplied=reapplied,
+            rule_name=rule_name,
+            rule_index=rule_index,
+            scope_label=scope_display_name(hass, scope_kind, scope_id),
+            group_label=groups.get(group_id),
+            group_count=len(groups),
+        ),
     )
-    context = Context()
-    async_log_entry(hass, "Ambience", message, domain=DOMAIN, context=context)
-    return context
 
 
 def _log_run_actions(
@@ -358,15 +365,9 @@ def _log_run_actions(
     rule_name: str | None,
     rule_index: int,
 ) -> Context:
-    """Fire an "Ambience" logbook entry for a manual run-actions and return a
-    fresh Context for the dispatched calls to share (see _log_apply)."""
-    from homeassistant.components.logbook import async_log_entry
-
+    """Fire the logbook entry for a manual run-actions and return its Context."""
     scene = rule_name or f"rule {rule_index + 1}"
-    message = f"ran '{scene}' in {scope_display_name(hass, scope_kind, scope_id)}"
-    context = Context()
-    async_log_entry(hass, "Ambience", message, domain=DOMAIN, context=context)
-    return context
+    return _log_entry(hass, f"ran '{scene}' in {scope_display_name(hass, scope_kind, scope_id)}")
 
 
 async def async_execute_actions(

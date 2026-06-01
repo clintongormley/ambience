@@ -615,23 +615,22 @@ export class AmbienceScopesView extends LitElement {
     }
   }
 
-  private async _applyRules(scope: Scope, groupId?: string) {
+  /** Run an api call, surfacing any failure in `_error`. */
+  private async _callApi(fn: () => Promise<unknown>) {
     this._error = "";
     try {
-      await applyRules(this.hass, scope, groupId);
+      await fn();
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
   }
 
-  private async _runRuleActions(scope: Scope, e: CustomEvent<{ index: number }>) {
-    this._error = "";
-    try {
-      await runRuleActions(this.hass, scope, e.detail.index);
-    } catch (err) {
-      // `err`, not `e` — `e` is the event parameter above.
-      this._error = (err as Error).message || String(err);
-    }
+  private _applyRules(scope: Scope, groupId?: string) {
+    return this._callApi(() => applyRules(this.hass, scope, groupId));
+  }
+
+  private _runRuleActions(scope: Scope, e: CustomEvent<{ index: number }>) {
+    return this._callApi(() => runRuleActions(this.hass, scope, e.detail.index));
   }
 
   private _cancelRule() {

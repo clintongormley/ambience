@@ -264,3 +264,33 @@ describe("ambience-script-predicate-input — YAML mode", () => {
     expect(formBtn?.title).toContain("unclosed");  // error message preview
   });
 });
+
+describe("ambience-script-predicate-input — field labels", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("_computeFieldLabel prefers the field's friendly name alias", async () => {
+    el = await mount(
+      { script: "script.foo", args: {} },
+      { services: { script: { foo: { fields: {
+        target_brightness: { name: "Target brightness", selector: { number: {} } },
+      } } } } },
+    );
+    expect(el._computeFieldLabel({ name: "target_brightness" })).toBe("Target brightness");
+  });
+
+  test("_computeFieldLabel falls back to a humanized raw key when no alias", async () => {
+    el = await mount(
+      { script: "script.foo", args: {} },
+      { services: { script: { foo: { fields: {
+        target_brightness: { selector: { number: {} } },
+      } } } } },
+    );
+    expect(el._computeFieldLabel({ name: "target_brightness" })).toBe("Target brightness");
+  });
+
+  test("_computeFieldLabel falls back to humanized key when no script is picked", async () => {
+    el = await mount(null, { services: { script: {} } });
+    expect(el._computeFieldLabel({ name: "target_brightness" })).toBe("Target brightness");
+  });
+});

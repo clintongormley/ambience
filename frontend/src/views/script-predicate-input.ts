@@ -7,6 +7,7 @@ import { getScriptReferencedEntities } from "../api.js";
 import { localize } from "../i18n.js";
 import type { ScriptPredicate } from "../types.js";
 import type { HaFormSchema } from "../ha-form.js";
+import { humanizeFieldId } from "../summary.js";
 
 type ScriptField = {
   name?: string;
@@ -219,6 +220,16 @@ export class AmbienceScriptPredicateInput extends LitElement {
     this._emit({ script: scriptEntityId, args: this._defaultArgs(scriptEntityId) });
   }
 
+  /** Friendly label for an args field: prefers the script field's `name`
+   *  alias, else humanizes the raw key. Mirrors summary.ts:paramLabel. */
+  _computeFieldLabel = (schema: { name: string }): string => {
+    const fields = this._fieldsFor(
+      this.value && typeof this.value === "object" ? this.value.script : null,
+    );
+    const alias = fields?.[schema.name]?.name;
+    return typeof alias === "string" && alias ? alias : humanizeFieldId(schema.name);
+  };
+
   /** Build an ha-form schema reflecting the picked script's fields. */
   _argsSchema(): HaFormSchema[] {
     const fields = this._fieldsFor(this.value && typeof this.value === "object" ? this.value.script : null);
@@ -363,6 +374,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
         .hass=${this.hass}
         .schema=${schema}
         .data=${args}
+        .computeLabel=${this._computeFieldLabel}
         @value-changed=${(e: CustomEvent<{ value: Record<string, unknown> }>) => {
           e.stopPropagation();
           this._updateArgs(e.detail.value);

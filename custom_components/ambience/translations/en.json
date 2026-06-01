@@ -226,7 +226,8 @@
     "group_edit_title": "Edit group",
     "group_add_title": "Add group",
     "group_color_none": "No colour",
-    "group_save": "Save"
+    "group_save": "Save",
+    "view_traces": "View traces"
   },
   "day_summary": {
     "any": "any",

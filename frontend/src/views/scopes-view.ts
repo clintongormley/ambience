@@ -48,6 +48,7 @@ import type {
 import "./rules-list.js";
 import "./rule-editor.js";
 import "./auto-triggers-section.js";
+import "./traces-modal.js";
 
 type EditingState = { scope: Scope; index: number; isNew: boolean; seed?: Rule };
 
@@ -220,6 +221,7 @@ export class AmbienceScopesView extends LitElement {
   @state() private _expanded = new Set<string>();
   @state() private _error = "";
   @state() private _editing: EditingState | null = null;
+  @state() private _viewingTraces: { scope: { scope_kind: string; scope_id: string | null }; group: string; groupName: string | null } | null = null;
   // Global group filter shared by every scope: "" = All, else a group id.
   // Sticky for the session (component lifetime).
   @state() private _filterGroup = "";
@@ -638,6 +640,15 @@ export class AmbienceScopesView extends LitElement {
     this._editing = null;
   }
 
+  private _showTraces(scope: Scope, group: string) {
+    const g = this._groups.find((x) => x.id === group);
+    this._viewingTraces = {
+      scope: { scope_kind: scope.kind, scope_id: "id" in scope ? scope.id : null },
+      group,
+      groupName: g?.name ?? null,
+    };
+  }
+
   // --- group filter --------------------------------------------------------
 
   private _selectFilter(id: string) {
@@ -833,6 +844,14 @@ export class AmbienceScopesView extends LitElement {
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}
       ></ambience-rule-editor>
+      <ambience-traces-modal
+        ?open=${this._viewingTraces !== null}
+        .hass=${this.hass}
+        .scope=${this._viewingTraces?.scope ?? { scope_kind: "house", scope_id: null }}
+        .group=${this._viewingTraces?.group ?? ""}
+        .groupName=${this._viewingTraces?.groupName ?? null}
+        @close=${() => { this._viewingTraces = null; }}
+      ></ambience-traces-modal>
     `;
   }
 
@@ -895,6 +914,8 @@ export class AmbienceScopesView extends LitElement {
                     this._runRuleActions(scope, e)}
                   @apply-group=${(e: CustomEvent<{ groupId: string }>) =>
                     this._applyRules(scope, e.detail.groupId)}
+                  @show-traces=${(e: CustomEvent<{ group: string }>) =>
+                    this._showTraces(scope, e.detail.group)}
                 ></ambience-rules-list>
                 <ambience-auto-triggers-section
                   .hass=${this.hass}

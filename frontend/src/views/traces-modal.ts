@@ -74,7 +74,11 @@ export class AmbienceTracesModal extends LitElement {
   @state() private _error = "";
 
   override updated(changed: Map<string, unknown>): void {
-    if ((changed.has("open") && this.open) || (changed.has("group") && this.open)) {
+    if (
+      (changed.has("open") && this.open) ||
+      (changed.has("group") && this.open) ||
+      (changed.has("scope") && this.open)
+    ) {
       this._load();
     }
   }

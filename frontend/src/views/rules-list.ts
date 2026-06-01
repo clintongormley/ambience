@@ -174,6 +174,18 @@ export class AmbienceRulesList extends LitElement {
       padding: 0 0.25rem;
       line-height: 1;
     }
+    .traces-btn {
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      padding: 0 0.25rem;
+      display: inline-flex;
+      align-items: center;
+    }
+    .traces-btn ha-icon {
+      --mdc-icon-size: 18px;
+    }
   `;
 
   @property({ attribute: false }) rules: Rule[] = [];
@@ -225,6 +237,12 @@ export class AmbienceRulesList extends LitElement {
       >
         ▶
       </button>
+      <button
+        class="traces-btn"
+        title=${localize(this.hass, "ui.view_traces", "View traces")}
+        aria-label=${localize(this.hass, "ui.view_traces", "View traces")}
+        @click=${(e: Event) => { e.stopPropagation(); this._emit("show-traces", { group: group.id }); }}
+      ><ha-icon icon="mdi:history"></ha-icon></button>
     </div>`;
   }
 

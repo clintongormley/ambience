@@ -789,4 +789,17 @@ describe("ambience-rules-list", () => {
     btn.click();
     expect(get()).toEqual({ groupId: "lighting" });
   });
+
+  test("group header has a traces button that emits show-traces with the group id", async () => {
+    el = await mount([{ name: "R", group: "general", when: {}, actions: [] }], [], {}, [
+      { id: "general", name: "General" },
+    ]);
+    const events: Array<{ group: string }> = [];
+    el.addEventListener("show-traces", (e: Event) => events.push((e as CustomEvent).detail));
+    const btn = el.shadowRoot.querySelector(".group-section-header .traces-btn") as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({ group: "general" });
+  });
 });

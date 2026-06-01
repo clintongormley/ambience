@@ -4,8 +4,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from custom_components.ambience.const import DATA_MATCHERS, DOMAIN
-from custom_components.ambience.simulate import SimulatedWorld, build_simulated_snapshots
+from custom_components.ambience.const import DATA_MATCHERS, DATA_STORE, DOMAIN
+from custom_components.ambience.simulate import (
+    SimulatedWorld,
+    build_simulated_snapshots,
+    simulate_inputs,
+)
 from custom_components.ambience.trace import CauseKind, TriggerCause
 
 
@@ -93,3 +97,76 @@ async def test_build_simulated_snapshots_injects_synthetic_sun():
     assert sun.state in ("above_horizon", "below_horizon")
     # ...but the real hass.states is untouched (read-only overlay).
     assert hass.states.get("sun.sun") is None
+
+
+# ---------------------------------------------------------------------------
+# Task 5: simulate_inputs
+# ---------------------------------------------------------------------------
+
+
+class _Store:
+    def __init__(self, rules, weather_entity=None):
+        self._rules = rules
+        self._weather_entity = weather_entity
+
+    def scope_config(self, scope_kind, scope_id):
+        return {"rules": self._rules}
+
+    def get_matcher_config(self, name):
+        if name == "weather":
+            return {"entity": self._weather_entity, "groups": []}
+        return {}
+
+
+def _inputs_hass(rules, states, weather_entity=None):
+    from custom_components.ambience.matchers.state import StateMatcher
+    from custom_components.ambience.matchers.weather import WeatherMatcher
+
+    hass = _Hass(states)
+    matchers = {"state": StateMatcher(hass), "weather": WeatherMatcher(hass)}
+    hass.data[DOMAIN] = {
+        DATA_MATCHERS: matchers,
+        DATA_STORE: _Store(rules, weather_entity),
+    }
+    return hass
+
+
+def test_simulate_inputs_lists_entity_knobs_for_the_group():
+    rules = [
+        {
+            "group": "g1",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+        },
+        {
+            "group": "g2",
+            "when": {"state": {"kind": "is", "entity_id": "binary_sensor.other", "states": ["on"]}},
+        },
+    ]
+    hass = _inputs_hass(rules, [_State("binary_sensor.motion", "off")])
+    result = simulate_inputs(hass, "area", "kitchen", "g1")
+    ids = [k["entity_id"] for k in result["knobs"]]
+    assert ids == ["binary_sensor.motion"]  # only g1's dependency
+    assert result["knobs"][0]["live_state"] == "off"
+    assert result["knobs"][0]["attributes"] == []
+
+
+def test_simulate_inputs_surfaces_weather_threshold_attributes():
+    rules = [
+        {
+            "group": "g1",
+            "when": {
+                "weather": {"thresholds": [{"attribute": "temperature", "op": "<", "value": 18}]}
+            },
+        }
+    ]
+    hass = _inputs_hass(
+        rules,
+        [_State("weather.home", "rainy", {"temperature": 9.0, "humidity": 80})],
+        weather_entity="weather.home",
+    )
+    result = simulate_inputs(hass, "area", "kitchen", "g1")
+    weather_knob = next(k for k in result["knobs"] if k["entity_id"] == "weather.home")
+    assert weather_knob["live_state"] == "rainy"
+    assert weather_knob["attributes"] == [{"name": "temperature", "live_value": 9.0}]

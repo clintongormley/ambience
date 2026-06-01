@@ -17,7 +17,8 @@ from typing import Any
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 
-from .const import DATA_MATCHERS, DOMAIN
+from .const import DATA_MATCHERS, DATA_STORE, DOMAIN
+from .scope_triggers import scope_trigger_spec
 from .sun_position import synthetic_sun_state
 
 _LOGGER = logging.getLogger(__name__)
@@ -111,3 +112,69 @@ async def build_simulated_snapshots(hass: HomeAssistant, world: SimulatedWorld) 
         else:
             snapshots[name] = result
     return snapshots
+
+
+def _group_config(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None, group: str
+) -> dict[str, Any]:
+    """The scope config narrowed to one group's rules: {"rules": [...]}."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = store.scope_config(scope_kind, scope_id)
+    return {"rules": [r for r in cfg.get("rules", []) if r.get("group") == group]}
+
+
+def _referenced_attributes(hass: HomeAssistant, group_cfg: dict[str, Any]) -> dict[str, list[str]]:
+    """entity_id -> attribute names the group's predicates read beyond `state`.
+
+    Only the weather matcher reads attributes (its numeric thresholds), so this
+    is weather-specific by design; promote to a matcher protocol method if a
+    second attribute-consuming matcher appears.
+    """
+    store = hass.data[DOMAIN][DATA_STORE]
+    weather_entity = store.get_matcher_config("weather").get("entity")
+    if not weather_entity:
+        return {}
+    names: set[str] = set()
+    for rule in group_cfg["rules"]:
+        predicate = (rule.get("when") or {}).get("weather")
+        if isinstance(predicate, dict):
+            for threshold in predicate.get("thresholds") or []:
+                if isinstance(threshold, dict) and threshold.get("attribute"):
+                    names.add(threshold["attribute"])
+    return {weather_entity: sorted(names)} if names else {}
+
+
+def simulate_inputs(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None, group: str
+) -> dict[str, Any]:
+    """The editable inputs for a group's simulator panel.
+
+    Returns {knobs, has_time, opaque}. Each entity knob carries its live state
+    and any referenced-attribute sub-rows pre-filled live. `has_time` is True
+    when the group depends on the clock/sun (the panel shows a date+time
+    picker). `opaque` flags incomplete deps (e.g. a template rule).
+    """
+    matchers: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
+    group_cfg = _group_config(hass, scope_kind, scope_id, group)
+    spec = scope_trigger_spec(matchers, group_cfg)
+    attrs_by_entity = _referenced_attributes(hass, group_cfg)
+
+    knobs: list[dict[str, Any]] = []
+    for entity_id in sorted(spec.entities):
+        live = hass.states.get(entity_id)
+        knobs.append(
+            {
+                "kind": "entity",
+                "entity_id": entity_id,
+                "live_state": live.state if live is not None else None,
+                "attributes": [
+                    {
+                        "name": name,
+                        "live_value": (live.attributes.get(name) if live is not None else None),
+                    }
+                    for name in attrs_by_entity.get(entity_id, [])
+                ],
+            }
+        )
+    has_time = bool(spec.clock_times or spec.has_time or spec.date_rollover or spec.sun_events)
+    return {"knobs": knobs, "has_time": has_time, "opaque": spec.opaque}

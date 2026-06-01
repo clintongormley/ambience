@@ -22,7 +22,7 @@ from .const import (
     DOMAIN,
 )
 from .engine import evaluate_explained, resolve
-from .naming import group_name, scope_display_name
+from .naming import group_names, scope_display_name
 from .trace import (
     CauseKind,
     Outcome,
@@ -331,14 +331,14 @@ def _log_apply(
     """
     from homeassistant.components.logbook import async_log_entry
 
-    store = hass.data[DOMAIN][DATA_STORE]
+    groups = group_names(hass)
     message = _compose_apply_message(
         reapplied=reapplied,
         rule_name=rule_name,
         rule_index=rule_index,
         scope_label=scope_display_name(hass, scope_kind, scope_id),
-        group_label=group_name(hass, group_id),
-        group_count=len(store.groups()),
+        group_label=groups.get(group_id),
+        group_count=len(groups),
     )
     context = Context()
     async_log_entry(hass, "Ambience", message, domain=DOMAIN, context=context)

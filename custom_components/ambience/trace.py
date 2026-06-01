@@ -218,7 +218,7 @@ def tracing_active() -> bool:
     return _LOGGER.isEnabledFor(logging.DEBUG) or _NOOP_LOGGER.isEnabledFor(logging.DEBUG)
 
 
-def _scope_name(hass: HomeAssistant, unit: UnitTrace) -> str | None:
+def _safe_scope_display_name(hass: HomeAssistant, unit: UnitTrace) -> str | None:
     """Best-effort friendly scope name; None when the registry isn't available
     (e.g. a bare test-double hass), so the label falls back to the raw id."""
     try:
@@ -237,7 +237,7 @@ def _resolve_names(hass: HomeAssistant, event: TraceEvent) -> TraceEvent:
         replace(
             u,
             group_name=names.get(u.group) or u.group_name,
-            scope_name=_scope_name(hass, u),
+            scope_name=_safe_scope_display_name(hass, u),
         )
         for u in event.units
     ]

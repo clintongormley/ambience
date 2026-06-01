@@ -16,18 +16,28 @@ from homeassistant.helpers import floor_registry as fr
 from .const import DATA_STORE, DOMAIN
 
 
-def scope_display_name(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
+def scope_display_name(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    fallback: str | None = None,
+) -> str:
     """Human label for a scope: area/floor name, or 'Global' for the house.
 
-    Falls back to the raw scope_id when the registry entry is missing (e.g. a
-    deleted area/floor, or a test with no registered areas)."""
+    When the registry entry is missing (e.g. a deleted area/floor, or a test
+    with no registered areas), returns `fallback` if given, else the raw
+    scope_id."""
     if scope_kind == "house":
         return "Global"
     if scope_kind == "floor":
         floor = fr.async_get(hass).async_get_floor(scope_id)
-        return floor.name if floor is not None else (scope_id or "floor")
+        if floor is not None:
+            return floor.name
+        return fallback if fallback is not None else (scope_id or "floor")
     area = ar.async_get(hass).async_get_area(scope_id)
-    return area.name if area is not None else (scope_id or "area")
+    if area is not None:
+        return area.name
+    return fallback if fallback is not None else (scope_id or "area")
 
 
 def group_names(hass: HomeAssistant) -> dict[str | None, str | None]:
@@ -40,8 +50,3 @@ def group_names(hass: HomeAssistant) -> dict[str | None, str | None]:
     if not callable(groups):
         return {}
     return {g.get("id"): g.get("name") for g in groups()}
-
-
-def group_name(hass: HomeAssistant, group_id: str) -> str | None:
-    """The configured display name for a group id, or None if unknown."""
-    return group_names(hass).get(group_id)

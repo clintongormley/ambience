@@ -8,7 +8,6 @@ from homeassistant.helpers import floor_registry as fr
 
 from custom_components.ambience.const import DATA_STORE, DOMAIN
 from custom_components.ambience.naming import (
-    group_name,
     group_names,
     scope_display_name,
 )
@@ -50,12 +49,6 @@ def test_group_names_empty_when_store_missing() -> None:
     assert group_names(_Hass({})) == {}
 
 
-def test_group_name_lookup_and_unknown() -> None:
-    hass = _Hass({DOMAIN: {DATA_STORE: _StoreStub([{"id": "g1", "name": "Lights"}])}})
-    assert group_name(hass, "g1") == "Lights"
-    assert group_name(hass, "nope") is None
-
-
 # --- scope display names ------------------------------------------------------
 
 
@@ -71,6 +64,11 @@ async def test_scope_display_name_area_uses_registry(hass: HomeAssistant) -> Non
 
 async def test_scope_display_name_area_falls_back_to_id(hass: HomeAssistant) -> None:
     assert scope_display_name(hass, "area", "ghost_area") == "ghost_area"
+
+
+async def test_scope_display_name_uses_fallback_when_given(hass: HomeAssistant) -> None:
+    # An explicit fallback wins over the raw id when the registry entry is missing.
+    assert scope_display_name(hass, "area", "ghost_area", fallback="Living Room") == "Living Room"
 
 
 async def test_scope_display_name_floor_uses_registry(hass: HomeAssistant) -> None:

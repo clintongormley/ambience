@@ -27,6 +27,7 @@ from .const import (
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
+from .naming import scope_display_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -215,13 +216,9 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         refresh. Falls back to the construction-time name if the registry
         entry has been removed.
         """
-        if self._scope_kind == "house":
-            return "Global"
-        if self._scope_kind == "floor":
-            floor = fr.async_get(self.hass).async_get_floor(self._scope_id)
-            return floor.name if floor is not None else self._fallback_prefix
-        area = ar.async_get(self.hass).async_get_area(self._scope_id)
-        return area.name if area is not None else self._fallback_prefix
+        return scope_display_name(
+            self.hass, self._scope_kind, self._scope_id, fallback=self._fallback_prefix
+        )
 
     def _refresh_name_from_store(self) -> None:
         """Compose display name from override (verbatim) or `<prefix> <default>`.

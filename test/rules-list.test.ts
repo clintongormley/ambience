@@ -823,4 +823,13 @@ describe("ambience-rules-list", () => {
     (el.shadowRoot.querySelector("button.toggle") as HTMLButtonElement).click();
     expect(get()).toEqual({ index: 0, enabled: true });
   });
+
+  test("group kebab Simulate emits show-simulator with the group id", async () => {
+    const group = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleGroup;
+    const ruleInGroup = { ...movieRule, group: "g1" } as Rule;
+    el = await mount([ruleInGroup], [], {}, [group]);
+    const get = captureEvent(el, "show-simulator");
+    await pickGroupKebab(el, "simulate");
+    expect(get()).toEqual({ group: "g1" });
+  });
 });

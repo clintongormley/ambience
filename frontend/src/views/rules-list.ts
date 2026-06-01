@@ -241,6 +241,7 @@ export class AmbienceRulesList extends LitElement {
         .items=${[
           { id: "run", label: localize(this.hass, "ui.run", "Run"), icon: "mdi:play" },
           { id: "traces", label: localize(this.hass, "ui.view_traces", "View traces"), icon: "mdi:transit-connection-variant" },
+          { id: "simulate", label: localize(this.hass, "ui.simulate", "Simulate"), icon: "mdi:flask-outline" },
         ] satisfies KebabItem[]}
         @menu-action=${(e: CustomEvent<{ id: string }>) => this._onGroupMenu(group, e.detail.id)}
       ></ambience-kebab-menu>
@@ -368,6 +369,7 @@ export class AmbienceRulesList extends LitElement {
   private _onGroupMenu(group: RuleGroup, id: string) {
     if (id === "run") this._emit("apply-group", { groupId: group.id });
     else if (id === "traces") this._emit("show-traces", { group: group.id });
+    else if (id === "simulate") this._emit("show-simulator", { group: group.id });
   }
 
   private _onRuleMenu(i: number, id: string) {

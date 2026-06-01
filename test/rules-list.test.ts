@@ -763,4 +763,30 @@ describe("ambience-rules-list", () => {
     expect(header.getAttribute("style") || "").toBe("");
     expect(header.textContent).toContain("Plain");
   });
+
+  test("emits run-rule-actions with the original index when run clicked", async () => {
+    el = await mount([movieRule, eveningRule]);
+    const get = captureEvent(el, "run-rule-actions");
+    const btns = el.shadowRoot.querySelectorAll("button[title='Run actions']");
+    expect(btns.length).toBe(2);
+    (btns[1] as HTMLButtonElement).click();
+    expect(get()).toEqual({ index: 1 });
+  });
+
+  test("emits apply-group with the group id when the group header apply is clicked", async () => {
+    const groups = [{ id: "lighting", name: "Lighting" }];
+    el = await mount(
+      [{ name: "R", group: "lighting", when: {}, actions: [] }],
+      [],
+      {},
+      groups,
+    );
+    const get = captureEvent(el, "apply-group");
+    const btn = el.shadowRoot.querySelector(
+      ".group-section-header button[title='Apply this group']",
+    ) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+    expect(get()).toEqual({ groupId: "lighting" });
+  });
 });

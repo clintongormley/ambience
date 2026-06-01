@@ -168,6 +168,12 @@ export class AmbienceRulesList extends LitElement {
     .group-section-header ha-icon {
       --mdc-icon-size: 20px;
     }
+    .group-section-header .apply-group {
+      margin-left: auto;
+      color: inherit;
+      padding: 0 0.25rem;
+      line-height: 1;
+    }
   `;
 
   @property({ attribute: false }) rules: Rule[] = [];
@@ -209,6 +215,16 @@ export class AmbienceRulesList extends LitElement {
     return html`<div class="group-section-header" style=${groupSwatchStyle(group.color)}>
       ${group.icon ? html`<ha-icon icon=${group.icon}></ha-icon>` : ""}
       <span>${group.name}</span>
+      <button
+        class="apply-group"
+        @click=${(e: Event) => {
+          e.stopPropagation();
+          this._emit("apply-group", { groupId: group.id });
+        }}
+        title=${localize(this.hass, "ui.apply_group", "Apply this group")}
+      >
+        ▶
+      </button>
     </div>`;
   }
 
@@ -434,6 +450,16 @@ export class AmbienceRulesList extends LitElement {
           title=${localize(this.hass, "ui.title_delete", "Delete")}
         >
           🗑
+        </button>
+        <button
+          class="run"
+          @click=${(e: Event) => {
+            e.stopPropagation();
+            this._emit("run-rule-actions", { index: i });
+          }}
+          title=${localize(this.hass, "ui.run_actions", "Run actions")}
+        >
+          ▶
         </button>
       </li>
     `;

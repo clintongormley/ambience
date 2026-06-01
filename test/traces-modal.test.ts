@@ -66,6 +66,25 @@ describe("ambience-traces-modal", () => {
     expect(vi.mocked(api.listTraces).mock.calls.length).toBeGreaterThan(calls);
   });
 
+  test("reopening starts collapsed — a reload clears any expanded rows", async () => {
+    const withExpl = unit({
+      explanation: {
+        winner_index: 0,
+        rules: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
+      },
+    });
+    el = await mount([withExpl]);
+    el.shadowRoot.querySelector(".why-toggle").click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".why")).toBeTruthy(); // expanded
+    // A reload (reopen / group-change / refresh) must reset expansion.
+    el.shadowRoot.querySelector(".refresh").click();
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".why")).toBeFalsy(); // collapsed again
+  });
+
   test("error state when listTraces rejects", async () => {
     vi.mocked(api.listTraces).mockRejectedValue(new Error("boom"));
     const e: any = document.createElement("ambience-traces-modal");

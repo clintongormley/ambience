@@ -86,6 +86,7 @@ export class AmbienceTracesModal extends LitElement {
   private async _load(): Promise<void> {
     this._error = "";
     this._loading = true;
+    this._expanded = new Set(); // every (re)open starts fully collapsed
     try {
       const all = await listTraces(this.hass);
       if (!this.isConnected) return;

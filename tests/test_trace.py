@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 
@@ -12,6 +13,7 @@ from custom_components.ambience.engine import (
     RuleEval,
 )
 from custom_components.ambience.trace import (
+    BufferedUnit,
     LogSink,
     TraceEvent,
     TriggerCause,
@@ -379,3 +381,74 @@ def test_emit_trace_feeds_the_registered_buffer():
     assert len(records) == 1
     assert records[0].unit.scope_id == "kitchen"
     assert records[0].event_id and records[0].timestamp  # enriched by emit_trace
+
+
+# ---------------------------------------------------------------------------
+# buffered_unit_to_dict tests
+# ---------------------------------------------------------------------------
+
+from custom_components.ambience.trace import buffered_unit_to_dict  # noqa: E402
+
+
+def test_buffered_unit_to_dict_acted_with_explanation():
+    explanation = Explanation(
+        winner_index=1,
+        rules=[
+            RuleEval(0, "night", [PredicateResult("tod", False, "evening")], False, True),
+            RuleEval(1, "evening", [PredicateResult("tod", True, "evening")], True, True),
+        ],
+    )
+    unit = UnitTrace(
+        "area",
+        "kitchen",
+        "General",
+        "on",
+        "acted",
+        explanation,
+        winner_name="evening",
+        actions=[{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {"x": 1}}],
+        group_name="Kitchen Scenes",
+    )
+    record = BufferedUnit(
+        "abc123", "2026-06-01T00:00:00", TriggerCause(kind="clock", detail="08:00"), unit
+    )
+    data = buffered_unit_to_dict(record)
+    # JSON-serializable (StrEnums included).
+    assert json.loads(json.dumps(data)) == data
+    assert data["event_id"] == "abc123"
+    assert data["timestamp"] == "2026-06-01T00:00:00"
+    assert data["cause"] == {
+        "kind": "clock",
+        "entity_id": None,
+        "old": None,
+        "new": None,
+        "detail": "08:00",
+    }
+    assert data["scope_kind"] == "area"
+    assert data["scope_id"] == "kitchen"
+    assert data["group"] == "General"
+    assert data["group_name"] == "Kitchen Scenes"
+    assert data["outcome"] == "acted"
+    assert data["winner_name"] == "evening"
+    assert data["actions"] == [
+        {"service": "light.turn_on", "entity_ids": ["light.k"], "params": {"x": 1}}
+    ]
+    assert data["explanation"]["winner_index"] == 1
+    assert data["explanation"]["rules"][1] == {
+        "index": 1,
+        "name": "evening",
+        "matched": True,
+        "evaluated": True,
+        "predicates": [{"matcher_key": "tod", "passed": True, "detail": "evening"}],
+    }
+
+
+def test_buffered_unit_to_dict_reapplied_has_null_explanation():
+    unit = UnitTrace("area", "kitchen", "General", "on", "reapplied", None, winner_name="evening")
+    record = BufferedUnit(
+        "e", "2026-06-01T00:00:00", TriggerCause(kind="reapply", detail="10s"), unit
+    )
+    data = buffered_unit_to_dict(record)
+    assert data["outcome"] == "reapplied"
+    assert data["explanation"] is None
+    assert json.loads(json.dumps(data)) == data

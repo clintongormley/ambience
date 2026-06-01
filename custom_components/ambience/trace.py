@@ -165,6 +165,56 @@ class BufferSink:
         self._buckets.clear()
 
 
+def _cause_to_dict(cause: TriggerCause) -> dict[str, Any]:
+    return {
+        "kind": str(cause.kind),
+        "entity_id": cause.entity_id,
+        "old": cause.old,
+        "new": cause.new,
+        "detail": cause.detail,
+    }
+
+
+def _explanation_to_dict(explanation: Explanation | None) -> dict[str, Any] | None:
+    if explanation is None:
+        return None
+    return {
+        "winner_index": explanation.winner_index,
+        "rules": [
+            {
+                "index": rule.index,
+                "name": rule.name,
+                "matched": rule.matched,
+                "evaluated": rule.evaluated,
+                "predicates": [
+                    {"matcher_key": p.matcher_key, "passed": p.passed, "detail": p.detail}
+                    for p in rule.predicates
+                ],
+            }
+            for rule in explanation.rules
+        ],
+    }
+
+
+def buffered_unit_to_dict(record: BufferedUnit) -> dict[str, Any]:
+    """A JSON-serializable view of one buffered unit, for the websocket API."""
+    unit = record.unit
+    return {
+        "event_id": record.event_id,
+        "timestamp": record.timestamp,
+        "cause": _cause_to_dict(record.cause),
+        "scope_kind": unit.scope_kind,
+        "scope_id": unit.scope_id,
+        "group": unit.group,
+        "group_name": unit.group_name,
+        "switch_state": unit.switch_state,
+        "outcome": str(unit.outcome),
+        "winner_name": unit.winner_name,
+        "actions": unit.actions,
+        "explanation": _explanation_to_dict(unit.explanation),
+    }
+
+
 def _scope_label(unit: UnitTrace) -> str:
     group = unit.group_name or unit.group
     scope = unit.scope_name or unit.scope_id or "-"

@@ -55,6 +55,56 @@ async def seeded_area(hass: HomeAssistant, installed) -> str:
     return area.id
 
 
+async def test_simulate_returns_result(hass: HomeAssistant, hass_ws_client, seeded_area) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        group="g1",
+        now="2026-12-21T17:30:00+00:00",
+        overrides={"binary_sensor.motion": {"state": "on"}},
+    )
+    assert resp["success"] is True
+    result = resp["result"]["result"]
+    assert result["cause"]["kind"] == "simulated"
+    assert result["group"] == "g1"
+    # Overriding motion → on makes the rule match.
+    assert result["outcome"] == "acted"
+    assert result["winner_name"] == "Motion on"
+
+
+async def test_simulate_rejects_unparseable_now(
+    hass: HomeAssistant, hass_ws_client, seeded_area
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        group="g1",
+        now="not-a-date",
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_simulate_rejects_malformed_override(
+    hass: HomeAssistant, hass_ws_client, seeded_area
+) -> None:
+    """A non-dict override value is rejected at the schema layer, not mid-resolve."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        group="g1",
+        now="2026-12-21T17:30:00+00:00",
+        overrides={"binary_sensor.motion": "on"},  # should be {"state": "on"}
+    )
+    assert resp["success"] is False
+
+
 async def test_simulate_inputs_returns_panel_shape(
     hass: HomeAssistant, hass_ws_client, seeded_area
 ) -> None:

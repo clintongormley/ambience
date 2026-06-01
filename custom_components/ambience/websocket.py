@@ -12,6 +12,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DATA_EXPOSED_ACTIONS,
@@ -34,7 +35,7 @@ from .service import (
     async_run_rule_actions,
     scope_reapply_intervals,
 )
-from .simulate import simulate_inputs
+from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import matcher_priority, resolve_order, shadowed_by
 from .store import GroupInUseError, LastGroupError, reassign_orphan_rules
 from .trace import buffered_unit_to_dict
@@ -84,6 +85,7 @@ _WS_COMMANDS = (
     "ambience/traces/list",
     "ambience/traces/clear",
     "ambience/simulate/inputs",
+    "ambience/simulate",
 )
 
 
@@ -196,6 +198,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_traces_list)
     websocket_api.async_register_command(hass, _ws_traces_clear)
     websocket_api.async_register_command(hass, _ws_simulate_inputs)
+    websocket_api.async_register_command(hass, _ws_simulate)
 
 
 def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
@@ -1423,6 +1426,41 @@ async def _ws_simulate_inputs(
     for knob in result["knobs"]:
         knob["states"] = _known_states_for(hass, knob["entity_id"])
     connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/simulate",
+        vol.Required("scope_kind"): str,
+        vol.Optional("scope_id"): vol.Any(str, None),
+        vol.Required("group"): str,
+        vol.Required("now"): str,
+        # Each override is {state?: str, attributes?: dict}; require dict values
+        # so a malformed payload is rejected at the schema layer, not mid-resolve.
+        vol.Optional("overrides", default=dict): {str: dict},
+    }
+)
+@websocket_api.async_response
+async def _ws_simulate(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Resolve a group against a hypothetical world (read-only)."""
+    now = dt_util.parse_datetime(msg["now"])
+    if now is None:
+        connection.send_error(msg["id"], "validation_error", f"unparseable now: {msg['now']!r}")
+        return
+    world = SimulatedWorld(now=now, overrides=msg.get("overrides") or {})
+    try:
+        result = await run_simulation(
+            hass, msg["scope_kind"], msg.get("scope_id"), msg["group"], world
+        )
+    except (ValueError, ServiceValidationError) as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    connection.send_result(msg["id"], {"result": result})
 
 
 def async_unregister_commands(hass: HomeAssistant) -> None:

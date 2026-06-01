@@ -127,8 +127,20 @@ export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {})
   const args = pred.args ?? {};
   const keys = Object.keys(args).sort();
   if (keys.length === 0) return pred.script;
-  const argStr = keys.map((k) => `${k}=${args[k]}`).join(", ");
+  const argStr = keys
+    .map((k) => `${_scriptFieldLabel(ctx.hass, pred.script, k)}=${formatParamValue(args[k])}`)
+    .join(", ");
   return `${pred.script}(${argStr})`;
+}
+
+/** Friendly label for a script argument: prefers the script field's HA `name`
+ *  alias (from `hass.services.script.<name>.fields`), falling back to the
+ *  humanised field id. Mirrors the editor's `_computeFieldLabel`. */
+function _scriptFieldLabel(hass: HassLike | undefined, scriptId: string, fieldId: string): string {
+  const name = scriptId.replace(/^script\./, "");
+  const services = (hass as { services?: Record<string, Record<string, { fields?: Record<string, { name?: unknown }> }>> } | undefined)?.services;
+  const alias = services?.script?.[name]?.fields?.[fieldId]?.name;
+  return typeof alias === "string" && alias ? alias : humanizeFieldId(fieldId);
 }
 
 /** Display name for an entity from a domain-prefixed id, falling back to a

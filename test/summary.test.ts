@@ -648,16 +648,34 @@ describe("summariseScript", () => {
       .toBe("script.foo");
   });
 
-  test("single arg renders as script.foo(k=v)", () => {
+  test("single arg renders with a humanised key when no alias is known", () => {
     expect(summariseScript({ script: "script.foo", args: { k: 7 } }, { hass: noLocalize }))
-      .toBe("script.foo(k=7)");
+      .toBe("script.foo(K=7)");
   });
 
   test("multiple args render alphabetically by key", () => {
     expect(summariseScript(
       { script: "script.foo", args: { z: "down", k: 7 } },
       { hass: noLocalize },
-    )).toBe("script.foo(k=7, z=down)");
+    )).toBe("script.foo(K=7, Z=down)");
+  });
+
+  test("object-valued arg renders via formatParamValue, not [object Object]", () => {
+    expect(summariseScript(
+      { script: "script.foo", args: { target: [210, 81, 81] } },
+      { hass: noLocalize },
+    )).toBe("script.foo(Target=[210,81,81])");
+  });
+
+  test("arg key resolves to the script field's friendly name alias", () => {
+    const hass = {
+      localize: () => undefined,
+      services: { script: { foo: { fields: { target: { name: "Target brightness" } } } } },
+    };
+    expect(summariseScript(
+      { script: "script.foo", args: { target: 5 } },
+      { hass },
+    )).toBe("script.foo(Target brightness=5)");
   });
 
   test("malformed predicate (non-string script) falls back to String(pred)", () => {
@@ -686,7 +704,7 @@ test("summariseMatcher dispatches script with args (sorted)", () => {
     "script",
     { script: "script.foo", args: { z: "down", k: 7 } },
     { hass: noLocalize },
-  )).toBe("script.foo(k=7, z=down)");
+  )).toBe("script.foo(K=7, Z=down)");
 });
 
 test("summariseMatcher script with null predicate yields '(any)'", () => {

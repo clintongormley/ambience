@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
+from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DATA_SWITCHES, DOMAIN
 
 
 def _seed_services_catalog(hass: HomeAssistant) -> None:
@@ -2200,3 +2200,91 @@ async def test_groups_delete_blocked_last_returns_group_last(
     assert resp["success"] is False
     assert resp["error"]["code"] == "group_last"
     assert "last group" in resp["error"]["message"]
+
+
+async def test_ws_apply_runs_even_when_switch_off(
+    hass: HomeAssistant, installed_with_actions, hass_ws_client, area_id
+) -> None:
+    from pytest_homeassistant_custom_component.common import async_mock_service
+
+    calls = async_mock_service(hass, "light", "turn_on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "rules": [
+                {
+                    "group": "lighting",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.l"], "params": {}}
+                    ],
+                }
+            ]
+        },
+    )
+    switch = hass.data[DOMAIN][DATA_SWITCHES][("area", area_id)]
+    await switch.async_turn_off()
+    await hass.async_block_till_done()
+
+    resp = await _ws_send(hass_ws_client, type="ambience/apply", area_id=area_id)
+
+    assert resp["success"] is True
+    assert resp["result"] == {"ok": True}
+    assert len(calls) == 1
+
+
+async def test_ws_apply_requires_exactly_one_scope(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/apply")
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_ws_run_rule_actions(
+    hass: HomeAssistant, installed_with_actions, hass_ws_client, area_id
+) -> None:
+    from pytest_homeassistant_custom_component.common import async_mock_service
+
+    calls = async_mock_service(hass, "light", "turn_on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "rules": [
+                {
+                    "name": "R1",
+                    "group": "lighting",
+                    "when": {
+                        "state": {
+                            "kind": "is",
+                            "entity_id": "binary_sensor.nope",
+                            "states": ["on"],
+                        }
+                    },
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.l"], "params": {}}
+                    ],
+                }
+            ]
+        },
+    )
+
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/rule/run_actions", area_id=area_id, rule_index=0
+    )
+
+    assert resp["success"] is True
+    assert resp["result"] == {"ran": 1, "rule_name": "R1"}
+    assert len(calls) == 1
+
+
+async def test_ws_run_rule_actions_out_of_range(
+    hass: HomeAssistant, installed_with_actions, hass_ws_client, area_id
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/rule/run_actions", area_id=area_id, rule_index=9
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"

@@ -26,7 +26,13 @@ from .const import (
 from .exposed_actions import ExposedActionsStore
 from .matchers.weather import WEATHER_CONDITIONS
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
-from .service import async_resolve_groups_only, async_resolve_only, scope_reapply_intervals
+from .service import (
+    async_apply_scene,
+    async_resolve_groups_only,
+    async_resolve_only,
+    async_run_rule_actions,
+    scope_reapply_intervals,
+)
 from .sorting import matcher_priority, resolve_order, shadowed_by
 from .store import GroupInUseError, LastGroupError, reassign_orphan_rules
 from .validators import validate_reapply_seconds
@@ -49,6 +55,8 @@ _WS_COMMANDS = (
     "ambience/exposed_actions/save",
     "ambience/validate",
     "ambience/dry_run",
+    "ambience/apply",
+    "ambience/rule/run_actions",
     "ambience/time_of_day_periods/list",
     "ambience/time_of_day_periods/save",
     "ambience/time_of_day_periods/reset",
@@ -157,6 +165,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_house_save)
     websocket_api.async_register_command(hass, _ws_validate)
     websocket_api.async_register_command(hass, _ws_dry_run)
+    websocket_api.async_register_command(hass, _ws_apply)
+    websocket_api.async_register_command(hass, _ws_run_rule_actions)
     websocket_api.async_register_command(hass, _ws_periods_list)
     websocket_api.async_register_command(hass, _ws_periods_save)
     websocket_api.async_register_command(hass, _ws_periods_reset)
@@ -651,6 +661,87 @@ async def _ws_dry_run(
     try:
         result = await async_resolve_only(hass, scope_kind, scope_id)
         result["groups"] = await async_resolve_groups_only(hass, scope_kind, scope_id)
+    except ServiceValidationError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    connection.send_result(msg["id"], result)
+
+
+def _parse_scope(msg: dict[str, Any]) -> tuple[str, str | None] | None:
+    """Map a ws message's scope selector to (scope_kind, scope_id).
+
+    Returns None when not exactly one of area_id/floor_id/house is present.
+    """
+    present = [k for k in ("area_id", "floor_id", "house") if k in msg]
+    if len(present) != 1:
+        return None
+    if "area_id" in msg:
+        return "area", msg["area_id"]
+    if "floor_id" in msg:
+        return "floor", msg["floor_id"]
+    return "house", None
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/apply",
+        vol.Optional("area_id"): str,
+        vol.Optional("floor_id"): str,
+        vol.Optional("house"): _house_must_be_true,
+        vol.Optional("group_id"): str,
+    }
+)
+@websocket_api.async_response
+async def _ws_apply(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    scope = _parse_scope(msg)
+    if scope is None:
+        connection.send_error(
+            msg["id"],
+            "validation_error",
+            "apply requires exactly one of area_id/floor_id/house",
+        )
+        return
+    scope_kind, scope_id = scope
+    try:
+        await async_apply_scene(hass, scope_kind, scope_id, group=msg.get("group_id"), force=True)
+    except ServiceValidationError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/rule/run_actions",
+        vol.Optional("area_id"): str,
+        vol.Optional("floor_id"): str,
+        vol.Optional("house"): _house_must_be_true,
+        vol.Required("rule_index"): int,
+    }
+)
+@websocket_api.async_response
+async def _ws_run_rule_actions(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    scope = _parse_scope(msg)
+    if scope is None:
+        connection.send_error(
+            msg["id"],
+            "validation_error",
+            "run_actions requires exactly one of area_id/floor_id/house",
+        )
+        return
+    scope_kind, scope_id = scope
+    try:
+        result = await async_run_rule_actions(hass, scope_kind, scope_id, msg["rule_index"])
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return

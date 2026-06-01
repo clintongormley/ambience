@@ -355,4 +355,3 @@ export type BufferedUnit = {
   actions: ActionSpec[];
   explanation: TraceExplanation | null;
 };
-export type TraceSummary = { count: number; latest: string | null };

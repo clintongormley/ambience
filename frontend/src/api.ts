@@ -22,7 +22,6 @@ import type {
   ServiceInfo,
   ServiceSchema,
   SwitchDefaults,
-  TraceSummary,
   WeatherConfig,
   WeatherGroup,
 } from "./types.js";
@@ -361,14 +360,6 @@ export async function deleteGroup(
 export async function listTraces(hass: HassConnection): Promise<BufferedUnit[]> {
   const res = await hass.callWS<{ traces: BufferedUnit[] }>({ type: "ambience/traces/list" });
   return res.traces;
-}
-
-export async function clearTraces(hass: HassConnection): Promise<void> {
-  await hass.callWS({ type: "ambience/traces/clear" });
-}
-
-export async function countTraces(hass: HassConnection): Promise<TraceSummary> {
-  return hass.callWS<TraceSummary>({ type: "ambience/traces/count" });
 }
 
 export async function getScriptReferencedEntities(

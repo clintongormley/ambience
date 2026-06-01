@@ -12,9 +12,8 @@ import { renderLogo } from "./logo.js";
 import { watchHaComponents } from "./ha-components.js";
 import "./views/scopes-view.js";
 import "./views/settings-view.js";
-import "./views/traces-view.js";
 
-type PanelView = "areas" | "settings" | "traces";
+type PanelView = "areas" | "settings";
 
 @customElement("ambience-panel")
 export class AmbiencePanel extends LitElement {
@@ -98,17 +97,11 @@ export class AmbiencePanel extends LitElement {
             class=${this._view === "settings" ? "active" : ""}
             @click=${() => { this._view = "settings"; }}
           >${localize(this.hass, "ui.tab_settings", "Settings")}</button>
-          <button
-            class=${this._view === "traces" ? "active" : ""}
-            @click=${() => { this._view = "traces"; }}
-          >${localize(this.hass, "ui.tab_traces", "Traces")}</button>
         </nav>
       </header>
       ${this._view === "areas"
         ? html`<ambience-scopes-view .hass=${this.hass}></ambience-scopes-view>`
-        : this._view === "settings"
-          ? html`<ambience-settings-view .hass=${this.hass}></ambience-settings-view>`
-          : html`<ambience-traces-view .hass=${this.hass}></ambience-traces-view>`}
+        : html`<ambience-settings-view .hass=${this.hass}></ambience-settings-view>`}
     `;
   }
 }

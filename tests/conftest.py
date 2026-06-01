@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, UrlManager
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -107,10 +107,11 @@ def init_frontend_extra_module_urls(hass: HomeAssistant) -> None:
     """Initialise the set that add_extra_js_url writes into.
 
     In a real HA instance the frontend component's async_setup populates this
-    key before any integration calls add_extra_js_url.  In tests the frontend
-    component is not set up, so we seed the key ourselves to avoid KeyError.
+    key with a UrlManager before any integration calls add_extra_js_url.  In
+    tests the frontend component is not set up, so we seed the same type
+    ourselves (not a bare set) to avoid KeyError and to match real semantics.
     """
-    hass.data.setdefault(DATA_EXTRA_MODULE_URL, set())
+    hass.data.setdefault(DATA_EXTRA_MODULE_URL, UrlManager(lambda *_: None, []))
 
 
 @pytest.fixture

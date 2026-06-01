@@ -96,7 +96,7 @@ _APPLY_SCENE_SCHEMA = vol.All(
 
 
 def _hash_bundle(bundle_path: Path) -> str:
-    """Return a short content hash of the panel bundle, or 'missing' if absent."""
+    """Return a short content hash of *bundle_path*, or 'missing' if absent."""
     try:
         return hashlib.sha256(bundle_path.read_bytes()).hexdigest()[:12]
     except OSError:

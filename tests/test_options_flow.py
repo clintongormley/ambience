@@ -126,3 +126,4 @@ async def test_card_loader_removed_on_unload(
         assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
         await hass.async_block_till_done()
     mock_remove.assert_called_once()
+    assert "ambience-card.js" in mock_remove.call_args.args[1]

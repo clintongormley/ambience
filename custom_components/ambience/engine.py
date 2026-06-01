@@ -10,6 +10,16 @@ from .protocols import Matcher
 Rule = dict[str, Any]
 
 
+def rule_enabled(rule: Rule) -> bool:
+    """A rule is enabled unless it carries an explicit ``enabled: False``.
+
+    Absent or ``True`` both mean enabled — the identity check (not ``== False``
+    / ``not rule.get(...)``) deliberately treats other falsy values as enabled,
+    so this is the single place the convention lives.
+    """
+    return rule.get("enabled") is not False
+
+
 @dataclass(frozen=True)
 class PredicateResult:
     """One predicate's evaluation within a rule."""
@@ -69,7 +79,7 @@ def evaluate_explained(
     rule_evals: list[RuleEval] = []
     winner: int | None = None
     for idx, rule in enumerate(rules):
-        if rule.get("enabled") is False:
+        if not rule_enabled(rule):
             # Disabled rule: recorded for traces but skipped — it cannot win
             # and does not short-circuit evaluation of the rules below it.
             rule_evals.append(RuleEval(idx, rule.get("name"), [], False, False, disabled=True))

@@ -389,9 +389,13 @@ export class AmbienceRulesList extends LitElement {
    *  1-based position WITHIN its render section. */
   private _renderRow(i: number, rule: Rule, displayNum: number) {
     const unpinLabel = localize(this.hass, "ui.unpin", "Unpin (return to automatic order)");
+    const isDisabled = rule.enabled === false;
+    const toggleLabel = isDisabled
+      ? localize(this.hass, "ui.enable_rule", "Enable rule")
+      : localize(this.hass, "ui.disable_rule", "Disable rule");
     return html`
       <li
-        class="${this._drag.over === i ? "drag-over " : ""}${rule.enabled === false ? "disabled" : ""}"
+        class="${this._drag.over === i ? "drag-over " : ""}${isDisabled ? "disabled" : ""}"
         draggable="true"
         @dragstart=${() => this._drag.start(i)}
         @dragover=${(e: DragEvent) => this._drag.dragOver(e, i)}
@@ -413,7 +417,7 @@ export class AmbienceRulesList extends LitElement {
         </span>
         <span class="idx">${displayNum}</span>
         <span class="warn-slot">
-          ${rule.shadowed_by != null && rule.enabled !== false
+          ${rule.shadowed_by != null && !isDisabled
             ? html`<span
                 class="shadow-warning"
                 title=${localize(this.hass, "ui.shadowed", "Never fires — shadowed by an earlier rule.")}
@@ -460,16 +464,12 @@ export class AmbienceRulesList extends LitElement {
           class="toggle"
           @click=${(e: Event) => {
             e.stopPropagation();
-            this._emit("toggle-rule-enabled", { index: i, enabled: rule.enabled === false });
+            this._emit("toggle-rule-enabled", { index: i, enabled: isDisabled });
           }}
-          title=${rule.enabled === false
-            ? localize(this.hass, "ui.enable_rule", "Enable rule")
-            : localize(this.hass, "ui.disable_rule", "Disable rule")}
-          aria-label=${rule.enabled === false
-            ? localize(this.hass, "ui.enable_rule", "Enable rule")
-            : localize(this.hass, "ui.disable_rule", "Disable rule")}
+          title=${toggleLabel}
+          aria-label=${toggleLabel}
         >
-          <ha-icon icon=${rule.enabled === false ? "mdi:toggle-switch-off-outline" : "mdi:toggle-switch"}></ha-icon>
+          <ha-icon icon=${isDisabled ? "mdi:toggle-switch-off-outline" : "mdi:toggle-switch"}></ha-icon>
         </button>
         <button
           @click=${(e: Event) => {

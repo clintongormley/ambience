@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .engine import rule_enabled
+
 Rule = dict[str, Any]
 
 _DEFAULT_PRIORITY = 0  # Fallback for matchers without a priority — lowest, so they sort last.
@@ -232,10 +234,10 @@ def shadowed_by(ordered_rules: list[Rule], matchers: dict[str, Any]) -> dict[int
     constrained = [_constrained(r) for r in ordered_rules]
     result: dict[int, int] = {}
     for j in range(len(ordered_rules)):
-        if ordered_rules[j].get("enabled") is False:
+        if not rule_enabled(ordered_rules[j]):
             continue
         for i in range(j):
-            if ordered_rules[i].get("enabled") is False:
+            if not rule_enabled(ordered_rules[i]):
                 continue
             if ordered_rules[i].get("group") != ordered_rules[j].get("group"):
                 continue

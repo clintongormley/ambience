@@ -83,3 +83,36 @@ def test_no_match_returns_none(matchers: dict[str, FakeMatcher]) -> None:
     explanation = evaluate_explained(rules, {"mode": "day"}, matchers)
     assert explanation.winner_index is None
     assert resolve(rules, {"mode": "day"}, matchers) is None
+
+
+def test_disabled_rule_is_skipped_and_later_rule_wins(
+    matchers: dict[str, FakeMatcher],
+) -> None:
+    rules = [
+        {"name": "a", "when": {"mode": "day"}, "enabled": False},
+        {"name": "b", "when": {"mode": "day"}},
+    ]
+    explanation = evaluate_explained(rules, {"mode": "day"}, matchers)
+    assert explanation.winner_index == 1
+    assert resolve(rules, {"mode": "day"}, matchers) == (1, rules[1])
+
+
+def test_disabled_rule_recorded_as_disabled(
+    matchers: dict[str, FakeMatcher],
+) -> None:
+    rules = [{"name": "a", "when": {"mode": "day"}, "enabled": False}]
+    explanation = evaluate_explained(rules, {"mode": "day"}, matchers)
+    rule_eval = explanation.rules[0]
+    assert rule_eval.disabled is True
+    assert rule_eval.matched is False
+    assert rule_eval.evaluated is False
+    assert rule_eval.predicates == []
+    assert explanation.winner_index is None
+
+
+def test_enabled_rule_defaults_disabled_false(
+    matchers: dict[str, FakeMatcher],
+) -> None:
+    rules = [{"name": "a", "when": {"mode": "day"}}]
+    explanation = evaluate_explained(rules, {"mode": "day"}, matchers)
+    assert explanation.rules[0].disabled is False

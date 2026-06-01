@@ -24,7 +24,10 @@ class RuleEval:
     """One rule's evaluation: its predicate results and whether it matched.
 
     `evaluated` is False for rules after the winner — they are never checked,
-    mirroring this function's own short-circuit semantics.
+    mirroring this function's own short-circuit semantics. `disabled` is True
+    for rules the user has turned off (``enabled: False``): they are skipped
+    entirely — never matched, never the winner, and they do not short-circuit
+    evaluation of later rules.
     """
 
     index: int
@@ -32,6 +35,7 @@ class RuleEval:
     predicates: list[PredicateResult]
     matched: bool
     evaluated: bool
+    disabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,13 @@ def evaluate_explained(
     rule_evals: list[RuleEval] = []
     winner: int | None = None
     for idx, rule in enumerate(rules):
+        if rule.get("enabled") is False:
+            # Disabled rule: recorded for traces but skipped — it cannot win
+            # and does not short-circuit evaluation of the rules below it.
+            rule_evals.append(
+                RuleEval(idx, rule.get("name"), [], False, False, disabled=True)
+            )
+            continue
         if winner is not None:
             rule_evals.append(RuleEval(idx, rule.get("name"), [], False, False))
             continue

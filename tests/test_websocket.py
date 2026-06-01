@@ -2288,3 +2288,11 @@ async def test_ws_run_rule_actions_out_of_range(
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
+
+
+async def test_ws_run_rule_actions_requires_exactly_one_scope(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/rule/run_actions", rule_index=0)
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"

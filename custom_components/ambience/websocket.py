@@ -644,6 +644,8 @@ async def _ws_dry_run(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
+    # Intentionally inlines scope parsing rather than using _parse_scope (see
+    # _ws_apply / _ws_run_rule_actions for the shared helper) — left untouched.
     present = [k for k in ("area_id", "floor_id", "house") if k in msg]
     if len(present) != 1:
         connection.send_error(
@@ -700,10 +702,11 @@ async def _ws_apply(
 ) -> None:
     scope = _parse_scope(msg)
     if scope is None:
+        present = [k for k in ("area_id", "floor_id", "house") if k in msg]
         connection.send_error(
             msg["id"],
             "validation_error",
-            "apply requires exactly one of area_id/floor_id/house",
+            f"apply requires exactly one of area_id/floor_id/house, got: {present!r}",
         )
         return
     scope_kind, scope_id = scope
@@ -733,10 +736,11 @@ async def _ws_run_rule_actions(
 ) -> None:
     scope = _parse_scope(msg)
     if scope is None:
+        present = [k for k in ("area_id", "floor_id", "house") if k in msg]
         connection.send_error(
             msg["id"],
             "validation_error",
-            "run_actions requires exactly one of area_id/floor_id/house",
+            f"run_actions requires exactly one of area_id/floor_id/house, got: {present!r}",
         )
         return
     scope_kind, scope_id = scope

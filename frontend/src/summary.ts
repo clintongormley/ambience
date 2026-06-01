@@ -121,7 +121,7 @@ export function summariseTemplate(pred: TemplatePredicate, ctx: MatcherContext =
 export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {}): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any_paren", "(any)");
   // Defensive: malformed predicate (non-object or missing/non-string script).
-  if (typeof pred !== "object" || pred === null || typeof (pred as { script?: unknown }).script !== "string") {
+  if (typeof pred !== "object" || typeof (pred as { script?: unknown }).script !== "string") {
     return String(pred);
   }
   const name = _domainEntityName(ctx, pred.script);
@@ -129,15 +129,16 @@ export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {})
   const keys = Object.keys(args).sort();
   if (keys.length === 0) return name;
   const argStr = keys
-    .map((k) => `${_scriptFieldLabel(ctx.hass, pred.script, k)}: ${formatArgValue(ctx.hass, args[k])}`)
+    .map((k) => `${scriptFieldLabel(ctx.hass, pred.script, k)}: ${formatArgValue(ctx.hass, args[k])}`)
     .join(", ");
   return `${name} (${argStr})`;
 }
 
-/** Friendly label for a script argument: prefers the script field's HA `name`
- *  alias (from `hass.services.script.<name>.fields`), falling back to the
- *  humanised field id. Mirrors the editor's `_computeFieldLabel`. */
-function _scriptFieldLabel(hass: HassLike | undefined, scriptId: string, fieldId: string): string {
+/** Friendly label for a script field: prefers the field's HA `name` alias
+ *  (from `hass.services.script.<name>.fields`), falling back to the humanised
+ *  field id. Shared by the script summary and the predicate editor's
+ *  `computeLabel`, which read the same live service registry. */
+export function scriptFieldLabel(hass: HassLike | undefined, scriptId: string, fieldId: string): string {
   const name = scriptId.replace(/^script\./, "");
   const services = (hass as { services?: Record<string, Record<string, { fields?: Record<string, { name?: unknown }> }>> } | undefined)?.services;
   const alias = services?.script?.[name]?.fields?.[fieldId]?.name;

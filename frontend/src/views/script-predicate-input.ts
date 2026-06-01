@@ -6,7 +6,7 @@ import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
 import type { ScriptPredicate } from "../types.js";
 import type { HaFormSchema } from "../ha-form.js";
-import { humanizeFieldId } from "../summary.js";
+import { scriptFieldLabel } from "../summary.js";
 
 type ScriptField = {
   name?: string;
@@ -159,11 +159,14 @@ export class AmbienceScriptPredicateInput extends LitElement {
     return services?.script?.[name]?.fields;
   }
 
+  /** The entity_id of the currently-picked script, or null. */
+  private get _picked(): string | null {
+    return this.value && typeof this.value === "object" ? this.value.script : null;
+  }
+
   /** Fields of the currently-picked script (or undefined). */
   private _currentFields(): Record<string, ScriptField> | undefined {
-    return this._fieldsFor(
-      this.value && typeof this.value === "object" ? this.value.script : null,
-    );
+    return this._fieldsFor(this._picked);
   }
 
   /** Seed an args dict from a script's field defaults. */
@@ -198,13 +201,10 @@ export class AmbienceScriptPredicateInput extends LitElement {
     this._emit({ script: scriptEntityId, args: this._defaultArgs(scriptEntityId) });
   }
 
-  /** Friendly label for an args field: prefers the script field's `name`
-   *  alias, else humanizes the raw key. Mirrors summary.ts:paramLabel. */
-  _computeFieldLabel = (schema: { name: string }): string => {
-    const fields = this._currentFields();
-    const alias = fields?.[schema.name]?.name;
-    return typeof alias === "string" && alias ? alias : humanizeFieldId(schema.name);
-  };
+  /** Friendly label for an args field — shared with the script summary so the
+   *  form and the summary agree on field names. */
+  _computeFieldLabel = (schema: { name: string }): string =>
+    scriptFieldLabel(this.hass, this._picked ?? "", schema.name);
 
   /** Helper text for an args field: the script field's `description`, or "". */
   _computeFieldHelper = (schema: { name: string }): string => {
@@ -249,7 +249,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
   }
 
   override render() {
-    const picked = (this.value && typeof this.value === "object") ? this.value.script : null;
+    const picked = this._picked;
     const schema = this._argsSchema();
     const args = (this.value && typeof this.value === "object" ? this.value.args : {}) ?? {};
     const hasFields = schema.length > 0;

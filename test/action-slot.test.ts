@@ -897,6 +897,30 @@ describe("ambience-action-slot", () => {
     expect(hint!.textContent).toContain("3");
   });
 
+  test("target-valued default hint renders friendly entity names", async () => {
+    const hass = {
+      ...makeHass(),
+      states: { "light.kitchen": { attributes: { friendly_name: "Kitchen" } } },
+    };
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { target: { selector: { target: {} } } },
+    };
+    el = await mount({
+      hass,
+      exposed: {
+        id: "script.dim", label: "",
+        visible_fields: ["target"],
+        defaults: { target: { entity_id: ["light.kitchen"] } },
+      },
+      schema,
+      params: {},
+    });
+    const hint = el.shadowRoot.querySelector(".field-default-hint");
+    expect(hint).toBeTruthy();
+    expect(hint!.textContent).toContain("Default: Kitchen");
+  });
+
   test("no default hint when settings has no default for the field", async () => {
     const schema: ServiceSchema = {
       target: null,

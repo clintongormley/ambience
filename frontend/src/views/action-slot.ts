@@ -8,7 +8,7 @@ import {
 } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
-import { formatParamValue, humanizeFieldId, selectorUnit } from "../summary.js";
+import { formatArgValue, humanizeFieldId, selectorUnit } from "../summary.js";
 import type { ExposedAction, Scope, ServiceSchema } from "../types.js";
 import "./target-picker.js";
 import type { HaFormSchemaEntry } from "../ha-form.js";
@@ -356,7 +356,7 @@ export class AmbienceActionSlot extends LitElement {
     const defaults = this.exposed?.defaults ?? {};
     if (!(entry.name in defaults)) return "";
     const unit = selectorUnit(entry.selector);
-    const value = formatParamValue(defaults[entry.name]);
+    const value = formatArgValue(this.hass, defaults[entry.name]);
     return ` (Default: ${value}${unit ? ` ${unit}` : ""})`;
   }
 

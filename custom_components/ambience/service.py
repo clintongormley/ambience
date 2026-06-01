@@ -218,14 +218,19 @@ async def async_apply_scene(
     hass: HomeAssistant,
     scope_kind: str,
     scope_id: str | None,
+    *,
+    group: str | None = None,
+    force: bool = False,
 ) -> None:
     """Apply a scene at the given scope according to configured rules.
 
     `scope_kind` is one of "area", "floor", "house". For "house", scope_id is
-    None.
+    None. `group` limits the apply to that single rule-group (None = every
+    group). `force=True` applies even when the scope's switch is off (used by
+    the manual UI buttons).
     """
     switch_state = _switch_state(hass, scope_kind, scope_id)
-    if switch_state == "off":
+    if not force and switch_state == "off":
         _LOGGER.info(
             "ambience: scope=%s/%s switch is off; skipping apply_scene",
             scope_kind,
@@ -275,8 +280,9 @@ async def async_apply_scene(
             )
         return None
 
+    gids = [group] if group is not None else sorted(group_ids(cfg))
     results = await asyncio.gather(
-        *(_apply_group(gid) for gid in group_ids(cfg)),
+        *(_apply_group(gid) for gid in gids),
         return_exceptions=True,
     )
     traces: list[UnitTrace] = []

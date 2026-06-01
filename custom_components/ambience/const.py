@@ -50,3 +50,10 @@ GENERAL_GROUP = {
 # Options flow
 CONF_SHOW_SIDEBAR_PANEL = "show_sidebar_panel"
 DEFAULT_SHOW_SIDEBAR_PANEL = True
+
+# hass.data key holding the Lovelace resource id registered for the card, so it
+# can be removed on unload.
+DATA_CARD_RESOURCE_ID = "card_resource_id"
+# hass.data key holding the versioned card URL, needed by the add_extra_js_url
+# fallback's removal on unload.
+DATA_CARD_RESOURCE_URL = "card_resource_url"

@@ -1,10 +1,11 @@
 // frontend/src/card.ts
 /**
  * Discoverable Lovelace card for Ambience. This is the tiny, lit-free loader
- * that is registered globally (via the integration's add_extra_js_url). It
- * registers the card in window.customCards so it appears in the card picker,
- * and defines <ambience-card> as a stub that lazy-loads the heavy
- * <ambience-frontend> chunk on first use.
+ * that the integration registers as a Lovelace resource (so it loads after HA's
+ * scoped-custom-element-registry is installed — see card_resources.py). It
+ * registers the card in window.customCards so it appears in the card picker, and
+ * defines <ambience-card> as a stub that lazy-loads the heavy <ambience-frontend>
+ * chunk on first use.
  */
 
 import { defineElement } from "./define-element.js";
@@ -67,23 +68,9 @@ class AmbienceCard extends HTMLElement {
   }
 }
 
-// Home Assistant installs `@webcomponents/scoped-custom-element-registry` while
-// its main bundle executes, replacing `window.customElements`. Because this
-// module is injected via add_extra_js_url, it can run BEFORE that patch — and a
-// define() done then lands on the native registry, invisible to the scoped
-// registry HA uses to resolve custom cards ("Configuration error: custom
-// element doesn't exist"). Defer registration until the document has finished
-// loading, by which point the patch is in place; HA rebuilds the card via
-// whenDefined once we register.
-function registerAmbienceCard(): void {
-  defineElement("ambience-card", AmbienceCard);
-}
-if (document.readyState === "complete") {
-  registerAmbienceCard();
-} else {
-  window.addEventListener("DOMContentLoaded", registerAmbienceCard, { once: true });
-  window.addEventListener("load", registerAmbienceCard, { once: true });
-}
+// Loaded as a Lovelace resource (post scoped-registry install), so a plain
+// idempotent define lands in the registry HA queries.
+defineElement("ambience-card", AmbienceCard);
 
 interface CustomCardEntry {
   type: string;

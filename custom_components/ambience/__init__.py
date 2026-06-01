@@ -8,10 +8,8 @@ from pathlib import Path
 
 import voluptuous as vol
 from homeassistant.components.frontend import (
-    add_extra_js_url,
     async_register_built_in_panel,
     async_remove_panel,
-    remove_extra_js_url,
 )
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
@@ -25,8 +23,13 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
+from .card_resources import (
+    async_register_card_resource,
+    async_unregister_card_resource,
+)
 from .const import (
     CONF_SHOW_SIDEBAR_PANEL,
+    DATA_CARD_RESOURCE_URL,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_LAST_APPLIED,
@@ -258,11 +261,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             },
         )
 
-    # Register the (tiny) card loader on every frontend page so the Ambience
-    # card is discoverable in the card picker. The heavy frontend chunk is
-    # lazy-loaded by the card only when it actually renders.
-    add_extra_js_url(hass, card_url)
-    entry.async_on_unload(lambda: remove_extra_js_url(hass, card_url))
+    # Register the (tiny) card loader as a Lovelace resource so it loads AFTER
+    # HA's scoped-custom-element-registry is installed (loading it earlier via
+    # add_extra_js_url makes the card fail to resolve on a cold load — see
+    # card_resources.py). The heavy frontend chunk is lazy-loaded by the card
+    # only when it actually renders.
+    domain_data[DATA_CARD_RESOURCE_URL] = card_url
+    await async_register_card_resource(hass, _CARD_JS_URL, card_url)
 
     engine = AutoTriggerEngine(hass)
     domain_data[DATA_ENGINE] = engine
@@ -295,6 +300,8 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_unload_platforms(entry, [Platform.SWITCH])
     async_remove_panel(hass, _PANEL_URL, warn_if_unknown=False)
+    card_url = hass.data.get(DOMAIN, {}).get(DATA_CARD_RESOURCE_URL, "")
+    await async_unregister_card_resource(hass, card_url)
     hass.services.async_remove(DOMAIN, "apply_scene")
     async_unregister_commands(hass)
     hass.data.pop(DOMAIN, None)

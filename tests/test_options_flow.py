@@ -83,21 +83,22 @@ async def test_toggling_option_reloads_entry(
     mock_reload.assert_called_once_with(mock_config_entry.entry_id)
 
 
-async def test_card_loader_registered_via_extra_js(
+async def test_card_resource_registered_on_setup(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
     mock_config_entry.add_to_hass(hass)
-    with patch("custom_components.ambience.add_extra_js_url") as mock_add:
+    with patch("custom_components.ambience.async_register_card_resource") as mock_register:
         assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
-    mock_add.assert_called_once()
-    url = mock_add.call_args.args[1]
-    assert "ambience-card.js" in url
-    assert "fe=" in url  # frontend chunk hash forwarded for cache-busting
+    mock_register.assert_called_once()
+    base_url, card_url = mock_register.call_args.args[1], mock_register.call_args.args[2]
+    assert base_url == "/ambience-panel/ambience-card.js"
+    assert "ambience-card.js" in card_url
+    assert "fe=" in card_url  # frontend chunk hash forwarded for cache-busting
 
 
-async def test_card_loader_registered_even_when_panel_off(
+async def test_card_resource_registered_even_when_panel_off(
     hass: HomeAssistant,
 ) -> None:
     entry = MockConfigEntry(
@@ -108,22 +109,22 @@ async def test_card_loader_registered_even_when_panel_off(
         unique_id="ambience_unique",
     )
     entry.add_to_hass(hass)
-    with patch("custom_components.ambience.add_extra_js_url") as mock_add:
+    with patch("custom_components.ambience.async_register_card_resource") as mock_register:
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
-    mock_add.assert_called_once()
+    mock_register.assert_called_once()
 
 
-async def test_card_loader_removed_on_unload(
+async def test_card_resource_removed_on_unload(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
     mock_config_entry.add_to_hass(hass)
-    with patch("custom_components.ambience.add_extra_js_url"):
+    with patch("custom_components.ambience.async_register_card_resource"):
         assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
-    with patch("custom_components.ambience.remove_extra_js_url") as mock_remove:
+    with patch("custom_components.ambience.async_unregister_card_resource") as mock_unregister:
         assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
         await hass.async_block_till_done()
-    mock_remove.assert_called_once()
-    assert "ambience-card.js" in mock_remove.call_args.args[1]
+    mock_unregister.assert_called_once()
+    assert "ambience-card.js" in mock_unregister.call_args.args[1]

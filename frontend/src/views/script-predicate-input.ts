@@ -3,7 +3,6 @@ import { customElement, property, state } from "lit/decorators.js";
 import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 
 import type { HassConnection } from "../api.js";
-import { getScriptReferencedEntities } from "../api.js";
 import { localize } from "../i18n.js";
 import type { ScriptPredicate } from "../types.js";
 import type { HaFormSchema } from "../ha-form.js";
@@ -55,8 +54,6 @@ export class AmbienceScriptPredicateInput extends LitElement {
       border-radius: 12px; padding: 0.15rem 0.5rem; font-size: 0.85em;
     }
     .chip .x { background: none; border: none; cursor: pointer; color: inherit; font-size: 1em; line-height: 1; padding: 0; }
-    .chip.add { cursor: pointer; }
-    .suggested { margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
     .help { font-size: 0.8em; color: var(--secondary-text-color, #777); margin: 0 0 0.4rem 0; }
     .muted { color: var(--secondary-text-color, #777); font-size: 0.85em; }
   `;
@@ -67,8 +64,6 @@ export class AmbienceScriptPredicateInput extends LitElement {
   @state() private _mode: "form" | "yaml" = "form";
   @state() private _yamlText = "";
   @state() private _yamlError: string | null = null;
-  @state() private _suggested: string[] = [];
-  @state() private _suggestedFor: string | null = null;
 
   override willUpdate(changed: Map<string, unknown>) {
     super.willUpdate?.(changed);
@@ -76,8 +71,6 @@ export class AmbienceScriptPredicateInput extends LitElement {
       // Keep the YAML buffer in sync with externally-driven value changes
       // (e.g. picker change while in form mode).
       if (this._mode === "form") this._yamlText = yamlDump(this.value ?? {});
-      const current = this.value && typeof this.value === "object" ? this.value.script : null;
-      void this._loadSuggestions(current);
     }
   }
 
@@ -89,22 +82,6 @@ export class AmbienceScriptPredicateInput extends LitElement {
     const fields = this._fieldsFor(picked);
     if (picked && (!fields || Object.keys(fields).length === 0)) {
       this._mode = "yaml";
-    }
-    const current = this.value && typeof this.value === "object" ? this.value.script : null;
-    void this._loadSuggestions(current);
-  }
-
-  private async _loadSuggestions(script: string | null) {
-    if (script === this._suggestedFor) return;  // already loaded/loading for this script
-    this._suggestedFor = script;
-    this._suggested = [];
-    if (!script || !this.hass) return;
-    try {
-      const { entities } = await getScriptReferencedEntities(this.hass, script);
-      // Only apply if still the current script (avoid races on rapid changes).
-      if (this._suggestedFor === script) this._suggested = entities;
-    } catch {
-      // best-effort; leave suggestions empty
     }
   }
 
@@ -268,11 +245,6 @@ export class AmbienceScriptPredicateInput extends LitElement {
     this._emit({ script: this.value.script, args: this.value.args, triggers });
   }
 
-  private _addTrigger(eid: string) {
-    if (this._triggers.includes(eid)) return;
-    this._setTriggers([...this._triggers, eid]);
-  }
-
   private _removeTrigger(eid: string) {
     this._setTriggers(this._triggers.filter((t) => t !== eid));
   }
@@ -316,7 +288,6 @@ export class AmbienceScriptPredicateInput extends LitElement {
 
   private _renderTriggers() {
     const current = this._triggers;
-    const suggestions = this._suggested.filter((e) => !current.includes(e));
     return html`
       <div class="section triggers">
         <h4>${localize(this.hass, "ui.script_triggers", "Triggers")}</h4>
@@ -337,19 +308,6 @@ export class AmbienceScriptPredicateInput extends LitElement {
                 </span>`,
               )}
         </div>
-        ${suggestions.length
-          ? html`<div class="suggested">
-              <span class="muted">${localize(this.hass, "ui.script_triggers_suggested", "Suggested:")}</span>
-              ${suggestions.map(
-                (eid) => html`<button
-                  type="button"
-                  class="chip add"
-                  data-test=${`suggest-${eid}`}
-                  @click=${() => this._addTrigger(eid)}
-                >+ ${eid}</button>`,
-              )}
-            </div>`
-          : ""}
       </div>
     `;
   }

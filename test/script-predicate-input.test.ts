@@ -317,3 +317,18 @@ describe("ambience-script-predicate-input — field labels", () => {
     expect(el._argsSchema()[0].description).toBeUndefined();
   });
 });
+
+describe("ambience-script-predicate-input — no suggestions", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("does not expose suggestion state or load suggestions", async () => {
+    el = await mount(
+      { script: "script.foo", args: {} },
+      { services: { script: { foo: { fields: { x: { selector: { text: {} } } } } } } },
+    );
+    expect(el._loadSuggestions).toBeUndefined();
+    expect(el._suggested).toBeUndefined();
+    expect(el.shadowRoot.querySelector(".suggested")).toBeNull();
+  });
+});

@@ -19,6 +19,7 @@ from .const import (
     DATA_PERIODS,
     DATA_STORE,
     DATA_SWITCHES,
+    DATA_TRACE_BUFFER,
     DOMAIN,
     GENERAL_GROUP_ID,
     SIGNAL_SWITCH_CONFIG_UPDATED,
@@ -35,6 +36,7 @@ from .service import (
 )
 from .sorting import matcher_priority, resolve_order, shadowed_by
 from .store import GroupInUseError, LastGroupError, reassign_orphan_rules
+from .trace import buffered_unit_to_dict
 from .validators import validate_reapply_seconds
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,6 +81,8 @@ _WS_COMMANDS = (
     "ambience/groups/list",
     "ambience/groups/save",
     "ambience/groups/delete",
+    "ambience/traces/list",
+    "ambience/traces/clear",
 )
 
 
@@ -189,6 +193,8 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_groups_list)
     websocket_api.async_register_command(hass, _ws_groups_save)
     websocket_api.async_register_command(hass, _ws_groups_delete)
+    websocket_api.async_register_command(hass, _ws_traces_list)
+    websocket_api.async_register_command(hass, _ws_traces_clear)
 
 
 def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
@@ -1377,6 +1383,41 @@ async def _ws_groups_delete(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
+    connection.send_result(msg["id"])
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/traces/list",
+        vol.Optional("limit"): vol.All(int, vol.Range(min=1)),
+    }
+)
+@websocket_api.async_response
+async def _ws_traces_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    buffer = hass.data.get(DOMAIN, {}).get(DATA_TRACE_BUFFER)
+    records = buffer.records() if buffer is not None else []
+    limit = msg.get("limit")
+    if limit is not None:
+        records = records[:limit]
+    connection.send_result(msg["id"], {"traces": [buffered_unit_to_dict(r) for r in records]})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/traces/clear"})
+@websocket_api.async_response
+async def _ws_traces_clear(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    buffer = hass.data.get(DOMAIN, {}).get(DATA_TRACE_BUFFER)
+    if buffer is not None:
+        buffer.clear()
     connection.send_result(msg["id"])
 
 

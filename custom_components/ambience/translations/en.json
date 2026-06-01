@@ -68,7 +68,6 @@
   },
   "ui": {
     "panel_title": "Ambience",
-    "tab_areas": "Areas",
     "tab_settings": "Settings",
     "settings_tab_ambience": "Ambience",
     "settings_tab_matchers": "Matchers",

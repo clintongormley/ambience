@@ -15,9 +15,7 @@ import { localize } from "./i18n.js";
 import { renderLogo } from "./logo.js";
 import { watchHaComponents } from "./ha-components.js";
 import "./views/scopes-view.js";
-import "./views/settings-view.js";
-
-type PanelView = "areas" | "settings";
+import "./views/settings-modal.js";
 
 export class AmbienceFrontend extends LitElement {
   static override styles = css`
@@ -48,28 +46,27 @@ export class AmbienceFrontend extends LitElement {
       height: 2rem;
       width: auto;
     }
-    nav {
-      display: flex;
-      gap: 0.25rem;
-    }
-    nav button {
+    .settings-btn {
       background: transparent;
-      border: 1px solid var(--divider-color, #e0e0e0);
-      border-radius: 4px;
-      padding: 0.35rem 0.75rem;
+      border: none;
+      border-radius: 50%;
+      padding: 0.35rem;
       cursor: pointer;
-      color: var(--primary-text-color, inherit);
-      font-size: 0.9rem;
+      color: var(--secondary-text-color, #888);
+      display: flex;
+      align-items: center;
     }
-    nav button.active {
-      background: var(--primary-color, #03a9f4);
-      color: var(--text-primary-color, #fff);
-      border-color: var(--primary-color, #03a9f4);
+    .settings-btn:hover {
+      color: var(--primary-text-color, inherit);
+      background: var(--secondary-background-color, #eee);
+    }
+    .settings-btn ha-icon {
+      --mdc-icon-size: 24px;
     }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
-  @state() private _view: PanelView = "areas";
+  @state() private _settingsOpen = false;
 
   override connectedCallback() {
     super.connectedCallback();
@@ -88,20 +85,19 @@ export class AmbienceFrontend extends LitElement {
             title: localize(this.hass, "ui.panel_title", "Ambience"),
           })}
         </h1>
-        <nav>
-          <button
-            class=${this._view === "areas" ? "active" : ""}
-            @click=${() => { this._view = "areas"; }}
-          >${localize(this.hass, "ui.tab_areas", "Areas")}</button>
-          <button
-            class=${this._view === "settings" ? "active" : ""}
-            @click=${() => { this._view = "settings"; }}
-          >${localize(this.hass, "ui.tab_settings", "Settings")}</button>
-        </nav>
+        <button
+          class="settings-btn"
+          @click=${() => { this._settingsOpen = true; }}
+          aria-label=${localize(this.hass, "ui.tab_settings", "Settings")}
+          title=${localize(this.hass, "ui.tab_settings", "Settings")}
+        ><ha-icon icon="mdi:cog"></ha-icon></button>
       </header>
-      ${this._view === "areas"
-        ? html`<ambience-scopes-view .hass=${this.hass}></ambience-scopes-view>`
-        : html`<ambience-settings-view .hass=${this.hass}></ambience-settings-view>`}
+      <ambience-scopes-view .hass=${this.hass}></ambience-scopes-view>
+      <ambience-settings-modal
+        .hass=${this.hass}
+        ?open=${this._settingsOpen}
+        @close=${() => { this._settingsOpen = false; }}
+      ></ambience-settings-modal>
     `;
   }
 }

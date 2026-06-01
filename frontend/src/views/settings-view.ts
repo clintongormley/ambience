@@ -12,21 +12,54 @@ type Tab = "ambience" | "matchers" | "actions";
 @customElement("ambience-settings-view")
 export class AmbienceSettingsView extends LitElement {
   static override styles = css`
-    :host { display: block; padding: 1rem; max-width: var(--ambience-content-max-width, 60rem); margin: 0 auto; }
-    nav { display: flex; gap: 0.25rem; margin-bottom: 1rem; }
+    :host {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+    }
+    /* HA-style tab bar: icon + label, primary-coloured active tab with an
+       underline indicator, a single divider beneath the whole row. */
+    nav {
+      display: flex;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--divider-color, #e0e0e0);
+    }
     nav button {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
       background: transparent;
-      border: 1px solid var(--divider-color, #e0e0e0);
-      border-radius: 4px;
-      padding: 0.35rem 0.75rem;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 0.85rem 1rem;
       cursor: pointer;
+      color: var(--secondary-text-color, #727272);
+      font-size: 0.95rem;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    nav button:hover {
       color: var(--primary-text-color, inherit);
-      font-size: 0.9rem;
     }
     nav button.active {
-      background: var(--primary-color, #03a9f4);
-      color: var(--text-primary-color, #fff);
-      border-color: var(--primary-color, #03a9f4);
+      color: var(--primary-color, #03a9f4);
+      border-bottom-color: var(--primary-color, #03a9f4);
+    }
+    nav button ha-icon {
+      --mdc-icon-size: 22px;
+    }
+    .content {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 1rem;
+      max-width: var(--ambience-content-max-width, 60rem);
+      width: 100%;
+      margin: 0 auto;
+      box-sizing: border-box;
     }
   `;
 
@@ -36,15 +69,23 @@ export class AmbienceSettingsView extends LitElement {
   override render() {
     return html`
       <nav>
-        <button class=${this._tab === "ambience" ? "active" : ""} @click=${() => { this._tab = "ambience"; }}>${localize(this.hass, "ui.settings_tab_ambience", "Ambience")}</button>
-        <button class=${this._tab === "matchers" ? "active" : ""} @click=${() => { this._tab = "matchers"; }}>${localize(this.hass, "ui.settings_tab_matchers", "Matchers")}</button>
-        <button class=${this._tab === "actions" ? "active" : ""} @click=${() => { this._tab = "actions"; }}>${localize(this.hass, "ui.settings_tab_actions", "Actions")}</button>
+        <button class=${this._tab === "ambience" ? "active" : ""} @click=${() => { this._tab = "ambience"; }}>
+          <ha-icon icon="mdi:home-lightbulb"></ha-icon>${localize(this.hass, "ui.settings_tab_ambience", "Ambience")}
+        </button>
+        <button class=${this._tab === "matchers" ? "active" : ""} @click=${() => { this._tab = "matchers"; }}>
+          <ha-icon icon="mdi:filter-variant"></ha-icon>${localize(this.hass, "ui.settings_tab_matchers", "Matchers")}
+        </button>
+        <button class=${this._tab === "actions" ? "active" : ""} @click=${() => { this._tab = "actions"; }}>
+          <ha-icon icon="mdi:flash"></ha-icon>${localize(this.hass, "ui.settings_tab_actions", "Actions")}
+        </button>
       </nav>
-      ${this._tab === "ambience"
-        ? html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
-        : this._tab === "matchers"
-          ? html`<ambience-matchers-settings .hass=${this.hass}></ambience-matchers-settings>`
-          : html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`}
+      <div class="content">
+        ${this._tab === "ambience"
+          ? html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
+          : this._tab === "matchers"
+            ? html`<ambience-matchers-settings .hass=${this.hass}></ambience-matchers-settings>`
+            : html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`}
+      </div>
     `;
   }
 }

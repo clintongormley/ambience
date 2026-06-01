@@ -59,4 +59,30 @@ describe("ambience-settings-view", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("ambience-actions-settings")).not.toBeNull();
   });
+
+  test("each tab renders an HA-style icon", async () => {
+    el = await mount();
+    const icons = el.shadowRoot.querySelectorAll("nav button ha-icon");
+    expect(Array.from(icons).map((i: Element) => i.getAttribute("icon"))).toEqual([
+      "mdi:home-lightbulb",
+      "mdi:filter-variant",
+      "mdi:flash",
+    ]);
+  });
+
+  test("the active tab is marked for the underline indicator", async () => {
+    el = await mount();
+    const active = el.shadowRoot.querySelectorAll("nav button.active");
+    expect(active.length).toBe(1);
+    expect(active[0].textContent).toContain("Ambience");
+  });
+
+  test("tab content lives in a scroll region separate from the nav", async () => {
+    el = await mount();
+    const content = el.shadowRoot.querySelector(".content");
+    expect(content).not.toBeNull();
+    expect(content!.querySelector("ambience-ambience-settings")).not.toBeNull();
+    // the nav must NOT be inside the scrolling content region
+    expect(content!.querySelector("nav")).toBeNull();
+  });
 });

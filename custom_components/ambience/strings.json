@@ -67,7 +67,6 @@
   },
   "ui": {
     "panel_title": "Ambience",
-    "tab_areas": "Areas",
     "tab_configuration": "Configuration",
     "no_areas": "No areas found in Home Assistant.",
     "not_configured": "not configured",

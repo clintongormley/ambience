@@ -362,13 +362,6 @@ export async function listTraces(hass: HassConnection): Promise<BufferedUnit[]> 
   return res.traces;
 }
 
-export async function getScriptReferencedEntities(
-  hass: HassConnection,
-  script: string,
-): Promise<{ entities: string[] }> {
-  return hass.callWS({ type: "ambience/script/referenced_entities", script });
-}
-
 export async function listAutoTriggers(
   hass: HassConnection,
   scope_kind: "area" | "floor" | "house",

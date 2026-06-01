@@ -12,8 +12,6 @@ from typing import Any
 
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import floor_registry as fr
 
 from .const import (
     DATA_EXPOSED_ACTIONS,
@@ -24,6 +22,7 @@ from .const import (
     DOMAIN,
 )
 from .engine import evaluate_explained, resolve
+from .naming import group_name, scope_display_name
 from .trace import (
     CauseKind,
     Outcome,
@@ -313,29 +312,6 @@ def _compose_apply_message(
     return message
 
 
-def _scope_label(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
-    """Human label for a scope: area/floor name, or 'Global' for house.
-
-    Falls back to the raw scope_id when the registry entry is missing (e.g. in
-    tests or for a deleted area/floor)."""
-    if scope_kind == "house":
-        return "Global"
-    if scope_kind == "floor":
-        floor = fr.async_get(hass).async_get_floor(scope_id)
-        return floor.name if floor is not None else (scope_id or "floor")
-    area = ar.async_get(hass).async_get_area(scope_id)
-    return area.name if area is not None else (scope_id or "area")
-
-
-def _group_label(hass: HomeAssistant, group_id: str) -> str | None:
-    """The configured display name for a group id, or None if unknown."""
-    store = hass.data[DOMAIN][DATA_STORE]
-    for group in store.groups():
-        if group.get("id") == group_id:
-            return group.get("name")
-    return None
-
-
 def _log_apply(
     hass: HomeAssistant,
     scope_kind: str,
@@ -360,8 +336,8 @@ def _log_apply(
         reapplied=reapplied,
         rule_name=rule_name,
         rule_index=rule_index,
-        scope_label=_scope_label(hass, scope_kind, scope_id),
-        group_label=_group_label(hass, group_id),
+        scope_label=scope_display_name(hass, scope_kind, scope_id),
+        group_label=group_name(hass, group_id),
         group_count=len(store.groups()),
     )
     context = Context()

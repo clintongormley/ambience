@@ -21,6 +21,27 @@ from custom_components.ambience.trace import (
 )
 
 
+def test_format_uses_scope_name_when_present():
+    # A resolved friendly scope name replaces the raw id in the label.
+    unit = UnitTrace(
+        "area", "mbr_id", "g", "on", "acted", None, winner_name="r", scope_name="Master Bedroom"
+    )
+    text = "\n".join(format_trace_event(TraceEvent(TriggerCause(kind="manual"), [unit])))
+    assert "area/Master Bedroom/g: acted" in text
+
+
+async def test_emit_trace_resolves_scope_name_for_log(hass, caplog):
+    from homeassistant.helpers import area_registry as ar
+
+    area = ar.async_get(hass).async_create("Kitchen")
+    hass.data.setdefault(DOMAIN, {})[DATA_TRACE_SINKS] = [LogSink()]
+    unit = UnitTrace("area", area.id, "general", "on", "acted", None, winner_name="r")
+    event = TraceEvent(TriggerCause(kind="manual"), [unit])
+    with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
+        emit_trace(hass, event)
+    assert "area/Kitchen/general" in caplog.text
+
+
 def test_cause_describe_entity():
     cause = TriggerCause(kind="entity", entity_id="binary_sensor.motion", old="off", new="on")
     assert cause.describe() == "binary_sensor.motion changed 'off' -> 'on'"

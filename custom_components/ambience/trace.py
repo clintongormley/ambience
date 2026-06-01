@@ -14,8 +14,9 @@ from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
 
-from .const import DATA_STORE, DATA_TRACE_SINKS, DOMAIN
+from .const import DATA_TRACE_SINKS, DOMAIN
 from .engine import Explanation
+from .naming import group_names, scope_display_name
 
 # "changes" stream — on whenever the integration's debug logging is on.
 _LOGGER = logging.getLogger(f"{__package__}.trace")
@@ -100,9 +101,10 @@ class UnitTrace:
     explanation: Explanation | None
     winner_name: str | None = None
     actions: list[dict[str, Any]] = field(default_factory=list)
-    # Human group name, resolved from the store at emit time (logs show this in
-    # preference to the opaque `group` id).
+    # Human group/scope names, resolved at emit time (logs show these in
+    # preference to the opaque `group` id / raw scope id).
     group_name: str | None = None
+    scope_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -121,7 +123,8 @@ class TraceEvent:
 
 def _scope_label(unit: UnitTrace) -> str:
     group = unit.group_name or unit.group
-    return f"{unit.scope_kind}/{unit.scope_id or '-'}/{group}"
+    scope = unit.scope_name or unit.scope_id or "-"
+    return f"{unit.scope_kind}/{scope}/{group}"
 
 
 def _format_action(action: dict[str, Any]) -> str:
@@ -215,16 +218,29 @@ def tracing_active() -> bool:
     return _LOGGER.isEnabledFor(logging.DEBUG) or _NOOP_LOGGER.isEnabledFor(logging.DEBUG)
 
 
-def _resolve_group_names(hass: HomeAssistant, event: TraceEvent) -> TraceEvent:
-    """Fill each unit's `group_name` from the store's group list (id -> name),
-    so logs show the human group name rather than its opaque id. Returns the
-    event unchanged if the store has no group list (e.g. test doubles)."""
-    store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
-    groups = getattr(store, "groups", None)
-    if not callable(groups):
-        return event
-    names = {g.get("id"): g.get("name") for g in groups()}
-    units = [replace(u, group_name=names.get(u.group) or u.group_name) for u in event.units]
+def _scope_name(hass: HomeAssistant, unit: UnitTrace) -> str | None:
+    """Best-effort friendly scope name; None when the registry isn't available
+    (e.g. a bare test-double hass), so the label falls back to the raw id."""
+    try:
+        return scope_display_name(hass, unit.scope_kind, unit.scope_id)
+    except Exception:  # noqa: BLE001 — a stub hass without registries must not crash tracing
+        return None
+
+
+def _resolve_names(hass: HomeAssistant, event: TraceEvent) -> TraceEvent:
+    """Fill each unit's `group_name` (store id -> name) and `scope_name`
+    (area/floor friendly name, 'Global' for house) so logs show human names
+    rather than opaque ids. Best-effort: leaves a name unresolved when the
+    store/registry isn't available (e.g. test doubles)."""
+    names = group_names(hass)
+    units = [
+        replace(
+            u,
+            group_name=names.get(u.group) or u.group_name,
+            scope_name=_scope_name(hass, u),
+        )
+        for u in event.units
+    ]
     return replace(event, units=units)
 
 
@@ -234,7 +250,7 @@ def emit_trace(hass: HomeAssistant, event: TraceEvent) -> None:
     sinks = hass.data.get(DOMAIN, {}).get(DATA_TRACE_SINKS, ())
     if not sinks:
         return
-    event = _resolve_group_names(hass, event)
+    event = _resolve_names(hass, event)
     event = replace(event, event_id=secrets.token_hex(3))
     for sink in sinks:
         sink.emit(event)

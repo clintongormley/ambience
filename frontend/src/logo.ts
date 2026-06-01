@@ -9,12 +9,12 @@
  * selects the vibrant art for dark backgrounds. @2x is offered via srcset.
  *
  * URLs resolve relative to this module, which esbuild bundles into
- * frontend/ambience-panel.js — served from the same directory as the PNGs.
+ * frontend/ambience-frontend.js — served from the same directory as the PNGs.
  */
 import { html, type TemplateResult } from "lit";
 
 // Directory this module lives in, at runtime. In production import.meta.url is
-// the served bundle URL (…/frontend/ambience-panel.js?hash=…); slicing to the
+// the served chunk URL (…/frontend/ambience-frontend.js?fe=…); slicing to the
 // last "/" drops the filename and any query, leaving …/frontend/. We avoid
 // `new URL("./x", import.meta.url)` because bundlers special-case that pattern
 // for static assets and choke on a dynamic name.

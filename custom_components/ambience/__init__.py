@@ -24,6 +24,7 @@ from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
+    CONF_SHOW_SIDEBAR_PANEL,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_LAST_APPLIED,
@@ -34,6 +35,7 @@ from .const import (
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
     DATA_TRACE_SINKS,
+    DEFAULT_SHOW_SIDEBAR_PANEL,
     DOMAIN,
     SIGNAL_CONFIG_CHANGED,
 )
@@ -228,22 +230,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     bundle_hash = await hass.async_add_executor_job(_hash_bundle, bundle_path)
     module_url = f"{_PANEL_JS_URL}?hash={bundle_hash}"
 
-    async_register_built_in_panel(
-        hass,
-        component_name="custom",
-        sidebar_title="Ambience",
-        sidebar_icon="mdi:lightbulb-multiple",
-        frontend_url_path=_PANEL_URL,
-        require_admin=True,
-        config={
-            "_panel_custom": {
-                "name": "ambience-panel",
-                "module_url": module_url,
-                "embed_iframe": False,
-                "trust_external": False,
-            }
-        },
-    )
+    if entry.options.get(CONF_SHOW_SIDEBAR_PANEL, DEFAULT_SHOW_SIDEBAR_PANEL):
+        async_register_built_in_panel(
+            hass,
+            component_name="custom",
+            sidebar_title="Ambience",
+            sidebar_icon="mdi:lightbulb-multiple",
+            frontend_url_path=_PANEL_URL,
+            require_admin=True,
+            config={
+                "_panel_custom": {
+                    "name": "ambience-panel",
+                    "module_url": module_url,
+                    "embed_iframe": False,
+                    "trust_external": False,
+                }
+            },
+        )
 
     engine = AutoTriggerEngine(hass)
     domain_data[DATA_ENGINE] = engine
@@ -263,13 +266,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _on_config_changed))
     entry.async_on_unload(engine.async_shutdown)
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
 
 
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the entry when options change so the panel toggle takes effect."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_unload_platforms(entry, [Platform.SWITCH])
-    async_remove_panel(hass, _PANEL_URL)
+    async_remove_panel(hass, _PANEL_URL, warn_if_unknown=False)
     hass.services.async_remove(DOMAIN, "apply_scene")
     async_unregister_commands(hass)
     hass.data.pop(DOMAIN, None)

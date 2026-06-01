@@ -67,7 +67,23 @@ class AmbienceCard extends HTMLElement {
   }
 }
 
-defineElement("ambience-card", AmbienceCard);
+// Home Assistant installs `@webcomponents/scoped-custom-element-registry` while
+// its main bundle executes, replacing `window.customElements`. Because this
+// module is injected via add_extra_js_url, it can run BEFORE that patch — and a
+// define() done then lands on the native registry, invisible to the scoped
+// registry HA uses to resolve custom cards ("Configuration error: custom
+// element doesn't exist"). Defer registration until the document has finished
+// loading, by which point the patch is in place; HA rebuilds the card via
+// whenDefined once we register.
+function registerAmbienceCard(): void {
+  defineElement("ambience-card", AmbienceCard);
+}
+if (document.readyState === "complete") {
+  registerAmbienceCard();
+} else {
+  window.addEventListener("DOMContentLoaded", registerAmbienceCard, { once: true });
+  window.addEventListener("load", registerAmbienceCard, { once: true });
+}
 
 interface CustomCardEntry {
   type: string;

@@ -128,7 +128,7 @@ export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {})
   const keys = Object.keys(args).sort();
   if (keys.length === 0) return pred.script;
   const argStr = keys
-    .map((k) => `${_scriptFieldLabel(ctx.hass, pred.script, k)}=${formatParamValue(args[k])}`)
+    .map((k) => `${_scriptFieldLabel(ctx.hass, pred.script, k)}=${formatArgValue(ctx.hass, args[k])}`)
     .join(", ");
   return `${pred.script}(${argStr})`;
 }
@@ -277,6 +277,39 @@ export function formatParamValue(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return JSON.stringify(value);
+}
+
+const _TARGET_KEYS = ["entity_id", "device_id", "area_id", "label_id", "floor_id"];
+const _TARGET_ENTITY_CAP = 2;
+
+/** If `value` is an HA target object (only target keys) carrying one or more
+ *  entity_ids, return that list; otherwise null. Device/area/label/floor-only
+ *  targets return null (no registry available here to name them). */
+function _targetEntityIds(value: unknown): string[] | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const obj = value as Record<string, unknown>;
+  if (!Object.keys(obj).every((k) => _TARGET_KEYS.includes(k))) return null;
+  const raw = obj.entity_id;
+  const ids =
+    typeof raw === "string"
+      ? [raw]
+      : Array.isArray(raw)
+        ? raw.filter((x): x is string => typeof x === "string")
+        : [];
+  return ids.length ? ids : null;
+}
+
+/** Format an arg/param value for a summary. HA target objects (`{entity_id:
+ *  …}`) render as friendly entity names — the first `_TARGET_ENTITY_CAP`, then
+ *  "+N more" for longer lists — so a summary reads "Target: Kitchen, Hallway
+ *  +2 more" rather than a raw JSON dump. Everything else falls back to
+ *  {@link formatParamValue}. */
+export function formatArgValue(hass: HassLike | undefined, value: unknown): string {
+  const ids = _targetEntityIds(value);
+  if (!ids) return formatParamValue(value);
+  const names = ids.slice(0, _TARGET_ENTITY_CAP).map((id) => _domainEntityName({ hass }, id));
+  const rest = ids.length - _TARGET_ENTITY_CAP;
+  return rest > 0 ? `${names.join(", ")} +${rest} more` : names.join(", ");
 }
 
 /** Extract the `unit_of_measurement` from a selector dict, if any — e.g.
@@ -463,7 +496,7 @@ export function summariseAction(
   else targets = `${n} ${noun}s`;
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${paramLabel(k, action.service, ctx.schemas)}: ${formatParamValue(v)}`)
+    .map(([k, v]) => `${paramLabel(k, action.service, ctx.schemas)}: ${formatArgValue(ctx.hass, v)}`)
     .join(", ");
   return params ? `${name}: ${targets}, ${params}` : `${name}: ${targets}`;
 }

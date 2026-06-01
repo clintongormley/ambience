@@ -423,6 +423,20 @@ describe("summariseAction", () => {
     expect(out).toContain("Script.foo");
     expect(out).toContain("Msg: hello");
   });
+
+  test("target-valued param renders friendly entity names", () => {
+    const hass = {
+      localize: () => undefined,
+      states: { "light.kitchen": { attributes: { friendly_name: "Kitchen" } } },
+    };
+    const action: ActionSpec = {
+      service: "script.dim",
+      entity_ids: [],
+      params: { target: { entity_id: ["light.kitchen"] } },
+    };
+    expect(summariseAction(action, { hass }))
+      .toBe("Script.dim: (no targets), Target: Kitchen");
+  });
 });
 
 test("summariseWeather formats group labels + thresholds", () => {
@@ -676,6 +690,52 @@ describe("summariseScript", () => {
       { script: "script.foo", args: { target: 5 } },
       { hass },
     )).toBe("script.foo(Target brightness=5)");
+  });
+
+  test("target-shaped arg renders friendly entity names", () => {
+    const hass = {
+      localize: () => undefined,
+      states: {
+        "sensor.cph2653_battery_level": { attributes: { friendly_name: "Battery Level" } },
+        "sensor.cph2653_battery_state": { attributes: { friendly_name: "Battery State" } },
+      },
+    };
+    expect(summariseScript(
+      {
+        script: "script.foo",
+        args: { target: { entity_id: ["sensor.cph2653_battery_level", "sensor.cph2653_battery_state"] } },
+      },
+      { hass },
+    )).toBe("script.foo(Target=Battery Level, Battery State)");
+  });
+
+  test("target with many entities is capped with '+N more'", () => {
+    const ids = ["a", "b", "c", "d", "e"].map((s) => `sensor.${s}`);
+    const states = Object.fromEntries(
+      ids.map((id, i) => [id, { attributes: { friendly_name: `E${i + 1}` } }]),
+    );
+    expect(summariseScript(
+      { script: "script.foo", args: { target: { entity_id: ids } } },
+      { hass: { localize: () => undefined, states } },
+    )).toBe("script.foo(Target=E1, E2 +3 more)");
+  });
+
+  test("single-string entity_id target renders one friendly name", () => {
+    const hass = {
+      localize: () => undefined,
+      states: { "light.kitchen": { attributes: { friendly_name: "Kitchen" } } },
+    };
+    expect(summariseScript(
+      { script: "script.foo", args: { target: { entity_id: "light.kitchen" } } },
+      { hass },
+    )).toBe("script.foo(Target=Kitchen)");
+  });
+
+  test("non-target object arg still renders as JSON", () => {
+    expect(summariseScript(
+      { script: "script.foo", args: { opts: { mode: "auto" } } },
+      { hass: noLocalize },
+    )).toBe('script.foo(Opts={"mode":"auto"})');
   });
 
   test("malformed predicate (non-string script) falls back to String(pred)", () => {

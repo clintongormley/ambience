@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { groupSwatchStyle } from "../group-colors.js";
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
-import { formatParamValue, paramLabel, ruleDisplayName, summariseMatcher } from "../summary.js";
+import { formatArgValue, paramLabel, ruleDisplayName, summariseMatcher } from "../summary.js";
 import { DragReorderController } from "../drag-reorder.js";
 import type {
   ActionSpec,
@@ -348,12 +348,13 @@ export class AmbienceRulesList extends LitElement {
 
   /** "Key: value, ..." string for the expanded action header. Keys use
    *  HA's `field.name` from the schema when available, otherwise the
-   *  humanized field id ("brightness_pct" → "Brightness pct"). Array
-   *  values are wrapped in [ ] via formatParamValue. */
+   *  humanized field id ("brightness_pct" → "Brightness pct"). Values use
+   *  formatArgValue: HA target objects become friendly entity names, arrays
+   *  are wrapped in [ ], other objects render as JSON. */
   private _actionParamsString(action: ActionSpec): string {
     return Object.entries(action.params)
       .filter(([, v]) => v !== undefined && v !== null && v !== "")
-      .map(([k, v]) => `${paramLabel(k, action.service, this.schemas)}: ${formatParamValue(v)}`)
+      .map(([k, v]) => `${paramLabel(k, action.service, this.schemas)}: ${formatArgValue(this.hass, v)}`)
       .join(", ");
   }
 

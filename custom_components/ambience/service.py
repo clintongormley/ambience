@@ -288,6 +288,28 @@ async def async_apply_scene(
         emit_trace(hass, TraceEvent(TriggerCause(kind=CauseKind.MANUAL), traces))
 
 
+def _compose_apply_message(
+    *,
+    reapplied: bool,
+    rule_name: str | None,
+    rule_index: int,
+    scope_label: str,
+    group_label: str | None,
+    group_count: int,
+) -> str:
+    """Compose the logbook message for an apply.
+
+    Names the matched rule ("scene") and scope. Appends the group name only when
+    more than one group exists. Unnamed rules fall back to "rule <N>" (1-based).
+    """
+    verb = "re-applied" if reapplied else "applied"
+    scene = rule_name or f"rule {rule_index + 1}"
+    message = f"{verb} '{scene}' in {scope_label}"
+    if group_count > 1 and group_label:
+        message += f" ({group_label})"
+    return message
+
+
 async def async_execute_actions(
     hass: HomeAssistant,
     scope_kind: str,

@@ -749,6 +749,49 @@ async def test_reapply_fires_due_action_for_winning_rule(hass):
     eng._teardown()
 
 
+async def test_reapply_emits_trace_event(hass):
+    captured: list[TraceEvent] = []
+
+    class CaptureSink:
+        def emit(self, event):
+            captured.append(event)
+
+    hass.services.async_register("light", "turn_on", lambda call: None)
+    action = {
+        "service": "light.turn_on",
+        "entity_ids": ["light.a"],
+        "params": {"brightness": 7},
+        "reapply_seconds": 10,
+    }
+    rule = {"when": {}, "group": "g", "name": "evening", "actions": [action]}
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_MATCHERS: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {("area", "k", "g"): 0},
+        DATA_SWITCHES: {},
+        DATA_TRACE_SINKS: [CaptureSink()],
+    }
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        eng = AutoTriggerEngine(hass)
+        eng.async_rebuild()
+        eng.async_subscribe()
+
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
+        await hass.async_block_till_done()
+
+        assert captured, "expected a reapply TraceEvent"
+        event = captured[-1]
+        assert event.cause.kind == "reapply"
+        unit = next(u for u in event.units if u.outcome == "reapplied")
+        assert unit.winner_name == "evening"
+        assert unit.actions == [action]
+        eng._teardown()
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
 async def test_reapply_skips_when_switch_off(hass):
     calls = []
     hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))

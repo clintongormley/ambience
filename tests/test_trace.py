@@ -128,3 +128,57 @@ def test_logsink_suppresses_noop_unless_noop_logger_enabled(caplog):
 def test_tracing_active_reflects_logger_levels(caplog):
     with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
         assert tracing_active() is True
+
+
+def test_format_renders_actions_for_acted_unit():
+    explanation = Explanation(
+        winner_index=0,
+        rules=[RuleEval(0, "evening", [PredicateResult("tod", True, "value=evening")], True, True)],
+    )
+    unit = UnitTrace(
+        "area",
+        "kitchen",
+        "General",
+        "on",
+        "acted",
+        explanation,
+        winner_name="evening",
+        actions=[
+            {
+                "service": "light.turn_on",
+                "entity_ids": ["light.kitchen"],
+                "params": {"brightness_pct": 60},
+            }
+        ],
+    )
+    text = "\n".join(format_trace_event(TraceEvent(TriggerCause(kind="manual"), [unit])))
+    assert "light.turn_on" in text
+    assert "light.kitchen" in text
+    assert "brightness_pct" in text
+
+
+def test_format_renders_reapply_unit_with_actions():
+    unit = UnitTrace(
+        "area",
+        "kitchen",
+        "General",
+        "on",
+        "reapplied",
+        None,
+        winner_name="evening",
+        actions=[{"service": "light.turn_on", "entity_ids": ["light.kitchen"]}],
+    )
+    text = "\n".join(
+        format_trace_event(TraceEvent(TriggerCause(kind="reapply", detail="10s"), [unit]))
+    )
+    assert "reapply (10s)" in text  # cause describes the interval
+    assert "reapplied -> 'evening'" in text  # winner name shown without a rule index
+    assert "light.turn_on" in text
+
+
+def test_logsink_routes_reapplied_to_changes_stream(caplog):
+    unit = UnitTrace("area", "kitchen", "General", "on", "reapplied", None, winner_name="evening")
+    event = TraceEvent(TriggerCause(kind="reapply", detail="10s"), [unit])
+    with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
+        LogSink().emit(event)
+    assert "reapplied" in caplog.text

@@ -36,6 +36,7 @@ class CauseKind(StrEnum):
     SWITCH = "switch"
     MANUAL = "manual"
     STARTUP = "startup"
+    REAPPLY = "reapply"
     UNKNOWN = "unknown"
 
 
@@ -46,6 +47,9 @@ class Outcome(StrEnum):
     NO_OP = "no_op"
     NO_MATCH = "no_match"
     SKIPPED_SWITCH_OFF = "skipped_switch_off"
+    # A periodic re-apply re-fired the current winner's due actions without
+    # re-resolving; routed to the changes stream alongside ACTED.
+    REAPPLIED = "reapplied"
 
 
 @dataclass(frozen=True)
@@ -73,6 +77,8 @@ class TriggerCause:
             return "manual apply_scene"
         if self.kind == CauseKind.STARTUP:
             return "startup sync"
+        if self.kind == CauseKind.REAPPLY:
+            return f"reapply ({self.detail})" if self.detail else "reapply"
         return str(self.kind)
 
 
@@ -107,8 +113,20 @@ def _scope_label(unit: UnitTrace) -> str:
     return f"{unit.scope_kind}/{unit.scope_id or '-'}/{unit.group}"
 
 
+def _format_action(action: dict[str, Any]) -> str:
+    """One dispatched action as `service [target, …] {params}`."""
+    parts = [str(action.get("service", "?"))]
+    targets = action.get("entity_ids") or []
+    if targets:
+        parts.append(f"[{', '.join(targets)}]")
+    params = action.get("params") or {}
+    if params:
+        parts.append(str(params))
+    return " ".join(parts)
+
+
 def format_trace_event(event: TraceEvent) -> list[str]:
-    """Render a trace event into log lines (header + per-unit/predicate)."""
+    """Render a trace event into log lines (header + per-unit/predicate/action)."""
     lines = [f"trigger: {event.cause.describe()}"]
     for unit in event.units:
         scope = _scope_label(unit)
@@ -116,26 +134,29 @@ def format_trace_event(event: TraceEvent) -> list[str]:
             lines.append(f"  {scope}: skipped (switch off)")
             continue
         explanation = unit.explanation
-        if explanation is None:
-            lines.append(f"  {scope}: {unit.outcome}")
-            continue
         winner = ""
-        if explanation.winner_index is not None:
+        if explanation is not None and explanation.winner_index is not None:
             winner = f" -> rule #{explanation.winner_index} {unit.winner_name!r}"
+        elif explanation is None and unit.winner_name is not None:
+            # Re-apply: no resolution happened, so no rule index — name only.
+            winner = f" -> {unit.winner_name!r}"
         lines.append(f"  {scope}: {unit.outcome}{winner}")
-        for rule_eval in explanation.rules:
-            if not rule_eval.evaluated:
-                lines.append(
-                    f"      rule #{rule_eval.index} {rule_eval.name!r}: "
-                    "not evaluated (winner found)"
-                )
-                continue
-            mark = "WON" if rule_eval.matched else "no"
-            lines.append(f"      rule #{rule_eval.index} {rule_eval.name!r}: {mark}")
-            for pred in rule_eval.predicates:
-                pmark = "pass" if pred.passed else "FAIL"
-                detail = f" [{pred.detail}]" if pred.detail else ""
-                lines.append(f"          {pred.matcher_key}: {pmark}{detail}")
+        if explanation is not None:
+            for rule_eval in explanation.rules:
+                if not rule_eval.evaluated:
+                    lines.append(
+                        f"      rule #{rule_eval.index} {rule_eval.name!r}: "
+                        "not evaluated (winner found)"
+                    )
+                    continue
+                mark = "WON" if rule_eval.matched else "no"
+                lines.append(f"      rule #{rule_eval.index} {rule_eval.name!r}: {mark}")
+                for pred in rule_eval.predicates:
+                    pmark = "pass" if pred.passed else "FAIL"
+                    detail = f" [{pred.detail}]" if pred.detail else ""
+                    lines.append(f"          {pred.matcher_key}: {pmark}{detail}")
+        for action in unit.actions:
+            lines.append(f"      → {_format_action(action)}")
     return lines
 
 
@@ -145,23 +166,27 @@ class TraceSink(Protocol):
     def emit(self, event: TraceEvent) -> None: ...
 
 
+_CHANGES_OUTCOMES = (Outcome.ACTED, Outcome.REAPPLIED)
+
+
 class LogSink:
     """Renders trace events to the standard HA log.
 
-    Acted units go to the `…trace` (changes) stream; no-op/no-match/switch-off
-    units go to the `…trace.noop` (opt-in) stream. Each is gated on its own
-    logger level so building a TraceEvent for a stream nobody watches is cheap.
+    Units that dispatched actions (acted / re-applied) go to the `…trace`
+    (changes) stream; no-op/no-match/switch-off units go to the `…trace.noop`
+    (opt-in) stream. Each is gated on its own logger level so building a
+    TraceEvent for a stream nobody watches is cheap.
     """
 
     def emit(self, event: TraceEvent) -> None:
         # Partition only inside each guard, so an off stream costs nothing.
         if _LOGGER.isEnabledFor(logging.DEBUG):
-            acted = [u for u in event.units if u.outcome == Outcome.ACTED]
-            if acted:
-                for line in format_trace_event(TraceEvent(event.cause, acted)):
+            changes = [u for u in event.units if u.outcome in _CHANGES_OUTCOMES]
+            if changes:
+                for line in format_trace_event(TraceEvent(event.cause, changes)):
                     _LOGGER.debug("%s", line)
         if _NOOP_LOGGER.isEnabledFor(logging.DEBUG):
-            other = [u for u in event.units if u.outcome != Outcome.ACTED]
+            other = [u for u in event.units if u.outcome not in _CHANGES_OUTCOMES]
             if other:
                 for line in format_trace_event(TraceEvent(event.cause, other)):
                     _NOOP_LOGGER.debug("%s", line)

@@ -487,13 +487,16 @@ class AutoTriggerEngine:
         range.
         """
         scope_kind, scope_id = scope
-        if _switch_state(self._hass, scope_kind, scope_id) == "off":
+        switch_state = _switch_state(self._hass, scope_kind, scope_id)
+        if switch_state == "off":
             return
         cfg = self._scope_cfgs.get(scope)
         if cfg is None:
             return
         rules = cfg.get("rules", [])
         exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
+        active = tracing_active()
+        traces: list[UnitTrace] = []
         for group_id in group_ids(cfg):
             index = get_last_applied(self._hass, scope_kind, scope_id, group_id)
             if index is None or not 0 <= index < len(rules):
@@ -505,6 +508,24 @@ class AutoTriggerEngine:
             ]
             if due:
                 await async_execute_actions(self._hass, scope_kind, scope_id, due, rule_index=index)
+                if active:
+                    traces.append(
+                        UnitTrace(
+                            scope_kind,
+                            scope_id,
+                            group_id,
+                            switch_state,
+                            Outcome.REAPPLIED,
+                            None,  # re-apply does not re-resolve, so no explanation
+                            winner_name=rules[index].get("name"),
+                            actions=due,
+                        )
+                    )
+        if traces:
+            emit_trace(
+                self._hass,
+                TraceEvent(TriggerCause(kind=CauseKind.REAPPLY, detail=f"{interval}s"), traces),
+            )
 
     def _schedule_for_rechecks(self, preds: frozenset[PredKey]) -> None:
         """For predicates with a `for:` duration, (re)schedule a recheck so a

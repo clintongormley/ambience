@@ -50,6 +50,7 @@ import "./rule-editor.js";
 import "./kebab-menu.js";
 import "./auto-triggers-modal.js";
 import "./traces-modal.js";
+import "./simulator-modal.js";
 import type { KebabItem } from "./kebab-menu.js";
 
 type EditingState = { scope: Scope; index: number; isNew: boolean; seed?: Rule };
@@ -224,6 +225,7 @@ export class AmbienceScopesView extends LitElement {
   @state() private _editing: EditingState | null = null;
   @state() private _viewingTraces: { scope: { scope_kind: string; scope_id: string | null }; group: string; groupName: string | null } | null = null;
   @state() private _autoTriggers: { scope: Scope; name: string; rules: Rule[] } | null = null;
+  @state() private _viewingSimulator: { scope: { scope_kind: string; scope_id: string | null }; group: string; groupName: string | null } | null = null;
   // Global group filter shared by every scope: "" = All, else a group id.
   // Sticky for the session (component lifetime).
   @state() private _filterGroup = "";
@@ -676,6 +678,15 @@ export class AmbienceScopesView extends LitElement {
     };
   }
 
+  private _showSimulator(scope: Scope, group: string) {
+    const g = this._groups.find((x) => x.id === group);
+    this._viewingSimulator = {
+      scope: { scope_kind: scope.kind, scope_id: "id" in scope ? scope.id : null },
+      group,
+      groupName: g?.name ?? null,
+    };
+  }
+
   // --- group filter --------------------------------------------------------
 
   private _selectFilter(id: string) {
@@ -887,6 +898,14 @@ export class AmbienceScopesView extends LitElement {
         .rules=${this._autoTriggers?.rules ?? []}
         @close=${() => { this._autoTriggers = null; }}
       ></ambience-auto-triggers-modal>
+      <ambience-simulator-modal
+        ?open=${this._viewingSimulator !== null}
+        .hass=${this.hass}
+        .scope=${this._viewingSimulator?.scope ?? { scope_kind: "house", scope_id: null }}
+        .group=${this._viewingSimulator?.group ?? ""}
+        .groupName=${this._viewingSimulator?.groupName ?? null}
+        @close=${() => { this._viewingSimulator = null; }}
+      ></ambience-simulator-modal>
     `;
   }
 
@@ -958,6 +977,8 @@ export class AmbienceScopesView extends LitElement {
                     this._applyRules(scope, e.detail.groupId)}
                   @show-traces=${(e: CustomEvent<{ group: string }>) =>
                     this._showTraces(scope, e.detail.group)}
+                  @show-simulator=${(e: CustomEvent<{ group: string }>) =>
+                    this._showSimulator(scope, e.detail.group)}
                 ></ambience-rules-list>
               </div>
             `

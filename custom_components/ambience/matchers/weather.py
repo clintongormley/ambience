@@ -120,7 +120,9 @@ class WeatherMatcher:
             return None
         return store.get_matcher_config("weather").get("entity")
 
-    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> WeatherSnapshot:
+    async def snapshot(
+        self, hass: HomeAssistant, *, now: datetime | None = None
+    ) -> WeatherSnapshot:
         from ..const import DATA_STORE, DOMAIN
 
         store = hass.data[DOMAIN][DATA_STORE]

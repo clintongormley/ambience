@@ -57,7 +57,9 @@ class TimeOfDayMatcher:
     ) -> None:
         self._period_lookup = period_lookup or (lambda: {})
 
-    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> TimeOfDaySnapshot:
+    async def snapshot(
+        self, hass: HomeAssistant, *, now: datetime | None = None
+    ) -> TimeOfDaySnapshot:
         state = hass.states.get("sun.sun")
         if state is None:
             raise RuntimeError("sun.sun unavailable")

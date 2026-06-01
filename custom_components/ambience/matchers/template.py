@@ -171,7 +171,9 @@ class TemplateMatcher:
             templates.append(tmpl)
         return templates
 
-    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> TemplateSnapshot:
+    async def snapshot(
+        self, hass: HomeAssistant, *, now: datetime | None = None
+    ) -> TemplateSnapshot:
         results: dict[str, bool] = {}
         deps: dict[str, TemplateDeps] = {}
         for tmpl in self._collect_templates():

@@ -72,9 +72,7 @@ def evaluate_explained(
         if rule.get("enabled") is False:
             # Disabled rule: recorded for traces but skipped — it cannot win
             # and does not short-circuit evaluation of the rules below it.
-            rule_evals.append(
-                RuleEval(idx, rule.get("name"), [], False, False, disabled=True)
-            )
+            rule_evals.append(RuleEval(idx, rule.get("name"), [], False, False, disabled=True))
             continue
         if winner is not None:
             rule_evals.append(RuleEval(idx, rule.get("name"), [], False, False))

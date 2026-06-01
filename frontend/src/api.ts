@@ -166,6 +166,34 @@ export async function dryRun(
   return hass.callWS(msg);
 }
 
+export async function applyRules(
+  hass: HassConnection,
+  scope: Scope,
+  groupId?: string,
+): Promise<{ ok: true }> {
+  const msg: Record<string, unknown> = { type: "ambience/apply" };
+  if (scope.kind === "area") msg.area_id = scope.id;
+  else if (scope.kind === "floor") msg.floor_id = scope.id;
+  else msg.house = true;
+  if (groupId !== undefined) msg.group_id = groupId;
+  return hass.callWS(msg);
+}
+
+export async function runRuleActions(
+  hass: HassConnection,
+  scope: Scope,
+  ruleIndex: number,
+): Promise<{ ran: number; rule_name: string | null }> {
+  const msg: Record<string, unknown> = {
+    type: "ambience/rule/run_actions",
+    rule_index: ruleIndex,
+  };
+  if (scope.kind === "area") msg.area_id = scope.id;
+  else if (scope.kind === "floor") msg.floor_id = scope.id;
+  else msg.house = true;
+  return hass.callWS(msg);
+}
+
 export async function listPeriods(hass: HassConnection): Promise<PeriodStoreView> {
   return hass.callWS({ type: "ambience/time_of_day_periods/list" });
 }

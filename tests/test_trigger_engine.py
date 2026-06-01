@@ -33,14 +33,19 @@ class FakeStore:
         scopes: list[tuple[str, str | None, dict]],
         enabled: dict[tuple[str, str | None], bool] | None = None,
         disabled: dict[tuple[str, str | None], set[str]] | None = None,
+        groups: list[dict] | None = None,
     ) -> None:
         self._scopes = scopes
         self._enabled = enabled or {}
         self._disabled = disabled or {}
         self._by_key = {(kind, sid): cfg for kind, sid, cfg in scopes}
+        self._groups = groups or []
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict]]:
         return list(self._scopes)
+
+    def groups(self) -> list[dict]:
+        return list(self._groups)
 
     def auto_triggers_enabled(self, scope_kind: str, scope_id: str | None) -> bool:
         return self._enabled.get((scope_kind, scope_id), True)
@@ -746,6 +751,44 @@ async def test_reapply_fires_due_action_for_winning_rule(hass):
     await hass.async_block_till_done()
 
     assert len(calls) == 1 and calls[0]["brightness"] == 7
+    eng._teardown()
+
+
+async def test_reapply_attributes_to_ambience(hass):
+    from homeassistant.const import EVENT_LOGBOOK_ENTRY
+    from pytest_homeassistant_custom_component.common import async_capture_events
+
+    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
+    contexts: list[str] = []
+    hass.services.async_register("light", "turn_on", lambda call: contexts.append(call.context.id))
+    action = {
+        "service": "light.turn_on",
+        "entity_ids": ["light.a"],
+        "params": {},
+        "reapply_seconds": 10,
+    }
+    rule = {"when": {}, "group": "g", "name": "Evening", "actions": [action]}
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_MATCHERS: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {("area", "k", "g"): 0},
+        DATA_SWITCHES: {},
+    }
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
+    await hass.async_block_till_done()
+
+    ambience = [e for e in entries if e.data.get("name") == "Ambience"]
+    assert len(ambience) == 1
+    entry = ambience[0]
+    # Single group ⇒ no group suffix; area "k" not registered ⇒ raw-id scope label.
+    assert entry.data["message"] == "re-applied 'Evening' in k"
+    assert len(contexts) == 1
+    assert contexts[0] == entry.context.id  # re-fired call shares the entry's context
     eng._teardown()
 
 

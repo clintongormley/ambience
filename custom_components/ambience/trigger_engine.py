@@ -37,6 +37,7 @@ from .const import (
 from .matchers.time_of_day import ANCHOR_ATTR
 from .scope_triggers import filter_spec, iter_predicate_specs
 from .service import (
+    _log_apply,
     _switch_state,
     async_execute_actions,
     async_execute_plan,
@@ -507,7 +508,13 @@ class AutoTriggerEngine:
                 if effective_reapply_seconds(action, exposed) == interval
             ]
             if due:
-                await async_execute_actions(self._hass, scope_kind, scope_id, due, rule_index=index)
+                rule_name = rules[index].get("name")
+                context = _log_apply(
+                    self._hass, scope_kind, scope_id, group_id, rule_name, index, reapplied=True
+                )
+                await async_execute_actions(
+                    self._hass, scope_kind, scope_id, due, rule_index=index, context=context
+                )
                 if active:
                     traces.append(
                         UnitTrace(
@@ -517,7 +524,7 @@ class AutoTriggerEngine:
                             switch_state,
                             Outcome.REAPPLIED,
                             None,  # re-apply does not re-resolve, so no explanation
-                            winner_name=rules[index].get("name"),
+                            winner_name=rule_name,
                             actions=due,
                         )
                     )

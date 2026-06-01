@@ -169,6 +169,18 @@ class BufferSink:
     def clear(self) -> None:
         self._buckets.clear()
 
+    def summary(self) -> dict[str, Any]:
+        """Cheap signal for the frontend's new-data badge: total record count and
+        the newest timestamp across all buckets (no serialization, no sort)."""
+        count = 0
+        latest: str | None = None
+        for bucket in self._buckets.values():
+            for record in bucket:
+                count += 1
+                if record.timestamp is not None and (latest is None or record.timestamp > latest):
+                    latest = record.timestamp
+        return {"count": count, "latest": latest}
+
 
 def _cause_to_dict(cause: TriggerCause) -> dict[str, Any]:
     return {

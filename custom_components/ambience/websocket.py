@@ -83,6 +83,7 @@ _WS_COMMANDS = (
     "ambience/groups/delete",
     "ambience/traces/list",
     "ambience/traces/clear",
+    "ambience/traces/count",
 )
 
 
@@ -195,6 +196,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_groups_delete)
     websocket_api.async_register_command(hass, _ws_traces_list)
     websocket_api.async_register_command(hass, _ws_traces_clear)
+    websocket_api.async_register_command(hass, _ws_traces_count)
 
 
 def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
@@ -1419,6 +1421,19 @@ async def _ws_traces_clear(
     if buffer is not None:
         buffer.clear()
     connection.send_result(msg["id"])
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/traces/count"})
+@websocket_api.async_response
+async def _ws_traces_count(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    buffer = hass.data.get(DOMAIN, {}).get(DATA_TRACE_BUFFER)
+    summary = buffer.summary() if buffer is not None else {"count": 0, "latest": None}
+    connection.send_result(msg["id"], summary)
 
 
 def async_unregister_commands(hass: HomeAssistant) -> None:

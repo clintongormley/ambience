@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from pathlib import Path
@@ -237,9 +238,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # own URL and forward when lazily importing the chunk.
     card_path = bundle_dir / "ambience-card.js"
     frontend_path = bundle_dir / "ambience-frontend.js"
-    bundle_hash = await hass.async_add_executor_job(_hash_bundle, bundle_path)
-    card_hash = await hass.async_add_executor_job(_hash_bundle, card_path)
-    frontend_hash = await hass.async_add_executor_job(_hash_bundle, frontend_path)
+    bundle_hash, card_hash, frontend_hash = await asyncio.gather(
+        hass.async_add_executor_job(_hash_bundle, bundle_path),
+        hass.async_add_executor_job(_hash_bundle, card_path),
+        hass.async_add_executor_job(_hash_bundle, frontend_path),
+    )
     module_url = f"{_PANEL_JS_URL}?hash={bundle_hash}&fe={frontend_hash}"
     card_url = f"{_CARD_JS_URL}?hash={card_hash}&fe={frontend_hash}"
 

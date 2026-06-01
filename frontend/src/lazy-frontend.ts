@@ -22,7 +22,8 @@ export function loadFrontend(metaUrl: string = import.meta.url): Promise<void> {
     const queryStart = metaUrl.indexOf("?");
     const path = queryStart === -1 ? metaUrl : metaUrl.slice(0, queryStart);
     const dir = path.slice(0, path.lastIndexOf("/") + 1);
-    const fe = new URL(metaUrl).searchParams.get("fe") ?? "";
+    const query = queryStart === -1 ? "" : metaUrl.slice(queryStart + 1);
+    const fe = new URLSearchParams(query).get("fe") ?? "";
     const target = `${dir}ambience-frontend.js${fe ? `?fe=${fe}` : ""}`;
     const p = _internals.importer(target).then(() => undefined);
     // Don't memoise a failure: clear so a later call can retry.

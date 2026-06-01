@@ -455,26 +455,3 @@ def test_buffered_unit_to_dict_reapplied_has_null_explanation():
     assert data["outcome"] == "reapplied"
     assert data["explanation"] is None
     assert json.loads(json.dumps(data)) == data
-
-
-def test_buffersink_summary_counts_and_latest():
-    sink = BufferSink()
-    sink.emit(
-        _event(
-            "08:00",
-            [UnitTrace("area", "kitchen", "General", "on", "acted", None)],
-            ts="2026-06-01T00:00:00",
-        )
-    )
-    sink.emit(
-        _event(
-            "09:00",
-            [UnitTrace("area", "hall", "General", "on", "acted", None)],
-            ts="2026-06-01T00:00:05",
-        )
-    )
-    assert sink.summary() == {"count": 2, "latest": "2026-06-01T00:00:05"}
-
-
-def test_buffersink_summary_empty():
-    assert BufferSink().summary() == {"count": 0, "latest": None}

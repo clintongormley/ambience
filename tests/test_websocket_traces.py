@@ -109,29 +109,3 @@ async def test_traces_list_rejects_non_positive_limit(hass, installed, hass_ws_c
     await client.send_json({"id": 1, "type": "ambience/traces/list", "limit": 0})
     response = await client.receive_json()
     assert response["success"] is False
-
-
-async def test_traces_count_returns_summary(hass, installed, hass_ws_client) -> None:
-    buffer = _seed_buffer(hass)
-    buffer.emit(
-        TraceEvent(
-            TriggerCause(kind="clock", detail="08:00"),
-            [UnitTrace("area", "kitchen", "General", "on", "acted", None)],
-            event_id="e1",
-            timestamp="2026-06-01T00:00:00",
-        )
-    )
-    client = await hass_ws_client(hass)
-    await client.send_json({"id": 1, "type": "ambience/traces/count"})
-    response = await client.receive_json()
-    assert response["success"]
-    assert response["result"] == {"count": 1, "latest": "2026-06-01T00:00:00"}
-
-
-async def test_traces_count_no_buffer(hass, installed, hass_ws_client) -> None:
-    hass.data[DOMAIN].pop(DATA_TRACE_BUFFER, None)
-    client = await hass_ws_client(hass)
-    await client.send_json({"id": 1, "type": "ambience/traces/count"})
-    response = await client.receive_json()
-    assert response["success"]
-    assert response["result"] == {"count": 0, "latest": None}

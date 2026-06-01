@@ -80,6 +80,23 @@ function captureEvent(el: HTMLElement, name: string) {
   return () => detail;
 }
 
+async function pickFromKebab(el: any, rowIndex: number, action: string) {
+  const rows = el.shadowRoot.querySelectorAll("li");
+  const kebab: any = rows[rowIndex].querySelector("ambience-kebab-menu");
+  (kebab.shadowRoot.querySelector(".kebab-trigger") as HTMLButtonElement).click();
+  await kebab.updateComplete;
+  (kebab.shadowRoot.querySelector(`[data-action='${action}']`) as HTMLButtonElement).click();
+  await kebab.updateComplete;
+}
+
+async function pickGroupKebab(el: any, action: string) {
+  const kebab: any = el.shadowRoot.querySelector(".group-section-header ambience-kebab-menu");
+  (kebab.shadowRoot.querySelector(".kebab-trigger") as HTMLButtonElement).click();
+  await kebab.updateComplete;
+  (kebab.shadowRoot.querySelector(`[data-action='${action}']`) as HTMLButtonElement).click();
+  await kebab.updateComplete;
+}
+
 describe("ambience-rules-list", () => {
   let el: any;
   afterEach(() => { el?.remove(); });
@@ -114,14 +131,6 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.textContent).toContain("Movie rule");
   });
 
-  test("emits edit-rule with index when the edit button clicked", async () => {
-    el = await mount([movieRule, eveningRule]);
-    const get = captureEvent(el, "edit-rule");
-    const btns = el.shadowRoot.querySelectorAll("button[title='Edit']");
-    (btns[1] as HTMLButtonElement).click();
-    expect(get()).toEqual({ index: 1 });
-  });
-
   test("clicking the rule name toggles expansion (does NOT emit edit-rule)", async () => {
     el = await mount([movieRule]);
     const get = captureEvent(el, "edit-rule");
@@ -139,38 +148,54 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.querySelector(".action-count")).toBeNull();
   });
 
-  test("clicking the edit button does NOT toggle expansion", async () => {
+  test("picking Edit from the kebab does NOT toggle expansion", async () => {
     el = await mount([movieRule]);
-    const btn = el.shadowRoot.querySelector("button[title='Edit']") as HTMLButtonElement;
-    btn.click();
+    await pickFromKebab(el, 0, "edit");
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".rule-detail")).toBeFalsy();
   });
 
-  test("emits duplicate-rule with index when duplicate button clicked", async () => {
+  test("rule row no longer renders standalone duplicate/run/delete buttons", async () => {
     el = await mount([movieRule]);
+    expect(el.shadowRoot.querySelector("button[title='Duplicate']")).toBeNull();
+    expect(el.shadowRoot.querySelector("button[title='Run actions']")).toBeNull();
+    expect(el.shadowRoot.querySelector("button[title='Delete']")).toBeNull();
+  });
+
+  test("rule row renders no standalone edit button; edit is in the kebab", async () => {
+    el = await mount([movieRule]);
+    expect(el.shadowRoot.querySelector("button[title='Edit']")).toBeNull();
+    expect(el.shadowRoot.querySelector("ambience-kebab-menu")).toBeTruthy();
+  });
+
+  test("kebab Edit emits edit-rule with index", async () => {
+    el = await mount([movieRule, eveningRule]);
+    const get = captureEvent(el, "edit-rule");
+    await pickFromKebab(el, 1, "edit");
+    expect(get()).toEqual({ index: 1 });
+  });
+
+  test("kebab Duplicate emits duplicate-rule with index", async () => {
+    el = await mount([movieRule, eveningRule]);
     const get = captureEvent(el, "duplicate-rule");
-    const btn = el.shadowRoot.querySelector("button[title='Duplicate']") as HTMLButtonElement;
-    btn.click();
+    await pickFromKebab(el, 1, "duplicate");
+    expect(get()).toEqual({ index: 1 });
+  });
+
+  test("kebab Run actions emits run-rule-actions with index", async () => {
+    el = await mount([movieRule, eveningRule]);
+    const get = captureEvent(el, "run-rule-actions");
+    await pickFromKebab(el, 0, "run");
     expect(get()).toEqual({ index: 0 });
   });
 
-  test("emits delete-rule after confirm dialog", async () => {
-    el = await mount([movieRule]);
+  test("kebab Delete emits delete-rule directly, without confirm", async () => {
+    el = await mount([movieRule, eveningRule]);
     const get = captureEvent(el, "delete-rule");
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    const btn = el.shadowRoot.querySelector("button[title='Delete']") as HTMLButtonElement;
-    btn.click();
-    expect(get()).toEqual({ index: 0 });
-  });
-
-  test("does not emit delete-rule when confirm is cancelled", async () => {
-    el = await mount([movieRule]);
-    const get = captureEvent(el, "delete-rule");
-    vi.spyOn(window, "confirm").mockReturnValue(false);
-    const btn = el.shadowRoot.querySelector("button[title='Delete']") as HTMLButtonElement;
-    btn.click();
-    expect(get()).toBeUndefined();
+    const confirmSpy = vi.spyOn(window, "confirm");
+    await pickFromKebab(el, 1, "delete");
+    expect(get()).toEqual({ index: 1 });
+    expect(confirmSpy).not.toHaveBeenCalled();
   });
 
   test("emits add-rule when Add rule button clicked (non-empty state)", async () => {
@@ -243,23 +268,6 @@ describe("ambience-rules-list", () => {
     expect(summary.toLowerCase()).toContain("morning");
   });
 
-
-  test("confirm dialog uses rule name", async () => {
-    el = await mount([movieRule]);
-    const spy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const btn = el.shadowRoot.querySelector("button[title='Delete']") as HTMLButtonElement;
-    btn.click();
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("Movie rule"));
-  });
-
-  test("delete label falls back to 'Rule N' when rule has no name", async () => {
-    const unnamed: Rule = { when: {}, actions: [] };
-    el = await mount([unnamed]);
-    const spy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const btn = el.shadowRoot.querySelector("button[title='Delete']") as HTMLButtonElement;
-    btn.click();
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("Rule 1"));
-  });
 
   test("drag start sets _dragFrom index", async () => {
     el = await mount([movieRule, eveningRule]);
@@ -731,7 +739,11 @@ describe("ambience-rules-list", () => {
     el.addEventListener("edit-rule", (e: any) => events.push(e.detail.index));
     const aSection = Array.from(el.shadowRoot.querySelectorAll(".group-section"))
       .find((s: any) => s.querySelector(".group-section-header")!.textContent!.includes("A"))! as Element;
-    (aSection.querySelector("button[title='Edit']") as HTMLButtonElement).click();
+    const kebab: any = aSection.querySelector("li ambience-kebab-menu");
+    (kebab.shadowRoot.querySelector(".kebab-trigger") as HTMLButtonElement).click();
+    await kebab.updateComplete;
+    (kebab.shadowRoot.querySelector("[data-action='edit']") as HTMLButtonElement).click();
+    await kebab.updateComplete;
     expect(events).toEqual([1]);
   });
 
@@ -764,43 +776,32 @@ describe("ambience-rules-list", () => {
     expect(header.textContent).toContain("Plain");
   });
 
-  test("emits run-rule-actions with the original index when run clicked", async () => {
-    el = await mount([movieRule, eveningRule]);
-    const get = captureEvent(el, "run-rule-actions");
-    const btns = el.shadowRoot.querySelectorAll("button[title='Run actions']");
-    expect(btns.length).toBe(2);
-    (btns[1] as HTMLButtonElement).click();
-    expect(get()).toEqual({ index: 1 });
+  test("group header renders a kebab (no standalone apply/traces buttons)", async () => {
+    const group = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleGroup;
+    const ruleInGroup = { ...movieRule, group: "g1" } as Rule;
+    el = await mount([ruleInGroup], [], {}, [group]);
+    const header = el.shadowRoot.querySelector(".group-section-header") as HTMLElement;
+    expect(header.querySelector("ambience-kebab-menu")).toBeTruthy();
+    expect(header.querySelector(".apply-group")).toBeNull();
+    expect(header.querySelector(".traces-btn")).toBeNull();
   });
 
-  test("emits apply-group with the group id when the group header apply is clicked", async () => {
-    const groups = [{ id: "lighting", name: "Lighting" }];
-    el = await mount(
-      [{ name: "R", group: "lighting", when: {}, actions: [] }],
-      [],
-      {},
-      groups,
-    );
+  test("group kebab Run emits apply-group with the group id", async () => {
+    const group = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleGroup;
+    const ruleInGroup = { ...movieRule, group: "g1" } as Rule;
+    el = await mount([ruleInGroup], [], {}, [group]);
     const get = captureEvent(el, "apply-group");
-    const btn = el.shadowRoot.querySelector(
-      ".group-section-header button[title='Apply this group']",
-    ) as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-    btn.click();
-    expect(get()).toEqual({ groupId: "lighting" });
+    await pickGroupKebab(el, "run");
+    expect(get()).toEqual({ groupId: "g1" });
   });
 
-  test("group header has a traces button that emits show-traces with the group id", async () => {
-    el = await mount([{ name: "R", group: "general", when: {}, actions: [] }], [], {}, [
-      { id: "general", name: "General" },
-    ]);
-    const events: Array<{ group: string }> = [];
-    el.addEventListener("show-traces", (e: Event) => events.push((e as CustomEvent).detail));
-    const btn = el.shadowRoot.querySelector(".group-section-header .traces-btn") as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-    btn.click();
-    expect(events).toHaveLength(1);
-    expect(events[0]).toEqual({ group: "general" });
+  test("group kebab Traces emits show-traces with the group id", async () => {
+    const group = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleGroup;
+    const ruleInGroup = { ...movieRule, group: "g1" } as Rule;
+    el = await mount([ruleInGroup], [], {}, [group]);
+    const get = captureEvent(el, "show-traces");
+    await pickGroupKebab(el, "traces");
+    expect(get()).toEqual({ group: "g1" });
   });
 
   test("renders a toggle that emits toggle-rule-enabled {index, enabled:false} for an enabled rule", async () => {

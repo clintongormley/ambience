@@ -47,8 +47,10 @@ import type {
 } from "../types.js";
 import "./rules-list.js";
 import "./rule-editor.js";
-import "./auto-triggers-section.js";
+import "./kebab-menu.js";
+import "./auto-triggers-modal.js";
 import "./traces-modal.js";
+import type { KebabItem } from "./kebab-menu.js";
 
 type EditingState = { scope: Scope; index: number; isNew: boolean; seed?: Rule };
 
@@ -112,6 +114,14 @@ export class AmbienceScopesView extends LitElement {
       gap: 0.5rem;
       padding: 0.75rem 1rem;
       cursor: pointer;
+      background: var(--secondary-background-color, #f5f5f5);
+      /* Collapsed: round all corners to match the card. */
+      border-radius: 4px;
+    }
+    /* Expanded: only the top corners round, so the grey header meets the white
+       body below with a flush edge. */
+    .scope-header.open {
+      border-radius: 4px 4px 0 0;
     }
     .chevron {
       width: 1em;
@@ -134,17 +144,6 @@ export class AmbienceScopesView extends LitElement {
       margin-left: 0.5rem;
       accent-color: var(--primary-color, #03a9f4);
       cursor: pointer;
-    }
-    .apply-scope {
-      background: transparent;
-      border: 1px solid var(--divider-color, #c0c0c0);
-      border-radius: 4px;
-      color: var(--primary-color, #03a9f4);
-      cursor: pointer;
-      padding: 0.2rem 0.5rem;
-      font-size: 0.85em;
-      white-space: nowrap;
-      flex: 0 0 auto;
     }
     .scope-body {
       padding: 0.5rem 1rem 1rem 1rem;
@@ -224,6 +223,7 @@ export class AmbienceScopesView extends LitElement {
   @state() private _error = "";
   @state() private _editing: EditingState | null = null;
   @state() private _viewingTraces: { scope: { scope_kind: string; scope_id: string | null }; group: string; groupName: string | null } | null = null;
+  @state() private _autoTriggers: { scope: Scope; name: string; rules: Rule[] } | null = null;
   // Global group filter shared by every scope: "" = All, else a group id.
   // Sticky for the session (component lifetime).
   @state() private _filterGroup = "";
@@ -662,6 +662,11 @@ export class AmbienceScopesView extends LitElement {
     this._editing = null;
   }
 
+  private _onScopeMenu(scope: Scope, name: string, cfg: ScopeConfig, id: string) {
+    if (id === "run") void this._applyRules(scope);
+    else if (id === "auto") this._autoTriggers = { scope, name, rules: cfg.rules };
+  }
+
   private _showTraces(scope: Scope, group: string) {
     const g = this._groups.find((x) => x.id === group);
     this._viewingTraces = {
@@ -874,6 +879,14 @@ export class AmbienceScopesView extends LitElement {
         .groupName=${this._viewingTraces?.groupName ?? null}
         @close=${() => { this._viewingTraces = null; }}
       ></ambience-traces-modal>
+      <ambience-auto-triggers-modal
+        ?open=${this._autoTriggers !== null}
+        .hass=${this.hass}
+        .scope=${this._autoTriggers?.scope ?? { kind: "house" }}
+        .scopeName=${this._autoTriggers?.name ?? ""}
+        .rules=${this._autoTriggers?.rules ?? []}
+        @close=${() => { this._autoTriggers = null; }}
+      ></ambience-auto-triggers-modal>
     `;
   }
 
@@ -890,22 +903,26 @@ export class AmbienceScopesView extends LitElement {
         class="scope-row ${rowClass}"
         data-id=${dataId}
       >
-        <div class="scope-header" @click=${() => this._toggleExpand(scope)}>
+        <div class="scope-header ${open ? "open" : ""}" @click=${() => this._toggleExpand(scope)}>
           <span class="chevron ${open ? "open" : ""}">▶</span>
           <span class="scope-name">${name}</span>
           <span class="scope-summary">${this._summary(cfg)}</span>
           ${this._renderScopeSwitch(scope)}
-          <button
-            class="apply-scope"
-            data-test="apply-scope"
-            title=${localize(this.hass, "ui.apply_rules", "Apply rules")}
-            @click=${(e: Event) => {
-              e.stopPropagation();
-              void this._applyRules(scope);
-            }}
-          >
-            ${localize(this.hass, "ui.apply_rules", "Apply rules")}
-          </button>
+          <ambience-kebab-menu
+            data-test="scope-kebab"
+            .hass=${this.hass}
+            .items=${[
+              { id: "run", label: localize(this.hass, "ui.run", "Run"), icon: "mdi:play" },
+              {
+                id: "auto",
+                label: localize(this.hass, "ui.auto_triggers_section", "Auto-triggers"),
+                icon: "mdi:flash-auto",
+              },
+            ] satisfies KebabItem[]}
+            @menu-action=${(e: CustomEvent<{ id: string }>) =>
+              this._onScopeMenu(scope, name, cfg, e.detail.id)}
+            @click=${(e: Event) => e.stopPropagation()}
+          ></ambience-kebab-menu>
         </div>
         ${open
           ? html`
@@ -942,11 +959,6 @@ export class AmbienceScopesView extends LitElement {
                   @show-traces=${(e: CustomEvent<{ group: string }>) =>
                     this._showTraces(scope, e.detail.group)}
                 ></ambience-rules-list>
-                <ambience-auto-triggers-section
-                  .hass=${this.hass}
-                  .scope=${scope}
-                  .rules=${cfg.rules}
-                ></ambience-auto-triggers-section>
               </div>
             `
           : ""}

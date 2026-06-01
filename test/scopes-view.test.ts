@@ -340,14 +340,14 @@ describe("ambience-scopes-view", () => {
     expect(eventTypes).toContain("floor_registry_updated");
   });
 
-  test("expanded scope renders an auto-triggers section", async () => {
+  test("expanded scope body no longer renders the inline auto-triggers section", async () => {
     el = await mount();
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
     ) as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();
     await el.updateComplete;
-    expect(row.querySelector("ambience-auto-triggers-section")).toBeTruthy();
+    expect(row.querySelector("ambience-auto-triggers-section")).toBeNull();
   });
 
   test("area_registry_updated remove clears that area's expanded/editing state", async () => {
@@ -976,17 +976,36 @@ describe("ambience-scopes-view", () => {
 
   // --- apply-rules / run-rule-actions ----------------------------------------
 
-  test("scope-header Apply rules button calls api.applyRules for that scope", async () => {
+  async function pickScopeKebab(target: any, rowSelector: string, action: string) {
+    const header = target.shadowRoot.querySelector(`${rowSelector} .scope-header`) as HTMLElement;
+    const kebab: any = header.querySelector("ambience-kebab-menu");
+    (kebab.shadowRoot.querySelector(".kebab-trigger") as HTMLButtonElement).click();
+    await kebab.updateComplete;
+    (kebab.shadowRoot.querySelector(`[data-action='${action}']`) as HTMLButtonElement).click();
+    await kebab.updateComplete;
+  }
+
+  test("scope header has a kebab and no standalone apply button", async () => {
     el = await mount();
-    const btn = el.shadowRoot.querySelector(
-      "li.scope-row.house [data-test='apply-scope']",
-    ) as HTMLButtonElement;
-    expect(btn).toBeTruthy();
-    btn.click();
-    await el.updateComplete;
+    const header = el.shadowRoot.querySelector("li.scope-row.house .scope-header") as HTMLElement;
+    expect(header.querySelector("ambience-kebab-menu")).toBeTruthy();
+    expect(header.querySelector("[data-test='apply-scope']")).toBeNull();
+  });
+
+  test("kebab Run calls api.applyRules for that scope", async () => {
+    el = await mount();
+    await pickScopeKebab(el, "li.scope-row.house", "run");
     expect(vi.mocked(api.applyRules)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(api.applyRules).mock.calls[0][1]).toEqual({ kind: "house" });
-    expect(vi.mocked(api.applyRules).mock.calls[0][2]).toBeUndefined();
+  });
+
+  test("kebab Auto-triggers opens the auto-triggers modal", async () => {
+    el = await mount();
+    await pickScopeKebab(el, "li.scope-row.house", "auto");
+    await el.updateComplete;
+    const modal = el.shadowRoot.querySelector("ambience-auto-triggers-modal") as HTMLElement;
+    expect(modal).toBeTruthy();
+    expect(modal.hasAttribute("open")).toBe(true);
   });
 
   test("run-rule-actions event from a rule list calls api.runRuleActions", async () => {

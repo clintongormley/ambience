@@ -372,6 +372,8 @@ export async function listAutoTriggers(
   return hass.callWS(msg);
 }
 
+// Retained for backend command parity; the auto-triggers UI is now a read-only
+// modal, so no view currently calls this.
 export async function setAutoTrigger(
   hass: HassConnection,
   scope_kind: "area" | "floor" | "house",

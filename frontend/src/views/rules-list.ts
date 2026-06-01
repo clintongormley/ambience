@@ -1,6 +1,8 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
+import "./kebab-menu";
+import type { KebabItem } from "./kebab-menu";
 import { groupSwatchStyle } from "../group-colors.js";
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
 import { formatArgValue, paramLabel, ruleDisplayName, summariseMatcher } from "../summary.js";
@@ -178,26 +180,19 @@ export class AmbienceRulesList extends LitElement {
     .group-section-header ha-icon {
       --mdc-icon-size: 20px;
     }
-    .group-section-header .apply-group {
+    .group-kebab {
       margin-left: auto;
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: inherit;
-      padding: 0 0.25rem;
-      line-height: 1;
+      --kebab-trigger-color: currentColor;
+      /* Cancel the header's right padding so the kebab sits flush at the bar's
+         right edge — aligning it with the scope-header and rule-row kebabs. */
+      margin-right: -0.75rem;
     }
-    .traces-btn {
-      background: none;
-      border: none;
-      color: inherit;
-      cursor: pointer;
-      padding: 0 0.25rem;
-      display: inline-flex;
-      align-items: center;
-    }
-    .traces-btn ha-icon {
-      --mdc-icon-size: 18px;
+    .row-kebab {
+      /* Cancel the row's right padding so the kebab sits flush at the card's
+         right edge, vertically in line with the group and scope kebabs. The
+         extra -1px compensates for the row card's 1px border (the group bar
+         has none), so all three kebab columns align to the same pixel. */
+      margin-right: calc(-1rem - 1px);
     }
   `;
 
@@ -240,22 +235,15 @@ export class AmbienceRulesList extends LitElement {
     return html`<div class="group-section-header" style=${groupSwatchStyle(group.color)}>
       ${group.icon ? html`<ha-icon icon=${group.icon}></ha-icon>` : ""}
       <span>${group.name}</span>
-      <button
-        class="apply-group"
-        @click=${(e: Event) => {
-          e.stopPropagation();
-          this._emit("apply-group", { groupId: group.id });
-        }}
-        title=${localize(this.hass, "ui.apply_group", "Apply this group")}
-      >
-        ▶
-      </button>
-      <button
-        class="traces-btn"
-        title=${localize(this.hass, "ui.view_traces", "View traces")}
-        aria-label=${localize(this.hass, "ui.view_traces", "View traces")}
-        @click=${(e: Event) => { e.stopPropagation(); this._emit("show-traces", { group: group.id }); }}
-      ><ha-icon icon="mdi:history"></ha-icon></button>
+      <ambience-kebab-menu
+        class="group-kebab"
+        .hass=${this.hass}
+        .items=${[
+          { id: "run", label: localize(this.hass, "ui.run", "Run"), icon: "mdi:play" },
+          { id: "traces", label: localize(this.hass, "ui.view_traces", "View traces"), icon: "mdi:transit-connection-variant" },
+        ] satisfies KebabItem[]}
+        @menu-action=${(e: CustomEvent<{ id: string }>) => this._onGroupMenu(group, e.detail.id)}
+      ></ambience-kebab-menu>
     </div>`;
   }
 
@@ -377,11 +365,16 @@ export class AmbienceRulesList extends LitElement {
     return actionLabel(this.hass as any, action.service);
   }
 
-  private _confirmDelete(i: number, rule: Rule, displayNum: number) {
-    const label = rule.name || localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(displayNum));
-    if (window.confirm(localize(this.hass, "ui.confirm_delete", 'Delete "{name}"?').replace("{name}", label))) {
-      this._emit("delete-rule", { index: i });
-    }
+  private _onGroupMenu(group: RuleGroup, id: string) {
+    if (id === "run") this._emit("apply-group", { groupId: group.id });
+    else if (id === "traces") this._emit("show-traces", { group: group.id });
+  }
+
+  private _onRuleMenu(i: number, id: string) {
+    if (id === "edit") this._emit("edit-rule", { index: i });
+    else if (id === "duplicate") this._emit("duplicate-rule", { index: i });
+    else if (id === "run") this._emit("run-rule-actions", { index: i });
+    else if (id === "delete") this._emit("delete-rule", { index: i });
   }
 
   /** A single rule row. `i` is the rule's ORIGINAL index in `this.rules`
@@ -471,43 +464,18 @@ export class AmbienceRulesList extends LitElement {
         >
           <ha-icon icon=${isDisabled ? "mdi:toggle-switch-off-outline" : "mdi:toggle-switch"}></ha-icon>
         </button>
-        <button
-          @click=${(e: Event) => {
-            e.stopPropagation();
-            this._emit("edit-rule", { index: i });
-          }}
-          title=${localize(this.hass, "ui.edit", "Edit")}
-        >
-          ✎
-        </button>
-        <button
-          @click=${(e: Event) => {
-            e.stopPropagation();
-            this._emit("duplicate-rule", { index: i });
-          }}
-          title=${localize(this.hass, "ui.duplicate", "Duplicate")}
-        >
-          ⧉
-        </button>
-        <button
-          class="run"
-          @click=${(e: Event) => {
-            e.stopPropagation();
-            this._emit("run-rule-actions", { index: i });
-          }}
-          title=${localize(this.hass, "ui.run_actions", "Run actions")}
-        >
-          ▶
-        </button>
-        <button
-          @click=${(e: Event) => {
-            e.stopPropagation();
-            this._confirmDelete(i, rule, displayNum);
-          }}
-          title=${localize(this.hass, "ui.title_delete", "Delete")}
-        >
-          🗑
-        </button>
+        <ambience-kebab-menu
+          class="row-kebab"
+          .hass=${this.hass}
+          .label=${localize(this.hass, "ui.rule_actions", "Rule actions")}
+          .items=${[
+            { id: "edit", label: localize(this.hass, "ui.edit", "Edit"), icon: "mdi:pencil" },
+            { id: "duplicate", label: localize(this.hass, "ui.duplicate", "Duplicate"), icon: "mdi:content-duplicate" },
+            { id: "run", label: localize(this.hass, "ui.run_actions", "Run actions"), icon: "mdi:play" },
+            { id: "delete", label: localize(this.hass, "ui.title_delete", "Delete"), icon: "mdi:delete", danger: true, dividerBefore: true },
+          ] satisfies KebabItem[]}
+          @menu-action=${(e: CustomEvent<{ id: string }>) => this._onRuleMenu(i, e.detail.id)}
+        ></ambience-kebab-menu>
       </li>
     `;
   }

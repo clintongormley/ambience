@@ -10,6 +10,7 @@ import type {
   RuleGroup,
   Scope,
   ScopeConfig,
+  ScopeSwitch,
 } from "../frontend/src/types";
 
 // Mock the api module — same shape as test/areas-list-view.test.ts but with
@@ -23,6 +24,7 @@ vi.mock("../frontend/src/api", () => ({
   saveFloor: vi.fn(),
   getHouse: vi.fn(),
   saveHouse: vi.fn(),
+  listSwitches: vi.fn(async () => []),
   listMatchers: vi.fn(),
   listExposedActions: vi.fn(),
   listGroups: vi.fn(async () => []),
@@ -59,8 +61,10 @@ const actions: ExposedAction[] = [
 
 const periods: PeriodStoreView = { builtins: {}, custom: {}, hidden: [] };
 
-function makeFakeHass() {
+function makeFakeHass(states: Record<string, { state?: string }> = {}) {
   return {
+    states,
+    callService: vi.fn().mockResolvedValue(undefined),
     connection: {
       subscribeEvents: vi.fn().mockResolvedValue(vi.fn()),
     },
@@ -73,6 +77,8 @@ type MountOpts = {
   areaConfigs?: Record<string, ScopeConfig>;
   floorConfigs?: Record<string, ScopeConfig>;
   houseConfig?: ScopeConfig;
+  switches?: ScopeSwitch[];
+  states?: Record<string, { state?: string }>;
 };
 
 async function mount(opts: MountOpts = {}): Promise<any> {
@@ -91,6 +97,7 @@ async function mount(opts: MountOpts = {}): Promise<any> {
     floorConfigs[floorId] ?? structuredClone(baseConfig),
   );
   vi.mocked(api.getHouse).mockResolvedValue(houseConfig);
+  vi.mocked(api.listSwitches).mockResolvedValue(opts.switches ?? []);
   vi.mocked(api.listMatchers).mockResolvedValue(matchers);
   vi.mocked(api.listExposedActions).mockResolvedValue(actions);
   vi.mocked(api.listPeriods).mockResolvedValue(periods);
@@ -99,7 +106,7 @@ async function mount(opts: MountOpts = {}): Promise<any> {
   vi.mocked(api.saveHouse).mockResolvedValue({ ok: true, config: baseConfig });
 
   const el: any = document.createElement("ambience-scopes-view");
-  el.hass = makeFakeHass();
+  el.hass = makeFakeHass(opts.states ?? {});
   document.body.appendChild(el);
   await el.updateComplete;
   // Two ticks: connectedCallback awaits _loadStatic, then _refreshAreas etc.
@@ -886,5 +893,102 @@ describe("ambience-scopes-view", () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(unsubArea).toHaveBeenCalled();
     expect(unsubFloor).toHaveBeenCalled();
+  });
+
+  // --- scope-header switch toggle -----------------------------------------
+
+  const baseSwitches = [
+    { scope_kind: "house", scope_id: null, entity_id: "switch.global_ambience" },
+    { scope_kind: "area", scope_id: "living_room", entity_id: "switch.living_room_ambience" },
+    { scope_kind: "area", scope_id: "bedroom", entity_id: "switch.bedroom_ambience" },
+    { scope_kind: "floor", scope_id: "ground", entity_id: "switch.ground_floor_ambience" },
+    { scope_kind: "floor", scope_id: "upstairs", entity_id: "switch.upstairs_floor_ambience" },
+  ] satisfies ScopeSwitch[];
+
+  function toggleIn(row: HTMLElement): any {
+    return row.querySelector("[data-test='scope-switch']");
+  }
+
+  test("renders a toggle per scope reflecting the switch state", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: {
+        "switch.living_room_ambience": { state: "on" },
+        "switch.bedroom_ambience": { state: "off" },
+      },
+    });
+    const lr = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='living_room']"));
+    const br = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
+    expect(lr).toBeTruthy();
+    expect(br).toBeTruthy();
+    expect(lr.checked).toBe(true);
+    expect(br.checked).toBe(false);
+  });
+
+  test("toggling an off switch calls switch.turn_on for its entity", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.bedroom_ambience": { state: "off" } },
+    });
+    const br = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
+    br.checked = true;
+    br.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    expect(el.hass.callService).toHaveBeenCalledWith("switch", "turn_on", {
+      entity_id: "switch.bedroom_ambience",
+    });
+  });
+
+  test("toggling an on switch calls switch.turn_off for its entity", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.living_room_ambience": { state: "on" } },
+    });
+    const lr = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='living_room']"));
+    lr.checked = false;
+    lr.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    expect(el.hass.callService).toHaveBeenCalledWith("switch", "turn_off", {
+      entity_id: "switch.living_room_ambience",
+    });
+  });
+
+  test("clicking the toggle does not expand the row", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.living_room_ambience": { state: "on" } },
+    });
+    const row = el.shadowRoot.querySelector(".scope-row.area[data-id='living_room']");
+    toggleIn(row).click();
+    await el.updateComplete;
+    expect(row.querySelector(".scope-body")).toBeFalsy();
+  });
+
+  test("renders no toggle for a scope with no known switch entity", async () => {
+    el = await mount({
+      switches: [
+        { scope_kind: "area", scope_id: "living_room", entity_id: "switch.living_room_ambience" },
+      ],
+    });
+    const br = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
+    expect(br).toBeFalsy();
+  });
+
+  // Keep last: registering <ha-switch> is global and switches the toggle widget
+  // for any mount that runs after this test.
+  test("uses <ha-switch> when it is registered and toggles via callService", async () => {
+    if (!customElements.get("ha-switch")) {
+      customElements.define("ha-switch", class extends HTMLElement {});
+    }
+    el = await mount({
+      switches: [
+        { scope_kind: "area", scope_id: "bedroom", entity_id: "switch.bedroom_ambience" },
+      ],
+      states: { "switch.bedroom_ambience": { state: "off" } },
+    });
+    const toggle = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
+    expect(toggle.tagName.toLowerCase()).toBe("ha-switch");
+    toggle.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    expect(el.hass.callService).toHaveBeenCalledWith("switch", "turn_on", {
+      entity_id: "switch.bedroom_ambience",
+    });
   });
 });

@@ -18,6 +18,7 @@ from .const import (
     DATA_MATCHERS,
     DATA_PERIODS,
     DATA_STORE,
+    DATA_SWITCHES,
     DOMAIN,
     GENERAL_GROUP_ID,
     SIGNAL_SWITCH_CONFIG_UPDATED,
@@ -58,6 +59,7 @@ _WS_COMMANDS = (
     "ambience/state/known_states",
     "ambience/switch_defaults/list",
     "ambience/switch_defaults/save",
+    "ambience/switches/list",
     "ambience/house/switch/save",
     "ambience/floor/switch/save",
     "ambience/area/switch/save",
@@ -165,6 +167,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_state_known_states)
     websocket_api.async_register_command(hass, _ws_switch_defaults_list)
     websocket_api.async_register_command(hass, _ws_switch_defaults_save)
+    websocket_api.async_register_command(hass, _ws_switches_list)
     websocket_api.async_register_command(hass, _ws_house_switch_save)
     websocket_api.async_register_command(hass, _ws_floor_switch_save)
     websocket_api.async_register_command(hass, _ws_area_switch_save)
@@ -993,6 +996,28 @@ async def _save_scope_switch(
         return
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, (scope_kind, scope_id))
     connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/switches/list"})
+@websocket_api.async_response
+async def _ws_switches_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Map each scope to its (possibly renamed) switch entity_id.
+
+    The frontend can't derive the entity_id — the entity registry takes over
+    after first registration, so user renames stick. Read it from the live
+    switch entities tracked in DATA_SWITCHES.
+    """
+    switches = hass.data[DOMAIN].get(DATA_SWITCHES, {})
+    result = [
+        {"scope_kind": kind, "scope_id": scope_id, "entity_id": sw.entity_id}
+        for (kind, scope_id), sw in switches.items()
+    ]
+    connection.send_result(msg["id"], result)
 
 
 @websocket_api.require_admin

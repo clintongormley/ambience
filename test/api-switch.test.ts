@@ -1,6 +1,7 @@
 import { describe, test, expect, vi } from "vitest";
 import {
   getSwitchDefaults,
+  listSwitches,
   saveSwitchDefaults,
   saveHouseSwitch,
   saveFloorSwitch,
@@ -27,6 +28,14 @@ describe("switch API wrappers", () => {
       name: "X",
       auto_on_delay_seconds: 600,
     });
+  });
+
+  test("listSwitches", async () => {
+    const rows = [{ scope_kind: "house", scope_id: null, entity_id: "switch.global_ambience" }];
+    const hass = mockHass(() => rows);
+    const r = await listSwitches(hass);
+    expect(hass.callWS).toHaveBeenCalledWith({ type: "ambience/switches/list" });
+    expect(r).toEqual(rows);
   });
 
   test("saveHouseSwitch", async () => {

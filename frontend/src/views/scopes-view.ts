@@ -23,6 +23,7 @@ import {
   listGroups,
   listMatchers,
   listPeriods,
+  listSwitches,
   saveArea,
   saveFloor,
   saveHouse,
@@ -123,6 +124,12 @@ export class AmbienceScopesView extends LitElement {
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
     }
+    .scope-switch {
+      flex: 0 0 auto;
+      margin-left: 0.5rem;
+      accent-color: var(--primary-color, #03a9f4);
+      cursor: pointer;
+    }
     .scope-body {
       padding: 0.5rem 1rem 1rem 1rem;
       border-top: 1px solid var(--divider-color, #e0e0e0);
@@ -183,6 +190,9 @@ export class AmbienceScopesView extends LitElement {
   @state() private _areaConfigs = new Map<string, ScopeConfig>();
   @state() private _floorConfigs = new Map<string, ScopeConfig>();
   @state() private _house: ScopeConfig = { rules: [] };
+  // scopeKey(scope) -> Ambience switch entity_id. Resolved by the backend
+  // because user/registry renames make the entity_id non-derivable.
+  @state() private _switchEntityIds = new Map<string, string>();
   @state() private _matchers: MatcherInfo[] = [];
   @state() private _actions: ExposedAction[] = [];
   @state() private _groups: RuleGroup[] = [];
@@ -246,6 +256,7 @@ export class AmbienceScopesView extends LitElement {
       this._refreshAreas(),
       this._refreshFloors(),
       this._refreshHouse(),
+      this._refreshSwitches(),
     ]);
     await this._subscribe();
   }
@@ -352,6 +363,26 @@ export class AmbienceScopesView extends LitElement {
     }
   }
 
+  private async _refreshSwitches() {
+    try {
+      const switches = await listSwitches(this.hass);
+      if (!this.isConnected) return;
+      this._switchEntityIds = new Map(
+        switches.map((s) => {
+          // Route through scopeKey() — the single source of truth for scope
+          // identity — rather than re-deriving its string format here.
+          const scope: Scope =
+            s.scope_kind === "house"
+              ? { kind: "house" }
+              : { kind: s.scope_kind, id: s.scope_id! };
+          return [scopeKey(scope), s.entity_id];
+        }),
+      );
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
+    }
+  }
+
   private async _subscribe() {
     const subArea = this.hass.connection.subscribeEvents<AreaRegistryEvent>(
       (event) => {
@@ -368,6 +399,8 @@ export class AmbienceScopesView extends LitElement {
           }
         }
         void this._refreshAreas();
+        // The switch set only changes when an area is added or removed.
+        if (event.data.action !== "update") void this._refreshSwitches();
       },
       "area_registry_updated",
     );
@@ -386,6 +419,8 @@ export class AmbienceScopesView extends LitElement {
           }
         }
         void this._refreshFloors();
+        // The switch set only changes when a floor is added or removed.
+        if (event.data.action !== "update") void this._refreshSwitches();
       },
       "floor_registry_updated",
     );
@@ -787,6 +822,7 @@ export class AmbienceScopesView extends LitElement {
           <span class="chevron ${open ? "open" : ""}">▶</span>
           <span class="scope-name">${name}</span>
           <span class="scope-summary">${this._summary(cfg)}</span>
+          ${this._renderScopeSwitch(scope)}
         </div>
         ${open
           ? html`
@@ -824,5 +860,40 @@ export class AmbienceScopesView extends LitElement {
           : ""}
       </li>
     `;
+  }
+
+  /** Live on/off toggle for the scope's Ambience switch, shown in the header.
+   *  Renders nothing until the backend has resolved the switch entity_id.
+   *  Uses HA's <ha-switch> when registered, else a themed checkbox fallback
+   *  (which also keeps the toggle testable under jsdom). */
+  private _renderScopeSwitch(scope: Scope) {
+    const entityId = this._switchEntityIds.get(scopeKey(scope));
+    if (!entityId) return "";
+    const on = this.hass.states?.[entityId]?.state === "on";
+    // Don't let toggling expand/collapse the row.
+    const stop = (e: Event) => e.stopPropagation();
+    const onChange = (e: Event) => {
+      e.stopPropagation();
+      void this.hass.callService?.("switch", on ? "turn_off" : "turn_on", {
+        entity_id: entityId,
+      });
+    };
+    if (customElements.get("ha-switch")) {
+      return html`<ha-switch
+        class="scope-switch"
+        data-test="scope-switch"
+        .checked=${on}
+        @click=${stop}
+        @change=${onChange}
+      ></ha-switch>`;
+    }
+    return html`<input
+      class="scope-switch"
+      data-test="scope-switch"
+      type="checkbox"
+      .checked=${on}
+      @click=${stop}
+      @change=${onChange}
+    />`;
   }
 }

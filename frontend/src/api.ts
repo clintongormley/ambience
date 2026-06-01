@@ -17,6 +17,7 @@ import type {
   RuleGroup,
   Scope,
   ScopeConfig,
+  ScopeSwitch,
   ServiceInfo,
   ServiceSchema,
   SwitchDefaults,
@@ -40,6 +41,14 @@ export type FloorRegistryEvent = {
 // hass.config, hass.themes, etc.).
 export type HassConnection = {
   callWS<T = unknown>(message: Record<string, unknown>): Promise<T>;
+  // Live entity states, keyed by entity_id. Optional — simpler mocks omit it.
+  states?: Record<string, { state?: string; attributes?: Record<string, unknown> }>;
+  // HA's service-call entry point, used to toggle switch entities.
+  callService?(
+    domain: string,
+    service: string,
+    data?: Record<string, unknown>,
+  ): Promise<unknown>;
   connection: {
     subscribeEvents<T>(
       callback: (event: T) => void,
@@ -220,6 +229,11 @@ export async function getKnownStates(
 
 export async function getSwitchDefaults(hass: HassConnection): Promise<SwitchDefaults> {
   return hass.callWS({ type: "ambience/switch_defaults/list" });
+}
+
+/** Map each scope to its (possibly renamed) Ambience switch entity_id. */
+export async function listSwitches(hass: HassConnection): Promise<ScopeSwitch[]> {
+  return hass.callWS({ type: "ambience/switches/list" });
 }
 
 export async function saveSwitchDefaults(

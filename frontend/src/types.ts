@@ -94,6 +94,14 @@ export type ScopeSwitchOverride = {
   auto_on_delay_seconds: number | null;
 };
 
+// One scope's Ambience switch entity, as resolved by the backend (the
+// entity_id can be user-renamed, so it can't be derived client-side).
+export type ScopeSwitch = {
+  scope_kind: "house" | "floor" | "area";
+  scope_id: string | null;
+  entity_id: string;
+};
+
 export type AreaConfig = {
   // Ordered list — array order is authoritative for the engine.
   rules: Rule[];

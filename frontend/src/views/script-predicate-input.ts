@@ -77,12 +77,6 @@ export class AmbienceScriptPredicateInput extends LitElement {
   override connectedCallback() {
     super.connectedCallback();
     this._yamlText = yamlDump(this.value ?? {});
-    // Scripts with no fields can only be edited as YAML.
-    const picked = this.value && typeof this.value === "object" ? this.value.script : null;
-    const fields = this._fieldsFor(picked);
-    if (picked && (!fields || Object.keys(fields).length === 0)) {
-      this._mode = "yaml";
-    }
   }
 
   _setMode(mode: "form" | "yaml") {
@@ -268,7 +262,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
         <div class="tabs">
           <button
             type="button"
-            ?disabled=${!hasFields || this._yamlError !== null}
+            ?disabled=${this._yamlError !== null}
             title=${this._yamlError ?? ""}
             class=${this._mode === "form" ? "active" : ""}
             @click=${() => this._setMode("form")}

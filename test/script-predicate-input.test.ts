@@ -150,7 +150,7 @@ describe("ambience-script-predicate-input — auto-form", () => {
     expect(detail.value).toEqual({ script: "script.foo", args: { temp: 25, zone: "down" } });
   });
 
-  test("form mode hidden when script declares no fields", async () => {
+  test("arguments section hidden when script declares no fields", async () => {
     el = await mount(
       { script: "script.bare", args: {} },
       { services: { script: { bare: {} } } },          // no fields
@@ -229,9 +229,9 @@ describe("ambience-script-predicate-input — YAML mode", () => {
     expect(el._yamlError).toMatch(/script\./);
   });
 
-  test("scripts without fields default to YAML mode", async () => {
+  test("scripts without fields default to form mode", async () => {
     el = await mount({ script: "script.bare", args: {} }, { services: { script: { bare: {} } } });
-    expect(el._mode).toBe("yaml");
+    expect(el._mode).toBe("form");
   });
 
   test("Form tab is disabled while YAML is invalid", async () => {
@@ -379,5 +379,39 @@ describe("ambience-script-predicate-input — triggers picker", () => {
     input.dispatchEvent(new Event("change"));
     // No-op: the dedupe guard prevents re-adding; triggers stay as-is.
     expect(el._triggers).toEqual(["light.kitchen"]);
+  });
+});
+
+describe("ambience-script-predicate-input — form tab reachable", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("no-fields script defaults to form mode", async () => {
+    el = await mount(
+      { script: "script.bare", args: {} },
+      { services: { script: { bare: {} } } },
+    );
+    expect(el._mode).toBe("form");
+  });
+
+  test("Form button is enabled for a no-fields script with valid yaml", async () => {
+    el = await mount(
+      { script: "script.bare", args: {} },
+      { services: { script: { bare: {} } } },
+    );
+    const buttons = [...el.shadowRoot.querySelectorAll(".tabs button")];
+    const formBtn = buttons.find((b: any) => b.textContent?.trim() === "Form");
+    expect(formBtn.disabled).toBe(false);
+  });
+
+  test("can switch back to form after going to YAML (no fields)", async () => {
+    el = await mount(
+      { script: "script.bare", args: {} },
+      { services: { script: { bare: {} } } },
+    );
+    el._setMode("yaml");
+    expect(el._mode).toBe("yaml");
+    el._setMode("form");
+    expect(el._mode).toBe("form");
   });
 });

@@ -8,8 +8,10 @@ from pathlib import Path
 
 import voluptuous as vol
 from homeassistant.components.frontend import (
+    add_extra_js_url,
     async_register_built_in_panel,
     async_remove_panel,
+    remove_extra_js_url,
 )
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
@@ -63,6 +65,7 @@ _LOGGER = logging.getLogger(__name__)
 _PANEL_URL = "ambience"
 _PANEL_STATIC_PATH = "/ambience-panel"
 _PANEL_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-panel.js"
+_CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
 
 
 def _exactly_one_scope(value: dict) -> dict:
@@ -225,10 +228,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         [StaticPathConfig(_PANEL_STATIC_PATH, str(bundle_dir), False)]
     )
 
-    # Append a content hash so browsers fetch the fresh bundle after a rebuild
-    # instead of serving a stale cached copy.
+    # Content hashes for cache-busting. The two loaders (panel, card) lazily
+    # import the shared ambience-frontend.js chunk; we forward that chunk's
+    # hash as `?fe=` so a rebuilt chunk is re-fetched.
+    frontend_path = bundle_dir / "ambience-frontend.js"
     bundle_hash = await hass.async_add_executor_job(_hash_bundle, bundle_path)
-    module_url = f"{_PANEL_JS_URL}?hash={bundle_hash}"
+    frontend_hash = await hass.async_add_executor_job(_hash_bundle, frontend_path)
+    module_url = f"{_PANEL_JS_URL}?hash={bundle_hash}&fe={frontend_hash}"
+    card_url = f"{_CARD_JS_URL}?fe={frontend_hash}"
 
     if entry.options.get(CONF_SHOW_SIDEBAR_PANEL, DEFAULT_SHOW_SIDEBAR_PANEL):
         async_register_built_in_panel(
@@ -247,6 +254,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 }
             },
         )
+
+    # Register the (tiny) card loader on every frontend page so the Ambience
+    # card is discoverable in the card picker. The heavy frontend chunk is
+    # lazy-loaded by the card only when it actually renders.
+    add_extra_js_url(hass, card_url)
+    entry.async_on_unload(lambda: remove_extra_js_url(hass, card_url))
 
     engine = AutoTriggerEngine(hass)
     domain_data[DATA_ENGINE] = engine

@@ -34,6 +34,8 @@ vi.mock("../frontend/src/api", () => ({
   getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
   listAutoTriggers: vi.fn(async () => ({ triggers: [], opaque: false })),
   setAutoTrigger: vi.fn(async () => ({ ok: true })),
+  applyRules: vi.fn(async () => ({ ok: true })),
+  runRuleActions: vi.fn(async () => ({ ran: 1, rule_name: "R" })),
 }));
 
 import * as api from "../frontend/src/api";
@@ -970,6 +972,82 @@ describe("ambience-scopes-view", () => {
     });
     const br = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
     expect(br).toBeFalsy();
+  });
+
+  // --- apply-rules / run-rule-actions ----------------------------------------
+
+  test("scope-header Apply rules button calls api.applyRules for that scope", async () => {
+    el = await mount();
+    const btn = el.shadowRoot.querySelector(
+      "li.scope-row.house [data-test='apply-scope']",
+    ) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+    await el.updateComplete;
+    expect(vi.mocked(api.applyRules)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.applyRules).mock.calls[0][1]).toEqual({ kind: "house" });
+    expect(vi.mocked(api.applyRules).mock.calls[0][2]).toBeUndefined();
+  });
+
+  test("run-rule-actions event from a rule list calls api.runRuleActions", async () => {
+    el = await mount({
+      areaConfigs: {
+        living_room: { rules: [{ name: "R", group: "g", when: {}, actions: [] }] },
+      },
+    });
+    const header = el.shadowRoot.querySelector(
+      "li.scope-row.area[data-id='living_room'] .scope-header",
+    ) as HTMLElement;
+    header.click();
+    await el.updateComplete;
+    const list = el.shadowRoot.querySelector(
+      "li.scope-row.area[data-id='living_room'] ambience-rules-list",
+    ) as HTMLElement;
+    expect(list).toBeTruthy();
+    list.dispatchEvent(
+      new CustomEvent("run-rule-actions", {
+        detail: { index: 0 },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    expect(vi.mocked(api.runRuleActions)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.runRuleActions).mock.calls[0][1]).toEqual({
+      kind: "area",
+      id: "living_room",
+    });
+    expect(vi.mocked(api.runRuleActions).mock.calls[0][2]).toBe(0);
+  });
+
+  test("apply-group event calls api.applyRules with the group id", async () => {
+    el = await mount({
+      areaConfigs: {
+        living_room: { rules: [{ name: "R", group: "g", when: {}, actions: [] }] },
+      },
+    });
+    const header = el.shadowRoot.querySelector(
+      "li.scope-row.area[data-id='living_room'] .scope-header",
+    ) as HTMLElement;
+    header.click();
+    await el.updateComplete;
+    const list = el.shadowRoot.querySelector(
+      "li.scope-row.area[data-id='living_room'] ambience-rules-list",
+    ) as HTMLElement;
+    list.dispatchEvent(
+      new CustomEvent("apply-group", {
+        detail: { groupId: "g" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    expect(vi.mocked(api.applyRules)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.applyRules).mock.calls[0][1]).toEqual({
+      kind: "area",
+      id: "living_room",
+    });
+    expect(vi.mocked(api.applyRules).mock.calls[0][2]).toBe("g");
   });
 
   // Keep last: registering <ha-switch> is global and switches the toggle widget

@@ -11,6 +11,7 @@ import { scopeKey } from "../entities-for-scope.js";
 import { stripPositionMetadata } from "../rule.js";
 import { localize } from "../i18n.js";
 import {
+  applyRules,
   getArea,
   getDayConfig,
   getFloor,
@@ -24,6 +25,7 @@ import {
   listMatchers,
   listPeriods,
   listSwitches,
+  runRuleActions,
   saveArea,
   saveFloor,
   saveHouse,
@@ -129,6 +131,16 @@ export class AmbienceScopesView extends LitElement {
       margin-left: 0.5rem;
       accent-color: var(--primary-color, #03a9f4);
       cursor: pointer;
+    }
+    .apply-scope {
+      background: transparent;
+      border: 1px solid var(--divider-color, #c0c0c0);
+      border-radius: 4px;
+      color: var(--primary-color, #03a9f4);
+      cursor: pointer;
+      padding: 0.2rem 0.5rem;
+      font-size: 0.85rem;
+      white-space: nowrap;
     }
     .scope-body {
       padding: 0.5rem 1rem 1rem 1rem;
@@ -602,6 +614,24 @@ export class AmbienceScopesView extends LitElement {
     }
   }
 
+  private async _applyRules(scope: Scope, groupId?: string) {
+    this._error = "";
+    try {
+      await applyRules(this.hass, scope, groupId);
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
+    }
+  }
+
+  private async _runRuleActions(scope: Scope, e: CustomEvent<{ index: number }>) {
+    this._error = "";
+    try {
+      await runRuleActions(this.hass, scope, e.detail.index);
+    } catch (err) {
+      this._error = (err as Error).message || String(err);
+    }
+  }
+
   private _cancelRule() {
     // New rules are not added to the config until saved, so cancel is a no-op.
     this._editing = null;
@@ -823,6 +853,17 @@ export class AmbienceScopesView extends LitElement {
           <span class="scope-name">${name}</span>
           <span class="scope-summary">${this._summary(cfg)}</span>
           ${this._renderScopeSwitch(scope)}
+          <button
+            class="apply-scope"
+            data-test="apply-scope"
+            title=${localize(this.hass, "ui.apply_rules", "Apply rules")}
+            @click=${(e: Event) => {
+              e.stopPropagation();
+              void this._applyRules(scope);
+            }}
+          >
+            ${localize(this.hass, "ui.apply_rules", "Apply rules")}
+          </button>
         </div>
         ${open
           ? html`
@@ -849,6 +890,10 @@ export class AmbienceScopesView extends LitElement {
                   ) => this._reorderRules(scope, e)}
                   @unpin-rule=${(e: CustomEvent<{ index: number }>) =>
                     this._unpinRule(scope, e)}
+                  @run-rule-actions=${(e: CustomEvent<{ index: number }>) =>
+                    this._runRuleActions(scope, e)}
+                  @apply-group=${(e: CustomEvent<{ groupId: string }>) =>
+                    this._applyRules(scope, e.detail.groupId)}
                 ></ambience-rules-list>
                 <ambience-auto-triggers-section
                   .hass=${this.hass}

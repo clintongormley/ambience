@@ -300,7 +300,8 @@ def _compose_apply_message(
     """Compose the logbook message for an apply.
 
     Names the matched rule ("scene") and scope. Appends the group name only when
-    more than one group exists. Unnamed rules fall back to "rule <N>" (1-based).
+    more than one group exists and a label is known (an unknown group id yields
+    no suffix). Unnamed rules fall back to "rule <N>" (1-based).
     """
     verb = "re-applied" if reapplied else "applied"
     scene = rule_name or f"rule {rule_index + 1}"

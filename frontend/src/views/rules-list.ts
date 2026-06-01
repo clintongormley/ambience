@@ -170,6 +170,9 @@ export class AmbienceRulesList extends LitElement {
     }
     .group-section-header .apply-group {
       margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
       color: inherit;
       padding: 0 0.25rem;
       line-height: 1;

@@ -283,6 +283,9 @@ var Dn=Object.defineProperty;var Fn=Object.getOwnPropertyDescriptor;var u=(t,n,e
     }
     .group-section-header .apply-group {
       margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
       color: inherit;
       padding: 0 0.25rem;
       line-height: 1;
@@ -2197,7 +2200,7 @@ var Dn=Object.defineProperty;var Fn=Object.getOwnPropertyDescriptor;var u=(t,n,e
               </div>`)}
           </div>`:T}
     </div>
-  `}var M=class extends _{constructor(){super(...arguments);this.group="";this.groupName=null;this.open=!1;this._records=[];this._expanded=new Set;this._loading=!0;this._error="";this._hasNew=!1}connectedCallback(){super.connectedCallback(),this._poll=setInterval(()=>this._checkNew(),5e3)}disconnectedCallback(){super.disconnectedCallback(),this._poll&&clearInterval(this._poll)}updated(e){(e.has("open")&&this.open||e.has("group")&&this.open||e.has("scope")&&this.open)&&this._load()}_mine(e){return e.filter(r=>r.scope_kind===this.scope.scope_kind&&r.scope_id===this.scope.scope_id&&r.group===this.group)}async _load(){this._error="",this._loading=!0,this._hasNew=!1,this._expanded=new Set;try{let e=await ar(this.hass);if(!this.isConnected)return;this._records=this._mine(e),this._loading=!1}catch(e){this._error=e.message||String(e),this._loading=!1}}async _checkNew(){if(!(!this.open||!this.isConnected||document.visibilityState!=="visible"))try{let r=this._mine(await ar(this.hass))[0]?.timestamp??null,i=this._records[0]?.timestamp??null;r&&(!i||r>i)&&(this._hasNew=!0)}catch{}}_toggle(e){let r=new Set(this._expanded);r.has(e)?r.delete(e):r.add(e),this._expanded=r}_onClose(){this.dispatchEvent(new CustomEvent("close",{bubbles:!0,composed:!0}))}render(){if(!this.open)return T;let e=this.groupName??this.group;return l`
+  `}var M=class extends _{constructor(){super(...arguments);this.group="";this.groupName=null;this.open=!1;this._records=[];this._expanded=new Set;this._loading=!0;this._error="";this._hasNew=!1}connectedCallback(){super.connectedCallback(),this._poll=setInterval(()=>this._checkNew(),5e3)}disconnectedCallback(){super.disconnectedCallback(),this._poll&&clearInterval(this._poll)}updated(e){this.open&&(e.has("open")||e.has("group")||e.has("scope"))&&this._load()}_mine(e){return e.filter(r=>r.scope_kind===this.scope.scope_kind&&r.scope_id===this.scope.scope_id&&r.group===this.group)}async _load(){this._error="",this._loading=!0,this._hasNew=!1,this._expanded=new Set;try{let e=await ar(this.hass);if(!this.isConnected)return;this._records=this._mine(e),this._loading=!1}catch(e){this._error=e.message||String(e),this._loading=!1}}async _checkNew(){if(!(!this.open||!this.isConnected||document.visibilityState!=="visible"))try{let r=this._mine(await ar(this.hass))[0]?.timestamp??null,i=this._records[0]?.timestamp??null;r&&(!i||r>i)&&(this._hasNew=!0)}catch{}}_toggle(e){let r=new Set(this._expanded);r.has(e)?r.delete(e):r.add(e),this._expanded=r}_onClose(){this.dispatchEvent(new CustomEvent("close",{bubbles:!0,composed:!0}))}render(){if(!this.open)return T;let e=this.groupName??this.group;return l`
       <div class="modal" role="dialog" aria-modal="true">
         <div class="header">
           <h3>${e}</h3>

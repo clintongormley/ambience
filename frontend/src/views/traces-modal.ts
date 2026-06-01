@@ -93,11 +93,7 @@ export class AmbienceTracesModal extends LitElement {
   }
 
   override updated(changed: Map<string, unknown>): void {
-    if (
-      (changed.has("open") && this.open) ||
-      (changed.has("group") && this.open) ||
-      (changed.has("scope") && this.open)
-    ) {
+    if (this.open && (changed.has("open") || changed.has("group") || changed.has("scope"))) {
       this._load();
     }
   }

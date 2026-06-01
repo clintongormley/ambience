@@ -156,9 +156,7 @@ class BufferSink:
     def emit(self, event: TraceEvent) -> None:
         for unit in event.units:
             key: BucketKey = (unit.scope_kind, unit.scope_id, unit.group)
-            bucket = self._buckets.get(key)
-            if bucket is None:
-                bucket = self._buckets[key] = deque(maxlen=TRACE_BUFFER_SIZE)
+            bucket = self._buckets.setdefault(key, deque(maxlen=TRACE_BUFFER_SIZE))
             bucket.append(BufferedUnit(event.event_id, event.timestamp, event.cause, unit))
 
     def records(self) -> list[BufferedUnit]:
@@ -172,7 +170,7 @@ class BufferSink:
 
 def _cause_to_dict(cause: TriggerCause) -> dict[str, Any]:
     return {
-        "kind": str(cause.kind),
+        "kind": cause.kind,
         "entity_id": cause.entity_id,
         "old": cause.old,
         "new": cause.new,
@@ -214,7 +212,7 @@ def buffered_unit_to_dict(record: BufferedUnit) -> dict[str, Any]:
         "group": unit.group,
         "group_name": unit.group_name,
         "switch_state": unit.switch_state,
-        "outcome": str(unit.outcome),
+        "outcome": unit.outcome,
         "winner_name": unit.winner_name,
         "actions": unit.actions,
         "explanation": _explanation_to_dict(unit.explanation),

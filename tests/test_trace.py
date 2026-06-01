@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from custom_components.ambience.const import DATA_TRACE_SINKS, DOMAIN
+from custom_components.ambience.const import DATA_STORE, DATA_TRACE_SINKS, DOMAIN
 from custom_components.ambience.engine import (
     Explanation,
     PredicateResult,
@@ -182,3 +182,47 @@ def test_logsink_routes_reapplied_to_changes_stream(caplog):
     with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
         LogSink().emit(event)
     assert "reapplied" in caplog.text
+
+
+def test_emit_trace_resolves_group_name_for_log(caplog):
+    class StoreStub:
+        def groups(self):
+            return [{"id": "749f3cb81a8d4c3a811c3fd9c0c1d23e", "name": "Master Lights"}]
+
+    unit = UnitTrace(
+        "area", "master_bedroom", "749f3cb81a8d4c3a811c3fd9c0c1d23e", "on", "acted", None
+    )
+    event = TraceEvent(TriggerCause(kind="manual"), [unit])
+    hass = _Hass({DOMAIN: {DATA_TRACE_SINKS: [LogSink()], DATA_STORE: StoreStub()}})
+    with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
+        emit_trace(hass, event)
+    assert "area/master_bedroom/Master Lights" in caplog.text
+    assert "749f3cb8" not in caplog.text
+
+
+def test_logsink_emits_one_record_per_event(caplog):
+    # All of an event's lines must land in a SINGLE log record, so concurrent
+    # evaluations can never interleave their lines in the log.
+    units = [
+        UnitTrace("area", "a", "G1", "on", "acted", None, winner_name="r1"),
+        UnitTrace("area", "b", "G2", "on", "acted", None, winner_name="r2"),
+    ]
+    event = TraceEvent(TriggerCause(kind="entity", entity_id="x", old="off", new="on"), units)
+    with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
+        LogSink().emit(event)
+    records = [r for r in caplog.records if r.name == "custom_components.ambience.trace"]
+    assert len(records) == 1  # one record for the whole event
+    message = records[0].getMessage()
+    assert "area/a/G1: acted -> 'r1'" in message
+    assert "area/b/G2: acted -> 'r2'" in message
+
+
+def test_emit_trace_keeps_group_id_when_store_lacks_names(caplog):
+    # A store double without groups() (or a missing store) must not crash; the
+    # log falls back to the group id.
+    unit = UnitTrace("area", "master_bedroom", "abc123", "on", "acted", None)
+    event = TraceEvent(TriggerCause(kind="manual"), [unit])
+    hass = _Hass({DOMAIN: {DATA_TRACE_SINKS: [LogSink()]}})
+    with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
+        emit_trace(hass, event)
+    assert "area/master_bedroom/abc123" in caplog.text

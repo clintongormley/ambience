@@ -7,13 +7,13 @@ ring buffer (Increment B) plugs into without re-instrumenting the engine.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
 
-from .const import DATA_TRACE_SINKS, DOMAIN
+from .const import DATA_STORE, DATA_TRACE_SINKS, DOMAIN
 from .engine import Explanation
 
 # "changes" stream — on whenever the integration's debug logging is on.
@@ -99,6 +99,9 @@ class UnitTrace:
     explanation: Explanation | None
     winner_name: str | None = None
     actions: list[dict[str, Any]] = field(default_factory=list)
+    # Human group name, resolved from the store at emit time (logs show this in
+    # preference to the opaque `group` id).
+    group_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -110,7 +113,8 @@ class TraceEvent:
 
 
 def _scope_label(unit: UnitTrace) -> str:
-    return f"{unit.scope_kind}/{unit.scope_id or '-'}/{unit.group}"
+    group = unit.group_name or unit.group
+    return f"{unit.scope_kind}/{unit.scope_id or '-'}/{group}"
 
 
 def _format_action(action: dict[str, Any]) -> str:
@@ -179,17 +183,21 @@ class LogSink:
     """
 
     def emit(self, event: TraceEvent) -> None:
-        # Partition only inside each guard, so an off stream costs nothing.
+        # One whole event = one log record (lines joined). Concurrent
+        # evaluations therefore can't interleave their lines in the log; each
+        # trigger is a single self-contained entry, and indentation within it
+        # ties every line to its scope/group/rule. Partition only inside each
+        # guard, so an off stream costs nothing.
         if _LOGGER.isEnabledFor(logging.DEBUG):
             changes = [u for u in event.units if u.outcome in _CHANGES_OUTCOMES]
             if changes:
-                for line in format_trace_event(TraceEvent(event.cause, changes)):
-                    _LOGGER.debug("%s", line)
+                _LOGGER.debug("%s", "\n".join(format_trace_event(TraceEvent(event.cause, changes))))
         if _NOOP_LOGGER.isEnabledFor(logging.DEBUG):
             other = [u for u in event.units if u.outcome not in _CHANGES_OUTCOMES]
             if other:
-                for line in format_trace_event(TraceEvent(event.cause, other)):
-                    _NOOP_LOGGER.debug("%s", line)
+                _NOOP_LOGGER.debug(
+                    "%s", "\n".join(format_trace_event(TraceEvent(event.cause, other)))
+                )
 
 
 def tracing_active() -> bool:
@@ -198,7 +206,24 @@ def tracing_active() -> bool:
     return _LOGGER.isEnabledFor(logging.DEBUG) or _NOOP_LOGGER.isEnabledFor(logging.DEBUG)
 
 
+def _resolve_group_names(hass: HomeAssistant, event: TraceEvent) -> TraceEvent:
+    """Fill each unit's `group_name` from the store's group list (id -> name),
+    so logs show the human group name rather than its opaque id. Returns the
+    event unchanged if the store has no group list (e.g. test doubles)."""
+    store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+    groups = getattr(store, "groups", None)
+    if not callable(groups):
+        return event
+    names = {g.get("id"): g.get("name") for g in groups()}
+    units = [replace(u, group_name=names.get(u.group) or u.group_name) for u in event.units]
+    return replace(event, units=units)
+
+
 def emit_trace(hass: HomeAssistant, event: TraceEvent) -> None:
     """Fan a trace event out to every registered sink."""
-    for sink in hass.data.get(DOMAIN, {}).get(DATA_TRACE_SINKS, ()):
+    sinks = hass.data.get(DOMAIN, {}).get(DATA_TRACE_SINKS, ())
+    if not sinks:
+        return
+    event = _resolve_group_names(hass, event)
+    for sink in sinks:
         sink.emit(event)

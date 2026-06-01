@@ -314,3 +314,65 @@ async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockC
 
     msgs = [e.data["message"] for e in entries if e.data.get("name") == "Ambience"]
     assert "applied 'Movie' in Global" in msgs
+
+
+# --- run_rule_actions: own "ran ..." wording + shared context -----------------
+
+
+async def test_run_rule_actions_fires_ambience_entry_and_shares_context(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    from custom_components.ambience.service import async_run_rule_actions
+
+    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
+    light_calls = async_mock_service(hass, "light", "turn_on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "name": "Movie",
+                    "group": "general",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                }
+            ],
+        },
+    )
+
+    await async_run_rule_actions(hass, "area", "lr", 0)
+    await hass.async_block_till_done()
+
+    ambience_entries = [e for e in entries if e.data.get("name") == "Ambience"]
+    assert len(ambience_entries) == 1
+    entry = ambience_entries[0]
+    assert entry.data["domain"] == "ambience"
+    # run-actions uses the "ran" verb; "lr" is not a real area ⇒ raw-id fallback.
+    assert entry.data["message"] == "ran 'Movie' in lr"
+    assert len(light_calls) == 1
+    assert light_calls[0].context.id == entry.context.id
+
+
+async def test_run_rule_actions_with_empty_actions_logs_nothing(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    from custom_components.ambience.service import async_run_rule_actions
+
+    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {"rules": [{"name": "Empty", "group": "general", "when": {}, "actions": []}]},
+    )
+
+    await async_run_rule_actions(hass, "area", "lr", 0)
+    await hass.async_block_till_done()
+
+    assert [e for e in entries if e.data.get("name") == "Ambience"] == []

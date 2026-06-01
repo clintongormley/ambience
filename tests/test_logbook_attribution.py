@@ -226,3 +226,91 @@ async def test_apply_with_empty_actions_logs_nothing(
     await hass.async_block_till_done()
 
     assert [e for e in entries if e.data.get("name") == "Ambience"] == []
+
+
+async def test_multiple_groups_include_group_name_and_own_context(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    from custom_components.ambience.service import async_apply_scene
+
+    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
+    light_calls = async_mock_service(hass, "light", "turn_on")
+    cover_calls = async_mock_service(hass, "cover", "open_cover")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_groups(
+        [
+            {"id": "lighting", "name": "Lights"},
+            {"id": "blinds", "name": "Blinds"},
+        ]
+    )
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [
+            {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
+            {"id": "cover.open_cover", "label": "", "visible_fields": [], "defaults": {}},
+        ]
+    )
+    await store.async_save_area(
+        "lr",
+        {
+            "rules": [
+                {
+                    "name": "Evening",
+                    "group": "lighting",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                },
+                {
+                    "name": "Open",
+                    "group": "blinds",
+                    "when": {},
+                    "actions": [
+                        {"service": "cover.open_cover", "entity_ids": ["cover.blind"], "params": {}}
+                    ],
+                },
+            ],
+        },
+    )
+
+    await async_apply_scene(hass, "area", "lr")
+    await hass.async_block_till_done()
+
+    by_msg = {e.data["message"]: e for e in entries if e.data.get("name") == "Ambience"}
+    assert "applied 'Evening' in lr (Lights)" in by_msg
+    assert "applied 'Open' in lr (Blinds)" in by_msg
+    assert light_calls[0].context.id == by_msg["applied 'Evening' in lr (Lights)"].context.id
+    assert cover_calls[0].context.id == by_msg["applied 'Open' in lr (Blinds)"].context.id
+    # Independent contexts per group.
+    assert light_calls[0].context.id != cover_calls[0].context.id
+
+
+async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockConfigEntry) -> None:
+    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
+    async_mock_service(hass, "light", "turn_on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    await store.async_save_house(
+        {
+            "rules": [
+                {
+                    "name": "Movie",
+                    "group": "general",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                }
+            ],
+        }
+    )
+
+    await hass.services.async_call(DOMAIN, "apply_scene", {"house": True}, blocking=True)
+    await hass.async_block_till_done()
+
+    msgs = [e.data["message"] for e in entries if e.data.get("name") == "Ambience"]
+    assert "applied 'Movie' in Global" in msgs

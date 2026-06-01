@@ -1050,6 +1050,41 @@ describe("ambience-scopes-view", () => {
     expect(vi.mocked(api.applyRules).mock.calls[0][2]).toBe("g");
   });
 
+  // --- rule enable/disable toggle -----------------------------------------
+
+  async function toggleRuleInArea(
+    areaId: string,
+    detail: { index: number; enabled: boolean },
+  ): Promise<void> {
+    const row = el.shadowRoot.querySelector(`.scope-row.area[data-id='${areaId}']`) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    rulesList.dispatchEvent(
+      new CustomEvent("toggle-rule-enabled", { detail, bubbles: true, composed: true }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  test("disabling a rule saves enabled:false on that rule", async () => {
+    el = await mount({ areaConfigs: { living_room: { rules: [{ name: "R", when: {}, actions: [] }] } } });
+    await toggleRuleInArea("living_room", { index: 0, enabled: false });
+    expect(api.saveArea).toHaveBeenCalledWith(
+      expect.anything(),
+      "living_room",
+      expect.objectContaining({ rules: [expect.objectContaining({ name: "R", enabled: false })] }),
+    );
+  });
+
+  test("re-enabling a rule removes the enabled key", async () => {
+    el = await mount({ areaConfigs: { living_room: { rules: [{ name: "R", when: {}, actions: [], enabled: false }] } } });
+    await toggleRuleInArea("living_room", { index: 0, enabled: true });
+    const call = vi.mocked(api.saveArea).mock.calls.at(-1)!;
+    const savedRule = (call[2] as ScopeConfig).rules[0];
+    expect(savedRule).not.toHaveProperty("enabled");
+    expect(savedRule).toMatchObject({ name: "R" });
+  });
+
   // Keep last: registering <ha-switch> is global and switches the toggle widget
   // for any mount that runs after this test.
   test("uses <ha-switch> when it is registered and toggles via callService", async () => {

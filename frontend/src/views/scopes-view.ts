@@ -579,6 +579,26 @@ export class AmbienceScopesView extends LitElement {
     void this._mutate(scope, { ...cfg, rules });
   }
 
+  private _toggleRuleEnabled(
+    scope: Scope,
+    e: CustomEvent<{ index: number; enabled: boolean }>,
+  ) {
+    const cfg = this._getConfig(scope);
+    if (!cfg) return;
+    const rules = cfg.rules.map((r, i) => {
+      if (i !== e.detail.index) return r;
+      if (e.detail.enabled) {
+        // Re-enable: drop the key entirely (absent = enabled) so default
+        // rules stay clean.
+        const next = { ...r };
+        delete next.enabled;
+        return next;
+      }
+      return { ...r, enabled: false };
+    });
+    void this._mutate(scope, { ...cfg, rules });
+  }
+
   private async _saveRule(e: CustomEvent<{ rule: Rule; scope: Scope }>) {
     const editing = this._editing;
     this._editing = null;
@@ -912,6 +932,9 @@ export class AmbienceScopesView extends LitElement {
                   ) => this._reorderRules(scope, e)}
                   @unpin-rule=${(e: CustomEvent<{ index: number }>) =>
                     this._unpinRule(scope, e)}
+                  @toggle-rule-enabled=${(
+                    e: CustomEvent<{ index: number; enabled: boolean }>,
+                  ) => this._toggleRuleEnabled(scope, e)}
                   @run-rule-actions=${(e: CustomEvent<{ index: number }>) =>
                     this._runRuleActions(scope, e)}
                   @apply-group=${(e: CustomEvent<{ groupId: string }>) =>

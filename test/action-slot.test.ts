@@ -918,7 +918,7 @@ describe("ambience-action-slot", () => {
     });
     const hint = el.shadowRoot.querySelector(".field-default-hint");
     expect(hint).toBeTruthy();
-    expect(hint!.textContent).toContain("Default: Kitchen");
+    expect(hint!.textContent).toContain("Default: [Kitchen]");
   });
 
   test("no default hint when settings has no default for the field", async () => {

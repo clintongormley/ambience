@@ -124,13 +124,14 @@ export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {})
   if (typeof pred !== "object" || pred === null || typeof (pred as { script?: unknown }).script !== "string") {
     return String(pred);
   }
+  const name = _domainEntityName(ctx, pred.script);
   const args = pred.args ?? {};
   const keys = Object.keys(args).sort();
-  if (keys.length === 0) return pred.script;
+  if (keys.length === 0) return name;
   const argStr = keys
-    .map((k) => `${_scriptFieldLabel(ctx.hass, pred.script, k)}=${formatArgValue(ctx.hass, args[k])}`)
+    .map((k) => `${_scriptFieldLabel(ctx.hass, pred.script, k)}: ${formatArgValue(ctx.hass, args[k])}`)
     .join(", ");
-  return `${pred.script}(${argStr})`;
+  return `${name} (${argStr})`;
 }
 
 /** Friendly label for a script argument: prefers the script field's HA `name`
@@ -300,16 +301,17 @@ function _targetEntityIds(value: unknown): string[] | null {
 }
 
 /** Format an arg/param value for a summary. HA target objects (`{entity_id:
- *  …}`) render as friendly entity names — the first `_TARGET_ENTITY_CAP`, then
- *  "+N more" for longer lists — so a summary reads "Target: Kitchen, Hallway
- *  +2 more" rather than a raw JSON dump. Everything else falls back to
- *  {@link formatParamValue}. */
+ *  …}`) render as a bracketed list of friendly entity names — the first
+ *  `_TARGET_ENTITY_CAP`, then "+N more" for longer lists — so a summary reads
+ *  "Target: [Kitchen, Hallway +2 more]" rather than a raw JSON dump. Everything
+ *  else falls back to {@link formatParamValue}. */
 export function formatArgValue(hass: HassLike | undefined, value: unknown): string {
   const ids = _targetEntityIds(value);
   if (!ids) return formatParamValue(value);
   const names = ids.slice(0, _TARGET_ENTITY_CAP).map((id) => _domainEntityName({ hass }, id));
   const rest = ids.length - _TARGET_ENTITY_CAP;
-  return rest > 0 ? `${names.join(", ")} +${rest} more` : names.join(", ");
+  const body = rest > 0 ? `${names.join(", ")} +${rest} more` : names.join(", ");
+  return `[${body}]`;
 }
 
 /** Extract the `unit_of_measurement` from a selector dict, if any — e.g.

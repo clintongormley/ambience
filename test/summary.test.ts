@@ -435,7 +435,7 @@ describe("summariseAction", () => {
       params: { target: { entity_id: ["light.kitchen"] } },
     };
     expect(summariseAction(action, { hass }))
-      .toBe("Script.dim: (no targets), Target: Kitchen");
+      .toBe("Script.dim: (no targets), Target: [Kitchen]");
   });
 });
 
@@ -652,33 +652,42 @@ describe("summariseScript", () => {
     expect(summariseScript(null, { hass: noLocalize })).toBe("(any)");
   });
 
-  test("no args renders the script id alone", () => {
-    expect(summariseScript({ script: "script.foo" }, { hass: noLocalize }))
-      .toBe("script.foo");
+  test("uses the script's friendly name when available", () => {
+    const hass = {
+      localize: () => undefined,
+      states: { "script.foobar": { attributes: { friendly_name: "Evening Scene" } } },
+    };
+    expect(summariseScript({ script: "script.foobar", args: {} }, { hass }))
+      .toBe("Evening Scene");
+  });
+
+  test("no args renders the humanised script name", () => {
+    expect(summariseScript({ script: "script.foobar" }, { hass: noLocalize }))
+      .toBe("Foobar");
   });
 
   test("empty args object is treated as no args", () => {
     expect(summariseScript({ script: "script.foo", args: {} }, { hass: noLocalize }))
-      .toBe("script.foo");
+      .toBe("Foo");
   });
 
   test("single arg renders with a humanised key when no alias is known", () => {
     expect(summariseScript({ script: "script.foo", args: { k: 7 } }, { hass: noLocalize }))
-      .toBe("script.foo(K=7)");
+      .toBe("Foo (K: 7)");
   });
 
   test("multiple args render alphabetically by key", () => {
     expect(summariseScript(
       { script: "script.foo", args: { z: "down", k: 7 } },
       { hass: noLocalize },
-    )).toBe("script.foo(K=7, Z=down)");
+    )).toBe("Foo (K: 7, Z: down)");
   });
 
   test("object-valued arg renders via formatParamValue, not [object Object]", () => {
     expect(summariseScript(
-      { script: "script.foo", args: { target: [210, 81, 81] } },
+      { script: "script.foo", args: { rgb: [210, 81, 81] } },
       { hass: noLocalize },
-    )).toBe("script.foo(Target=[210,81,81])");
+    )).toBe("Foo (Rgb: [210,81,81])");
   });
 
   test("arg key resolves to the script field's friendly name alias", () => {
@@ -689,10 +698,10 @@ describe("summariseScript", () => {
     expect(summariseScript(
       { script: "script.foo", args: { target: 5 } },
       { hass },
-    )).toBe("script.foo(Target brightness=5)");
+    )).toBe("Foo (Target brightness: 5)");
   });
 
-  test("target-shaped arg renders friendly entity names", () => {
+  test("target-shaped arg renders a bracketed list of friendly entity names", () => {
     const hass = {
       localize: () => undefined,
       states: {
@@ -706,7 +715,7 @@ describe("summariseScript", () => {
         args: { target: { entity_id: ["sensor.cph2653_battery_level", "sensor.cph2653_battery_state"] } },
       },
       { hass },
-    )).toBe("script.foo(Target=Battery Level, Battery State)");
+    )).toBe("Foo (Target: [Battery Level, Battery State])");
   });
 
   test("target with many entities is capped with '+N more'", () => {
@@ -717,7 +726,7 @@ describe("summariseScript", () => {
     expect(summariseScript(
       { script: "script.foo", args: { target: { entity_id: ids } } },
       { hass: { localize: () => undefined, states } },
-    )).toBe("script.foo(Target=E1, E2 +3 more)");
+    )).toBe("Foo (Target: [E1, E2 +3 more])");
   });
 
   test("single-string entity_id target renders one friendly name", () => {
@@ -728,14 +737,14 @@ describe("summariseScript", () => {
     expect(summariseScript(
       { script: "script.foo", args: { target: { entity_id: "light.kitchen" } } },
       { hass },
-    )).toBe("script.foo(Target=Kitchen)");
+    )).toBe("Foo (Target: [Kitchen])");
   });
 
   test("non-target object arg still renders as JSON", () => {
     expect(summariseScript(
       { script: "script.foo", args: { opts: { mode: "auto" } } },
       { hass: noLocalize },
-    )).toBe('script.foo(Opts={"mode":"auto"})');
+    )).toBe('Foo (Opts: {"mode":"auto"})');
   });
 
   test("malformed predicate (non-string script) falls back to String(pred)", () => {
@@ -756,7 +765,7 @@ test("summariseMatcher dispatches script with no args", () => {
     "script",
     { script: "script.foo" },
     { hass: noLocalize },
-  )).toBe("script.foo");
+  )).toBe("Foo");
 });
 
 test("summariseMatcher dispatches script with args (sorted)", () => {
@@ -764,7 +773,7 @@ test("summariseMatcher dispatches script with args (sorted)", () => {
     "script",
     { script: "script.foo", args: { z: "down", k: 7 } },
     { hass: noLocalize },
-  )).toBe("script.foo(K=7, Z=down)");
+  )).toBe("Foo (K: 7, Z: down)");
 });
 
 test("summariseMatcher script with null predicate yields '(any)'", () => {

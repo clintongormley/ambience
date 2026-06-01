@@ -56,6 +56,9 @@ function entityCount(actions: Action[]): number {
 }
 
 function renderRule(r: TraceRuleEval): TemplateResult {
+  if (r.disabled) {
+    return html`<div class="rule disabled">rule #${r.index} ${r.name ?? "—"}: disabled</div>`;
+  }
   if (!r.evaluated) {
     return html`<div class="rule skipped">rule #${r.index} ${r.name ?? "—"}: not evaluated</div>`;
   }

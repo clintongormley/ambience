@@ -110,4 +110,13 @@ describe("trace-detail", () => {
     expect(titles).not.toContain("Rule evaluation");
     expect(host.querySelector(".why-toggle")).toBeTruthy();
   });
+
+  test("disabled rule is marked 'disabled', not 'not evaluated'", () => {
+    const host = renderToHost({ explanation: { winner_index: 1, rules: [
+      { index: 0, name: "Off", matched: false, evaluated: false, disabled: true, predicates: [] },
+      { index: 1, name: "Win", matched: true, evaluated: true, predicates: [] },
+    ] } }, true);
+    expect(host.textContent).toContain("disabled");
+    expect(host.textContent).not.toContain("not evaluated");
+  });
 });

@@ -18,6 +18,7 @@ from custom_components.ambience.trace import (
     TraceEvent,
     TriggerCause,
     UnitTrace,
+    _explanation_to_dict,
     emit_trace,
     format_trace_event,
     tracing_active,
@@ -442,6 +443,7 @@ def test_buffered_unit_to_dict_acted_with_explanation():
         "name": "evening",
         "matched": True,
         "evaluated": True,
+        "disabled": False,
         "predicates": [{"matcher_key": "tod", "passed": True, "detail": "evening"}],
     }
 
@@ -455,3 +457,27 @@ def test_buffered_unit_to_dict_reapplied_has_null_explanation():
     assert data["outcome"] == "reapplied"
     assert data["explanation"] is None
     assert json.loads(json.dumps(data)) == data
+
+
+def test_format_marks_disabled_rules():
+    explanation = Explanation(
+        winner_index=1,
+        rules=[
+            RuleEval(0, "off", [], False, False, disabled=True),
+            RuleEval(1, "win", [PredicateResult("mode", True, None)], True, True),
+        ],
+    )
+    unit = UnitTrace("house", None, "General", "on", "acted", explanation, winner_name="win")
+    event = TraceEvent(TriggerCause(kind="startup"), [unit])
+    text = "\n".join(format_trace_event(event))
+    assert "rule #0 'off': disabled" in text
+    assert "not evaluated" not in text
+
+
+def test_explanation_to_dict_includes_disabled():
+    explanation = Explanation(
+        winner_index=None,
+        rules=[RuleEval(0, "off", [], False, False, disabled=True)],
+    )
+    result = _explanation_to_dict(explanation)
+    assert result["rules"][0]["disabled"] is True

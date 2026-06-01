@@ -189,6 +189,7 @@ def _explanation_to_dict(explanation: Explanation | None) -> dict[str, Any] | No
                 "name": rule.name,
                 "matched": rule.matched,
                 "evaluated": rule.evaluated,
+                "disabled": rule.disabled,
                 "predicates": [
                     {"matcher_key": p.matcher_key, "passed": p.passed, "detail": p.detail}
                     for p in rule.predicates
@@ -255,6 +256,9 @@ def format_trace_event(event: TraceEvent) -> list[str]:
         lines.append(f"  {scope}: {unit.outcome}{winner}")
         if explanation is not None:
             for rule_eval in explanation.rules:
+                if rule_eval.disabled:
+                    lines.append(f"      rule #{rule_eval.index} {rule_eval.name!r}: disabled")
+                    continue
                 if not rule_eval.evaluated:
                     lines.append(
                         f"      rule #{rule_eval.index} {rule_eval.name!r}: "

@@ -338,6 +338,7 @@ export type TraceRuleEval = {
   name: string | null;
   matched: boolean;
   evaluated: boolean;
+  disabled?: boolean;
   predicates: TracePredicate[];
 };
 export type TraceExplanation = { winner_index: number | null; rules: TraceRuleEval[] };

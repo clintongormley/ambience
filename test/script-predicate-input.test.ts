@@ -57,6 +57,18 @@ describe("ambience-script-predicate-input — picker", () => {
     expect(detail.value).toEqual({ script: "script.foo", args: {} });
   });
 
+  test("_pickScript drops stale triggers from a previous script", async () => {
+    el = await mount(
+      { script: "script.old", args: {}, triggers: ["light.kitchen"] },
+      { services: { script: { old: {}, foo: {} } } },
+    );
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el._pickScript("script.foo");
+    expect(detail.value).toEqual({ script: "script.foo", args: {} });
+    expect(detail.value.triggers).toBeUndefined();
+  });
+
   test("_pickScript seeds args from field defaults", async () => {
     el = await mount(null, {
       services: {

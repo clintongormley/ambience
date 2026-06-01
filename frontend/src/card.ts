@@ -33,9 +33,20 @@ class AmbienceCard extends HTMLElement {
     return this._hass;
   }
 
-  // Row-count hint for the layout editor; the frontend fills a full-height card.
+  // Row-count hint for the masonry layout editor.
   getCardSize(): number {
     return 12;
+  }
+
+  // Sections (grid) layout sizing. Without this HA gives the card a single
+  // grid column (~one card width). Span the full section by default, allow the
+  // user to resize down, and size height to content.
+  getGridOptions(): {
+    columns: number | "full";
+    rows: number | "auto";
+    min_columns: number;
+  } {
+    return { columns: "full", rows: "auto", min_columns: 6 };
   }
 
   connectedCallback(): void {

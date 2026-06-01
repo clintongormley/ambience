@@ -77,6 +77,16 @@ describe("<ambience-card>", () => {
     expect(el.style.getPropertyValue("--ambience-content-max-width")).toBe("none");
   });
 
+  test("getGridOptions requests full width + content height (Sections layout)", () => {
+    const el = document.createElement("ambience-card") as HTMLElement & {
+      getGridOptions: () => Record<string, unknown>;
+    };
+    const opts = el.getGridOptions();
+    expect(opts.columns).toBe("full");
+    expect(opts.rows).toBe("auto");
+    expect(typeof opts.min_columns).toBe("number");
+  });
+
   test("getStubConfig returns an object and getCardSize returns a number", () => {
     const Ctor = customElements.get("ambience-card") as unknown as {
       getStubConfig: () => object;

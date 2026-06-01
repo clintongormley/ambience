@@ -32,6 +32,7 @@ from .const import (
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
+    DATA_TRACE_BUFFER,
     DATA_TRACE_SINKS,
     DOMAIN,
     SIGNAL_CONFIG_CHANGED,
@@ -49,7 +50,7 @@ from .periods import PeriodStore
 from .registry import register_matcher
 from .service import async_apply_scene, clear_last_applied
 from .store import AmbienceStore
-from .trace import LogSink
+from .trace import BufferSink, LogSink
 from .trigger_engine import AutoTriggerEngine
 from .websocket import async_register_commands, async_unregister_commands
 
@@ -106,7 +107,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data[DATA_MATCHERS] = {}
     domain_data[DATA_SWITCHES] = {}
     domain_data[DATA_LAST_APPLIED] = {}
-    domain_data[DATA_TRACE_SINKS] = [LogSink()]
+    trace_buffer = BufferSink()
+    domain_data[DATA_TRACE_BUFFER] = trace_buffer
+    domain_data[DATA_TRACE_SINKS] = [LogSink(), trace_buffer]
 
     store = AmbienceStore(hass)
     await store.async_load()

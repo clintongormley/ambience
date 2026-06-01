@@ -368,3 +368,14 @@ def test_buffersink_clear_empties_all_buckets():
     sink.emit(_event("08:00", [UnitTrace("area", "kitchen", "General", "on", "acted", None)]))
     sink.clear()
     assert sink.records() == []
+
+
+def test_emit_trace_feeds_the_registered_buffer():
+    buffer = BufferSink()
+    hass = _Hass({DOMAIN: {DATA_TRACE_SINKS: [buffer], DATA_TRACE_BUFFER: buffer}})
+    unit = UnitTrace("area", "kitchen", "General", "on", "acted", None, winner_name="a")
+    emit_trace(hass, TraceEvent(TriggerCause(kind="manual"), [unit]))
+    records = buffer.records()
+    assert len(records) == 1
+    assert records[0].unit.scope_id == "kitchen"
+    assert records[0].event_id and records[0].timestamp  # enriched by emit_trace

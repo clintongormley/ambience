@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from "vitest";
+import { describe, test, expect, beforeEach, afterEach } from "vitest";
 import "../frontend/src/ambience-frontend";
 
 const hass = {
@@ -22,6 +22,8 @@ describe("<ambience-frontend>", () => {
     document.body.appendChild(el);
     await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
   });
+
+  afterEach(() => el?.remove());
 
   test("is defined as a custom element", () => {
     expect(customElements.get("ambience-frontend")).toBeTypeOf("function");

@@ -139,8 +139,9 @@ export class AmbienceScopesView extends LitElement {
       color: var(--primary-color, #03a9f4);
       cursor: pointer;
       padding: 0.2rem 0.5rem;
-      font-size: 0.85rem;
+      font-size: 0.85em;
       white-space: nowrap;
+      flex: 0 0 auto;
     }
     .scope-body {
       padding: 0.5rem 1rem 1rem 1rem;
@@ -627,8 +628,8 @@ export class AmbienceScopesView extends LitElement {
     this._error = "";
     try {
       await runRuleActions(this.hass, scope, e.detail.index);
-    } catch (err) {
-      this._error = (err as Error).message || String(err);
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
     }
   }
 

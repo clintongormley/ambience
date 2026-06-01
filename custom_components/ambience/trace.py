@@ -42,6 +42,7 @@ class CauseKind(StrEnum):
     MANUAL = "manual"
     STARTUP = "startup"
     REAPPLY = "reapply"
+    SIMULATED = "simulated"
     UNKNOWN = "unknown"
 
 
@@ -84,6 +85,8 @@ class TriggerCause:
             return "startup sync"
         if self.kind == CauseKind.REAPPLY:
             return f"reapply ({self.detail})" if self.detail else "reapply"
+        if self.kind == CauseKind.SIMULATED:
+            return f"simulated {self.detail}" if self.detail else "simulated"
         return str(self.kind)
 
 

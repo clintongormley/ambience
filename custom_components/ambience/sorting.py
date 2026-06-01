@@ -227,11 +227,16 @@ def shadowed_by(ordered_rules: list[Rule], matchers: dict[str, Any]) -> dict[int
     """For rules already in final (resolved) order, map the index of each
     shadowed rule to the index of the earliest rule IN THE SAME GROUP that
     shadows it. Groups resolve independently, so a rule can only be shadowed by
-    an earlier rule in its own group."""
+    an earlier rule in its own group. Disabled rules (``enabled: False``) are
+    ignored — they neither shadow others nor are reported as shadowed."""
     constrained = [_constrained(r) for r in ordered_rules]
     result: dict[int, int] = {}
     for j in range(len(ordered_rules)):
+        if ordered_rules[j].get("enabled") is False:
+            continue
         for i in range(j):
+            if ordered_rules[i].get("enabled") is False:
+                continue
             if ordered_rules[i].get("group") != ordered_rules[j].get("group"):
                 continue
             if _superset_or_equal(constrained[i], constrained[j], matchers):

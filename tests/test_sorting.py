@@ -347,3 +347,24 @@ def test_shadowed_by_is_per_group() -> None:
         {"when": {"tod": (8, 16)}, "actions": [], "group": "b"},  # idx 1: narrow, group b
     ]
     assert shadowed_by(cross_group, matchers) == {}
+
+
+def test_disabled_rule_does_not_shadow_rule_below() -> None:
+    matchers = {"mode": StringMatcher()}
+    ordered = [
+        {"name": "off", "when": {"mode": "x"}, "actions": [], "enabled": False},
+        {"name": "live", "when": {"mode": "x"}, "actions": []},
+    ]
+    # The earlier rule is disabled, so it no longer shadows the live one.
+    assert shadowed_by(ordered, matchers) == {}
+
+
+def test_disabled_rule_is_not_reported_as_shadowed() -> None:
+    matchers = {"mode": StringMatcher()}
+    ordered = [
+        {"name": "live", "when": {"mode": "x"}, "actions": []},
+        {"name": "off", "when": {"mode": "x"}, "actions": [], "enabled": False},
+    ]
+    # The disabled rule below is not flagged shadowed — its disabled state
+    # is what the UI shows instead.
+    assert shadowed_by(ordered, matchers) == {}

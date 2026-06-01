@@ -1,22 +1,41 @@
 import { build } from "esbuild";
 
-await build({
-  entryPoints: ["frontend/src/main.ts"],
+const common = {
   bundle: true,
   format: "esm",
   target: "es2022",
-  outfile: "custom_components/ambience/frontend/ambience-panel.js",
   minify: true,
   sourcemap: false,
   legalComments: "none",
-  // HA's frontend serves `custom-card-helpers` via an import map, so we
-  // resolve it at runtime in the browser rather than bundling our own copy.
-  // The runtime resolution gives us HA's actual helpers (including the
-  // current location of loadCardHelpers, wherever HA has moved it).
+  // HA's frontend serves `custom-card-helpers` via an import map; resolve at
+  // runtime rather than bundling our own copy.
   external: ["custom-card-helpers"],
   banner: {
-    js: "/* Ambience panel — bundled output. Do not edit by hand. */",
+    js: "/* Ambience — bundled output. Do not edit by hand. */",
   },
+};
+
+const outDir = "custom_components/ambience/frontend";
+
+// Heavy shared chunk: the full UI. Lazy-loaded by both loaders below.
+await build({
+  ...common,
+  entryPoints: ["frontend/src/ambience-frontend.ts"],
+  outfile: `${outDir}/ambience-frontend.js`,
 });
 
-console.log("Built custom_components/ambience/frontend/ambience-panel.js");
+// Sidebar panel loader (registered only when the sidebar option is on).
+await build({
+  ...common,
+  entryPoints: ["frontend/src/main.ts"],
+  outfile: `${outDir}/ambience-panel.js`,
+});
+
+// Card loader (registered globally so it appears in the card picker).
+await build({
+  ...common,
+  entryPoints: ["frontend/src/card.ts"],
+  outfile: `${outDir}/ambience-card.js`,
+});
+
+console.log("Built ambience-frontend.js, ambience-panel.js, ambience-card.js");

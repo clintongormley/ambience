@@ -125,6 +125,9 @@ async def async_resolve_with_snapshots(
     # winner from the Explanation (resolve() is itself a thin wrapper over
     # evaluate_explained, so calling both would walk the rules twice).
     if explain:
+        # describe=True calls matcher.describe() per predicate. With the always-on
+        # BufferSink (Increment B), `explain` is true on every evaluation, so this
+        # runs in production — bounded, but no longer gated behind debug logging.
         explanation = evaluate_explained(candidates, snapshots, matchers_registry, describe=True)
         winner = explanation.winner_index
         match = None if winner is None else (winner, candidates[winner])

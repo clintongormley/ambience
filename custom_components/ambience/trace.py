@@ -1,7 +1,8 @@
 """Evaluation tracing: cause/unit/event types, log formatting, and sinks.
 
-Increment A ships a LogSink only. `emit_trace` is the seam a future in-memory
-ring buffer (Increment B) plugs into without re-instrumenting the engine.
+`emit_trace` is the fan-out seam: a LogSink writes to the HA log, and a
+BufferSink (Increment B) retains recent evaluations in memory for the websocket
+read API. New sinks plug in here without re-instrumenting the engine.
 """
 
 from __future__ import annotations
@@ -143,7 +144,11 @@ BucketKey = tuple[str, str | None, str]
 class BufferSink:
     """A trace sink that retains the last `TRACE_BUFFER_SIZE` evaluations per
     `(scope, group)`. Always-on; in-memory; lost on restart. Single-threaded
-    event loop => no locking."""
+    event loop => no locking.
+
+    Bucket keys for scopes/groups that no longer exist are not pruned (each key's
+    deque is bounded, and config groups are few and stable); revisit if needed.
+    """
 
     def __init__(self) -> None:
         self._buckets: dict[BucketKey, deque[BufferedUnit]] = {}

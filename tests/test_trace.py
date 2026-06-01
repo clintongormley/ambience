@@ -282,9 +282,10 @@ def test_tracing_active_true_when_buffer_registered():
     assert tracing_active(hass) is True
 
 
-def test_tracing_active_false_with_no_buffer_and_no_debug():
+def test_tracing_active_false_with_no_buffer_and_no_debug(caplog):
     hass = _Hass({DOMAIN: {}})
-    assert tracing_active(hass) is False
+    with caplog.at_level(logging.WARNING, logger="custom_components.ambience"):
+        assert tracing_active(hass) is False
 
 
 def test_emit_trace_assigns_a_timestamp():

@@ -59,14 +59,19 @@ async def test_force_applies_even_when_switch_off(hass, mock_config_entry):
 
     assert len(light_calls) == 1
     assert len(cover_calls) == 1
+    # force applies every group; both winners are recorded.
+    assert get_last_applied(hass, "area", area_id, "lighting") is not None
+    assert get_last_applied(hass, "area", area_id, "blinds") is not None
 
 
 async def test_group_applies_only_that_group(hass, mock_config_entry):
+    # Switch left on and force omitted, so this proves group= works on its own,
+    # independent of force=.
     area_id = await _install(hass, mock_config_entry)
     light_calls = async_mock_service(hass, "light", "turn_on")
     cover_calls = async_mock_service(hass, "cover", "open_cover")
 
-    await async_apply_scene(hass, "area", area_id, group="lighting", force=True)
+    await async_apply_scene(hass, "area", area_id, group="lighting")
 
     assert len(light_calls) == 1
     assert len(cover_calls) == 0

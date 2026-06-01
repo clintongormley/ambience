@@ -326,6 +326,7 @@ export type TraceCause = {
     | "manual"
     | "startup"
     | "reapply"
+    | "simulated"
     | "unknown";
   entity_id: string | null;
   old: string | null;
@@ -359,3 +360,25 @@ export type BufferedUnit = {
   actions: ActionSpec[];
   explanation: TraceExplanation | null;
 };
+
+// --- what-if simulator (mirrors custom_components/ambience/simulate.py) ---
+
+export type SimulateKnobAttribute = { name: string; live_value: unknown };
+export type SimulateKnob = {
+  kind: "entity";
+  entity_id: string;
+  live_state: string | null;
+  states: string[];
+  attributes: SimulateKnobAttribute[];
+};
+export type SimulateInputs = {
+  knobs: SimulateKnob[];
+  has_time: boolean;
+  opaque: boolean;
+};
+// The result reuses BufferedUnit — a simulation renders through the same UI.
+export type SimulateScope = { scope_kind: string; scope_id: string | null };
+export type SimulateOverrides = Record<
+  string,
+  { state?: string; attributes?: Record<string, unknown> }
+>;

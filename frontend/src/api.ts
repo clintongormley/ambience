@@ -21,6 +21,9 @@ import type {
   ScopeSwitch,
   ServiceInfo,
   ServiceSchema,
+  SimulateInputs,
+  SimulateOverrides,
+  SimulateScope,
   SwitchDefaults,
   WeatherConfig,
   WeatherGroup,
@@ -360,6 +363,37 @@ export async function deleteGroup(
 export async function listTraces(hass: HassConnection): Promise<BufferedUnit[]> {
   const res = await hass.callWS<{ traces: BufferedUnit[] }>({ type: "ambience/traces/list" });
   return res.traces;
+}
+
+export async function simulateInputs(
+  hass: HassConnection,
+  scope: SimulateScope,
+  group: string,
+): Promise<SimulateInputs> {
+  return hass.callWS({
+    type: "ambience/simulate/inputs",
+    scope_kind: scope.scope_kind,
+    scope_id: scope.scope_id,
+    group,
+  });
+}
+
+export async function simulate(
+  hass: HassConnection,
+  scope: SimulateScope,
+  group: string,
+  now: string,
+  overrides: SimulateOverrides,
+): Promise<BufferedUnit> {
+  const res = await hass.callWS<{ result: BufferedUnit }>({
+    type: "ambience/simulate",
+    scope_kind: scope.scope_kind,
+    scope_id: scope.scope_id,
+    group,
+    now,
+    overrides,
+  });
+  return res.result;
 }
 
 export async function listAutoTriggers(

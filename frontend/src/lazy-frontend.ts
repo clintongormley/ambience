@@ -24,7 +24,12 @@ export function loadFrontend(metaUrl: string = import.meta.url): Promise<void> {
     const dir = path.slice(0, path.lastIndexOf("/") + 1);
     const fe = new URL(metaUrl).searchParams.get("fe") ?? "";
     const target = `${dir}ambience-frontend.js${fe ? `?fe=${fe}` : ""}`;
-    pending = _internals.importer(target).then(() => undefined);
+    const p = _internals.importer(target).then(() => undefined);
+    // Don't memoise a failure: clear so a later call can retry.
+    p.catch(() => {
+      if (pending === p) pending = undefined;
+    });
+    pending = p;
   }
   return pending;
 }

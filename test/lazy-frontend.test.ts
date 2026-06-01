@@ -27,4 +27,16 @@ describe("loadFrontend", () => {
     await loadFrontend("http://ha.local/x/ambience-card.js");
     expect(_internals.importer).toHaveBeenCalledTimes(1);
   });
+
+  test("does not memoise a rejected import — a later call retries", async () => {
+    _internals.importer = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network"))
+      .mockResolvedValueOnce({});
+
+    await expect(loadFrontend("http://ha.local/x/ambience-card.js")).rejects.toThrow("network");
+    // Second call must retry rather than return the cached rejected promise.
+    await expect(loadFrontend("http://ha.local/x/ambience-card.js")).resolves.toBeUndefined();
+    expect(_internals.importer).toHaveBeenCalledTimes(2);
+  });
 });

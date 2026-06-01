@@ -71,6 +71,12 @@ describe("<ambience-card>", () => {
     expect(el.style.display).toBe("block");
   });
 
+  test("drops the reading-column width cap so it fills its cell", () => {
+    const el = document.createElement("ambience-card") as HTMLElement;
+    document.body.appendChild(el);
+    expect(el.style.getPropertyValue("--ambience-content-max-width")).toBe("none");
+  });
+
   test("getStubConfig returns an object and getCardSize returns a number", () => {
     const Ctor = customElements.get("ambience-card") as unknown as {
       getStubConfig: () => object;

@@ -43,6 +43,9 @@ class AmbienceCard extends HTMLElement {
     // its content instead of filling the dashboard cell. Make it a block so it
     // spans the column(s) the user sized it to.
     this.style.display = "block";
+    // Drop the sidebar panel's reading-column width cap so the card uses the
+    // full width of its (possibly multi-column) dashboard cell.
+    this.style.setProperty("--ambience-content-max-width", "none");
     void this._ensure();
   }
 

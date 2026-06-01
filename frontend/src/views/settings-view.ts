@@ -12,7 +12,7 @@ type Tab = "ambience" | "matchers" | "actions";
 @customElement("ambience-settings-view")
 export class AmbienceSettingsView extends LitElement {
   static override styles = css`
-    :host { display: block; padding: 1rem; max-width: 60rem; margin: 0 auto; }
+    :host { display: block; padding: 1rem; max-width: var(--ambience-content-max-width, 60rem); margin: 0 auto; }
     nav { display: flex; gap: 0.25rem; margin-bottom: 1rem; }
     nav button {
       background: transparent;

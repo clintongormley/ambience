@@ -81,7 +81,9 @@ export class AmbienceScopesView extends LitElement {
     :host {
       display: block;
       padding: 1rem;
-      max-width: 60rem;
+      /* Reading-column cap for the sidebar panel; the card overrides this var
+         so it fills whatever width the user gives the card. */
+      max-width: var(--ambience-content-max-width, 60rem);
       margin: 0 auto;
     }
     .empty {

@@ -2221,7 +2221,9 @@ var Tn=Object.defineProperty;var Ln=Object.getOwnPropertyDescriptor;var u=(t,n,e
     :host {
       display: block;
       padding: 1rem;
-      max-width: 60rem;
+      /* Reading-column cap for the sidebar panel; the card overrides this var
+         so it fills whatever width the user gives the card. */
+      max-width: var(--ambience-content-max-width, 60rem);
       margin: 0 auto;
     }
     .empty {
@@ -3461,7 +3463,7 @@ var Tn=Object.defineProperty;var Ln=Object.getOwnPropertyDescriptor;var u=(t,n,e
       </nav>
       ${this._tab==="ambience"?l`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`:this._tab==="matchers"?l`<ambience-matchers-settings .hass=${this.hass}></ambience-matchers-settings>`:l`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`}
     `}};Se.styles=b`
-    :host { display: block; padding: 1rem; max-width: 60rem; margin: 0 auto; }
+    :host { display: block; padding: 1rem; max-width: var(--ambience-content-max-width, 60rem); margin: 0 auto; }
     nav { display: flex; gap: 0.25rem; margin-bottom: 1rem; }
     nav button {
       background: transparent;

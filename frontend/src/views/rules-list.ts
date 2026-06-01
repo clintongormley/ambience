@@ -443,15 +443,6 @@ export class AmbienceRulesList extends LitElement {
           ⧉
         </button>
         <button
-          @click=${(e: Event) => {
-            e.stopPropagation();
-            this._confirmDelete(i, rule, displayNum);
-          }}
-          title=${localize(this.hass, "ui.title_delete", "Delete")}
-        >
-          🗑
-        </button>
-        <button
           class="run"
           @click=${(e: Event) => {
             e.stopPropagation();
@@ -460,6 +451,15 @@ export class AmbienceRulesList extends LitElement {
           title=${localize(this.hass, "ui.run_actions", "Run actions")}
         >
           ▶
+        </button>
+        <button
+          @click=${(e: Event) => {
+            e.stopPropagation();
+            this._confirmDelete(i, rule, displayNum);
+          }}
+          title=${localize(this.hass, "ui.title_delete", "Delete")}
+        >
+          🗑
         </button>
       </li>
     `;

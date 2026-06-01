@@ -56,6 +56,7 @@
     "panel_title": "Ambience",
     "tab_areas": "Areas",
     "tab_configuration": "Configuration",
+    "tab_traces": "Traces",
     "no_areas": "No areas found in Home Assistant.",
     "not_configured": "not configured",
     "rule_singular": "rule",

@@ -65,6 +65,12 @@ describe("<ambience-card>", () => {
     expect(inner.hass).toBe(fake);
   });
 
+  test("renders as a block so it fills its dashboard cell (not inline)", () => {
+    const el = document.createElement("ambience-card") as HTMLElement;
+    document.body.appendChild(el);
+    expect(el.style.display).toBe("block");
+  });
+
   test("getStubConfig returns an object and getCardSize returns a number", () => {
     const Ctor = customElements.get("ambience-card") as unknown as {
       getStubConfig: () => object;

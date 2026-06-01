@@ -37,6 +37,10 @@ class AmbienceCard extends HTMLElement {
   }
 
   connectedCallback(): void {
+    // Custom elements default to display:inline, which shrink-wraps the card to
+    // its content instead of filling the dashboard cell. Make it a block so it
+    // spans the column(s) the user sized it to.
+    this.style.display = "block";
     void this._ensure();
   }
 

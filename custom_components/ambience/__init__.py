@@ -228,14 +228,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         [StaticPathConfig(_PANEL_STATIC_PATH, str(bundle_dir), False)]
     )
 
-    # Content hashes for cache-busting. The two loaders (panel, card) lazily
-    # import the shared ambience-frontend.js chunk; we forward that chunk's
-    # hash as `?fe=` so a rebuilt chunk is re-fetched.
+    # Content hashes for cache-busting. Each loader URL carries its own bundle
+    # hash (`?hash=`) so an edited loader is re-fetched, plus the shared
+    # ambience-frontend.js chunk hash (`?fe=`), which the loaders read off their
+    # own URL and forward when lazily importing the chunk.
+    card_path = bundle_dir / "ambience-card.js"
     frontend_path = bundle_dir / "ambience-frontend.js"
     bundle_hash = await hass.async_add_executor_job(_hash_bundle, bundle_path)
+    card_hash = await hass.async_add_executor_job(_hash_bundle, card_path)
     frontend_hash = await hass.async_add_executor_job(_hash_bundle, frontend_path)
     module_url = f"{_PANEL_JS_URL}?hash={bundle_hash}&fe={frontend_hash}"
-    card_url = f"{_CARD_JS_URL}?fe={frontend_hash}"
+    card_url = f"{_CARD_JS_URL}?hash={card_hash}&fe={frontend_hash}"
 
     if entry.options.get(CONF_SHOW_SIDEBAR_PANEL, DEFAULT_SHOW_SIDEBAR_PANEL):
         async_register_built_in_panel(

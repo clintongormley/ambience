@@ -34,6 +34,7 @@ from .service import (
     async_run_rule_actions,
     scope_reapply_intervals,
 )
+from .simulate import simulate_inputs
 from .sorting import matcher_priority, resolve_order, shadowed_by
 from .store import GroupInUseError, LastGroupError, reassign_orphan_rules
 from .trace import buffered_unit_to_dict
@@ -82,6 +83,7 @@ _WS_COMMANDS = (
     "ambience/groups/delete",
     "ambience/traces/list",
     "ambience/traces/clear",
+    "ambience/simulate/inputs",
 )
 
 
@@ -193,6 +195,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_groups_delete)
     websocket_api.async_register_command(hass, _ws_traces_list)
     websocket_api.async_register_command(hass, _ws_traces_clear)
+    websocket_api.async_register_command(hass, _ws_simulate_inputs)
 
 
 def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
@@ -1393,6 +1396,33 @@ async def _ws_traces_clear(
     if buffer is not None:
         buffer.clear()
     connection.send_result(msg["id"])
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/simulate/inputs",
+        vol.Required("scope_kind"): str,
+        vol.Optional("scope_id"): vol.Any(str, None),
+        vol.Required("group"): str,
+    }
+)
+@websocket_api.async_response
+async def _ws_simulate_inputs(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """The editable inputs for a group's simulator panel (read-only)."""
+    try:
+        result = simulate_inputs(hass, msg["scope_kind"], msg.get("scope_id"), msg["group"])
+    except (ValueError, ServiceValidationError) as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    # Enrich entity knobs with plausible state options for the dropdown.
+    for knob in result["knobs"]:
+        knob["states"] = _known_states_for(hass, knob["entity_id"])
+    connection.send_result(msg["id"], result)
 
 
 def async_unregister_commands(hass: HomeAssistant) -> None:

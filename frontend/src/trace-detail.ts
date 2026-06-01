@@ -22,10 +22,11 @@ export const traceDetailStyles = css`
   .action-summary .n { color: var(--secondary-text-color, #888); }
   .why-toggle { background: none; border: none; color: var(--primary-color, #03a9f4); cursor: pointer;
     padding: 0.3rem 0; font-size: 0.82rem; }
-  .why { margin-top: 0.3rem; }
-  .section + .section { margin-top: 0.6rem; }
-  .section-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
-    color: var(--secondary-text-color, #888); margin-bottom: 0.2rem; }
+  .why { margin-top: 0.6rem; padding: 0.2rem 0 0.2rem 0.9rem;
+    border-left: 2px solid var(--divider-color, #444); }
+  .section + .section { margin-top: 1.25rem; }
+  .section-title { font-size: 0.95rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--primary-text-color, #fff); margin-bottom: 0.5rem; }
   .rules { font-family: monospace; font-size: 0.8rem; line-height: 1.7; }
   .rule.won { color: var(--success-color, #4caf50); }
   .rule.skipped { opacity: 0.5; }

@@ -16,6 +16,9 @@ export type Rule = {
   priority?: number;
   // True when the user fixed this rule's position by dragging it.
   pinned?: boolean;
+  // Absent or true = enabled; false = disabled. A disabled rule is retained
+  // and keeps its position but is ignored by automatic evaluation.
+  enabled?: boolean;
   // Transient (response-only): index of an earlier rule that shadows this one,
   // or null/absent. Never persisted.
   shadowed_by?: number | null;

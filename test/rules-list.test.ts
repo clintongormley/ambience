@@ -802,4 +802,24 @@ describe("ambience-rules-list", () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toEqual({ group: "general" });
   });
+
+  test("renders a toggle that emits toggle-rule-enabled {index, enabled:false} for an enabled rule", async () => {
+    el = await mount([movieRule]);
+    const get = captureEvent(el, "toggle-rule-enabled");
+    const toggle = el.shadowRoot.querySelector("button.toggle") as HTMLButtonElement;
+    expect(toggle).toBeTruthy();
+    toggle.click();
+    expect(get()).toEqual({ index: 0, enabled: false });
+  });
+
+  test("a disabled rule: toggle emits enabled:true, row is dimmed, no shadow warning", async () => {
+    const disabled: Rule = { ...movieRule, enabled: false, shadowed_by: 0 };
+    el = await mount([disabled]);
+    const get = captureEvent(el, "toggle-rule-enabled");
+    const li = el.shadowRoot.querySelector("li") as HTMLElement;
+    expect(li.classList.contains("disabled")).toBe(true);
+    expect(el.shadowRoot.querySelector(".shadow-warning")).toBeNull();
+    (el.shadowRoot.querySelector("button.toggle") as HTMLButtonElement).click();
+    expect(get()).toEqual({ index: 0, enabled: true });
+  });
 });

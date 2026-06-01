@@ -157,6 +157,8 @@
     "rule_n": "Rule {n}",
     "drag_to_reorder": "Drag to reorder",
     "unpin": "Unpin (return to automatic order)",
+    "enable_rule": "Enable rule",
+    "disable_rule": "Disable rule",
     "shadowed": "Never fires — shadowed by an earlier rule.",
     "duplicate": "Duplicate",
     "run_actions": "Run actions",

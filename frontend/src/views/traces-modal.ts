@@ -49,6 +49,11 @@ export class AmbienceTracesModal extends LitElement {
         border-radius: 4px; background: none; color: inherit;
         font-size: 0.85rem;
       }
+      .refresh.has-new {
+        border-color: var(--primary-color, #03a9f4);
+        color: var(--primary-color, #03a9f4);
+        font-weight: 600;
+      }
       .close {
         padding: 0.25rem 0.5rem; cursor: pointer;
         border: none; background: none; font-size: 1.2rem;
@@ -72,6 +77,20 @@ export class AmbienceTracesModal extends LitElement {
   @state() private _expanded = new Set<string>();
   @state() private _loading = true;
   @state() private _error = "";
+  @state() private _hasNew = false;
+  private _poll?: ReturnType<typeof setInterval>;
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    // While open, watch for newer traces for this group without disturbing the
+    // list the user is reading — just flag the Refresh button.
+    this._poll = setInterval(() => this._checkNew(), 5000);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    if (this._poll) clearInterval(this._poll);
+  }
 
   override updated(changed: Map<string, unknown>): void {
     if (
@@ -83,23 +102,41 @@ export class AmbienceTracesModal extends LitElement {
     }
   }
 
+  // The buffered records belonging to this (scope, group) bucket, newest-first.
+  private _mine(all: BufferedUnit[]): BufferedUnit[] {
+    return all.filter(
+      (u) =>
+        u.scope_kind === this.scope.scope_kind &&
+        u.scope_id === this.scope.scope_id &&
+        u.group === this.group,
+    );
+  }
+
   private async _load(): Promise<void> {
     this._error = "";
     this._loading = true;
+    this._hasNew = false; // refresh / reopen consumes the "new traces" signal
     this._expanded = new Set(); // every (re)open starts fully collapsed
     try {
       const all = await listTraces(this.hass);
       if (!this.isConnected) return;
-      this._records = all.filter(
-        (u) =>
-          u.scope_kind === this.scope.scope_kind &&
-          u.scope_id === this.scope.scope_id &&
-          u.group === this.group,
-      );
+      this._records = this._mine(all);
       this._loading = false;
     } catch (e) {
       this._error = (e as Error).message || String(e);
       this._loading = false;
+    }
+  }
+
+  private async _checkNew(): Promise<void> {
+    if (!this.open || !this.isConnected || document.visibilityState !== "visible") return;
+    try {
+      const mine = this._mine(await listTraces(this.hass));
+      const newest = mine[0]?.timestamp ?? null;
+      const shown = this._records[0]?.timestamp ?? null;
+      if (newest && (!shown || newest > shown)) this._hasNew = true;
+    } catch {
+      // background check — stay silent
     }
   }
 
@@ -120,7 +157,9 @@ export class AmbienceTracesModal extends LitElement {
       <div class="modal" role="dialog" aria-modal="true">
         <div class="header">
           <h3>${title}</h3>
-          <button class="refresh" @click=${() => this._load()}>Refresh</button>
+          <button class="refresh ${this._hasNew ? "has-new" : ""}" @click=${() => this._load()}>
+            ${this._hasNew ? "● New traces — refresh" : "Refresh"}
+          </button>
           <button class="close" @click=${this._onClose} aria-label="Close">✕</button>
         </div>
         <div class="body">

@@ -85,6 +85,34 @@ describe("ambience-traces-modal", () => {
     expect(el.shadowRoot.querySelector(".why")).toBeFalsy(); // collapsed again
   });
 
+  test("Refresh flags when newer traces are available for this group, and clears on refresh", async () => {
+    el = await mount([unit({ event_id: "old", timestamp: "2026-06-01T10:00:00+00:00" })]);
+    expect(el.shadowRoot.querySelector(".refresh.has-new")).toBeFalsy();
+    // A newer record lands in the same (scope, group) bucket.
+    vi.mocked(api.listTraces).mockResolvedValue([
+      unit({ event_id: "new", timestamp: "2026-06-01T11:00:00+00:00" }),
+    ]);
+    await el._checkNew(); // simulate a poll tick
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".refresh.has-new")).toBeTruthy();
+    // Refresh loads the new record and clears the flag.
+    el.shadowRoot.querySelector(".refresh").click();
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".refresh.has-new")).toBeFalsy();
+  });
+
+  test("the new-traces flag ignores newer records from other groups", async () => {
+    el = await mount([unit({ event_id: "old", timestamp: "2026-06-01T10:00:00+00:00" })]);
+    vi.mocked(api.listTraces).mockResolvedValue([
+      unit({ event_id: "other", group: "g2", timestamp: "2026-06-01T12:00:00+00:00" }),
+    ]);
+    await el._checkNew();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".refresh.has-new")).toBeFalsy();
+  });
+
   test("error state when listTraces rejects", async () => {
     vi.mocked(api.listTraces).mockRejectedValue(new Error("boom"));
     const e: any = document.createElement("ambience-traces-modal");

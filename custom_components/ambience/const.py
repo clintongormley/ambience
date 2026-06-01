@@ -46,3 +46,7 @@ GENERAL_GROUP = {
     "icon": "mdi:home",
     "color": "blue-grey",
 }
+
+# Options flow
+CONF_SHOW_SIDEBAR_PANEL = "show_sidebar_panel"
+DEFAULT_SHOW_SIDEBAR_PANEL = True

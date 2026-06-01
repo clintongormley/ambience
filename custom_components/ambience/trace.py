@@ -210,6 +210,7 @@ def buffered_unit_to_dict(record: BufferedUnit) -> dict[str, Any]:
         "cause": _cause_to_dict(record.cause),
         "scope_kind": unit.scope_kind,
         "scope_id": unit.scope_id,
+        "scope_name": unit.scope_name,
         "group": unit.group,
         "group_name": unit.group_name,
         "switch_state": unit.switch_state,

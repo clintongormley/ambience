@@ -409,6 +409,7 @@ def test_buffered_unit_to_dict_acted_with_explanation():
         winner_name="evening",
         actions=[{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {"x": 1}}],
         group_name="Kitchen Scenes",
+        scope_name="Kitchen",
     )
     record = BufferedUnit(
         "abc123", "2026-06-01T00:00:00", TriggerCause(kind="clock", detail="08:00"), unit
@@ -427,6 +428,7 @@ def test_buffered_unit_to_dict_acted_with_explanation():
     }
     assert data["scope_kind"] == "area"
     assert data["scope_id"] == "kitchen"
+    assert data["scope_name"] == "Kitchen"
     assert data["group"] == "General"
     assert data["group_name"] == "Kitchen Scenes"
     assert data["outcome"] == "acted"

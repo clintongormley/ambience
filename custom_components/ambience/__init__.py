@@ -272,7 +272,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the entry when options change so the panel toggle takes effect."""
+    """Reload the config entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 

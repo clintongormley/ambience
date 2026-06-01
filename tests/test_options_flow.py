@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
@@ -71,7 +71,10 @@ async def test_toggling_option_reloads_entry(
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    with patch("homeassistant.config_entries.ConfigEntries.async_reload") as mock_reload:
+    with patch(
+        "homeassistant.config_entries.ConfigEntries.async_reload",
+        new_callable=AsyncMock,
+    ) as mock_reload:
         result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
         await hass.config_entries.options.async_configure(
             result["flow_id"], {CONF_SHOW_SIDEBAR_PANEL: False}

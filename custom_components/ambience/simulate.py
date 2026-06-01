@@ -17,9 +17,19 @@ from typing import Any
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 
-from .const import DATA_MATCHERS, DATA_STORE, DOMAIN
+from .const import DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
+from .engine import evaluate_explained
+from .naming import group_names, scope_display_name
 from .scope_triggers import scope_trigger_spec
 from .sun_position import synthetic_sun_state
+from .trace import (
+    BufferedUnit,
+    CauseKind,
+    Outcome,
+    TriggerCause,
+    UnitTrace,
+    buffered_unit_to_dict,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -178,3 +188,80 @@ def simulate_inputs(
         )
     has_time = bool(spec.clock_times or spec.has_time or spec.date_rollover or spec.sun_events)
     return {"knobs": knobs, "has_time": has_time, "opaque": spec.opaque}
+
+
+def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
+    """The scope switch's on/off state, or 'unknown' when unavailable. Mirrors
+    service._switch_state but tolerates a missing switch registry (simulations
+    can run before switches register)."""
+    switches = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {})
+    switch = switches.get((scope_kind, scope_id))
+    if switch is None:
+        return "unknown"
+    return "on" if switch.is_on else "off"
+
+
+def _safe_scope_name(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str | None:
+    try:
+        return scope_display_name(hass, scope_kind, scope_id)
+    except Exception:  # noqa: BLE001 — test doubles may lack registries
+        return None
+
+
+def _safe_group_name(hass: HomeAssistant, group: str) -> str | None:
+    # group_names() already tolerates a missing store (returns {}); this guard
+    # only protects against a present-but-broken store, and keeps symmetry with
+    # _safe_scope_name.
+    try:
+        return group_names(hass).get(group)
+    except Exception:  # noqa: BLE001 — test doubles may lack a full store
+        return None
+
+
+async def run_simulation(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    group: str,
+    world: SimulatedWorld,
+) -> dict[str, Any]:
+    """Resolve one group against the simulated world and return a BufferedUnit
+    dict (the shape `renderEvaluation()` consumes), with a `simulated` cause."""
+    matchers: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
+    candidates = _group_config(hass, scope_kind, scope_id, group)["rules"]
+    snapshots = await build_simulated_snapshots(hass, world)
+    explanation = evaluate_explained(candidates, snapshots, matchers, describe=True)
+
+    switch_state = _switch_state(hass, scope_kind, scope_id)
+    scope_name = _safe_scope_name(hass, scope_kind, scope_id)
+    group_name = _safe_group_name(hass, group)
+
+    winner = explanation.winner_index
+    if winner is None:
+        unit = UnitTrace(
+            scope_kind,
+            scope_id,
+            group,
+            switch_state,
+            Outcome.NO_MATCH,
+            explanation,
+            group_name=group_name,
+            scope_name=scope_name,
+        )
+    else:
+        rule = candidates[winner]
+        unit = UnitTrace(
+            scope_kind,
+            scope_id,
+            group,
+            switch_state,
+            Outcome.ACTED,
+            explanation,
+            winner_name=rule.get("name"),
+            actions=rule.get("actions", []),
+            group_name=group_name,
+            scope_name=scope_name,
+        )
+    cause = TriggerCause(kind=CauseKind.SIMULATED, detail=world.now.isoformat())
+    record = BufferedUnit(event_id=None, timestamp=world.now.isoformat(), cause=cause, unit=unit)
+    return buffered_unit_to_dict(record)

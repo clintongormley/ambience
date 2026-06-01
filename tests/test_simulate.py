@@ -8,6 +8,7 @@ from custom_components.ambience.const import DATA_MATCHERS, DATA_STORE, DOMAIN
 from custom_components.ambience.simulate import (
     SimulatedWorld,
     build_simulated_snapshots,
+    run_simulation,
     simulate_inputs,
 )
 from custom_components.ambience.trace import CauseKind, TriggerCause
@@ -170,3 +171,60 @@ def test_simulate_inputs_surfaces_weather_threshold_attributes():
     weather_knob = next(k for k in result["knobs"] if k["entity_id"] == "weather.home")
     assert weather_knob["live_state"] == "rainy"
     assert weather_knob["attributes"] == [{"name": "temperature", "live_value": 9.0}]
+
+
+# ---------------------------------------------------------------------------
+# Task 6: run_simulation
+# ---------------------------------------------------------------------------
+
+
+def _resolve_hass(rules, states):
+    from custom_components.ambience.matchers.state import StateMatcher
+
+    hass = _Hass(states)
+    hass.data[DOMAIN] = {
+        DATA_MATCHERS: {"state": StateMatcher(hass)},
+        DATA_STORE: _Store(rules),
+    }
+    return hass
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_returns_winner_as_buffered_unit():
+    rules = [
+        {
+            "group": "g1",
+            "name": "Motion on",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
+        }
+    ]
+    hass = _resolve_hass(rules, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
+    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+
+    assert result["outcome"] == "acted"
+    assert result["winner_name"] == "Motion on"
+    assert result["cause"]["kind"] == "simulated"
+    assert result["group"] == "g1"
+    assert result["explanation"]["rules"][0]["matched"] is True
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_reports_no_match():
+    rules = [
+        {
+            "group": "g1",
+            "name": "Motion on",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+        }
+    ]
+    hass = _resolve_hass(rules, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={})  # motion stays off
+    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+    assert result["outcome"] == "no_match"
+    assert result["winner_name"] is None

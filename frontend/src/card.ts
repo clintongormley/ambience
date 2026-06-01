@@ -16,6 +16,7 @@ interface CardConfig {
 class AmbienceCard extends HTMLElement {
   private _hass?: unknown;
   private _inner?: HTMLElement & { hass?: unknown };
+  private _loading = false;
 
   setConfig(_config: CardConfig): void {
     void this._ensure();
@@ -30,6 +31,7 @@ class AmbienceCard extends HTMLElement {
     return this._hass;
   }
 
+  // Row-count hint for the layout editor; the frontend fills a full-height card.
   getCardSize(): number {
     return 12;
   }
@@ -39,15 +41,20 @@ class AmbienceCard extends HTMLElement {
   }
 
   private async _ensure(): Promise<void> {
-    if (this._inner) return;
-    await loadFrontend();
-    if (this._inner) return; // re-entrancy guard
-    const el = document.createElement("ambience-frontend") as HTMLElement & {
-      hass?: unknown;
-    };
-    el.hass = this._hass;
-    this._inner = el;
-    this.appendChild(el);
+    if (this._inner || this._loading) return;
+    this._loading = true;
+    try {
+      await loadFrontend();
+      if (this._inner) return;
+      const el = document.createElement("ambience-frontend") as HTMLElement & {
+        hass?: unknown;
+      };
+      el.hass = this._hass;
+      this._inner = el;
+      this.appendChild(el);
+    } finally {
+      this._loading = false;
+    }
   }
 
   static getStubConfig(): Record<string, never> {

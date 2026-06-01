@@ -23,15 +23,6 @@ describe("<ambience-card>", () => {
     expect(customElements.get("ambience-frontend")).toBeUndefined();
   });
 
-  test("getStubConfig returns an object and getCardSize returns a number", () => {
-    const Ctor = customElements.get("ambience-card") as unknown as {
-      getStubConfig: () => object;
-    };
-    expect(typeof Ctor.getStubConfig()).toBe("object");
-    const el = document.createElement("ambience-card") as HTMLElement & { getCardSize: () => number };
-    expect(typeof el.getCardSize()).toBe("number");
-  });
-
   test("setConfig triggers the lazy load and appends an <ambience-frontend> child", async () => {
     const el = document.createElement("ambience-card") as HTMLElement & {
       setConfig: (c: object) => void;
@@ -57,5 +48,29 @@ describe("<ambience-card>", () => {
     el.hass = fake;
     const inner = el.querySelector("ambience-frontend") as HTMLElement & { hass?: unknown };
     expect(inner.hass).toBe(fake);
+  });
+
+  test("applies hass set before setConfig once the inner element is created", async () => {
+    const el = document.createElement("ambience-card") as HTMLElement & {
+      setConfig: (c: object) => void;
+      hass: unknown;
+    };
+    const fake = { foo: 2 };
+    el.hass = fake;                     // set BEFORE setConfig
+    document.body.appendChild(el);
+    el.setConfig({ type: "custom:ambience-card" });
+    await Promise.resolve();
+    await Promise.resolve();
+    const inner = el.querySelector("ambience-frontend") as HTMLElement & { hass?: unknown };
+    expect(inner.hass).toBe(fake);
+  });
+
+  test("getStubConfig returns an object and getCardSize returns a number", () => {
+    const Ctor = customElements.get("ambience-card") as unknown as {
+      getStubConfig: () => object;
+    };
+    expect(Ctor.getStubConfig()).toEqual({});
+    const el = document.createElement("ambience-card") as HTMLElement & { getCardSize: () => number };
+    expect(el.getCardSize()).toBe(12);
   });
 });

@@ -1684,29 +1684,6 @@ async def test_auto_triggers_get_unknown_scope_kind_errors(hass, installed, hass
     assert resp["success"] is False
 
 
-async def test_script_referenced_entities_unknown_script_is_empty(
-    hass, installed, hass_ws_client
-) -> None:
-    resp = await _ws_send(
-        hass_ws_client, type="ambience/script/referenced_entities", script="script.nope"
-    )
-    assert resp["success"] is True
-    assert resp["result"] == {"entities": []}
-
-
-async def test_script_referenced_entities_returns_sorted(hass, installed, hass_ws_client) -> None:
-    from types import SimpleNamespace
-
-    entity = SimpleNamespace(referenced_entities={"person.b", "person.a"})
-    component = SimpleNamespace(get_entity=lambda eid: entity if eid == "script.s" else None)
-    hass.data.setdefault("entity_components", {})["script"] = component
-    resp = await _ws_send(
-        hass_ws_client, type="ambience/script/referenced_entities", script="script.s"
-    )
-    assert resp["success"] is True
-    assert resp["result"] == {"entities": ["person.a", "person.b"]}
-
-
 async def test_auto_triggers_set_unknown_scope_kind_errors(hass, installed, hass_ws_client) -> None:
     resp = await _ws_send(
         hass_ws_client, type="ambience/auto_triggers/set", scope_kind="galaxy", enabled=True

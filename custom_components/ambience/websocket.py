@@ -77,7 +77,6 @@ _WS_COMMANDS = (
     "ambience/auto_triggers/set",
     "ambience/auto_triggers/list",
     "ambience/auto_triggers/set_trigger",
-    "ambience/script/referenced_entities",
     "ambience/groups/list",
     "ambience/groups/save",
     "ambience/groups/delete",
@@ -189,7 +188,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_auto_triggers_set)
     websocket_api.async_register_command(hass, _ws_auto_triggers_list)
     websocket_api.async_register_command(hass, _ws_auto_triggers_set_trigger)
-    websocket_api.async_register_command(hass, _ws_script_referenced_entities)
     websocket_api.async_register_command(hass, _ws_groups_list)
     websocket_api.async_register_command(hass, _ws_groups_save)
     websocket_api.async_register_command(hass, _ws_groups_delete)
@@ -1268,30 +1266,6 @@ async def _ws_auto_triggers_set_trigger(
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
     connection.send_result(msg["id"], {"ok": True})
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/script/referenced_entities",
-        vol.Required("script"): str,
-    }
-)
-@websocket_api.async_response
-async def _ws_script_referenced_entities(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
-) -> None:
-    """Best-effort static entities a script references (for trigger suggestions).
-
-    May be incomplete — templated references aren't captured (the engine warns).
-    """
-    component = hass.data.get("entity_components", {}).get("script")
-    entities: list[str] = []
-    if component is not None:
-        entity = component.get_entity(msg["script"])
-        if entity is not None:
-            entities = sorted(entity.referenced_entities)
-    connection.send_result(msg["id"], {"entities": entities})
 
 
 @websocket_api.require_admin

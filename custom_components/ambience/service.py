@@ -351,6 +351,24 @@ def _log_apply(
     return context
 
 
+def _log_run_actions(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    rule_name: str | None,
+    rule_index: int,
+) -> Context:
+    """Fire an "Ambience" logbook entry for a manual run-actions and return a
+    fresh Context for the dispatched calls to share (see _log_apply)."""
+    from homeassistant.components.logbook import async_log_entry
+
+    scene = rule_name or f"rule {rule_index + 1}"
+    message = f"ran '{scene}' in {scope_display_name(hass, scope_kind, scope_id)}"
+    context = Context()
+    async_log_entry(hass, "Ambience", message, domain=DOMAIN, context=context)
+    return context
+
+
 async def async_execute_actions(
     hass: HomeAssistant,
     scope_kind: str,
@@ -403,6 +421,36 @@ async def async_execute_actions(
     for result in results:
         if isinstance(result, BaseException):
             _LOGGER.warning("ambience: action raised: %s", result)
+
+
+async def async_run_rule_actions(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    rule_index: int,
+) -> dict[str, Any]:
+    """Run one rule's actions unconditionally.
+
+    Does NOT evaluate the rule's `when`, does NOT gate on the scope switch, and
+    does NOT touch last_applied (it is an out-of-band manual override, not a
+    resolution). Returns {ran, rule_name} for UI feedback. An out-of-range
+    `rule_index` raises ServiceValidationError.
+    """
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = _scope_config(store, scope_kind, scope_id)
+    rules = cfg.get("rules", [])
+    if not 0 <= rule_index < len(rules):
+        raise ServiceValidationError(f"rule_index out of range: {rule_index}")
+    rule = rules[rule_index]
+    actions = rule.get("actions", [])
+    rule_name = rule.get("name")
+    context = (
+        _log_run_actions(hass, scope_kind, scope_id, rule_name, rule_index) if actions else None
+    )
+    await async_execute_actions(
+        hass, scope_kind, scope_id, actions, rule_index=rule_index, context=context
+    )
+    return {"ran": len(actions), "rule_name": rule_name}
 
 
 async def async_execute_plan(

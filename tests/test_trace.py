@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from custom_components.ambience.const import DATA_STORE, DATA_TRACE_SINKS, DOMAIN
+from custom_components.ambience.const import DATA_STORE, DATA_TRACE_BUFFER, DATA_TRACE_SINKS, DOMAIN
 from custom_components.ambience.engine import (
     Explanation,
     PredicateResult,
@@ -170,8 +170,9 @@ def test_logsink_suppresses_noop_unless_noop_logger_enabled(caplog):
 
 
 def test_tracing_active_reflects_logger_levels(caplog):
+    hass = _Hass({DOMAIN: {}})
     with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
-        assert tracing_active() is True
+        assert tracing_active(hass) is True
 
 
 def test_format_renders_actions_for_acted_unit():
@@ -270,3 +271,14 @@ def test_emit_trace_keeps_group_id_when_store_lacks_names(caplog):
     with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
         emit_trace(hass, event)
     assert "area/master_bedroom/abc123" in caplog.text
+
+
+def test_tracing_active_true_when_buffer_registered():
+    # No trace logger at DEBUG, but a buffer is registered -> active.
+    hass = _Hass({DOMAIN: {DATA_TRACE_BUFFER: object()}})
+    assert tracing_active(hass) is True
+
+
+def test_tracing_active_false_with_no_buffer_and_no_debug():
+    hass = _Hass({DOMAIN: {}})
+    assert tracing_active(hass) is False

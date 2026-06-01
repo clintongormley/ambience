@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
 
-from .const import DATA_TRACE_SINKS, DOMAIN
+from .const import DATA_TRACE_BUFFER, DATA_TRACE_SINKS, DOMAIN
 from .engine import Explanation
 from .naming import group_names, scope_display_name
 
@@ -212,9 +212,12 @@ class LogSink:
                 )
 
 
-def tracing_active() -> bool:
-    """True if any trace stream is enabled — so building explanations is worth
-    the cost. (Increment B also returns True when a buffer sink is registered.)"""
+def tracing_active(hass: HomeAssistant) -> bool:
+    """True if any trace consumer wants data — a registered ring buffer
+    (always-on) or a trace logger at DEBUG — so building explanations (with
+    `describe()`) is worth the cost. Returns False when nothing is listening."""
+    if DATA_TRACE_BUFFER in hass.data.get(DOMAIN, {}):
+        return True
     return _LOGGER.isEnabledFor(logging.DEBUG) or _NOOP_LOGGER.isEnabledFor(logging.DEBUG)
 
 

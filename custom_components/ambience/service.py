@@ -240,7 +240,7 @@ async def async_apply_scene(
 
     # Snapshot once, then apply every group's winner concurrently (groups are
     # independent by construction).
-    active = tracing_active()
+    active = tracing_active(hass)
     snapshots = await _snapshot_all(hass)
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = _scope_config(store, scope_kind, scope_id)

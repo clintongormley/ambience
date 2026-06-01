@@ -229,7 +229,7 @@ class AutoTriggerEngine:
         """Resolve a dirty (scope, group) unit and apply if the winner changed
         (or `force`). Skips when the switch is off. Returns a UnitTrace
         describing the outcome when tracing is active, else None."""
-        active = tracing_active()
+        active = tracing_active(self._hass)
         switch_state = _switch_state(self._hass, scope_kind, scope_id)
         if switch_state == "off":
             if active:
@@ -496,7 +496,7 @@ class AutoTriggerEngine:
             return
         rules = cfg.get("rules", [])
         exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
-        active = tracing_active()
+        active = tracing_active(self._hass)
         traces: list[UnitTrace] = []
         for group_id in group_ids(cfg):
             index = get_last_applied(self._hass, scope_kind, scope_id, group_id)

@@ -21,6 +21,9 @@ DATA_LAST_APPLIED = "last_applied"
 DATA_ENGINE = "engine"
 # Registered TraceSink instances (see trace.py).
 DATA_TRACE_SINKS = "trace_sinks"
+# In-memory trace ring buffer (BufferSink) + its per-(scope,group) cap.
+DATA_TRACE_BUFFER = "trace_buffer"
+TRACE_BUFFER_SIZE = 5
 
 # Dispatcher signal — payload: tuple (scope_kind, scope_id) or None (global defaults changed)
 SIGNAL_SWITCH_CONFIG_UPDATED = "ambience_switch_config_updated"

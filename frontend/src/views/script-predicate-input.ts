@@ -249,6 +249,11 @@ export class AmbienceScriptPredicateInput extends LitElement {
     this._setTriggers(this._triggers.filter((t) => t !== eid));
   }
 
+  private _addTrigger(eid: string) {
+    if (this._triggers.includes(eid)) return;
+    this._setTriggers([...this._triggers, eid]);
+  }
+
   override render() {
     const picked = (this.value && typeof this.value === "object") ? this.value.script : null;
     const schema = this._argsSchema();
@@ -281,7 +286,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
           ${this._renderArgs(schema, args)}
         </div>
       ` : ""}
-      ${picked ? this._renderTriggers() : ""}
+      ${picked && this._mode === "form" ? this._renderTriggers() : ""}
       ${picked && this._mode === "yaml" ? this._renderYaml() : ""}
     `;
   }
@@ -298,17 +303,49 @@ export class AmbienceScriptPredicateInput extends LitElement {
             "Re-evaluate this rule when these entities change. A script is opaque, so templated references may be missed — add any it depends on.",
           )}
         </p>
-        <div class="chips">
-          ${current.length === 0
-            ? html`<span class="muted">${localize(this.hass, "ui.script_triggers_none", "No triggers")}</span>`
-            : current.map(
-                (eid) => html`<span class="chip" data-test=${`trigger-${eid}`}>
-                  ${eid}
-                  <button type="button" class="x" title="Remove" @click=${() => this._removeTrigger(eid)}>×</button>
-                </span>`,
-              )}
-        </div>
+        ${this._renderTriggerPicker(current)}
       </div>
+    `;
+  }
+
+  /* v8 ignore start -- ha-form path (real HA only) */
+  private _renderTriggerPicker(current: string[]) {
+    if (customElements.get("ha-form")) {
+      const schema = [{ name: "triggers", selector: { entity: { multiple: true } } }];
+      return html`<ha-form
+        .hass=${this.hass}
+        .schema=${schema}
+        .data=${{ triggers: current }}
+        .computeLabel=${() => ""}
+        @value-changed=${(e: CustomEvent<{ value: { triggers?: string[] } }>) => {
+          e.stopPropagation();
+          this._setTriggers(e.detail.value.triggers ?? []);
+        }}
+      ></ha-form>`;
+    }
+    /* v8 ignore stop */
+    // jsdom fallback: chips with remove + a text input to add by entity_id.
+    return html`
+      <div class="chips">
+        ${current.length === 0
+          ? html`<span class="muted">${localize(this.hass, "ui.script_triggers_none", "No triggers")}</span>`
+          : current.map(
+              (eid) => html`<span class="chip" data-test=${`trigger-${eid}`}>
+                ${eid}
+                <button type="button" class="x" title="Remove" @click=${() => this._removeTrigger(eid)}>×</button>
+              </span>`,
+            )}
+      </div>
+      <input
+        data-test="trigger-add-input"
+        placeholder="entity_id"
+        @change=${(e: Event) => {
+          const input = e.target as HTMLInputElement;
+          const eid = input.value.trim();
+          if (eid) this._addTrigger(eid);
+          input.value = "";
+        }}
+      />
     `;
   }
 

@@ -332,3 +332,52 @@ describe("ambience-script-predicate-input — no suggestions", () => {
     expect(el.shadowRoot.querySelector(".suggested")).toBeNull();
   });
 });
+
+describe("ambience-script-predicate-input — triggers picker", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  const withScript = {
+    script: "script.foo",
+    args: {},
+    triggers: ["light.kitchen"],
+  } as ScriptPredicate;
+  const hass = { services: { script: { foo: { fields: { x: { selector: { text: {} } } } } } } };
+
+  test("removing a trigger chip emits the shortened list", async () => {
+    el = await mount(withScript, hass);
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    const removeBtn = el.shadowRoot.querySelector('[data-test="trigger-light.kitchen"] .x');
+    removeBtn.click();
+    expect(detail.value.triggers).toEqual([]);
+  });
+
+  test("typing an entity_id in the fallback input adds it", async () => {
+    el = await mount({ script: "script.foo", args: {}, triggers: [] }, hass);
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    const input = el.shadowRoot.querySelector('[data-test="trigger-add-input"]');
+    input.value = "binary_sensor.front_door";
+    input.dispatchEvent(new Event("change"));
+    expect(detail.value.triggers).toEqual(["binary_sensor.front_door"]);
+  });
+
+  test("triggers section is not rendered in YAML mode", async () => {
+    el = await mount(withScript, hass);
+    el._setMode("yaml");
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".triggers")).toBeNull();
+  });
+
+  test("adding an entity already present does not duplicate it", async () => {
+    el = await mount({ script: "script.foo", args: {}, triggers: ["light.kitchen"] }, hass);
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    const input = el.shadowRoot.querySelector('[data-test="trigger-add-input"]');
+    input.value = "light.kitchen";
+    input.dispatchEvent(new Event("change"));
+    // No-op: the dedupe guard prevents re-adding; triggers stay as-is.
+    expect(el._triggers).toEqual(["light.kitchen"]);
+  });
+});

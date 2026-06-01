@@ -122,4 +122,34 @@ describe("ambience-traces-view", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".why").textContent).toContain("not evaluated");
   });
+
+  test("shows the new-data badge when a newer trace arrives, and refresh reloads", async () => {
+    // Mount with real timers so the initial _load() and the mount helper's own
+    // setTimeout(0) flush complete cleanly before fake timers take over.
+    el = await mount([unit({ timestamp: "2026-06-01T10:00:00+00:00" })]);
+    // Only switch to fake timers AFTER mount so the mount helper's setTimeout(0)
+    // isn't frozen. The setInterval from connectedCallback was registered with real
+    // timers; we simulate the poll tick by calling _checkNew() directly instead of
+    // advancing the clock, then verify the badge and reload path work correctly.
+    vi.useFakeTimers();
+    try {
+      // A newer record exists in the buffer than what's displayed.
+      vi.mocked(api.countTraces).mockResolvedValue({ count: 2, latest: "2026-06-01T11:00:00+00:00" });
+      // Advance past the 5-second interval. Because the setInterval was registered
+      // before fake-timer takeover, we also fire the check directly to simulate the tick.
+      await vi.advanceTimersByTimeAsync(5001);
+      await (el as any)._checkNew();
+      await el.updateComplete;
+      const badge = el.shadowRoot.querySelector(".new-badge");
+      expect(badge).toBeTruthy();
+      // Clicking the badge reloads (listTraces called again).
+      const calls = vi.mocked(api.listTraces).mock.calls.length;
+      badge.click();
+      await el.updateComplete;
+      await Promise.resolve();
+      expect(vi.mocked(api.listTraces).mock.calls.length).toBeGreaterThan(calls);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

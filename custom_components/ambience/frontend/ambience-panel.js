@@ -3477,7 +3477,7 @@ var Pn=Object.defineProperty;var Rn=Object.getOwnPropertyDescriptor;var u=(t,n,e
       color: var(--text-primary-color, #fff);
       border-color: var(--primary-color, #03a9f4);
     }
-  `,u([m({attribute:!1})],Le.prototype,"hass",2),u([g()],Le.prototype,"_tab",2),Le=u([$("ambience-settings-view")],Le);function ol(t){return`${t.scope_kind}|${t.scope_id??""}|${t.group}`}var z=class extends _{constructor(){super(...arguments);this._traces=[];this._groups=new Map;this._selected=null;this._expanded=new Set;this._newAvailable=!1;this._loading=!0;this._error=""}async connectedCallback(){super.connectedCallback(),await this._load(),this._poll=setInterval(()=>this._checkNew(),5e3)}disconnectedCallback(){super.disconnectedCallback(),this._poll&&clearInterval(this._poll)}async _load(){try{this._error="";let[e,r]=await Promise.all([fi(this.hass),Ne(this.hass)]);if(!this.isConnected)return;this._traces=e,this._groups=new Map(r.map(s=>[s.id,s])),this._newAvailable=!1;let i=this._buckets();i.length&&(this._selected===null||!i.some(s=>s.id===this._selected))&&(this._selected=i[0].id),this._loading=!1}catch(e){this._error=e.message||String(e),this._loading=!1}}async _checkNew(){if(!(document.visibilityState!=="visible"||!this.isConnected))try{let{latest:e}=await vi(this.hass),r=this._traces[0]?.timestamp??null;e&&(!r||e>r)&&(this._newAvailable=!0)}catch{}}_buckets(){let e=new Map;for(let r of this._traces){let i=ol(r),s=e.get(i);s||(s={id:i,scope_kind:r.scope_kind,scope_id:r.scope_id,scope_name:r.scope_name,group:r.group,group_name:r.group_name,records:[],newest:r.timestamp??""},e.set(i,s)),s.records.push(r),(r.timestamp??"")>s.newest&&(s.newest=r.timestamp??"")}return[...e.values()].sort((r,i)=>r.newest<i.newest?1:-1)}_scopeText(e){return e.scope_name||ge({scope_kind:e.scope_kind,scope_id:e.scope_id})}_causeText(e){return e.kind==="entity"?`${e.entity_id} ${e.old} \u2192 ${e.new}`:e.detail?`${He(e.kind)} ${e.detail}`:He(e.kind)}_evalKey(e){return`${e.event_id??""}|${e.timestamp??""}|${e.scope_id??""}|${e.group}`}render(){if(this._error)return l`<p class="error">${this._error}</p>`;if(this._loading)return l`<p class="empty">Loading…</p>`;let e=this._buckets();if(!e.length)return l`<p class="empty">No traces captured yet.</p>`;let r=e.find(i=>i.id===this._selected)??e[0];return l`
+  `,u([m({attribute:!1})],Le.prototype,"hass",2),u([g()],Le.prototype,"_tab",2),Le=u([$("ambience-settings-view")],Le);function ol(t){return`${t.scope_kind}|${t.scope_id??""}|${t.group}`}var z=class extends _{constructor(){super(...arguments);this._traces=[];this._groups=new Map;this._selected=null;this._expanded=new Set;this._newAvailable=!1;this._loading=!0;this._error=""}async connectedCallback(){super.connectedCallback(),await this._load(),this._poll=setInterval(()=>this._checkNew(),5e3)}disconnectedCallback(){super.disconnectedCallback(),this._poll&&clearInterval(this._poll)}async _load(){try{this._error="";let[e,r]=await Promise.all([fi(this.hass),Ne(this.hass)]);if(!this.isConnected)return;this._traces=e,this._groups=new Map(r.map(s=>[s.id,s])),this._newAvailable=!1;let i=this._buckets();i.length&&(this._selected===null||!i.some(s=>s.id===this._selected))&&(this._selected=i[0].id),this._loading=!1}catch(e){this._error=e.message||String(e),this._loading=!1}}async _checkNew(){if(!(document.visibilityState!=="visible"||!this.isConnected))try{let{latest:e}=await vi(this.hass),r=this._traces[0]?.timestamp??null;e&&(!r||e>r)&&(this._newAvailable=!0)}catch{}}_buckets(){let e=new Map;for(let r of this._traces){let i=ol(r),s=e.get(i);s||(s={id:i,scope_kind:r.scope_kind,scope_id:r.scope_id,scope_name:r.scope_name,group:r.group,group_name:r.group_name,records:[],newest:r.timestamp??""},e.set(i,s)),s.records.push(r),(r.timestamp??"")>s.newest&&(s.newest=r.timestamp??"")}return[...e.values()].sort((r,i)=>r.newest<i.newest?1:-1)}_scopeText(e){return e.scope_name||ge({scope_kind:e.scope_kind,scope_id:e.scope_id})}_causeText(e){return e.kind==="entity"?`${e.entity_id} ${e.old} \u2192 ${e.new}`:e.detail?`${He(e.kind)} ${e.detail}`:He(e.kind)}_evalKey(e,r){return`${e.event_id??r}|${e.timestamp??""}|${e.scope_id??""}|${e.group}`}render(){if(this._error)return l`<p class="error">${this._error}</p>`;if(this._loading)return l`<p class="empty">Loading…</p>`;let e=this._buckets();if(!e.length)return l`<p class="empty">No traces captured yet.</p>`;let r=e.find(i=>i.id===this._selected)??e[0];return l`
       <div class="bar">
         <button @click=${()=>this._load()}>Refresh</button>
         ${this._newAvailable?l`<button class="new-badge" @click=${()=>this._load()}>● New traces — refresh</button>`:T}
@@ -3489,7 +3489,7 @@ var Pn=Object.defineProperty;var Rn=Object.getOwnPropertyDescriptor;var u=(t,n,e
           ${e.map(i=>this._renderBucket(i,i.id===r.id))}
         </ul>
         <div class="evaluations">
-          ${r.records.map(i=>this._renderEval(i))}
+          ${r.records.map((i,s)=>this._renderEval(i,s))}
         </div>
       </div>
     `}_renderBucket(e,r){let i=this._groups.get(e.group);return l`
@@ -3507,7 +3507,7 @@ var Pn=Object.defineProperty;var Rn=Object.getOwnPropertyDescriptor;var u=(t,n,e
         </span>
         <span class="count">${e.records.length}</span>
       </li>
-    `}_renderEval(e){let r=this._evalKey(e),i=this._expanded.has(r),s=e.actions[0];return l`
+    `}_renderEval(e,r){let i=this._evalKey(e,r),s=this._expanded.has(i),a=e.actions[0];return l`
       <div class="eval">
         <div class="top">
           <span class="outcome ${e.outcome}">${e.outcome.replace(/_/g," ")}</span>
@@ -3515,11 +3515,12 @@ var Pn=Object.defineProperty;var Rn=Object.getOwnPropertyDescriptor;var u=(t,n,e
           <span class="ts">${e.timestamp?new Date(e.timestamp).toLocaleTimeString():""}</span>
         </div>
         ${e.winner_name?l`<div class="won">Won: <span class="name">${e.winner_name}</span>
-              ${s?l`<span class="action"> → ${this._actionText(s)}</span>`:T}</div>`:T}
-        ${e.explanation?l`<button class="why-toggle" @click=${()=>this._toggle(r)}>
-              ${i?"\u25BE Hide":"\u25B8 Why this rule won"} (${e.explanation.rules.length} rules)
+              ${a?l`<span class="action"> → ${this._actionText(a)}</span>`:T}</div>`:T}
+        ${e.explanation?l`<button class="why-toggle" @click=${()=>this._toggle(i)}>
+              ${s?"\u25BE Hide":e.winner_name?"\u25B8 Why this rule won":"\u25B8 Why nothing matched"}
+              (${e.explanation.rules.length} rules)
             </button>`:T}
-        ${i&&e.explanation?this._renderWhy(e):T}
+        ${s&&e.explanation?this._renderWhy(e):T}
       </div>
     `}_renderWhy(e){return l`
       <div class="why">

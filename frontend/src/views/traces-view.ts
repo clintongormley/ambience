@@ -95,6 +95,7 @@ export class AmbienceTracesView extends LitElement {
       this._traces = traces;
       this._groups = new Map(groups.map((g) => [g.id, g]));
       this._newAvailable = false;
+      // Compute buckets here (before re-render) to pick the initial _selected.
       const buckets = this._buckets();
       if (buckets.length && (this._selected === null || !buckets.some((b) => b.id === this._selected))) {
         this._selected = buckets[0].id;
@@ -145,8 +146,8 @@ export class AmbienceTracesView extends LitElement {
     return humanizeId(c.kind);
   }
 
-  private _evalKey(u: BufferedUnit): string {
-    return `${u.event_id ?? ""}|${u.timestamp ?? ""}|${u.scope_id ?? ""}|${u.group}`;
+  private _evalKey(u: BufferedUnit, idx: number): string {
+    return `${u.event_id ?? idx}|${u.timestamp ?? ""}|${u.scope_id ?? ""}|${u.group}`;
   }
 
   override render() {
@@ -169,7 +170,7 @@ export class AmbienceTracesView extends LitElement {
           ${buckets.map((b) => this._renderBucket(b, b.id === selected.id))}
         </ul>
         <div class="evaluations">
-          ${selected.records.map((u) => this._renderEval(u))}
+          ${selected.records.map((u, i) => this._renderEval(u, i))}
         </div>
       </div>
     `;
@@ -200,8 +201,8 @@ export class AmbienceTracesView extends LitElement {
     `;
   }
 
-  private _renderEval(u: BufferedUnit) {
-    const key = this._evalKey(u);
+  private _renderEval(u: BufferedUnit, idx: number) {
+    const key = this._evalKey(u, idx);
     const open = this._expanded.has(key);
     const firstAction = u.actions[0];
     return html`
@@ -217,7 +218,8 @@ export class AmbienceTracesView extends LitElement {
           : nothing}
         ${u.explanation
           ? html`<button class="why-toggle" @click=${() => this._toggle(key)}>
-              ${open ? "▾ Hide" : "▸ Why this rule won"} (${u.explanation.rules.length} rules)
+              ${open ? "▾ Hide" : u.winner_name ? "▸ Why this rule won" : "▸ Why nothing matched"}
+              (${u.explanation.rules.length} rules)
             </button>`
           : nothing}
         ${open && u.explanation ? this._renderWhy(u) : nothing}

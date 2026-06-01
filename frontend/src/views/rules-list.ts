@@ -53,7 +53,7 @@ export class AmbienceRulesList extends LitElement {
       padding: 0.25rem 0.5rem;
     }
     .toggle ha-icon {
-      --mdc-icon-size: 20px;
+      --mdc-icon-size: 36px;
     }
     .handle {
       cursor: grab;

@@ -210,7 +210,7 @@ var In=Object.defineProperty;var Mn=Object.getOwnPropertyDescriptor;var u=(t,n,e
       padding: 0.25rem 0.5rem;
     }
     .toggle ha-icon {
-      --mdc-icon-size: 20px;
+      --mdc-icon-size: 36px;
     }
     .handle {
       cursor: grab;

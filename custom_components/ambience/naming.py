@@ -1,7 +1,7 @@
-"""Canonical human-readable names for scopes and groups.
+"""Canonical human-readable names for scopes and categories.
 
 Shared by the logbook attribution (`service._log_apply`) and the evaluation
-trace (`trace`), so both render the same friendly area/floor/group names from a
+trace (`trace`), so both render the same friendly area/floor/category names from a
 single source of truth instead of duplicating the lookups.
 """
 
@@ -40,13 +40,13 @@ def scope_display_name(
     return fallback if fallback is not None else (scope_id or "area")
 
 
-def group_names(hass: HomeAssistant) -> dict[str | None, str | None]:
-    """Map of group id -> configured group name, from the store.
+def category_names(hass: HomeAssistant) -> dict[str | None, str | None]:
+    """Map of category id -> configured category name, from the store.
 
-    Returns an empty map when the store has no group list (e.g. a missing store
+    Returns an empty map when the store has no category list (e.g. a missing store
     or a test double), so callers can treat every id as unresolved."""
     store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
-    groups: Any = getattr(store, "groups", None)
-    if not callable(groups):
+    categories: Any = getattr(store, "categories", None)
+    if not callable(categories):
         return {}
-    return {g.get("id"): g.get("name") for g in groups()}
+    return {g.get("id"): g.get("name") for g in categories()}

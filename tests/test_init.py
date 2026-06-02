@@ -13,8 +13,8 @@ from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
+    DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
-    DATA_MATCHERS,
     DATA_STORE,
     DOMAIN,
 )
@@ -59,22 +59,22 @@ async def test_setup_seeds_registries_and_store(
 
     data = hass.data[DOMAIN]
     assert DATA_STORE in data
-    assert "time_of_day" in data[DATA_MATCHERS]
-    assert "scene" not in data[DATA_MATCHERS]
+    assert "time_of_day" in data[DATA_CONDITIONS]
+    assert "scene" not in data[DATA_CONDITIONS]
     # ExposedActionsStore is wired up; fresh setup starts empty.
     assert DATA_EXPOSED_ACTIONS in data
     assert data[DATA_EXPOSED_ACTIONS].list() == []
 
 
-async def test_script_matcher_is_registered(
+async def test_script_condition_is_registered(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
     mock_config_entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    matchers = hass.data[DOMAIN][DATA_MATCHERS]
-    assert "script" in matchers
-    assert matchers["script"].priority == 975
+    conditions = hass.data[DOMAIN][DATA_CONDITIONS]
+    assert "script" in conditions
+    assert conditions["script"].priority == 975
 
 
 async def test_setup_registers_apply_scene_service(
@@ -144,7 +144,7 @@ async def test_area_registry_removal_deletes_ambience_config(
     await hass.async_block_till_done()
 
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(area.id, {"extra": [], "matchers": [], "rules": []})
+    await store.async_save_area(area.id, {"extra": [], "conditions": [], "rules": []})
     assert store.get_area(area.id) is not None
 
     ar.async_get(hass).async_delete(area.id)
@@ -192,7 +192,7 @@ async def test_startup_reconciliation_drops_orphan_area(
             "areas": {"ghost_area": {"rules": []}},
             "floors": {},
             "house": {"rules": []},
-            "matchers": {},
+            "conditions": {},
         }
     )
 
@@ -221,7 +221,7 @@ async def test_startup_reconciliation_drops_orphan_floor(
             "areas": {},
             "floors": {"ghost_floor": {"rules": []}},
             "house": {"rules": []},
-            "matchers": {},
+            "conditions": {},
         }
     )
 

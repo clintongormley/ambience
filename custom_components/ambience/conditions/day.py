@@ -1,4 +1,4 @@
-"""Built-in `day` matcher — date / weekday / workday predicate."""
+"""Built-in `day` condition — date / weekday / workday predicate."""
 
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ def _parse_day_spec(spec: Any) -> list[tuple[int, int]]:
     return ranges
 
 
-class DayMatcher:
+class DayCondition:
     name = "day"
     description = "Matches based on the current date, weekday, or workday status."
     predicate_help = (
@@ -97,13 +97,13 @@ class DayMatcher:
         store = self._hass.data.get(DOMAIN, {}).get(DATA_STORE)
         if store is None:
             return {"workday_sensor": None, "workday_calendar": None}
-        return store.get_matcher_config("day")
+        return store.get_condition_config("day")
 
     async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> DaySnapshot:
         from ..const import DATA_STORE, DOMAIN  # local import to avoid cycles
 
         store = hass.data[DOMAIN][DATA_STORE]
-        cfg = store.get_matcher_config("day")
+        cfg = store.get_condition_config("day")
         today = dt_util.as_local(now).date() if now is not None else dt_util.now().date()
         month_workdays = await self._fetch_month_workdays(hass, cfg.get("workday_calendar"), today)
         if now is not None and cfg.get("workday_calendar") and month_workdays is not None:
@@ -143,7 +143,7 @@ class DayMatcher:
         try:
             events = await _fetch_calendar_events(hass, entity_id, month_start, month_end)
         except Exception as exc:  # noqa: BLE001
-            _LOGGER.warning("day matcher: failed to fetch workday calendar events: %s", exc)
+            _LOGGER.warning("day condition: failed to fetch workday calendar events: %s", exc)
             return None
         dates: set[date] = set()
         for event in events:

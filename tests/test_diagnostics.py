@@ -18,20 +18,20 @@ from custom_components.ambience.store import AmbienceStore
 
 @pytest.fixture
 async def seeded_store(hass: HomeAssistant) -> AmbienceStore:
-    """A store populated with rules and matcher config carrying sensitive data."""
+    """A store populated with rules and condition config carrying sensitive data."""
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_matcher_config(
+    await store.async_save_condition_config(
         "day",
         {"workday_sensor": "binary_sensor.workday", "workday_calendar": "calendar.work"},
     )
-    await store.async_save_matcher_config("weather", {"entity": "weather.home", "groups": []})
+    await store.async_save_condition_config("weather", {"entity": "weather.home", "groups": []})
     await store.async_save_area(
         "living_room",
         {
             "rules": [
                 {
-                    "group": "general",
+                    "category": "general",
                     "when": {
                         "people": {"who": ["person.alice"], "where": "zone.work"},
                         "template": {"template": "{{ is_state('person.bob', 'home') }}"},
@@ -59,7 +59,7 @@ async def test_config_entry_diagnostics_dumps_full_store(
     # Full store is dumped: structure and non-sensitive content survive.
     assert "living_room" in result["areas"]
     rule = result["areas"]["living_room"]["rules"][0]
-    assert rule["group"] == "general"
+    assert rule["category"] == "general"
     assert rule["actions"][0]["entity_ids"] == ["light.lamp"]
     assert rule["actions"][0]["params"] == {"brightness_pct": 30}
 
@@ -69,14 +69,14 @@ async def test_config_entry_diagnostics_redacts_sensitive_keys(
 ) -> None:
     result = await async_get_config_entry_diagnostics(hass, mock_config_entry)
 
-    assert result["matchers"]["day"]["workday_sensor"] == REDACTED
-    assert result["matchers"]["day"]["workday_calendar"] == REDACTED
-    assert result["matchers"]["weather"]["entity"] == REDACTED
+    assert result["conditions"]["day"]["workday_sensor"] == REDACTED
+    assert result["conditions"]["day"]["workday_calendar"] == REDACTED
+    assert result["conditions"]["weather"]["entity"] == REDACTED
 
     when = result["areas"]["living_room"]["rules"][0]["when"]
     assert when["people"]["who"] == REDACTED
     assert when["people"]["where"] == REDACTED
-    # The template matcher's predicate key is itself `template`, so the whole
+    # The template condition's predicate key is itself `template`, so the whole
     # predicate value is redacted (the key — i.e. that a template rule exists —
     # still survives).
     assert when["template"] == REDACTED
@@ -88,7 +88,7 @@ async def test_config_entry_diagnostics_does_not_mutate_store(
     await async_get_config_entry_diagnostics(hass, mock_config_entry)
 
     # Redaction must operate on a copy — the live store keeps its real values.
-    assert seeded_store.get_matcher_config("day")["workday_sensor"] == "binary_sensor.workday"
+    assert seeded_store.get_condition_config("day")["workday_sensor"] == "binary_sensor.workday"
 
 
 async def test_device_diagnostics_dumps_redacted_store(
@@ -103,4 +103,4 @@ async def test_device_diagnostics_dumps_redacted_store(
     result = await async_get_device_diagnostics(hass, mock_config_entry, device)
 
     assert "living_room" in result["areas"]
-    assert result["matchers"]["day"]["workday_sensor"] == REDACTED
+    assert result["conditions"]["day"]["workday_sensor"] == REDACTED

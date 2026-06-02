@@ -1,9 +1,9 @@
 """Shared helper for collecting per-rule predicates across all scopes.
 
-Both `script` and `template` matchers need the same walk: visit every rule in
+Both `script` and `template` conditions need the same walk: visit every rule in
 every scope (areas, floors, house) and yield the predicate carried by
 `when[key]`, skipping rules that don't set the key or set it to `None`
-(the wildcard). Dedup / normalisation is matcher-specific and stays in the
+(the wildcard). Dedup / normalisation is condition-specific and stays in the
 caller.
 """
 

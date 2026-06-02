@@ -1,4 +1,4 @@
-"""Built-in `weather` matcher — condition + numeric-threshold predicate."""
+"""Built-in `weather` condition — weather state + numeric-threshold predicate."""
 
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ def _op_satisfied(actual: float, op: str, value: float) -> bool:
     return False
 
 
-class WeatherMatcher:
+class WeatherCondition:
     name = "weather"
     description = "Matches the current weather condition and attribute thresholds."
     predicate_help = (
@@ -118,7 +118,7 @@ class WeatherMatcher:
         store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
         if store is None:
             return None
-        return store.get_matcher_config("weather").get("entity")
+        return store.get_condition_config("weather").get("entity")
 
     async def snapshot(
         self, hass: HomeAssistant, *, now: datetime | None = None
@@ -126,7 +126,7 @@ class WeatherMatcher:
         from ..const import DATA_STORE, DOMAIN
 
         store = hass.data[DOMAIN][DATA_STORE]
-        entity_id = store.get_matcher_config("weather").get("entity")
+        entity_id = store.get_condition_config("weather").get("entity")
         if not entity_id:
             return WeatherSnapshot(condition=None, attributes={})
         state = hass.states.get(entity_id)
@@ -162,7 +162,7 @@ class WeatherMatcher:
         store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
         if store is None:
             return []
-        return list(store.get_matcher_config("weather").get("groups") or [])
+        return list(store.get_condition_config("weather").get("groups") or [])
 
     def _allowed_conditions(self, group_ids: list[str]) -> set[str]:
         allowed: set[str] = set()

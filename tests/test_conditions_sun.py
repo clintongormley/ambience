@@ -1,11 +1,11 @@
-"""SunMatcher — elevation + azimuth angular-position predicate."""
+"""SunCondition — elevation + azimuth angular-position predicate."""
 
 from __future__ import annotations
 
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.ambience.matchers.sun import SunMatcher, SunSnapshot
+from custom_components.ambience.conditions.sun import SunCondition, SunSnapshot
 
 
 def _snap(elevation: float | None = 0.0, azimuth: float | None = 180.0) -> SunSnapshot:
@@ -16,7 +16,7 @@ def _snap(elevation: float | None = 0.0, azimuth: float | None = 180.0) -> SunSn
 
 
 def test_protocol_fields() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     assert m.name == "sun"
     assert m.input == "sun_predicate"
     assert m.priority == 750
@@ -29,27 +29,27 @@ def test_protocol_fields() -> None:
 
 async def test_snapshot_reads_elevation_and_azimuth(hass: HomeAssistant) -> None:
     hass.states.async_set("sun.sun", "above_horizon", {"elevation": 23.4, "azimuth": 187.6})
-    snap = await SunMatcher().snapshot(hass)
+    snap = await SunCondition().snapshot(hass)
     assert snap.elevation == 23.4
     assert snap.azimuth == 187.6
 
 
 async def test_snapshot_missing_entity(hass: HomeAssistant) -> None:
-    snap = await SunMatcher().snapshot(hass)
+    snap = await SunCondition().snapshot(hass)
     assert snap.elevation is None
     assert snap.azimuth is None
 
 
 async def test_snapshot_missing_attributes(hass: HomeAssistant) -> None:
     hass.states.async_set("sun.sun", "above_horizon", {})
-    snap = await SunMatcher().snapshot(hass)
+    snap = await SunCondition().snapshot(hass)
     assert snap.elevation is None
     assert snap.azimuth is None
 
 
 async def test_snapshot_unavailable(hass: HomeAssistant) -> None:
     hass.states.async_set("sun.sun", "unavailable", {})
-    snap = await SunMatcher().snapshot(hass)
+    snap = await SunCondition().snapshot(hass)
     assert snap.elevation is None
     assert snap.azimuth is None
 
@@ -58,18 +58,18 @@ async def test_snapshot_unavailable(hass: HomeAssistant) -> None:
 
 
 def test_matches_none_is_wildcard() -> None:
-    assert SunMatcher().matches(None, _snap()) is True
+    assert SunCondition().matches(None, _snap()) is True
 
 
 def test_matches_non_dict_is_false() -> None:
-    assert SunMatcher().matches(42, _snap()) is False
+    assert SunCondition().matches(42, _snap()) is False
 
 
 # ── matches: elevation ───────────────────────────────────────────────────────
 
 
 def test_matches_elevation_above() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     pred = {"elevation": {"min": 10}}
     assert m.matches(pred, _snap(elevation=20)) is True
     assert m.matches(pred, _snap(elevation=5)) is False
@@ -77,7 +77,7 @@ def test_matches_elevation_above() -> None:
 
 
 def test_matches_elevation_below() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     pred = {"elevation": {"max": 30}}
     assert m.matches(pred, _snap(elevation=20)) is True
     assert m.matches(pred, _snap(elevation=40)) is False
@@ -85,7 +85,7 @@ def test_matches_elevation_below() -> None:
 
 
 def test_matches_elevation_between() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     pred = {"elevation": {"min": 0, "max": 30}}
     assert m.matches(pred, _snap(elevation=15)) is True
     assert m.matches(pred, _snap(elevation=-5)) is False
@@ -93,21 +93,21 @@ def test_matches_elevation_between() -> None:
 
 
 def test_matches_elevation_missing_snapshot_is_false() -> None:
-    assert SunMatcher().matches({"elevation": {"min": 0}}, _snap(elevation=None)) is False
+    assert SunCondition().matches({"elevation": {"min": 0}}, _snap(elevation=None)) is False
 
 
 # ── matches: azimuth ─────────────────────────────────────────────────────────
 
 
 def test_matches_azimuth_single_sector() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     pred = {"azimuth": {"sectors": ["S"]}}
     assert m.matches(pred, _snap(azimuth=180)) is True
     assert m.matches(pred, _snap(azimuth=270)) is False
 
 
 def test_matches_azimuth_multiple_sectors() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     pred = {"azimuth": {"sectors": ["W", "SW"]}}
     assert m.matches(pred, _snap(azimuth=270)) is True  # W
     assert m.matches(pred, _snap(azimuth=225)) is True  # SW
@@ -115,14 +115,14 @@ def test_matches_azimuth_multiple_sectors() -> None:
 
 
 def test_matches_azimuth_custom_range() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     pred = {"azimuth": {"ranges": [{"from": 200, "to": 250}]}}
     assert m.matches(pred, _snap(azimuth=225)) is True
     assert m.matches(pred, _snap(azimuth=260)) is False
 
 
 def test_matches_azimuth_wraparound_range() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     pred = {"azimuth": {"ranges": [{"from": 350, "to": 20}]}}
     assert m.matches(pred, _snap(azimuth=355)) is True
     assert m.matches(pred, _snap(azimuth=10)) is True
@@ -131,7 +131,7 @@ def test_matches_azimuth_wraparound_range() -> None:
 
 
 def test_matches_azimuth_north_sector_wraps() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     pred = {"azimuth": {"sectors": ["N"]}}
     assert m.matches(pred, _snap(azimuth=0)) is True
     assert m.matches(pred, _snap(azimuth=350)) is True
@@ -140,7 +140,7 @@ def test_matches_azimuth_north_sector_wraps() -> None:
 
 
 def test_matches_azimuth_sectors_or_ranges_union() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     pred = {"azimuth": {"sectors": ["S"], "ranges": [{"from": 60, "to": 70}]}}
     assert m.matches(pred, _snap(azimuth=180)) is True  # sector
     assert m.matches(pred, _snap(azimuth=65)) is True  # range
@@ -148,14 +148,14 @@ def test_matches_azimuth_sectors_or_ranges_union() -> None:
 
 
 def test_matches_azimuth_missing_snapshot_is_false() -> None:
-    assert SunMatcher().matches({"azimuth": {"sectors": ["S"]}}, _snap(azimuth=None)) is False
+    assert SunCondition().matches({"azimuth": {"sectors": ["S"]}}, _snap(azimuth=None)) is False
 
 
 # ── matches: combined AND ────────────────────────────────────────────────────
 
 
 def test_matches_elevation_and_azimuth_anded() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     pred = {"elevation": {"max": 20}, "azimuth": {"sectors": ["W"]}}
     assert m.matches(pred, _snap(elevation=15, azimuth=270)) is True
     assert m.matches(pred, _snap(elevation=15, azimuth=180)) is False  # wrong azimuth
@@ -166,11 +166,11 @@ def test_matches_elevation_and_azimuth_anded() -> None:
 
 
 def test_validate_accepts_none() -> None:
-    SunMatcher().validate_predicate(None)
+    SunCondition().validate_predicate(None)
 
 
 def test_validate_accepts_well_formed() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     m.validate_predicate({"elevation": {"min": 0, "max": 30}})
     m.validate_predicate({"azimuth": {"sectors": ["W", "SW"]}})
     m.validate_predicate({"azimuth": {"ranges": [{"from": 350, "to": 20}]}})
@@ -198,14 +198,14 @@ def test_validate_accepts_well_formed() -> None:
 )
 def test_validate_rejects(predicate) -> None:
     with pytest.raises(ValueError):
-        SunMatcher().validate_predicate(predicate)
+        SunCondition().validate_predicate(predicate)
 
 
 # ── describe ─────────────────────────────────────────────────────────────────
 
 
 def test_describe_includes_elevation_azimuth_and_nearest_sector() -> None:
-    out = SunMatcher().describe(_snap(elevation=23, azimuth=187))
+    out = SunCondition().describe(_snap(elevation=23, azimuth=187))
     assert out is not None
     assert "23" in out
     assert "187" in out
@@ -213,18 +213,18 @@ def test_describe_includes_elevation_azimuth_and_nearest_sector() -> None:
 
 
 def test_describe_nearest_sector_wraps_north() -> None:
-    assert "N" in SunMatcher().describe(_snap(elevation=5, azimuth=359))
+    assert "N" in SunCondition().describe(_snap(elevation=5, azimuth=359))
 
 
 def test_describe_none_when_no_data() -> None:
-    assert SunMatcher().describe(_snap(elevation=None, azimuth=None)) is None
+    assert SunCondition().describe(_snap(elevation=None, azimuth=None)) is None
 
 
 # ── contains: elevation ──────────────────────────────────────────────────────
 
 
 def test_contains_elevation_interval_nesting() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     above0 = {"elevation": {"min": 0}}
     above10 = {"elevation": {"min": 10}}
     above30 = {"elevation": {"min": 30}}
@@ -234,7 +234,7 @@ def test_contains_elevation_interval_nesting() -> None:
 
 
 def test_contains_elevation_band_within_band() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     wide = {"elevation": {"min": 0, "max": 40}}
     narrow = {"elevation": {"min": 10, "max": 30}}
     assert m.contains(wide, narrow) is True
@@ -242,7 +242,7 @@ def test_contains_elevation_band_within_band() -> None:
 
 
 def test_contains_absent_elevation_is_full_range() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     # outer with no elevation key contains any elevation constraint
     assert (
         m.contains(
@@ -265,7 +265,7 @@ def test_contains_absent_elevation_is_full_range() -> None:
 
 
 def test_contains_azimuth_sector_within_range() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     outer = {"azimuth": {"ranges": [{"from": 150, "to": 210}]}}
     inner = {"azimuth": {"sectors": ["S"]}}  # 157.5–202.5
     assert m.contains(outer, inner) is True
@@ -273,7 +273,7 @@ def test_contains_azimuth_sector_within_range() -> None:
 
 
 def test_contains_azimuth_union() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     outer = {"azimuth": {"sectors": ["S", "SW"]}}
     inner = {"azimuth": {"sectors": ["SW"]}}
     assert m.contains(outer, inner) is True
@@ -281,7 +281,7 @@ def test_contains_azimuth_union() -> None:
 
 
 def test_contains_azimuth_wraparound() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     outer = {"azimuth": {"ranges": [{"from": 340, "to": 30}]}}
     inner = {"azimuth": {"ranges": [{"from": 350, "to": 20}]}}
     assert m.contains(outer, inner) is True
@@ -289,7 +289,7 @@ def test_contains_azimuth_wraparound() -> None:
 
 
 def test_contains_absent_azimuth_is_full_circle() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     full = {"elevation": {"min": 0}}  # no azimuth key
     bounded = {"elevation": {"min": 0}, "azimuth": {"sectors": ["S"]}}
     assert m.contains(full, bounded) is True
@@ -297,14 +297,14 @@ def test_contains_absent_azimuth_is_full_circle() -> None:
 
 
 def test_contains_combined() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     outer = {"elevation": {"min": 0, "max": 40}, "azimuth": {"sectors": ["S", "SW", "W"]}}
     inner = {"elevation": {"min": 10, "max": 30}, "azimuth": {"sectors": ["SW"]}}
     assert m.contains(outer, inner) is True
 
 
 def test_contains_disjoint_azimuth() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     assert m.contains({"azimuth": {"sectors": ["S"]}}, {"azimuth": {"sectors": ["N"]}}) is False
 
 
@@ -312,13 +312,13 @@ def test_contains_disjoint_azimuth() -> None:
 
 
 def test_order_key_uses_elevation_min() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     assert m.order_key({"elevation": {"min": 10}}) == 10
     assert m.order_key({"elevation": {"min": -5, "max": 5}}) == -5
 
 
 def test_order_key_absent_elevation_min_is_neg_inf() -> None:
-    m = SunMatcher()
+    m = SunCondition()
     assert m.order_key({"azimuth": {"sectors": ["S"]}}) == float("-inf")
     assert m.order_key({"elevation": {"max": 30}}) == float("-inf")
 
@@ -327,19 +327,19 @@ def test_order_key_absent_elevation_min_is_neg_inf() -> None:
 
 
 def test_trigger_deps_watches_sun_entity_for_elevation() -> None:
-    spec = SunMatcher().trigger_deps({"elevation": {"min": 10}})
+    spec = SunCondition().trigger_deps({"elevation": {"min": 10}})
     assert spec.entities == frozenset({"sun.sun"})
     assert spec.entity_durations == frozenset()
 
 
 def test_trigger_deps_watches_sun_entity_for_azimuth() -> None:
-    spec = SunMatcher().trigger_deps({"azimuth": {"sectors": ["S"]}})
+    spec = SunCondition().trigger_deps({"azimuth": {"sectors": ["S"]}})
     assert spec.entities == frozenset({"sun.sun"})
 
 
 def test_trigger_deps_none_or_garbage_is_empty() -> None:
     from custom_components.ambience.triggers import EMPTY
 
-    assert SunMatcher().trigger_deps(None) == EMPTY
-    assert SunMatcher().trigger_deps("garbage") == EMPTY
-    assert SunMatcher().trigger_deps({}) == EMPTY
+    assert SunCondition().trigger_deps(None) == EMPTY
+    assert SunCondition().trigger_deps("garbage") == EMPTY
+    assert SunCondition().trigger_deps({}) == EMPTY

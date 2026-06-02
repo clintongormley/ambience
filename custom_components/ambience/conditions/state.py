@@ -1,4 +1,4 @@
-"""StateMatcher — boolean expression over entity states + optional `for`."""
+"""StateCondition — boolean expression over entity states + optional `for`."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class StateSnapshot:
 _UNAVAILABLE = {"unavailable", "unknown"}
 
 
-class StateMatcher:
+class StateCondition:
     """Match a rule against a boolean expression over entity states.
 
     Predicate is a recursive tree:
@@ -54,7 +54,7 @@ class StateMatcher:
     )
     input = "state_predicate"
     # Above day (900): state is the most specific world-fact a rule can name,
-    # so it ranks highest among world-fact matchers in the linearisation
+    # so it ranks highest among world-fact conditions in the linearisation
     # tiebreaker.
     priority = 950
 

@@ -1,4 +1,4 @@
-"""ScriptMatcher — calls a HA script, reads {match: bool} from the response."""
+"""ScriptCondition — calls a HA script, reads {match: bool} from the response."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.ambience.const import DATA_STORE, DOMAIN
-from custom_components.ambience.matchers.script import (
-    ScriptMatcher,
+from custom_components.ambience.conditions.script import (
+    ScriptCondition,
     ScriptSnapshot,
     _cache_key,
 )
+from custom_components.ambience.const import DATA_STORE, DOMAIN
 
 
 class _StoreStub:
@@ -47,7 +47,7 @@ def _install_store(
 
 
 def test_protocol_fields() -> None:
-    m = ScriptMatcher()
+    m = ScriptCondition()
     assert m.name == "script"
     assert m.input == "script_predicate"
     assert m.priority == 975
@@ -56,13 +56,13 @@ def test_protocol_fields() -> None:
 
 
 def test_validate_predicate_accepts_null() -> None:
-    ScriptMatcher().validate_predicate(None)
+    ScriptCondition().validate_predicate(None)
 
 
 def test_validate_predicate_accepts_well_formed() -> None:
-    ScriptMatcher().validate_predicate({"script": "script.foo"})
-    ScriptMatcher().validate_predicate({"script": "script.foo", "args": {}})
-    ScriptMatcher().validate_predicate({"script": "script.foo", "args": {"k": 1}})
+    ScriptCondition().validate_predicate({"script": "script.foo"})
+    ScriptCondition().validate_predicate({"script": "script.foo", "args": {}})
+    ScriptCondition().validate_predicate({"script": "script.foo", "args": {"k": 1}})
 
 
 @pytest.mark.parametrize(
@@ -80,18 +80,18 @@ def test_validate_predicate_accepts_well_formed() -> None:
 )
 def test_validate_predicate_rejects_bad(bad: object) -> None:
     with pytest.raises(ValueError):
-        ScriptMatcher().validate_predicate(bad)
+        ScriptCondition().validate_predicate(bad)
 
 
 def test_order_key_uses_script_id() -> None:
-    assert ScriptMatcher().order_key({"script": "script.foo"}) == "script.foo"
-    assert ScriptMatcher().order_key(None) == ""
-    assert ScriptMatcher().order_key("nonsense") == ""
+    assert ScriptCondition().order_key({"script": "script.foo"}) == "script.foo"
+    assert ScriptCondition().order_key(None) == ""
+    assert ScriptCondition().order_key("nonsense") == ""
 
 
 def test_describe_returns_none() -> None:
-    # Script matcher has no single "current value" — per-predicate.
-    assert ScriptMatcher().describe(object()) is None
+    # Script condition has no single "current value" — per-predicate.
+    assert ScriptCondition().describe(object()) is None
 
 
 def test_cache_key_is_stable_across_arg_orderings() -> None:
@@ -107,30 +107,30 @@ def test_cache_key_includes_script_and_args() -> None:
 
 def test_matches_null_predicate_is_wildcard() -> None:
     snap = ScriptSnapshot(results={})
-    assert ScriptMatcher().matches(None, snap) is True
+    assert ScriptCondition().matches(None, snap) is True
 
 
 def test_matches_returns_true_when_snapshot_says_so() -> None:
     key = _cache_key("script.foo", {"x": 1})
     snap = ScriptSnapshot(results={key: True})
-    assert ScriptMatcher().matches({"script": "script.foo", "args": {"x": 1}}, snap) is True
+    assert ScriptCondition().matches({"script": "script.foo", "args": {"x": 1}}, snap) is True
 
 
 def test_matches_returns_false_when_snapshot_says_so() -> None:
     key = _cache_key("script.foo", {})
     snap = ScriptSnapshot(results={key: False})
-    assert ScriptMatcher().matches({"script": "script.foo"}, snap) is False
+    assert ScriptCondition().matches({"script": "script.foo"}, snap) is False
 
 
 def test_matches_returns_false_on_cache_miss() -> None:
     snap = ScriptSnapshot(results={})
-    assert ScriptMatcher().matches({"script": "script.never_called"}, snap) is False
+    assert ScriptCondition().matches({"script": "script.never_called"}, snap) is False
 
 
 def test_matches_returns_false_on_malformed_predicate() -> None:
     snap = ScriptSnapshot(results={})
-    assert ScriptMatcher().matches("nope", snap) is False
-    assert ScriptMatcher().matches({"script": 42}, snap) is False
+    assert ScriptCondition().matches("nope", snap) is False
+    assert ScriptCondition().matches({"script": 42}, snap) is False
 
 
 def test_collect_pairs_walks_all_areas_and_rules(hass: HomeAssistant) -> None:
@@ -152,7 +152,7 @@ def test_collect_pairs_walks_all_areas_and_rules(hass: HomeAssistant) -> None:
             },
         },
     )
-    pairs = ScriptMatcher(hass=hass)._collect_pairs()
+    pairs = ScriptCondition(hass=hass)._collect_pairs()
     assert sorted(pairs) == [
         ("script.a", '{"k":1}'),
         ("script.b", "{}"),
@@ -164,7 +164,7 @@ def test_collect_pairs_walks_floors(hass: HomeAssistant) -> None:
         hass,
         floors={"f1": {"rules": [{"when": {"script": {"script": "script.floor_check"}}}]}},
     )
-    pairs = ScriptMatcher(hass=hass)._collect_pairs()
+    pairs = ScriptCondition(hass=hass)._collect_pairs()
     assert ("script.floor_check", "{}") in pairs
 
 
@@ -173,13 +173,13 @@ def test_collect_pairs_walks_house(hass: HomeAssistant) -> None:
         hass,
         house={"rules": [{"when": {"script": {"script": "script.house_check"}}}]},
     )
-    pairs = ScriptMatcher(hass=hass)._collect_pairs()
+    pairs = ScriptCondition(hass=hass)._collect_pairs()
     assert ("script.house_check", "{}") in pairs
 
 
 def test_collect_pairs_no_store_returns_empty(hass: HomeAssistant) -> None:
-    # No store installed under DOMAIN — matcher must not blow up.
-    assert ScriptMatcher(hass=hass)._collect_pairs() == []
+    # No store installed under DOMAIN — condition must not blow up.
+    assert ScriptCondition(hass=hass)._collect_pairs() == []
 
 
 def test_collect_pairs_skips_malformed_predicates(hass: HomeAssistant) -> None:
@@ -195,7 +195,7 @@ def test_collect_pairs_skips_malformed_predicates(hass: HomeAssistant) -> None:
             },
         },
     )
-    pairs = ScriptMatcher(hass=hass)._collect_pairs()
+    pairs = ScriptCondition(hass=hass)._collect_pairs()
     assert pairs == [("script.ok", "{}")]
 
 
@@ -248,7 +248,7 @@ async def test_snapshot_calls_each_script_once_and_records_match(hass: HomeAssis
     _install_service(hass, "script", "true_one", response={"match": True})
     _install_service(hass, "script", "false_one", response={"match": False})
 
-    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results[_cache_key("script.true_one", {"x": 1})] is True
     assert snap.results[_cache_key("script.false_one", {})] is False
 
@@ -256,21 +256,21 @@ async def test_snapshot_calls_each_script_once_and_records_match(hass: HomeAssis
 async def test_snapshot_no_match_when_match_key_absent(hass: HomeAssistant) -> None:
     _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.no_key"}}}]}})
     _install_service(hass, "script", "no_key", response={"other": True})
-    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results[_cache_key("script.no_key", {})] is False
 
 
 async def test_snapshot_no_match_when_match_is_not_bool_true(hass: HomeAssistant) -> None:
     _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.truthy"}}}]}})
     _install_service(hass, "script", "truthy", response={"match": "yes"})  # truthy but not True
-    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results[_cache_key("script.truthy", {})] is False
 
 
 async def test_snapshot_missing_script_records_false(hass: HomeAssistant, caplog) -> None:
     _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.gone"}}}]}})
     # No service registered.
-    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results[_cache_key("script.gone", {})] is False
     assert "script.gone" in caplog.text
 
@@ -278,7 +278,7 @@ async def test_snapshot_missing_script_records_false(hass: HomeAssistant, caplog
 async def test_snapshot_script_raises_records_false(hass: HomeAssistant, caplog) -> None:
     _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.boom"}}}]}})
     _install_service(hass, "script", "boom", raises=RuntimeError("kaboom"))
-    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results[_cache_key("script.boom", {})] is False
     assert "script.boom" in caplog.text
 
@@ -287,7 +287,7 @@ async def test_snapshot_timeout_records_false(hass: HomeAssistant, caplog) -> No
     _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.slow"}}}]}})
     # Delay longer than the override timeout.
     _install_service(hass, "script", "slow", response={"match": True}, delay=0.2)
-    m = ScriptMatcher(hass=hass)
+    m = ScriptCondition(hass=hass)
     m._timeout_seconds = 0.05
     snap = await m.snapshot(hass)
     assert snap.results[_cache_key("script.slow", {})] is False
@@ -300,13 +300,13 @@ async def test_snapshot_passes_args_to_service_call(hass: HomeAssistant) -> None
         {"a": {"rules": [{"when": {"script": {"script": "script.echo", "args": {"k": 7}}}}]}},
     )
     spy = _install_service(hass, "script", "echo", response={"match": True})
-    await ScriptMatcher(hass=hass).snapshot(hass)
+    await ScriptCondition(hass=hass).snapshot(hass)
     spy.assert_called_once_with({"k": 7})
 
 
 async def test_snapshot_empty_when_no_script_predicates(hass: HomeAssistant) -> None:
     _install_store(hass, {"a": {"rules": [{"when": {"state": {"x": 1}}}]}})
-    snap = await ScriptMatcher(hass=hass).snapshot(hass)
+    snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results == {}
 
 
@@ -314,7 +314,7 @@ async def test_snapshot_reuses_cached_result_within_ttl(hass: HomeAssistant) -> 
     _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.cached"}}}]}})
     spy = _install_service(hass, "script", "cached", response={"match": True})
 
-    m = ScriptMatcher(hass=hass)
+    m = ScriptCondition(hass=hass)
     # Long TTL so the second tick reuses the first call's result.
     m._ttl_seconds = 60.0
 
@@ -327,12 +327,12 @@ async def test_snapshot_recalls_after_ttl_expiry(hass: HomeAssistant, monkeypatc
     _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.expires"}}}]}})
     spy = _install_service(hass, "script", "expires", response={"match": True})
 
-    m = ScriptMatcher(hass=hass)
+    m = ScriptCondition(hass=hass)
     m._ttl_seconds = 0.1
 
     fake_now = [1000.0]
     monkeypatch.setattr(
-        "custom_components.ambience.matchers.script._monotonic", lambda: fake_now[0]
+        "custom_components.ambience.conditions.script._monotonic", lambda: fake_now[0]
     )
 
     await m.snapshot(hass)
@@ -358,7 +358,7 @@ async def test_snapshot_caches_per_args(hass: HomeAssistant) -> None:
     )
     spy = _install_service(hass, "script", "same", response={"match": True})
 
-    m = ScriptMatcher(hass=hass)
+    m = ScriptCondition(hass=hass)
     m._ttl_seconds = 60.0
     await m.snapshot(hass)
     await m.snapshot(hass)
@@ -367,13 +367,13 @@ async def test_snapshot_caches_per_args(hass: HomeAssistant) -> None:
 
 
 def test_trigger_deps_is_opaque_with_no_declared_triggers() -> None:
-    spec = ScriptMatcher().trigger_deps({"script": "script.foo"})
+    spec = ScriptCondition().trigger_deps({"script": "script.foo"})
     assert spec.opaque is True
     assert spec.entities == frozenset()
 
 
 def test_trigger_deps_includes_declared_triggers() -> None:
-    spec = ScriptMatcher().trigger_deps(
+    spec = ScriptCondition().trigger_deps(
         {"script": "script.foo", "triggers": ["person.john", "input_boolean.guest"]}
     )
     assert spec.opaque is True
@@ -381,30 +381,32 @@ def test_trigger_deps_includes_declared_triggers() -> None:
 
 
 def test_trigger_deps_none_predicate_is_opaque_no_entities() -> None:
-    spec = ScriptMatcher().trigger_deps(None)
+    spec = ScriptCondition().trigger_deps(None)
     assert spec.opaque is True
     assert spec.entities == frozenset()
 
 
 def test_validate_predicate_accepts_valid_triggers() -> None:
-    ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": ["person.john"]})
+    ScriptCondition().validate_predicate({"script": "script.foo", "triggers": ["person.john"]})
 
 
 def test_validate_predicate_rejects_non_list_triggers() -> None:
     with pytest.raises(ValueError, match="triggers"):
-        ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": "person.john"})
+        ScriptCondition().validate_predicate({"script": "script.foo", "triggers": "person.john"})
 
 
 def test_validate_predicate_rejects_non_string_trigger_items() -> None:
     with pytest.raises(ValueError, match="triggers"):
-        ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": ["person.john", 5]})
+        ScriptCondition().validate_predicate(
+            {"script": "script.foo", "triggers": ["person.john", 5]}
+        )
 
 
 def test_validate_predicate_rejects_empty_string_trigger() -> None:
     with pytest.raises(ValueError, match="triggers"):
-        ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": [""]})
+        ScriptCondition().validate_predicate({"script": "script.foo", "triggers": [""]})
 
 
 def test_validate_predicate_accepts_empty_triggers_list() -> None:
     # An empty list means "no declared triggers" — equivalent to omitting it.
-    ScriptMatcher().validate_predicate({"script": "script.foo", "triggers": []})
+    ScriptCondition().validate_predicate({"script": "script.foo", "triggers": []})

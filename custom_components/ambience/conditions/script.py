@@ -1,4 +1,4 @@
-"""ScriptMatcher — evaluate a rule by calling a HA script that returns {match: bool}.
+"""ScriptCondition — evaluate a rule by calling a HA script that returns {match: bool}.
 
 Per-rule predicate carries `(script, args)`. `snapshot()` collects every
 distinct pair across all areas' rules, calls each script in parallel with a
@@ -44,7 +44,7 @@ class ScriptSnapshot:
     results: dict[str, bool] = field(default_factory=dict)
 
 
-class ScriptMatcher:
+class ScriptCondition:
     """Matches by calling a HA script and reading {match: bool} from its response."""
 
     name = "script"

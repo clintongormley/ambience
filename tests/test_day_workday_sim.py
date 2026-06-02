@@ -1,18 +1,18 @@
-"""day matcher derives workday from the calendar for a simulated date."""
+"""day condition derives workday from the calendar for a simulated date."""
 
 from datetime import UTC, date, datetime
 
 import pytest
 
+from custom_components.ambience.conditions.day import DayCondition
 from custom_components.ambience.const import DATA_STORE, DOMAIN
-from custom_components.ambience.matchers.day import DayMatcher
 
 
 class _Store:
     def __init__(self, cfg):
         self._cfg = cfg
 
-    def get_matcher_config(self, name):
+    def get_condition_config(self, name):
         return self._cfg
 
 
@@ -35,9 +35,9 @@ async def test_workday_derived_from_calendar_when_date_is_a_workday(monkeypatch)
         return [_Ev()]
 
     monkeypatch.setattr(
-        "custom_components.ambience.matchers.day._fetch_calendar_events", fake_fetch
+        "custom_components.ambience.conditions.day._fetch_calendar_events", fake_fetch
     )
-    snap = await DayMatcher(hass).snapshot(hass, now=chosen)
+    snap = await DayCondition(hass).snapshot(hass, now=chosen)
     assert snap.workday_state == "on"
 
 
@@ -54,7 +54,7 @@ async def test_workday_off_when_date_not_in_calendar(monkeypatch):
         return [_Ev()]
 
     monkeypatch.setattr(
-        "custom_components.ambience.matchers.day._fetch_calendar_events", fake_fetch
+        "custom_components.ambience.conditions.day._fetch_calendar_events", fake_fetch
     )
-    snap = await DayMatcher(hass).snapshot(hass, now=chosen)
+    snap = await DayCondition(hass).snapshot(hass, now=chosen)
     assert snap.workday_state == "off"

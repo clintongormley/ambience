@@ -1,4 +1,4 @@
-"""Canonical scope/group display-name helpers shared by logbook + trace."""
+"""Canonical scope/category display-name helpers shared by logbook + trace."""
 
 from __future__ import annotations
 
@@ -8,17 +8,17 @@ from homeassistant.helpers import floor_registry as fr
 
 from custom_components.ambience.const import DATA_STORE, DOMAIN
 from custom_components.ambience.naming import (
-    group_names,
+    category_names,
     scope_display_name,
 )
 
 
 class _StoreStub:
-    def __init__(self, groups: list[dict]) -> None:
-        self._groups = groups
+    def __init__(self, categories: list[dict]) -> None:
+        self._categories = categories
 
-    def groups(self) -> list[dict]:
-        return list(self._groups)
+    def categories(self) -> list[dict]:
+        return list(self._categories)
 
 
 class _Hass:
@@ -28,10 +28,10 @@ class _Hass:
         self.data = data
 
 
-# --- group names --------------------------------------------------------------
+# --- category names --------------------------------------------------------------
 
 
-def test_group_names_maps_id_to_name() -> None:
+def test_category_names_maps_id_to_name() -> None:
     hass = _Hass(
         {
             DOMAIN: {
@@ -41,12 +41,12 @@ def test_group_names_maps_id_to_name() -> None:
             }
         }
     )
-    assert group_names(hass) == {"g1": "Lights", "g2": "Blinds"}
+    assert category_names(hass) == {"g1": "Lights", "g2": "Blinds"}
 
 
-def test_group_names_empty_when_store_missing() -> None:
-    assert group_names(_Hass({DOMAIN: {}})) == {}
-    assert group_names(_Hass({})) == {}
+def test_category_names_empty_when_store_missing() -> None:
+    assert category_names(_Hass({DOMAIN: {}})) == {}
+    assert category_names(_Hass({})) == {}
 
 
 # --- scope display names ------------------------------------------------------

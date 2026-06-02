@@ -1,4 +1,4 @@
-"""Internal interface for Ambience's built-in matchers."""
+"""Internal interface for Ambience's built-in conditions."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ from typing import Any, Protocol
 from homeassistant.core import HomeAssistant
 
 
-class Matcher(Protocol):
-    """A predicate evaluator. The built-in matchers all conform to this shape.
+class Condition(Protocol):
+    """A predicate evaluator. The built-in conditions all conform to this shape.
 
     Optional (duck-typed, read via getattr with defaults — not part of the
     Protocol so they stay optional):
       - ``contains(outer, inner) -> bool``: True iff every state matching
         ``inner`` also matches ``outer``. The hard-constraint primitive for
-        the rule sort. Absent => no containment edges from this matcher.
+        the rule sort. Absent => no containment edges from this condition.
       - ``order_key(predicate)``: a sortable linearisation key for the
         predicate (e.g. start-minute-of-day). Absent => the slot sorts last.
       - ``priority: int``: linearisation-slot order, lower first. Default 1000.
@@ -30,8 +30,8 @@ class Matcher(Protocol):
         """Capture all state needed to evaluate predicates.
 
         `now` overrides the wall-clock the snapshot is taken at (used by the
-        what-if simulator to time-travel). When None, the matcher reads the
-        real current time. Time-insensitive matchers accept and ignore it.
+        what-if simulator to time-travel). When None, the condition reads the
+        real current time. Time-insensitive conditions accept and ignore it.
         """
         ...
 

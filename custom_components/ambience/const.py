@@ -5,7 +5,7 @@ STORAGE_KEY = "ambience"
 STORAGE_VERSION = 1
 
 DATA_EXPOSED_ACTIONS = "exposed_actions"
-DATA_MATCHERS = "matchers"
+DATA_CONDITIONS = "conditions"
 DATA_PERIODS = "periods"
 DATA_STORE = "store"
 
@@ -21,14 +21,14 @@ DATA_LAST_APPLIED = "last_applied"
 DATA_ENGINE = "engine"
 # Registered TraceSink instances (see trace.py).
 DATA_TRACE_SINKS = "trace_sinks"
-# In-memory trace ring buffer (BufferSink) + its per-(scope,group) cap.
+# In-memory trace ring buffer (BufferSink) + its per-(scope,category) cap.
 DATA_TRACE_BUFFER = "trace_buffer"
 TRACE_BUFFER_SIZE = 5
 
 # Dispatcher signal — payload: tuple (scope_kind, scope_id) or None (global defaults changed)
 SIGNAL_SWITCH_CONFIG_UPDATED = "ambience_switch_config_updated"
 
-# Dispatcher signal — fired when rules / matcher config / a scope's
+# Dispatcher signal — fired when rules / condition config / a scope's
 # auto_triggers flag change, so the auto-trigger engine rebuilds its watch-set.
 # No payload.
 SIGNAL_CONFIG_CHANGED = "ambience_config_changed"
@@ -37,11 +37,11 @@ SIGNAL_CONFIG_CHANGED = "ambience_config_changed"
 DEFAULT_SWITCH_NAME = "Ambience"
 DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 7200  # 2h; 0 = never auto-on
 
-# The group seeded on a fresh install. It is an ordinary group (renameable,
-# deletable when it is not the last group) — these are only its initial values.
-GENERAL_GROUP_ID = "general"
-GENERAL_GROUP = {
-    "id": GENERAL_GROUP_ID,
+# The category seeded on a fresh install. It is an ordinary category (renameable,
+# deletable when it is not the last category) — these are only its initial values.
+GENERAL_CATEGORY_ID = "general"
+GENERAL_CATEGORY = {
+    "id": GENERAL_CATEGORY_ID,
     "name": "General",
     "icon": "mdi:home",
     "color": "blue-grey",

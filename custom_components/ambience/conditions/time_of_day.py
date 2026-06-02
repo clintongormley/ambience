@@ -1,4 +1,4 @@
-"""Built-in time_of_day matcher — structured JSON predicate format."""
+"""Built-in time_of_day condition — structured JSON predicate format."""
 
 from __future__ import annotations
 
@@ -38,8 +38,8 @@ class TimeOfDaySnapshot:
     dusk: datetime
 
 
-class TimeOfDayMatcher:
-    """time_of_day matcher: named periods, absolute and sun-relative ranges,
+class TimeOfDayCondition:
+    """time_of_day condition: named periods, absolute and sun-relative ranges,
     expressed as structured JSON predicates."""
 
     name = "time_of_day"

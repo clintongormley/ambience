@@ -11,37 +11,37 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
+from .conditions.weather import DEFAULT_WEATHER_GROUPS
 from .const import (
     DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
     DEFAULT_SWITCH_NAME,
-    GENERAL_GROUP,
-    GENERAL_GROUP_ID,
+    GENERAL_CATEGORY,
+    GENERAL_CATEGORY_ID,
     SIGNAL_CONFIG_CHANGED,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
-from .matchers.weather import DEFAULT_WEATHER_GROUPS
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class LastGroupError(ValueError):
-    """Raised when deleting the only remaining group."""
+class LastCategoryError(ValueError):
+    """Raised when deleting the only remaining category."""
 
 
-class GroupInUseError(ValueError):
-    """Raised when deleting a group that still has rules in some scope."""
+class CategoryInUseError(ValueError):
+    """Raised when deleting a category that still has rules in some scope."""
 
 
 def reassign_orphan_rules(rules: list[dict[str, Any]], known: set[str], target: str) -> bool:
-    """Point any rule with no group or an unknown group at `target`. Mutates the
+    """Point any rule with no category or an unknown category at `target`. Mutates the
     rules in place; returns True if anything was changed. Shared by the store's
     load-time migration and the websocket's save-time coercion."""
     changed = False
     for rule in rules:
-        gid = rule.get("group")
-        if gid is None or gid not in known:
-            rule["group"] = target
+        cid = rule.get("category")
+        if cid is None or cid not in known:
+            rule["category"] = target
             changed = True
     return changed
 
@@ -62,11 +62,11 @@ class AmbienceStore:
     def _empty() -> dict[str, Any]:
         return {
             "version": STORAGE_VERSION,
-            "groups": [dict(GENERAL_GROUP)],
+            "categories": [dict(GENERAL_CATEGORY)],
             "areas": {},
             "floors": {},
             "house": {"rules": []},
-            "matchers": {
+            "conditions": {
                 "time_of_day": {"custom": {}, "hidden": []},
                 "day": {"workday_sensor": None, "workday_calendar": None},
                 "weather": {"entity": None, "groups": list(DEFAULT_WEATHER_GROUPS)},
@@ -156,20 +156,22 @@ class AmbienceStore:
             "nighttime" if h == "night" else "daytime" if h == "day" else h for h in hidden
         ]
 
-    def _migrate_drop_area_matchers(self) -> None:
-        """Per-area `matchers` is no longer a UI gate — drop the field from every area."""
+    def _migrate_drop_area_conditions(self) -> None:
+        """Per-area `conditions` is no longer a UI gate — drop the field from every area."""
         for area_cfg in self._data.get("areas", {}).values():
-            area_cfg.pop("matchers", None)
+            area_cfg.pop("conditions", None)
 
     def _migrate_relocate_periods(self) -> None:
-        """Move top-level `time_of_day_periods` to `matchers.time_of_day`."""
+        """Move top-level `time_of_day_periods` to `conditions.time_of_day`."""
         if "time_of_day_periods" not in self._data:
             return
-        self._data.setdefault("matchers", {})["time_of_day"] = self._data.pop("time_of_day_periods")
+        self._data.setdefault("conditions", {})["time_of_day"] = self._data.pop(
+            "time_of_day_periods"
+        )
 
-    def _ensure_matchers_namespace(self) -> None:
-        """Make sure `matchers.day` (and any future per-matcher key) has a default."""
-        namespace = self._data.setdefault("matchers", {})
+    def _ensure_conditions_namespace(self) -> None:
+        """Make sure `conditions.day` (and any future per-condition key) has a default."""
+        namespace = self._data.setdefault("conditions", {})
         namespace.setdefault("time_of_day", {"custom": {}, "hidden": []})
         namespace.setdefault("day", {"workday_sensor": None, "workday_calendar": None})
         weather = namespace.setdefault("weather", {})
@@ -181,28 +183,28 @@ class AmbienceStore:
         self._data.setdefault("floors", {})
         self._data.setdefault("house", {"rules": []})
 
-    def _ensure_groups(self) -> None:
-        """Seed the General group when no groups exist. Groups are required: a
-        store must always have at least one (see _migrate_groups)."""
-        if not self._data.get("groups"):
-            self._data["groups"] = [dict(GENERAL_GROUP)]
+    def _ensure_categories(self) -> None:
+        """Seed the General category when no categories exist. Categories are
+        required: a store must always have at least one (see _migrate_categories)."""
+        if not self._data.get("categories"):
+            self._data["categories"] = [dict(GENERAL_CATEGORY)]
 
-    def _migrate_groups(self) -> None:
-        """Reassign every ungrouped / unknown-group rule to General, seeding
-        General on demand if a store with other groups never had one.
-        `_ensure_groups` runs first, so at least one group already exists."""
-        known = {g["id"] for g in self._data.get("groups", [])}
+    def _migrate_categories(self) -> None:
+        """Reassign every uncategorised / unknown-category rule to General, seeding
+        General on demand if a store with other categories never had one.
+        `_ensure_categories` runs first, so at least one category already exists."""
+        known = {c["id"] for c in self._data.get("categories", [])}
         rules = [
             rule for _kind, _id, cfg in self.all_scope_configs() for rule in cfg.get("rules", [])
         ]
-        if not any(r.get("group") is None or r.get("group") not in known for r in rules):
+        if not any(r.get("category") is None or r.get("category") not in known for r in rules):
             return
-        # Orphaned rules need a home: seed General if a store with other groups
+        # Orphaned rules need a home: seed General if a store with other categories
         # never had one, then point them all at it.
-        if GENERAL_GROUP_ID not in known:
-            self._data["groups"].append(dict(GENERAL_GROUP))
-            known = known | {GENERAL_GROUP_ID}
-        reassign_orphan_rules(rules, known, GENERAL_GROUP_ID)
+        if GENERAL_CATEGORY_ID not in known:
+            self._data["categories"].append(dict(GENERAL_CATEGORY))
+            known = known | {GENERAL_CATEGORY_ID}
+        reassign_orphan_rules(rules, known, GENERAL_CATEGORY_ID)
 
     def _ensure_switch_defaults(self) -> None:
         sd = self._data.setdefault("switch_defaults", {})
@@ -221,12 +223,12 @@ class AmbienceStore:
         self._data = raw
         self._migrate_actions()
         self._migrate_periods()
-        self._migrate_drop_area_matchers()
+        self._migrate_drop_area_conditions()
         self._migrate_relocate_periods()
-        self._ensure_matchers_namespace()
+        self._ensure_conditions_namespace()
         self._ensure_scope_buckets()
-        self._ensure_groups()
-        self._migrate_groups()
+        self._ensure_categories()
+        self._migrate_categories()
         self._ensure_switch_defaults()
 
     def as_dict(self) -> dict[str, Any]:
@@ -292,37 +294,37 @@ class AmbienceStore:
         triples.append(("house", None, self._data.get("house", {"rules": []})))
         return triples
 
-    def groups(self) -> list[dict[str, Any]]:
-        """The global ordered groups list (a copy)."""
-        return [dict(g) for g in self._data.get("groups", [])]
+    def categories(self) -> list[dict[str, Any]]:
+        """The global ordered categories list (a copy)."""
+        return [dict(c) for c in self._data.get("categories", [])]
 
-    async def async_save_groups(self, groups: list[dict[str, Any]]) -> None:
-        """Replace the whole groups list. Caller (websocket) validates shape."""
-        self._data["groups"] = [dict(g) for g in groups]
+    async def async_save_categories(self, categories: list[dict[str, Any]]) -> None:
+        """Replace the whole categories list. Caller (websocket) validates shape."""
+        self._data["categories"] = [dict(c) for c in categories]
         await self._store.async_save(self._data)
         self._notify_config_changed()
 
-    async def async_delete_group(self, group_id: str) -> None:
-        """Remove a group. Refused when the group still has rules in any scope,
-        or when it is the last remaining group (a rule must always have a group
-        and at least one group must always exist)."""
-        groups = self._data.get("groups", [])
-        if len(groups) <= 1:
-            raise LastGroupError("cannot delete the last group")
+    async def async_delete_category(self, category_id: str) -> None:
+        """Remove a category. Refused when the category still has rules in any
+        scope, or when it is the last remaining category (a rule must always have
+        a category and at least one category must always exist)."""
+        categories = self._data.get("categories", [])
+        if len(categories) <= 1:
+            raise LastCategoryError("cannot delete the last category")
         in_use = any(
-            rule.get("group") == group_id
+            rule.get("category") == category_id
             for _kind, _id, cfg in self.all_scope_configs()
             for rule in cfg.get("rules", [])
         )
         if in_use:
-            raise GroupInUseError(f"group {group_id!r} still has rules")
-        self._data["groups"] = [g for g in groups if g.get("id") != group_id]
+            raise CategoryInUseError(f"category {category_id!r} still has rules")
+        self._data["categories"] = [c for c in categories if c.get("id") != category_id]
         await self._store.async_save(self._data)
         self._notify_config_changed()
 
-    def get_matcher_config(self, name: str) -> dict[str, Any]:
-        """Return per-matcher config dict, with defaults applied for missing keys."""
-        cfg = self._data.get("matchers", {}).get(name, {})
+    def get_condition_config(self, name: str) -> dict[str, Any]:
+        """Return per-condition config dict, with defaults applied for missing keys."""
+        cfg = self._data.get("conditions", {}).get(name, {})
         if name == "time_of_day":
             return {
                 "custom": cfg.get("custom", {}),
@@ -340,16 +342,16 @@ class AmbienceStore:
             return {"entity": cfg.get("entity"), "groups": groups}
         return dict(cfg)
 
-    async def async_save_matcher_config(self, name: str, config: dict[str, Any]) -> None:
-        self._data.setdefault("matchers", {})[name] = config
+    async def async_save_condition_config(self, name: str, config: dict[str, Any]) -> None:
+        self._data.setdefault("conditions", {})[name] = config
         await self._store.async_save(self._data)
         self._notify_config_changed()
 
     def get_periods(self) -> dict[str, Any]:
-        return self.get_matcher_config("time_of_day")
+        return self.get_condition_config("time_of_day")
 
     async def async_save_periods(self, payload: dict[str, Any]) -> None:
-        await self.async_save_matcher_config("time_of_day", payload)
+        await self.async_save_condition_config("time_of_day", payload)
 
     # -------------------------------------------------------------------------
     # Switch defaults + per-scope off-at state

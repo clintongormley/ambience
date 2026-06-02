@@ -33,26 +33,26 @@ class _FakeExposedStorage:
 # --- Pure message composition -------------------------------------------------
 
 
-def test_message_named_rule_single_group() -> None:
+def test_message_named_rule_single_category() -> None:
     msg = _compose_apply_message(
         reapplied=False,
         rule_name="Evening",
         rule_index=0,
         scope_label="Master Bedroom",
-        group_label="Lights",
-        group_count=1,
+        category_label="Lights",
+        category_count=1,
     )
     assert msg == "applied 'Evening' in Master Bedroom"
 
 
-def test_message_multiple_groups_includes_group() -> None:
+def test_message_multiple_categories_includes_category() -> None:
     msg = _compose_apply_message(
         reapplied=False,
         rule_name="Evening",
         rule_index=0,
         scope_label="Master Bedroom",
-        group_label="Lights",
-        group_count=2,
+        category_label="Lights",
+        category_count=2,
     )
     assert msg == "applied 'Evening' in Master Bedroom (Lights)"
 
@@ -63,8 +63,8 @@ def test_message_unnamed_rule_falls_back_to_index() -> None:
         rule_name=None,
         rule_index=2,
         scope_label="Kitchen",
-        group_label=None,
-        group_count=1,
+        category_label=None,
+        category_count=1,
     )
     assert msg == "applied 'rule 3' in Kitchen"
 
@@ -75,33 +75,33 @@ def test_message_reapplied_verb() -> None:
         rule_name="Evening",
         rule_index=0,
         scope_label="Master Bedroom",
-        group_label="Lights",
-        group_count=2,
+        category_label="Lights",
+        category_count=2,
     )
     assert msg == "re-applied 'Evening' in Master Bedroom (Lights)"
 
 
-def test_message_multiple_groups_but_no_label_omits_group() -> None:
-    # group_count > 1 with an unknown/labelless group: suffix is omitted.
+def test_message_multiple_categories_but_no_label_omits_category() -> None:
+    # category_count > 1 with an unknown/labelless category: suffix is omitted.
     msg = _compose_apply_message(
         reapplied=False,
         rule_name="Evening",
         rule_index=0,
         scope_label="Master Bedroom",
-        group_label=None,
-        group_count=2,
+        category_label=None,
+        category_count=2,
     )
     assert msg == "applied 'Evening' in Master Bedroom"
 
 
-def test_message_reapplied_single_group() -> None:
+def test_message_reapplied_single_category() -> None:
     msg = _compose_apply_message(
         reapplied=True,
         rule_name="Evening",
         rule_index=0,
         scope_label="Master Bedroom",
-        group_label="Lights",
-        group_count=1,
+        category_label="Lights",
+        category_count=1,
     )
     assert msg == "re-applied 'Evening' in Master Bedroom"
 
@@ -184,7 +184,7 @@ async def test_apply_fires_ambience_entry_and_shares_context(
             "rules": [
                 {
                     "name": "Evening",
-                    "group": "general",
+                    "category": "general",
                     "when": {},
                     "actions": [
                         {
@@ -205,7 +205,7 @@ async def test_apply_fires_ambience_entry_and_shares_context(
     assert len(ambience_entries) == 1
     entry = ambience_entries[0]
     assert entry.data["domain"] == "ambience"
-    # Single configured group ⇒ no "(group)" suffix; "lr" is not a real area ⇒
+    # Single configured category ⇒ no "(category)" suffix; "lr" is not a real area ⇒
     # the scope label falls back to the raw id.
     assert entry.data["message"] == "applied 'Evening' in lr"
     assert len(cover_calls) == 1
@@ -219,7 +219,7 @@ async def test_apply_with_empty_actions_logs_nothing(
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_area(
         "lr",
-        {"rules": [{"name": "Empty", "group": "general", "when": {}, "actions": []}]},
+        {"rules": [{"name": "Empty", "category": "general", "when": {}, "actions": []}]},
     )
 
     await hass.services.async_call(DOMAIN, "apply_scene", {"area": "lr"}, blocking=True)
@@ -228,7 +228,7 @@ async def test_apply_with_empty_actions_logs_nothing(
     assert [e for e in entries if e.data.get("name") == "Ambience"] == []
 
 
-async def test_multiple_groups_include_group_name_and_own_context(
+async def test_multiple_categories_include_category_name_and_own_context(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
     from custom_components.ambience.service import async_apply_scene
@@ -237,7 +237,7 @@ async def test_multiple_groups_include_group_name_and_own_context(
     light_calls = async_mock_service(hass, "light", "turn_on")
     cover_calls = async_mock_service(hass, "cover", "open_cover")
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_groups(
+    await store.async_save_categories(
         [
             {"id": "lighting", "name": "Lights"},
             {"id": "blinds", "name": "Blinds"},
@@ -256,7 +256,7 @@ async def test_multiple_groups_include_group_name_and_own_context(
             "rules": [
                 {
                     "name": "Evening",
-                    "group": "lighting",
+                    "category": "lighting",
                     "when": {},
                     "actions": [
                         {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
@@ -264,7 +264,7 @@ async def test_multiple_groups_include_group_name_and_own_context(
                 },
                 {
                     "name": "Open",
-                    "group": "blinds",
+                    "category": "blinds",
                     "when": {},
                     "actions": [
                         {"service": "cover.open_cover", "entity_ids": ["cover.blind"], "params": {}}
@@ -282,7 +282,7 @@ async def test_multiple_groups_include_group_name_and_own_context(
     assert "applied 'Open' in lr (Blinds)" in by_msg
     assert light_calls[0].context.id == by_msg["applied 'Evening' in lr (Lights)"].context.id
     assert cover_calls[0].context.id == by_msg["applied 'Open' in lr (Blinds)"].context.id
-    # Independent contexts per group.
+    # Independent contexts per category.
     assert light_calls[0].context.id != cover_calls[0].context.id
 
 
@@ -299,7 +299,7 @@ async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockC
             "rules": [
                 {
                     "name": "Movie",
-                    "group": "general",
+                    "category": "general",
                     "when": {},
                     "actions": [
                         {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
@@ -337,7 +337,7 @@ async def test_run_rule_actions_fires_ambience_entry_and_shares_context(
             "rules": [
                 {
                     "name": "Movie",
-                    "group": "general",
+                    "category": "general",
                     "when": {},
                     "actions": [
                         {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
@@ -369,7 +369,7 @@ async def test_run_rule_actions_with_empty_actions_logs_nothing(
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_area(
         "lr",
-        {"rules": [{"name": "Empty", "group": "general", "when": {}, "actions": []}]},
+        {"rules": [{"name": "Empty", "category": "general", "when": {}, "actions": []}]},
     )
 
     await async_run_rule_actions(hass, "area", "lr", 0)

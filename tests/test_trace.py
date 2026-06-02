@@ -67,7 +67,7 @@ def test_format_acted_unit_lists_predicates():
     unit = UnitTrace(
         scope_kind="area",
         scope_id="kitchen",
-        group="General",
+        category="General",
         switch_state="on",
         outcome="acted",
         explanation=explanation,
@@ -234,9 +234,9 @@ def test_logsink_routes_reapplied_to_changes_stream(caplog):
     assert "reapplied" in caplog.text
 
 
-def test_emit_trace_resolves_group_name_for_log(caplog):
+def test_emit_trace_resolves_category_name_for_log(caplog):
     class StoreStub:
-        def groups(self):
+        def categories(self):
             return [{"id": "749f3cb81a8d4c3a811c3fd9c0c1d23e", "name": "Master Lights"}]
 
     unit = UnitTrace(
@@ -267,9 +267,9 @@ def test_logsink_emits_one_record_per_event(caplog):
     assert "area/b/G2: acted -> 'r2'" in message
 
 
-def test_emit_trace_keeps_group_id_when_store_lacks_names(caplog):
-    # A store double without groups() (or a missing store) must not crash; the
-    # log falls back to the group id.
+def test_emit_trace_keeps_category_id_when_store_lacks_names(caplog):
+    # A store double without categories() (or a missing store) must not crash; the
+    # log falls back to the category id.
     unit = UnitTrace("area", "master_bedroom", "abc123", "on", "acted", None)
     event = TraceEvent(TriggerCause(kind="manual"), [unit])
     hass = _Hass({DOMAIN: {DATA_TRACE_SINKS: [LogSink()]}})
@@ -317,13 +317,13 @@ def _event(cause_detail, units, event_id="e", ts="2026-06-01T00:00:00"):
     )
 
 
-def test_buffersink_splits_event_into_per_scope_group_buckets():
+def test_buffersink_splits_event_into_per_scope_category_buckets():
     sink = BufferSink()
     u_kitchen = UnitTrace("area", "kitchen", "General", "on", "acted", None, winner_name="a")
     u_hall = UnitTrace("area", "hall", "General", "on", "acted", None, winner_name="b")
     sink.emit(_event("08:00", [u_kitchen, u_hall]))
     records = sink.records()
-    assert {(r.unit.scope_id, r.unit.group) for r in records} == {
+    assert {(r.unit.scope_id, r.unit.category) for r in records} == {
         ("kitchen", "General"),
         ("hall", "General"),
     }
@@ -410,7 +410,7 @@ def test_buffered_unit_to_dict_acted_with_explanation():
         explanation,
         winner_name="evening",
         actions=[{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {"x": 1}}],
-        group_name="Kitchen Scenes",
+        category_name="Kitchen Scenes",
         scope_name="Kitchen",
     )
     record = BufferedUnit(
@@ -431,8 +431,8 @@ def test_buffered_unit_to_dict_acted_with_explanation():
     assert data["scope_kind"] == "area"
     assert data["scope_id"] == "kitchen"
     assert data["scope_name"] == "Kitchen"
-    assert data["group"] == "General"
-    assert data["group_name"] == "Kitchen Scenes"
+    assert data["category"] == "General"
+    assert data["category_name"] == "Kitchen Scenes"
     assert data["outcome"] == "acted"
     assert data["winner_name"] == "evening"
     assert data["actions"] == [
@@ -445,7 +445,7 @@ def test_buffered_unit_to_dict_acted_with_explanation():
         "matched": True,
         "evaluated": True,
         "disabled": False,
-        "predicates": [{"matcher_key": "tod", "passed": True, "detail": "evening"}],
+        "predicates": [{"condition_key": "tod", "passed": True, "detail": "evening"}],
     }
 
 

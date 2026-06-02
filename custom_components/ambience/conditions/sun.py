@@ -1,4 +1,4 @@
-"""Built-in `sun` matcher — solar elevation + azimuth angular-position predicate."""
+"""Built-in `sun` condition — solar elevation + azimuth angular-position predicate."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class SunSnapshot:
     azimuth: float | None
 
 
-class SunMatcher:
+class SunCondition:
     name = "sun"
     description = "Matches the sun's angular position — elevation and compass azimuth."
     predicate_help = (

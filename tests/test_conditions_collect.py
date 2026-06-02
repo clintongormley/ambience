@@ -1,8 +1,8 @@
-"""Shared scope-predicate collector used by script/template matchers."""
+"""Shared scope-predicate collector used by script/template conditions."""
 
 from __future__ import annotations
 
-from custom_components.ambience.matchers._collect import collect_scope_predicates
+from custom_components.ambience.conditions._collect import collect_scope_predicates
 
 
 class _StoreStub:

@@ -1,4 +1,4 @@
-"""PeopleMatcher — who is (not) at home / in a zone, with optional `for`."""
+"""PeopleCondition — who is (not) at home / in a zone, with optional `for`."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ class PeopleSnapshot:
     in_zones: dict[str, list[str] | None] = field(default_factory=dict)
 
 
-class PeopleMatcher:
+class PeopleCondition:
     """Match on who is (not) at home / in a named zone.
 
     Predicate (scoped quantifier):
@@ -234,7 +234,7 @@ class PeopleMatcher:
     # --- sorting (containment lattice) ----------------------------------
     # No `order_key`: there is no meaningful total order among people
     # predicates for the linearisation tiebreaker, so that slot falls back to
-    # "sorts last". `contains` is this matcher's only sorting contribution.
+    # "sorts last". `contains` is this condition's only sorting contribution.
 
     def contains(self, outer: Any, inner: Any) -> bool:
         """True iff every world-state matching `inner` also matches `outer`

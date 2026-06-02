@@ -35,10 +35,10 @@ async def seeded_area(hass: HomeAssistant, installed) -> str:
     await store.async_save_area(
         area.id,
         {
-            "matchers": [],
+            "conditions": [],
             "rules": [
                 {
-                    "group": "g1",
+                    "category": "g1",
                     "name": "Motion on",
                     "when": {
                         "state": {
@@ -61,14 +61,14 @@ async def test_simulate_returns_result(hass: HomeAssistant, hass_ws_client, seed
         type="ambience/simulate",
         scope_kind="area",
         scope_id=seeded_area,
-        group="g1",
+        category="g1",
         now="2026-12-21T17:30:00+00:00",
         overrides={"binary_sensor.motion": {"state": "on"}},
     )
     assert resp["success"] is True
     result = resp["result"]["result"]
     assert result["cause"]["kind"] == "simulated"
-    assert result["group"] == "g1"
+    assert result["category"] == "g1"
     # Overriding motion → on makes the rule match.
     assert result["outcome"] == "acted"
     assert result["winner_name"] == "Motion on"
@@ -82,7 +82,7 @@ async def test_simulate_rejects_unparseable_now(
         type="ambience/simulate",
         scope_kind="area",
         scope_id=seeded_area,
-        group="g1",
+        category="g1",
         now="not-a-date",
     )
     assert resp["success"] is False
@@ -98,7 +98,7 @@ async def test_simulate_rejects_malformed_override(
         type="ambience/simulate",
         scope_kind="area",
         scope_id=seeded_area,
-        group="g1",
+        category="g1",
         now="2026-12-21T17:30:00+00:00",
         overrides={"binary_sensor.motion": "on"},  # should be {"state": "on"}
     )
@@ -113,7 +113,7 @@ async def test_simulate_inputs_returns_panel_shape(
         type="ambience/simulate/inputs",
         scope_kind="area",
         scope_id=seeded_area,
-        group="g1",
+        category="g1",
     )
     assert resp["success"] is True
     result = resp["result"]
@@ -130,10 +130,10 @@ async def test_simulate_accepts_verdicts(hass: HomeAssistant, hass_ws_client, se
         type="ambience/simulate",
         scope_kind="area",
         scope_id=seeded_area,
-        group="g1",
+        category="g1",
         now="2026-12-21T17:30:00+00:00",
         overrides={},
         verdicts={"script": {"somekey": True}},
     )
     assert resp["success"] is True
-    assert resp["result"]["result"]["group"] == "g1"
+    assert resp["result"]["result"]["category"] == "g1"

@@ -6,8 +6,8 @@ See spec §5. Rule order has two parts:
     strict subset of Q's (under first-match-wins, Q would otherwise permanently
     shadow P);
   * a linearisation — among rules the partial order leaves free, the one with
-    the smaller linearisation key (a per-matcher tuple of `order_key` values,
-    the slots ordered by matcher `priority` DESCENDING — higher priority =
+    the smaller linearisation key (a per-condition tuple of `order_key` values,
+    the slots ordered by condition `priority` DESCENDING — higher priority =
     more important = sorts earlier; a slot a rule does not constrain sorts last).
 
 The result is a stable topological sort: rules tying on everything keep their
@@ -22,14 +22,14 @@ from .engine import rule_enabled
 
 Rule = dict[str, Any]
 
-_DEFAULT_PRIORITY = 0  # Fallback for matchers without a priority — lowest, so they sort last.
+_DEFAULT_PRIORITY = 0  # Fallback for conditions without a priority — lowest, so they sort last.
 
 
-def matcher_priority(matcher: Any) -> int:
-    """A matcher's linearisation priority (higher = more important), defaulting
+def condition_priority(condition: Any) -> int:
+    """A condition's linearisation priority (higher = more important), defaulting
     to `_DEFAULT_PRIORITY` when absent or non-int. Shared with the websocket
-    `matchers/list` handler so both treat priority identically."""
-    value = getattr(matcher, "priority", _DEFAULT_PRIORITY)
+    `conditions/list` handler so both treat priority identically."""
+    value = getattr(condition, "priority", _DEFAULT_PRIORITY)
     return value if isinstance(value, int) else _DEFAULT_PRIORITY
 
 
@@ -38,7 +38,7 @@ def _constrained(rule: Rule) -> dict[str, Any]:
     return {k: v for k, v in rule.get("when", {}).items() if v is not None}
 
 
-def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
+def sort_rules(rules: list[Rule], conditions: dict[str, Any]) -> list[Rule]:
     """Return a new list of rules in containment-aware topological order."""
     count = len(rules)
     if count < 2:
@@ -47,12 +47,12 @@ def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
     constrained = [_constrained(rule) for rule in rules]
 
     # --- linearisation key per rule --------------------------------------
-    # One slot per matcher named anywhere in a `when`, ordered by `priority`
+    # One slot per condition named anywhere in a `when`, ordered by `priority`
     # DESCENDING (higher priority = more important = sorts earlier; ties broken
     # by name for determinism).
     slot_names = sorted(
         {name for rule in rules for name in rule.get("when", {})},
-        key=lambda name: (-matcher_priority(matchers.get(name)), name),
+        key=lambda name: (-condition_priority(conditions.get(name)), name),
     )
 
     def lin_key(rule: Rule) -> tuple:
@@ -60,7 +60,7 @@ def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
         slots: list[tuple[int, Any]] = []
         for name in slot_names:
             predicate = when.get(name)
-            order_fn = getattr(matchers.get(name), "order_key", None)
+            order_fn = getattr(conditions.get(name), "order_key", None)
             if predicate is not None and callable(order_fn):
                 slots.append((0, order_fn(predicate)))
             else:
@@ -82,7 +82,7 @@ def sort_rules(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
             a_pred = cons_a[key]
             if a_pred == b_pred:
                 continue
-            contains = getattr(matchers.get(key), "contains", None)
+            contains = getattr(conditions.get(key), "contains", None)
             if callable(contains) and contains(b_pred, a_pred):
                 strict = True  # a_pred is strictly within b_pred
             else:
@@ -151,8 +151,8 @@ def _fill(order: list[Rule]) -> None:
         i = j
 
 
-def _resolve_order_one_group(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
-    """Canonicalise one group's rules: maintain unpinned rules' priority numbers
+def _resolve_order_one_category(rules: list[Rule], conditions: dict[str, Any]) -> list[Rule]:
+    """Canonicalise one category's rules: maintain unpinned rules' priority numbers
     against the topological auto order (gap insertion preserves untouched
     numbers), keep pinned numbers fixed, then sort all rules by priority
     descending (higher = more important). Returns new rule dicts."""
@@ -164,7 +164,7 @@ def _resolve_order_one_group(rules: list[Rule], matchers: dict[str, Any]) -> lis
             r["priority"] = None
 
     unpinned = [r for r in rules if not r["pinned"]]
-    order = sort_rules(unpinned, matchers)  # desired auto order, most important first
+    order = sort_rules(unpinned, conditions)  # desired auto order, most important first
 
     # Keep existing numbers that already decrease down `order`; clear the rest.
     hi: int | None = None
@@ -191,23 +191,23 @@ def _resolve_order_one_group(rules: list[Rule], matchers: dict[str, Any]) -> lis
     return rules
 
 
-def resolve_order(rules: list[Rule], matchers: dict[str, Any]) -> list[Rule]:
-    """Canonicalise a scope's rules per group: partition by `group` (preserving
-    each group's first-appearance order), canonicalise each partition
-    independently, then concatenate so each group stays contiguous. Groups are
+def resolve_order(rules: list[Rule], conditions: dict[str, Any]) -> list[Rule]:
+    """Canonicalise a scope's rules per category: partition by `category` (preserving
+    each category's first-appearance order), canonicalise each partition
+    independently, then concatenate so each category stays contiguous. Categories are
     independent buckets, so order and priority are only meaningful within a
-    group."""
+    category."""
     buckets: dict[str | None, list[Rule]] = {}
     for r in rules:
-        buckets.setdefault(r.get("group"), []).append(r)
+        buckets.setdefault(r.get("category"), []).append(r)
     out: list[Rule] = []
     for bucket in buckets.values():
-        out.extend(_resolve_order_one_group(bucket, matchers))
+        out.extend(_resolve_order_one_category(bucket, conditions))
     return out
 
 
 def _superset_or_equal(
-    outer: dict[str, Any], inner: dict[str, Any], matchers: dict[str, Any]
+    outer: dict[str, Any], inner: dict[str, Any], conditions: dict[str, Any]
 ) -> bool:
     """True if `outer`'s match-set ⊇ `inner`'s: every world-state matching the
     inner rule also matches the outer rule. `outer`/`inner` are constrained
@@ -218,18 +218,18 @@ def _superset_or_equal(
         i_pred = inner[key]
         if o_pred == i_pred:
             continue
-        contains = getattr(matchers.get(key), "contains", None)
+        contains = getattr(conditions.get(key), "contains", None)
         if callable(contains) and contains(o_pred, i_pred):
             continue
         return False
     return True
 
 
-def shadowed_by(ordered_rules: list[Rule], matchers: dict[str, Any]) -> dict[int, int]:
+def shadowed_by(ordered_rules: list[Rule], conditions: dict[str, Any]) -> dict[int, int]:
     """For rules already in final (resolved) order, map the index of each
-    shadowed rule to the index of the earliest rule IN THE SAME GROUP that
-    shadows it. Groups resolve independently, so a rule can only be shadowed by
-    an earlier rule in its own group. Disabled rules (``enabled: False``) are
+    shadowed rule to the index of the earliest rule IN THE SAME CATEGORY that
+    shadows it. Categories resolve independently, so a rule can only be shadowed by
+    an earlier rule in its own category. Disabled rules (``enabled: False``) are
     ignored — they neither shadow others nor are reported as shadowed."""
     constrained = [_constrained(r) for r in ordered_rules]
     result: dict[int, int] = {}
@@ -239,9 +239,9 @@ def shadowed_by(ordered_rules: list[Rule], matchers: dict[str, Any]) -> dict[int
         for i in range(j):
             if not rule_enabled(ordered_rules[i]):
                 continue
-            if ordered_rules[i].get("group") != ordered_rules[j].get("group"):
+            if ordered_rules[i].get("category") != ordered_rules[j].get("category"):
                 continue
-            if _superset_or_equal(constrained[i], constrained[j], matchers):
+            if _superset_or_equal(constrained[i], constrained[j], conditions):
                 result[j] = i
                 break
     return result

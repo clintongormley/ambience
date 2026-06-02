@@ -22,7 +22,7 @@ from custom_components.ambience.service import async_resolve_only
 
 
 async def _setup_with_sun(hass: HomeAssistant) -> None:
-    # Mock sun.sun so TimeOfDayMatcher.snapshot succeeds
+    # Mock sun.sun so TimeOfDayCondition.snapshot succeeds
     now = datetime.now(UTC)
     hass.states.async_set(
         "sun.sun",
@@ -67,10 +67,10 @@ async def test_service_call_invokes_light_turn_on(
     await store.async_save_area(
         "lr",
         {
-            "matchers": [],
+            "conditions": [],
             "rules": [
                 {
-                    "group": "lighting",
+                    "category": "lighting",
                     "when": {},  # wildcard rule ⇒ always matches
                     "actions": [
                         {
@@ -97,10 +97,10 @@ async def test_service_call_invokes_light_turn_on(
     assert on_calls[0].data["transition"] == 2.0  # passed straight through
 
 
-async def test_apply_scene_applies_all_groups(
+async def test_apply_scene_applies_all_categories(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """apply_scene applies every group's winner concurrently and records each."""
+    """apply_scene applies every category's winner concurrently and records each."""
     from custom_components.ambience.service import async_apply_scene, get_last_applied
 
     light_calls = async_mock_service(hass, "light", "turn_on")
@@ -118,14 +118,14 @@ async def test_apply_scene_applies_all_groups(
         {
             "rules": [
                 {
-                    "group": "lighting",
+                    "category": "lighting",
                     "when": {},
                     "actions": [
                         {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
                     ],
                 },
                 {
-                    "group": "blinds",
+                    "category": "blinds",
                     "when": {},
                     "actions": [
                         {
@@ -147,16 +147,16 @@ async def test_apply_scene_applies_all_groups(
     assert len(cover_calls) == 1
 
 
-async def test_time_of_day_rule_matches_for_area_without_matchers_field(
+async def test_time_of_day_rule_matches_for_area_without_conditions_field(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """Regression: areas loaded from disk may have no per-area `matchers` field.
-    All registered matchers are always active, so a rule with a time_of_day
-    predicate must still resolve regardless of whether the area has a matchers key.
+    """Regression: areas loaded from disk may have no per-area `conditions` field.
+    All registered conditions are always active, so a rule with a time_of_day
+    predicate must still resolve regardless of whether the area has a conditions key.
     """
     store = hass.data[DOMAIN][DATA_STORE]
 
-    # Save an area WITHOUT a `matchers` key — exactly as a disk-loaded, migrated
+    # Save an area WITHOUT a `conditions` key — exactly as a disk-loaded, migrated
     # area looks in production.
     await store.async_save_area(
         "lr",
@@ -180,7 +180,7 @@ async def test_time_of_day_rule_matches_for_area_without_matchers_field(
 
     result = await async_resolve_only(hass, "area", "lr")
 
-    # The time_of_day matcher must have been activated (snapshot captured)...
+    # The time_of_day condition must have been activated (snapshot captured)...
     assert "time_of_day" in result["snapshots_described"]
     # ...and the rule must match. Before the fix, no time_of_day snapshot is taken,
     # so resolve() sees no value for the predicate and the rule does not match.
@@ -268,7 +268,7 @@ async def test_engine_auto_applies_state_rule_on_config_change(
         {
             "rules": [
                 {
-                    "group": "lighting",
+                    "category": "lighting",
                     "when": {
                         "state": {
                             "kind": "is",

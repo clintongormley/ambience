@@ -19,7 +19,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import DATA_TRACE_BUFFER, DATA_TRACE_SINKS, DOMAIN, TRACE_BUFFER_SIZE
 from .engine import Explanation
-from .naming import group_names, scope_display_name
+from .naming import category_names, scope_display_name
 
 # "changes" stream — on whenever the integration's debug logging is on.
 _LOGGER = logging.getLogger(f"{__package__}.trace")
@@ -47,7 +47,7 @@ class CauseKind(StrEnum):
 
 
 class Outcome(StrEnum):
-    """What an evaluated (scope, group) unit did."""
+    """What an evaluated (scope, category) unit did."""
 
     ACTED = "acted"
     NO_OP = "no_op"
@@ -92,7 +92,7 @@ class TriggerCause:
 
 @dataclass(frozen=True)
 class UnitTrace:
-    """One (scope, group) unit's evaluation and outcome.
+    """One (scope, category) unit's evaluation and outcome.
 
     `switch_state` and `actions` are populated by the engine wiring and carried
     for the structured trace record (consumed by the future ring buffer); the
@@ -101,15 +101,15 @@ class UnitTrace:
 
     scope_kind: str
     scope_id: str | None
-    group: str
+    category: str
     switch_state: str
     outcome: Outcome
     explanation: Explanation | None
     winner_name: str | None = None
     actions: list[dict[str, Any]] = field(default_factory=list)
-    # Human group/scope names, resolved at emit time (logs show these in
-    # preference to the opaque `group` id / raw scope id).
-    group_name: str | None = None
+    # Human category/scope names, resolved at emit time (logs show these in
+    # preference to the opaque `category` id / raw scope id).
+    category_name: str | None = None
     scope_name: str | None = None
 
 
@@ -140,17 +140,17 @@ class BufferedUnit:
     unit: UnitTrace
 
 
-# (scope_kind, scope_id, group) — the per-bucket key, the analog of one HA automation.
+# (scope_kind, scope_id, category) — the per-bucket key, the analog of one HA automation.
 BucketKey = tuple[str, str | None, str]
 
 
 class BufferSink:
     """A trace sink that retains the last `TRACE_BUFFER_SIZE` evaluations per
-    `(scope, group)`. Always-on; in-memory; lost on restart. Single-threaded
+    `(scope, category)`. Always-on; in-memory; lost on restart. Single-threaded
     event loop => no locking.
 
-    Bucket keys for scopes/groups that no longer exist are not pruned (each key's
-    deque is bounded, and config groups are few and stable); revisit if needed.
+    Bucket keys for scopes/categories that no longer exist are not pruned (each key's
+    deque is bounded, and config categories are few and stable); revisit if needed.
     """
 
     def __init__(self) -> None:
@@ -158,7 +158,7 @@ class BufferSink:
 
     def emit(self, event: TraceEvent) -> None:
         for unit in event.units:
-            key: BucketKey = (unit.scope_kind, unit.scope_id, unit.group)
+            key: BucketKey = (unit.scope_kind, unit.scope_id, unit.category)
             bucket = self._buckets.setdefault(key, deque(maxlen=TRACE_BUFFER_SIZE))
             bucket.append(BufferedUnit(event.event_id, event.timestamp, event.cause, unit))
 
@@ -194,7 +194,7 @@ def _explanation_to_dict(explanation: Explanation | None) -> dict[str, Any] | No
                 "evaluated": rule.evaluated,
                 "disabled": rule.disabled,
                 "predicates": [
-                    {"matcher_key": p.matcher_key, "passed": p.passed, "detail": p.detail}
+                    {"condition_key": p.condition_key, "passed": p.passed, "detail": p.detail}
                     for p in rule.predicates
                 ],
             }
@@ -213,8 +213,8 @@ def buffered_unit_to_dict(record: BufferedUnit) -> dict[str, Any]:
         "scope_kind": unit.scope_kind,
         "scope_id": unit.scope_id,
         "scope_name": unit.scope_name,
-        "group": unit.group,
-        "group_name": unit.group_name,
+        "category": unit.category,
+        "category_name": unit.category_name,
         "switch_state": unit.switch_state,
         "outcome": unit.outcome,
         "winner_name": unit.winner_name,
@@ -224,9 +224,9 @@ def buffered_unit_to_dict(record: BufferedUnit) -> dict[str, Any]:
 
 
 def _scope_label(unit: UnitTrace) -> str:
-    group = unit.group_name or unit.group
+    category = unit.category_name or unit.category
     scope = unit.scope_name or unit.scope_id or "-"
-    return f"{unit.scope_kind}/{scope}/{group}"
+    return f"{unit.scope_kind}/{scope}/{category}"
 
 
 def _format_action(action: dict[str, Any]) -> str:
@@ -275,7 +275,7 @@ def format_trace_event(event: TraceEvent) -> list[str]:
                 for pred in rule_eval.predicates:
                     pmark = "pass" if pred.passed else "FAIL"
                     detail = f" [{pred.detail}]" if pred.detail else ""
-                    lines.append(f"          {pred.matcher_key}: {pmark}{detail}")
+                    lines.append(f"          {pred.condition_key}: {pmark}{detail}")
         for action in unit.actions:
             lines.append(f"      → {_format_action(action)}")
     if event.event_id:
@@ -305,7 +305,7 @@ class LogSink:
         # One whole event = one log record (lines joined). Concurrent
         # evaluations therefore can't interleave their lines in the log; each
         # trigger is a single self-contained entry, and indentation within it
-        # ties every line to its scope/group/rule. Partition only inside each
+        # ties every line to its scope/category/rule. Partition only inside each
         # guard, so an off stream costs nothing.
         if _LOGGER.isEnabledFor(logging.DEBUG):
             changes = [u for u in event.units if u.outcome in _CHANGES_OUTCOMES]
@@ -338,15 +338,15 @@ def _safe_scope_display_name(hass: HomeAssistant, unit: UnitTrace) -> str | None
 
 
 def _resolve_names(hass: HomeAssistant, event: TraceEvent) -> TraceEvent:
-    """Fill each unit's `group_name` (store id -> name) and `scope_name`
+    """Fill each unit's `category_name` (store id -> name) and `scope_name`
     (area/floor friendly name, 'Global' for house) so logs show human names
     rather than opaque ids. Best-effort: leaves a name unresolved when the
     store/registry isn't available (e.g. test doubles)."""
-    names = group_names(hass)
+    names = category_names(hass)
     units = [
         replace(
             u,
-            group_name=names.get(u.group) or u.group_name,
+            category_name=names.get(u.category) or u.category_name,
             scope_name=_safe_scope_display_name(hass, u),
         )
         for u in event.units
@@ -355,7 +355,7 @@ def _resolve_names(hass: HomeAssistant, event: TraceEvent) -> TraceEvent:
 
 
 def emit_trace(hass: HomeAssistant, event: TraceEvent) -> None:
-    """Tag the event with a correlation id, resolve group names, and fan it out
+    """Tag the event with a correlation id, resolve category names, and fan it out
     to every registered sink."""
     sinks = hass.data.get(DOMAIN, {}).get(DATA_TRACE_SINKS, ())
     if not sinks:

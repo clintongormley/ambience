@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from custom_components.ambience.const import DATA_MATCHERS, DATA_STORE, DOMAIN
-from custom_components.ambience.matchers.script import ScriptMatcher, _cache_key
+from custom_components.ambience.conditions.script import ScriptCondition, _cache_key
+from custom_components.ambience.const import DATA_CONDITIONS, DATA_STORE, DOMAIN
 from custom_components.ambience.simulate import (
     SimulatedWorld,
     build_simulated_snapshots,
@@ -58,7 +58,7 @@ class _Config:
     time_zone = "UTC"
 
 
-class _RecordingMatcher:
+class _RecordingCondition:
     """Captures the hass/now it was snapshotted with."""
 
     name = "recording"
@@ -75,7 +75,7 @@ class _Hass:
     def __init__(self, states):
         self.config = _Config()
         self.states = _States(states)
-        self.data = {DOMAIN: {DATA_MATCHERS: {"recording": _RecordingMatcher()}}}
+        self.data = {DOMAIN: {DATA_CONDITIONS: {"recording": _RecordingCondition()}}}
 
 
 @pytest.mark.asyncio
@@ -94,7 +94,7 @@ async def test_build_simulated_snapshots_injects_now_and_overrides():
 async def test_build_simulated_snapshots_injects_synthetic_sun():
     hass = _Hass([])  # no live sun.sun
     snaps = await build_simulated_snapshots(hass, SimulatedWorld(now=FIXED, overrides={}))
-    # The matcher sees the injected sun.sun through the overlay...
+    # The condition sees the injected sun.sun through the overlay...
     sun = snaps["recording"]["sun"]
     assert sun is not None
     assert sun.state in ("above_horizon", "below_horizon")
@@ -115,36 +115,36 @@ class _Store:
     def scope_config(self, scope_kind, scope_id):
         return {"rules": self._rules}
 
-    def get_matcher_config(self, name):
+    def get_condition_config(self, name):
         if name == "weather":
             return {"entity": self._weather_entity, "groups": []}
         return {}
 
 
 def _inputs_hass(rules, states, weather_entity=None):
-    from custom_components.ambience.matchers.state import StateMatcher
-    from custom_components.ambience.matchers.weather import WeatherMatcher
+    from custom_components.ambience.conditions.state import StateCondition
+    from custom_components.ambience.conditions.weather import WeatherCondition
 
     hass = _Hass(states)
-    matchers = {"state": StateMatcher(hass), "weather": WeatherMatcher(hass)}
+    conditions = {"state": StateCondition(hass), "weather": WeatherCondition(hass)}
     hass.data[DOMAIN] = {
-        DATA_MATCHERS: matchers,
+        DATA_CONDITIONS: conditions,
         DATA_STORE: _Store(rules, weather_entity),
     }
     return hass
 
 
 @pytest.mark.asyncio
-async def test_simulate_inputs_lists_entity_knobs_for_the_group():
+async def test_simulate_inputs_lists_entity_knobs_for_the_category():
     rules = [
         {
-            "group": "g1",
+            "category": "g1",
             "when": {
                 "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
             },
         },
         {
-            "group": "g2",
+            "category": "g2",
             "when": {"state": {"kind": "is", "entity_id": "binary_sensor.other", "states": ["on"]}},
         },
     ]
@@ -160,7 +160,7 @@ async def test_simulate_inputs_lists_entity_knobs_for_the_group():
 async def test_simulate_inputs_surfaces_weather_threshold_attributes():
     rules = [
         {
-            "group": "g1",
+            "category": "g1",
             "when": {
                 "weather": {"thresholds": [{"attribute": "temperature", "op": "<", "value": 18}]}
             },
@@ -181,29 +181,35 @@ async def test_simulate_inputs_surfaces_weather_threshold_attributes():
 
 @pytest.mark.asyncio
 async def test_simulate_inputs_emits_script_verdict_knob():
-    from custom_components.ambience.matchers.script import ScriptMatcher, ScriptSnapshot, _cache_key
+    from custom_components.ambience.conditions.script import (
+        ScriptCondition,
+        ScriptSnapshot,
+        _cache_key,
+    )
 
-    class _ScriptStub(ScriptMatcher):
+    class _ScriptStub(ScriptCondition):
         async def snapshot(self, hass, *, now=None):
             return ScriptSnapshot(results={_cache_key("script.holiday", {}): True})
 
-    rules = [{"group": "g1", "name": "Holiday", "when": {"script": {"script": "script.holiday"}}}]
+    rules = [
+        {"category": "g1", "name": "Holiday", "when": {"script": {"script": "script.holiday"}}}
+    ]
 
     class _Store4:
         def scope_config(self, sk, si):
             return {"rules": rules}
 
-        def get_matcher_config(self, name):
+        def get_condition_config(self, name):
             return {"entity": None, "groups": []} if name == "weather" else {}
 
     hass = _Hass([])
-    hass.data[DOMAIN] = {DATA_MATCHERS: {"script": _ScriptStub(hass)}, DATA_STORE: _Store4()}
+    hass.data[DOMAIN] = {DATA_CONDITIONS: {"script": _ScriptStub(hass)}, DATA_STORE: _Store4()}
 
     result = await simulate_inputs(hass, "area", "kitchen", "g1")
     verdicts = [k for k in result["knobs"] if k["kind"] == "verdict"]
     assert len(verdicts) == 1
     v = verdicts[0]
-    assert v["matcher"] == "script"
+    assert v["condition"] == "script"
     assert v["key"] == _cache_key("script.holiday", {})
     assert v["entity_id"] == "script.holiday"
     assert v["live_value"] is True
@@ -216,11 +222,11 @@ async def test_simulate_inputs_emits_script_verdict_knob():
 
 
 def _resolve_hass(rules, states):
-    from custom_components.ambience.matchers.state import StateMatcher
+    from custom_components.ambience.conditions.state import StateCondition
 
     hass = _Hass(states)
     hass.data[DOMAIN] = {
-        DATA_MATCHERS: {"state": StateMatcher(hass)},
+        DATA_CONDITIONS: {"state": StateCondition(hass)},
         DATA_STORE: _Store(rules),
     }
     return hass
@@ -230,7 +236,7 @@ def _resolve_hass(rules, states):
 async def test_run_simulation_returns_winner_as_buffered_unit():
     rules = [
         {
-            "group": "g1",
+            "category": "g1",
             "name": "Motion on",
             "when": {
                 "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
@@ -245,7 +251,7 @@ async def test_run_simulation_returns_winner_as_buffered_unit():
     assert result["outcome"] == "acted"
     assert result["winner_name"] == "Motion on"
     assert result["cause"]["kind"] == "simulated"
-    assert result["group"] == "g1"
+    assert result["category"] == "g1"
     assert result["explanation"]["rules"][0]["matched"] is True
 
 
@@ -253,7 +259,7 @@ async def test_run_simulation_returns_winner_as_buffered_unit():
 async def test_run_simulation_reports_no_match():
     rules = [
         {
-            "group": "g1",
+            "category": "g1",
             "name": "Motion on",
             "when": {
                 "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
@@ -268,7 +274,7 @@ async def test_run_simulation_reports_no_match():
 
 
 # ---------------------------------------------------------------------------
-# Task 3: verdict overrides for opaque matchers
+# Task 3: verdict overrides for opaque conditions
 # ---------------------------------------------------------------------------
 
 
@@ -276,13 +282,13 @@ async def test_run_simulation_reports_no_match():
 async def test_build_simulated_snapshots_uses_verdicts_for_script():
     called = {"snapshot": False}
 
-    class _Spy(ScriptMatcher):
+    class _Spy(ScriptCondition):
         async def snapshot(self, hass, *, now=None):  # must NOT be called
             called["snapshot"] = True
             raise AssertionError("real script snapshot should not run under verdicts")
 
     hass = _Hass([])
-    hass.data[DOMAIN] = {DATA_MATCHERS: {"script": _Spy(hass)}}
+    hass.data[DOMAIN] = {DATA_CONDITIONS: {"script": _Spy(hass)}}
     key = _cache_key("script.holiday", {})
     world = SimulatedWorld(now=FIXED, overrides={}, verdicts={"script": {key: True}})
 
@@ -299,15 +305,15 @@ async def test_build_simulated_snapshots_uses_verdicts_for_script():
 def test_simulate_inputs_excludes_time_derived_entities():
     rules = [
         {
-            "group": "g1",
+            "category": "g1",
             "when": {
                 "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]},
                 "day": {"include": [{"kind": "workday"}]},
             },
         }
     ]
-    from custom_components.ambience.matchers.day import DayMatcher
-    from custom_components.ambience.matchers.state import StateMatcher
+    from custom_components.ambience.conditions.day import DayCondition
+    from custom_components.ambience.conditions.state import StateCondition
 
     hass = _Hass([_State("binary_sensor.motion", "off")])
 
@@ -315,36 +321,36 @@ def test_simulate_inputs_excludes_time_derived_entities():
         def scope_config(self, sk, si):
             return {"rules": rules}
 
-        def get_matcher_config(self, name):
+        def get_condition_config(self, name):
             if name == "day":
                 return {"workday_sensor": "binary_sensor.workday", "workday_calendar": None}
             if name == "weather":
-                return {"entity": None, "groups": []}
+                return {"entity": None, "categories": []}
             return {}
 
     hass.data[DOMAIN] = {
-        DATA_MATCHERS: {"state": StateMatcher(hass), "day": DayMatcher(hass)},
+        DATA_CONDITIONS: {"state": StateCondition(hass), "day": DayCondition(hass)},
         DATA_STORE: _Store2(),
     }
     result = simulate_inputs_entities(hass, "area", "kitchen", "g1")
     ids = [k["entity_id"] for k in result]
-    assert ids == ["binary_sensor.motion"]  # workday sensor excluded (day matcher)
+    assert ids == ["binary_sensor.motion"]  # workday sensor excluded (day condition)
 
 
 def test_simulate_inputs_control_kinds():
     rules = [
         {
-            "group": "g1",
+            "category": "g1",
             "when": {
                 "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
             },
         },
         {
-            "group": "g1",
+            "category": "g1",
             "when": {"state": {"kind": "is", "entity_id": "sensor.count", "states": ["2.0"]}},
         },
     ]
-    from custom_components.ambience.matchers.state import StateMatcher
+    from custom_components.ambience.conditions.state import StateCondition
 
     hass = _Hass([_State("binary_sensor.motion", "off"), _State("sensor.count", "2.0")])
 
@@ -352,10 +358,10 @@ def test_simulate_inputs_control_kinds():
         def scope_config(self, sk, si):
             return {"rules": rules}
 
-        def get_matcher_config(self, name):
+        def get_condition_config(self, name):
             return {"entity": None, "groups": []} if name == "weather" else {}
 
-    hass.data[DOMAIN] = {DATA_MATCHERS: {"state": StateMatcher(hass)}, DATA_STORE: _Store3()}
+    hass.data[DOMAIN] = {DATA_CONDITIONS: {"state": StateCondition(hass)}, DATA_STORE: _Store3()}
     knobs = {k["entity_id"]: k for k in simulate_inputs_entities(hass, "area", "kitchen", "g1")}
     assert knobs["binary_sensor.motion"]["control"] == "select"
     assert knobs["binary_sensor.motion"]["options"] == ["on", "off"]
@@ -366,11 +372,11 @@ def test_simulate_inputs_control_kinds():
 def test_simulate_inputs_surfaces_state_referenced_attributes():
     """Attributes read by a state predicate (string via is/is_not, numeric via
     >/< ops) become editable sub-rows with the right control."""
-    from custom_components.ambience.matchers.state import StateMatcher
+    from custom_components.ambience.conditions.state import StateCondition
 
     rules = [
         {
-            "group": "g1",
+            "category": "g1",
             "when": {
                 "state": {
                     "kind": "and",
@@ -403,10 +409,10 @@ def test_simulate_inputs_surfaces_state_referenced_attributes():
         def scope_config(self, sk, si):
             return {"rules": rules}
 
-        def get_matcher_config(self, name):
+        def get_condition_config(self, name):
             return {"entity": None, "groups": []} if name == "weather" else {}
 
-    hass.data[DOMAIN] = {DATA_MATCHERS: {"state": StateMatcher(hass)}, DATA_STORE: _Store6()}
+    hass.data[DOMAIN] = {DATA_CONDITIONS: {"state": StateCondition(hass)}, DATA_STORE: _Store6()}
     knobs = {k["entity_id"]: k for k in simulate_inputs_entities(hass, "area", "kitchen", "g1")}
     assert {"name": "description", "control": "text", "live_value": "today"} in knobs[
         "calendar.work"

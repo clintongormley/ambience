@@ -1,4 +1,4 @@
-"""Named-period store for the time_of_day matcher.
+"""Named-period store for the time_of_day condition.
 
 Provides BUILTIN_PERIODS (code-shipped seeds, immutable) and PeriodStore (the
 user-owned slice: custom map + hidden ids, shadowing built-ins).

@@ -27,14 +27,14 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
+from .conditions.time_of_day import ANCHOR_ATTR
 from .const import (
+    DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
-    DATA_MATCHERS,
     DATA_STORE,
     DATA_SWITCHES,
     DOMAIN,
 )
-from .matchers.time_of_day import ANCHOR_ATTR
 from .scope_triggers import iter_predicate_specs
 from .service import (
     _log_apply,
@@ -42,9 +42,9 @@ from .service import (
     async_execute_actions,
     async_execute_plan,
     async_resolve_with_snapshots,
+    category_ids,
     effective_reapply_seconds,
     get_last_applied,
-    group_ids,
     scope_reapply_intervals,
 )
 from .trace import (
@@ -108,8 +108,8 @@ class AutoTriggerEngine:
     def _store(self) -> Any:
         return self._hass.data[DOMAIN][DATA_STORE]
 
-    def _matchers(self) -> dict[str, Any]:
-        return self._hass.data[DOMAIN][DATA_MATCHERS]
+    def _conditions(self) -> dict[str, Any]:
+        return self._hass.data[DOMAIN][DATA_CONDITIONS]
 
     def async_rebuild(self) -> None:
         """Recapture every scope and rebuild the trigger index from them."""
@@ -132,13 +132,13 @@ class AutoTriggerEngine:
         Every watch a scope's rules imply is registered — auto-triggers are
         always on.
         """
-        matchers = self._matchers()
+        conditions = self._conditions()
         entries: list[tuple[PredKey, TriggerSpec]] = []
         for (scope_kind, scope_id), cfg in self._scope_cfgs.items():
-            for rule_index, matcher_key, spec in iter_predicate_specs(matchers, cfg):
+            for rule_index, condition_key, spec in iter_predicate_specs(conditions, cfg):
                 if spec == EMPTY:
                     continue
-                entries.append(((scope_kind, scope_id, rule_index, matcher_key), spec))
+                entries.append(((scope_kind, scope_id, rule_index, condition_key), spec))
         return entries
 
     def _build_reapply_intervals(self) -> dict[int, set[tuple[str, str | None]]]:
@@ -153,73 +153,73 @@ class AutoTriggerEngine:
 
     def _predicate_for(self, key: PredKey) -> Any:
         """The stored predicate for a PredKey, or None if it no longer exists."""
-        scope_kind, scope_id, rule_index, matcher_key = key
+        scope_kind, scope_id, rule_index, condition_key = key
         cfg = self._scope_cfgs.get((scope_kind, scope_id))
         if cfg is None:
             return None
         rules = cfg.get("rules", [])
         if not 0 <= rule_index < len(rules):
             return None
-        return rules[rule_index].get("when", {}).get(matcher_key)
+        return rules[rule_index].get("when", {}).get(condition_key)
 
-    def _group_for(self, scope_kind: str, scope_id: str | None, rule_index: int) -> str | None:
-        """The group id a rule belongs to (always a real id for a live rule);
+    def _category_for(self, scope_kind: str, scope_id: str | None, rule_index: int) -> str | None:
+        """The category id a rule belongs to (always a real id for a live rule);
         None only when the scope/rule no longer exists, in which case the caller
-        must drop the unit (a None group must never reach the apply path)."""
+        must drop the unit (a None category must never reach the apply path)."""
         cfg = self._scope_cfgs.get((scope_kind, scope_id))
         if cfg is None:
             return None
         rules = cfg.get("rules", [])
         if 0 <= rule_index < len(rules):
-            return rules[rule_index].get("group")
+            return rules[rule_index].get("category")
         return None
 
     def _recompute(
         self, fired: set[PredKey], snapshots: dict[str, Any]
     ) -> set[tuple[str, str | None, str]]:
         """Re-evaluate the fired predicates against `snapshots`; return the
-        (scope_kind, scope_id, group) units whose boolean changed. Updates
+        (scope_kind, scope_id, category) units whose boolean changed. Updates
         `predicate_state`. A missing/None snapshot evaluates the predicate to
         False; a first-seen predicate counts as a flip."""
-        matchers = self._matchers()
+        conditions = self._conditions()
         dirty: set[tuple[str, str | None, str]] = set()
         for key in fired:
             predicate = self._predicate_for(key)
             if predicate is None:
                 continue
-            matcher = matchers.get(key[3])
-            if matcher is None:
+            condition = conditions.get(key[3])
+            if condition is None:
                 continue
             snap = snapshots.get(key[3])
-            new_value = bool(matcher.matches(predicate, snap)) if snap is not None else False
+            new_value = bool(condition.matches(predicate, snap)) if snap is not None else False
             old_value = self._predicate_state.get(key)
             self._predicate_state[key] = new_value
             if old_value != new_value:
-                group = self._group_for(key[0], key[1], key[2])
-                if group is not None:
-                    dirty.add((key[0], key[1], group))
+                category = self._category_for(key[0], key[1], key[2])
+                if category is not None:
+                    dirty.add((key[0], key[1], category))
         return dirty
 
-    async def _refresh_snapshots(self, matcher_keys: set[str]) -> None:
-        """Re-snapshot the given matchers into the cache (None on failure)."""
-        matchers = self._matchers()
-        for key in matcher_keys:
-            matcher = matchers.get(key)
-            if matcher is None:
+    async def _refresh_snapshots(self, condition_keys: set[str]) -> None:
+        """Re-snapshot the given conditions into the cache (None on failure)."""
+        conditions = self._conditions()
+        for key in condition_keys:
+            condition = conditions.get(key)
+            if condition is None:
                 continue
             try:
-                self._snapshots[key] = await matcher.snapshot(self._hass)
-            except Exception as exc:  # noqa: BLE001 — any matcher error => None snapshot
-                _LOGGER.warning("ambience: matcher %r snapshot failed: %s", key, exc)
+                self._snapshots[key] = await condition.snapshot(self._hass)
+            except Exception as exc:  # noqa: BLE001 — any condition error => None snapshot
+                _LOGGER.warning("ambience: condition %r snapshot failed: %s", key, exc)
                 self._snapshots[key] = None
 
     async def _refresh_all_snapshots(self) -> None:
-        await self._refresh_snapshots(set(self._matchers()))
+        await self._refresh_snapshots(set(self._conditions()))
 
     async def _resolve_and_apply(
-        self, scope_kind: str, scope_id: str | None, group_id: str, *, force: bool = False
+        self, scope_kind: str, scope_id: str | None, category_id: str, *, force: bool = False
     ) -> UnitTrace | None:
-        """Resolve a dirty (scope, group) unit and apply if the winner changed
+        """Resolve a dirty (scope, category) unit and apply if the winner changed
         (or `force`). Skips when the switch is off. Returns a UnitTrace
         describing the outcome when tracing is active, else None."""
         active = tracing_active(self._hass)
@@ -227,7 +227,12 @@ class AutoTriggerEngine:
         if switch_state == "off":
             if active:
                 return UnitTrace(
-                    scope_kind, scope_id, group_id, switch_state, Outcome.SKIPPED_SWITCH_OFF, None
+                    scope_kind,
+                    scope_id,
+                    category_id,
+                    switch_state,
+                    Outcome.SKIPPED_SWITCH_OFF,
+                    None,
                 )
             return None
         plan = await async_resolve_with_snapshots(
@@ -235,7 +240,7 @@ class AutoTriggerEngine:
             scope_kind,
             scope_id,
             self._snapshots,
-            group=group_id,
+            category=category_id,
             describe=False,
             explain=active,
         )
@@ -244,27 +249,27 @@ class AutoTriggerEngine:
         if index is None:
             if active:
                 return UnitTrace(
-                    scope_kind, scope_id, group_id, switch_state, Outcome.NO_MATCH, explanation
+                    scope_kind, scope_id, category_id, switch_state, Outcome.NO_MATCH, explanation
                 )
             return None
-        if not force and index == get_last_applied(self._hass, scope_kind, scope_id, group_id):
+        if not force and index == get_last_applied(self._hass, scope_kind, scope_id, category_id):
             if active:
                 return UnitTrace(
                     scope_kind,
                     scope_id,
-                    group_id,
+                    category_id,
                     switch_state,
                     Outcome.NO_OP,
                     explanation,
                     winner_name=plan["rule_name"],
                 )
             return None
-        await async_execute_plan(self._hass, scope_kind, scope_id, plan, group_id)
+        await async_execute_plan(self._hass, scope_kind, scope_id, plan, category_id)
         if active:
             return UnitTrace(
                 scope_kind,
                 scope_id,
-                group_id,
+                category_id,
                 switch_state,
                 Outcome.ACTED,
                 explanation,
@@ -276,7 +281,7 @@ class AutoTriggerEngine:
     async def _apply_units(
         self, units: Iterable[tuple[str, str | None, str]], *, force: bool = False
     ) -> list[UnitTrace]:
-        """Apply dirty (scope_kind, scope_id, group) units, concurrently within
+        """Apply dirty (scope_kind, scope_id, category) units, concurrently within
         each containment tier, tiers sequential in order areas→floors→house.
         Returns the per-unit traces produced (empty when tracing is inactive)."""
         by_tier: dict[int, list[tuple[str, str | None, str]]] = defaultdict(list)
@@ -290,14 +295,14 @@ class AutoTriggerEngine:
             )
             for res in results:
                 if isinstance(res, BaseException):
-                    _LOGGER.warning("ambience: group apply failed: %s", res)
+                    _LOGGER.warning("ambience: category apply failed: %s", res)
                 elif res is not None:
                     traces.append(res)
         return traces
 
     async def async_evaluate(self, fired: set[PredKey], cause: TriggerCause | None = None) -> None:
-        """Recompute the fired predicates (refreshing only their matchers) and
-        resolve+apply every (scope, group) whose winning rule changed. Emits a
+        """Recompute the fired predicates (refreshing only their conditions) and
+        resolve+apply every (scope, category) whose winning rule changed. Emits a
         TraceEvent for the batch when tracing produced any unit traces."""
         if not fired:
             return
@@ -333,9 +338,9 @@ class AutoTriggerEngine:
         await self._refresh_all_snapshots()
         self._recompute(set(self._index.all_predicates()), self._snapshots)
         units = [
-            (kind, sid, gid)
+            (kind, sid, cid)
             for (kind, sid), cfg in self._scope_cfgs.items()
-            for gid in group_ids(cfg)
+            for cid in category_ids(cfg)
         ]
         traces = await self._apply_units(units)
         if traces:
@@ -473,11 +478,11 @@ class AutoTriggerEngine:
         await asyncio.gather(*(self._reapply_scope(scope, interval) for scope in scopes))
 
     async def _reapply_scope(self, scope: tuple[str, str | None], interval: int) -> None:
-        """Re-fire each group's current winning rule's actions due at `interval`.
+        """Re-fire each category's current winning rule's actions due at `interval`.
 
-        Uses last-applied per (scope, group) (kept current by the watch system)
+        Uses last-applied per (scope, category) (kept current by the watch system)
         rather than re-resolving, and never mutates last-applied. Skips when the
-        switch is off, a group has no active rule, or its stored index is out of
+        switch is off, a category has no active rule, or its stored index is out of
         range.
         """
         scope_kind, scope_id = scope
@@ -491,8 +496,8 @@ class AutoTriggerEngine:
         exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
         active = tracing_active(self._hass)
         traces: list[UnitTrace] = []
-        for group_id in group_ids(cfg):
-            index = get_last_applied(self._hass, scope_kind, scope_id, group_id)
+        for category_id in category_ids(cfg):
+            index = get_last_applied(self._hass, scope_kind, scope_id, category_id)
             if index is None or not 0 <= index < len(rules):
                 continue
             due = [
@@ -503,7 +508,7 @@ class AutoTriggerEngine:
             if due:
                 rule_name = rules[index].get("name")
                 context = _log_apply(
-                    self._hass, scope_kind, scope_id, group_id, rule_name, index, reapplied=True
+                    self._hass, scope_kind, scope_id, category_id, rule_name, index, reapplied=True
                 )
                 await async_execute_actions(
                     self._hass, scope_kind, scope_id, due, rule_index=index, context=context
@@ -513,7 +518,7 @@ class AutoTriggerEngine:
                         UnitTrace(
                             scope_kind,
                             scope_id,
-                            group_id,
+                            category_id,
                             switch_state,
                             Outcome.REAPPLIED,
                             None,  # re-apply does not re-resolve, so no explanation
@@ -565,11 +570,11 @@ class AutoTriggerEngine:
     async def _force_resync_scope(
         self, scope: tuple[str, str | None], switch_entity_id: str | None = None
     ) -> None:
-        """Force-apply every group of a scope (used on a switch off->on)."""
+        """Force-apply every category of a scope (used on a switch off->on)."""
         scope_kind, scope_id = scope
         cfg = self._scope_cfgs.get(scope)
         traces = await self._apply_units(
-            [(scope_kind, scope_id, gid) for gid in group_ids(cfg or {})], force=True
+            [(scope_kind, scope_id, cid) for cid in category_ids(cfg or {})], force=True
         )
         if traces:
             emit_trace(

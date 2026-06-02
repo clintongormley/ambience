@@ -14,29 +14,29 @@ from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
+from .conditions.weather import WEATHER_CONDITIONS
 from .const import (
+    DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
-    DATA_MATCHERS,
     DATA_PERIODS,
     DATA_STORE,
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
     DOMAIN,
-    GENERAL_GROUP_ID,
+    GENERAL_CATEGORY_ID,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from .exposed_actions import ExposedActionsStore
-from .matchers.weather import WEATHER_CONDITIONS
 from .service import (
     async_apply_scene,
-    async_resolve_groups_only,
+    async_resolve_categories_only,
     async_resolve_only,
     async_run_rule_actions,
 )
 from .simulate import SimulatedWorld, run_simulation, simulate_inputs
-from .sorting import matcher_priority, resolve_order, shadowed_by
+from .sorting import condition_priority, resolve_order, shadowed_by
 from .state_options import known_states_for
-from .store import GroupInUseError, LastGroupError, reassign_orphan_rules
+from .store import CategoryInUseError, LastCategoryError, reassign_orphan_rules
 from .trace import buffered_unit_to_dict
 from .validators import validate_reapply_seconds
 
@@ -51,7 +51,7 @@ _WS_COMMANDS = (
     "ambience/floor/save",
     "ambience/house/get",
     "ambience/house/save",
-    "ambience/matchers/list",
+    "ambience/conditions/list",
     "ambience/services/list",
     "ambience/services/get_schema",
     "ambience/exposed_actions/list",
@@ -63,17 +63,17 @@ _WS_COMMANDS = (
     "ambience/time_of_day_periods/list",
     "ambience/time_of_day_periods/save",
     "ambience/time_of_day_periods/reset",
-    "ambience/matchers/day/config/list",
-    "ambience/matchers/day/config/save",
-    "ambience/matchers/weather/config/list",
-    "ambience/matchers/weather/config/save",
+    "ambience/conditions/day/config/list",
+    "ambience/conditions/day/config/save",
+    "ambience/conditions/weather/config/list",
+    "ambience/conditions/weather/config/save",
     "ambience/state/known_states",
     "ambience/switch_defaults/list",
     "ambience/switch_defaults/save",
     "ambience/switches/list",
-    "ambience/groups/list",
-    "ambience/groups/save",
-    "ambience/groups/delete",
+    "ambience/categories/list",
+    "ambience/categories/save",
+    "ambience/categories/delete",
     "ambience/traces/list",
     "ambience/traces/clear",
     "ambience/simulate/inputs",
@@ -84,7 +84,7 @@ _WS_COMMANDS = (
 def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_areas_list)
     websocket_api.async_register_command(hass, _ws_floors_list)
-    websocket_api.async_register_command(hass, _ws_matchers_list)
+    websocket_api.async_register_command(hass, _ws_conditions_list)
     websocket_api.async_register_command(hass, _ws_services_list)
     websocket_api.async_register_command(hass, _ws_services_get_schema)
     websocket_api.async_register_command(hass, _ws_exposed_actions_list)
@@ -110,9 +110,9 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_switch_defaults_list)
     websocket_api.async_register_command(hass, _ws_switch_defaults_save)
     websocket_api.async_register_command(hass, _ws_switches_list)
-    websocket_api.async_register_command(hass, _ws_groups_list)
-    websocket_api.async_register_command(hass, _ws_groups_save)
-    websocket_api.async_register_command(hass, _ws_groups_delete)
+    websocket_api.async_register_command(hass, _ws_categories_list)
+    websocket_api.async_register_command(hass, _ws_categories_save)
+    websocket_api.async_register_command(hass, _ws_categories_delete)
     websocket_api.async_register_command(hass, _ws_traces_list)
     websocket_api.async_register_command(hass, _ws_traces_clear)
     websocket_api.async_register_command(hass, _ws_simulate_inputs)
@@ -122,17 +122,17 @@ def async_register_commands(hass: HomeAssistant) -> None:
 def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise ValueError("config must be an object")
-    config.pop("matchers", None)  # legacy field; dropped silently
-    matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
+    config.pop("conditions", None)  # legacy field; dropped silently
+    conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
     for rule_idx, rule in enumerate(config.get("rules", [])):
         when = rule.get("when", {})
         for key, predicate in when.items():
             if predicate is None:
                 continue
-            if key not in matchers_registry:
-                raise ValueError(f"rule {rule_idx}: unknown matcher {key}")
-            matchers_registry[key].validate_predicate(predicate)
+            if key not in conditions_registry:
+                raise ValueError(f"rule {rule_idx}: unknown condition {key}")
+            conditions_registry[key].validate_predicate(predicate)
         for action_idx, action_spec in enumerate(rule.get("actions", [])):
             service_id = action_spec.get("service")
             if not isinstance(service_id, str) or "." not in service_id:
@@ -166,33 +166,39 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
 def _canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
     """Resolve rule order + numbers for storage. Strips legacy `auto_sort` and
     the transient per-rule `shadowed_by` hint so neither is persisted."""
-    matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
+    conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     out = {k: v for k, v in config.items() if k != "auto_sort"}
     rules = [{k: v for k, v in r.items() if k != "shadowed_by"} for r in config.get("rules", [])]
-    out["rules"] = resolve_order(rules, matchers_registry)
+    out["rules"] = resolve_order(rules, conditions_registry)
     return out
 
 
 def _with_shadows(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
     """Return a copy whose rules carry a transient `shadowed_by` index (or None).
     Not persisted — only sent to the frontend."""
-    matchers_registry = hass.data[DOMAIN][DATA_MATCHERS]
+    conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     rules = config.get("rules", [])
-    shadows = shadowed_by(rules, matchers_registry)
+    shadows = shadowed_by(rules, conditions_registry)
     return {
         **config,
         "rules": [{**r, "shadowed_by": shadows.get(idx)} for idx, r in enumerate(rules)],
     }
 
 
-def _coerce_rule_groups(store, config: dict) -> None:
-    """Point any rule with no group / an unknown group at General (or, if General
-    was deleted, the first existing group), logging once. Mutates `config`.
-    Shares the per-rule reassignment with store._migrate_groups."""
-    known = {g["id"] for g in store.groups()}
-    target = GENERAL_GROUP_ID if GENERAL_GROUP_ID in known else next(iter(known), GENERAL_GROUP_ID)
+def _coerce_rule_categories(store, config: dict) -> None:
+    """Point any rule with no category / an unknown category at General (or, if General
+    was deleted, the first existing category), logging once. Mutates `config`.
+    Shares the per-rule reassignment with store._migrate_categories."""
+    known = {c["id"] for c in store.categories()}
+    target = (
+        GENERAL_CATEGORY_ID
+        if GENERAL_CATEGORY_ID in known
+        else next(iter(known), GENERAL_CATEGORY_ID)
+    )
     if reassign_orphan_rules(config.get("rules", []), known, target):
-        _LOGGER.warning("ambience: scope save had ungrouped/unknown-group rule(s); set to General")
+        _LOGGER.warning(
+            "ambience: scope save had uncategorised/unknown-category rule(s); set to General"
+        )
 
 
 @websocket_api.require_admin
@@ -228,23 +234,23 @@ async def _ws_floors_list(
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/matchers/list"})
+@websocket_api.websocket_command({vol.Required("type"): "ambience/conditions/list"})
 @websocket_api.async_response
-async def _ws_matchers_list(
+async def _ws_conditions_list(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    matchers = hass.data[DOMAIN][DATA_MATCHERS]
+    conditions = hass.data[DOMAIN][DATA_CONDITIONS]
     result = [
         {
             "name": m.name,
             "description": m.description,
             "predicate_help": m.predicate_help,
             "input": getattr(m, "input", "text"),
-            "priority": matcher_priority(m),
+            "priority": condition_priority(m),
         }
-        for m in matchers.values()
+        for m in conditions.values()
     ]
     connection.send_result(msg["id"], result)
 
@@ -423,10 +429,10 @@ async def _ws_area_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    # Coerce groups BEFORE canonicalising so each rule is ordered in its final
-    # (post-coercion) group bucket, not a transient unknown/empty one.
+    # Coerce categories BEFORE canonicalising so each rule is ordered in its final
+    # (post-coercion) category bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    _coerce_rule_groups(store, msg["config"])
+    _coerce_rule_categories(store, msg["config"])
     config = _canonicalise(hass, msg["config"])
     await store.async_save_area(area_id, config)
     connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
@@ -481,10 +487,10 @@ async def _ws_floor_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    # Coerce groups BEFORE canonicalising so each rule is ordered in its final
-    # (post-coercion) group bucket, not a transient unknown/empty one.
+    # Coerce categories BEFORE canonicalising so each rule is ordered in its final
+    # (post-coercion) category bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    _coerce_rule_groups(store, msg["config"])
+    _coerce_rule_categories(store, msg["config"])
     config = _canonicalise(hass, msg["config"])
     await store.async_save_floor(floor_id, config)
     connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
@@ -521,10 +527,10 @@ async def _ws_house_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    # Coerce groups BEFORE canonicalising so each rule is ordered in its final
-    # (post-coercion) group bucket, not a transient unknown/empty one.
+    # Coerce categories BEFORE canonicalising so each rule is ordered in its final
+    # (post-coercion) category bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    _coerce_rule_groups(store, msg["config"])
+    _coerce_rule_categories(store, msg["config"])
     config = _canonicalise(hass, msg["config"])
     await store.async_save_house(config)
     connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
@@ -593,7 +599,7 @@ async def _ws_dry_run(
     try:
         scope_kind, scope_id = _parse_scope(msg, "dry_run")
         result = await async_resolve_only(hass, scope_kind, scope_id)
-        result["groups"] = await async_resolve_groups_only(hass, scope_kind, scope_id)
+        result["categories"] = await async_resolve_categories_only(hass, scope_kind, scope_id)
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
@@ -607,7 +613,7 @@ async def _ws_dry_run(
         vol.Optional("area_id"): str,
         vol.Optional("floor_id"): str,
         vol.Optional("house"): _house_must_be_true,
-        vol.Optional("group_id"): str,
+        vol.Optional("category_id"): str,
     }
 )
 @websocket_api.async_response
@@ -618,7 +624,9 @@ async def _ws_apply(
 ) -> None:
     try:
         scope_kind, scope_id = _parse_scope(msg, "apply")
-        await async_apply_scene(hass, scope_kind, scope_id, group=msg.get("group_id"), force=True)
+        await async_apply_scene(
+            hass, scope_kind, scope_id, category=msg.get("category_id"), force=True
+        )
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
@@ -733,7 +741,7 @@ async def _ws_periods_reset(
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/matchers/day/config/list"})
+@websocket_api.websocket_command({vol.Required("type"): "ambience/conditions/day/config/list"})
 @websocket_api.async_response
 async def _ws_day_config_list(
     hass: HomeAssistant,
@@ -741,13 +749,13 @@ async def _ws_day_config_list(
     msg: dict[str, Any],
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    connection.send_result(msg["id"], store.get_matcher_config("day"))
+    connection.send_result(msg["id"], store.get_condition_config("day"))
 
 
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): "ambience/matchers/day/config/save",
+        vol.Required("type"): "ambience/conditions/day/config/save",
         vol.Optional("workday_sensor"): vol.Any(str, None),
         vol.Optional("workday_calendar"): vol.Any(str, None),
     }
@@ -763,7 +771,7 @@ async def _ws_day_config_save(
         "workday_calendar": msg.get("workday_calendar"),
     }
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_matcher_config("day", new_cfg)
+    await store.async_save_condition_config("day", new_cfg)
     warnings = _dangling_day_entity_warnings(hass, new_cfg)
     connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
 
@@ -806,7 +814,7 @@ def _dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> l
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/matchers/weather/config/list"})
+@websocket_api.websocket_command({vol.Required("type"): "ambience/conditions/weather/config/list"})
 @websocket_api.async_response
 async def _ws_weather_config_list(
     hass: HomeAssistant,
@@ -814,13 +822,13 @@ async def _ws_weather_config_list(
     msg: dict[str, Any],
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    connection.send_result(msg["id"], store.get_matcher_config("weather"))
+    connection.send_result(msg["id"], store.get_condition_config("weather"))
 
 
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): "ambience/matchers/weather/config/save",
+        vol.Required("type"): "ambience/conditions/weather/config/save",
         vol.Optional("entity"): vol.Any(str, None),
         vol.Optional("groups"): list,
     }
@@ -838,8 +846,8 @@ async def _ws_weather_config_save(
         return
     new_cfg = {"entity": msg.get("entity"), "groups": groups}
     store = hass.data[DOMAIN][DATA_STORE]
-    old_cfg = store.get_matcher_config("weather")
-    await store.async_save_matcher_config("weather", new_cfg)
+    old_cfg = store.get_condition_config("weather")
+    await store.async_save_condition_config("weather", new_cfg)
     warnings = _dangling_weather_warnings(hass, old_cfg, new_cfg)
     connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
 
@@ -993,22 +1001,22 @@ async def _ws_switches_list(
 
 
 @websocket_api.require_admin
-@websocket_api.websocket_command({vol.Required("type"): "ambience/groups/list"})
+@websocket_api.websocket_command({vol.Required("type"): "ambience/categories/list"})
 @websocket_api.async_response
-async def _ws_groups_list(
+async def _ws_categories_list(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    connection.send_result(msg["id"], {"groups": store.groups()})
+    connection.send_result(msg["id"], {"categories": store.categories()})
 
 
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): "ambience/groups/save",
-        vol.Required("groups"): [
+        vol.Required("type"): "ambience/categories/save",
+        vol.Required("categories"): [
             {
                 vol.Required("id"): str,
                 vol.Required("name"): str,
@@ -1019,64 +1027,66 @@ async def _ws_groups_list(
     }
 )
 @websocket_api.async_response
-async def _ws_groups_save(
+async def _ws_categories_save(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    groups = msg["groups"]
+    categories = msg["categories"]
     seen_ids: set[str] = set()
     seen_names: set[str] = set()
-    for group in groups:
-        gid = group.get("id")
-        name = group.get("name")
-        if not isinstance(gid, str) or not gid.strip():
+    for category in categories:
+        cid = category.get("id")
+        name = category.get("name")
+        if not isinstance(cid, str) or not cid.strip():
             connection.send_error(
-                msg["id"], "invalid_groups", "group id must be a non-empty string"
+                msg["id"], "invalid_categories", "category id must be a non-empty string"
             )
             return
-        if gid in seen_ids:
-            connection.send_error(msg["id"], "invalid_groups", f"duplicate group id: {gid!r}")
+        if cid in seen_ids:
+            connection.send_error(
+                msg["id"], "invalid_categories", f"duplicate category id: {cid!r}"
+            )
             return
-        seen_ids.add(gid)
+        seen_ids.add(cid)
         if not isinstance(name, str) or not name.strip():
             connection.send_error(
-                msg["id"], "invalid_groups", f"group {gid!r} name must be a non-empty string"
+                msg["id"], "invalid_categories", f"category {cid!r} name must be a non-empty string"
             )
             return
         key = name.strip().casefold()
         if key in seen_names:
             connection.send_error(
-                msg["id"], "invalid_groups", f"duplicate group name: {name.strip()!r}"
+                msg["id"], "invalid_categories", f"duplicate category name: {name.strip()!r}"
             )
             return
         seen_names.add(key)
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_groups(groups)
+    await store.async_save_categories(categories)
     connection.send_result(msg["id"])
 
 
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): "ambience/groups/delete",
-        vol.Required("group_id"): str,
+        vol.Required("type"): "ambience/categories/delete",
+        vol.Required("category_id"): str,
     }
 )
 @websocket_api.async_response
-async def _ws_groups_delete(
+async def _ws_categories_delete(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     try:
-        await store.async_delete_group(msg["group_id"])
-    except LastGroupError as exc:
-        connection.send_error(msg["id"], "group_last", str(exc))
+        await store.async_delete_category(msg["category_id"])
+    except LastCategoryError as exc:
+        connection.send_error(msg["id"], "category_last", str(exc))
         return
-    except GroupInUseError as exc:
-        connection.send_error(msg["id"], "group_in_use", str(exc))
+    except CategoryInUseError as exc:
+        connection.send_error(msg["id"], "category_in_use", str(exc))
         return
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
@@ -1125,7 +1135,7 @@ async def _ws_traces_clear(
         vol.Required("type"): "ambience/simulate/inputs",
         vol.Required("scope_kind"): str,
         vol.Optional("scope_id"): vol.Any(str, None),
-        vol.Required("group"): str,
+        vol.Required("category"): str,
     }
 )
 @websocket_api.async_response
@@ -1134,9 +1144,11 @@ async def _ws_simulate_inputs(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """The editable inputs for a group's simulator panel (read-only)."""
+    """The editable inputs for a category's simulator panel (read-only)."""
     try:
-        result = await simulate_inputs(hass, msg["scope_kind"], msg.get("scope_id"), msg["group"])
+        result = await simulate_inputs(
+            hass, msg["scope_kind"], msg.get("scope_id"), msg["category"]
+        )
     except (ValueError, ServiceValidationError) as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
@@ -1149,12 +1161,12 @@ async def _ws_simulate_inputs(
         vol.Required("type"): "ambience/simulate",
         vol.Required("scope_kind"): str,
         vol.Optional("scope_id"): vol.Any(str, None),
-        vol.Required("group"): str,
+        vol.Required("category"): str,
         vol.Required("now"): str,
         # Each override is {state?: str, attributes?: dict}; require dict values
         # so a malformed payload is rejected at the schema layer, not mid-resolve.
         vol.Optional("overrides", default=dict): {str: dict},
-        # Per opaque-matcher verdicts: matcher_key -> {result_key: bool}.
+        # Per opaque-condition verdicts: condition_key -> {result_key: bool}.
         vol.Optional("verdicts", default=dict): {str: {str: bool}},
     }
 )
@@ -1164,7 +1176,7 @@ async def _ws_simulate(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Resolve a group against a hypothetical world (read-only)."""
+    """Resolve a category against a hypothetical world (read-only)."""
     now = dt_util.parse_datetime(msg["now"])
     if now is None:
         connection.send_error(msg["id"], "validation_error", f"unparseable now: {msg['now']!r}")
@@ -1176,7 +1188,7 @@ async def _ws_simulate(
     )
     try:
         result = await run_simulation(
-            hass, msg["scope_kind"], msg.get("scope_id"), msg["group"], world
+            hass, msg["scope_kind"], msg.get("scope_id"), msg["category"], world
         )
     except (ValueError, ServiceValidationError) as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))

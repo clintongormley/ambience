@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from custom_components.ambience.const import (
-    GENERAL_GROUP_ID,
+    GENERAL_CATEGORY_ID,
     SIGNAL_CONFIG_CHANGED,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -26,7 +26,7 @@ async def test_save_and_read_area(hass: HomeAssistant) -> None:
     await store.async_load()
     config = {
         "extra": ["movie"],
-        "matchers": ["time_of_day"],
+        "conditions": ["time_of_day"],
         "rules": [],
     }
     await store.async_save_area("living_room", config)
@@ -43,7 +43,7 @@ async def test_get_area_unknown_returns_none(hass: HomeAssistant) -> None:
 async def test_delete_area(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_area("a", {"extra": [], "matchers": [], "rules": []})
+    await store.async_save_area("a", {"extra": [], "conditions": [], "rules": []})
     await store.async_delete_area("a")
     assert store.get_area("a") is None
 
@@ -117,13 +117,13 @@ async def test_periods_load_handles_legacy_payload_without_periods_key(
 
 
 def test_async_load_migrates_old_action_targets(hass: HomeAssistant) -> None:
-    """Old dict-shaped targets are split by params group into new entity_ids/params shape."""
+    """Old dict-shaped targets are split by params category into new entity_ids/params shape."""
     store = AmbienceStore(hass)
     store._data = {
         "version": 1,
         "areas": {
             "living_room": {
-                "matchers": [],
+                "conditions": [],
                 "rules": [
                     {
                         "name": "test",
@@ -145,7 +145,7 @@ def test_async_load_migrates_old_action_targets(hass: HomeAssistant) -> None:
     }
     store._migrate_actions()
     actions = store._data["areas"]["living_room"]["rules"][0]["actions"]
-    # Two groups: brightness=100 (a, b) and brightness=50 (c)
+    # Two categories: brightness=100 (a, b) and brightness=50 (c)
     assert len(actions) == 2
     by_brightness = {a["params"]["brightness"]: a for a in actions}
     assert sorted(by_brightness[100]["entity_ids"]) == ["light.a", "light.b"]
@@ -164,7 +164,7 @@ def test_async_load_leaves_new_shape_unchanged(hass: HomeAssistant) -> None:
         "version": 1,
         "areas": {
             "living_room": {
-                "matchers": [],
+                "conditions": [],
                 "rules": [{"name": "test", "when": {}, "actions": [new_action]}],
             }
         },
@@ -180,7 +180,7 @@ def test_async_load_handles_empty_targets_dict(hass: HomeAssistant) -> None:
         "version": 1,
         "areas": {
             "living_room": {
-                "matchers": [],
+                "conditions": [],
                 "rules": [
                     {
                         "name": "test",
@@ -207,7 +207,7 @@ def test_migrate_one_action_passthrough_when_targets_not_dict(hass: HomeAssistan
         "version": 1,
         "areas": {
             "living_room": {
-                "matchers": [],
+                "conditions": [],
                 "rules": [{"name": "bad", "when": {}, "actions": [bad_action]}],
             }
         },
@@ -224,7 +224,7 @@ def test_async_load_migrates_old_period_names(hass: HomeAssistant) -> None:
         "version": 1,
         "areas": {
             "living_room": {
-                "matchers": [],
+                "conditions": [],
                 "rules": [
                     {
                         "name": "old",
@@ -262,33 +262,33 @@ def test_async_load_migrates_old_period_names(hass: HomeAssistant) -> None:
     assert hidden == ["daytime"]
 
 
-async def test_empty_store_has_matcher_defaults(hass: HomeAssistant) -> None:
+async def test_empty_store_has_condition_defaults(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    assert store.get_matcher_config("time_of_day") == {"custom": {}, "hidden": []}
-    assert store.get_matcher_config("day") == {
+    assert store.get_condition_config("time_of_day") == {"custom": {}, "hidden": []}
+    assert store.get_condition_config("day") == {
         "workday_sensor": None,
         "workday_calendar": None,
     }
 
 
-async def test_save_matcher_config_round_trips(hass: HomeAssistant) -> None:
+async def test_save_condition_config_round_trips(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_matcher_config(
+    await store.async_save_condition_config(
         "day",
         {
             "workday_sensor": "binary_sensor.workday",
             "workday_calendar": "calendar.workday",
         },
     )
-    assert store.get_matcher_config("day") == {
+    assert store.get_condition_config("day") == {
         "workday_sensor": "binary_sensor.workday",
         "workday_calendar": "calendar.workday",
     }
 
 
-async def test_migration_drops_area_matchers(hass: HomeAssistant) -> None:
+async def test_migration_drops_area_conditions(hass: HomeAssistant) -> None:
     from homeassistant.helpers.storage import Store
 
     raw = Store(hass, STORAGE_VERSION, STORAGE_KEY)
@@ -296,14 +296,14 @@ async def test_migration_drops_area_matchers(hass: HomeAssistant) -> None:
         {
             "version": STORAGE_VERSION,
             "areas": {
-                "a1": {"matchers": ["time_of_day"], "rules": []},
+                "a1": {"conditions": ["time_of_day"], "rules": []},
             },
             "time_of_day_periods": {"custom": {}, "hidden": []},
         }
     )
     store = AmbienceStore(hass)
     await store.async_load()
-    assert "matchers" not in store.get_area("a1")
+    assert "conditions" not in store.get_area("a1")
 
 
 async def test_migration_relocates_periods(hass: HomeAssistant) -> None:
@@ -327,7 +327,7 @@ async def test_migration_relocates_periods(hass: HomeAssistant) -> None:
     )
     store = AmbienceStore(hass)
     await store.async_load()
-    assert store.get_matcher_config("time_of_day") == {
+    assert store.get_condition_config("time_of_day") == {
         "custom": {
             "latenight": {
                 "from": {"kind": "time", "hh": 22, "mm": 0},
@@ -356,34 +356,34 @@ async def test_load_ignores_legacy_enabled_matchers(hass: HomeAssistant) -> None
 
 
 async def test_empty_store_has_weather_default(hass: HomeAssistant) -> None:
-    from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
+    from custom_components.ambience.conditions.weather import DEFAULT_WEATHER_GROUPS
 
     store = AmbienceStore(hass)
     await store.async_load()
-    assert store.get_matcher_config("weather") == {
+    assert store.get_condition_config("weather") == {
         "entity": None,
         "groups": DEFAULT_WEATHER_GROUPS,
     }
 
 
 async def test_save_weather_config_round_trips(hass: HomeAssistant) -> None:
-    from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
+    from custom_components.ambience.conditions.weather import DEFAULT_WEATHER_GROUPS
 
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_matcher_config("weather", {"entity": "weather.home"})
-    assert store.get_matcher_config("weather") == {
+    await store.async_save_condition_config("weather", {"entity": "weather.home"})
+    assert store.get_condition_config("weather") == {
         "entity": "weather.home",
         "groups": DEFAULT_WEATHER_GROUPS,
     }
 
 
 async def test_empty_store_seeds_default_weather_groups(hass: HomeAssistant) -> None:
-    from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
+    from custom_components.ambience.conditions.weather import DEFAULT_WEATHER_GROUPS
 
     store = AmbienceStore(hass)
     await store.async_load()
-    cfg = store.get_matcher_config("weather")
+    cfg = store.get_condition_config("weather")
     assert cfg["entity"] is None
     assert cfg["groups"] == DEFAULT_WEATHER_GROUPS
 
@@ -399,12 +399,12 @@ async def test_existing_weather_entity_keeps_user_groups(hass: HomeAssistant) ->
         {
             "version": STORAGE_VERSION,
             "areas": {},
-            "matchers": {"weather": {"entity": "weather.home", "groups": user_groups}},
+            "conditions": {"weather": {"entity": "weather.home", "groups": user_groups}},
         }
     )
     store = AmbienceStore(hass)
     await store.async_load()
-    cfg = store.get_matcher_config("weather")
+    cfg = store.get_condition_config("weather")
     assert cfg == {"entity": "weather.home", "groups": user_groups}
 
 
@@ -491,12 +491,12 @@ async def test_save_area_fires_config_changed(hass: HomeAssistant) -> None:
     assert len(calls) == 1
 
 
-async def test_save_matcher_config_fires_config_changed(hass: HomeAssistant) -> None:
+async def test_save_condition_config_fires_config_changed(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
     calls: list = []
     unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
-    await store.async_save_matcher_config("weather", {"entity": "weather.home"})
+    await store.async_save_condition_config("weather", {"entity": "weather.home"})
     await hass.async_block_till_done()
     unsub()
     assert len(calls) == 1
@@ -540,75 +540,75 @@ async def test_delete_missing_area_is_silent(hass: HomeAssistant) -> None:
     assert calls == []
 
 
-async def test_load_empty_seeds_general_group(hass: HomeAssistant) -> None:
-    # Groups are required: a fresh store seeds the General group.
+async def test_load_empty_seeds_general_category(hass: HomeAssistant) -> None:
+    # Categories are required: a fresh store seeds the General category.
     store = AmbienceStore(hass)
     await store.async_load()
-    assert [g["id"] for g in store.groups()] == [GENERAL_GROUP_ID]
+    assert [g["id"] for g in store.categories()] == [GENERAL_CATEGORY_ID]
 
 
-async def test_ensure_groups_is_idempotent_and_preserves_user_groups(
+async def test_ensure_categories_is_idempotent_and_preserves_user_categories(
     hass: HomeAssistant,
 ) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_groups([{"id": "blinds", "name": "Blinds"}])
-    # Reload simulates a second startup: ensure must not clobber existing groups
-    # nor prepend the General group when at least one group already exists.
+    await store.async_save_categories([{"id": "blinds", "name": "Blinds"}])
+    # Reload simulates a second startup: ensure must not clobber existing categories
+    # nor prepend the General category when at least one category already exists.
     store2 = AmbienceStore(hass)
     await store2.async_load()
-    assert store2.groups() == [{"id": "blinds", "name": "Blinds"}]
+    assert store2.categories() == [{"id": "blinds", "name": "Blinds"}]
 
 
-async def test_save_groups_fires_config_changed(hass: HomeAssistant) -> None:
+async def test_save_categories_fires_config_changed(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
     calls: list = []
     unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
-    await store.async_save_groups([{"id": "blinds", "name": "Blinds"}])
+    await store.async_save_categories([{"id": "blinds", "name": "Blinds"}])
     await hass.async_block_till_done()
     unsub()
     assert len(calls) == 1
 
 
-async def test_migrate_leaves_explicit_group_untouched(hass: HomeAssistant) -> None:
-    """Rules referencing an existing group are not overwritten by the migration."""
+async def test_migrate_leaves_explicit_category_untouched(hass: HomeAssistant) -> None:
+    """Rules referencing an existing category are not overwritten by the migration."""
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_groups([{"id": "blinds", "name": "Blinds"}])
+    await store.async_save_categories([{"id": "blinds", "name": "Blinds"}])
     await store.async_save_area(
         "lr",
-        {"rules": [{"when": {}, "actions": [], "group": "blinds"}], "auto_sort": True},
+        {"rules": [{"when": {}, "actions": [], "category": "blinds"}], "auto_sort": True},
     )
     store2 = AmbienceStore(hass)
     await store2.async_load()
-    assert store2.get_area("lr")["rules"][0]["group"] == "blinds"
+    assert store2.get_area("lr")["rules"][0]["category"] == "blinds"
 
 
-async def test_fresh_store_seeds_general_group(hass: HomeAssistant) -> None:
+async def test_fresh_store_seeds_general_category(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()  # no persisted data
-    groups = store.groups()
-    assert [g["id"] for g in groups] == [GENERAL_GROUP_ID]
-    assert groups[0]["name"] == "General"
-    assert groups[0]["icon"] == "mdi:home"
-    assert groups[0]["color"] == "blue-grey"
+    categories = store.categories()
+    assert [g["id"] for g in categories] == [GENERAL_CATEGORY_ID]
+    assert categories[0]["name"] == "General"
+    assert categories[0]["icon"] == "mdi:home"
+    assert categories[0]["color"] == "blue-grey"
 
 
-async def test_load_migrates_ungrouped_and_unknown_rules_to_general(
+async def test_load_migrates_uncategorised_and_unknown_rules_to_general(
     hass: HomeAssistant, hass_storage
 ) -> None:
     hass_storage[STORAGE_KEY] = {
         "version": STORAGE_VERSION,
         "data": {
             "version": STORAGE_VERSION,
-            "groups": [{"id": "blinds", "name": "Blinds"}],
+            "categories": [{"id": "blinds", "name": "Blinds"}],
             "areas": {
                 "a1": {
                     "rules": [
-                        {"when": {}, "actions": []},  # ungrouped
-                        {"when": {}, "actions": [], "group": "gone"},  # unknown id
-                        {"when": {}, "actions": [], "group": "blinds"},
+                        {"when": {}, "actions": []},  # uncategorised
+                        {"when": {}, "actions": [], "category": "gone"},  # unknown id
+                        {"when": {}, "actions": [], "category": "blinds"},
                     ]
                 }
             },
@@ -618,18 +618,20 @@ async def test_load_migrates_ungrouped_and_unknown_rules_to_general(
     }
     store = AmbienceStore(hass)
     await store.async_load()
-    assert any(g["id"] == GENERAL_GROUP_ID for g in store.groups())
-    groups_on_rules = [r.get("group") for r in store.get_area("a1")["rules"]]
-    assert groups_on_rules == [GENERAL_GROUP_ID, GENERAL_GROUP_ID, "blinds"]
+    assert any(g["id"] == GENERAL_CATEGORY_ID for g in store.categories())
+    categories_on_rules = [r.get("category") for r in store.get_area("a1")["rules"]]
+    assert categories_on_rules == [GENERAL_CATEGORY_ID, GENERAL_CATEGORY_ID, "blinds"]
 
 
-async def test_delete_group_blocked_when_it_has_members(hass: HomeAssistant, hass_storage) -> None:
+async def test_delete_category_blocked_when_it_has_members(
+    hass: HomeAssistant, hass_storage
+) -> None:
     hass_storage[STORAGE_KEY] = {
         "version": STORAGE_VERSION,
         "data": {
             "version": STORAGE_VERSION,
-            "groups": [{"id": "blinds", "name": "Blinds"}, {"id": "lights", "name": "Lights"}],
-            "areas": {"a1": {"rules": [{"when": {}, "actions": [], "group": "blinds"}]}},
+            "categories": [{"id": "blinds", "name": "Blinds"}, {"id": "lights", "name": "Lights"}],
+            "areas": {"a1": {"rules": [{"when": {}, "actions": [], "category": "blinds"}]}},
             "floors": {},
             "house": {"rules": []},
         },
@@ -637,16 +639,16 @@ async def test_delete_group_blocked_when_it_has_members(hass: HomeAssistant, has
     store = AmbienceStore(hass)
     await store.async_load()
     with pytest.raises(ValueError, match="still has rules"):
-        await store.async_delete_group("blinds")
-    assert any(g["id"] == "blinds" for g in store.groups())
+        await store.async_delete_category("blinds")
+    assert any(g["id"] == "blinds" for g in store.categories())
 
 
-async def test_delete_group_blocked_when_last(hass: HomeAssistant, hass_storage) -> None:
+async def test_delete_category_blocked_when_last(hass: HomeAssistant, hass_storage) -> None:
     hass_storage[STORAGE_KEY] = {
         "version": STORAGE_VERSION,
         "data": {
             "version": STORAGE_VERSION,
-            "groups": [{"id": "only", "name": "Only"}],
+            "categories": [{"id": "only", "name": "Only"}],
             "areas": {},
             "floors": {},
             "house": {"rules": []},
@@ -654,16 +656,16 @@ async def test_delete_group_blocked_when_last(hass: HomeAssistant, hass_storage)
     }
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError, match="last group"):
-        await store.async_delete_group("only")
+    with pytest.raises(ValueError, match="last category"):
+        await store.async_delete_category("only")
 
 
-async def test_delete_empty_non_last_group_succeeds(hass: HomeAssistant, hass_storage) -> None:
+async def test_delete_empty_non_last_category_succeeds(hass: HomeAssistant, hass_storage) -> None:
     hass_storage[STORAGE_KEY] = {
         "version": STORAGE_VERSION,
         "data": {
             "version": STORAGE_VERSION,
-            "groups": [{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
+            "categories": [{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
             "areas": {},
             "floors": {},
             "house": {"rules": []},
@@ -671,5 +673,5 @@ async def test_delete_empty_non_last_group_succeeds(hass: HomeAssistant, hass_st
     }
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_delete_group("a")
-    assert [g["id"] for g in store.groups()] == ["b"]
+    await store.async_delete_category("a")
+    assert [g["id"] for g in store.categories()] == ["b"]

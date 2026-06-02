@@ -26,7 +26,7 @@ async def _install(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> s
             "rules": [
                 {
                     "name": "Never matches",
-                    "group": "lighting",
+                    "category": "lighting",
                     # A predicate that is NOT currently true — proves we skip evaluation.
                     "when": {
                         "state": {

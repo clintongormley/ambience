@@ -1,6 +1,6 @@
-"""Trigger-dependency value type shared by matchers and the auto-trigger engine.
+"""Trigger-dependency value type shared by conditions and the auto-trigger engine.
 
-A matcher's optional ``trigger_deps(predicate) -> TriggerSpec`` answers "what
+A condition's optional ``trigger_deps(predicate) -> TriggerSpec`` answers "what
 should wake this predicate up?".  The engine merges every rule's spec in a
 scope into one watch-set.  Pure data — no HA imports, no side effects.
 """
@@ -18,7 +18,7 @@ class TriggerSpec:
     - ``entities``: entity_ids to watch via state-change events.
     - ``entity_durations``: ``(entity_id, for_seconds)`` pairs — after that
       entity changes, re-check again at ``change_time + for_seconds`` (the
-      state matcher's ``for:`` clause).
+      state condition's ``for:`` clause).
     - ``clock_times``: ``(hour, minute)`` local wall-clock boundaries.
     - ``sun_events``: ``(anchor, offset_min)`` — anchor is one of
       sunrise/sunset/noon/midnight/dawn/dusk.

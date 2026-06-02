@@ -126,7 +126,7 @@ async def test_areas_list_returns_all_ha_areas(
     bedroom = reg.async_create("Bedroom")
     # Only one has Ambience config — both must still be listed, sorted by name.
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(kitchen.id, {"matchers": [], "rules": []})
+    await store.async_save_area(kitchen.id, {"conditions": [], "rules": []})
     resp = await _ws_send(hass_ws_client, type="ambience/areas/list")
     assert resp["success"] is True
     assert resp["result"] == [
@@ -135,12 +135,12 @@ async def test_areas_list_returns_all_ha_areas(
     ]
 
 
-async def test_matchers_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
-    resp = await _ws_send(hass_ws_client, type="ambience/matchers/list")
+async def test_conditions_list(hass: HomeAssistant, installed, hass_ws_client) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/conditions/list")
     assert resp["success"] is True
     by_name = {m["name"]: m for m in resp["result"]}
 
-    # the scene matcher has been removed; it must not appear in the list.
+    # the scene condition has been removed; it must not appear in the list.
     assert "scene" not in by_name
 
     # day sorts before time_of_day in the linearisation tiebreaker.
@@ -705,19 +705,19 @@ async def test_area_save_then_get(
     assert len(get["result"]["rules"]) == 1
 
 
-async def test_scope_save_coerces_unknown_group_to_general(
+async def test_scope_save_coerces_unknown_category_to_general(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
-    """A rule referencing a group id not in the groups list (or with no group key)
-    is rewritten to the General group — rules are always grouped."""
-    from custom_components.ambience.const import GENERAL_GROUP_ID
+    """A rule referencing a category id not in the categories list (or with no category key)
+    is rewritten to the General category — rules are always categorised."""
+    from custom_components.ambience.const import GENERAL_CATEGORY_ID
 
     config = {
         "auto_sort": False,
         "rules": [
             {
                 "name": "ghost rule",
-                "group": "nonexistent",
+                "category": "nonexistent",
                 "when": {},
                 "actions": [
                     {
@@ -728,7 +728,7 @@ async def test_scope_save_coerces_unknown_group_to_general(
                 ],
             },
             {
-                "name": "no group key",
+                "name": "no category key",
                 "when": {},
                 "actions": [
                     {
@@ -751,8 +751,8 @@ async def test_scope_save_coerces_unknown_group_to_general(
     get = await _ws_send(hass_ws_client, id=2, type="ambience/area/get", area_id=area_id)
     assert get["success"] is True
     rules = get["result"]["rules"]
-    assert rules[0]["group"] == GENERAL_GROUP_ID
-    assert rules[1]["group"] == GENERAL_GROUP_ID
+    assert rules[0]["category"] == GENERAL_CATEGORY_ID
+    assert rules[1]["category"] == GENERAL_CATEGORY_ID
 
 
 async def test_area_save_rejects_area_id_not_in_registry(
@@ -763,7 +763,7 @@ async def test_area_save_rejects_area_id_not_in_registry(
         hass_ws_client,
         type="ambience/area/save",
         area_id="not_a_real_area",
-        config={"matchers": [], "rules": []},
+        config={"conditions": [], "rules": []},
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
@@ -774,7 +774,7 @@ async def test_area_save_rejects_invalid_predicate(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
     config = {
-        "matchers": ["time_of_day"],
+        "conditions": ["time_of_day"],
         "rules": [
             {
                 "when": {"time_of_day": "garbage_predicate"},
@@ -796,7 +796,7 @@ async def test_validate_ok(hass: HomeAssistant, installed, hass_ws_client) -> No
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/validate",
-        config={"matchers": [], "rules": []},
+        config={"conditions": [], "rules": []},
     )
     assert resp["success"] is True
     assert resp["result"] == {"ok": True}
@@ -810,7 +810,7 @@ async def test_dry_run_returns_matched_rule(
         type="ambience/area/save",
         area_id=area_id,
         config={
-            "matchers": [],
+            "conditions": [],
             "rules": [
                 {
                     "name": "movie default",
@@ -839,28 +839,28 @@ async def test_dry_run_returns_matched_rule(
     assert resp["result"]["actions"][0]["service"] == "light.turn_on"
 
 
-async def test_dry_run_returns_per_group_results(
+async def test_dry_run_returns_per_category_results(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
-    groups_resp = await _ws_send(
+    categories_resp = await _ws_send(
         hass_ws_client,
-        type="ambience/groups/save",
-        groups=[
+        type="ambience/categories/save",
+        categories=[
             {"id": "lighting", "name": "Lighting"},
             {"id": "blinds", "name": "Blinds"},
         ],
     )
-    assert groups_resp["success"] is True
+    assert categories_resp["success"] is True
     save = await _ws_send(
         hass_ws_client,
         type="ambience/area/save",
         area_id=area_id,
         config={
-            "matchers": [],
+            "conditions": [],
             "rules": [
                 {
                     "name": "lights movie",
-                    "group": "lighting",
+                    "category": "lighting",
                     "when": {},
                     "actions": [
                         {
@@ -872,7 +872,7 @@ async def test_dry_run_returns_per_group_results(
                 },
                 {
                     "name": "blinds movie",
-                    "group": "blinds",
+                    "category": "blinds",
                     "when": {},
                     "actions": [],
                 },
@@ -888,9 +888,9 @@ async def test_dry_run_returns_per_group_results(
     )
     assert resp["success"] is True
     result = resp["result"]
-    assert "groups" in result
-    assert result["groups"]["lighting"]["matched_rule_index"] == 0
-    assert result["groups"]["blinds"]["matched_rule_index"] == 1
+    assert "categories" in result
+    assert result["categories"]["lighting"]["matched_rule_index"] == 0
+    assert result["categories"]["blinds"]["matched_rule_index"] == 1
 
 
 async def test_dry_run_no_match(hass: HomeAssistant, installed, area_id, hass_ws_client) -> None:
@@ -899,7 +899,7 @@ async def test_dry_run_no_match(hass: HomeAssistant, installed, area_id, hass_ws
         type="ambience/area/save",
         area_id=area_id,
         config={
-            "matchers": [],
+            "conditions": [],
             "rules": [],
         },
     )
@@ -972,7 +972,7 @@ async def test_area_save_sorts_rules_by_specificity(
         "to": {"kind": "time", "hh": 13, "mm": 0},
     }
     config = {
-        "matchers": ["time_of_day"],
+        "conditions": ["time_of_day"],
         "rules": [
             {"when": {"time_of_day": wide}, "actions": []},
             {"when": {"time_of_day": narrow}, "actions": []},
@@ -1132,7 +1132,7 @@ async def test_ws_periods_save_returns_warnings_for_dangling_refs(
             "type": "ambience/area/save",
             "area_id": area.id,
             "config": {
-                "matchers": ["time_of_day"],
+                "conditions": ["time_of_day"],
                 "rules": [
                     {
                         "name": "Evening rule",
@@ -1241,12 +1241,12 @@ async def test_ws_periods_reset_clears_custom_and_hidden(
 
 
 # ---------------------------------------------------------------------------
-# C1: ambience/matchers/day/config/list + save
+# C1: ambience/conditions/day/config/list + save
 # ---------------------------------------------------------------------------
 
 
 async def test_day_config_list_defaults(hass, installed, hass_ws_client) -> None:
-    resp = await _ws_send(hass_ws_client, type="ambience/matchers/day/config/list")
+    resp = await _ws_send(hass_ws_client, type="ambience/conditions/day/config/list")
     assert resp["success"] is True
     assert resp["result"] == {"workday_sensor": None, "workday_calendar": None}
 
@@ -1254,14 +1254,14 @@ async def test_day_config_list_defaults(hass, installed, hass_ws_client) -> None
 async def test_day_config_save_round_trips(hass, installed, hass_ws_client) -> None:
     resp = await _ws_send(
         hass_ws_client,
-        type="ambience/matchers/day/config/save",
+        type="ambience/conditions/day/config/save",
         workday_sensor="binary_sensor.workday",
         workday_calendar="calendar.workday",
     )
     assert resp["success"] is True
     assert resp["result"]["ok"] is True
     assert resp["result"]["warnings"] == []
-    resp2 = await _ws_send(hass_ws_client, type="ambience/matchers/day/config/list")
+    resp2 = await _ws_send(hass_ws_client, type="ambience/conditions/day/config/list")
     assert resp2["result"] == {
         "workday_sensor": "binary_sensor.workday",
         "workday_calendar": "calendar.workday",
@@ -1272,7 +1272,7 @@ async def test_day_config_save_emits_warnings_when_clearing_sensor(
     hass, installed, hass_ws_client, area_id
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_matcher_config(
+    await store.async_save_condition_config(
         "day",
         {
             "workday_sensor": "binary_sensor.workday",
@@ -1293,7 +1293,7 @@ async def test_day_config_save_emits_warnings_when_clearing_sensor(
     )
     resp = await _ws_send(
         hass_ws_client,
-        type="ambience/matchers/day/config/save",
+        type="ambience/conditions/day/config/save",
         workday_sensor=None,
         workday_calendar=None,
     )
@@ -1310,7 +1310,7 @@ async def test_day_config_save_emits_warnings_when_clearing_sensor(
 # ---------------------------------------------------------------------------
 
 
-async def test_area_save_ignores_legacy_matchers_field(
+async def test_area_save_ignores_legacy_conditions_field(
     hass, installed, hass_ws_client, area_id
 ) -> None:
     resp = await _ws_send(
@@ -1318,17 +1318,17 @@ async def test_area_save_ignores_legacy_matchers_field(
         type="ambience/area/save",
         area_id=area_id,
         config={
-            "matchers": ["time_of_day"],  # legacy field — ignored
+            "conditions": ["time_of_day"],  # legacy field — ignored
             "rules": [],
         },
     )
     assert resp["success"] is True
 
 
-async def test_matchers_list_includes_weather(
+async def test_conditions_list_includes_weather(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
-    resp = await _ws_send(hass_ws_client, type="ambience/matchers/list")
+    resp = await _ws_send(hass_ws_client, type="ambience/conditions/list")
     by_name = {m["name"]: m for m in resp["result"]}
     weather = by_name["weather"]
     assert "toggleable" not in weather
@@ -1336,8 +1336,10 @@ async def test_matchers_list_includes_weather(
     assert weather["priority"] == 700
 
 
-async def test_matchers_list_includes_state(hass: HomeAssistant, installed, hass_ws_client) -> None:
-    resp = await _ws_send(hass_ws_client, type="ambience/matchers/list")
+async def test_conditions_list_includes_state(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/conditions/list")
     assert resp["success"] is True
     by_name = {m["name"]: m for m in resp["result"]}
     state = by_name["state"]
@@ -1349,9 +1351,9 @@ async def test_matchers_list_includes_state(hass: HomeAssistant, installed, hass
 
 
 async def test_weather_config_list_default(hass, installed, hass_ws_client) -> None:
-    from custom_components.ambience.matchers.weather import DEFAULT_WEATHER_GROUPS
+    from custom_components.ambience.conditions.weather import DEFAULT_WEATHER_GROUPS
 
-    resp = await _ws_send(hass_ws_client, type="ambience/matchers/weather/config/list")
+    resp = await _ws_send(hass_ws_client, type="ambience/conditions/weather/config/list")
     assert resp["success"] is True
     assert resp["result"] == {"entity": None, "groups": DEFAULT_WEATHER_GROUPS}
 
@@ -1360,14 +1362,14 @@ async def test_weather_config_save_round_trips(hass, installed, hass_ws_client) 
     custom = [{"id": "wet", "label": "Wet", "conditions": ["rainy", "pouring"]}]
     resp = await _ws_send(
         hass_ws_client,
-        type="ambience/matchers/weather/config/save",
+        type="ambience/conditions/weather/config/save",
         entity="weather.home",
         groups=custom,
     )
     assert resp["success"] is True
     assert resp["result"]["ok"] is True
     assert resp["result"]["warnings"] == []
-    resp2 = await _ws_send(hass_ws_client, type="ambience/matchers/weather/config/list")
+    resp2 = await _ws_send(hass_ws_client, type="ambience/conditions/weather/config/list")
     assert resp2["result"] == {"entity": "weather.home", "groups": custom}
 
 
@@ -1375,7 +1377,7 @@ async def test_weather_config_save_warns_when_clearing_referenced_entity(
     hass, installed, hass_ws_client, area_id
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_matcher_config(
+    await store.async_save_condition_config(
         "weather",
         {
             "entity": "weather.home",
@@ -1396,7 +1398,7 @@ async def test_weather_config_save_warns_when_clearing_referenced_entity(
     )
     resp = await _ws_send(
         hass_ws_client,
-        type="ambience/matchers/weather/config/save",
+        type="ambience/conditions/weather/config/save",
         entity=None,
         groups=[{"id": "wet", "label": "Wet", "conditions": ["rainy"]}],
     )
@@ -1412,7 +1414,7 @@ async def test_weather_config_save_warns_when_deleting_referenced_group(
     hass, installed, hass_ws_client, area_id
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_matcher_config(
+    await store.async_save_condition_config(
         "weather",
         {
             "entity": "weather.home",
@@ -1437,7 +1439,7 @@ async def test_weather_config_save_warns_when_deleting_referenced_group(
     # Save with `wet` removed.
     resp = await _ws_send(
         hass_ws_client,
-        type="ambience/matchers/weather/config/save",
+        type="ambience/conditions/weather/config/save",
         entity="weather.home",
         groups=[{"id": "sunny", "label": "Sunny", "conditions": ["sunny"]}],
     )
@@ -1458,7 +1460,7 @@ async def test_weather_config_save_rejects_malformed_groups(
     bad = [{"id": "wet", "label": "Wet", "conditions": ["not-a-real-condition"]}]
     resp = await _ws_send(
         hass_ws_client,
-        type="ambience/matchers/weather/config/save",
+        type="ambience/conditions/weather/config/save",
         entity="weather.home",
         groups=bad,
     )
@@ -1475,7 +1477,7 @@ async def test_weather_config_save_rejects_duplicate_group_ids(
     ]
     resp = await _ws_send(
         hass_ws_client,
-        type="ambience/matchers/weather/config/save",
+        type="ambience/conditions/weather/config/save",
         entity="weather.home",
         groups=dup,
     )
@@ -1826,92 +1828,92 @@ async def test_shadowed_by_not_persisted_on_round_trip(
         assert "pinned" in rule
 
 
-async def test_groups_list_seeds_general_by_default(hass, installed, hass_ws_client) -> None:
-    # Groups are required: a fresh install seeds the General group.
-    resp = await _ws_send(hass_ws_client, type="ambience/groups/list")
+async def test_categories_list_seeds_general_by_default(hass, installed, hass_ws_client) -> None:
+    # Categories are required: a fresh install seeds the General category.
+    resp = await _ws_send(hass_ws_client, type="ambience/categories/list")
     assert resp["success"] is True
-    assert [g["id"] for g in resp["result"]["groups"]] == ["general"]
+    assert [g["id"] for g in resp["result"]["categories"]] == ["general"]
 
 
-async def test_groups_save_round_trip(hass, installed, hass_ws_client) -> None:
-    groups = [{"id": "lights", "name": "Lights"}, {"id": "blinds", "name": "Blinds"}]
-    resp = await _ws_send(hass_ws_client, type="ambience/groups/save", groups=groups)
+async def test_categories_save_round_trip(hass, installed, hass_ws_client) -> None:
+    categories = [{"id": "lights", "name": "Lights"}, {"id": "blinds", "name": "Blinds"}]
+    resp = await _ws_send(hass_ws_client, type="ambience/categories/save", categories=categories)
     assert resp["success"] is True, resp
-    list_resp = await _ws_send(hass_ws_client, type="ambience/groups/list")
-    assert list_resp["result"]["groups"] == groups
+    list_resp = await _ws_send(hass_ws_client, type="ambience/categories/list")
+    assert list_resp["result"]["categories"] == categories
 
 
-async def test_groups_save_rejects_duplicate_ids(hass, installed, hass_ws_client) -> None:
+async def test_categories_save_rejects_duplicate_ids(hass, installed, hass_ws_client) -> None:
     resp = await _ws_send(
         hass_ws_client,
-        type="ambience/groups/save",
-        groups=[
+        type="ambience/categories/save",
+        categories=[
             {"id": "x", "name": "Lights"},
             {"id": "x", "name": "Blinds"},
         ],
     )
     assert resp["success"] is False
-    assert resp["error"]["code"] == "invalid_groups"
+    assert resp["error"]["code"] == "invalid_categories"
 
 
-async def test_groups_save_rejects_empty_name(hass, installed, hass_ws_client) -> None:
+async def test_categories_save_rejects_empty_name(hass, installed, hass_ws_client) -> None:
     resp = await _ws_send(
         hass_ws_client,
-        type="ambience/groups/save",
-        groups=[{"id": "x", "name": ""}],
+        type="ambience/categories/save",
+        categories=[{"id": "x", "name": ""}],
     )
     assert resp["success"] is False
-    assert resp["error"]["code"] == "invalid_groups"
+    assert resp["error"]["code"] == "invalid_categories"
 
 
-async def test_groups_save_rejects_duplicate_names(hass, installed, hass_ws_client) -> None:
+async def test_categories_save_rejects_duplicate_names(hass, installed, hass_ws_client) -> None:
     # Same name (case-insensitive, trimmed) on two distinct ids is rejected.
     resp = await _ws_send(
         hass_ws_client,
-        type="ambience/groups/save",
-        groups=[
+        type="ambience/categories/save",
+        categories=[
             {"id": "a", "name": "Lights"},
             {"id": "b", "name": "  lights "},
         ],
     )
     assert resp["success"] is False
-    assert resp["error"]["code"] == "invalid_groups"
+    assert resp["error"]["code"] == "invalid_categories"
 
 
-async def test_groups_delete_removes_user_group(hass, installed, hass_ws_client) -> None:
+async def test_categories_delete_removes_user_category(hass, installed, hass_ws_client) -> None:
     await _ws_send(
         hass_ws_client,
-        type="ambience/groups/save",
-        groups=[{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
+        type="ambience/categories/save",
+        categories=[{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
     )
-    resp = await _ws_send(hass_ws_client, type="ambience/groups/delete", group_id="b")
+    resp = await _ws_send(hass_ws_client, type="ambience/categories/delete", category_id="b")
     assert resp["success"] is True, resp
-    list_resp = await _ws_send(hass_ws_client, type="ambience/groups/list")
-    assert {g["id"] for g in list_resp["result"]["groups"]} == {"a"}
+    list_resp = await _ws_send(hass_ws_client, type="ambience/categories/list")
+    assert {g["id"] for g in list_resp["result"]["categories"]} == {"a"}
 
 
-async def test_groups_delete_unknown_is_noop(hass, installed, hass_ws_client) -> None:
-    # Seed two groups so the last-group guard does not fire; deleting an unknown
+async def test_categories_delete_unknown_is_noop(hass, installed, hass_ws_client) -> None:
+    # Seed two categories so the last-category guard does not fire; deleting an unknown
     # id then removes nothing but still succeeds.
     await _ws_send(
         hass_ws_client,
-        type="ambience/groups/save",
-        groups=[{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
+        type="ambience/categories/save",
+        categories=[{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
     )
-    resp = await _ws_send(hass_ws_client, type="ambience/groups/delete", group_id="nope")
+    resp = await _ws_send(hass_ws_client, type="ambience/categories/delete", category_id="nope")
     assert resp["success"] is True, resp
-    list_resp = await _ws_send(hass_ws_client, type="ambience/groups/list")
-    assert {g["id"] for g in list_resp["result"]["groups"]} == {"a", "b"}
+    list_resp = await _ws_send(hass_ws_client, type="ambience/categories/list")
+    assert {g["id"] for g in list_resp["result"]["categories"]} == {"a", "b"}
 
 
-async def test_groups_delete_blocked_in_use_returns_group_in_use(
+async def test_categories_delete_blocked_in_use_returns_category_in_use(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
-    """Deleting a group that still has rules returns a stable group_in_use code."""
+    """Deleting a category that still has rules returns a stable category_in_use code."""
     await _ws_send(
         hass_ws_client,
-        type="ambience/groups/save",
-        groups=[{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
+        type="ambience/categories/save",
+        categories=[{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
     )
     save = await _ws_send(
         hass_ws_client,
@@ -1921,8 +1923,8 @@ async def test_groups_delete_blocked_in_use_returns_group_in_use(
         config={
             "rules": [
                 {
-                    "name": "in group a",
-                    "group": "a",
+                    "name": "in category a",
+                    "category": "a",
                     "when": {},
                     "actions": [
                         {
@@ -1937,21 +1939,21 @@ async def test_groups_delete_blocked_in_use_returns_group_in_use(
     )
     assert save["success"] is True, save
 
-    resp = await _ws_send(hass_ws_client, id=3, type="ambience/groups/delete", group_id="a")
+    resp = await _ws_send(hass_ws_client, id=3, type="ambience/categories/delete", category_id="a")
     assert resp["success"] is False
-    assert resp["error"]["code"] == "group_in_use"
+    assert resp["error"]["code"] == "category_in_use"
     assert "still has rules" in resp["error"]["message"]
 
 
-async def test_groups_delete_blocked_last_returns_group_last(
+async def test_categories_delete_blocked_last_returns_category_last(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
-    """Deleting the only remaining group returns a stable group_last code."""
-    # A fresh install seeds exactly one group ("general").
-    resp = await _ws_send(hass_ws_client, type="ambience/groups/delete", group_id="general")
+    """Deleting the only remaining category returns a stable category_last code."""
+    # A fresh install seeds exactly one category ("general").
+    resp = await _ws_send(hass_ws_client, type="ambience/categories/delete", category_id="general")
     assert resp["success"] is False
-    assert resp["error"]["code"] == "group_last"
-    assert "last group" in resp["error"]["message"]
+    assert resp["error"]["code"] == "category_last"
+    assert "last category" in resp["error"]["message"]
 
 
 async def test_ws_apply_runs_even_when_switch_off(
@@ -1966,7 +1968,7 @@ async def test_ws_apply_runs_even_when_switch_off(
         {
             "rules": [
                 {
-                    "group": "lighting",
+                    "category": "lighting",
                     "when": {},
                     "actions": [
                         {"service": "light.turn_on", "entity_ids": ["light.l"], "params": {}}
@@ -2007,7 +2009,7 @@ async def test_ws_run_rule_actions(
             "rules": [
                 {
                     "name": "R1",
-                    "group": "lighting",
+                    "category": "lighting",
                     "when": {
                         "state": {
                             "kind": "is",

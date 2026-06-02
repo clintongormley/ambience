@@ -63,7 +63,7 @@ async def test_legacy_load_backfills_switch_defaults(hass: HomeAssistant) -> Non
             "areas": {},
             "floors": {},
             "house": {"rules": []},
-            "matchers": {},
+            "conditions": {},
         }
     )
     store = AmbienceStore(hass)

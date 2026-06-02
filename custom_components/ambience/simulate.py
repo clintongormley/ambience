@@ -1,7 +1,7 @@
 """What-if rule simulator: synthesize a hypothetical world and resolve it.
 
 A `SimulatedWorld` (a `now` plus per-entity full-state overrides) is turned into
-the `{matcher_name: snapshot}` dict the engine consumes, so `evaluate_explained`
+the `{condition_name: snapshot}` dict the engine consumes, so `evaluate_explained`
 runs unchanged against a world the user described instead of the live one.
 Read-only: nothing here writes to Home Assistant.
 """
@@ -17,12 +17,12 @@ from typing import Any
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 
-from .const import DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
+from .conditions.script import ScriptSnapshot
+from .conditions.template import TemplateSnapshot
+from .conditions.weather import WEATHER_CONDITIONS
+from .const import DATA_CONDITIONS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from .engine import evaluate_explained
-from .matchers.script import ScriptSnapshot
-from .matchers.template import TemplateSnapshot
-from .matchers.weather import WEATHER_CONDITIONS
-from .naming import group_names, scope_display_name
+from .naming import category_names, scope_display_name
 from .scope_triggers import iter_predicate_specs, scope_trigger_spec
 from .state_options import known_states_for
 from .sun_position import synthetic_sun_state
@@ -37,10 +37,10 @@ from .trace import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Matchers whose predicates evaluate live (call a real script / render a
+# Conditions whose predicates evaluate live (call a real script / render a
 # template) and so cannot honour entity overrides. The simulator drives them
 # with explicit per-predicate verdicts instead of running them.
-_OPAQUE_MATCHERS = ("script", "template")
+_OPAQUE_CONDITIONS = ("script", "template")
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ class SimulatedWorld:
 
     `overrides` maps entity_id -> {"state": str, "attributes": {name: value}};
     `attributes` is optional and merged over the entity's live attributes.
-    `verdicts` maps an opaque matcher_key -> {result_key: bool}, forcing each
+    `verdicts` maps an opaque condition_key -> {result_key: bool}, forcing each
     `script`/`template` predicate's result (the simulator computes the keys).
     """
 
@@ -112,31 +112,31 @@ def _build_override_states(hass: HomeAssistant, world: SimulatedWorld) -> dict[s
     return overrides
 
 
-def _verdict_snapshot(matcher_key: str, verdicts: dict[str, bool]) -> Any:
-    """Build an opaque matcher's snapshot from forced verdicts.
+def _verdict_snapshot(condition_key: str, verdicts: dict[str, bool]) -> Any:
+    """Build an opaque condition's snapshot from forced verdicts.
 
     Both script and template snapshots are a `results: dict[str, bool]` looked
     up by `matches()`, so a verdict map is a complete snapshot."""
-    if matcher_key == "script":
+    if condition_key == "script":
         return ScriptSnapshot(results=dict(verdicts))
-    if matcher_key == "template":
+    if condition_key == "template":
         return TemplateSnapshot(results=dict(verdicts))
-    raise ValueError(f"no verdict snapshot for opaque matcher {matcher_key!r}")
+    raise ValueError(f"no verdict snapshot for opaque condition {condition_key!r}")
 
 
 async def build_simulated_snapshots(hass: HomeAssistant, world: SimulatedWorld) -> dict[str, Any]:
-    """Snapshot every registered matcher against the simulated world.
+    """Snapshot every registered condition against the simulated world.
 
-    Entity-reading matchers snapshot against the overlay (with injected `now`);
-    opaque matchers (script/template) are built from `world.verdicts` so no real
-    script runs and overrides are honoured. A live matcher whose snapshot raises
+    Entity-reading conditions snapshot against the overlay (with injected `now`);
+    opaque conditions (script/template) are built from `world.verdicts` so no real
+    script runs and overrides are honoured. A live condition whose snapshot raises
     degrades to None (same policy as `_snapshot_all`)."""
-    matchers: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
+    conditions: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
     overlay = _SimulatedHass(
         hass,
         _SimulatedStates(hass.states, _build_override_states(hass, world)),
     )
-    live = {name: m for name, m in matchers.items() if name not in _OPAQUE_MATCHERS}
+    live = {name: m for name, m in conditions.items() if name not in _OPAQUE_CONDITIONS}
     results = await asyncio.gather(
         *[m.snapshot(overlay, now=world.now) for m in live.values()],
         return_exceptions=True,
@@ -148,19 +148,19 @@ async def build_simulated_snapshots(hass: HomeAssistant, world: SimulatedWorld) 
             snapshots[name] = None
         else:
             snapshots[name] = result
-    for name in matchers:
-        if name in _OPAQUE_MATCHERS:
+    for name in conditions:
+        if name in _OPAQUE_CONDITIONS:
             snapshots[name] = _verdict_snapshot(name, world.verdicts.get(name, {}))
     return snapshots
 
 
-def _group_config(
-    hass: HomeAssistant, scope_kind: str, scope_id: str | None, group: str
+def _category_config(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None, category: str
 ) -> dict[str, Any]:
-    """The scope config narrowed to one group's rules: {"rules": [...]}."""
+    """The scope config narrowed to one category's rules: {"rules": [...]}."""
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = store.scope_config(scope_kind, scope_id)
-    return {"rules": [r for r in cfg.get("rules", []) if r.get("group") == group]}
+    return {"rules": [r for r in cfg.get("rules", []) if r.get("category") == category]}
 
 
 # state-predicate atom kinds that compare numerically (so the attribute is a
@@ -178,7 +178,7 @@ def _record_attr(out: dict[str, dict[str, str]], entity_id: str, name: str, cont
 
 def _collect_state_attributes(node: Any, out: dict[str, dict[str, str]]) -> None:
     """Walk a state predicate tree, recording every `(entity_id, attribute)` an
-    atom reads (mirrors StateMatcher's own tree walk)."""
+    atom reads (mirrors StateCondition's own tree walk)."""
     if not isinstance(node, dict):
         return
     kind = node.get("kind")
@@ -197,15 +197,15 @@ def _collect_state_attributes(node: Any, out: dict[str, dict[str, str]]) -> None
 
 
 def _referenced_attributes(
-    hass: HomeAssistant, group_cfg: dict[str, Any]
+    hass: HomeAssistant, category_cfg: dict[str, Any]
 ) -> dict[str, list[dict[str, str]]]:
-    """entity_id -> [{name, control}] for attributes the group's predicates read
-    beyond `state`: the weather matcher's numeric thresholds and any attribute a
+    """entity_id -> [{name, control}] for attributes the category's predicates read
+    beyond `state`: the weather condition's numeric thresholds and any attribute a
     `state` predicate atom references (string via is/is_not, numeric via >/<)."""
     out: dict[str, dict[str, str]] = {}
     store = hass.data[DOMAIN][DATA_STORE]
-    weather_entity = store.get_matcher_config("weather").get("entity")
-    for rule in group_cfg["rules"]:
+    weather_entity = store.get_condition_config("weather").get("entity")
+    for rule in category_cfg["rules"]:
         when = rule.get("when") or {}
         weather = when.get("weather")
         if weather_entity and isinstance(weather, dict):
@@ -219,15 +219,15 @@ def _referenced_attributes(
     }
 
 
-_TIME_DERIVED_MATCHERS = ("day", "sun", "time_of_day")
+_TIME_DERIVED_CONDITIONS = ("day", "sun", "time_of_day")
 
 
-def _time_derived_entities(matchers: dict[str, Any], group_cfg: dict[str, Any]) -> set[str]:
-    """Entities contributed by the date/sun/time matchers — folded under the
+def _time_derived_entities(conditions: dict[str, Any], category_cfg: dict[str, Any]) -> set[str]:
+    """Entities contributed by the date/sun/time conditions — folded under the
     `When` field, so they are not shown as separate knobs."""
     out: set[str] = set()
-    for _idx, matcher_key, spec in iter_predicate_specs(matchers, group_cfg):
-        if matcher_key in _TIME_DERIVED_MATCHERS:
+    for _idx, condition_key, spec in iter_predicate_specs(conditions, category_cfg):
+        if condition_key in _TIME_DERIVED_CONDITIONS:
             out |= spec.entities
     return out
 
@@ -286,17 +286,17 @@ def _entity_knob(
 
 
 def simulate_inputs_entities(
-    hass: HomeAssistant, scope_kind: str, scope_id: str | None, group: str
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None, category: str
 ) -> list[dict[str, Any]]:
-    """The entity knobs for a group's panel (date/sun/time entities excluded),
+    """The entity knobs for a category's panel (date/sun/time entities excluded),
     each with a control hint + options. Verdict knobs are added separately."""
-    matchers: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
+    conditions: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
     store = hass.data[DOMAIN][DATA_STORE]
-    group_cfg = _group_config(hass, scope_kind, scope_id, group)
-    spec = scope_trigger_spec(matchers, group_cfg)
-    excluded = _time_derived_entities(matchers, group_cfg)
-    attrs_by_entity = _referenced_attributes(hass, group_cfg)
-    weather_entity = store.get_matcher_config("weather").get("entity")
+    category_cfg = _category_config(hass, scope_kind, scope_id, category)
+    spec = scope_trigger_spec(conditions, category_cfg)
+    excluded = _time_derived_entities(conditions, category_cfg)
+    attrs_by_entity = _referenced_attributes(hass, category_cfg)
+    weather_entity = store.get_condition_config("weather").get("entity")
     return [
         _entity_knob(hass, entity_id, attrs_by_entity.get(entity_id, []), weather_entity)
         for entity_id in sorted(spec.entities - excluded)
@@ -304,14 +304,14 @@ def simulate_inputs_entities(
 
 
 def _verdict_identity(
-    matcher: Any, matcher_key: str, predicate: dict[str, Any], rule: dict[str, Any]
+    condition: Any, condition_key: str, predicate: dict[str, Any], rule: dict[str, Any]
 ) -> tuple[str, str | None, str]:
     """(result_key, entity_id|None, label) for an opaque predicate's verdict knob.
 
-    The result key comes from the matcher's own `result_key()` so the simulator
+    The result key comes from the condition's own `result_key()` so the simulator
     and `matches()` always agree on the identity."""
-    key = matcher.result_key(predicate) if matcher is not None else ""
-    if matcher_key == "script":
+    key = condition.result_key(predicate) if condition is not None else ""
+    if condition_key == "script":
         script = predicate.get("script")
         label = script if isinstance(script, str) else "script"
         return key, (script if isinstance(script, str) else None), label
@@ -319,39 +319,41 @@ def _verdict_identity(
 
 
 async def _verdict_knobs(
-    hass: HomeAssistant, matchers: dict[str, Any], group_cfg: dict[str, Any]
+    hass: HomeAssistant, conditions: dict[str, Any], category_cfg: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    """One true/false knob per opaque (script/template) predicate in the group,
-    defaulting to its live verdict (computed once per opaque matcher)."""
+    """One true/false knob per opaque (script/template) predicate in the category,
+    defaulting to its live verdict (computed once per opaque condition)."""
     live_snaps: dict[str, Any] = {}
-    for name in _OPAQUE_MATCHERS:
-        matcher = matchers.get(name)
-        if matcher is not None:
+    for name in _OPAQUE_CONDITIONS:
+        condition = conditions.get(name)
+        if condition is not None:
             try:
-                live_snaps[name] = await matcher.snapshot(hass)
+                live_snaps[name] = await condition.snapshot(hass)
             except Exception as exc:  # noqa: BLE001 — a failing live verdict defaults to False
                 _LOGGER.warning("ambience: live verdict snapshot for %r failed: %s", name, exc)
                 live_snaps[name] = None
     knobs: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    for rule in group_cfg["rules"]:
+    for rule in category_cfg["rules"]:
         when = rule.get("when") or {}
-        for name in _OPAQUE_MATCHERS:
+        for name in _OPAQUE_CONDITIONS:
             predicate = when.get(name)
             if not isinstance(predicate, dict):
                 continue
-            matcher = matchers.get(name)
-            key, entity_id, label = _verdict_identity(matcher, name, predicate, rule)
+            condition = conditions.get(name)
+            key, entity_id, label = _verdict_identity(condition, name, predicate, rule)
             if (name, key) in seen:
                 continue
             seen.add((name, key))
             snap = live_snaps.get(name)
             live_value = (
-                bool(matcher.matches(predicate, snap)) if (matcher and snap is not None) else False
+                bool(condition.matches(predicate, snap))
+                if (condition and snap is not None)
+                else False
             )
             knob: dict[str, Any] = {
                 "kind": "verdict",
-                "matcher": name,
+                "condition": name,
                 "key": key,
                 "label": label,
                 "live_value": live_value,
@@ -363,17 +365,17 @@ async def _verdict_knobs(
 
 
 async def simulate_inputs(
-    hass: HomeAssistant, scope_kind: str, scope_id: str | None, group: str
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None, category: str
 ) -> dict[str, Any]:
-    """The editable inputs for a group's simulator panel: entity knobs (with
+    """The editable inputs for a category's simulator panel: entity knobs (with
     control hints) plus verdict knobs for opaque predicates. `has_time` is True
-    when the group depends on the clock/sun (the panel shows a date+time picker;
+    when the category depends on the clock/sun (the panel shows a date+time picker;
     the day/sun/time entities themselves are folded under it, not listed)."""
-    matchers: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
-    group_cfg = _group_config(hass, scope_kind, scope_id, group)
-    spec = scope_trigger_spec(matchers, group_cfg)
-    knobs = simulate_inputs_entities(hass, scope_kind, scope_id, group)
-    knobs.extend(await _verdict_knobs(hass, matchers, group_cfg))
+    conditions: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
+    category_cfg = _category_config(hass, scope_kind, scope_id, category)
+    spec = scope_trigger_spec(conditions, category_cfg)
+    knobs = simulate_inputs_entities(hass, scope_kind, scope_id, category)
+    knobs.extend(await _verdict_knobs(hass, conditions, category_cfg))
     has_time = bool(spec.clock_times or spec.has_time or spec.date_rollover or spec.sun_events)
     return {"knobs": knobs, "has_time": has_time}
 
@@ -396,12 +398,12 @@ def _safe_scope_name(hass: HomeAssistant, scope_kind: str, scope_id: str | None)
         return None
 
 
-def _safe_group_name(hass: HomeAssistant, group: str) -> str | None:
-    # group_names() already tolerates a missing store (returns {}); this guard
+def _safe_category_name(hass: HomeAssistant, category: str) -> str | None:
+    # category_names() already tolerates a missing store (returns {}); this guard
     # only protects against a present-but-broken store, and keeps symmetry with
     # _safe_scope_name.
     try:
-        return group_names(hass).get(group)
+        return category_names(hass).get(category)
     except Exception:  # noqa: BLE001 — test doubles may lack a full store
         return None
 
@@ -410,30 +412,30 @@ async def run_simulation(
     hass: HomeAssistant,
     scope_kind: str,
     scope_id: str | None,
-    group: str,
+    category: str,
     world: SimulatedWorld,
 ) -> dict[str, Any]:
-    """Resolve one group against the simulated world and return a BufferedUnit
+    """Resolve one category against the simulated world and return a BufferedUnit
     dict (the shape `renderEvaluation()` consumes), with a `simulated` cause."""
-    matchers: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
-    candidates = _group_config(hass, scope_kind, scope_id, group)["rules"]
+    conditions: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
+    candidates = _category_config(hass, scope_kind, scope_id, category)["rules"]
     snapshots = await build_simulated_snapshots(hass, world)
-    explanation = evaluate_explained(candidates, snapshots, matchers, describe=True)
+    explanation = evaluate_explained(candidates, snapshots, conditions, describe=True)
 
     switch_state = _switch_state(hass, scope_kind, scope_id)
     scope_name = _safe_scope_name(hass, scope_kind, scope_id)
-    group_name = _safe_group_name(hass, group)
+    category_name = _safe_category_name(hass, category)
 
     winner = explanation.winner_index
     if winner is None:
         unit = UnitTrace(
             scope_kind,
             scope_id,
-            group,
+            category,
             switch_state,
             Outcome.NO_MATCH,
             explanation,
-            group_name=group_name,
+            category_name=category_name,
             scope_name=scope_name,
         )
     else:
@@ -441,13 +443,13 @@ async def run_simulation(
         unit = UnitTrace(
             scope_kind,
             scope_id,
-            group,
+            category,
             switch_state,
             Outcome.ACTED,
             explanation,
             winner_name=rule.get("name"),
             actions=rule.get("actions", []),
-            group_name=group_name,
+            category_name=category_name,
             scope_name=scope_name,
         )
     cause = TriggerCause(kind=CauseKind.SIMULATED, detail=world.now.isoformat())

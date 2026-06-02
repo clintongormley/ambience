@@ -11,9 +11,9 @@ from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.ambience.const import (
+    DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
     DATA_LAST_APPLIED,
-    DATA_MATCHERS,
     DATA_STORE,
     DATA_SWITCHES,
     DATA_TRACE_SINKS,
@@ -31,17 +31,17 @@ class FakeStore:
     def __init__(
         self,
         scopes: list[tuple[str, str | None, dict]],
-        groups: list[dict] | None = None,
+        categories: list[dict] | None = None,
     ) -> None:
         self._scopes = scopes
         self._by_key = {(kind, sid): cfg for kind, sid, cfg in scopes}
-        self._groups = groups or []
+        self._categories = categories or []
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict]]:
         return list(self._scopes)
 
-    def groups(self) -> list[dict]:
-        return list(self._groups)
+    def categories(self) -> list[dict]:
+        return list(self._categories)
 
     def get_area(self, area_id: str) -> dict | None:
         return self._by_key.get(("area", area_id))
@@ -53,8 +53,8 @@ class FakeStore:
         return self._by_key.get(("house", None), {"rules": []})
 
 
-class DepsMatcher:
-    """Matcher stub: trigger_deps returns a fixed spec; matches compares equality."""
+class DepsCondition:
+    """Condition stub: trigger_deps returns a fixed spec; matches compares equality."""
 
     def __init__(self, spec: TriggerSpec) -> None:
         self._spec = spec
@@ -66,10 +66,10 @@ class DepsMatcher:
         return predicate is None or predicate == snapshot
 
 
-def _engine(hass, scopes, matchers) -> AutoTriggerEngine:
+def _engine(hass, scopes, conditions) -> AutoTriggerEngine:
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: matchers,
+        DATA_CONDITIONS: conditions,
     }
     return AutoTriggerEngine(hass)
 
@@ -78,8 +78,8 @@ async def test_rebuild_indexes_enabled_scope_predicate(hass) -> None:
     scopes = [
         ("area", "kitchen", {"rules": [{"when": {"state": "x"}}]}),
     ]
-    matchers = {"state": DepsMatcher(TriggerSpec(entities=frozenset({"binary_sensor.motion"})))}
-    engine = _engine(hass, scopes, matchers)
+    conditions = {"state": DepsCondition(TriggerSpec(entities=frozenset({"binary_sensor.motion"})))}
+    engine = _engine(hass, scopes, conditions)
     engine.async_rebuild()
     idx = engine.index
     assert idx.by_entity["binary_sensor.motion"] == frozenset({("area", "kitchen", 0, "state")})
@@ -100,8 +100,8 @@ async def test_rebuild_watches_every_scope_unconditionally(hass) -> None:
             },
         )
     ]
-    matchers = {"state": DepsMatcher(TriggerSpec(entities=frozenset({"binary_sensor.motion"})))}
-    engine = _engine(hass, scopes, matchers)
+    conditions = {"state": DepsCondition(TriggerSpec(entities=frozenset({"binary_sensor.motion"})))}
+    engine = _engine(hass, scopes, conditions)
     engine.async_rebuild()
     assert engine.index.by_entity["binary_sensor.motion"] == frozenset(
         {("area", "kitchen", 0, "state")}
@@ -120,24 +120,24 @@ async def test_rebuild_skips_none_predicate_and_empty_deps(hass) -> None:
             },
         )
     ]
-    matchers = {
-        "state": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.a"}))),
-        "weather": DepsMatcher(EMPTY),
+    conditions = {
+        "state": DepsCondition(TriggerSpec(entities=frozenset({"sensor.a"}))),
+        "weather": DepsCondition(EMPTY),
     }
-    engine = _engine(hass, scopes, matchers)
+    engine = _engine(hass, scopes, conditions)
     engine.async_rebuild()
     assert engine.index.by_entity == {}
     assert engine.index.entities == frozenset()
 
 
-async def test_rebuild_unknown_matcher_is_skipped(hass) -> None:
+async def test_rebuild_unknown_condition_is_skipped(hass) -> None:
     scopes = [("area", "a", {"rules": [{"when": {"mystery": "p"}}]})]
     engine = _engine(hass, scopes, {})
     engine.async_rebuild()
     assert engine.index.entities == frozenset()
 
 
-async def test_rebuild_matcher_without_trigger_deps_is_opaque(hass) -> None:
+async def test_rebuild_condition_without_trigger_deps_is_opaque(hass) -> None:
     class NoDeps:
         def matches(self, predicate, snapshot):
             return True
@@ -149,12 +149,12 @@ async def test_rebuild_matcher_without_trigger_deps_is_opaque(hass) -> None:
 
 
 def _engine_with_state(hass) -> AutoTriggerEngine:
-    # One scope, one rule in group "g": tod predicate "evening", deps on sensor.x.
+    # One scope, one rule in category "g": tod predicate "evening", deps on sensor.x.
     scopes = [
-        ("area", "a", {"rules": [{"when": {"tod": "evening"}, "group": "g"}]}),
+        ("area", "a", {"rules": [{"when": {"tod": "evening"}, "category": "g"}]}),
     ]
-    matchers = {"tod": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.x"})))}
-    engine = _engine(hass, scopes, matchers)
+    conditions = {"tod": DepsCondition(TriggerSpec(entities=frozenset({"sensor.x"})))}
+    engine = _engine(hass, scopes, conditions)
     engine.async_rebuild()
     return engine
 
@@ -199,21 +199,21 @@ async def test_recompute_stale_key_is_ignored(hass) -> None:
 
 
 async def test_recompute_one_flip_among_two_predicates_marks_scope_once(hass) -> None:
-    # Two predicates in one scope+group; only one flips → unit appears once.
+    # Two predicates in one scope+category; only one flips → unit appears once.
     scopes = [
         (
             "area",
             "a",
             {
                 "rules": [
-                    {"when": {"tod": "evening"}, "group": "g"},
-                    {"when": {"tod": "night"}, "group": "g"},
+                    {"when": {"tod": "evening"}, "category": "g"},
+                    {"when": {"tod": "night"}, "category": "g"},
                 ]
             },
         ),
     ]
-    matchers = {"tod": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.x"})))}
-    engine = _engine(hass, scopes, matchers)
+    conditions = {"tod": DepsCondition(TriggerSpec(entities=frozenset({"sensor.x"})))}
+    engine = _engine(hass, scopes, conditions)
     engine.async_rebuild()
     k0 = ("area", "a", 0, "tod")
     k1 = ("area", "a", 1, "tod")
@@ -222,23 +222,23 @@ async def test_recompute_one_flip_among_two_predicates_marks_scope_once(hass) ->
     assert dirty == {("area", "a", "g")}
 
 
-async def test_recompute_marks_only_flipped_groups_dirty(hass) -> None:
-    # Two rules in two groups; flip ONLY the predicate of rule idx0 (group
-    # "lighting"). The dirty unit set must name only that scope+group.
+async def test_recompute_marks_only_flipped_categories_dirty(hass) -> None:
+    # Two rules in two categories; flip ONLY the predicate of rule idx0 (category
+    # "lighting"). The dirty unit set must name only that scope+category.
     scopes = [
         (
             "area",
             "lr",
             {
                 "rules": [
-                    {"when": {"tod": "evening"}, "group": "lighting"},
-                    {"when": {"tod": "night"}, "group": "blinds"},
+                    {"when": {"tod": "evening"}, "category": "lighting"},
+                    {"when": {"tod": "night"}, "category": "blinds"},
                 ]
             },
         ),
     ]
-    matchers = {"tod": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.x"})))}
-    engine = _engine(hass, scopes, matchers)
+    conditions = {"tod": DepsCondition(TriggerSpec(entities=frozenset({"sensor.x"})))}
+    engine = _engine(hass, scopes, conditions)
     engine.async_rebuild()
     k0 = ("area", "lr", 0, "tod")
     k1 = ("area", "lr", 1, "tod")
@@ -249,11 +249,11 @@ async def test_recompute_marks_only_flipped_groups_dirty(hass) -> None:
 
 async def test_tier_executor_applies_areas_then_floors_then_house(hass) -> None:
     scopes = [("area", "a", {"rules": []})]
-    matchers: dict = {}
-    engine = _engine(hass, scopes, matchers)
+    conditions: dict = {}
+    engine = _engine(hass, scopes, conditions)
     recorded: list[str] = []
 
-    async def _spy(scope_kind, scope_id, group_id, *, force=False):
+    async def _spy(scope_kind, scope_id, category_id, *, force=False):
         recorded.append(scope_kind)
 
     engine._resolve_and_apply = _spy  # type: ignore[assignment]
@@ -273,29 +273,29 @@ async def test_recompute_key_for_removed_scope_is_ignored(hass) -> None:
     assert dirty == set()
 
 
-async def test_group_for_returns_rule_group(hass) -> None:
-    engine = _engine_with_state(hass)  # area a, rule0 in group "g"
-    assert engine._group_for("area", "a", 0) == "g"
+async def test_category_for_returns_rule_category(hass) -> None:
+    engine = _engine_with_state(hass)  # area a, rule0 in category "g"
+    assert engine._category_for("area", "a", 0) == "g"
 
 
 async def test_recompute_drops_units_for_missing_rule(hass) -> None:
-    # A flipping predicate whose rule resolves to a None group (here: a rule
-    # with no group, but the same holds for a stale/out-of-range rule) must be
-    # DROPPED, never added as a (kind, id, None) unit — a None group would
+    # A flipping predicate whose rule resolves to a None category (here: a rule
+    # with no category, but the same holds for a stale/out-of-range rule) must be
+    # DROPPED, never added as a (kind, id, None) unit — a None category would
     # wrongly resolve the whole list in the apply path.
     scopes = [
-        ("area", "a", {"rules": [{"when": {"tod": "evening"}}]}),  # no group on the rule
+        ("area", "a", {"rules": [{"when": {"tod": "evening"}}]}),  # no category on the rule
     ]
-    matchers = {"tod": DepsMatcher(TriggerSpec(entities=frozenset({"sensor.x"})))}
-    engine = _engine(hass, scopes, matchers)
+    conditions = {"tod": DepsCondition(TriggerSpec(entities=frozenset({"sensor.x"})))}
+    engine = _engine(hass, scopes, conditions)
     engine.async_rebuild()
-    key = ("area", "a", 0, "tod")  # live predicate, flips True; group is None
+    key = ("area", "a", 0, "tod")  # live predicate, flips True; category is None
     dirty = engine._recompute({key}, {"tod": "evening"})
     assert all(unit[2] is not None for unit in dirty)
     assert dirty == set()
 
 
-class CacheMatcher:
+class CacheCondition:
     """trigger_deps + equality matches + a mutable snapshot value."""
 
     def __init__(self, deps: TriggerSpec, value: Any) -> None:
@@ -328,23 +328,23 @@ class _FakeExposedStorage:
 
 def _apply_engine(hass, *, switch_on: bool = True):
     """Engine over one area 'a' with rules [evening->idx0, morning->idx1], the
-    'tod' matcher watching sensor.x, switch on, empty exposed actions."""
-    tod = CacheMatcher(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    'tod' condition watching sensor.x, switch on, empty exposed actions."""
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
     scopes = [
         (
             "area",
             "a",
             {
                 "rules": [
-                    {"when": {"tod": "evening"}, "group": "g", "actions": []},
-                    {"when": {"tod": "morning"}, "group": "g", "actions": []},
+                    {"when": {"tod": "evening"}, "category": "g", "actions": []},
+                    {"when": {"tod": "morning"}, "category": "g", "actions": []},
                 ]
             },
         )
     ]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: {"tod": tod},
+        DATA_CONDITIONS: {"tod": tod},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=switch_on)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -389,8 +389,8 @@ async def test_resolve_and_apply_force_reapplies_unchanged_winner(hass) -> None:
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
 
 
-class SpyMatcher:
-    """Counts snapshot() calls — to prove unfired matchers aren't re-snapshotted."""
+class SpyCondition:
+    """Counts snapshot() calls — to prove unfired conditions aren't re-snapshotted."""
 
     def __init__(self, deps: TriggerSpec) -> None:
         self._deps = deps
@@ -410,12 +410,12 @@ class SpyMatcher:
         return None
 
 
-async def test_evaluate_does_not_refresh_unfired_matchers(hass) -> None:
+async def test_evaluate_does_not_refresh_unfired_conditions(hass) -> None:
     # The gating invariant: firing the 'tod' predicate must not re-snapshot the
-    # (expensive/opaque) 'script' matcher, even though both are indexed and the
+    # (expensive/opaque) 'script' condition, even though both are indexed and the
     # tod flip triggers a scope resolve.
-    tod = CacheMatcher(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
-    script = SpyMatcher(TriggerSpec(entities=frozenset({"sensor.y"}), opaque=True))
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    script = SpyCondition(TriggerSpec(entities=frozenset({"sensor.y"}), opaque=True))
     scopes = [
         (
             "area",
@@ -429,7 +429,7 @@ async def test_evaluate_does_not_refresh_unfired_matchers(hass) -> None:
     ]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: {"tod": tod, "script": script},
+        DATA_CONDITIONS: {"tod": tod, "script": script},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -439,8 +439,8 @@ async def test_evaluate_does_not_refresh_unfired_matchers(hass) -> None:
     assert script.snapshot_calls == 0
 
 
-class StateReadMatcher:
-    """A matcher whose snapshot reads binary_sensor.x's state from hass."""
+class StateReadCondition:
+    """A condition whose snapshot reads binary_sensor.x's state from hass."""
 
     def trigger_deps(self, predicate: Any) -> TriggerSpec:
         return TriggerSpec(entities=frozenset({"binary_sensor.x"}))
@@ -458,10 +458,10 @@ class StateReadMatcher:
 
 def _live_engine(hass) -> AutoTriggerEngine:
     """Engine: area 'a', rule0 fires when binary_sensor.x == 'on'. Switch on."""
-    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "group": "g", "actions": []}]})]
+    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: {"x": StateReadMatcher()},
+        DATA_CONDITIONS: {"x": StateReadCondition()},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -506,7 +506,7 @@ async def test_unrelated_entity_change_is_ignored(hass) -> None:
 async def test_has_time_tick_fires(hass) -> None:
     calls: list = []
 
-    class HasTimeMatcher:
+    class HasTimeCondition:
         def trigger_deps(self, predicate):
             return TriggerSpec(entities=frozenset(), has_time=True)
 
@@ -523,7 +523,7 @@ async def test_has_time_tick_fires(hass) -> None:
     scopes = [("area", "a", {"rules": [{"when": {"tmpl": "x"}, "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: {"tmpl": HasTimeMatcher()},
+        DATA_CONDITIONS: {"tmpl": HasTimeCondition()},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -545,7 +545,7 @@ async def test_sun_event_scheduled_when_sun_available(hass) -> None:
         {"next_setting": (dt_util.utcnow() + timedelta(hours=2)).isoformat()},
     )
 
-    class SunDepMatcher:
+    class SunDepCondition:
         def trigger_deps(self, predicate):
             return TriggerSpec(sun_events=frozenset({("sunset", 0)}))
 
@@ -561,7 +561,7 @@ async def test_sun_event_scheduled_when_sun_available(hass) -> None:
     scopes = [("area", "a", {"rules": [{"when": {"sun": "x"}, "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: {"sun": SunDepMatcher()},
+        DATA_CONDITIONS: {"sun": SunDepCondition()},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -576,7 +576,7 @@ async def test_sun_event_scheduled_when_sun_available(hass) -> None:
 async def test_for_recheck_scheduled_on_state_change(hass) -> None:
     hass.states.async_set("binary_sensor.x", "off")
 
-    class ForMatcher:
+    class ForCondition:
         def trigger_deps(self, predicate):
             return TriggerSpec(
                 entities=frozenset({"binary_sensor.x"}),
@@ -593,10 +593,10 @@ async def test_for_recheck_scheduled_on_state_change(hass) -> None:
         def describe(self, snapshot):
             return snapshot
 
-    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "group": "g", "actions": []}]})]
+    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: {"x": ForMatcher()},
+        DATA_CONDITIONS: {"x": ForCondition()},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -613,10 +613,10 @@ async def test_for_recheck_scheduled_on_state_change(hass) -> None:
 
 async def test_async_start_builds_subscribes_and_syncs(hass) -> None:
     hass.states.async_set("binary_sensor.x", "on")
-    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "group": "g", "actions": []}]})]
+    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: {"x": StateReadMatcher()},
+        DATA_CONDITIONS: {"x": StateReadCondition()},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -631,10 +631,10 @@ async def test_async_start_builds_subscribes_and_syncs(hass) -> None:
 async def test_switch_off_to_on_force_resyncs(hass) -> None:
     hass.states.async_set("binary_sensor.x", "on")
     switch = SimpleNamespace(is_on=True, entity_id="switch.ambience_a")
-    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "group": "g", "actions": []}]})]
+    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: {"x": StateReadMatcher()},
+        DATA_CONDITIONS: {"x": StateReadCondition()},
         DATA_SWITCHES: {("area", "a"): switch},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -652,13 +652,13 @@ async def test_switch_off_to_on_force_resyncs(hass) -> None:
     engine._teardown()
 
 
-async def test_initial_sync_skips_rule_with_unregistered_matcher(hass) -> None:
-    # A rule whose `when` names a matcher that isn't registered (e.g. a stale
+async def test_initial_sync_skips_rule_with_unregistered_condition(hass) -> None:
+    # A rule whose `when` names a condition that isn't registered (e.g. a stale
     # config key) cannot be evaluated, so the engine must NOT auto-apply it.
     scopes = [("area", "a", {"rules": [{"when": {"nonexistent": "x"}, "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: {},
+        DATA_CONDITIONS: {},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -681,11 +681,11 @@ async def test_rebuild_prunes_stale_predicate_state(hass) -> None:
 
 async def test_config_refresh_is_debounced(hass) -> None:
     # Two rapid refresh requests coalesce into a single rebuild+sync.
-    spy = SpyMatcher(TriggerSpec(entities=frozenset({"sensor.y"})))
-    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "group": "g", "actions": []}]})]
+    spy = SpyCondition(TriggerSpec(entities=frozenset({"sensor.y"})))
+    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_MATCHERS: {"x": spy},
+        DATA_CONDITIONS: {"x": spy},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -715,10 +715,10 @@ async def test_reapply_fires_due_action_for_winning_rule(hass):
         "params": {"brightness": 7},
         "reapply_seconds": 10,
     }
-    rule = {"when": {}, "group": "g", "actions": [action]}
+    rule = {"when": {}, "category": "g", "actions": [action]}
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
-        DATA_MATCHERS: {},
+        DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
         DATA_SWITCHES: {},
@@ -747,10 +747,10 @@ async def test_reapply_attributes_to_ambience(hass):
         "params": {},
         "reapply_seconds": 10,
     }
-    rule = {"when": {}, "group": "g", "name": "Evening", "actions": [action]}
+    rule = {"when": {}, "category": "g", "name": "Evening", "actions": [action]}
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
-        DATA_MATCHERS: {},
+        DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
         DATA_SWITCHES: {},
@@ -765,7 +765,7 @@ async def test_reapply_attributes_to_ambience(hass):
     ambience = [e for e in entries if e.data.get("name") == "Ambience"]
     assert len(ambience) == 1
     entry = ambience[0]
-    # Single group ⇒ no group suffix; area "k" not registered ⇒ raw-id scope label.
+    # Single category ⇒ no category suffix; area "k" not registered ⇒ raw-id scope label.
     assert entry.data["message"] == "re-applied 'Evening' in k"
     assert len(contexts) == 1
     assert contexts[0] == entry.context.id  # re-fired call shares the entry's context
@@ -786,10 +786,10 @@ async def test_reapply_emits_trace_event(hass):
         "params": {"brightness": 7},
         "reapply_seconds": 10,
     }
-    rule = {"when": {}, "group": "g", "name": "evening", "actions": [action]}
+    rule = {"when": {}, "category": "g", "name": "evening", "actions": [action]}
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
-        DATA_MATCHERS: {},
+        DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
         DATA_SWITCHES: {},
@@ -820,7 +820,7 @@ async def test_reapply_skips_when_switch_off(hass):
     hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
     rule = {
         "when": {},
-        "group": "g",
+        "category": "g",
         "actions": [
             {
                 "service": "light.turn_on",
@@ -832,7 +832,7 @@ async def test_reapply_skips_when_switch_off(hass):
     }
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
-        DATA_MATCHERS: {},
+        DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
         DATA_SWITCHES: {("area", "k"): SimpleNamespace(is_on=False)},
@@ -851,10 +851,10 @@ async def test_reapply_skips_when_switch_off(hass):
 async def test_reapply_skips_when_rule_is_not_the_winner(hass):
     calls = []
     hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
-    rule0 = {"when": {}, "group": "g", "actions": []}
+    rule0 = {"when": {}, "category": "g", "actions": []}
     rule1 = {
         "when": {},
-        "group": "g",
+        "category": "g",
         "actions": [
             {
                 "service": "light.turn_on",
@@ -866,7 +866,7 @@ async def test_reapply_skips_when_rule_is_not_the_winner(hass):
     }
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule0, rule1]})]),
-        DATA_MATCHERS: {},
+        DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         # winner is rule 0; the re-applying action lives in rule 1
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
@@ -886,7 +886,7 @@ async def test_reapply_skips_when_no_rule_active(hass):
     hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
     rule = {
         "when": {},
-        "group": "g",
+        "category": "g",
         "actions": [
             {
                 "service": "light.turn_on",
@@ -898,7 +898,7 @@ async def test_reapply_skips_when_no_rule_active(hass):
     }
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
-        DATA_MATCHERS: {},
+        DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {},  # nothing applied
         DATA_SWITCHES: {},
@@ -949,7 +949,7 @@ async def test_reapply_distinct_intervals_fire_independently(hass):
     hass.services.async_register("light", "turn_off", lambda c: calls.append(("off", c.data)))
     rule = {
         "when": {},
-        "group": "g",
+        "category": "g",
         "actions": [
             {
                 "service": "light.turn_on",
@@ -967,7 +967,7 @@ async def test_reapply_distinct_intervals_fire_independently(hass):
     }
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
-        DATA_MATCHERS: {},
+        DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on", "light.turn_off"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
         DATA_SWITCHES: {},

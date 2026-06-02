@@ -17,7 +17,7 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
 # sun.sun attribute name -> astral function. Each function returns a tz-aware
-# UTC datetime for the given observer/date; the time_of_day matcher normalises
+# UTC datetime for the given observer/date; the time_of_day condition normalises
 # anchors to within ±12h of `now`, so a same-date anchor is sufficient.
 _ANCHORS = {
     "next_rising": sunrise,
@@ -32,9 +32,9 @@ _ANCHORS = {
 def synthetic_sun_state(hass: HomeAssistant, now: datetime) -> State:
     """A `sun.sun` State for `now` at the home's location.
 
-    Carries `elevation`/`azimuth` (for the sun matcher) and the six `next_*`
-    anchors (for the time_of_day matcher). Anchors that are undefined at the
-    location/date (polar day/night) are omitted; a matcher needing a missing
+    Carries `elevation`/`azimuth` (for the sun condition) and the six `next_*`
+    anchors (for the time_of_day condition). Anchors that are undefined at the
+    location/date (polar day/night) are omitted; a condition needing a missing
     anchor will fail its snapshot and resolve to None, same as live behaviour.
     """
     observer = Observer(

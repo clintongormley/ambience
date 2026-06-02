@@ -1,4 +1,4 @@
-"""DayMatcher — date / weekday / workday predicate."""
+"""DayCondition — date / weekday / workday predicate."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from custom_components.ambience.conditions.day import DayCondition, DaySnapshot
 from custom_components.ambience.const import DATA_STORE, DOMAIN
-from custom_components.ambience.matchers.day import DayMatcher, DaySnapshot
 
 
 def _snap(today: date, **overrides) -> DaySnapshot:
@@ -25,8 +25,8 @@ def _snap(today: date, **overrides) -> DaySnapshot:
     return DaySnapshot(**defaults)
 
 
-def test_matcher_protocol_fields() -> None:
-    m = DayMatcher()
+def test_condition_protocol_fields() -> None:
+    m = DayCondition()
     assert m.name == "day"
     assert not hasattr(m, "toggleable")
     assert m.input == "day_predicate"
@@ -39,7 +39,7 @@ def _install_store_stub(hass: HomeAssistant, **day_config) -> None:
     """Plant a minimal store stub at hass.data[DOMAIN][DATA_STORE]."""
 
     class _Store:
-        def get_matcher_config(self, name: str) -> dict[str, object]:
+        def get_condition_config(self, name: str) -> dict[str, object]:
             if name == "day":
                 return {
                     "workday_sensor": day_config.get("workday_sensor"),
@@ -52,7 +52,7 @@ def _install_store_stub(hass: HomeAssistant, **day_config) -> None:
 
 async def test_snapshot_today_weekday_days_in_month(hass: HomeAssistant) -> None:
     _install_store_stub(hass)
-    snap = await DayMatcher().snapshot(hass)
+    snap = await DayCondition().snapshot(hass)
     today = dt_util.now().date()
     assert snap.today == today
     assert snap.weekday == today.weekday()
@@ -66,26 +66,26 @@ async def test_snapshot_today_weekday_days_in_month(hass: HomeAssistant) -> None
 async def test_snapshot_reads_workday_sensor_state(hass: HomeAssistant) -> None:
     _install_store_stub(hass, workday_sensor="binary_sensor.workday")
     hass.states.async_set("binary_sensor.workday", "on")
-    snap = await DayMatcher().snapshot(hass)
+    snap = await DayCondition().snapshot(hass)
     assert snap.workday_state == "on"
 
 
 async def test_snapshot_workday_sensor_unavailable_yields_none(hass: HomeAssistant) -> None:
     _install_store_stub(hass, workday_sensor="binary_sensor.workday")
-    snap = await DayMatcher().snapshot(hass)
+    snap = await DayCondition().snapshot(hass)
     assert snap.workday_state is None
 
 
 async def test_snapshot_workday_sensor_unknown_state_yields_none(hass: HomeAssistant) -> None:
     _install_store_stub(hass, workday_sensor="binary_sensor.workday")
     hass.states.async_set("binary_sensor.workday", "unknown")
-    snap = await DayMatcher().snapshot(hass)
+    snap = await DayCondition().snapshot(hass)
     assert snap.workday_state is None
 
 
 async def test_snapshot_month_workdays_none_without_calendar(hass: HomeAssistant) -> None:
     _install_store_stub(hass)
-    snap = await DayMatcher().snapshot(hass)
+    snap = await DayCondition().snapshot(hass)
     assert snap.month_workdays is None
 
 
@@ -105,10 +105,10 @@ async def test_snapshot_month_workdays_from_calendar_events(hass: HomeAssistant)
         return [_Event(2), _Event(3), _Event(4), _Event(5), _Event(6)]
 
     with patch(
-        "custom_components.ambience.matchers.day._fetch_calendar_events",
+        "custom_components.ambience.conditions.day._fetch_calendar_events",
         new=fake_fetch,
     ):
-        snap = await DayMatcher().snapshot(hass)
+        snap = await DayCondition().snapshot(hass)
 
     assert snap.month_workdays == tuple(date(today.year, today.month, d) for d in (2, 3, 4, 5, 6))
 
@@ -122,17 +122,17 @@ async def test_snapshot_month_workdays_handles_fetch_error(
         raise RuntimeError("entity missing")
 
     with patch(
-        "custom_components.ambience.matchers.day._fetch_calendar_events",
+        "custom_components.ambience.conditions.day._fetch_calendar_events",
         new=boom,
     ):
-        snap = await DayMatcher().snapshot(hass)
+        snap = await DayCondition().snapshot(hass)
 
     assert snap.month_workdays is None
     assert "entity missing" in caplog.text
 
 
 def test_matches_weekday() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     mon = _snap(date(2026, 5, 18))  # Monday
     fri = _snap(date(2026, 5, 22))  # Friday
     pred = {"include": [{"kind": "weekday", "days": [0, 4]}], "exclude": []}
@@ -143,7 +143,7 @@ def test_matches_weekday() -> None:
 
 
 def test_matches_day_of_month() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     pred = {"include": [{"kind": "day_of_month", "days": "1, 15"}], "exclude": []}
     assert m.matches(pred, _snap(date(2026, 5, 1))) is True
     assert m.matches(pred, _snap(date(2026, 5, 15))) is True
@@ -151,7 +151,7 @@ def test_matches_day_of_month() -> None:
 
 
 def test_matches_day_of_month_ranges() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     pred = {"include": [{"kind": "day_of_month", "days": "1-10, 15"}], "exclude": []}
     assert m.matches(pred, _snap(date(2026, 5, 1))) is True
     assert m.matches(pred, _snap(date(2026, 5, 10))) is True
@@ -161,20 +161,20 @@ def test_matches_day_of_month_ranges() -> None:
 
 
 def test_matches_day_of_month_malformed_spec_does_not_match() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     pred = {"include": [{"kind": "day_of_month", "days": "garbage"}], "exclude": []}
     assert m.matches(pred, _snap(date(2026, 5, 1))) is False
 
 
 def test_matches_last_day() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     pred = {"include": [{"kind": "last_day"}], "exclude": []}
     assert m.matches(pred, _snap(date(2026, 5, 31), days_in_month=31)) is True
     assert m.matches(pred, _snap(date(2026, 5, 30), days_in_month=31)) is False
 
 
 def test_matches_workday_and_holiday() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     work_pred = {"include": [{"kind": "workday"}], "exclude": []}
     hol_pred = {"include": [{"kind": "holiday"}], "exclude": []}
     on = _snap(date(2026, 5, 18), workday_state="on")
@@ -189,7 +189,7 @@ def test_matches_workday_and_holiday() -> None:
 
 
 def test_matches_date_annual() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     pred = {"include": [{"kind": "date", "month": 12, "day": 25}], "exclude": []}
     assert m.matches(pred, _snap(date(2026, 12, 25))) is True
     assert m.matches(pred, _snap(date(2027, 12, 25))) is True
@@ -197,7 +197,7 @@ def test_matches_date_annual() -> None:
 
 
 def test_matches_date_range_forward() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     pred = {
         "include": [
             {"kind": "date_range", "from": {"month": 7, "day": 15}, "to": {"month": 8, "day": 31}}
@@ -211,7 +211,7 @@ def test_matches_date_range_forward() -> None:
 
 
 def test_matches_date_range_wraparound() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     pred = {
         "include": [
             {"kind": "date_range", "from": {"month": 12, "day": 20}, "to": {"month": 1, "day": 5}}
@@ -224,7 +224,7 @@ def test_matches_date_range_wraparound() -> None:
 
 
 def test_matches_first_workday() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     workdays = tuple(date(2026, 5, d) for d in (4, 5, 6, 7, 8, 11, 12, 13, 14, 15))
     pred = {"include": [{"kind": "first_workday"}], "exclude": []}
     assert m.matches(pred, _snap(date(2026, 5, 4), month_workdays=workdays)) is True
@@ -233,7 +233,7 @@ def test_matches_first_workday() -> None:
 
 
 def test_matches_last_workday() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     workdays = tuple(date(2026, 5, d) for d in (4, 5, 6, 7, 8, 11, 12, 13, 14, 15))
     pred = {"include": [{"kind": "last_workday"}], "exclude": []}
     assert m.matches(pred, _snap(date(2026, 5, 15), month_workdays=workdays)) is True
@@ -242,18 +242,18 @@ def test_matches_last_workday() -> None:
 
 
 def test_matches_null_predicate_is_wildcard() -> None:
-    assert DayMatcher().matches(None, _snap(date(2026, 5, 1))) is True
+    assert DayCondition().matches(None, _snap(date(2026, 5, 1))) is True
 
 
 def test_matches_empty_include_is_all_days() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     pred = {"include": [], "exclude": [{"kind": "weekday", "days": [5, 6]}]}
     assert m.matches(pred, _snap(date(2026, 5, 18))) is True  # Mon
     assert m.matches(pred, _snap(date(2026, 5, 23))) is False  # Sat
 
 
 def test_matches_exclude_overrides_include() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     pred = {
         "include": [{"kind": "weekday", "days": [0, 1, 2, 3, 4]}],
         "exclude": [{"kind": "date", "month": 5, "day": 18}],
@@ -263,37 +263,37 @@ def test_matches_exclude_overrides_include() -> None:
 
 
 def test_matches_unknown_kind_evaluates_false() -> None:
-    m = DayMatcher()
+    m = DayCondition()
     pred = {"include": [{"kind": "wat", "x": 1}], "exclude": []}
     assert m.matches(pred, _snap(date(2026, 5, 18))) is False
 
 
 @pytest.fixture
-def m_with_entities(hass: HomeAssistant) -> DayMatcher:
+def m_with_entities(hass: HomeAssistant) -> DayCondition:
     _install_store_stub(
         hass,
         workday_sensor="binary_sensor.workday",
         workday_calendar="calendar.workday",
     )
-    return DayMatcher(hass=hass)
+    return DayCondition(hass=hass)
 
 
 @pytest.fixture
-def m_no_entities(hass: HomeAssistant) -> DayMatcher:
+def m_no_entities(hass: HomeAssistant) -> DayCondition:
     _install_store_stub(hass)
-    return DayMatcher(hass=hass)
+    return DayCondition(hass=hass)
 
 
-def test_validate_accepts_null(m_no_entities: DayMatcher) -> None:
+def test_validate_accepts_null(m_no_entities: DayCondition) -> None:
     m_no_entities.validate_predicate(None)  # no raise
 
 
-def test_validate_rejects_non_dict(m_no_entities: DayMatcher) -> None:
+def test_validate_rejects_non_dict(m_no_entities: DayCondition) -> None:
     with pytest.raises(ValueError):
         m_no_entities.validate_predicate(42)
 
 
-def test_validate_rejects_unknown_kind(m_no_entities: DayMatcher) -> None:
+def test_validate_rejects_unknown_kind(m_no_entities: DayCondition) -> None:
     with pytest.raises(ValueError, match="unknown day item kind"):
         m_no_entities.validate_predicate(
             {
@@ -304,7 +304,7 @@ def test_validate_rejects_unknown_kind(m_no_entities: DayMatcher) -> None:
 
 
 @pytest.mark.parametrize("days", [[], [-1], [7], "abc", 5])
-def test_validate_rejects_bad_weekday_days(m_no_entities: DayMatcher, days) -> None:
+def test_validate_rejects_bad_weekday_days(m_no_entities: DayCondition, days) -> None:
     with pytest.raises(ValueError):
         m_no_entities.validate_predicate(
             {
@@ -315,7 +315,7 @@ def test_validate_rejects_bad_weekday_days(m_no_entities: DayMatcher, days) -> N
 
 
 @pytest.mark.parametrize("days", ["", "0", "32", "abc", "5-", "-5", "10-2", ",,,", 5, [1, 2]])
-def test_validate_rejects_bad_day_of_month(m_no_entities: DayMatcher, days) -> None:
+def test_validate_rejects_bad_day_of_month(m_no_entities: DayCondition, days) -> None:
     with pytest.raises(ValueError):
         m_no_entities.validate_predicate(
             {
@@ -326,7 +326,7 @@ def test_validate_rejects_bad_day_of_month(m_no_entities: DayMatcher, days) -> N
 
 
 @pytest.mark.parametrize("days", ["1", "1, 15, 31", "1-10", "1-10, 15", " 2 - 4 , 20 "])
-def test_validate_accepts_day_of_month_specs(m_no_entities: DayMatcher, days) -> None:
+def test_validate_accepts_day_of_month_specs(m_no_entities: DayCondition, days) -> None:
     m_no_entities.validate_predicate(
         {
             "include": [{"kind": "day_of_month", "days": days}],
@@ -336,7 +336,7 @@ def test_validate_accepts_day_of_month_specs(m_no_entities: DayMatcher, days) ->
 
 
 @pytest.mark.parametrize("month,day", [(0, 1), (13, 1), (1, 0), (1, 32), (None, 1)])
-def test_validate_rejects_bad_date(m_no_entities: DayMatcher, month, day) -> None:
+def test_validate_rejects_bad_date(m_no_entities: DayCondition, month, day) -> None:
     with pytest.raises(ValueError):
         m_no_entities.validate_predicate(
             {
@@ -346,7 +346,7 @@ def test_validate_rejects_bad_date(m_no_entities: DayMatcher, month, day) -> Non
         )
 
 
-def test_validate_rejects_bad_date_range(m_no_entities: DayMatcher) -> None:
+def test_validate_rejects_bad_date_range(m_no_entities: DayCondition) -> None:
     with pytest.raises(ValueError):
         m_no_entities.validate_predicate(
             {
@@ -356,7 +356,7 @@ def test_validate_rejects_bad_date_range(m_no_entities: DayMatcher) -> None:
         )
 
 
-def test_validate_workday_item_requires_sensor(m_no_entities: DayMatcher) -> None:
+def test_validate_workday_item_requires_sensor(m_no_entities: DayCondition) -> None:
     with pytest.raises(ValueError, match="workday_sensor"):
         m_no_entities.validate_predicate(
             {
@@ -366,7 +366,7 @@ def test_validate_workday_item_requires_sensor(m_no_entities: DayMatcher) -> Non
         )
 
 
-def test_validate_first_workday_requires_calendar(m_no_entities: DayMatcher) -> None:
+def test_validate_first_workday_requires_calendar(m_no_entities: DayCondition) -> None:
     with pytest.raises(ValueError, match="workday_calendar"):
         m_no_entities.validate_predicate(
             {
@@ -376,7 +376,7 @@ def test_validate_first_workday_requires_calendar(m_no_entities: DayMatcher) -> 
         )
 
 
-def test_validate_with_entities_accepts_workday_items(m_with_entities: DayMatcher) -> None:
+def test_validate_with_entities_accepts_workday_items(m_with_entities: DayCondition) -> None:
     m_with_entities.validate_predicate(
         {
             "include": [{"kind": "workday"}, {"kind": "first_workday"}],
@@ -385,45 +385,45 @@ def test_validate_with_entities_accepts_workday_items(m_with_entities: DayMatche
     )
 
 
-def _matcher_with_workday_sensor(sensor: str | None) -> DayMatcher:
+def _condition_with_workday_sensor(sensor: str | None) -> DayCondition:
     hass = MagicMock()
     store = MagicMock()
-    store.get_matcher_config.return_value = {
+    store.get_condition_config.return_value = {
         "workday_sensor": sensor,
         "workday_calendar": None,
     }
     hass.data = {DOMAIN: {DATA_STORE: store}}
-    return DayMatcher(hass=hass)
+    return DayCondition(hass=hass)
 
 
 def test_trigger_deps_always_sets_date_rollover() -> None:
-    m = _matcher_with_workday_sensor(None)
+    m = _condition_with_workday_sensor(None)
     spec = m.trigger_deps({"include": [{"kind": "weekday", "days": [0, 1]}]})
     assert spec.date_rollover is True
     assert spec.entities == frozenset()
 
 
 def test_trigger_deps_watches_workday_sensor_when_used() -> None:
-    m = _matcher_with_workday_sensor("binary_sensor.workday")
+    m = _condition_with_workday_sensor("binary_sensor.workday")
     spec = m.trigger_deps({"include": [{"kind": "workday"}]})
     assert spec.date_rollover is True
     assert spec.entities == frozenset({"binary_sensor.workday"})
 
 
 def test_trigger_deps_ignores_workday_sensor_when_not_used() -> None:
-    m = _matcher_with_workday_sensor("binary_sensor.workday")
+    m = _condition_with_workday_sensor("binary_sensor.workday")
     spec = m.trigger_deps({"include": [{"kind": "weekday", "days": [5, 6]}]})
     assert spec.entities == frozenset()
 
 
 def test_trigger_deps_watches_workday_sensor_in_exclude() -> None:
-    m = _matcher_with_workday_sensor("binary_sensor.workday")
+    m = _condition_with_workday_sensor("binary_sensor.workday")
     spec = m.trigger_deps({"exclude": [{"kind": "holiday"}]})
     assert spec.entities == frozenset({"binary_sensor.workday"})
 
 
 def test_trigger_deps_tolerates_garbage_input() -> None:
-    m = _matcher_with_workday_sensor("binary_sensor.workday")
+    m = _condition_with_workday_sensor("binary_sensor.workday")
     for bad in [
         None,
         "string",

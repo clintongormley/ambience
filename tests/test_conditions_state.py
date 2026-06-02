@@ -1,4 +1,4 @@
-"""StateMatcher — boolean expression over entity states + optional `for`."""
+"""StateCondition — boolean expression over entity states + optional `for`."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.ambience.matchers.state import StateMatcher, StateSnapshot
+from custom_components.ambience.conditions.state import StateCondition, StateSnapshot
 
 
 def _snap(
@@ -32,7 +32,7 @@ def _snap(
 
 
 def test_protocol_fields() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     assert m.name == "state"
     assert not hasattr(m, "toggleable")
     assert m.input == "state_predicate"
@@ -42,32 +42,32 @@ def test_protocol_fields() -> None:
 
 
 def test_matches_none_predicate_is_true() -> None:
-    assert StateMatcher().matches(None, _snap()) is True
+    assert StateCondition().matches(None, _snap()) is True
 
 
 def test_matches_atom_is_membership() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap({"person.bob": ("home", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
     pred = {"kind": "is", "entity_id": "person.bob", "states": ["home", "work"]}
     assert m.matches(pred, snap) is True
 
 
 def test_matches_atom_not_in() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap({"person.bob": ("away", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
     pred = {"kind": "is", "entity_id": "person.bob", "states": ["home", "work"]}
     assert m.matches(pred, snap) is False
 
 
 def test_matches_atom_is_not_negates() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap({"person.bob": ("away", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
     pred = {"kind": "is_not", "entity_id": "person.bob", "states": ["home"]}
     assert m.matches(pred, snap) is True
 
 
 def test_matches_atom_missing_entity_is_false() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     pred = {"kind": "is", "entity_id": "person.ghost", "states": ["home"]}
     assert m.matches(pred, _snap()) is False
     pred2 = {"kind": "is_not", "entity_id": "person.ghost", "states": ["home"]}
@@ -75,7 +75,7 @@ def test_matches_atom_missing_entity_is_false() -> None:
 
 
 def test_matches_atom_for_duration_met() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
     snap = _snap(
         {"person.bob": ("home", now - timedelta(minutes=10))},
@@ -91,7 +91,7 @@ def test_matches_atom_for_duration_met() -> None:
 
 
 def test_matches_atom_for_duration_not_yet() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
     snap = _snap(
         {"person.bob": ("home", now - timedelta(minutes=1))},
@@ -111,7 +111,7 @@ def test_state_mode_for_clocks_on_last_changed_not_last_updated() -> None:
     Entity has been "home" for 10m (last_changed), but an attribute-only
     refresh bumped last_updated to 1m ago. A `for: 5m` state atom must still
     match — the state string never changed."""
-    m = StateMatcher()
+    m = StateCondition()
     now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
     snap = _snap(
         {
@@ -137,7 +137,7 @@ def test_attribute_mode_for_clocks_on_last_updated() -> None:
     attribute change resets its own clock. Same timestamps as the state-mode
     test, but a `for: 5m` attribute atom must NOT match — only 1m since the
     attribute last changed (last_updated)."""
-    m = StateMatcher()
+    m = StateCondition()
     now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
     snap = _snap(
         {
@@ -161,7 +161,7 @@ def test_attribute_mode_for_clocks_on_last_updated() -> None:
 
 
 def test_matches_and_group() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap(
         {
             "person.bob": ("home", datetime(2026, 5, 25, 11, 0, tzinfo=UTC)),
@@ -181,7 +181,7 @@ def test_matches_and_group() -> None:
 
 
 def test_matches_or_group() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap({"person.bob": ("away", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
     pred = {
         "kind": "or",
@@ -194,7 +194,7 @@ def test_matches_or_group() -> None:
 
 
 def test_matches_not_wrapper() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap({"person.bob": ("home", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
     pred = {"kind": "not", "item": {"kind": "is", "entity_id": "person.bob", "states": ["home"]}}
     assert m.matches(pred, snap) is False
@@ -204,7 +204,7 @@ def test_matches_not_wrapper() -> None:
 
 def test_matches_nested_expression() -> None:
     """(A is home AND B is on) OR NOT C is open"""
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap(
         {
             "person.bob": ("home", datetime(2026, 5, 25, 11, 0, tzinfo=UTC)),
@@ -229,7 +229,7 @@ def test_matches_nested_expression() -> None:
 
 
 def test_matches_unknown_kind_is_false() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     assert m.matches({"kind": "xor", "items": []}, _snap()) is False
     assert m.matches({"not_a_dict": True}, _snap()) is False
     assert m.matches(42, _snap()) is False
@@ -238,7 +238,7 @@ def test_matches_unknown_kind_is_false() -> None:
 async def test_snapshot_captures_all_states(hass: HomeAssistant) -> None:
     hass.states.async_set("person.bob", "home", {})
     hass.states.async_set("binary_sensor.door", "on", {})
-    snap = await StateMatcher().snapshot(hass)
+    snap = await StateCondition().snapshot(hass)
     assert "person.bob" in snap.states
     assert snap.states["person.bob"][0] == "home"
     assert "binary_sensor.door" in snap.states
@@ -246,23 +246,23 @@ async def test_snapshot_captures_all_states(hass: HomeAssistant) -> None:
 
 
 def test_describe_returns_none() -> None:
-    assert StateMatcher().describe(_snap()) is None
+    assert StateCondition().describe(_snap()) is None
 
 
 # --- validate_predicate ------------------------------------------------
 
 
 def test_validate_accepts_none() -> None:
-    StateMatcher().validate_predicate(None)
+    StateCondition().validate_predicate(None)
 
 
 def test_validate_rejects_non_dict() -> None:
     with pytest.raises(ValueError):
-        StateMatcher().validate_predicate(42)
+        StateCondition().validate_predicate(42)
 
 
 def test_validate_atom_requires_entity_id() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     with pytest.raises(ValueError, match="entity_id"):
         m.validate_predicate({"kind": "is", "states": ["on"]})
     with pytest.raises(ValueError, match="entity_id"):
@@ -270,7 +270,7 @@ def test_validate_atom_requires_entity_id() -> None:
 
 
 def test_validate_atom_requires_non_empty_states() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     with pytest.raises(ValueError, match="states"):
         m.validate_predicate({"kind": "is", "entity_id": "x", "states": []})
     with pytest.raises(ValueError, match="states"):
@@ -280,7 +280,7 @@ def test_validate_atom_requires_non_empty_states() -> None:
 
 
 def test_validate_atom_for_is_optional() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"]})
     m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"], "for": None})
     m.validate_predicate(
@@ -289,7 +289,7 @@ def test_validate_atom_for_is_optional() -> None:
 
 
 def test_validate_atom_for_rejects_negative_or_non_int() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     with pytest.raises(ValueError, match="for"):
         m.validate_predicate(
             {"kind": "is", "entity_id": "x", "states": ["on"], "for": {"h": -1, "m": 0, "s": 0}}
@@ -301,7 +301,7 @@ def test_validate_atom_for_rejects_negative_or_non_int() -> None:
 
 
 def test_validate_group_requires_non_empty_items() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     with pytest.raises(ValueError, match="items"):
         m.validate_predicate({"kind": "and", "items": []})
     with pytest.raises(ValueError, match="items"):
@@ -309,19 +309,19 @@ def test_validate_group_requires_non_empty_items() -> None:
 
 
 def test_validate_not_requires_item() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     with pytest.raises(ValueError, match="item"):
         m.validate_predicate({"kind": "not"})
 
 
 def test_validate_unknown_kind() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     with pytest.raises(ValueError, match="kind"):
         m.validate_predicate({"kind": "xor", "items": []})
 
 
 def test_validate_recurses_into_groups_and_not() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     bad = {
         "kind": "and",
         "items": [
@@ -333,7 +333,7 @@ def test_validate_recurses_into_groups_and_not() -> None:
 
 
 def test_validate_accepts_realistic_nested() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     pred = {
         "kind": "or",
         "items": [
@@ -359,7 +359,7 @@ def test_validate_accepts_realistic_nested() -> None:
 
 
 def test_order_key_uses_first_atom_entity_id() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     assert m.order_key({"kind": "is", "entity_id": "x", "states": ["on"]}) == "x"
     nested = {
         "kind": "or",
@@ -376,13 +376,13 @@ def test_order_key_uses_first_atom_entity_id() -> None:
 
 
 def test_order_key_handles_not_wrapper() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     expr = {"kind": "not", "item": {"kind": "is", "entity_id": "cover.c", "states": ["open"]}}
     assert m.order_key(expr) == "cover.c"
 
 
 def test_order_key_none_predicate_returns_string() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     assert isinstance(m.order_key(None), str)
 
 
@@ -391,7 +391,7 @@ def test_order_key_none_predicate_returns_string() -> None:
 
 def test_matches_atom_compares_attribute_when_set() -> None:
     """`attribute` swaps the LHS from entity.state to entity.attributes[attr]."""
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap(
         {"media_player.x": ("playing", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
         attributes={"media_player.x": {"source": "Spotify"}},
@@ -407,7 +407,7 @@ def test_matches_atom_compares_attribute_when_set() -> None:
 
 
 def test_matches_atom_attribute_not_matching() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap(
         {"media_player.x": ("playing", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
         attributes={"media_player.x": {"source": "Radio"}},
@@ -422,7 +422,7 @@ def test_matches_atom_attribute_not_matching() -> None:
 
 
 def test_matches_atom_attribute_is_not_negates() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap(
         {"media_player.x": ("playing", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
         attributes={"media_player.x": {"source": "Radio"}},
@@ -438,7 +438,7 @@ def test_matches_atom_attribute_is_not_negates() -> None:
 
 def test_matches_atom_attribute_missing_returns_false() -> None:
     """An entity that doesn't expose the requested attribute can't match."""
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap(
         {"media_player.x": ("playing", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
         attributes={"media_player.x": {"source": "Spotify"}},
@@ -457,7 +457,7 @@ def test_matches_atom_attribute_missing_returns_false() -> None:
 
 def test_matches_atom_attribute_string_coerced() -> None:
     """Numeric / bool attribute values get stringified before comparison."""
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap(
         {"light.x": ("on", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
         attributes={"light.x": {"brightness": 255, "is_dimmable": True}},
@@ -487,7 +487,7 @@ def test_matches_atom_attribute_string_coerced() -> None:
 def test_matches_atom_attribute_ignores_unavailable_state() -> None:
     """If the entity's state is unavailable, attribute comparison still fails
     — we treat the whole entity as unobservable."""
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap(
         {"sensor.x": ("unavailable", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
         attributes={"sensor.x": {"source": "Spotify"}},
@@ -503,7 +503,7 @@ def test_matches_atom_attribute_ignores_unavailable_state() -> None:
 
 async def test_snapshot_captures_entity_attributes(hass) -> None:
     hass.states.async_set("media_player.x", "playing", {"source": "Spotify", "volume_level": 0.5})
-    snap = await StateMatcher().snapshot(hass)
+    snap = await StateCondition().snapshot(hass)
     assert snap.attributes["media_player.x"]["source"] == "Spotify"
     assert snap.attributes["media_player.x"]["volume_level"] == 0.5
 
@@ -524,14 +524,14 @@ async def test_snapshot_captures_both_last_changed_and_last_updated(hass) -> Non
     assert s2.last_updated > ts1
     assert s2.last_changed == s1.last_changed
 
-    snap = await StateMatcher().snapshot(hass)
+    snap = await StateCondition().snapshot(hass)
     _state, captured_changed, captured_updated = snap.states["media_player.x"]
     assert captured_changed == s2.last_changed, "snapshot must capture last_changed"
     assert captured_updated == s2.last_updated, "snapshot must capture last_updated"
 
 
 def test_validate_atom_attribute_is_optional() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     # Without attribute (existing behavior)
     m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on"]})
     # With attribute = None (explicit)
@@ -543,7 +543,7 @@ def test_validate_atom_attribute_is_optional() -> None:
 
 
 def test_validate_atom_attribute_rejects_non_string() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     with pytest.raises(ValueError, match="attribute"):
         m.validate_predicate({"kind": "is", "entity_id": "x", "attribute": 42, "states": ["on"]})
     with pytest.raises(ValueError, match="attribute"):
@@ -568,14 +568,14 @@ def test_validate_atom_attribute_rejects_non_string() -> None:
     ],
 )
 def test_matches_numeric_ops_on_state(kind, value, threshold, expected) -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap({"sensor.temp": (value, datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
     pred = {"kind": kind, "entity_id": "sensor.temp", "states": [threshold]}
     assert m.matches(pred, snap) is expected
 
 
 def test_matches_numeric_op_on_attribute() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap(
         {"light.x": ("on", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))},
         attributes={"light.x": {"brightness": 200}},
@@ -591,21 +591,21 @@ def test_matches_numeric_op_on_attribute() -> None:
 
 def test_matches_numeric_op_unparseable_value_is_false() -> None:
     """A non-numeric state can't satisfy a numeric comparison."""
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap({"sensor.x": ("foo", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
     pred = {"kind": ">", "entity_id": "sensor.x", "states": ["5"]}
     assert m.matches(pred, snap) is False
 
 
 def test_matches_numeric_op_missing_threshold_is_false() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     snap = _snap({"sensor.x": ("10", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
     pred = {"kind": ">", "entity_id": "sensor.x", "states": []}
     assert m.matches(pred, snap) is False
 
 
 def test_validate_numeric_op_requires_one_numeric_value() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     # Happy path
     m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["10"]})
     m.validate_predicate({"kind": "<=", "entity_id": "x", "states": ["3.14"]})
@@ -620,13 +620,13 @@ def test_validate_numeric_op_requires_one_numeric_value() -> None:
 
 
 def test_validate_numeric_op_accepts_negative_and_decimals() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["-3.5"]})
     m.validate_predicate({"kind": ">=", "entity_id": "x", "states": ["0"]})
 
 
 def test_order_key_supports_numeric_kinds() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     assert m.order_key({"kind": ">", "entity_id": "x", "states": ["5"]}) == "x"
 
 
@@ -634,7 +634,7 @@ def test_order_key_supports_numeric_kinds() -> None:
 
 
 def test_trigger_deps_collects_entities_and_durations() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     pred = {
         "kind": "and",
         "items": [
@@ -662,11 +662,11 @@ def test_trigger_deps_collects_entities_and_durations() -> None:
 def test_trigger_deps_none_predicate_is_empty() -> None:
     from custom_components.ambience.triggers import EMPTY
 
-    assert StateMatcher().trigger_deps(None) == EMPTY
+    assert StateCondition().trigger_deps(None) == EMPTY
 
 
 def test_trigger_deps_collects_from_or_group() -> None:
-    m = StateMatcher()
+    m = StateCondition()
     pred = {
         "kind": "or",
         "items": [

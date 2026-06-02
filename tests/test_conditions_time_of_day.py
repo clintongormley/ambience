@@ -1,4 +1,4 @@
-"""TimeOfDayMatcher — structured JSON predicate format."""
+"""TimeOfDayCondition — structured JSON predicate format."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from custom_components.ambience.matchers.time_of_day import (
-    TimeOfDayMatcher,
+from custom_components.ambience.conditions.time_of_day import (
+    TimeOfDayCondition,
     TimeOfDaySnapshot,
 )
 from custom_components.ambience.periods import BUILTIN_PERIODS
@@ -44,11 +44,11 @@ def _build_snapshot(now: datetime, **overrides: datetime) -> TimeOfDaySnapshot:
     return TimeOfDaySnapshot(**defaults)
 
 
-def _matcher(periods: dict[str, dict[str, Any]] | None = None) -> TimeOfDayMatcher:
-    """Build a matcher whose period_lookup returns the given periods dict
+def _condition(periods: dict[str, dict[str, Any]] | None = None) -> TimeOfDayCondition:
+    """Build a condition whose period_lookup returns the given periods dict
     (defaults to BUILTIN_PERIODS)."""
     effective = periods if periods is not None else dict(BUILTIN_PERIODS)
-    return TimeOfDayMatcher(period_lookup=lambda: effective)
+    return TimeOfDayCondition(period_lookup=lambda: effective)
 
 
 # ── snapshot ────────────────────────────────────────────────────────────────
@@ -73,14 +73,14 @@ async def test_snapshot_returns_today_anchors(hass: HomeAssistant) -> None:
             "next_midnight": next_midnight,
         },
     )
-    snap = await _matcher().snapshot(hass)
+    snap = await _condition().snapshot(hass)
     for field in ("now", "sunrise", "sunset", "dawn", "dusk", "noon", "midnight"):
         assert getattr(snap, field).tzinfo is not None
 
 
 async def test_snapshot_raises_when_sun_unavailable(hass: HomeAssistant) -> None:
     with pytest.raises(RuntimeError, match="sun.sun"):
-        await _matcher().snapshot(hass)
+        await _condition().snapshot(hass)
 
 
 async def test_snapshot_raises_when_attribute_missing(hass: HomeAssistant) -> None:
@@ -96,7 +96,7 @@ async def test_snapshot_raises_when_attribute_missing(hass: HomeAssistant) -> No
         },
     )
     with pytest.raises(RuntimeError, match="next_rising"):
-        await _matcher().snapshot(hass)
+        await _condition().snapshot(hass)
 
 
 # ── matches: explicit ranges ────────────────────────────────────────────────
@@ -116,16 +116,16 @@ def _range(from_ep: dict, to_ep: dict) -> dict:
 
 def test_matches_absolute_range_inside() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 17, 0, tzinfo=UTC))
-    assert _matcher().matches(_range(_time(16, 0), _time(18, 30)), snap) is True
+    assert _condition().matches(_range(_time(16, 0), _time(18, 30)), snap) is True
 
 
 def test_matches_absolute_range_outside() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 15, 0, tzinfo=UTC))
-    assert _matcher().matches(_range(_time(16, 0), _time(18, 30)), snap) is False
+    assert _condition().matches(_range(_time(16, 0), _time(18, 30)), snap) is False
 
 
 def test_matches_absolute_range_wraps_midnight() -> None:
-    m = _matcher()
+    m = _condition()
     pred = _range(_time(22, 0), _time(2, 0))
     assert m.matches(pred, _build_snapshot(datetime(2026, 5, 13, 1, 0, tzinfo=UTC))) is True
     assert m.matches(pred, _build_snapshot(datetime(2026, 5, 13, 3, 0, tzinfo=UTC))) is False
@@ -133,22 +133,22 @@ def test_matches_absolute_range_wraps_midnight() -> None:
 
 def test_matches_sun_relative_range_inside() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 18, 15, tzinfo=UTC))
-    assert _matcher().matches(_range(_sun("sunset"), _sun("dusk")), snap) is True
+    assert _condition().matches(_range(_sun("sunset"), _sun("dusk")), snap) is True
 
 
 def test_matches_sun_relative_range_outside() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 19, 0, tzinfo=UTC))
-    assert _matcher().matches(_range(_sun("sunset"), _sun("dusk")), snap) is False
+    assert _condition().matches(_range(_sun("sunset"), _sun("dusk")), snap) is False
 
 
 def test_matches_sun_relative_with_negative_offset() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 17, 45, tzinfo=UTC))
-    assert _matcher().matches(_range(_sun("sunset", -30), _time(22, 0)), snap) is True
+    assert _condition().matches(_range(_sun("sunset", -30), _time(22, 0)), snap) is True
 
 
 def test_matches_sun_relative_with_positive_offset_hours() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 14, 0, tzinfo=UTC))
-    assert _matcher().matches(_range(_sun("noon", 60), _sun("sunset")), snap) is True
+    assert _condition().matches(_range(_sun("noon", 60), _sun("sunset")), snap) is True
 
 
 # ── matches: named periods ─────────────────────────────────────────────────
@@ -181,25 +181,25 @@ def test_matches_sun_relative_with_positive_offset_hours() -> None:
 )
 def test_matches_named_period(period: str, now_hour: int, now_minute: int, expected: bool) -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, now_hour, now_minute, tzinfo=UTC))
-    assert _matcher().matches({"period": period}, snap) is expected, period
+    assert _condition().matches({"period": period}, snap) is expected, period
 
 
 def test_matches_custom_period_via_lookup() -> None:
     custom = {**BUILTIN_PERIODS, "wind_down": _range(_time(20, 0), _time(22, 0))}
     snap = _build_snapshot(datetime(2026, 5, 13, 21, 0, tzinfo=UTC))
-    assert _matcher(custom).matches({"period": "wind_down"}, snap) is True
+    assert _condition(custom).matches({"period": "wind_down"}, snap) is True
 
 
 def test_matches_custom_shadows_builtin() -> None:
     custom = {**BUILTIN_PERIODS, "afternoon": _range(_time(13, 0), _time(17, 0))}
     snap = _build_snapshot(datetime(2026, 5, 13, 17, 15, tzinfo=UTC))
-    assert _matcher(custom).matches({"period": "afternoon"}, snap) is False
+    assert _condition(custom).matches({"period": "afternoon"}, snap) is False
 
 
 def test_matches_missing_period_raises_loudly() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
     with pytest.raises(ValueError, match="unknown time_of_day period"):
-        _matcher().matches({"period": "nonexistent"}, snap)
+        _condition().matches({"period": "nonexistent"}, snap)
 
 
 # ── matches: OR lists ──────────────────────────────────────────────────────
@@ -207,18 +207,18 @@ def test_matches_missing_period_raises_loudly() -> None:
 
 def test_matches_list_any() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 14, 0, tzinfo=UTC))
-    assert _matcher().matches([{"period": "evening"}, {"period": "afternoon"}], snap) is True
+    assert _condition().matches([{"period": "evening"}, {"period": "afternoon"}], snap) is True
 
 
 def test_matches_list_none() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 10, 0, tzinfo=UTC))
-    assert _matcher().matches([{"period": "evening"}, {"period": "afternoon"}], snap) is False
+    assert _condition().matches([{"period": "evening"}, {"period": "afternoon"}], snap) is False
 
 
 def test_matches_list_mixed_period_and_range() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 17, 0, tzinfo=UTC))
     pred = [{"period": "evening"}, _range(_time(16, 0), _time(18, 30))]
-    assert _matcher().matches(pred, snap) is True
+    assert _condition().matches(pred, snap) is True
 
 
 # ── validate_predicate ─────────────────────────────────────────────────────
@@ -235,7 +235,7 @@ def test_matches_list_mixed_period_and_range() -> None:
     ],
 )
 def test_validate_predicate_accepts_valid(pred: Any) -> None:
-    _matcher().validate_predicate(pred)
+    _condition().validate_predicate(pred)
 
 
 @pytest.mark.parametrize(
@@ -255,12 +255,12 @@ def test_validate_predicate_accepts_valid(pred: Any) -> None:
 )
 def test_validate_predicate_rejects_invalid(pred: Any) -> None:
     with pytest.raises(ValueError):
-        _matcher().validate_predicate(pred)
+        _condition().validate_predicate(pred)
 
 
 def test_validate_predicate_rejects_missing_period() -> None:
     with pytest.raises(ValueError, match="unknown time_of_day period"):
-        _matcher().validate_predicate({"period": "nonexistent"})
+        _condition().validate_predicate({"period": "nonexistent"})
 
 
 # ── describe ───────────────────────────────────────────────────────────────
@@ -268,7 +268,7 @@ def test_validate_predicate_rejects_missing_period() -> None:
 
 def test_describe_returns_named_period_when_matching() -> None:
     snap = _build_snapshot(datetime(2026, 5, 13, 14, 0, tzinfo=UTC))
-    assert _matcher().describe(snap) == "afternoon"
+    assert _condition().describe(snap) == "afternoon"
 
 
 def test_describe_returns_none_if_no_period_matches() -> None:
@@ -277,14 +277,14 @@ def test_describe_returns_none_if_no_period_matches() -> None:
     # outside of — here a single evening window with now at midday.
     only_evening = {"evening": _range(_sun("sunset"), _sun("dusk"))}
     snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
-    assert _matcher(only_evening).describe(snap) is None
+    assert _condition(only_evening).describe(snap) is None
 
 
 # ── contains ───────────────────────────────────────────────────────────────
 
 
 def test_contains_nested_range() -> None:
-    m = _matcher()
+    m = _condition()
     wide = _range(_time(10, 0), _time(14, 0))
     narrow = _range(_time(12, 0), _time(13, 0))
     assert m.contains(wide, narrow) is True
@@ -292,45 +292,45 @@ def test_contains_nested_range() -> None:
 
 
 def test_contains_equal_range() -> None:
-    m = _matcher()
+    m = _condition()
     rng = _range(_time(10, 0), _time(14, 0))
     assert m.contains(rng, rng) is True
 
 
 def test_contains_disjoint() -> None:
-    m = _matcher()
+    m = _condition()
     assert (
         m.contains(_range(_time(8, 0), _time(10, 0)), _range(_time(18, 0), _time(19, 0))) is False
     )
 
 
 def test_contains_partial_overlap_neither_contains() -> None:
-    m = _matcher()
+    m = _condition()
     assert (
         m.contains(_range(_time(10, 0), _time(12, 0)), _range(_time(11, 0), _time(13, 0))) is False
     )
 
 
 def test_contains_wrap_midnight() -> None:
-    m = _matcher()
+    m = _condition()
     assert m.contains(_range(_time(22, 0), _time(2, 0)), _range(_time(23, 0), _time(1, 0))) is True
     assert m.contains(_range(_time(23, 0), _time(1, 0)), _range(_time(22, 0), _time(2, 0))) is False
 
 
 def test_contains_named_period() -> None:
-    m = _matcher()
+    m = _condition()
     assert m.contains({"period": "daytime"}, {"period": "afternoon"}) is True
 
 
 def test_contains_list_predicate_union() -> None:
-    m = _matcher()
+    m = _condition()
     outer = [_range(_time(10, 0), _time(12, 0)), _range(_time(11, 0), _time(14, 0))]
     inner = _range(_time(11, 30), _time(13, 0))
     assert m.contains(outer, inner) is True
 
 
 def test_contains_full_day_predicate() -> None:
-    m = _matcher()
+    m = _condition()
     full = _range(_time(0, 0), _time(0, 0))
     assert m.contains(full, _range(_time(12, 0), _time(13, 0))) is True
     assert m.contains(_range(_time(12, 0), _time(13, 0)), full) is False
@@ -340,38 +340,38 @@ def test_contains_full_day_predicate() -> None:
 
 
 def test_order_key_is_start_minute_of_day() -> None:
-    m = _matcher()
+    m = _condition()
     assert m.order_key(_range(_time(8, 0), _time(10, 0))) == 480
     assert m.order_key(_range(_time(18, 0), _time(19, 0))) == 1080
 
 
 def test_order_key_list_takes_earliest_start() -> None:
-    m = _matcher()
+    m = _condition()
     pred = [_range(_time(18, 0), _time(19, 0)), _range(_time(8, 0), _time(10, 0))]
     assert m.order_key(pred) == 480
 
 
 def test_order_key_named_period() -> None:
-    assert _matcher().order_key({"period": "nighttime"}) == 1110.0
+    assert _condition().order_key({"period": "nighttime"}) == 1110.0
 
 
-# ── matcher metadata ───────────────────────────────────────────────────────
+# ── condition metadata ───────────────────────────────────────────────────────
 
 
 def test_input_attribute_signals_dedicated_widget() -> None:
-    assert _matcher().input == "time_of_day"
+    assert _condition().input == "time_of_day"
 
 
-def test_matcher_exposes_description() -> None:
-    assert _matcher().description.strip() != ""
+def test_condition_exposes_description() -> None:
+    assert _condition().description.strip() != ""
 
 
 def test_priority() -> None:
-    assert _matcher().priority == 800
+    assert _condition().priority == 800
 
 
 def test_trigger_deps_absolute_range_yields_clock_times() -> None:
-    m = TimeOfDayMatcher()
+    m = TimeOfDayCondition()
     pred = {
         "from": {"kind": "time", "hh": 22, "mm": 30},
         "to": {"kind": "time", "hh": 6, "mm": 0},
@@ -383,7 +383,7 @@ def test_trigger_deps_absolute_range_yields_clock_times() -> None:
 
 
 def test_trigger_deps_sun_range_yields_sun_events() -> None:
-    m = TimeOfDayMatcher()
+    m = TimeOfDayCondition()
     pred = {
         "from": {"kind": "sun", "anchor": "sunrise", "offset_min": -30},
         "to": {"kind": "sun", "anchor": "sunset", "offset_min": 0},
@@ -400,14 +400,14 @@ def test_trigger_deps_named_period_resolves_via_lookup() -> None:
             "to": {"kind": "time", "hh": 23, "mm": 0},
         }
     }
-    m = TimeOfDayMatcher(period_lookup=lambda: periods)
+    m = TimeOfDayCondition(period_lookup=lambda: periods)
     spec = m.trigger_deps({"period": "evening"})
     assert spec.sun_events == frozenset({("sunset", 0)})
     assert spec.clock_times == frozenset({(23, 0)})
 
 
 def test_trigger_deps_list_merges_all_items() -> None:
-    m = TimeOfDayMatcher()
+    m = TimeOfDayCondition()
     pred = [
         {"from": {"kind": "time", "hh": 7, "mm": 0}, "to": {"kind": "time", "hh": 9, "mm": 0}},
         {"from": {"kind": "time", "hh": 18, "mm": 0}, "to": {"kind": "time", "hh": 20, "mm": 0}},
@@ -418,7 +418,7 @@ def test_trigger_deps_list_merges_all_items() -> None:
 
 
 def test_trigger_deps_tolerates_garbage_input() -> None:
-    m = TimeOfDayMatcher()
+    m = TimeOfDayCondition()
     bad_inputs: list[Any] = [
         "string",
         42,
@@ -436,7 +436,7 @@ def test_trigger_deps_tolerates_garbage_input() -> None:
 
 
 def test_trigger_deps_skips_out_of_range_and_unknown_anchor() -> None:
-    m = TimeOfDayMatcher()
+    m = TimeOfDayCondition()
     pred = {
         "from": {"kind": "time", "hh": 99, "mm": 0},
         "to": {"kind": "sun", "anchor": "nope", "offset_min": 0},
@@ -447,7 +447,7 @@ def test_trigger_deps_skips_out_of_range_and_unknown_anchor() -> None:
 
 
 def test_trigger_deps_rejects_bool_time_and_offset() -> None:
-    m = TimeOfDayMatcher()
+    m = TimeOfDayCondition()
     pred = {
         "from": {"kind": "time", "hh": True, "mm": False},
         "to": {"kind": "sun", "anchor": "sunset", "offset_min": True},
@@ -463,12 +463,12 @@ def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:
     means 16:00Z. If a non-UTC tz is configured, the resolved start would
     be 16:00 in that tz."""
     # Test that the resolved time is in the local tz (UTC in tests by default)
-    from custom_components.ambience.matchers.time_of_day import TimeOfDayMatcher
+    from custom_components.ambience.conditions.time_of_day import TimeOfDayCondition
 
-    matcher = TimeOfDayMatcher(period_lookup=lambda: {})
+    condition = TimeOfDayCondition(period_lookup=lambda: {})
     snap = _build_snapshot(datetime(2026, 5, 13, 17, 0, tzinfo=UTC))
     assert (
-        matcher.matches(
+        condition.matches(
             {
                 "from": {"kind": "time", "hh": 16, "mm": 0},
                 "to": {"kind": "time", "hh": 18, "mm": 30},

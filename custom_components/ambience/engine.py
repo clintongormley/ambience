@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .protocols import Matcher
+from .protocols import Condition
 
 Rule = dict[str, Any]
 
@@ -24,7 +24,7 @@ def rule_enabled(rule: Rule) -> bool:
 class PredicateResult:
     """One predicate's evaluation within a rule."""
 
-    matcher_key: str
+    condition_key: str
     passed: bool
     detail: str | None = None
 
@@ -59,21 +59,21 @@ class Explanation:
 def evaluate_explained(
     rules: list[Rule],
     snapshots: dict[str, Any],
-    matchers: dict[str, Matcher],
+    conditions: dict[str, Condition],
     *,
     describe: bool = False,
 ) -> Explanation:
     """Evaluate `rules`, recording every predicate result and the winner.
 
     Same matching semantics as `resolve()`: a `when` key whose predicate is
-    None (or absent) is a wildcard; a matcher missing from `matchers`, or whose
+    None (or absent) is a wildcard; a condition missing from `conditions`, or whose
     snapshot is None, fails the rule; evaluation short-circuits on the first
     failing predicate and stops at the first matching rule.
 
     When `describe` is True, each successfully evaluated predicate's `detail`
-    is filled from the matcher's `describe(snapshot)` (extra cost — callers
+    is filled from the condition's `describe(snapshot)` (extra cost — callers
     pass True only when tracing). Predicates that cannot be evaluated (missing
-    matcher or None snapshot) always carry ``detail="unavailable"`` regardless
+    condition or None snapshot) always carry ``detail="unavailable"`` regardless
     of this flag.
     """
     rule_evals: list[RuleEval] = []
@@ -93,14 +93,14 @@ def evaluate_explained(
         for key, predicate in when.items():
             if predicate is None:
                 continue
-            matcher = matchers.get(key)
+            condition = conditions.get(key)
             snap = snapshots.get(key)
-            if matcher is None or snap is None:
+            if condition is None or snap is None:
                 predicates.append(PredicateResult(key, False, "unavailable"))
                 ok = False
                 break
-            passed = bool(matcher.matches(predicate, snap))
-            detail = matcher.describe(snap) if describe else None
+            passed = bool(condition.matches(predicate, snap))
+            detail = condition.describe(snap) if describe else None
             predicates.append(PredicateResult(key, passed, detail))
             if not passed:
                 ok = False
@@ -114,14 +114,14 @@ def evaluate_explained(
 def resolve(
     rules: list[Rule],
     snapshots: dict[str, Any],
-    matchers: dict[str, Matcher],
+    conditions: dict[str, Condition],
 ) -> tuple[int, Rule] | None:
     """Return (index, rule) for the first matching rule, or None.
 
     Thin derivation over `evaluate_explained()` so the matching logic has a
     single source of truth shared with traces.
     """
-    explanation = evaluate_explained(rules, snapshots, matchers)
+    explanation = evaluate_explained(rules, snapshots, conditions)
     if explanation.winner_index is None:
         return None
     return explanation.winner_index, rules[explanation.winner_index]

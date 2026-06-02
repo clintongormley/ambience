@@ -1,4 +1,4 @@
-"""TemplateMatcher — evaluate a Jinja2 template (against HA state) to a boolean.
+"""TemplateCondition — evaluate a Jinja2 template (against HA state) to a boolean.
 
 The lightweight sibling of `script`: same "collect every distinct predicate
 across all scopes, pre-evaluate in snapshot(), pure dict lookup in matches()"
@@ -56,7 +56,7 @@ class TemplateSnapshot:
     deps: dict[str, TemplateDeps] = field(default_factory=dict)
 
 
-class TemplateMatcher:
+class TemplateCondition:
     """Matches by rendering a Jinja2 template against HA state to a boolean."""
 
     name = "template"

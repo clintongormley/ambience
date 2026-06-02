@@ -28,13 +28,21 @@ from .card_resources import (
     async_register_card_resource,
     async_unregister_card_resource,
 )
+from .conditions.day import DayCondition
+from .conditions.people import PeopleCondition
+from .conditions.script import ScriptCondition
+from .conditions.state import StateCondition
+from .conditions.sun import SunCondition
+from .conditions.template import TemplateCondition
+from .conditions.time_of_day import TimeOfDayCondition
+from .conditions.weather import WeatherCondition
 from .const import (
     CONF_SHOW_SIDEBAR_PANEL,
     DATA_CARD_RESOURCE_URL,
+    DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_LAST_APPLIED,
-    DATA_MATCHERS,
     DATA_PERIODS,
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
@@ -46,14 +54,6 @@ from .const import (
     SIGNAL_CONFIG_CHANGED,
 )
 from .exposed_actions import ExposedActionsStore
-from .matchers.day import DayMatcher
-from .matchers.people import PeopleMatcher
-from .matchers.script import ScriptMatcher
-from .matchers.state import StateMatcher
-from .matchers.sun import SunMatcher
-from .matchers.template import TemplateMatcher
-from .matchers.time_of_day import TimeOfDayMatcher
-from .matchers.weather import WeatherMatcher
 from .periods import PeriodStore
 from .service import async_apply_scene, clear_last_applied
 from .store import AmbienceStore
@@ -143,18 +143,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     period_store = PeriodStore(store)
     domain_data[DATA_PERIODS] = period_store
 
-    # The built-in matchers, keyed by their `name`. Matchers are an internal
+    # The built-in conditions, keyed by their `name`. Conditions are an internal
     # implementation detail — there is deliberately no registration hook for
-    # third-party matchers.
-    domain_data[DATA_MATCHERS] = {
-        "time_of_day": TimeOfDayMatcher(period_lookup=period_store.effective),
-        "day": DayMatcher(hass=hass),
-        "weather": WeatherMatcher(hass=hass),
-        "sun": SunMatcher(hass=hass),
-        "state": StateMatcher(hass=hass),
-        "people": PeopleMatcher(hass=hass),
-        "script": ScriptMatcher(hass=hass),
-        "template": TemplateMatcher(hass=hass),
+    # third-party conditions.
+    domain_data[DATA_CONDITIONS] = {
+        "time_of_day": TimeOfDayCondition(period_lookup=period_store.effective),
+        "day": DayCondition(hass=hass),
+        "weather": WeatherCondition(hass=hass),
+        "sun": SunCondition(hass=hass),
+        "state": StateCondition(hass=hass),
+        "people": PeopleCondition(hass=hass),
+        "script": ScriptCondition(hass=hass),
+        "template": TemplateCondition(hass=hass),
     }
 
     async def _handle_apply_scene(call: ServiceCall) -> None:

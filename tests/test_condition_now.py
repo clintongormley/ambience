@@ -1,14 +1,14 @@
-"""Matcher snapshots honour an injected `now` (for the what-if simulator)."""
+"""Condition snapshots honour an injected `now` (for the what-if simulator)."""
 
 from datetime import UTC, datetime
 
 import pytest
 from homeassistant.util import dt as dt_util
 
-from custom_components.ambience.matchers.day import DayMatcher
-from custom_components.ambience.matchers.people import PeopleMatcher
-from custom_components.ambience.matchers.state import StateMatcher
-from custom_components.ambience.matchers.time_of_day import TimeOfDayMatcher
+from custom_components.ambience.conditions.day import DayCondition
+from custom_components.ambience.conditions.people import PeopleCondition
+from custom_components.ambience.conditions.state import StateCondition
+from custom_components.ambience.conditions.time_of_day import TimeOfDayCondition
 
 FIXED = datetime(2026, 12, 21, 17, 30, tzinfo=UTC)
 
@@ -44,13 +44,13 @@ class _FakeHass:
 
 @pytest.mark.asyncio
 async def test_people_snapshot_uses_injected_now():
-    snap = await PeopleMatcher().snapshot(_FakeHass(), now=FIXED)
+    snap = await PeopleCondition().snapshot(_FakeHass(), now=FIXED)
     assert snap.now == FIXED
 
 
 @pytest.mark.asyncio
 async def test_state_snapshot_uses_injected_now():
-    snap = await StateMatcher().snapshot(_FakeHass(), now=FIXED)
+    snap = await StateCondition().snapshot(_FakeHass(), now=FIXED)
     assert snap.now == FIXED
 
 
@@ -69,7 +69,7 @@ async def test_time_of_day_snapshot_uses_injected_now():
             "next_dusk": "2026-12-21T16:30:00+00:00",
         },
     )
-    snap = await TimeOfDayMatcher().snapshot(_FakeHass({"sun.sun": sun}), now=FIXED)
+    snap = await TimeOfDayCondition().snapshot(_FakeHass({"sun.sun": sun}), now=FIXED)
     assert snap.now == FIXED
 
 
@@ -78,9 +78,9 @@ async def test_day_snapshot_uses_injected_now_local_date():
     from custom_components.ambience.const import DATA_STORE, DOMAIN
 
     class _FakeStore:
-        def get_matcher_config(self, name):
+        def get_condition_config(self, name):
             return {"workday_sensor": None, "workday_calendar": None}
 
     hass = _FakeHass(data={DOMAIN: {DATA_STORE: _FakeStore()}})
-    snap = await DayMatcher().snapshot(hass, now=FIXED)
+    snap = await DayCondition().snapshot(hass, now=FIXED)
     assert snap.today == dt_util.as_local(FIXED).date()

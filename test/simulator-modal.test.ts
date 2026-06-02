@@ -14,6 +14,7 @@ const INPUTS = {
     { kind: "entity", entity_id: "binary_sensor.motion", control: "select", options: ["on", "off"], live_state: "off", attributes: [] },
     { kind: "entity", entity_id: "sensor.count", control: "number", live_state: "2.0", attributes: [] },
     { kind: "entity", entity_id: "calendar.work", control: "select", options: ["off"], live_state: "off", attributes: [{ name: "description", control: "text", live_value: "today" }] },
+    { kind: "entity", entity_id: "event.boot", control: "text", live_state: null, attributes: [{ name: "event_type", control: "text", live_value: null }] },
     { kind: "verdict", matcher: "script", key: "k1", label: "script.holiday", entity_id: "script.holiday", live_value: false },
   ],
 };
@@ -84,6 +85,18 @@ describe("ambience-simulator-modal", () => {
     await new Promise((r) => setTimeout(r, 0));
     const args = vi.mocked(api.simulate).mock.calls[0];
     expect(args[4]["calendar.work"].attributes.description).toBe("xxx");
+  });
+
+  test("attribute-only override on a stateless entity is still sent (no state)", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector("input[data-attr='event.boot:event_type']");
+    input.value = "foo"; input.dispatchEvent(new Event("input"));
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    const override = vi.mocked(api.simulate).mock.calls[0][4]["event.boot"];
+    expect(override.attributes.event_type).toBe("foo");
+    expect(override.state).toBeUndefined(); // stateless → no state key
   });
 
   test("result renders via renderEvaluation", async () => {

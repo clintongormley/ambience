@@ -161,7 +161,7 @@ export class AmbienceSimulatorModal extends LitElement {
     for (const k of this._knobs) {
       if (k.kind !== "entity") continue;
       const v = this._values[k.entity_id];
-      if (!v || v.state === "") continue;
+      if (!v) continue;
       const attributes: Record<string, unknown> = {};
       for (const a of k.attributes) {
         const raw = v.attributes[a.name];
@@ -173,7 +173,14 @@ export class AmbienceSimulatorModal extends LitElement {
           attributes[a.name] = raw; // text attribute (e.g. description) sent as-is
         }
       }
-      overrides[k.entity_id] = { state: v.state, attributes };
+      // Send `state` only when set; an empty field falls back to the live state
+      // server-side, so an attribute-only override (incl. on a stateless entity)
+      // is still expressible. Skip entities with nothing to override.
+      const override: { state?: string; attributes: Record<string, unknown> } = { attributes };
+      if (v.state !== "") override.state = v.state;
+      if (override.state !== undefined || Object.keys(attributes).length > 0) {
+        overrides[k.entity_id] = override;
+      }
     }
     return overrides;
   }

@@ -158,15 +158,21 @@ def test_matches_sun_relative_with_positive_offset_hours() -> None:
     "period,now_hour,now_minute,expected",
     [
         ("morning", 7, 0, True),
-        ("morning", 6, 0, True),  # morning now starts at sunrise (06:00)
+        ("morning", 5, 30, True),  # morning starts at dawn (05:30), inclusive
+        ("morning", 5, 45, True),  # ...so dawn→sunrise is morning, not a gap
+        ("morning", 5, 0, False),  # before dawn is not morning
         ("morning", 11, 30, True),  # ...and runs to noon (12:00)
         ("morning", 12, 0, False),  # noon is exclusive end
         ("afternoon", 14, 0, True),
         ("afternoon", 18, 0, False),
-        ("afternoon", 12, 0, False),  # afternoon starts at noon+1m
+        ("afternoon", 12, 0, True),  # noon belongs to afternoon (inclusive start, no +1m)
         ("evening", 18, 15, True),
         ("evening", 19, 0, False),
+        ("daytime", 5, 30, True),  # daytime now starts at dawn (05:30), inclusive
+        ("daytime", 5, 45, True),  # ...so dawn→sunrise is daytime, not a gap
+        ("daytime", 5, 0, False),  # before dawn is not daytime
         ("daytime", 12, 0, True),
+        ("daytime", 18, 0, False),  # sunset is the exclusive end
         ("daytime", 19, 0, False),
         ("nighttime", 22, 0, True),
         ("nighttime", 4, 0, True),
@@ -266,16 +272,12 @@ def test_describe_returns_named_period_when_matching() -> None:
 
 
 def test_describe_returns_none_if_no_period_matches() -> None:
-    impossible = _build_snapshot(
-        now=datetime(2026, 5, 13, 12, 0, tzinfo=UTC),
-        sunrise=datetime(2026, 5, 13, 0, 0, tzinfo=UTC),
-        sunset=datetime(2026, 5, 13, 4, 0, tzinfo=UTC),
-        noon=datetime(2026, 5, 13, 2, 0, tzinfo=UTC),
-        midnight=datetime(2026, 5, 13, 0, 0, tzinfo=UTC),
-        dawn=datetime(2026, 5, 13, 6, 0, tzinfo=UTC),
-        dusk=datetime(2026, 5, 13, 5, 0, tzinfo=UTC),
-    )
-    assert _matcher().describe(impossible) is None
+    # The builtin periods now tile the full day (daytime∪evening∪nighttime cover
+    # everything), so a "no match" only happens against a period set the time is
+    # outside of — here a single evening window with now at midday.
+    only_evening = {"evening": _range(_sun("sunset"), _sun("dusk"))}
+    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    assert _matcher(only_evening).describe(snap) is None
 
 
 # ── contains ───────────────────────────────────────────────────────────────

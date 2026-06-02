@@ -24,6 +24,7 @@ from __future__ import annotations
 from collections.abc import Collection, Iterator
 from typing import Any
 
+from .engine import rule_enabled
 from .triggers import TriggerSpec, merge
 
 GROUP_TIME_KEY = "group:time"
@@ -95,10 +96,15 @@ def iter_predicate_specs(
 
     The single source of the "what does a predicate watch?" policy, shared by
     the UI (``scope_trigger_spec``) and the engine (``_build_entries``): a
-    ``None`` predicate (wildcard) and an unknown matcher contribute nothing; a
-    matcher without ``trigger_deps`` is treated as opaque.
+    disabled rule (``enabled: False``) contributes nothing (it can never win, so
+    its predicates must not wake the scope); a ``None`` predicate (wildcard) and
+    an unknown matcher contribute nothing; a matcher without ``trigger_deps`` is
+    treated as opaque. ``rule_index`` stays aligned with each rule's position in
+    ``cfg['rules']`` so disabled rules simply leave gaps.
     """
     for rule_index, rule in enumerate(cfg.get("rules", [])):
+        if not rule_enabled(rule):
+            continue
         for matcher_key, predicate in rule.get("when", {}).items():
             if predicate is None:
                 continue

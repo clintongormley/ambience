@@ -6,6 +6,7 @@ from typing import Any
 
 from custom_components.ambience.scope_triggers import (
     filter_spec,
+    iter_predicate_specs,
     scope_trigger_spec,
     trigger_descriptors,
 )
@@ -177,3 +178,44 @@ def test_scope_spec_missing_trigger_deps_is_opaque() -> None:
     cfg = {"rules": [{"when": {"script": {"script": "script.s"}}}]}
     spec = scope_trigger_spec(matchers, cfg)
     assert spec.opaque is True
+
+
+def test_scope_spec_skips_disabled_rule() -> None:
+    """A rule with ``enabled: False`` contributes no watches — a disabled rule
+    can never win, so its predicates must not wake the scope."""
+    matchers = {"state": _FakeMatcher(TriggerSpec(entities=frozenset({"binary_sensor.motion"})))}
+    cfg = {"rules": [{"enabled": False, "when": {"state": {"x": 1}}}]}
+    spec = scope_trigger_spec(matchers, cfg)
+    assert spec.entities == frozenset()
+
+
+def test_scope_spec_disabled_rule_excluded_enabled_kept() -> None:
+    matchers = {
+        "state": _FakeMatcher(TriggerSpec(entities=frozenset({"binary_sensor.motion"}))),
+        "people": _FakeMatcher(TriggerSpec(entities=frozenset({"person.bob"}))),
+    }
+    cfg = {
+        "rules": [
+            {"enabled": False, "when": {"state": {"x": 1}}},
+            {"when": {"people": {"y": 2}}},
+        ]
+    }
+    spec = scope_trigger_spec(matchers, cfg)
+    assert spec.entities == frozenset({"person.bob"})
+
+
+def test_iter_predicate_specs_skips_disabled_keeps_rule_index() -> None:
+    """``iter_predicate_specs`` skips disabled rules entirely; the rule_index of
+    surviving rules stays aligned with their position in ``cfg['rules']``."""
+    matchers = {
+        "state": _FakeMatcher(TriggerSpec(entities=frozenset({"binary_sensor.motion"}))),
+        "people": _FakeMatcher(TriggerSpec(entities=frozenset({"person.bob"}))),
+    }
+    cfg = {
+        "rules": [
+            {"enabled": False, "when": {"state": {"x": 1}}},
+            {"when": {"people": {"y": 2}}},
+        ]
+    }
+    out = list(iter_predicate_specs(matchers, cfg))
+    assert [(idx, key) for idx, key, _ in out] == [(1, "people")]

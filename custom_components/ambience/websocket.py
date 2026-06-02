@@ -122,7 +122,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
 def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise ValueError("config must be an object")
-    config.pop("conditions", None)  # legacy field; dropped silently
+    config.pop("matchers", None)  # legacy per-area gate (historical name); dropped silently
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
     for rule_idx, rule in enumerate(config.get("rules", [])):

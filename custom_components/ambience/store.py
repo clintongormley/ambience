@@ -173,10 +173,12 @@ class AmbienceStore:
         if "matchers" in self._data and "conditions" not in self._data:
             self._data["conditions"] = self._data.pop("matchers")
 
-    def _migrate_drop_area_conditions(self) -> None:
-        """Per-area `conditions` is no longer a UI gate — drop the field from every area."""
+    def _migrate_drop_area_matchers(self) -> None:
+        """Per-area `matchers` is a removed legacy UI gate — drop the field from every
+        area. `matchers` here is the historical on-disk field name (pre-rename); it is
+        not the current top-level `conditions` namespace, so it must stay literal."""
         for area_cfg in self._data.get("areas", {}).values():
-            area_cfg.pop("conditions", None)
+            area_cfg.pop("matchers", None)
 
     def _migrate_relocate_periods(self) -> None:
         """Move top-level `time_of_day_periods` to `conditions.time_of_day`."""
@@ -242,7 +244,7 @@ class AmbienceStore:
         self._migrate_matchers_to_conditions()
         self._migrate_actions()
         self._migrate_periods()
-        self._migrate_drop_area_conditions()
+        self._migrate_drop_area_matchers()
         self._migrate_relocate_periods()
         self._ensure_conditions_namespace()
         self._ensure_scope_buckets()

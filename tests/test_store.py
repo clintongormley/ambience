@@ -290,7 +290,11 @@ async def test_save_condition_config_round_trips(hass: HomeAssistant) -> None:
     }
 
 
-async def test_migration_drops_area_conditions(hass: HomeAssistant) -> None:
+async def test_migration_drops_area_matchers(hass: HomeAssistant) -> None:
+    """The old per-area `matchers` gate is a removed legacy on-disk field; loading
+    must strip it. Its literal name stays `matchers` (the historical field) — it is
+    NOT the current top-level `conditions` namespace — so the rename must not have
+    changed the popped key."""
     from homeassistant.helpers.storage import Store
 
     raw = Store(hass, STORAGE_VERSION, STORAGE_KEY)
@@ -298,14 +302,14 @@ async def test_migration_drops_area_conditions(hass: HomeAssistant) -> None:
         {
             "version": STORAGE_VERSION,
             "areas": {
-                "a1": {"conditions": ["time_of_day"], "rules": []},
+                "a1": {"matchers": ["time_of_day"], "rules": []},
             },
             "time_of_day_periods": {"custom": {}, "hidden": []},
         }
     )
     store = AmbienceStore(hass)
     await store.async_load()
-    assert "conditions" not in store.get_area("a1")
+    assert "matchers" not in store.get_area("a1")
 
 
 async def test_migration_relocates_periods(hass: HomeAssistant) -> None:

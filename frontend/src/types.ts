@@ -365,7 +365,7 @@ export type BufferedUnit = {
 
 export type SimulateControl = "select" | "number" | "text";
 
-export type SimulateAttribute = { name: string; control: "number"; live_value: unknown };
+export type SimulateAttribute = { name: string; control: "number" | "text"; live_value: unknown };
 
 export type SimulateEntityKnob = {
   kind: "entity";

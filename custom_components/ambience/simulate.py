@@ -163,25 +163,60 @@ def _group_config(
     return {"rules": [r for r in cfg.get("rules", []) if r.get("group") == group]}
 
 
-def _referenced_attributes(hass: HomeAssistant, group_cfg: dict[str, Any]) -> dict[str, list[str]]:
-    """entity_id -> attribute names the group's predicates read beyond `state`.
+# state-predicate atom kinds that compare numerically (so the attribute is a
+# number); any other comparison (`is`/`is_not`) treats the attribute as text.
+_STATE_NUMERIC_KINDS = (">", ">=", "<", "<=")
 
-    Only the weather matcher reads attributes (its numeric thresholds), so this
-    is weather-specific by design; promote to a matcher protocol method if a
-    second attribute-consuming matcher appears.
-    """
+
+def _record_attr(out: dict[str, dict[str, str]], entity_id: str, name: str, control: str) -> None:
+    """Record an entity attribute and its control, preferring `text` when an
+    attribute is read both numerically and as a string (text holds either)."""
+    attrs = out.setdefault(entity_id, {})
+    if attrs.get(name) != "text":
+        attrs[name] = control
+
+
+def _collect_state_attributes(node: Any, out: dict[str, dict[str, str]]) -> None:
+    """Walk a state predicate tree, recording every `(entity_id, attribute)` an
+    atom reads (mirrors StateMatcher's own tree walk)."""
+    if not isinstance(node, dict):
+        return
+    kind = node.get("kind")
+    if kind in ("and", "or"):
+        for item in node.get("items") or []:
+            _collect_state_attributes(item, out)
+        return
+    if kind == "not":
+        _collect_state_attributes(node.get("item"), out)
+        return
+    attribute = node.get("attribute")
+    entity_id = node.get("entity_id")
+    if attribute and isinstance(entity_id, str):
+        control = "number" if kind in _STATE_NUMERIC_KINDS else "text"
+        _record_attr(out, entity_id, attribute, control)
+
+
+def _referenced_attributes(
+    hass: HomeAssistant, group_cfg: dict[str, Any]
+) -> dict[str, list[dict[str, str]]]:
+    """entity_id -> [{name, control}] for attributes the group's predicates read
+    beyond `state`: the weather matcher's numeric thresholds and any attribute a
+    `state` predicate atom references (string via is/is_not, numeric via >/<)."""
+    out: dict[str, dict[str, str]] = {}
     store = hass.data[DOMAIN][DATA_STORE]
     weather_entity = store.get_matcher_config("weather").get("entity")
-    if not weather_entity:
-        return {}
-    names: set[str] = set()
     for rule in group_cfg["rules"]:
-        predicate = (rule.get("when") or {}).get("weather")
-        if isinstance(predicate, dict):
-            for threshold in predicate.get("thresholds") or []:
+        when = rule.get("when") or {}
+        weather = when.get("weather")
+        if weather_entity and isinstance(weather, dict):
+            for threshold in weather.get("thresholds") or []:
                 if isinstance(threshold, dict) and threshold.get("attribute"):
-                    names.add(threshold["attribute"])
-    return {weather_entity: sorted(names)} if names else {}
+                    _record_attr(out, weather_entity, threshold["attribute"], "number")
+        _collect_state_attributes(when.get("state"), out)
+    return {
+        entity_id: [{"name": name, "control": control} for name, control in sorted(attrs.items())]
+        for entity_id, attrs in out.items()
+    }
 
 
 _TIME_DERIVED_MATCHERS = ("day", "sun", "time_of_day")
@@ -208,7 +243,10 @@ def _is_number(value: str | None) -> bool:
 
 
 def _entity_knob(
-    hass: HomeAssistant, entity_id: str, attr_names: list[str], weather_entity: str | None
+    hass: HomeAssistant,
+    entity_id: str,
+    attr_specs: list[dict[str, str]],
+    weather_entity: str | None,
 ) -> dict[str, Any]:
     live = hass.states.get(entity_id)
     live_state = live.state if live is not None else None
@@ -235,11 +273,11 @@ def _entity_knob(
         "live_state": live_state,
         "attributes": [
             {
-                "name": name,
-                "control": "number",
-                "live_value": (live.attributes.get(name) if live is not None else None),
+                "name": spec["name"],
+                "control": spec["control"],
+                "live_value": (live.attributes.get(spec["name"]) if live is not None else None),
             }
-            for name in attr_names
+            for spec in attr_specs
         ],
     }
     if options is not None:

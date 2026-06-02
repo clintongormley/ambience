@@ -13,6 +13,7 @@ const INPUTS = {
   knobs: [
     { kind: "entity", entity_id: "binary_sensor.motion", control: "select", options: ["on", "off"], live_state: "off", attributes: [] },
     { kind: "entity", entity_id: "sensor.count", control: "number", live_state: "2.0", attributes: [] },
+    { kind: "entity", entity_id: "calendar.work", control: "select", options: ["off"], live_state: "off", attributes: [{ name: "description", control: "text", live_value: "today" }] },
     { kind: "verdict", matcher: "script", key: "k1", label: "script.holiday", entity_id: "script.holiday", live_value: false },
   ],
 };
@@ -70,6 +71,19 @@ describe("ambience-simulator-modal", () => {
     const reset = el.shadowRoot.querySelector("[data-reset='binary_sensor.motion']");
     reset.click(); await el.updateComplete;
     expect(el.shadowRoot.querySelector("select[data-entity='binary_sensor.motion']").value).toBe("off");
+  });
+
+  test("text attribute renders a text input and sends a string override", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector("input[data-attr='calendar.work:description']");
+    expect(input).toBeTruthy();
+    expect(input.type).toBe("text");
+    input.value = "xxx"; input.dispatchEvent(new Event("input"));
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    const args = vi.mocked(api.simulate).mock.calls[0];
+    expect(args[4]["calendar.work"].attributes.description).toBe("xxx");
   });
 
   test("result renders via renderEvaluation", async () => {

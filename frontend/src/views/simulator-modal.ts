@@ -52,8 +52,12 @@ export class AmbienceSimulatorModal extends LitElement {
         letter-spacing: 0.05em; color: var(--primary-text-color, #fff); margin: 0.9rem 0 0.4rem; }
       .when { display: flex; align-items: center; gap: 0.6rem; padding: 0.2rem 0 0.4rem; }
       .when .hint { color: var(--secondary-text-color, #999); font-size: 0.8em; }
-      .row { display: flex; align-items: center; gap: 0.75rem; padding: 0.55rem 0;
+      /* Top-align so the icon and control line up with the entity name (first
+         line), not floating between the name and the entity_id subtitle. */
+      .row { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.55rem 0;
         border-bottom: 1px solid var(--divider-color, #e0e0e0); }
+      .row-icon { margin-top: 1px; }
+      .row-ctrl { margin-top: -2px; }
       .row.attr { border-bottom: 0; padding-top: 0.1rem; }
       /* the weather row + its attrs read as one unit (no inner dividers), with
          the divider restored after the last attribute to separate the group */
@@ -162,10 +166,15 @@ export class AmbienceSimulatorModal extends LitElement {
       const v = this._values[k.entity_id];
       if (!v || v.state === "") continue;
       const attributes: Record<string, unknown> = {};
-      for (const [name, raw] of Object.entries(v.attributes)) {
-        if (raw === "") continue;
-        const n = Number(raw);
-        if (!Number.isNaN(n)) attributes[name] = n;
+      for (const a of k.attributes) {
+        const raw = v.attributes[a.name];
+        if (raw === undefined || raw === "") continue;
+        if (a.control === "number") {
+          const n = Number(raw);
+          if (!Number.isNaN(n)) attributes[a.name] = n;
+        } else {
+          attributes[a.name] = raw; // text attribute (e.g. description) sent as-is
+        }
       }
       overrides[k.entity_id] = { state: v.state, attributes };
     }
@@ -246,7 +255,9 @@ export class AmbienceSimulatorModal extends LitElement {
         <div class="row attr ${i === k.attributes.length - 1 ? "last-attr" : ""}">
           <div class="row-text"><div class="row-title">${optionLabel(a.name)}</div></div>
           <div class="row-ctrl">
-            <input class="num" type="number" data-attr=${`${k.entity_id}:${a.name}`}
+            <input class=${a.control === "number" ? "num" : ""}
+              type=${a.control === "number" ? "number" : "text"}
+              data-attr=${`${k.entity_id}:${a.name}`}
               .value=${v?.attributes[a.name] ?? ""}
               @input=${(e: Event) => this._setAttr(k.entity_id, a.name, (e.target as HTMLInputElement).value)} />
             <button class="reset" title="Reset to live"

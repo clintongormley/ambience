@@ -361,3 +361,56 @@ def test_simulate_inputs_control_kinds():
     assert knobs["binary_sensor.motion"]["options"] == ["on", "off"]
     assert knobs["sensor.count"]["control"] == "number"
     assert "options" not in knobs["sensor.count"]
+
+
+def test_simulate_inputs_surfaces_state_referenced_attributes():
+    """Attributes read by a state predicate (string via is/is_not, numeric via
+    >/< ops) become editable sub-rows with the right control."""
+    from custom_components.ambience.matchers.state import StateMatcher
+
+    rules = [
+        {
+            "group": "g1",
+            "when": {
+                "state": {
+                    "kind": "and",
+                    "items": [
+                        {
+                            "kind": "is",
+                            "entity_id": "calendar.work",
+                            "attribute": "description",
+                            "states": ["xxx"],
+                        },
+                        {
+                            "kind": ">",
+                            "entity_id": "sensor.dev",
+                            "attribute": "battery",
+                            "states": ["20"],
+                        },
+                    ],
+                }
+            },
+        }
+    ]
+    hass = _Hass(
+        [
+            _State("calendar.work", "off", {"description": "today"}),
+            _State("sensor.dev", "5", {"battery": 80}),
+        ]
+    )
+
+    class _Store6:
+        def scope_config(self, sk, si):
+            return {"rules": rules}
+
+        def get_matcher_config(self, name):
+            return {"entity": None, "groups": []} if name == "weather" else {}
+
+    hass.data[DOMAIN] = {DATA_MATCHERS: {"state": StateMatcher(hass)}, DATA_STORE: _Store6()}
+    knobs = {k["entity_id"]: k for k in simulate_inputs_entities(hass, "area", "kitchen", "g1")}
+    assert {"name": "description", "control": "text", "live_value": "today"} in knobs[
+        "calendar.work"
+    ]["attributes"]
+    assert {"name": "battery", "control": "number", "live_value": 80} in knobs["sensor.dev"][
+        "attributes"
+    ]

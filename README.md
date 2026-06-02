@@ -33,7 +33,7 @@ pytest
 
 ## Usage
 
-Configure Ambience via the **Ambience** panel (sidebar, admin-only). Add an area, define scene names, pick which matchers participate, then author rules. Activating a scene picks the first matching rule from an ordered list (based on time of day, weather, etc.) and runs its actions.
+Configure Ambience via the **Ambience** panel (sidebar, admin-only). Add an area, define scene names, pick which conditions participate, then author rules. Activating a scene picks the first matching rule from an ordered list (based on time of day, weather, etc.) and runs its actions.
 
 ### Per-scope switches
 
@@ -77,7 +77,7 @@ All commands are admin-only.
 | `ambience/area/get` | `{area_id}` | full area config |
 | `ambience/area/save` | `{area_id, config}` | `{ok: true}` or error |
 | `ambience/area/delete` | `{area_id}` | `{ok: true}` |
-| `ambience/matchers/list` | – | matchers + descriptions + predicate help |
+| `ambience/conditions/list` | – | conditions + descriptions + predicate help |
 | `ambience/services/list` | – | HA services available for use as actions |
 | `ambience/exposed_actions/list` | – | configured action definitions (id, label, service, …) |
 | `ambience/exposed_actions/save` | `{actions}` | `{ok: true}` |

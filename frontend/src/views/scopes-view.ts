@@ -6,7 +6,7 @@ import type {
   FloorRegistryEvent,
   HassConnection,
 } from "../api.js";
-import { groupSwatch, groupSwatchStyles } from "../group-swatch.js";
+import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
 import { scopeKey } from "../entities-for-scope.js";
 import { stripPositionMetadata } from "../rule.js";
 import { localize } from "../i18n.js";
@@ -21,8 +21,8 @@ import {
   getServiceSchema,
   listExposedActions,
   listFloors,
-  listGroups,
-  listMatchers,
+  listCategories,
+  listConditions,
   listPeriods,
   listSwitches,
   runRuleActions,
@@ -32,13 +32,13 @@ import {
 } from "../api.js";
 import type {
   AreaListItem,
+  ConditionInfo,
   DayConfig,
   ExposedAction,
   FloorListItem,
-  MatcherInfo,
   PeriodStoreView,
   Rule,
-  RuleGroup,
+  RuleCategory,
   Scope,
   ScopeConfig,
   ScopeOption,
@@ -52,7 +52,12 @@ import "./traces-modal.js";
 import "./simulator-modal.js";
 import type { KebabItem } from "./kebab-menu.js";
 
-type EditingState = { scope: Scope; index: number; isNew: boolean; seed?: Rule };
+type EditingState = {
+  scope: Scope;
+  index: number;
+  isNew: boolean;
+  seed?: Rule;
+};
 
 function _normalize(cfg: ScopeConfig): ScopeConfig {
   return { rules: cfg.rules ?? [] };
@@ -70,7 +75,8 @@ function _pinPriority(
   all: Rule[],
 ): number {
   // Common case: dropped between two rules — no need to scan the whole list.
-  if (above !== undefined && below !== undefined) return Math.floor((above + below) / 2);
+  if (above !== undefined && below !== undefined)
+    return Math.floor((above + below) / 2);
   const nums = all.map((r) => r.priority ?? 0);
   if (above === undefined && below === undefined) return PIN_GAP;
   if (above === undefined) return Math.max(...nums) + PIN_GAP; // top slot
@@ -79,124 +85,173 @@ function _pinPriority(
 
 @customElement("ambience-scopes-view")
 export class AmbienceScopesView extends LitElement {
-  static override styles = [groupSwatchStyles, css`
-    :host {
-      display: block;
-      padding: 1rem;
-      /* Reading-column cap for the sidebar panel; the card overrides this var
+  static override styles = [
+    categorySwatchStyles,
+    css`
+      :host {
+        display: block;
+        padding: 1rem;
+        /* Reading-column cap for the sidebar panel; the card overrides this var
          so it fills whatever width the user gives the card. */
-      max-width: var(--ambience-content-max-width, 60rem);
-      margin: 0 auto;
-    }
-    .empty {
-      color: var(--secondary-text-color, #888);
-      text-align: center;
-      padding: 2rem;
-    }
-    .error {
-      color: var(--error-color, #d32f2f);
-      margin: 0.5rem 0;
-    }
-    ul {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-    li.scope-row {
-      border: 1px solid var(--divider-color, #e0e0e0);
-      border-radius: 4px;
-      margin-bottom: 0.5rem;
-      background: var(--card-background-color, #fff);
-    }
-    .scope-header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1rem;
-      cursor: pointer;
-      background: var(--secondary-background-color, #f5f5f5);
-      /* Collapsed: round all corners to match the card. */
-      border-radius: 4px;
-    }
-    /* Expanded: only the top corners round, so the grey header meets the white
+        max-width: var(--ambience-content-max-width, 60rem);
+        margin: 0 auto;
+      }
+      .empty {
+        color: var(--secondary-text-color, #888);
+        text-align: center;
+        padding: 2rem;
+      }
+      .error {
+        color: var(--error-color, #d32f2f);
+        margin: 0.5rem 0;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      li.scope-row {
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 4px;
+        margin-bottom: 0.5rem;
+        background: var(--card-background-color, #fff);
+      }
+      .scope-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        background: var(--secondary-background-color, #f5f5f5);
+        /* Collapsed: round all corners to match the card. */
+        border-radius: 4px;
+      }
+      /* Expanded: only the top corners round, so the grey header meets the white
        body below with a flush edge. */
-    .scope-header.open {
-      border-radius: 4px 4px 0 0;
-    }
-    .chevron {
-      width: 1em;
-      color: var(--secondary-text-color, #888);
-      transition: transform 0.1s;
-    }
-    .chevron.open {
-      transform: rotate(90deg);
-    }
-    .scope-name {
-      flex: 1;
-      font-weight: 600;
-    }
-    .scope-summary {
-      font-size: 0.85em;
-      color: var(--secondary-text-color, #888);
-    }
-    .scope-switch {
-      flex: 0 0 auto;
-      margin-left: 0.5rem;
-      accent-color: var(--primary-color, #03a9f4);
-      cursor: pointer;
-    }
-    .scope-body {
-      padding: 0.5rem 1rem 1rem 1rem;
-      border-top: 1px solid var(--divider-color, #e0e0e0);
-    }
-    .group-filter-row {
-      display: flex; align-items: center; gap: 0.75rem;
-      margin: 0 0 1.25rem 0;
-    }
-    .group-filter-label {
-      font-size: 0.95rem; font-weight: 500;
-      color: var(--secondary-text-color, #888);
-    }
-    .group-filter { position: relative; min-width: 18rem; }
-    /* Trigger keeps a stable height regardless of the selection (the swatch is
-       always present), so picking a group never resizes the control. */
-    .group-filter-trigger {
-      display: flex; align-items: center; gap: 0.65rem; width: 100%;
-      min-height: 48px; box-sizing: border-box;
-      padding: 0.4rem 0.6rem 0.4rem 0.5rem;
-      border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px;
-      background: var(--card-background-color, #fff);
-      color: var(--primary-text-color, #212121);
-      cursor: pointer; font: inherit; font-size: 1rem;
-    }
-    .group-filter-trigger:hover { background: var(--secondary-background-color, #f5f5f5); }
-    .group-filter-trigger .group-name { flex: 1; text-align: left; }
-    .group-filter-trigger .caret { color: var(--secondary-text-color, #888); flex: 0 0 auto; }
-    /* Transparent full-screen catcher so any outside click closes the menu. */
-    .group-filter-backdrop { position: fixed; inset: 0; z-index: 10; }
-    .group-filter-menu {
-      position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 11;
-      max-height: 60vh; overflow-y: auto;
-      background: var(--card-background-color, #fff);
-      border: 1px solid var(--divider-color, #e0e0e0); border-radius: 8px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-      padding: 0.35rem;
-    }
-    .group-filter-option {
-      display: flex; align-items: center; gap: 0.65rem; width: 100%;
-      min-height: 44px; box-sizing: border-box;
-      padding: 0.4rem 0.6rem; border: 0; border-radius: 6px;
-      background: none; color: var(--primary-text-color, #212121);
-      cursor: pointer; font: inherit; font-size: 1rem; text-align: left;
-    }
-    .group-filter-option:hover { background: var(--secondary-background-color, #f5f5f5); }
-    .group-filter-option[aria-selected="true"] {
-      background: var(--secondary-background-color, #eee); font-weight: 600;
-    }
-    /* Swatch shell + sizing come from groupSwatchStyles (2rem default); it is
+      .scope-header.open {
+        border-radius: 4px 4px 0 0;
+      }
+      .chevron {
+        width: 1em;
+        color: var(--secondary-text-color, #888);
+        transition: transform 0.1s;
+      }
+      .chevron.open {
+        transform: rotate(90deg);
+      }
+      .scope-name {
+        flex: 1;
+        font-weight: 600;
+      }
+      .scope-summary {
+        font-size: 0.85em;
+        color: var(--secondary-text-color, #888);
+      }
+      .scope-switch {
+        flex: 0 0 auto;
+        margin-left: 0.5rem;
+        accent-color: var(--primary-color, #03a9f4);
+        cursor: pointer;
+      }
+      .scope-body {
+        padding: 0.5rem 1rem 1rem 1rem;
+        border-top: 1px solid var(--divider-color, #e0e0e0);
+      }
+      .category-filter-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 0 0 1.25rem 0;
+      }
+      .category-filter-label {
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: var(--secondary-text-color, #888);
+      }
+      .category-filter {
+        position: relative;
+        min-width: 18rem;
+      }
+      /* Trigger keeps a stable height regardless of the selection (the swatch is
+       always present), so picking a category never resizes the control. */
+      .category-filter-trigger {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        width: 100%;
+        min-height: 48px;
+        box-sizing: border-box;
+        padding: 0.4rem 0.6rem 0.4rem 0.5rem;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 8px;
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color, #212121);
+        cursor: pointer;
+        font: inherit;
+        font-size: 1rem;
+      }
+      .category-filter-trigger:hover {
+        background: var(--secondary-background-color, #f5f5f5);
+      }
+      .category-filter-trigger .category-name {
+        flex: 1;
+        text-align: left;
+      }
+      .category-filter-trigger .caret {
+        color: var(--secondary-text-color, #888);
+        flex: 0 0 auto;
+      }
+      /* Transparent full-screen catcher so any outside click closes the menu. */
+      .category-filter-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+      }
+      .category-filter-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        z-index: 11;
+        max-height: 60vh;
+        overflow-y: auto;
+        background: var(--card-background-color, #fff);
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 8px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+        padding: 0.35rem;
+      }
+      .category-filter-option {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        width: 100%;
+        min-height: 44px;
+        box-sizing: border-box;
+        padding: 0.4rem 0.6rem;
+        border: 0;
+        border-radius: 6px;
+        background: none;
+        color: var(--primary-text-color, #212121);
+        cursor: pointer;
+        font: inherit;
+        font-size: 1rem;
+        text-align: left;
+      }
+      .category-filter-option:hover {
+        background: var(--secondary-background-color, #f5f5f5);
+      }
+      .category-filter-option[aria-selected="true"] {
+        background: var(--secondary-background-color, #eee);
+        font-weight: 600;
+      }
+      /* Swatch shell + sizing come from categorySwatchStyles (2rem default); it is
        always present so rows and the trigger keep a consistent height. */
-    .group-name { flex: 1; }
-  `];
+      .category-name {
+        flex: 1;
+      }
+    `,
+  ];
 
   @property({ attribute: false }) hass!: HassConnection;
 
@@ -208,9 +263,9 @@ export class AmbienceScopesView extends LitElement {
   // scopeKey(scope) -> Ambience switch entity_id. Resolved by the backend
   // because user/registry renames make the entity_id non-derivable.
   @state() private _switchEntityIds = new Map<string, string>();
-  @state() private _matchers: MatcherInfo[] = [];
+  @state() private _conditions: ConditionInfo[] = [];
   @state() private _actions: ExposedAction[] = [];
-  @state() private _groups: RuleGroup[] = [];
+  @state() private _categories: RuleCategory[] = [];
   // Per-service schemas, keyed by service id. Loaded after _actions so the
   // summary functions can show HA's `field.name` instead of the humanized
   // field id. Best-effort: services whose schema fetch fails are omitted.
@@ -222,11 +277,19 @@ export class AmbienceScopesView extends LitElement {
   @state() private _expanded = new Set<string>();
   @state() private _error = "";
   @state() private _editing: EditingState | null = null;
-  @state() private _viewingTraces: { scope: { scope_kind: string; scope_id: string | null }; group: string; groupName: string | null } | null = null;
-  @state() private _viewingSimulator: { scope: { scope_kind: string; scope_id: string | null }; group: string; groupName: string | null } | null = null;
-  // Global group filter shared by every scope: "" = All, else a group id.
+  @state() private _viewingTraces: {
+    scope: { scope_kind: string; scope_id: string | null };
+    category: string;
+    categoryName: string | null;
+  } | null = null;
+  @state() private _viewingSimulator: {
+    scope: { scope_kind: string; scope_id: string | null };
+    category: string;
+    categoryName: string | null;
+  } | null = null;
+  // Global category filter shared by every scope: "" = All, else a category id.
   // Sticky for the session (component lifetime).
-  @state() private _filterGroup = "";
+  @state() private _filterCategory = "";
   // Whether the colour-coded filter dropdown menu is open.
   @state() private _filterOpen = false;
   private _unsubArea?: () => void;
@@ -267,7 +330,10 @@ export class AmbienceScopesView extends LitElement {
 
   override async connectedCallback() {
     super.connectedCallback();
-    window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
+    window.addEventListener(
+      "ambience-exposed-actions-changed",
+      this._onExposedActionsChanged,
+    );
     await this._loadStatic();
     await Promise.all([
       this._refreshAreas(),
@@ -280,7 +346,10 @@ export class AmbienceScopesView extends LitElement {
 
   override disconnectedCallback() {
     super.disconnectedCallback();
-    window.removeEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
+    window.removeEventListener(
+      "ambience-exposed-actions-changed",
+      this._onExposedActionsChanged,
+    );
     this._unsubArea?.();
     this._unsubArea = undefined;
     this._unsubFloor?.();
@@ -291,21 +360,28 @@ export class AmbienceScopesView extends LitElement {
 
   private async _loadStatic() {
     try {
-      const [matchers, actions, periods, dayConfig, weatherConfig, groups] = await Promise.all([
-        listMatchers(this.hass),
+      const [
+        conditions,
+        actions,
+        periods,
+        dayConfig,
+        weatherConfig,
+        categories,
+      ] = await Promise.all([
+        listConditions(this.hass),
         listExposedActions(this.hass),
         listPeriods(this.hass),
         getDayConfig(this.hass),
         getWeatherConfig(this.hass),
-        listGroups(this.hass),
+        listCategories(this.hass),
       ]);
       if (!this.isConnected) return;
-      this._matchers = matchers;
+      this._conditions = conditions;
       this._actions = actions;
       this._periods = periods;
       this._dayConfig = dayConfig;
       this._weatherConfig = weatherConfig;
-      this._groups = groups;
+      this._categories = categories;
       await this._refreshSchemas(actions);
     } catch (e) {
       this._error = (e as Error).message || String(e);
@@ -549,23 +625,29 @@ export class AmbienceScopesView extends LitElement {
     if (!cfg) return;
     const { from, to } = e.detail;
     const moved = cfg.rules[from];
-    // Reorder is per-group: a drop whose target row is in a different group is
-    // rejected (groups are independent; cross-group moves aren't meaningful).
-    if (!moved || cfg.rules[to]?.group !== moved.group) return;
+    // Reorder is per-category: a drop whose target row is in a different
+    // category is rejected (categories are independent; cross-category moves
+    // aren't meaningful).
+    if (!moved || cfg.rules[to]?.category !== moved.category) return;
     const rules = [...cfg.rules];
     rules.splice(from, 1);
     rules.splice(to, 0, moved);
-    // Pin priority is computed from the nearest SAME-GROUP neighbours around the
-    // drop position (the backend keeps groups contiguous, so scanning outward
-    // finds group-mates).
-    const sameGroup = (idx: number) => rules[idx] && rules[idx].group === moved.group;
+    // Pin priority is computed from the nearest SAME-CATEGORY neighbours around
+    // the drop position (the backend keeps categories contiguous, so scanning
+    // outward finds category-mates).
+    const sameCategory = (idx: number) =>
+      rules[idx] && rules[idx].category === moved.category;
     let a = to - 1;
-    while (a >= 0 && !sameGroup(a)) a--;
+    while (a >= 0 && !sameCategory(a)) a--;
     let b = to + 1;
-    while (b < rules.length && !sameGroup(b)) b++;
+    while (b < rules.length && !sameCategory(b)) b++;
     const above = a >= 0 ? rules[a].priority : undefined;
     const below = b < rules.length ? rules[b].priority : undefined;
-    const priority = _pinPriority(above, below, cfg.rules.filter((r) => r.group === moved.group));
+    const priority = _pinPriority(
+      above,
+      below,
+      cfg.rules.filter((r) => r.category === moved.category),
+    );
     rules[to] = { ...moved, priority, pinned: true };
     void this._mutate(scope, { ...cfg, rules });
   }
@@ -649,12 +731,14 @@ export class AmbienceScopesView extends LitElement {
     }
   }
 
-  private _applyRules(scope: Scope, groupId?: string) {
-    return this._callApi(() => applyRules(this.hass, scope, groupId));
+  private _applyRules(scope: Scope, categoryId?: string) {
+    return this._callApi(() => applyRules(this.hass, scope, categoryId));
   }
 
   private _runRuleActions(scope: Scope, e: CustomEvent<{ index: number }>) {
-    return this._callApi(() => runRuleActions(this.hass, scope, e.detail.index));
+    return this._callApi(() =>
+      runRuleActions(this.hass, scope, e.detail.index),
+    );
   }
 
   private _cancelRule() {
@@ -662,92 +746,122 @@ export class AmbienceScopesView extends LitElement {
     this._editing = null;
   }
 
-  private _onScopeMenu(scope: Scope, _name: string, _cfg: ScopeConfig, id: string) {
+  private _onScopeMenu(
+    scope: Scope,
+    _name: string,
+    _cfg: ScopeConfig,
+    id: string,
+  ) {
     if (id === "run") void this._applyRules(scope);
   }
 
-  private _showTraces(scope: Scope, group: string) {
-    const g = this._groups.find((x) => x.id === group);
+  private _showTraces(scope: Scope, category: string) {
+    const g = this._categories.find((x) => x.id === category);
     this._viewingTraces = {
-      scope: { scope_kind: scope.kind, scope_id: "id" in scope ? scope.id : null },
-      group,
-      groupName: g?.name ?? null,
+      scope: {
+        scope_kind: scope.kind,
+        scope_id: "id" in scope ? scope.id : null,
+      },
+      category,
+      categoryName: g?.name ?? null,
     };
   }
 
-  private _showSimulator(scope: Scope, group: string) {
-    const g = this._groups.find((x) => x.id === group);
+  private _showSimulator(scope: Scope, category: string) {
+    const g = this._categories.find((x) => x.id === category);
     this._viewingSimulator = {
-      scope: { scope_kind: scope.kind, scope_id: "id" in scope ? scope.id : null },
-      group,
-      groupName: g?.name ?? null,
+      scope: {
+        scope_kind: scope.kind,
+        scope_id: "id" in scope ? scope.id : null,
+      },
+      category,
+      categoryName: g?.name ?? null,
     };
   }
 
-  // --- group filter --------------------------------------------------------
+  // --- category filter -----------------------------------------------------
 
   private _selectFilter(id: string) {
-    this._filterGroup = id;
+    this._filterCategory = id;
     this._filterOpen = false;
   }
 
-  /** A colour swatch (group colour bg + icon) followed by the group name.
-   *  `null` renders the "All groups" entry with a neutral filter-icon swatch,
+  /** A colour swatch (category colour bg + icon) followed by the category name.
+   *  `null` renders the "All categories" entry with a neutral filter-icon swatch,
    *  so the trigger and option rows keep a consistent height across selections. */
-  private _renderFilterEntry(group: RuleGroup | null) {
-    if (group === null) {
+  private _renderFilterEntry(category: RuleCategory | null) {
+    if (category === null) {
       return html`
-        ${groupSwatch(undefined, "mdi:filter-variant")}
-        <span class="group-name">${localize(this.hass, "ui.all_groups", "All groups")}</span>
+        ${categorySwatch(undefined, "mdi:filter-variant")}
+        <span class="category-name"
+          >${localize(this.hass, "ui.all_categories", "All categories")}</span
+        >
       `;
     }
     return html`
-      ${groupSwatch(group.color, group.icon)}
-      <span class="group-name">${group.name}</span>
+      ${categorySwatch(category.color, category.icon)}
+      <span class="category-name">${category.name}</span>
     `;
   }
 
-  /** The colour-coded global group filter: a trigger showing the current
+  /** The colour-coded global category filter: a trigger showing the current
    *  selection and a dropdown of swatch+icon+name options. Shown only when
-   *  more than one group exists. */
+   *  more than one category exists. */
   private _renderFilter() {
-    if (this._groups.length <= 1) return "";
-    const sorted = [...this._groups].sort((a, b) => a.name.localeCompare(b.name));
-    const current = this._groups.find((g) => g.id === this._filterGroup) ?? null;
+    if (this._categories.length <= 1) return "";
+    const sorted = [...this._categories].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+    const current =
+      this._categories.find((g) => g.id === this._filterCategory) ?? null;
     return html`
-      <div class="group-filter-row">
-        <span class="group-filter-label">${localize(this.hass, "ui.filter_by_group", "Filter by group")}</span>
-        <div class="group-filter">
+      <div class="category-filter-row">
+        <span class="category-filter-label"
+          >${localize(
+            this.hass,
+            "ui.filter_by_category",
+            "Filter by category",
+          )}</span
+        >
+        <div class="category-filter">
           <button
-            class="group-filter-trigger"
+            class="category-filter-trigger"
             aria-haspopup="listbox"
             aria-expanded=${this._filterOpen}
-            @click=${() => { this._filterOpen = !this._filterOpen; }}
+            @click=${() => {
+              this._filterOpen = !this._filterOpen;
+            }}
           >
             ${this._renderFilterEntry(current)}
             <ha-icon class="caret" icon="mdi:menu-down"></ha-icon>
           </button>
           ${this._filterOpen
             ? html`
-                <div class="group-filter-backdrop" @click=${() => { this._filterOpen = false; }}></div>
-                <div class="group-filter-menu" role="listbox">
+                <div
+                  class="category-filter-backdrop"
+                  @click=${() => {
+                    this._filterOpen = false;
+                  }}
+                ></div>
+                <div class="category-filter-menu" role="listbox">
                   <button
-                    class="group-filter-option"
+                    class="category-filter-option"
                     role="option"
-                    aria-selected=${this._filterGroup === ""}
+                    aria-selected=${this._filterCategory === ""}
                     @click=${() => this._selectFilter("")}
                   >
                     ${this._renderFilterEntry(null)}
                   </button>
                   ${sorted.map(
-                    (g) => html`<button
-                      class="group-filter-option"
-                      role="option"
-                      aria-selected=${this._filterGroup === g.id}
-                      @click=${() => this._selectFilter(g.id)}
-                    >
-                      ${this._renderFilterEntry(g)}
-                    </button>`,
+                    (g) =>
+                      html`<button
+                        class="category-filter-option"
+                        role="option"
+                        aria-selected=${this._filterCategory === g.id}
+                        @click=${() => this._selectFilter(g.id)}
+                      >
+                        ${this._renderFilterEntry(g)}
+                      </button>`,
                   )}
                 </div>
               `
@@ -759,26 +873,29 @@ export class AmbienceScopesView extends LitElement {
 
   // --- derived -------------------------------------------------------------
 
-  /** The group a newly-added rule should default to: the active filter when a
-   *  single group is selected, otherwise the alphabetically-first group. */
-  private _defaultGroupId(): string {
-    if (this._filterGroup !== "") return this._filterGroup;
-    const sorted = [...this._groups].sort((a, b) => a.name.localeCompare(b.name));
+  /** The category a newly-added rule should default to: the active filter when a
+   *  single category is selected, otherwise the alphabetically-first category. */
+  private _defaultCategoryId(): string {
+    if (this._filterCategory !== "") return this._filterCategory;
+    const sorted = [...this._categories].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
     return sorted[0]?.id ?? "";
   }
 
   private get _editingRule(): Rule | null {
     if (!this._editing) return null;
     if (this._editing.seed) return this._editing.seed;
-    if (this._editing.isNew) return { when: {}, actions: [], group: this._defaultGroupId() };
+    if (this._editing.isNew)
+      return { when: {}, actions: [], category: this._defaultCategoryId() };
     const cfg = this._getConfig(this._editing.scope);
     return cfg?.rules[this._editing.index] ?? null;
   }
 
-  /** Matcher rows for the rule editor — sorted by `priority` (higher first). */
-  private get _editorMatchers(): MatcherInfo[] {
+  /** Condition rows for the rule editor — sorted by `priority` (higher first). */
+  private get _editorConditions(): ConditionInfo[] {
     if (!this._editing) return [];
-    return this._matchers.slice().sort((a, b) => b.priority - a.priority);
+    return this._conditions.slice().sort((a, b) => b.priority - a.priority);
   }
 
   /** Selectable destinations for the rule editor: house, then floors, then areas. */
@@ -786,7 +903,10 @@ export class AmbienceScopesView extends LitElement {
     const floorPrefix = localize(this.hass, "ui.scope_floor_prefix", "Floor: ");
     const areaPrefix = localize(this.hass, "ui.scope_area_prefix", "Area: ");
     return [
-      { scope: { kind: "house" }, label: localize(this.hass, "ui.scope_global", "Global") },
+      {
+        scope: { kind: "house" },
+        label: localize(this.hass, "ui.scope_global", "Global"),
+      },
       ...this._floors.map((f) => ({
         scope: { kind: "floor" as const, id: f.floor_id },
         label: `${floorPrefix}${f.name}`,
@@ -805,9 +925,10 @@ export class AmbienceScopesView extends LitElement {
     }
     // Otherwise count the rules matching the active filter (all when "").
     const r =
-      this._filterGroup === ""
+      this._filterCategory === ""
         ? cfg.rules.length
-        : cfg.rules.filter((rule) => rule.group === this._filterGroup).length;
+        : cfg.rules.filter((rule) => rule.category === this._filterCategory)
+            .length;
     const noun =
       r === 1
         ? localize(this.hass, "ui.rule_singular", "rule")
@@ -869,31 +990,41 @@ export class AmbienceScopesView extends LitElement {
         .scopes=${this._scopeOptions}
         .autoEditScope=${!!this._editing?.seed}
         .rule=${this._editingRule}
-        .matchers=${this._editorMatchers}
+        .conditions=${this._editorConditions}
         .periods=${this._periods}
         .dayConfig=${this._dayConfig}
         .weatherConfig=${this._weatherConfig}
         .availableActions=${this._actions}
         .schemas=${this._schemas}
-        .groups=${this._groups}
+        .categories=${this._categories}
         @save-rule=${this._saveRule}
         @cancel-rule=${this._cancelRule}
       ></ambience-rule-editor>
       <ambience-traces-modal
         ?open=${this._viewingTraces !== null}
         .hass=${this.hass}
-        .scope=${this._viewingTraces?.scope ?? { scope_kind: "house", scope_id: null }}
-        .group=${this._viewingTraces?.group ?? ""}
-        .groupName=${this._viewingTraces?.groupName ?? null}
-        @close=${() => { this._viewingTraces = null; }}
+        .scope=${this._viewingTraces?.scope ?? {
+          scope_kind: "house",
+          scope_id: null,
+        }}
+        .category=${this._viewingTraces?.category ?? ""}
+        .categoryName=${this._viewingTraces?.categoryName ?? null}
+        @close=${() => {
+          this._viewingTraces = null;
+        }}
       ></ambience-traces-modal>
       <ambience-simulator-modal
         ?open=${this._viewingSimulator !== null}
         .hass=${this.hass}
-        .scope=${this._viewingSimulator?.scope ?? { scope_kind: "house", scope_id: null }}
-        .group=${this._viewingSimulator?.group ?? ""}
-        .groupName=${this._viewingSimulator?.groupName ?? null}
-        @close=${() => { this._viewingSimulator = null; }}
+        .scope=${this._viewingSimulator?.scope ?? {
+          scope_kind: "house",
+          scope_id: null,
+        }}
+        .category=${this._viewingSimulator?.category ?? ""}
+        .categoryName=${this._viewingSimulator?.categoryName ?? null}
+        @close=${() => {
+          this._viewingSimulator = null;
+        }}
       ></ambience-simulator-modal>
     `;
   }
@@ -907,11 +1038,11 @@ export class AmbienceScopesView extends LitElement {
     const open = this._expanded.has(scopeKey(scope));
     const dataId = scope.kind === "house" ? "" : scope.id;
     return html`
-      <li
-        class="scope-row ${rowClass}"
-        data-id=${dataId}
-      >
-        <div class="scope-header ${open ? "open" : ""}" @click=${() => this._toggleExpand(scope)}>
+      <li class="scope-row ${rowClass}" data-id=${dataId}>
+        <div
+          class="scope-header ${open ? "open" : ""}"
+          @click=${() => this._toggleExpand(scope)}
+        >
           <span class="chevron ${open ? "open" : ""}">▶</span>
           <span class="scope-name">${name}</span>
           <span class="scope-summary">${this._summary(cfg)}</span>
@@ -920,7 +1051,11 @@ export class AmbienceScopesView extends LitElement {
             data-test="scope-kebab"
             .hass=${this.hass}
             .items=${[
-              { id: "run", label: localize(this.hass, "ui.run", "Run"), icon: "mdi:play" },
+              {
+                id: "run",
+                label: localize(this.hass, "ui.run", "Run"),
+                icon: "mdi:play",
+              },
             ] satisfies KebabItem[]}
             @menu-action=${(e: CustomEvent<{ id: string }>) =>
               this._onScopeMenu(scope, name, cfg, e.detail.id)}
@@ -934,11 +1069,11 @@ export class AmbienceScopesView extends LitElement {
                   .rules=${cfg.rules}
                   .periods=${this._periods}
                   .weatherConfig=${this._weatherConfig}
-                  .matchers=${this._matchers}
+                  .conditions=${this._conditions}
                   .availableActions=${this._actions}
                   .schemas=${this._schemas}
-                  .groups=${this._groups}
-                  .filterGroup=${this._filterGroup}
+                  .categories=${this._categories}
+                  .filterCategory=${this._filterCategory}
                   .hass=${this.hass}
                   @add-rule=${() => this._addRule(scope)}
                   @edit-rule=${(e: CustomEvent<{ index: number }>) =>
@@ -957,12 +1092,12 @@ export class AmbienceScopesView extends LitElement {
                   ) => this._toggleRuleEnabled(scope, e)}
                   @run-rule-actions=${(e: CustomEvent<{ index: number }>) =>
                     this._runRuleActions(scope, e)}
-                  @apply-group=${(e: CustomEvent<{ groupId: string }>) =>
-                    this._applyRules(scope, e.detail.groupId)}
-                  @show-traces=${(e: CustomEvent<{ group: string }>) =>
-                    this._showTraces(scope, e.detail.group)}
-                  @show-simulator=${(e: CustomEvent<{ group: string }>) =>
-                    this._showSimulator(scope, e.detail.group)}
+                  @apply-category=${(e: CustomEvent<{ categoryId: string }>) =>
+                    this._applyRules(scope, e.detail.categoryId)}
+                  @show-traces=${(e: CustomEvent<{ category: string }>) =>
+                    this._showTraces(scope, e.detail.category)}
+                  @show-simulator=${(e: CustomEvent<{ category: string }>) =>
+                    this._showSimulator(scope, e.detail.category)}
                 ></ambience-rules-list>
               </div>
             `

@@ -4,10 +4,10 @@ import { customElement, property, state } from "lit/decorators.js";
 import { localize } from "../i18n.js";
 import type { HassConnection } from "../api.js";
 import "./ambience-settings.js";
-import "./matchers-settings.js";
+import "./conditions-settings.js";
 import "./actions-settings.js";
 
-type Tab = "ambience" | "matchers" | "actions";
+type Tab = "ambience" | "conditions" | "actions";
 
 @customElement("ambience-settings-view")
 export class AmbienceSettingsView extends LitElement {
@@ -72,8 +72,8 @@ export class AmbienceSettingsView extends LitElement {
         <button class=${this._tab === "ambience" ? "active" : ""} @click=${() => { this._tab = "ambience"; }}>
           <ha-icon icon="mdi:home-lightbulb"></ha-icon>${localize(this.hass, "ui.settings_tab_ambience", "Ambience")}
         </button>
-        <button class=${this._tab === "matchers" ? "active" : ""} @click=${() => { this._tab = "matchers"; }}>
-          <ha-icon icon="mdi:filter-variant"></ha-icon>${localize(this.hass, "ui.settings_tab_matchers", "Matchers")}
+        <button class=${this._tab === "conditions" ? "active" : ""} @click=${() => { this._tab = "conditions"; }}>
+          <ha-icon icon="mdi:filter-variant"></ha-icon>${localize(this.hass, "ui.settings_tab_conditions", "Conditions")}
         </button>
         <button class=${this._tab === "actions" ? "active" : ""} @click=${() => { this._tab = "actions"; }}>
           <ha-icon icon="mdi:flash"></ha-icon>${localize(this.hass, "ui.settings_tab_actions", "Actions")}
@@ -82,8 +82,8 @@ export class AmbienceSettingsView extends LitElement {
       <div class="content">
         ${this._tab === "ambience"
           ? html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
-          : this._tab === "matchers"
-            ? html`<ambience-matchers-settings .hass=${this.hass}></ambience-matchers-settings>`
+          : this._tab === "conditions"
+            ? html`<ambience-conditions-settings .hass=${this.hass}></ambience-conditions-settings>`
             : html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`}
       </div>
     `;

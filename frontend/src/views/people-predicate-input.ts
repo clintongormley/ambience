@@ -51,7 +51,7 @@ const MODE_QUANT: Record<Mode, PeopleQuant> = {
  * Because a present-but-empty `who:[]` round-trips back to its own "X of:" mode,
  * the mode is derived purely from `value` — no reactive override machinery.
  *
- * `null` value = the matcher isn't yet constrained: we show Everybody + Home but
+ * `null` value = the condition isn't yet constrained: we show Everybody + Home but
  * do NOT emit on mount (the rule editor removes the condition via its own
  * control). Every explicit selection is a real constraint, so we emit the
  * corresponding predicate on change.

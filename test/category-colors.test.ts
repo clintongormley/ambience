@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 
-import { colorHex, textColorFor } from "../frontend/src/group-colors";
+import { colorHex, textColorFor } from "../frontend/src/category-colors";
 
 describe("textColorFor", () => {
   test("white background → black text", () => {

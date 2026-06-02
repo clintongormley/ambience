@@ -6,15 +6,15 @@ import type {
   AreaConfig,
   AreaListItem,
   BufferedUnit,
+  ConditionInfo,
   DayConfig,
   DryRunResult,
   ExposedAction,
   ExposedActionWarning,
   FloorListItem,
-  MatcherInfo,
   PeriodDef,
   PeriodStoreView,
-  RuleGroup,
+  RuleCategory,
   Scope,
   ScopeConfig,
   ScopeSwitch,
@@ -46,7 +46,10 @@ export type FloorRegistryEvent = {
 export type HassConnection = {
   callWS<T = unknown>(message: Record<string, unknown>): Promise<T>;
   // Live entity states, keyed by entity_id. Optional — simpler mocks omit it.
-  states?: Record<string, { state?: string; attributes?: Record<string, unknown> }>;
+  states?: Record<
+    string,
+    { state?: string; attributes?: Record<string, unknown> }
+  >;
   // HA's service-call entry point, used to toggle switch entities.
   callService?(
     domain: string,
@@ -92,7 +95,9 @@ export async function saveArea(
   });
 }
 
-export async function listFloors(hass: HassConnection): Promise<FloorListItem[]> {
+export async function listFloors(
+  hass: HassConnection,
+): Promise<FloorListItem[]> {
   return hass.callWS({ type: "ambience/floors/list" });
 }
 
@@ -126,11 +131,15 @@ export async function saveHouse(
   return hass.callWS({ type: "ambience/house/save", config });
 }
 
-export async function listMatchers(hass: HassConnection): Promise<MatcherInfo[]> {
-  return hass.callWS({ type: "ambience/matchers/list" });
+export async function listConditions(
+  hass: HassConnection,
+): Promise<ConditionInfo[]> {
+  return hass.callWS({ type: "ambience/conditions/list" });
 }
 
-export async function listExposedActions(hass: HassConnection): Promise<ExposedAction[]> {
+export async function listExposedActions(
+  hass: HassConnection,
+): Promise<ExposedAction[]> {
   return hass.callWS({ type: "ambience/exposed_actions/list" });
 }
 
@@ -141,7 +150,9 @@ export async function saveExposedActions(
   return hass.callWS({ type: "ambience/exposed_actions/save", actions });
 }
 
-export async function listServices(hass: HassConnection): Promise<ServiceInfo[]> {
+export async function listServices(
+  hass: HassConnection,
+): Promise<ServiceInfo[]> {
   return hass.callWS({ type: "ambience/services/list" });
 }
 
@@ -177,10 +188,13 @@ export async function dryRun(
 export async function applyRules(
   hass: HassConnection,
   scope: Scope,
-  groupId?: string,
+  categoryId?: string,
 ): Promise<{ ok: true }> {
-  const msg: Record<string, unknown> = { type: "ambience/apply", ...scopeFields(scope) };
-  if (groupId !== undefined) msg.group_id = groupId;
+  const msg: Record<string, unknown> = {
+    type: "ambience/apply",
+    ...scopeFields(scope),
+  };
+  if (categoryId !== undefined) msg.category_id = categoryId;
   return hass.callWS(msg);
 }
 
@@ -196,7 +210,9 @@ export async function runRuleActions(
   });
 }
 
-export async function listPeriods(hass: HassConnection): Promise<PeriodStoreView> {
+export async function listPeriods(
+  hass: HassConnection,
+): Promise<PeriodStoreView> {
   return hass.callWS({ type: "ambience/time_of_day_periods/list" });
 }
 
@@ -204,7 +220,15 @@ export async function savePeriods(
   hass: HassConnection,
   custom: Record<string, PeriodDef>,
   hidden: string[],
-): Promise<{ ok: true; warnings: Array<{ scope_kind: string; scope_id: string | null; rule_name: string; missing_period: string }> }> {
+): Promise<{
+  ok: true;
+  warnings: Array<{
+    scope_kind: string;
+    scope_id: string | null;
+    rule_name: string;
+    missing_period: string;
+  }>;
+}> {
   return hass.callWS({
     type: "ambience/time_of_day_periods/save",
     custom,
@@ -212,37 +236,57 @@ export async function savePeriods(
   });
 }
 
-export async function resetPeriods(hass: HassConnection): Promise<{ ok: true }> {
+export async function resetPeriods(
+  hass: HassConnection,
+): Promise<{ ok: true }> {
   return hass.callWS({ type: "ambience/time_of_day_periods/reset" });
 }
 
 export async function getDayConfig(hass: HassConnection): Promise<DayConfig> {
-  return hass.callWS({ type: "ambience/matchers/day/config/list" });
+  return hass.callWS({ type: "ambience/conditions/day/config/list" });
 }
 
 export async function saveDayConfig(
   hass: HassConnection,
   workday_sensor: string | null,
   workday_calendar: string | null,
-): Promise<{ ok: true; warnings: Array<{ scope_kind: string; scope_id: string | null; rule_name: string; reason: string }> }> {
+): Promise<{
+  ok: true;
+  warnings: Array<{
+    scope_kind: string;
+    scope_id: string | null;
+    rule_name: string;
+    reason: string;
+  }>;
+}> {
   return hass.callWS({
-    type: "ambience/matchers/day/config/save",
+    type: "ambience/conditions/day/config/save",
     workday_sensor,
     workday_calendar,
   });
 }
 
-export async function getWeatherConfig(hass: HassConnection): Promise<WeatherConfig> {
-  return hass.callWS({ type: "ambience/matchers/weather/config/list" });
+export async function getWeatherConfig(
+  hass: HassConnection,
+): Promise<WeatherConfig> {
+  return hass.callWS({ type: "ambience/conditions/weather/config/list" });
 }
 
 export async function saveWeatherConfig(
   hass: HassConnection,
   entity: string | null,
   groups: WeatherGroup[],
-): Promise<{ ok: true; warnings: Array<{ scope_kind: string; scope_id: string | null; rule_name: string; reason: string }> }> {
+): Promise<{
+  ok: true;
+  warnings: Array<{
+    scope_kind: string;
+    scope_id: string | null;
+    rule_name: string;
+    reason: string;
+  }>;
+}> {
   return hass.callWS({
-    type: "ambience/matchers/weather/config/save",
+    type: "ambience/conditions/weather/config/save",
     entity,
     groups,
   });
@@ -257,12 +301,16 @@ export async function getKnownStates(
   return hass.callWS({ type: "ambience/state/known_states", entity_id });
 }
 
-export async function getSwitchDefaults(hass: HassConnection): Promise<SwitchDefaults> {
+export async function getSwitchDefaults(
+  hass: HassConnection,
+): Promise<SwitchDefaults> {
   return hass.callWS({ type: "ambience/switch_defaults/list" });
 }
 
 /** Map each scope to its (possibly renamed) Ambience switch entity_id. */
-export async function listSwitches(hass: HassConnection): Promise<ScopeSwitch[]> {
+export async function listSwitches(
+  hass: HassConnection,
+): Promise<ScopeSwitch[]> {
   return hass.callWS({ type: "ambience/switches/list" });
 }
 
@@ -278,49 +326,55 @@ export async function saveSwitchDefaults(
   });
 }
 
-export async function listGroups(hass: HassConnection): Promise<RuleGroup[]> {
-  const res = await hass.callWS<{ groups: RuleGroup[] }>({
-    type: "ambience/groups/list",
+export async function listCategories(
+  hass: HassConnection,
+): Promise<RuleCategory[]> {
+  const res = await hass.callWS<{ categories: RuleCategory[] }>({
+    type: "ambience/categories/list",
   });
-  return res.groups;
+  return res.categories;
 }
 
-export async function saveGroups(
+export async function saveCategories(
   hass: HassConnection,
-  groups: RuleGroup[],
+  categories: RuleCategory[],
 ): Promise<{ ok: true }> {
-  return hass.callWS({ type: "ambience/groups/save", groups });
+  return hass.callWS({ type: "ambience/categories/save", categories });
 }
 
-export async function deleteGroup(
+export async function deleteCategory(
   hass: HassConnection,
-  group_id: string,
+  category_id: string,
 ): Promise<{ ok: true }> {
-  return hass.callWS({ type: "ambience/groups/delete", group_id });
+  return hass.callWS({ type: "ambience/categories/delete", category_id });
 }
 
-export async function listTraces(hass: HassConnection): Promise<BufferedUnit[]> {
-  const res = await hass.callWS<{ traces: BufferedUnit[] }>({ type: "ambience/traces/list" });
+export async function listTraces(
+  hass: HassConnection,
+): Promise<BufferedUnit[]> {
+  const res = await hass.callWS<{ traces: BufferedUnit[] }>({
+    type: "ambience/traces/list",
+  });
   return res.traces;
 }
 
 export async function simulateInputs(
   hass: HassConnection,
   scope: SimulateScope,
-  group: string,
+  category: string,
 ): Promise<SimulateInputs> {
   return hass.callWS({
     type: "ambience/simulate/inputs",
     scope_kind: scope.scope_kind,
     scope_id: scope.scope_id,
-    group,
+    category,
   });
 }
 
 export async function simulate(
   hass: HassConnection,
   scope: SimulateScope,
-  group: string,
+  category: string,
   now: string,
   overrides: SimulateOverrides,
   verdicts: SimulateVerdicts,
@@ -329,11 +383,10 @@ export async function simulate(
     type: "ambience/simulate",
     scope_kind: scope.scope_kind,
     scope_id: scope.scope_id,
-    group,
+    category,
     now,
     overrides,
     verdicts,
   });
   return res.result;
 }
-

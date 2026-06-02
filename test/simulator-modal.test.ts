@@ -15,7 +15,7 @@ const INPUTS = {
     { kind: "entity", entity_id: "sensor.count", control: "number", live_state: "2.0", attributes: [] },
     { kind: "entity", entity_id: "calendar.work", control: "select", options: ["off"], live_state: "off", attributes: [{ name: "description", control: "text", live_value: "today" }] },
     { kind: "entity", entity_id: "event.boot", control: "text", live_state: null, attributes: [{ name: "event_type", control: "text", live_value: null }] },
-    { kind: "verdict", matcher: "script", key: "k1", label: "script.holiday", entity_id: "script.holiday", live_value: false },
+    { kind: "verdict", condition: "script", key: "k1", label: "script.holiday", entity_id: "script.holiday", live_value: false },
   ],
 };
 
@@ -23,7 +23,7 @@ const RESULT = {
   event_id: null, timestamp: "2026-12-21T17:30:00+00:00",
   cause: { kind: "simulated", entity_id: null, old: null, new: null, detail: "x" },
   scope_kind: "area", scope_id: "kitchen", scope_name: "Kitchen",
-  group: "g1", group_name: "Lights", switch_state: "on",
+  category: "g1", category_name: "Lights", switch_state: "on",
   outcome: "acted", winner_name: "Evening", actions: [],
   explanation: { winner_index: 0, rules: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }] },
 };
@@ -34,7 +34,7 @@ async function mount(): Promise<any> {
   const el: any = document.createElement("ambience-simulator-modal");
   el.hass = { callWS: vi.fn(), states: { "binary_sensor.motion": { attributes: { friendly_name: "Hall motion" } } } };
   el.scope = { scope_kind: "area", scope_id: "kitchen" };
-  el.group = "g1"; el.groupName = "Lights"; el.open = true;
+  el.category = "g1"; el.categoryName = "Lights"; el.open = true;
   document.body.appendChild(el);
   await el.updateComplete; await new Promise((r) => setTimeout(r, 0)); await el.updateComplete;
   return el;

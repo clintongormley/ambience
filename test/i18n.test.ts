@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 import {
   periodLabel,
-  matcherLabel,
+  conditionLabel,
   actionLabel,
   anchorLabel,
   localize,
@@ -53,29 +53,29 @@ describe("periodLabel", () => {
   });
 });
 
-describe("matcherLabel", () => {
+describe("conditionLabel", () => {
   test("returns translated label when hass.localize hits", () => {
     const hass = { localize: (k: string) =>
-      k === "component.ambience.matcher.mode" ? "Mode" : undefined };
-    expect(matcherLabel(hass, "mode")).toBe("Mode");
+      k === "component.ambience.condition.mode" ? "Mode" : undefined };
+    expect(conditionLabel(hass, "mode")).toBe("Mode");
   });
 
   test("falls back to friendly form of name when hass.localize misses", () => {
     const hass = { localize: () => undefined };
-    expect(matcherLabel(hass, "mode")).toBe("Mode");
+    expect(conditionLabel(hass, "mode")).toBe("Mode");
   });
 
   test("falls back to friendly form for multi-word ids", () => {
-    expect(matcherLabel(undefined, "time_of_day")).toBe("Time of day");
+    expect(conditionLabel(undefined, "time_of_day")).toBe("Time of day");
   });
 
   test("falls back to friendly form when localize returns the key itself", () => {
     const hass = { localize: (k: string) => k };
-    expect(matcherLabel(hass, "time_of_day")).toBe("Time of day");
+    expect(conditionLabel(hass, "time_of_day")).toBe("Time of day");
   });
 
   test("works with undefined hass", () => {
-    expect(matcherLabel(undefined, "mode")).toBe("Mode");
+    expect(conditionLabel(undefined, "mode")).toBe("Mode");
   });
 });
 

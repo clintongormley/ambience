@@ -5,34 +5,34 @@ import type {
   ActionSpec,
   DayConfig,
   ExposedAction,
-  MatcherInfo,
+  ConditionInfo,
   PeriodStoreView,
   Rule,
-  RuleGroup,
+  RuleCategory,
   Scope,
   ScopeOption,
 } from "../types.js";
 import type { HassConnection } from "../api.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
-import { localize, matcherLabel } from "../i18n.js";
+import { localize, conditionLabel } from "../i18n.js";
 import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
-import { ruleDisplayName, summariseMatcher, summariseAction } from "../summary.js";
+import { ruleDisplayName, summariseCondition, summariseAction } from "../summary.js";
 import { entitiesForScope, scopeKey } from "../entities-for-scope.js";
-import { groupSwatch, groupSwatchStyles } from "../group-swatch.js";
+import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
 import { stripPositionMetadata } from "../rule.js";
 import "./action-slot.js";
-import "./matcher-input.js";
+import "./condition-input.js";
 
 type OpenSlot =
   | { kind: "name" }
-  | { kind: "group" }
+  | { kind: "category" }
   | { kind: "destination" }
-  | { kind: "matcher"; id: string }
+  | { kind: "condition"; id: string }
   | { kind: "action"; idx: number }
   | null;
 
 /**
- * True for the people matcher's "X of: nothing selected" invalid shape: a
+ * True for the people condition's "X of: nothing selected" invalid shape: a
  * predicate object carrying a `who` key that is a present-but-empty array.
  * (An "X of:" mode with zero people ticked.) Used by both validation and save.
  */
@@ -46,10 +46,10 @@ function _isEmptyWhoPredicate(pred: unknown): boolean {
 }
 
 /**
- * The default predicate seeded into `when` when a matcher is added via the
- * +Add condition dropdown. The people matcher defaults to a real
+ * The default predicate seeded into `when` when a condition is added via the
+ * +Add condition dropdown. The people condition defaults to a real
  * "Everybody is Home" constraint (rather than the wildcard "(any)") — to get
- * the wildcard back, the user removes the matcher. Every other matcher keeps
+ * the wildcard back, the user removes the condition. Every other condition keeps
  * the "(any)" default, i.e. no predicate is seeded.
  */
 function _defaultPredicateFor(name: string): unknown {
@@ -63,13 +63,13 @@ function sameScope(a?: Scope, b?: Scope): boolean {
 
 @customElement("ambience-rule-editor")
 export class AmbienceRuleEditor extends LitElement {
-  static override styles = [groupSwatchStyles, css`
+  static override styles = [categorySwatchStyles, css`
     :host {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.4); z-index: 100;
       align-items: stretch; justify-content: center;
-      --group-swatch-size: 1.75rem;
-      --group-swatch-icon-size: 18px;
+      --category-swatch-size: 1.75rem;
+      --category-swatch-icon-size: 18px;
     }
     :host([open]) { display: flex; }
     .modal {
@@ -131,7 +131,7 @@ export class AmbienceRuleEditor extends LitElement {
       background: var(--card-background-color, #fff);
       flex-shrink: 0;
     }
-    select.add-matcher, select.add-action {
+    select.add-condition, select.add-action {
       margin-top: 0.5rem;
     }
     button {
@@ -205,31 +205,31 @@ export class AmbienceRuleEditor extends LitElement {
       color: var(--secondary-text-color, #888);
       font-size: 0.9em;
     }
-    /* Group field: colour-coded swatch + icon (shell from groupSwatchStyles),
+    /* Category field: colour-coded swatch + icon (shell from categorySwatchStyles),
        matching the rules-list filter. */
-    .group-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-    .group-menu { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.35rem; }
-    .group-option {
+    .category-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .category-menu { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.35rem; }
+    .category-option {
       display: flex; align-items: center; gap: 0.6rem; width: 100%;
       min-height: 40px; box-sizing: border-box;
       padding: 0.3rem 0.5rem; border: 0; border-radius: 6px;
       background: none; color: var(--primary-text-color, inherit);
       cursor: pointer; font: inherit; font-size: 1rem; text-align: left;
     }
-    .group-option:hover { background: var(--secondary-background-color, #f5f5f5); }
-    .group-option[aria-selected="true"] {
+    .category-option:hover { background: var(--secondary-background-color, #f5f5f5); }
+    .category-option[aria-selected="true"] {
       background: var(--secondary-background-color, #eee); font-weight: 600;
     }
   `];
 
   @property({ type: Boolean, reflect: true }) open = false;
   @property({ attribute: false }) rule: Rule | null = null;
-  @property({ attribute: false }) matchers: MatcherInfo[] = [];
+  @property({ attribute: false }) conditions: ConditionInfo[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) dayConfig?: DayConfig;
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) availableActions: ExposedAction[] = [];
-  @property({ attribute: false }) groups: RuleGroup[] = [];
+  @property({ attribute: false }) categories: RuleCategory[] = [];
   @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) scope?: Scope;
@@ -252,17 +252,17 @@ export class AmbienceRuleEditor extends LitElement {
   @state() private _serviceHasTarget: Map<string, boolean> = new Map();
 
   /**
-   * Last-known error reported by a matcher's input widget, keyed by matcher
-   * name (via the `render-invalid-changed` event — the template matcher is the
-   * first emitter, but the channel is matcher-agnostic). A present entry means
+   * Last-known error reported by a condition's input widget, keyed by condition
+   * name (via the `render-invalid-changed` event — the template condition is the
+   * first emitter, but the channel is condition-agnostic). A present entry means
    * that condition is invalid, so closing/saving its slot is blocked until it's
    * fixed. Not reactive: it's read during the `_showError`-gated render.
    */
-  private _matcherError: Map<string, string> = new Map();
+  private _conditionError: Map<string, string> = new Map();
 
-  private _onMatcherInvalid(name: string, error: string | null) {
-    if (error) this._matcherError.set(name, error);
-    else this._matcherError.delete(name);
+  private _onConditionInvalid(name: string, error: string | null) {
+    if (error) this._conditionError.set(name, error);
+    else this._conditionError.delete(name);
   }
 
   override connectedCallback() {
@@ -305,7 +305,7 @@ export class AmbienceRuleEditor extends LitElement {
     this._scope = opt.scope;
     if (!this.hass) return;
     // Re-check action targets against the new scope. Pruning is destructive:
-    // switching back to the old scope does NOT restore cleared refs. Matcher
+    // switching back to the old scope does NOT restore cleared refs. Condition
     // predicates may legitimately reference other scopes, so they're untouched.
     const inScope = new Set(entitiesForScope(this.hass, this._scope, []));
     this._draft = {
@@ -449,42 +449,42 @@ export class AmbienceRuleEditor extends LitElement {
     return html`<input type="text" .value=${value} @input=${this._onNameInput} />`;
   }
 
-  // --- Group field ---
+  // --- Category field ---
 
-  // A rule's group is required: the selector always has a value and there is
-  // no "no group" option.
+  // A rule's category is required: the selector always has a value and there is
+  // no "no category" option.
 
-  private _setGroup(id: string) {
-    if (!this._draft || !id || id === this._draft.group) return;
-    // Pin position and priority are per-group, so moving a rule to a different
-    // group invalidates them — drop the fixed-position fields so it falls back
-    // to automatic ordering within the new group.
-    this._draft = { ...stripPositionMetadata(this._draft), group: id };
+  private _setCategory(id: string) {
+    if (!this._draft || !id || id === this._draft.category) return;
+    // Pin position and priority are per-category, so moving a rule to a different
+    // category invalidates them — drop the fixed-position fields so it falls back
+    // to automatic ordering within the new category.
+    this._draft = { ...stripPositionMetadata(this._draft), category: id };
   }
 
   /**
-   * The group as a collapse/expand slot (like the name field): a swatch + name
+   * The category as a collapse/expand slot (like the name field): a swatch + name
    * summary, expanding to a colour-coded menu of swatch + name options (the same
-   * visual language as the rules-list group filter).
+   * visual language as the rules-list category filter).
    */
-  private _renderGroupSlot() {
-    if (this.groups.length === 0) return "";
-    const sorted = [...this.groups].sort((a, b) => a.name.localeCompare(b.name));
-    const currentId = this._draft!.group || sorted[0].id;
-    const current = this.groups.find((g) => g.id === currentId) ?? sorted[0];
-    if (this._isOpen({ kind: "group" })) {
+  private _renderCategorySlot() {
+    if (this.categories.length === 0) return "";
+    const sorted = [...this.categories].sort((a, b) => a.name.localeCompare(b.name));
+    const currentId = this._draft!.category || sorted[0].id;
+    const current = this.categories.find((g) => g.id === currentId) ?? sorted[0];
+    if (this._isOpen({ kind: "category" })) {
       return html`
-        <div class="slot group-slot expanded" data-slot-id="group">
-          <div class="group-menu" role="listbox">
+        <div class="slot category-slot expanded" data-slot-id="category">
+          <div class="category-menu" role="listbox">
             ${sorted.map(
               (g) => html`<button
-                class="group-option"
+                class="category-option"
                 role="option"
                 aria-selected=${g.id === currentId}
-                @click=${() => { this._setGroup(g.id); this._open = null; }}
+                @click=${() => { this._setCategory(g.id); this._open = null; }}
               >
-                ${groupSwatch(g.color, g.icon)}
-                <span class="group-name">${g.name}</span>
+                ${categorySwatch(g.color, g.icon)}
+                <span class="category-name">${g.name}</span>
               </button>`,
             )}
           </div>
@@ -492,11 +492,11 @@ export class AmbienceRuleEditor extends LitElement {
       `;
     }
     return html`
-      <div class="slot collapsed" data-slot-id="group">
-        <div class="summary" @click=${() => this._toggleSlot({ kind: "group" })}>
-          <strong>${localize(this.hass, "ui.group", "Group")}:</strong>
-          ${groupSwatch(current.color, current.icon)}
-          <span class="group-name">${current.name}</span>
+      <div class="slot collapsed" data-slot-id="category">
+        <div class="summary" @click=${() => this._toggleSlot({ kind: "category" })}>
+          <strong>${localize(this.hass, "ui.category", "Category")}:</strong>
+          ${categorySwatch(current.color, current.icon)}
+          <span class="category-name">${current.name}</span>
         </div>
       </div>
     `;
@@ -507,9 +507,9 @@ export class AmbienceRuleEditor extends LitElement {
   private _isOpen(slot: Exclude<OpenSlot, null>): boolean {
     const open = this._open;
     if (open === null || open.kind !== slot.kind) return false;
-    if (slot.kind === "matcher" && open.kind === "matcher") return slot.id === open.id;
+    if (slot.kind === "condition" && open.kind === "condition") return slot.id === open.id;
     if (slot.kind === "action" && open.kind === "action") return slot.idx === open.idx;
-    // name / group / destination — a kind match is sufficient (single instance).
+    // name / category / destination — a kind match is sufficient (single instance).
     return true;
   }
 
@@ -518,8 +518,8 @@ export class AmbienceRuleEditor extends LitElement {
    * data, or null if valid.
    *
    * - Name slot: always valid (optional).
-   * - Matcher slots: predicates are valid by construction, with one exception —
-   *   the people matcher's "X of:" modes carry a `who` array that must not be
+   * - Condition slots: predicates are valid by construction, with one exception —
+   *   the people condition's "X of:" modes carry a `who` array that must not be
    *   empty (an unfinished selection). A present-but-empty `who` is the error.
    * - Action slots: must have at least one target. Per-field required-ness
    *   is enforced by ha-form / native browser validation inside the slot;
@@ -528,18 +528,18 @@ export class AmbienceRuleEditor extends LitElement {
    */
   private _validationError(slot: OpenSlot): string | null {
     if (slot === null) return null;
-    // Name is optional; group and destination always carry a valid value.
-    if (slot.kind === "name" || slot.kind === "group" || slot.kind === "destination") return null;
-    if (slot.kind === "matcher") {
+    // Name is optional; category and destination always carry a valid value.
+    if (slot.kind === "name" || slot.kind === "category" || slot.kind === "destination") return null;
+    if (slot.kind === "condition") {
       // People empty-selection case: an "X of:" mode (who key present) with
-      // zero people ticked. Other matchers are valid by construction.
+      // zero people ticked. Other conditions are valid by construction.
       const pred = this._draft?.when[slot.id];
       if (_isEmptyWhoPredicate(pred)) {
         return localize(this.hass, "ui.people_select_one", "Select at least one person");
       }
-      // A matcher whose input widget reports an error (e.g. a `template` whose
+      // A condition whose input widget reports an error (e.g. a `template` whose
       // Jinja throws) must not be left in the rule.
-      if (this._matcherError.has(slot.id)) {
+      if (this._conditionError.has(slot.id)) {
         return localize(
           this.hass,
           "ui.condition_error",
@@ -608,8 +608,8 @@ export class AmbienceRuleEditor extends LitElement {
       if (node.classList.contains("actions-bar")) return;
       // The add-condition dropdown fires `change` followed by a bubbling
       // `click` from the selected option. Without this skip, that click
-      // would collapse the matcher slot the change handler just opened.
-      if (node.classList.contains("add-matcher")) return;
+      // would collapse the condition slot the change handler just opened.
+      if (node.classList.contains("add-condition")) return;
       // Same reasoning for the +Add action dropdown: opening it to browse
       // options should not be treated as "leaving the current slot".
       if (node.classList.contains("add-action")) return;
@@ -617,46 +617,46 @@ export class AmbienceRuleEditor extends LitElement {
     this._tryCloseCurrent();
   }
 
-  // --- Matcher row ---
+  // --- Condition row ---
 
-  private _setPredicate(matcher: string, value: unknown) {
+  private _setPredicate(condition: string, value: unknown) {
     if (!this._draft) return;
     const when = { ...this._draft.when };
-    if (value == null) delete when[matcher];
-    else when[matcher] = value;
+    if (value == null) delete when[condition];
+    else when[condition] = value;
     this._draft = { ...this._draft, when };
   }
 
-  private _renderMatcherRow(m: MatcherInfo) {
+  private _renderConditionRow(m: ConditionInfo) {
     const value = this._draft!.when[m.name] ?? null;
-    const open = this._isOpen({ kind: "matcher", id: m.name });
+    const open = this._isOpen({ kind: "condition", id: m.name });
 
-    const summary = summariseMatcher(m.name, value, { hass: this.hass as any, periods: this.periods });
+    const summary = summariseCondition(m.name, value, { hass: this.hass as any, periods: this.periods });
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id=${m.name}>
-        <div class="summary" @click=${() => this._toggleSlot({ kind: "matcher", id: m.name })}>
-          <span class="summary-label"><strong>${matcherLabel(this.hass as any, m.name)}:</strong> ${summary}</span>
+        <div class="summary" @click=${() => this._toggleSlot({ kind: "condition", id: m.name })}>
+          <span class="summary-label"><strong>${conditionLabel(this.hass as any, m.name)}:</strong> ${summary}</span>
           <button
             class="remove"
-            @click=${(e: Event) => { e.stopPropagation(); this._removeMatcher(m.name); }}
+            @click=${(e: Event) => { e.stopPropagation(); this._removeCondition(m.name); }}
             title=${localize(this.hass, "ui.remove_condition", "Remove condition")}
           >✕</button>
         </div>
         ${open ? html`
           <div class="body">
-            <ambience-matcher-input
+            <ambience-condition-input
               .hass=${this.hass}
-              .matcher=${m}
+              .condition=${m}
               .value=${value}
               .periods=${this.periods}
               .dayConfig=${this.dayConfig}
               .weatherConfig=${this.weatherConfig}
               @value-changed=${(e: CustomEvent<{ value: unknown }>) => this._setPredicate(m.name, e.detail.value)}
-              @render-invalid-changed=${(e: CustomEvent<{ error: string | null }>) => this._onMatcherInvalid(m.name, e.detail.error)}
-            ></ambience-matcher-input>
+              @render-invalid-changed=${(e: CustomEvent<{ error: string | null }>) => this._onConditionInvalid(m.name, e.detail.error)}
+            ></ambience-condition-input>
 
-            ${this._showError && this._validationError({ kind: "matcher", id: m.name }) ? html`
-              <div class="error">${this._validationError({ kind: "matcher", id: m.name })}</div>
+            ${this._showError && this._validationError({ kind: "condition", id: m.name }) ? html`
+              <div class="error">${this._validationError({ kind: "condition", id: m.name })}</div>
             ` : ""}
           </div>
         ` : ""}
@@ -664,102 +664,102 @@ export class AmbienceRuleEditor extends LitElement {
     `;
   }
 
-  // --- Matcher visibility / add+remove ---
+  // --- Condition visibility / add+remove ---
 
   /**
-   * Matchers shown as rows. A matcher is visible only if it has a non-null
+   * Conditions shown as rows. A condition is visible only if it has a non-null
    * value in `when`, OR if it's the currently-open slot (just-added via
    * dropdown, no predicate set yet). A stored null predicate is treated as
    * "not in the rule" — same as an absent key.
    */
-  private _visibleMatchers(): MatcherInfo[] {
+  private _visibleConditions(): ConditionInfo[] {
     if (!this._draft) return [];
     const when = this._draft.when;
-    return this.matchers.filter((m) =>
+    return this.conditions.filter((m) =>
       (m.name in when && when[m.name] != null) ||
-      (this._open?.kind === "matcher" && this._open.id === m.name),
+      (this._open?.kind === "condition" && this._open.id === m.name),
     );
   }
 
-  private _unusedMatchers(): MatcherInfo[] {
-    const visible = new Set(this._visibleMatchers().map((m) => m.name));
-    return this.matchers
+  private _unusedConditions(): ConditionInfo[] {
+    const visible = new Set(this._visibleConditions().map((m) => m.name));
+    return this.conditions
       .filter((m) => !visible.has(m.name))
       .sort((a, b) =>
-        matcherLabel(this.hass as any, a.name).localeCompare(
-          matcherLabel(this.hass as any, b.name),
+        conditionLabel(this.hass as any, a.name).localeCompare(
+          conditionLabel(this.hass as any, b.name),
         ),
       );
   }
 
-  private _onAddMatcher = (e: Event) => {
+  private _onAddCondition = (e: Event) => {
     const select = e.target as HTMLSelectElement;
     const name = select.value;
     select.value = "";  // reset placeholder regardless of branch
-    this._addMatcher(name);
+    this._addCondition(name);
   };
 
   // Sentinel value for the ha-form select's placeholder option. ha-form's
   // dropdown won't render an option whose value is the empty string, so we
   // use a non-colliding literal and translate it back to "no selection" on
   // emit. (Same pattern as state-expr-atom's "State" sentinel.)
-  private static readonly _ADD_MATCHER_PLACEHOLDER = "__add_matcher__";
+  private static readonly _ADD_CONDITION_PLACEHOLDER = "__add_condition__";
 
   /* v8 ignore start -- ha-form not registered in jsdom */
-  private _onAddMatcherHaForm = (e: CustomEvent<{ value: { add: string } }>) => {
+  private _onAddConditionHaForm = (e: CustomEvent<{ value: { add: string } }>) => {
     e.stopPropagation();
     const name = e.detail.value.add;
-    if (name === AmbienceRuleEditor._ADD_MATCHER_PLACEHOLDER) return;
-    this._addMatcher(name);
+    if (name === AmbienceRuleEditor._ADD_CONDITION_PLACEHOLDER) return;
+    this._addCondition(name);
   };
   /* v8 ignore stop */
 
-  private _addMatcher(name: string) {
+  private _addCondition(name: string) {
     if (!name) return;
     // If a different slot is open and invalid, refuse to switch.
     if (this._open !== null && !this._tryCloseCurrent()) return;
-    // Seed a default predicate for matchers that want a real starting
+    // Seed a default predicate for conditions that want a real starting
     // constraint (currently only `people` → "Everybody is Home"). Skip if the
     // key is already present so we never clobber an existing value.
     const def = _defaultPredicateFor(name);
     if (def != null && this._draft && !(name in this._draft.when)) {
       this._draft = { ...this._draft, when: { ...this._draft.when, [name]: def } };
     }
-    this._open = { kind: "matcher", id: name };
+    this._open = { kind: "condition", id: name };
     this._showError = false;
   }
 
-  private _removeMatcher(name: string) {
+  private _removeCondition(name: string) {
     if (!this._draft) return;
     const when = { ...this._draft.when };
     delete when[name];
     this._draft = { ...this._draft, when };
-    this._matcherError.delete(name);
-    if (this._open?.kind === "matcher" && this._open.id === name) {
+    this._conditionError.delete(name);
+    if (this._open?.kind === "condition" && this._open.id === name) {
       this._open = null;
       this._showError = false;
     }
   }
 
-  private _renderAddMatcher() {
-    const unused = this._unusedMatchers();
+  private _renderAddCondition() {
+    const unused = this._unusedConditions();
     if (unused.length === 0) return "";
     /* v8 ignore next 4 -- ha-form not registered in jsdom; jsdom tests hit the fallback below */
     if (customElements.get("ha-form")) {
-      return this._renderAddMatcherHaForm(unused);
+      return this._renderAddConditionHaForm(unused);
     }
     return html`
-      <div class="add-matcher">
-        <select class="add-matcher" @change=${this._onAddMatcher}>
+      <div class="add-condition">
+        <select class="add-condition" @change=${this._onAddCondition}>
           <option value="">${localize(this.hass, "ui.add_condition", "+ Add condition…")}</option>
-          ${unused.map((m) => html`<option value=${m.name}>${matcherLabel(this.hass as any, m.name)}</option>`)}
+          ${unused.map((m) => html`<option value=${m.name}>${conditionLabel(this.hass as any, m.name)}</option>`)}
         </select>
       </div>
     `;
   }
 
   /* v8 ignore start -- ha-form path (real HA only) */
-  private _renderAddMatcherHaForm(unused: MatcherInfo[]) {
+  private _renderAddConditionHaForm(unused: ConditionInfo[]) {
     const placeholderLabel = localize(this.hass, "ui.add_condition", "+ Add condition…");
     const schema = [{
       name: "add",
@@ -767,20 +767,20 @@ export class AmbienceRuleEditor extends LitElement {
         select: {
           mode: "dropdown",
           options: [
-            { value: AmbienceRuleEditor._ADD_MATCHER_PLACEHOLDER, label: placeholderLabel },
-            ...unused.map((m) => ({ value: m.name, label: matcherLabel(this.hass as any, m.name) })),
+            { value: AmbienceRuleEditor._ADD_CONDITION_PLACEHOLDER, label: placeholderLabel },
+            ...unused.map((m) => ({ value: m.name, label: conditionLabel(this.hass as any, m.name) })),
           ],
         },
       },
     }];
     return html`
-      <div class="add-matcher">
+      <div class="add-condition">
         <ha-form
           .hass=${this.hass}
           .schema=${schema}
-          .data=${{ add: AmbienceRuleEditor._ADD_MATCHER_PLACEHOLDER }}
+          .data=${{ add: AmbienceRuleEditor._ADD_CONDITION_PLACEHOLDER }}
           .computeLabel=${() => ""}
-          @value-changed=${this._onAddMatcherHaForm}
+          @value-changed=${this._onAddConditionHaForm}
         ></ha-form>
       </div>
     `;
@@ -1009,9 +1009,9 @@ export class AmbienceRuleEditor extends LitElement {
     // only place they're checked — block on the first error and re-open the
     // offending slot with its message shown.
     for (const id of Object.keys(this._draft.when)) {
-      if (this._draft.when[id] != null && this._validationError({ kind: "matcher", id }) !== null) {
+      if (this._draft.when[id] != null && this._validationError({ kind: "condition", id }) !== null) {
         this._showError = true;
-        this._open = { kind: "matcher", id };
+        this._open = { kind: "condition", id };
         return;
       }
     }
@@ -1022,7 +1022,7 @@ export class AmbienceRuleEditor extends LitElement {
         return;
       }
     }
-    // Defense in depth: a matcher set to "any" should not persist as a null
+    // Defense in depth: a condition set to "any" should not persist as a null
     // predicate in storage. _setPredicate already deletes on null for live
     // user input, but older storage / hand-edited JSON might still carry one.
     const when = Object.fromEntries(
@@ -1041,17 +1041,17 @@ export class AmbienceRuleEditor extends LitElement {
 
   override render() {
     if (!this._draft) return html``;
-    const visibleMatchers = this._visibleMatchers();
+    const visibleConditions = this._visibleConditions();
     return html`
       <div class="modal" @click=${this._onModalClick}>
         <div class="content">
           ${this._renderNameSlot()}
-          ${this._renderGroupSlot()}
+          ${this._renderCategorySlot()}
           ${this._renderDestinationSlot()}
 
           <h3>${localize(this.hass, "ui.when_heading", "When")}</h3>
-          ${visibleMatchers.map((m) => this._renderMatcherRow(m))}
-          ${this._renderAddMatcher()}
+          ${visibleConditions.map((m) => this._renderConditionRow(m))}
+          ${this._renderAddCondition()}
 
           <h3>${localize(this.hass, "ui.actions_heading", "Actions")}</h3>
           ${this._draft.actions.map((a, i) => this._renderActionRow(a, i))}

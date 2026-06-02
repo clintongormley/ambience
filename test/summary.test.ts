@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 import {
   ruleDisplayName,
-  summariseMatcher,
+  summariseCondition,
   summariseTimeOfDay,
   summariseDay,
   summariseAction,
@@ -55,35 +55,35 @@ describe("ruleDisplayName", () => {
   });
 });
 
-describe("summariseMatcher", () => {
+describe("summariseCondition", () => {
   test("null predicate renders as '(any)'", () => {
-    expect(summariseMatcher("mode", null, { hass: noLocalize, periods })).toBe("(any)");
+    expect(summariseCondition("mode", null, { hass: noLocalize, periods })).toBe("(any)");
   });
 
   test("mode predicate renders as the raw string", () => {
-    expect(summariseMatcher("mode", "movie", { hass: noLocalize, periods })).toBe("movie");
+    expect(summariseCondition("mode", "movie", { hass: noLocalize, periods })).toBe("movie");
   });
 
   test("time_of_day predicate delegates to summariseTimeOfDay", () => {
     expect(
-      summariseMatcher("time_of_day", { period: "afternoon" }, { hass: noLocalize, periods }),
+      summariseCondition("time_of_day", { period: "afternoon" }, { hass: noLocalize, periods }),
     ).toBe("Afternoon");
   });
 
   test("people predicate delegates to summarisePeople (not [object Object])", () => {
     expect(
-      summariseMatcher("people", { quant: "nobody", where: "home" }, { hass: noLocalize, periods }),
+      summariseCondition("people", { quant: "nobody", where: "home" }, { hass: noLocalize, periods }),
     ).toBe("Nobody is at Home");
   });
 
   test("template predicate renders the template string (not [object Object])", () => {
     expect(
-      summariseMatcher("template", { template: "{{ is_state('x','on') }}" }, { hass: noLocalize, periods }),
+      summariseCondition("template", { template: "{{ is_state('x','on') }}" }, { hass: noLocalize, periods }),
     ).toBe("{{ is_state('x','on') }}");
   });
 
   test("null template predicate renders as '(any)'", () => {
-    expect(summariseMatcher("template", null, { hass: noLocalize, periods })).toBe("(any)");
+    expect(summariseCondition("template", null, { hass: noLocalize, periods })).toBe("(any)");
   });
 });
 
@@ -261,9 +261,9 @@ describe("summariseDay", () => {
     expect(summariseDay({ include: [{ kind: "last_workday" }], exclude: [] })).toBe("Last workday");
   });
 
-  test("summariseMatcher delegates day to summariseDay", () => {
+  test("summariseCondition delegates day to summariseDay", () => {
     expect(
-      summariseMatcher("day", { include: [{ kind: "weekday", days: [5, 6] }], exclude: [] }, {}),
+      summariseCondition("day", { include: [{ kind: "weekday", days: [5, 6] }], exclude: [] }, {}),
     ).toBe("Sat/Sun");
   });
 });
@@ -469,13 +469,13 @@ test("summariseSun formats elevation bands, azimuth sectors and ranges", () => {
   expect(summariseSun(null)).toBe("any");
 });
 
-test("summariseMatcher dispatches the sun matcher", () => {
-  expect(summariseMatcher("sun", { azimuth: { sectors: ["W"] } }, {})).toBe("W");
+test("summariseCondition dispatches the sun condition", () => {
+  expect(summariseCondition("sun", { azimuth: { sectors: ["W"] } }, {})).toBe("W");
 });
 
 test("summariseWeather renders dangling group ids title-cased (no '?' suffix)", () => {
   // `stormy` and `cold_snap` aren't in the configured groups — simulates a
-  // rule whose referenced group was renamed or deleted in the matcher config.
+  // rule whose referenced group was renamed or deleted in the condition config.
   const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
   expect(summariseWeather({ groups: ["wet", "stormy"], thresholds: [] }, ctx))
     .toBe("Wet/Stormy");
@@ -484,9 +484,9 @@ test("summariseWeather renders dangling group ids title-cased (no '?' suffix)", 
     .toBe("Cold Snap/Heat Wave");
 });
 
-test("summariseMatcher delegates weather", () => {
+test("summariseCondition delegates weather", () => {
   const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
-  expect(summariseMatcher("weather", { groups: ["wet"], thresholds: [] }, ctx))
+  expect(summariseCondition("weather", { groups: ["wet"], thresholds: [] }, ctx))
     .toBe("Wet");
 });
 
@@ -560,8 +560,8 @@ test("summariseState null is 'any'", () => {
   expect(summariseState(null, {})).toBe("any");
 });
 
-test("summariseMatcher dispatches state", () => {
-  expect(summariseMatcher("state", {
+test("summariseCondition dispatches state", () => {
+  expect(summariseCondition("state", {
     kind: "is", entity_id: "a", states: ["on"],
   }, {})).toBe("a is on");
 });
@@ -760,22 +760,22 @@ describe("summariseScript", () => {
   });
 });
 
-test("summariseMatcher dispatches script with no args", () => {
-  expect(summariseMatcher(
+test("summariseCondition dispatches script with no args", () => {
+  expect(summariseCondition(
     "script",
     { script: "script.foo" },
     { hass: noLocalize },
   )).toBe("Foo");
 });
 
-test("summariseMatcher dispatches script with args (sorted)", () => {
-  expect(summariseMatcher(
+test("summariseCondition dispatches script with args (sorted)", () => {
+  expect(summariseCondition(
     "script",
     { script: "script.foo", args: { z: "down", k: 7 } },
     { hass: noLocalize },
   )).toBe("Foo (K: 7, Z: down)");
 });
 
-test("summariseMatcher script with null predicate yields '(any)'", () => {
-  expect(summariseMatcher("script", null, { hass: noLocalize })).toBe("(any)");
+test("summariseCondition script with null predicate yields '(any)'", () => {
+  expect(summariseCondition("script", null, { hass: noLocalize })).toBe("(any)");
 });

@@ -3,18 +3,23 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import "./kebab-menu";
 import type { KebabItem } from "./kebab-menu";
-import { groupSwatchStyle } from "../group-colors.js";
+import { categorySwatchStyle } from "../category-colors.js";
 import { entityName, type HassWithStates } from "./entity-row.js";
-import { actionLabel, localize, matcherLabel } from "../i18n.js";
-import { formatArgValue, paramLabel, ruleDisplayName, summariseMatcher } from "../summary.js";
+import { actionLabel, localize, conditionLabel } from "../i18n.js";
+import {
+  formatArgValue,
+  paramLabel,
+  ruleDisplayName,
+  summariseCondition,
+} from "../summary.js";
 import { DragReorderController } from "../drag-reorder.js";
 import type {
   ActionSpec,
+  ConditionInfo,
   ExposedAction,
-  MatcherInfo,
   PeriodStoreView,
   Rule,
-  RuleGroup,
+  RuleCategory,
 } from "../types.js";
 
 @customElement("ambience-rules-list")
@@ -87,10 +92,10 @@ export class AmbienceRulesList extends LitElement {
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
     }
-    .matcher-line {
+    .condition-line {
       padding: 0.05rem 0;
-      /* Wrap continuation lines indented to align under the matcher body
-         (after the bold "Matcher:" label). */
+      /* Wrap continuation lines indented to align under the condition body
+         (after the bold "Condition:" label). */
       padding-left: 1.25rem;
       text-indent: -1.25rem;
     }
@@ -159,10 +164,10 @@ export class AmbienceRulesList extends LitElement {
       cursor: help;
       line-height: 1;
     }
-    /* Full-width coloured bar before each group's rules. The colour + text
-       colour are set inline per group; this rule carries layout + the neutral
-       fallback used when a group has no colour. */
-    .group-section-header {
+    /* Full-width coloured bar before each category's rules. The colour + text
+       colour are set inline per category; this rule carries layout + the neutral
+       fallback used when a category has no colour. */
+    .category-section-header {
       display: flex;
       align-items: center;
       gap: 0.5rem;
@@ -175,13 +180,13 @@ export class AmbienceRulesList extends LitElement {
       background: var(--secondary-background-color, #e0e0e0);
       color: var(--primary-text-color, #212121);
     }
-    .group-section:first-of-type .group-section-header {
+    .category-section:first-of-type .category-section-header {
       margin-top: 0;
     }
-    .group-section-header ha-icon {
+    .category-section-header ha-icon {
       --mdc-icon-size: 20px;
     }
-    .group-kebab {
+    .category-kebab {
       margin-left: auto;
       --kebab-trigger-color: currentColor;
       /* Cancel the header's right padding so the kebab sits flush at the bar's
@@ -190,8 +195,8 @@ export class AmbienceRulesList extends LitElement {
     }
     .row-kebab {
       /* Cancel the row's right padding so the kebab sits flush at the card's
-         right edge, vertically in line with the group and scope kebabs. The
-         extra -1px compensates for the row card's 1px border (the group bar
+         right edge, vertically in line with the category and scope kebabs. The
+         extra -1px compensates for the row card's 1px border (the category bar
          has none), so all three kebab columns align to the same pixel. */
       margin-right: calc(-1rem - 1px);
     }
@@ -199,12 +204,16 @@ export class AmbienceRulesList extends LitElement {
 
   @property({ attribute: false }) rules: Rule[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
-  @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
-  @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
-  // Matcher registry — used to sort `when` keys by `priority` in the summary
+  @property({ attribute: false })
+  weatherConfig?: import("../types.js").WeatherConfig;
+  @property({ attribute: false }) hass?: {
+    localize?: (k: string) => string | undefined;
+    [key: string]: unknown;
+  };
+  // Condition registry — used to sort `when` keys by `priority` in the summary
   // so it reads in the same order as the linearisation tiebreaker (higher
   // priority first). Undefined → falls back to `when`-dict insertion order.
-  @property({ attribute: false }) matchers?: MatcherInfo[];
+  @property({ attribute: false }) conditions?: ConditionInfo[];
   // Exposed-actions registry — used to resolve a friendly label for each
   // action when rendering the expanded detail under a rule. Optional;
   // when missing, falls back to the service id (snake-case → title-case).
@@ -212,14 +221,17 @@ export class AmbienceRulesList extends LitElement {
   // Per-service schemas — used to look up HA's `field.name` attribute
   // for each param key in the expanded action detail. Optional; when
   // missing, the param key is humanized (snake_case → "Title case").
-  @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
-  // Available rule groups, used to render the section header bars. Empty ⇒ no
-  // group sections (every rule rendered as one flat list).
-  @property({ attribute: false }) groups: RuleGroup[] = [];
+  @property({ attribute: false }) schemas: Record<
+    string,
+    import("../types.js").ServiceSchema
+  > = {};
+  // Available rule categories, used to render the section header bars. Empty ⇒ no
+  // category sections (every rule rendered as one flat list).
+  @property({ attribute: false }) categories: RuleCategory[] = [];
 
-  // The active group filter, OWNED BY THE PARENT (scopes-view): "" = All,
-  // otherwise a group id. Presentation-only.
-  @property({ attribute: false }) filterGroup: string = "";
+  // The active category filter, OWNED BY THE PARENT (scopes-view): "" = All,
+  // otherwise a category id. Presentation-only.
+  @property({ attribute: false }) filterCategory: string = "";
 
   // Drag-to-reorder controller. On drop it emits "reorder-rules" {from,to};
   // the parent (scopes-view) performs the actual move.
@@ -229,50 +241,76 @@ export class AmbienceRulesList extends LitElement {
   // Rule indices whose action list is expanded inline.
   @state() private _expanded = new Set<number>();
 
-  /** A full-width coloured header bar for a group's section: the group's colour
-   *  as background (auto-contrast text), its icon, then its name. Falls back to
-   *  neutral theme colours when the group has no colour. */
-  private _renderSectionHeader(group: RuleGroup) {
-    return html`<div class="group-section-header" style=${groupSwatchStyle(group.color)}>
-      ${group.icon ? html`<ha-icon icon=${group.icon}></ha-icon>` : ""}
-      <span>${group.name}</span>
+  /** A full-width coloured header bar for a category's section: the category's
+   *  colour as background (auto-contrast text), its icon, then its name. Falls
+   *  back to neutral theme colours when the category has no colour. */
+  private _renderSectionHeader(category: RuleCategory) {
+    return html`<div
+      class="category-section-header"
+      style=${categorySwatchStyle(category.color)}
+    >
+      ${category.icon ? html`<ha-icon icon=${category.icon}></ha-icon>` : ""}
+      <span>${category.name}</span>
       <ambience-kebab-menu
-        class="group-kebab"
+        class="category-kebab"
         .hass=${this.hass}
         .items=${[
-          { id: "run", label: localize(this.hass, "ui.run", "Run"), icon: "mdi:play" },
-          { id: "traces", label: localize(this.hass, "ui.view_traces", "View traces"), icon: "mdi:transit-connection-variant" },
-          { id: "simulate", label: localize(this.hass, "ui.simulate", "Simulate"), icon: "mdi:flask-outline" },
+          {
+            id: "run",
+            label: localize(this.hass, "ui.run", "Run"),
+            icon: "mdi:play",
+          },
+          {
+            id: "traces",
+            label: localize(this.hass, "ui.view_traces", "View traces"),
+            icon: "mdi:transit-connection-variant",
+          },
+          {
+            id: "simulate",
+            label: localize(this.hass, "ui.simulate", "Simulate"),
+            icon: "mdi:flask-outline",
+          },
         ] satisfies KebabItem[]}
-        @menu-action=${(e: CustomEvent<{ id: string }>) => this._onGroupMenu(group, e.detail.id)}
+        @menu-action=${(e: CustomEvent<{ id: string }>) =>
+          this._onCategoryMenu(category, e.detail.id)}
       ></ambience-kebab-menu>
     </div>`;
   }
 
   /**
    * Rules paired with their ORIGINAL index, partitioned into render sections.
-   * filterGroup="" (All) → one section per group that has rules, sorted by
-   * group name; each labelled. filterGroup=<id> → a single unlabelled section
-   * with only that group's rules. Original indices are preserved so
+   * filterCategory="" (All) → one section per category that has rules, sorted by
+   * category name; each labelled. filterCategory=<id> → a single unlabelled
+   * section with only that category's rules. Original indices are preserved so
    * edit/delete/duplicate/reorder reference the correct underlying entry.
    */
-  private _sections(): Array<{ group: RuleGroup | undefined; rows: Array<[number, Rule]> }> {
+  private _sections(): Array<{
+    category: RuleCategory | undefined;
+    rows: Array<[number, Rule]>;
+  }> {
     const pairs = this.rules.map((rule, i) => [i, rule] as [number, Rule]);
-    if (this.filterGroup !== "") {
-      return [{
-        group: this.groups.find((g) => g.id === this.filterGroup),
-        rows: pairs.filter(([, r]) => r.group === this.filterGroup),
-      }];
+    if (this.filterCategory !== "") {
+      return [
+        {
+          category: this.categories.find((g) => g.id === this.filterCategory),
+          rows: pairs.filter(([, r]) => r.category === this.filterCategory),
+        },
+      ];
     }
     const byId = new Map<string, Array<[number, Rule]>>();
     for (const [i, r] of pairs) {
-      const list = byId.get(r.group) ?? [];
+      const list = byId.get(r.category) ?? [];
       list.push([i, r]);
-      byId.set(r.group, list);
+      byId.set(r.category, list);
     }
     return [...byId.entries()]
-      .map(([gid, rows]) => ({ group: this.groups.find((g) => g.id === gid), rows }))
-      .sort((a, b) => (a.group?.name ?? "").localeCompare(b.group?.name ?? ""));
+      .map(([gid, rows]) => ({
+        category: this.categories.find((g) => g.id === gid),
+        rows,
+      }))
+      .sort((a, b) =>
+        (a.category?.name ?? "").localeCompare(b.category?.name ?? ""),
+      );
   }
 
   private _emit(name: string, detail: unknown) {
@@ -283,20 +321,25 @@ export class AmbienceRulesList extends LitElement {
 
   /** Sorted list of active `when` keys (higher priority first). */
   private _whenKeys(rule: Rule): string[] {
-    const priorityOf = new Map((this.matchers ?? []).map((m) => [m.name, m.priority]));
+    const priorityOf = new Map(
+      (this.conditions ?? []).map((m) => [m.name, m.priority]),
+    );
     return Object.keys(rule.when)
       .filter((k) => rule.when[k] != null)
-      .sort((a, b) => (priorityOf.get(b) ?? -Infinity) - (priorityOf.get(a) ?? -Infinity));
+      .sort(
+        (a, b) =>
+          (priorityOf.get(b) ?? -Infinity) - (priorityOf.get(a) ?? -Infinity),
+      );
   }
 
-  /** Inline (collapsed) "when" summary: matcher entries joined by `, ` with
-   *  each matcher label wrapped in <strong>. */
+  /** Inline (collapsed) "when" summary: condition entries joined by `, ` with
+   *  each condition label wrapped in <strong>. */
   private _whenSummary(rule: Rule) {
     const keys = this._whenKeys(rule);
     if (keys.length === 0) return localize(this.hass, "ui.summary_any", "any");
     return keys.map((k, i) => {
-      const label = matcherLabel(this.hass as any, k);
-      const body = summariseMatcher(k, rule.when[k], {
+      const label = conditionLabel(this.hass as any, k);
+      const body = summariseCondition(k, rule.when[k], {
         hass: this.hass as any,
         periods: this.periods,
         weatherGroups: this.weatherConfig?.groups,
@@ -306,29 +349,34 @@ export class AmbienceRulesList extends LitElement {
     });
   }
 
-  /** Expanded "when" detail: one matcher per line. */
+  /** Expanded "when" detail: one condition per line. */
   private _whenStacked(rule: Rule) {
     const keys = this._whenKeys(rule);
     if (keys.length === 0) {
-      return html`<div class="matcher-line">${localize(this.hass, "ui.summary_any", "any")}</div>`;
+      return html`<div class="condition-line">
+        ${localize(this.hass, "ui.summary_any", "any")}
+      </div>`;
     }
     return keys.map((k) => {
-      const label = matcherLabel(this.hass as any, k);
-      const body = summariseMatcher(k, rule.when[k], {
+      const label = conditionLabel(this.hass as any, k);
+      const body = summariseCondition(k, rule.when[k], {
         hass: this.hass as any,
         periods: this.periods,
         weatherGroups: this.weatherConfig?.groups,
       });
-      return html`<div class="matcher-line"><strong>${label}:</strong> ${body}</div>`;
+      return html`<div class="condition-line">
+        <strong>${label}:</strong> ${body}
+      </div>`;
     });
   }
 
   /** "N actions" / "1 action" / "0 actions" label. */
   private _actionCountLabel(rule: Rule): string {
     const n = rule.actions.length;
-    const word = n === 1
-      ? localize(this.hass, "ui.action_singular", "action")
-      : localize(this.hass, "ui.action_plural", "actions");
+    const word =
+      n === 1
+        ? localize(this.hass, "ui.action_singular", "action")
+        : localize(this.hass, "ui.action_plural", "actions");
     return `${n} ${word}`;
   }
 
@@ -352,7 +400,10 @@ export class AmbienceRulesList extends LitElement {
   private _actionParamsString(action: ActionSpec): string {
     return Object.entries(action.params)
       .filter(([, v]) => v !== undefined && v !== null && v !== "")
-      .map(([k, v]) => `${paramLabel(k, action.service, this.schemas)}: ${formatArgValue(this.hass, v)}`)
+      .map(
+        ([k, v]) =>
+          `${paramLabel(k, action.service, this.schemas)}: ${formatArgValue(this.hass, v)}`,
+      )
       .join(", ");
   }
 
@@ -365,10 +416,12 @@ export class AmbienceRulesList extends LitElement {
     return actionLabel(this.hass as any, action.service);
   }
 
-  private _onGroupMenu(group: RuleGroup, id: string) {
-    if (id === "run") this._emit("apply-group", { groupId: group.id });
-    else if (id === "traces") this._emit("show-traces", { group: group.id });
-    else if (id === "simulate") this._emit("show-simulator", { group: group.id });
+  private _onCategoryMenu(category: RuleCategory, id: string) {
+    if (id === "run") this._emit("apply-category", { categoryId: category.id });
+    else if (id === "traces")
+      this._emit("show-traces", { category: category.id });
+    else if (id === "simulate")
+      this._emit("show-simulator", { category: category.id });
   }
 
   private _onRuleMenu(i: number, id: string) {
@@ -382,14 +435,20 @@ export class AmbienceRulesList extends LitElement {
    *  (used for every emitted event and drag handler); `displayNum` is the
    *  1-based position WITHIN its render section. */
   private _renderRow(i: number, rule: Rule, displayNum: number) {
-    const unpinLabel = localize(this.hass, "ui.unpin", "Unpin (return to automatic order)");
+    const unpinLabel = localize(
+      this.hass,
+      "ui.unpin",
+      "Unpin (return to automatic order)",
+    );
     const isDisabled = rule.enabled === false;
     const toggleLabel = isDisabled
       ? localize(this.hass, "ui.enable_rule", "Enable rule")
       : localize(this.hass, "ui.disable_rule", "Disable rule");
     return html`
       <li
-        class="${this._drag.over === i ? "drag-over " : ""}${isDisabled ? "disabled" : ""}"
+        class="${this._drag.over === i ? "drag-over " : ""}${isDisabled
+          ? "disabled"
+          : ""}"
         draggable="true"
         @dragstart=${() => this._drag.start(i)}
         @dragover=${(e: DragEvent) => this._drag.dragOver(e, i)}
@@ -406,26 +465,50 @@ export class AmbienceRulesList extends LitElement {
                   e.stopPropagation();
                   this._emit("unpin-rule", { index: i });
                 }}
-              >📌</button>`
-            : html`<span class="handle" title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}>⠿</span>`}
+              >
+                📌
+              </button>`
+            : html`<span
+                class="handle"
+                title=${localize(
+                  this.hass,
+                  "ui.drag_to_reorder",
+                  "Drag to reorder",
+                )}
+                >⠿</span
+              >`}
         </span>
         <span class="idx">${displayNum}</span>
         <span class="warn-slot">
           ${rule.shadowed_by != null && !isDisabled
             ? html`<span
                 class="shadow-warning"
-                title=${localize(this.hass, "ui.shadowed", "Never fires — shadowed by an earlier rule.")}
-              >⚠️</span>`
+                title=${localize(
+                  this.hass,
+                  "ui.shadowed",
+                  "Never fires — shadowed by an earlier rule.",
+                )}
+                >⚠️</span
+              >`
             : ""}
         </span>
         <div class="body" @click=${() => this._toggleRule(i)}>
           <div class="name">
-            ${ruleDisplayName(rule, localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(displayNum)))}
+            ${ruleDisplayName(
+              rule,
+              localize(this.hass, "ui.rule_n", "Rule {n}").replace(
+                "{n}",
+                String(displayNum),
+              ),
+            )}
           </div>
           <div class="summary">
             ${this._expanded.has(i)
               ? ""
-              : html`${this._whenSummary(rule)} · <span class="action-count">${this._actionCountLabel(rule)}</span>`}
+              : html`${this._whenSummary(rule)} ·
+                  <span class="action-count"
+                    >${this._actionCountLabel(rule)}</span
+                  >`}
           </div>
           ${this._expanded.has(i)
             ? html`
@@ -437,14 +520,25 @@ export class AmbienceRulesList extends LitElement {
                         ${rule.actions.map((a) => {
                           const params = this._actionParamsString(a);
                           const label = this._actionLabel(a);
-                          const header = params ? `${label} · ${params}` : label;
+                          const header = params
+                            ? `${label} · ${params}`
+                            : label;
                           return html`
                             <div class="actions-detail-item">
                               <div class="action-header">${header}</div>
                               ${a.entity_ids.length === 0
-                                ? html`<div class="no-targets">${localize(this.hass, "ui.no_targets", "(no targets)")}</div>`
+                                ? html`<div class="no-targets">
+                                    ${localize(
+                                      this.hass,
+                                      "ui.no_targets",
+                                      "(no targets)",
+                                    )}
+                                  </div>`
                                 : html`<ul class="entity-list">
-                                    ${a.entity_ids.map((eid) => html`<li>${this._entityName(eid)}</li>`)}
+                                    ${a.entity_ids.map(
+                                      (eid) =>
+                                        html`<li>${this._entityName(eid)}</li>`,
+                                    )}
                                   </ul>`}
                             </div>
                           `;
@@ -458,24 +552,50 @@ export class AmbienceRulesList extends LitElement {
           class="toggle"
           @click=${(e: Event) => {
             e.stopPropagation();
-            this._emit("toggle-rule-enabled", { index: i, enabled: isDisabled });
+            this._emit("toggle-rule-enabled", {
+              index: i,
+              enabled: isDisabled,
+            });
           }}
           title=${toggleLabel}
           aria-label=${toggleLabel}
         >
-          <ha-icon icon=${isDisabled ? "mdi:toggle-switch-off-outline" : "mdi:toggle-switch"}></ha-icon>
+          <ha-icon
+            icon=${isDisabled
+              ? "mdi:toggle-switch-off-outline"
+              : "mdi:toggle-switch"}
+          ></ha-icon>
         </button>
         <ambience-kebab-menu
           class="row-kebab"
           .hass=${this.hass}
           .label=${localize(this.hass, "ui.rule_actions", "Rule actions")}
           .items=${[
-            { id: "edit", label: localize(this.hass, "ui.edit", "Edit"), icon: "mdi:pencil" },
-            { id: "duplicate", label: localize(this.hass, "ui.duplicate", "Duplicate"), icon: "mdi:content-duplicate" },
-            { id: "run", label: localize(this.hass, "ui.run_actions", "Run actions"), icon: "mdi:play" },
-            { id: "delete", label: localize(this.hass, "ui.title_delete", "Delete"), icon: "mdi:delete", danger: true, dividerBefore: true },
+            {
+              id: "edit",
+              label: localize(this.hass, "ui.edit", "Edit"),
+              icon: "mdi:pencil",
+            },
+            {
+              id: "duplicate",
+              label: localize(this.hass, "ui.duplicate", "Duplicate"),
+              icon: "mdi:content-duplicate",
+            },
+            {
+              id: "run",
+              label: localize(this.hass, "ui.run_actions", "Run actions"),
+              icon: "mdi:play",
+            },
+            {
+              id: "delete",
+              label: localize(this.hass, "ui.title_delete", "Delete"),
+              icon: "mdi:delete",
+              danger: true,
+              dividerBefore: true,
+            },
           ] satisfies KebabItem[]}
-          @menu-action=${(e: CustomEvent<{ id: string }>) => this._onRuleMenu(i, e.detail.id)}
+          @menu-action=${(e: CustomEvent<{ id: string }>) =>
+            this._onRuleMenu(i, e.detail.id)}
         ></ambience-kebab-menu>
       </li>
     `;
@@ -484,26 +604,34 @@ export class AmbienceRulesList extends LitElement {
   override render() {
     if (this.rules.length === 0) {
       return html`
-        <p class="empty">${localize(this.hass, "ui.no_rules_yet", "No rules yet.")}</p>
+        <p class="empty">
+          ${localize(this.hass, "ui.no_rules_yet", "No rules yet.")}
+        </p>
         <button class="add" @click=${() => this._emit("add-rule", {})}>
           ${localize(this.hass, "ui.add_rule", "+ Add rule")}
         </button>
       `;
     }
     // Only render sections that actually have rules — when filtering to a
-    // single group, a scope with no rules in that group shows nothing (no
+    // single category, a scope with no rules in that category shows nothing (no
     // empty header bar).
-    const sections = this._sections().filter((section) => section.rows.length > 0);
-    // Show the coloured group header for every section, including when a single
-    // group is filtered — the bar labels which group these rules belong to.
-    const showHeaders = this.groups.length > 0;
+    const sections = this._sections().filter(
+      (section) => section.rows.length > 0,
+    );
+    // Show the coloured category header for every section, including when a single
+    // category is filtered — the bar labels which category these rules belong to.
+    const showHeaders = this.categories.length > 0;
     return html`
       ${sections.map(
         (section) => html`
-          <div class="group-section">
-            ${showHeaders && section.group ? this._renderSectionHeader(section.group) : ""}
+          <div class="category-section">
+            ${showHeaders && section.category
+              ? this._renderSectionHeader(section.category)
+              : ""}
             <ul>
-              ${section.rows.map(([i, rule], n) => this._renderRow(i, rule, n + 1))}
+              ${section.rows.map(([i, rule], n) =>
+                this._renderRow(i, rule, n + 1),
+              )}
             </ul>
           </div>
         `,

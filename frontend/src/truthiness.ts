@@ -1,13 +1,13 @@
 /**
  * Frontend mirror of Home Assistant's `result_as_boolean`
  * (homeassistant.helpers.template.result_as_boolean), which the backend
- * `TemplateMatcher` uses to turn a rendered template into a match/no-match.
+ * `TemplateCondition` uses to turn a rendered template into a match/no-match.
  *
  * Keep this in sync with the backend rule:
  *   true / non-zero number / "1" / "true" / "yes" / "on" / "enable"  => true
  *   everything else (incl. unknown/none/empty/other strings)         => false
  *
- * Used to annotate the live render preview with the boolean the matcher will
+ * Used to annotate the live render preview with the boolean the condition will
  * actually see — important because e.g. a bare `"42"` string is NOT truthy.
  */
 const TRUE_STRINGS = new Set(["1", "true", "yes", "on", "enable"]);

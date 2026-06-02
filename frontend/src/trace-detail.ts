@@ -4,7 +4,7 @@ import type { BufferedUnit, ServiceSchema, TraceCause, TraceRuleEval } from "./t
 import {
   deriveActionLabel,
   humanizeId,
-  matcherLabel,
+  conditionLabel,
   periodLabel,
   weatherConditionLabel,
 } from "./i18n.js";
@@ -14,13 +14,13 @@ type Action = { service: string; entity_ids?: string[]; params?: Record<string, 
 
 type HassLike = { localize?: (key: string) => string | undefined; [key: string]: unknown };
 
-// A predicate's `detail` is the matcher's `describe()` output. Most matchers
+// A predicate's `detail` is the condition's `describe()` output. Most conditions
 // already return a human phrase (e.g. "3 of 5 home (Alice, Bob)"); a couple
 // emit a raw enum id that needs a friendly label. Humanize only those — passing
 // the human phrases through untouched (humanizeId would lower-case them).
-function formatDetail(hass: HassLike | undefined, matcherKey: string, detail: string): string {
-  if (matcherKey === "time_of_day") return periodLabel(hass, detail, {});
-  if (matcherKey === "weather") return weatherConditionLabel(hass, detail);
+function formatDetail(hass: HassLike | undefined, conditionKey: string, detail: string): string {
+  if (conditionKey === "time_of_day") return periodLabel(hass, detail, {});
+  if (conditionKey === "weather") return weatherConditionLabel(hass, detail);
   return detail;
 }
 
@@ -99,8 +99,8 @@ function renderRule(r: TraceRuleEval, hass: HassLike | undefined): TemplateResul
     ${r.predicates.map(
       (p) => html`
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
-          ${p.passed ? "✓" : "✗"} ${matcherLabel(hass, p.matcher_key)}${p.detail
-            ? html` <span class="dim">[${formatDetail(hass, p.matcher_key, p.detail)}]</span>`
+          ${p.passed ? "✓" : "✗"} ${conditionLabel(hass, p.condition_key)}${p.detail
+            ? html` <span class="dim">[${formatDetail(hass, p.condition_key, p.detail)}]</span>`
             : nothing}
         </div>`,
     )}

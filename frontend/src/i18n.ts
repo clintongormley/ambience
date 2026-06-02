@@ -20,7 +20,7 @@ function _resolve(hass: HassLike | undefined, key: string, fallback: string): st
  *   "light.turn_on" → "Light.turn on"  (dots are preserved)
  *
  * The shared humanisation primitive: used wherever a raw id needs a readable
- * label — field ids (via {@link humanizeFieldId} in summary.ts), matcher/action
+ * label — field ids (via {@link humanizeFieldId} in summary.ts), condition/action
  * ids (here), and so on.
  */
 export function humanizeId(id: string): string {
@@ -28,7 +28,7 @@ export function humanizeId(id: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-/** Fallback label for matcher/action ids when hass.localize has no
+/** Fallback label for condition/action ids when hass.localize has no
  *  translation for the key. */
 function _friendlyFallback(id: string): string {
   return humanizeId(id);
@@ -59,8 +59,8 @@ export function deriveActionLabel(serviceId: string): string {
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
-export function matcherLabel(hass: HassLike | undefined, name: string): string {
-  return _resolve(hass, `component.ambience.matcher.${name}`, _friendlyFallback(name));
+export function conditionLabel(hass: HassLike | undefined, name: string): string {
+  return _resolve(hass, `component.ambience.condition.${name}`, _friendlyFallback(name));
 }
 
 export function actionLabel(hass: HassLike | undefined, name: string): string {
@@ -249,7 +249,7 @@ export function weatherAttrUnit(
   return _DEFAULT_WEATHER_UNITS[attr] ?? "";
 }
 
-// --- state matcher --------------------------------------------------------
+// --- state condition --------------------------------------------------------
 
 const _STATE_OP_FALLBACKS: Record<string, string> = {
   is: "is",
@@ -265,7 +265,7 @@ const _STATE_OP_FALLBACKS: Record<string, string> = {
   not: "NOT",
 };
 
-/** Label for a state-matcher operator (`is`, `is_not`, `and`, `or`, `not`). */
+/** Label for a state-condition operator (`is`, `is_not`, `and`, `or`, `not`). */
 export function stateOpLabel(hass: HassLike | undefined, op: string): string {
   return _resolve(
     hass,

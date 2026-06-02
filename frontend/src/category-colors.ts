@@ -1,7 +1,7 @@
-export type GroupColor = { id: string; label: string; hex: string };
+export type CategoryColor = { id: string; label: string; hex: string };
 
-// Curated HA-ish palette (Material 500-ish). `id` is what's stored on the group.
-export const GROUP_COLORS: GroupColor[] = [
+// Curated HA-ish palette (Material 500-ish). `id` is what's stored on the category.
+export const CATEGORY_COLORS: CategoryColor[] = [
   { id: "red", label: "Red", hex: "#f44336" },
   { id: "pink", label: "Pink", hex: "#e91e63" },
   { id: "purple", label: "Purple", hex: "#9c27b0" },
@@ -26,7 +26,7 @@ export const GROUP_COLORS: GroupColor[] = [
 // hex for a stored color id (undefined if unset/unknown).
 export function colorHex(color: string | undefined): string | undefined {
   if (!color) return undefined;
-  return GROUP_COLORS.find((c) => c.id === color)?.hex;
+  return CATEGORY_COLORS.find((c) => c.id === color)?.hex;
 }
 
 // Pick black or white text for legibility on a hex background (W3C relative luminance).
@@ -40,10 +40,10 @@ export function textColorFor(hex: string): "#000000" | "#ffffff" {
   return L > 0.5 ? "#000000" : "#ffffff";
 }
 
-// Inline style for a coloured group swatch: the group's colour as background
-// with an auto-contrast foreground, or "" when the group has no colour (callers
+// Inline style for a coloured category swatch: the category's colour as background
+// with an auto-contrast foreground, or "" when the category has no colour (callers
 // fall back to a neutral CSS class). Keeps the bg/fg contrast pairing in one place.
-export function groupSwatchStyle(color: string | undefined): string {
+export function categorySwatchStyle(color: string | undefined): string {
   const hex = colorHex(color);
   return hex ? `background:${hex};color:${textColorFor(hex)}` : "";
 }

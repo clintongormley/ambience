@@ -112,7 +112,7 @@ describe("ambience-template-predicate-input", () => {
     expect(el.shadowRoot.textContent ?? "").toContain("42");
   });
 
-  test("indicates the boolean the matcher will see — truthy result", async () => {
+  test("indicates the boolean the condition will see — truthy result", async () => {
     const { hass } = mockHass((_msg, cb) => cb({ result: "on" }));
     el = await mount({ template: "{{ 'on' }}" }, hass);
     const bool = el.shadowRoot.querySelector(".preview .bool");
@@ -121,8 +121,8 @@ describe("ambience-template-predicate-input", () => {
     expect(bool?.textContent?.toLowerCase()).toContain("true");
   });
 
-  test("indicates the boolean the matcher will see — falsy result (bare numeric string)", async () => {
-    // "42" renders as a string and is NOT truthy to the matcher.
+  test("indicates the boolean the condition will see — falsy result (bare numeric string)", async () => {
+    // "42" renders as a string and is NOT truthy to the condition.
     const { hass } = mockHass((_msg, cb) => cb({ result: "42" }));
     el = await mount({ template: "{{ states('sensor.lux') }}" }, hass);
     const bool = el.shadowRoot.querySelector(".preview .bool");
@@ -195,14 +195,14 @@ describe("ambience-template-predicate-input", () => {
   });
 });
 
-describe("matcher-input template dispatch", () => {
+describe("condition-input template dispatch", () => {
   let el: any;
   afterEach(() => el?.remove());
 
   test("renders ambience-template-predicate-input for input=template_predicate", async () => {
-    await import("../frontend/src/views/matcher-input");
-    el = document.createElement("ambience-matcher-input");
-    el.matcher = {
+    await import("../frontend/src/views/condition-input");
+    el = document.createElement("ambience-condition-input");
+    el.condition = {
       name: "template",
       description: "",
       predicate_help: "help text",

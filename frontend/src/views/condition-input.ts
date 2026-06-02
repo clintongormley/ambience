@@ -3,7 +3,7 @@ import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
-import type { DayConfig, MatcherInfo, PeriodStoreView } from "../types.js";
+import type { DayConfig, ConditionInfo, PeriodStoreView } from "../types.js";
 import "./script-predicate-input.js";
 import "./time-of-day-input.js";
 import "./day-predicate-input.js";
@@ -14,16 +14,16 @@ import "./people-predicate-input.js";
 import "./template-predicate-input.js";
 
 /**
- * Dispatcher element for one matcher's predicate input. Given a matcher's
+ * Dispatcher element for one condition's predicate input. Given a condition's
  * `input` hint and the current predicate value, renders the right widget:
  *
- *   "text" / unknown -> free-text input + the matcher's predicate_help
+ *   "text" / unknown -> free-text input + the condition's predicate_help
  *
  * Emits `value-changed` with `{ value: unknown }`. A `null` value means the
- * matcher is unconstrained (wildcard) for this rule.
+ * condition is unconstrained (wildcard) for this rule.
  */
-@customElement("ambience-matcher-input")
-export class AmbienceMatcherInput extends LitElement {
+@customElement("ambience-condition-input")
+export class AmbienceConditionInput extends LitElement {
   static override styles = css`
     :host {
       display: block;
@@ -45,7 +45,7 @@ export class AmbienceMatcherInput extends LitElement {
     }
   `;
 
-  @property({ attribute: false }) matcher!: MatcherInfo;
+  @property({ attribute: false }) condition!: ConditionInfo;
   @property({ attribute: false }) value: unknown = null;
   @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) dayConfig?: DayConfig;
@@ -68,7 +68,7 @@ export class AmbienceMatcherInput extends LitElement {
   }
 
   override render() {
-    if (this.matcher.input === "time_of_day") {
+    if (this.condition.input === "time_of_day") {
       return html`
         <ambience-time-of-day-input
           .value=${this.value as any}
@@ -81,7 +81,7 @@ export class AmbienceMatcherInput extends LitElement {
         ></ambience-time-of-day-input>
       `;
     }
-    if (this.matcher.input === "script_predicate") {
+    if (this.condition.input === "script_predicate") {
       return html`
         <ambience-script-predicate-input
           .hass=${this.hass}
@@ -93,7 +93,7 @@ export class AmbienceMatcherInput extends LitElement {
         ></ambience-script-predicate-input>
       `;
     }
-    if (this.matcher.input === "day_predicate") {
+    if (this.condition.input === "day_predicate") {
       return html`
         <ambience-day-predicate-input
           .hass=${this.hass}
@@ -106,7 +106,7 @@ export class AmbienceMatcherInput extends LitElement {
         ></ambience-day-predicate-input>
       `;
     }
-    if (this.matcher.input === "weather_predicate") {
+    if (this.condition.input === "weather_predicate") {
       return html`
         <ambience-weather-predicate-input
           .hass=${this.hass}
@@ -120,7 +120,7 @@ export class AmbienceMatcherInput extends LitElement {
         ></ambience-weather-predicate-input>
       `;
     }
-    if (this.matcher.input === "sun_predicate") {
+    if (this.condition.input === "sun_predicate") {
       return html`
         <ambience-sun-predicate-input
           .hass=${this.hass}
@@ -132,7 +132,7 @@ export class AmbienceMatcherInput extends LitElement {
         ></ambience-sun-predicate-input>
       `;
     }
-    if (this.matcher.input === "template_predicate") {
+    if (this.condition.input === "template_predicate") {
       return html`
         <ambience-template-predicate-input
           .hass=${this.hass}
@@ -144,7 +144,7 @@ export class AmbienceMatcherInput extends LitElement {
         ></ambience-template-predicate-input>
       `;
     }
-    if (this.matcher.input === "state_predicate") {
+    if (this.condition.input === "state_predicate") {
       return html`
         <ambience-state-predicate-input
           .hass=${this.hass}
@@ -156,7 +156,7 @@ export class AmbienceMatcherInput extends LitElement {
         ></ambience-state-predicate-input>
       `;
     }
-    if (this.matcher.input === "people_predicate") {
+    if (this.condition.input === "people_predicate") {
       return html`
         <ambience-people-predicate-input
           .hass=${this.hass}
@@ -175,7 +175,7 @@ export class AmbienceMatcherInput extends LitElement {
         .value=${this.value == null ? "" : String(this.value)}
         @input=${this._onText}
       />
-      <div class="help">${this.matcher.predicate_help}</div>
+      <div class="help">${this.condition.predicate_help}</div>
     `;
   }
 }

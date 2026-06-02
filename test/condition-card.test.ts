@@ -1,16 +1,16 @@
 import { describe, test, expect, afterEach } from "vitest";
-import "../frontend/src/views/matcher-card";
+import "../frontend/src/views/condition-card";
 
 async function mount(opts: { name?: string; description?: string } = {}): Promise<any> {
-  const el: any = document.createElement("ambience-matcher-card");
-  el.matcherName = opts.name ?? "time_of_day";
-  el.matcherDescription = opts.description ?? "Matches time";
+  const el: any = document.createElement("ambience-condition-card");
+  el.conditionName = opts.name ?? "time_of_day";
+  el.conditionDescription = opts.description ?? "Matches time";
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
 }
 
-describe("ambience-matcher-card", () => {
+describe("ambience-condition-card", () => {
   let el: any;
   afterEach(() => el?.remove());
 

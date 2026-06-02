@@ -35,7 +35,7 @@ interface HassLike {
   [key: string]: unknown;
 }
 
-interface MatcherContext {
+interface ConditionContext {
   hass?: HassLike;
   periods?: PeriodStoreView;
   weatherGroups?: WeatherGroup[];
@@ -73,56 +73,72 @@ export function paramLabel(
 /**
  * Display name for a rule: explicit `name`, or a default placeholder.
  */
-export function ruleDisplayName(rule: Rule, defaultPlaceholder = "New rule"): string {
+export function ruleDisplayName(
+  rule: Rule,
+  defaultPlaceholder = "New rule",
+): string {
   if (rule.name && rule.name.trim()) return rule.name;
   return defaultPlaceholder;
 }
 
-export function summariseMatcher(
-  matcherName: string,
+export function summariseCondition(
+  conditionName: string,
   predicate: unknown,
-  ctx: MatcherContext,
+  ctx: ConditionContext,
 ): string {
-  if (predicate == null) return localize(ctx.hass, "ui.summary_any_paren", "(any)");
-  if (matcherName === "time_of_day") {
+  if (predicate == null)
+    return localize(ctx.hass, "ui.summary_any_paren", "(any)");
+  if (conditionName === "time_of_day") {
     return summariseTimeOfDay(predicate as TimeOfDayPredicate, ctx);
   }
-  if (matcherName === "day") {
+  if (conditionName === "day") {
     return summariseDay(predicate as DayPredicate, ctx);
   }
-  if (matcherName === "weather") {
+  if (conditionName === "weather") {
     return summariseWeather(predicate as WeatherPredicate, ctx);
   }
-  if (matcherName === "sun") {
+  if (conditionName === "sun") {
     return summariseSun(predicate as SunPredicate, ctx);
   }
-  if (matcherName === "state") {
+  if (conditionName === "state") {
     return summariseState(predicate as StatePredicate, ctx);
   }
-  if (matcherName === "script") {
+  if (conditionName === "script") {
     return summariseScript(predicate as ScriptPredicate, ctx);
   }
-  if (matcherName === "people") {
+  if (conditionName === "people") {
     return summarisePeople(predicate as PeoplePredicate, ctx);
   }
-  if (matcherName === "template") {
+  if (conditionName === "template") {
     return summariseTemplate(predicate as TemplatePredicate, ctx);
   }
   return String(predicate);
 }
 
-export function summariseTemplate(pred: TemplatePredicate, ctx: MatcherContext = {}): string {
+export function summariseTemplate(
+  pred: TemplatePredicate,
+  ctx: ConditionContext = {},
+): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any_paren", "(any)");
-  if (typeof pred !== "object" || typeof (pred as { template?: unknown }).template !== "string") {
+  if (
+    typeof pred !== "object" ||
+    typeof (pred as { template?: unknown }).template !== "string"
+  ) {
     return String(pred);
   }
   return pred.template;
 }
 
-export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {}): string {
+export function summariseScript(
+  pred: ScriptPredicate,
+  ctx: ConditionContext = {},
+): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any_paren", "(any)");
   // Defensive: malformed predicate (non-object or missing/non-string script).
-  if (typeof pred !== "object" || typeof (pred as { script?: unknown }).script !== "string") {
+  if (
+    typeof pred !== "object" ||
+    typeof (pred as { script?: unknown }).script !== "string"
+  ) {
     return String(pred);
   }
   const name = _domainEntityName(ctx, pred.script);
@@ -130,7 +146,10 @@ export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {})
   const keys = Object.keys(args).sort();
   if (keys.length === 0) return name;
   const argStr = keys
-    .map((k) => `${scriptFieldLabel(ctx.hass, pred.script, k)}: ${formatArgValue(ctx.hass, args[k])}`)
+    .map(
+      (k) =>
+        `${scriptFieldLabel(ctx.hass, pred.script, k)}: ${formatArgValue(ctx.hass, args[k])}`,
+    )
     .join(", ");
   return `${name} (${argStr})`;
 }
@@ -139,9 +158,22 @@ export function summariseScript(pred: ScriptPredicate, ctx: MatcherContext = {})
  *  (from `hass.services.script.<name>.fields`), falling back to the humanised
  *  field id. Shared by the script summary and the predicate editor's
  *  `computeLabel`, which read the same live service registry. */
-export function scriptFieldLabel(hass: HassLike | undefined, scriptId: string, fieldId: string): string {
+export function scriptFieldLabel(
+  hass: HassLike | undefined,
+  scriptId: string,
+  fieldId: string,
+): string {
   const name = scriptId.replace(/^script\./, "");
-  const services = (hass as { services?: Record<string, Record<string, { fields?: Record<string, { name?: unknown }> }>> } | undefined)?.services;
+  const services = (
+    hass as
+      | {
+          services?: Record<
+            string,
+            Record<string, { fields?: Record<string, { name?: unknown }> }>
+          >;
+        }
+      | undefined
+  )?.services;
   const alias = services?.script?.[name]?.fields?.[fieldId]?.name;
   return typeof alias === "string" && alias ? alias : humanizeFieldId(fieldId);
 }
@@ -149,8 +181,12 @@ export function scriptFieldLabel(hass: HassLike | undefined, scriptId: string, f
 /** Display name for an entity from a domain-prefixed id, falling back to a
  *  humanised local id (`person.alice` → "Alice", `zone.gym` → "Gym") when no
  *  friendly_name is set. */
-function _domainEntityName(ctx: MatcherContext, entity_id: string): string {
-  const states = (ctx.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
+function _domainEntityName(ctx: ConditionContext, entity_id: string): string {
+  const states = (
+    ctx.hass as
+      | { states?: Record<string, { attributes?: Record<string, unknown> }> }
+      | undefined
+  )?.states;
   const name = states?.[entity_id]?.attributes?.friendly_name;
   if (typeof name === "string" && name) return name;
   const dot = entity_id.indexOf(".");
@@ -160,8 +196,9 @@ function _domainEntityName(ctx: MatcherContext, entity_id: string): string {
 
 /** The location NAME only (no "at" prefix): "Home" or the zone's friendly name
  *  (capitalised) — the "at"/"not at" connector is built from `negate`. */
-function _whereLabel(where: string, ctx: MatcherContext): string {
-  if (where === "home") return localize(ctx.hass, "people_summary.home", "Home");
+function _whereLabel(where: string, ctx: ConditionContext): string {
+  if (where === "home")
+    return localize(ctx.hass, "people_summary.home", "Home");
   return _domainEntityName(ctx, where);
 }
 
@@ -174,7 +211,10 @@ function _whereLabel(where: string, ctx: MatcherContext): string {
  * absent → a base mode (everyone→Everybody, nobody→Nobody); present → an
  * "X of:" mode chosen by `quant`.
  */
-export function summarisePeople(pred: PeoplePredicate, ctx: MatcherContext = {}): string {
+export function summarisePeople(
+  pred: PeoplePredicate,
+  ctx: ConditionContext = {},
+): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
   const where = pred.where ?? "home";
 
@@ -229,7 +269,10 @@ export function summarisePeople(pred: PeoplePredicate, ctx: MatcherContext = {})
   return head;
 }
 
-export function summariseDay(pred: DayPredicate, ctx: MatcherContext = {}): string {
+export function summariseDay(
+  pred: DayPredicate,
+  ctx: ConditionContext = {},
+): string {
   if (pred === null) return localize(ctx.hass, "day_summary.any", "any");
   const include = pred.include ?? [];
   const exclude = pred.exclude ?? [];
@@ -242,7 +285,7 @@ export function summariseDay(pred: DayPredicate, ctx: MatcherContext = {}): stri
   return `${inc} (${except} ${exclude.map((it) => _fmtDayItem(it, ctx)).join(", ")})`;
 }
 
-function _fmtDayItem(item: DayItem, ctx: MatcherContext): string {
+function _fmtDayItem(item: DayItem, ctx: ConditionContext): string {
   switch (item.kind) {
     case "weekday":
       return item.days.map((d) => weekdayLabel(ctx.hass, d)).join("/");
@@ -265,7 +308,12 @@ function _fmtDayItem(item: DayItem, ctx: MatcherContext): string {
   }
 }
 
-const _OP_LABEL: Record<string, string> = { "<": "<", "<=": "≤", ">": ">", ">=": "≥" };
+const _OP_LABEL: Record<string, string> = {
+  "<": "<",
+  "<=": "≤",
+  ">": ">",
+  ">=": "≥",
+};
 
 /** Humanize a field id: replace underscores with spaces and capitalize first letter.
  *  "brightness_pct" → "Brightness pct", "transition" → "Transition" */
@@ -278,11 +326,18 @@ export function humanizeFieldId(fieldId: string): string {
  *  [210, 81, 81] → "[210,81,81]". */
 export function formatParamValue(value: unknown): string {
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   return JSON.stringify(value);
 }
 
-const _TARGET_KEYS = ["entity_id", "device_id", "area_id", "label_id", "floor_id"];
+const _TARGET_KEYS = [
+  "entity_id",
+  "device_id",
+  "area_id",
+  "label_id",
+  "floor_id",
+];
 const _TARGET_ENTITY_CAP = 2;
 
 /** If `value` is an HA target object (only target keys) carrying one or more
@@ -307,12 +362,18 @@ function _targetEntityIds(value: unknown): string[] | null {
  *  `_TARGET_ENTITY_CAP`, then "+N more" for longer lists — so a summary reads
  *  "Target: [Kitchen, Hallway +2 more]" rather than a raw JSON dump. Everything
  *  else falls back to {@link formatParamValue}. */
-export function formatArgValue(hass: HassLike | undefined, value: unknown): string {
+export function formatArgValue(
+  hass: HassLike | undefined,
+  value: unknown,
+): string {
   const ids = _targetEntityIds(value);
   if (!ids) return formatParamValue(value);
-  const names = ids.slice(0, _TARGET_ENTITY_CAP).map((id) => _domainEntityName({ hass }, id));
+  const names = ids
+    .slice(0, _TARGET_ENTITY_CAP)
+    .map((id) => _domainEntityName({ hass }, id));
   const rest = ids.length - _TARGET_ENTITY_CAP;
-  const body = rest > 0 ? `${names.join(", ")} +${rest} more` : names.join(", ");
+  const body =
+    rest > 0 ? `${names.join(", ")} +${rest} more` : names.join(", ");
   return `[${body}]`;
 }
 
@@ -340,20 +401,33 @@ function _humaniseGroupId(id: string): string {
     .join(" ");
 }
 
-export function summariseWeather(pred: WeatherPredicate, ctx: MatcherContext = {}): string {
+export function summariseWeather(
+  pred: WeatherPredicate,
+  ctx: ConditionContext = {},
+): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
-  const groupMap = new Map((ctx.weatherGroups ?? []).map((g) => [g.id, g.label]));
+  const groupMap = new Map(
+    (ctx.weatherGroups ?? []).map((g) => [g.id, g.label]),
+  );
   const groups = (pred.groups ?? [])
     .map((id) => groupMap.get(id) ?? _humaniseGroupId(id))
     .join("/");
   const thr = (pred.thresholds ?? [])
-    .map((t) => `${weatherAttrLabel(ctx.hass, t.attribute)} ${_OP_LABEL[t.op] ?? t.op} ${t.value}`)
+    .map(
+      (t) =>
+        `${weatherAttrLabel(ctx.hass, t.attribute)} ${_OP_LABEL[t.op] ?? t.op} ${t.value}`,
+    )
     .join(", ");
   const parts = [groups, thr].filter((s) => s !== "");
-  return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
+  return parts.length === 0
+    ? localize(ctx.hass, "ui.summary_any", "any")
+    : parts.join(", ");
 }
 
-export function summariseSun(pred: SunPredicate, ctx: MatcherContext = {}): string {
+export function summariseSun(
+  pred: SunPredicate,
+  ctx: ConditionContext = {},
+): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
   const parts: string[] = [];
   const e = pred.elevation;
@@ -367,31 +441,42 @@ export function summariseSun(pred: SunPredicate, ctx: MatcherContext = {}): stri
     if (az.sectors?.length) parts.push(az.sectors.join("/"));
     for (const r of az.ranges ?? []) parts.push(`${r.from}°–${r.to}°`);
   }
-  return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
+  return parts.length === 0
+    ? localize(ctx.hass, "ui.summary_any", "any")
+    : parts.join(", ");
 }
 
 /** Best-effort display name for an entity: friendly_name attribute when set,
  *  otherwise the raw entity_id. Thin ctx-first adapter over {@link entityName}. */
-function _entityDisplayName(ctx: MatcherContext, entity_id: string): string {
+function _entityDisplayName(ctx: ConditionContext, entity_id: string): string {
   return entityName(ctx.hass as HassWithStates | undefined, entity_id);
 }
 
 /** Public, hass-first wrapper around {@link _entityDisplayName}: an entity's
  *  friendly_name when set, else the raw entity_id. */
-export function entityDisplayName(hass: HassLike | undefined, entity_id: string): string {
+export function entityDisplayName(
+  hass: HassLike | undefined,
+  entity_id: string,
+): string {
   return _entityDisplayName({ hass }, entity_id);
 }
 
-export function summariseState(pred: StatePredicate, ctx: MatcherContext = {}): string {
+export function summariseState(
+  pred: StatePredicate,
+  ctx: ConditionContext = {},
+): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
   return _renderStateExpr(pred, ctx);
 }
 
-function _renderStateExpr(expr: StateExpr, ctx: MatcherContext): string {
+function _renderStateExpr(expr: StateExpr, ctx: ConditionContext): string {
   if (
-    expr.kind === "is" || expr.kind === "is_not"
-    || expr.kind === ">" || expr.kind === ">="
-    || expr.kind === "<" || expr.kind === "<="
+    expr.kind === "is" ||
+    expr.kind === "is_not" ||
+    expr.kind === ">" ||
+    expr.kind === ">=" ||
+    expr.kind === "<" ||
+    expr.kind === "<="
   ) {
     const verb = stateOpLabel(ctx.hass, expr.kind);
     // For is/is_not: multi-value list joined with "/". For numeric: a single
@@ -420,7 +505,7 @@ function _renderStateExpr(expr: StateExpr, ctx: MatcherContext): string {
   return "";
 }
 
-function _wrapStateIfGroup(expr: StateExpr, ctx: MatcherContext): string {
+function _wrapStateIfGroup(expr: StateExpr, ctx: ConditionContext): string {
   if (expr.kind === "and" || expr.kind === "or") {
     return `(${_renderStateExpr(expr, ctx)})`;
   }
@@ -441,7 +526,7 @@ function _fmtStateDur(d: { h: number; m: number; s: number }): string {
 
 export function summariseTimeOfDay(
   pred: TimeOfDayPredicate,
-  ctx: MatcherContext,
+  ctx: ConditionContext,
 ): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
   const list = Array.isArray(pred) ? pred : [pred];
@@ -456,16 +541,17 @@ export function summariseTimeOfDay(
     .join(", ");
 }
 
-function _fmtEndpoint(ep: TimeEndpoint, ctx: MatcherContext): string {
+function _fmtEndpoint(ep: TimeEndpoint, ctx: ConditionContext): string {
   if (ep.kind === "time") {
     return `${String(ep.hh).padStart(2, "0")}:${String(ep.mm).padStart(2, "0")}`;
   }
   const anchor = anchorLabel(ctx.hass, ep.anchor);
   if (ep.offset_min === 0) return anchor;
   const abs = Math.abs(ep.offset_min);
-  const unit = abs % 60 === 0
-    ? `${abs / 60}${localize(ctx.hass, "ui.unit_hour_abbr", "h")}`
-    : `${abs}${localize(ctx.hass, "ui.unit_min_abbr", "m")}`;
+  const unit =
+    abs % 60 === 0
+      ? `${abs / 60}${localize(ctx.hass, "ui.unit_hour_abbr", "h")}`
+      : `${abs}${localize(ctx.hass, "ui.unit_min_abbr", "m")}`;
   return `${anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
 }
 
@@ -504,7 +590,10 @@ export function summariseAction(
   else targets = `${n} ${noun}s`;
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    .map(([k, v]) => `${paramLabel(k, action.service, ctx.schemas)}: ${formatArgValue(ctx.hass, v)}`)
+    .map(
+      ([k, v]) =>
+        `${paramLabel(k, action.service, ctx.schemas)}: ${formatArgValue(ctx.hass, v)}`,
+    )
     .join(", ");
   return params ? `${name}: ${targets}, ${params}` : `${name}: ${targets}`;
 }

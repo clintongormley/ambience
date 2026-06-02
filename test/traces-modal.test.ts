@@ -11,20 +11,20 @@ function unit(over: Partial<BufferedUnit> = {}): BufferedUnit {
     event_id: "e1", timestamp: "2026-06-01T10:00:00+00:00",
     cause: { kind: "entity", entity_id: "binary_sensor.motion", old: "off", new: "on", detail: null },
     scope_kind: "area", scope_id: "kitchen", scope_name: "Kitchen",
-    group: "g1", group_name: "Evening", switch_state: "on",
+    category: "g1", category_name: "Evening", switch_state: "on",
     outcome: "acted", winner_name: "Evening",
     actions: [{ service: "light.turn_on", entity_ids: ["light.k"], params: {} }],
     explanation: null, ...over,
   };
 }
 
-async function mount(traces: BufferedUnit[], group = "g1"): Promise<any> {
+async function mount(traces: BufferedUnit[], category = "g1"): Promise<any> {
   vi.mocked(api.listTraces).mockResolvedValue(traces);
   const el: any = document.createElement("ambience-traces-modal");
   el.hass = { callWS: vi.fn() };
   el.scope = { scope_kind: "area", scope_id: "kitchen" };
-  el.group = group;
-  el.groupName = "Evening";
+  el.category = category;
+  el.categoryName = "Evening";
   el.open = true;
   document.body.appendChild(el);
   await el.updateComplete;
@@ -38,11 +38,11 @@ describe("ambience-traces-modal", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => el?.remove());
 
-  test("shows only this scope+group's records", async () => {
+  test("shows only this scope+category's records", async () => {
     el = await mount([
       unit({ event_id: "a" }),
       unit({ event_id: "b", scope_id: "hall" }),          // other scope_id — filtered out
-      unit({ event_id: "c", group: "g2" }),                // other group — filtered out
+      unit({ event_id: "c", category: "g2" }),                // other category — filtered out
       unit({ event_id: "d" }),
       unit({ event_id: "e", scope_kind: "floor" }),        // other scope_kind — filtered out
     ]);
@@ -52,7 +52,7 @@ describe("ambience-traces-modal", () => {
     expect(vi.mocked(api.listTraces).mock.calls.length).toBe(1);
   });
 
-  test("empty state when the group has no traces", async () => {
+  test("empty state when the category has no traces", async () => {
     el = await mount([unit({ scope_id: "hall" })]);  // nothing for kitchen/g1
     expect(el.shadowRoot.textContent).toContain("No traces");
   });
@@ -77,7 +77,7 @@ describe("ambience-traces-modal", () => {
     el.shadowRoot.querySelector(".why-toggle").click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".why")).toBeTruthy(); // expanded
-    // A reload (reopen / group-change / refresh) must reset expansion.
+    // A reload (reopen / category-change / refresh) must reset expansion.
     el.shadowRoot.querySelector(".refresh").click();
     await el.updateComplete;
     await new Promise((r) => setTimeout(r, 0));
@@ -85,10 +85,10 @@ describe("ambience-traces-modal", () => {
     expect(el.shadowRoot.querySelector(".why")).toBeFalsy(); // collapsed again
   });
 
-  test("Refresh flags when newer traces are available for this group, and clears on refresh", async () => {
+  test("Refresh flags when newer traces are available for this category, and clears on refresh", async () => {
     el = await mount([unit({ event_id: "old", timestamp: "2026-06-01T10:00:00+00:00" })]);
     expect(el.shadowRoot.querySelector(".refresh.has-new")).toBeFalsy();
-    // A newer record lands in the same (scope, group) bucket.
+    // A newer record lands in the same (scope, category) bucket.
     vi.mocked(api.listTraces).mockResolvedValue([
       unit({ event_id: "new", timestamp: "2026-06-01T11:00:00+00:00" }),
     ]);
@@ -103,10 +103,10 @@ describe("ambience-traces-modal", () => {
     expect(el.shadowRoot.querySelector(".refresh.has-new")).toBeFalsy();
   });
 
-  test("the new-traces flag ignores newer records from other groups", async () => {
+  test("the new-traces flag ignores newer records from other categories", async () => {
     el = await mount([unit({ event_id: "old", timestamp: "2026-06-01T10:00:00+00:00" })]);
     vi.mocked(api.listTraces).mockResolvedValue([
-      unit({ event_id: "other", group: "g2", timestamp: "2026-06-01T12:00:00+00:00" }),
+      unit({ event_id: "other", category: "g2", timestamp: "2026-06-01T12:00:00+00:00" }),
     ]);
     await el._checkNew();
     await el.updateComplete;
@@ -144,7 +144,7 @@ describe("ambience-traces-modal", () => {
     vi.mocked(api.listTraces).mockRejectedValue(new Error("boom"));
     const e: any = document.createElement("ambience-traces-modal");
     e.hass = { callWS: vi.fn() }; e.scope = { scope_kind: "area", scope_id: "kitchen" };
-    e.group = "g1"; e.groupName = "Evening"; e.open = true;
+    e.category = "g1"; e.categoryName = "Evening"; e.open = true;
     document.body.appendChild(e);
     await e.updateComplete; await new Promise((r) => setTimeout(r, 0)); await e.updateComplete;
     expect(e.shadowRoot.textContent).toContain("boom");

@@ -1,6 +1,6 @@
 /**
  * Day-of-month spec validation, mirroring the backend `_parse_day_spec`
- * (custom_components/ambience/matchers/day.py).
+ * (custom_components/ambience/conditions/day.py).
  *
  * A spec is a comma-separated list of single days ("15") and inclusive ranges
  * ("1-10"). Whitespace is tolerated and empty tokens are ignored. Every day

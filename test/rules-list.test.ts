@@ -12,10 +12,10 @@ beforeAll(() => {
   }
 });
 import "../frontend/src/views/rules-list";
-import { colorHex } from "../frontend/src/group-colors";
-import type { ExposedAction, MatcherInfo, Rule, RuleGroup, PeriodStoreView } from "../frontend/src/types";
+import { colorHex } from "../frontend/src/category-colors";
+import type { ExposedAction, ConditionInfo, Rule, RuleCategory, PeriodStoreView } from "../frontend/src/types";
 
-const matchers: MatcherInfo[] = [
+const conditions: ConditionInfo[] = [
   { name: "mode",       description: "", predicate_help: "", input: "text",    priority: 1000 },
   { name: "day",         description: "", predicate_help: "", input: "day_predicate",     priority: 900 },
   { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day",       priority: 800 },
@@ -47,10 +47,10 @@ const eveningRule: Rule = {
 
 const testHass = {
   localize: (k: string) => {
-    if (k === "component.ambience.matcher.mode") return "Mode";
-    if (k === "component.ambience.matcher.time_of_day") return "Time of day";
-    if (k === "component.ambience.matcher.day") return "Day";
-    if (k === "component.ambience.matcher.weather") return "Weather";
+    if (k === "component.ambience.condition.mode") return "Mode";
+    if (k === "component.ambience.condition.time_of_day") return "Time of day";
+    if (k === "component.ambience.condition.day") return "Day";
+    if (k === "component.ambience.condition.weather") return "Weather";
     return undefined;
   },
 };
@@ -59,16 +59,16 @@ async function mount(
   rules: Rule[] = [],
   availableActions: ExposedAction[] = [],
   schemas: Record<string, unknown> = {},
-  groups: RuleGroup[] = [],
+  categories: RuleCategory[] = [],
 ): Promise<any> {
   const el: any = document.createElement("ambience-rules-list");
   el.rules = rules;
   el.periods = periods;
-  el.matchers = matchers;
+  el.conditions = conditions;
   el.hass = testHass;
   el.availableActions = availableActions;
   el.schemas = schemas;
-  el.groups = groups;
+  el.categories = categories;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
@@ -89,8 +89,8 @@ async function pickFromKebab(el: any, rowIndex: number, action: string) {
   await kebab.updateComplete;
 }
 
-async function pickGroupKebab(el: any, action: string) {
-  const kebab: any = el.shadowRoot.querySelector(".group-section-header ambience-kebab-menu");
+async function pickCategoryKebab(el: any, action: string) {
+  const kebab: any = el.shadowRoot.querySelector(".category-section-header ambience-kebab-menu");
   (kebab.shadowRoot.querySelector(".kebab-trigger") as HTMLButtonElement).click();
   await kebab.updateComplete;
   (kebab.shadowRoot.querySelector(`[data-action='${action}']`) as HTMLButtonElement).click();
@@ -390,7 +390,7 @@ describe("ambience-rules-list", () => {
     expect(name).toBe("My rule");
   });
 
-  test("summary uses friendly matcher labels", async () => {
+  test("summary uses friendly condition labels", async () => {
     const rules: Rule[] = [{
       name: "test",
       when: { time_of_day: { period: "afternoon" }, mode: "movie" },
@@ -404,7 +404,7 @@ describe("ambience-rules-list", () => {
     expect(summary).toContain("movie");
   });
 
-  test("matcher labels in the summary are wrapped in <strong>", async () => {
+  test("condition labels in the summary are wrapped in <strong>", async () => {
     const rules: Rule[] = [{
       name: "test",
       when: { time_of_day: { period: "afternoon" }, mode: "movie" },
@@ -432,7 +432,7 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.querySelector(".rule-detail")).toBeTruthy();
   });
 
-  test("expanded rule renders each matcher on its own line", async () => {
+  test("expanded rule renders each condition on its own line", async () => {
     const rules: Rule[] = [{
       name: "r",
       when: { time_of_day: { period: "afternoon" }, mode: "movie" },
@@ -442,7 +442,7 @@ describe("ambience-rules-list", () => {
     (el.shadowRoot.querySelector(".summary") as HTMLElement).click();
     await el.updateComplete;
     const lines = Array.from(
-      el.shadowRoot.querySelectorAll(".rule-detail .matcher-line"),
+      el.shadowRoot.querySelectorAll(".rule-detail .condition-line"),
     );
     expect(lines.length).toBe(2);
     const texts = lines.map((n: any) => n.textContent?.trim() ?? "");
@@ -586,7 +586,7 @@ describe("ambience-rules-list", () => {
     const el2: any = document.createElement("ambience-rules-list");
     el2.rules = [rule];
     el2.periods = periods;
-    el2.matchers = matchers;
+    el2.conditions = conditions;
     el2.availableActions = [];
     el2.hass = {
       ...testHass,
@@ -651,7 +651,7 @@ describe("ambience-rules-list", () => {
     expect(el.shadowRoot.querySelector(".entity-list")).toBeFalsy();
   });
 
-  test("summary lists matchers in priority order (mode, day, time_of_day, weather)", async () => {
+  test("summary lists conditions in priority order (mode, day, time_of_day, weather)", async () => {
     const rules: Rule[] = [{
       name: "test",
       // Deliberately interleave the `when` keys to confirm the summary does
@@ -671,24 +671,24 @@ describe("ambience-rules-list", () => {
     const iDay = summary.indexOf("Day:");
     const iTod = summary.indexOf("Time of day:");
     const iWeather = summary.indexOf("Weather:");
-    // Most-important matcher (mode=1000) must appear first; least-important (weather=700) last.
+    // Most-important condition (mode=1000) must appear first; least-important (weather=700) last.
     expect(iMode).toBeGreaterThanOrEqual(0);
     expect(iDay).toBeGreaterThan(iMode);
     expect(iTod).toBeGreaterThan(iDay);
     expect(iWeather).toBeGreaterThan(iTod);
   });
 
-  // --- group sections ------------------------------------------------------
+  // --- category sections ------------------------------------------------------
 
-  test("All view groups rules by group, sorted by group name, numbered per group", async () => {
+  test("All view groups rules into categories, sorted by category name, numbered per category", async () => {
     const groups = [{ id: "b", name: "Blinds" }, { id: "a", name: "Awnings" }];
     const rules = [
-      { when: {}, actions: [], group: "b" },   // Blinds 1
-      { when: {}, actions: [], group: "a" },   // Awnings 1
-      { when: {}, actions: [], group: "b" },   // Blinds 2
+      { when: {}, actions: [], category: "b" },   // Blinds 1
+      { when: {}, actions: [], category: "a" },   // Awnings 1
+      { when: {}, actions: [], category: "b" },   // Blinds 2
     ];
-    el = await mount(rules, [], {}, groups);   // filterGroup defaults to "" (All)
-    const headers = Array.from(el.shadowRoot.querySelectorAll(".group-section-header"))
+    el = await mount(rules, [], {}, groups);   // filterCategory defaults to "" (All)
+    const headers = Array.from(el.shadowRoot.querySelectorAll(".category-section-header"))
       .map((h: any) => h.textContent!.trim());
     // alphabetical by NAME: Awnings before Blinds
     expect(headers.some((h: string) => h.includes("Awnings"))).toBe(true);
@@ -696,49 +696,49 @@ describe("ambience-rules-list", () => {
       headers.findIndex((h: string) => h.includes("Blinds")),
     );
     // Within the Blinds section the rows are numbered 1, 2.
-    const blindsSection = Array.from(el.shadowRoot.querySelectorAll(".group-section"))
-      .find((s: any) => s.querySelector(".group-section-header")!.textContent!.includes("Blinds"))! as Element;
+    const blindsSection = Array.from(el.shadowRoot.querySelectorAll(".category-section"))
+      .find((s: any) => s.querySelector(".category-section-header")!.textContent!.includes("Blinds"))! as Element;
     const nums = Array.from(blindsSection.querySelectorAll(".idx")).map((n: any) => n.textContent!.trim());
     expect(nums).toEqual(["1", "2"]);
   });
 
-  test("single-group filter shows only that group, with its header, numbered 1..N", async () => {
+  test("single-category filter shows only that category, with its header, numbered 1..N", async () => {
     const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
     const rules = [
-      { when: {}, actions: [], group: "a" },
-      { when: {}, actions: [], group: "b" },
+      { when: {}, actions: [], category: "a" },
+      { when: {}, actions: [], category: "b" },
     ];
     el = await mount(rules, [], {}, groups);
-    el.filterGroup = "a";
+    el.filterCategory = "a";
     await el.updateComplete;
-    // The single visible section still shows its group header bar.
-    const headers = Array.from(el.shadowRoot.querySelectorAll(".group-section-header"));
+    // The single visible section still shows its category header bar.
+    const headers = Array.from(el.shadowRoot.querySelectorAll(".category-section-header"));
     expect(headers.length).toBe(1);
     expect(headers[0].textContent).toContain("A");
     expect(el.shadowRoot.querySelectorAll("li").length).toBe(1);
   });
 
-  test("filtering to a group with no rules in this scope shows no header bar", async () => {
+  test("filtering to a category with no rules in this scope shows no header bar", async () => {
     const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
-    const rules = [{ when: {}, actions: [], group: "a" }];
+    const rules = [{ when: {}, actions: [], category: "a" }];
     el = await mount(rules, [], {}, groups);
-    el.filterGroup = "b"; // scope has no group-b rules
+    el.filterCategory = "b"; // scope has no category-b rules
     await el.updateComplete;
-    expect(el.shadowRoot.querySelectorAll(".group-section-header").length).toBe(0);
+    expect(el.shadowRoot.querySelectorAll(".category-section-header").length).toBe(0);
     expect(el.shadowRoot.querySelectorAll("li").length).toBe(0);
   });
 
   test("editing a row in a section emits the rule's ORIGINAL index", async () => {
     const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
     const rules = [
-      { when: {}, actions: [], group: "b" },   // original index 0
-      { when: {}, actions: [], group: "a" },   // original index 1
+      { when: {}, actions: [], category: "b" },   // original index 0
+      { when: {}, actions: [], category: "a" },   // original index 1
     ];
     el = await mount(rules, [], {}, groups);
     const events: number[] = [];
     el.addEventListener("edit-rule", (e: any) => events.push(e.detail.index));
-    const aSection = Array.from(el.shadowRoot.querySelectorAll(".group-section"))
-      .find((s: any) => s.querySelector(".group-section-header")!.textContent!.includes("A"))! as Element;
+    const aSection = Array.from(el.shadowRoot.querySelectorAll(".category-section"))
+      .find((s: any) => s.querySelector(".category-section-header")!.textContent!.includes("A"))! as Element;
     const kebab: any = aSection.querySelector("li ambience-kebab-menu");
     (kebab.shadowRoot.querySelector(".kebab-trigger") as HTMLButtonElement).click();
     await kebab.updateComplete;
@@ -747,61 +747,61 @@ describe("ambience-rules-list", () => {
     expect(events).toEqual([1]);
   });
 
-  test("rules no longer render a per-row group lozenge", async () => {
-    const rule: Rule = { name: "R", group: "g1", when: {}, actions: [] };
+  test("rules no longer render a per-row category lozenge", async () => {
+    const rule: Rule = { name: "R", category: "g1", when: {}, actions: [] };
     el = await mount([rule], [], {}, [{ id: "g1", name: "Lights", color: "green", icon: "mdi:lightbulb" }]);
-    expect(el.shadowRoot.querySelector("ambience-group-chip")).toBeNull();
+    expect(el.shadowRoot.querySelector("ambience-category-chip")).toBeNull();
     const nameEl = el.shadowRoot.querySelector(".name") as HTMLElement;
-    expect(nameEl.querySelector("ambience-group-chip")).toBeNull();
+    expect(nameEl.querySelector("ambience-category-chip")).toBeNull();
     expect(nameEl.textContent!.trim()).toBe("R");
   });
 
-  test("the group section header is a full-width coloured bar with the group's colour, icon and name", async () => {
-    const group: RuleGroup = { id: "g1", name: "Lights", color: "green", icon: "mdi:lightbulb" };
-    el = await mount([{ name: "R", group: "g1", when: {}, actions: [] }], [], {}, [group]);
-    const header = el.shadowRoot.querySelector(".group-section-header") as HTMLElement;
+  test("the category section header is a full-width coloured bar with the category's colour, icon and name", async () => {
+    const category: RuleCategory = { id: "g1", name: "Lights", color: "green", icon: "mdi:lightbulb" };
+    el = await mount([{ name: "R", category: "g1", when: {}, actions: [] }], [], {}, [category]);
+    const header = el.shadowRoot.querySelector(".category-section-header") as HTMLElement;
     expect(header).toBeTruthy();
-    // Group colour applied inline as the bar background.
+    // Category colour applied inline as the bar background.
     expect(header.getAttribute("style") || "").toContain(colorHex("green")!);
     // Icon + name rendered inside the bar.
     expect(header.querySelector('ha-icon[icon="mdi:lightbulb"]')).toBeTruthy();
     expect(header.textContent).toContain("Lights");
   });
 
-  test("a colourless group renders a header with no inline background (neutral fallback)", async () => {
-    const group: RuleGroup = { id: "g1", name: "Plain" };
-    el = await mount([{ name: "R", group: "g1", when: {}, actions: [] }], [], {}, [group]);
-    const header = el.shadowRoot.querySelector(".group-section-header") as HTMLElement;
+  test("a colourless category renders a header with no inline background (neutral fallback)", async () => {
+    const category: RuleCategory = { id: "g1", name: "Plain" };
+    el = await mount([{ name: "R", category: "g1", when: {}, actions: [] }], [], {}, [category]);
+    const header = el.shadowRoot.querySelector(".category-section-header") as HTMLElement;
     expect(header.getAttribute("style") || "").toBe("");
     expect(header.textContent).toContain("Plain");
   });
 
-  test("group header renders a kebab (no standalone apply/traces buttons)", async () => {
-    const group = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleGroup;
-    const ruleInGroup = { ...movieRule, group: "g1" } as Rule;
-    el = await mount([ruleInGroup], [], {}, [group]);
-    const header = el.shadowRoot.querySelector(".group-section-header") as HTMLElement;
+  test("category header renders a kebab (no standalone apply/traces buttons)", async () => {
+    const category = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleCategory;
+    const ruleInCategory = { ...movieRule, category: "g1" } as Rule;
+    el = await mount([ruleInCategory], [], {}, [category]);
+    const header = el.shadowRoot.querySelector(".category-section-header") as HTMLElement;
     expect(header.querySelector("ambience-kebab-menu")).toBeTruthy();
-    expect(header.querySelector(".apply-group")).toBeNull();
+    expect(header.querySelector(".apply-category")).toBeNull();
     expect(header.querySelector(".traces-btn")).toBeNull();
   });
 
-  test("group kebab Run emits apply-group with the group id", async () => {
-    const group = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleGroup;
-    const ruleInGroup = { ...movieRule, group: "g1" } as Rule;
-    el = await mount([ruleInGroup], [], {}, [group]);
-    const get = captureEvent(el, "apply-group");
-    await pickGroupKebab(el, "run");
-    expect(get()).toEqual({ groupId: "g1" });
+  test("category kebab Run emits apply-category with the category id", async () => {
+    const category = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleCategory;
+    const ruleInCategory = { ...movieRule, category: "g1" } as Rule;
+    el = await mount([ruleInCategory], [], {}, [category]);
+    const get = captureEvent(el, "apply-category");
+    await pickCategoryKebab(el, "run");
+    expect(get()).toEqual({ categoryId: "g1" });
   });
 
-  test("group kebab Traces emits show-traces with the group id", async () => {
-    const group = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleGroup;
-    const ruleInGroup = { ...movieRule, group: "g1" } as Rule;
-    el = await mount([ruleInGroup], [], {}, [group]);
+  test("category kebab Traces emits show-traces with the category id", async () => {
+    const category = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleCategory;
+    const ruleInCategory = { ...movieRule, category: "g1" } as Rule;
+    el = await mount([ruleInCategory], [], {}, [category]);
     const get = captureEvent(el, "show-traces");
-    await pickGroupKebab(el, "traces");
-    expect(get()).toEqual({ group: "g1" });
+    await pickCategoryKebab(el, "traces");
+    expect(get()).toEqual({ category: "g1" });
   });
 
   test("renders a toggle that emits toggle-rule-enabled {index, enabled:false} for an enabled rule", async () => {
@@ -824,12 +824,12 @@ describe("ambience-rules-list", () => {
     expect(get()).toEqual({ index: 0, enabled: true });
   });
 
-  test("group kebab Simulate emits show-simulator with the group id", async () => {
-    const group = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleGroup;
-    const ruleInGroup = { ...movieRule, group: "g1" } as Rule;
-    el = await mount([ruleInGroup], [], {}, [group]);
+  test("category kebab Simulate emits show-simulator with the category id", async () => {
+    const category = { id: "g1", name: "Evening", color: "blue", icon: "" } as RuleCategory;
+    const ruleInCategory = { ...movieRule, category: "g1" } as Rule;
+    el = await mount([ruleInCategory], [], {}, [category]);
     const get = captureEvent(el, "show-simulator");
-    await pickGroupKebab(el, "simulate");
-    expect(get()).toEqual({ group: "g1" });
+    await pickCategoryKebab(el, "simulate");
+    expect(get()).toEqual({ category: "g1" });
   });
 });

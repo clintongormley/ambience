@@ -1,7 +1,7 @@
 import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
-  listMatchers: vi.fn(async () => ([
+  listConditions: vi.fn(async () => ([
     { name: "mode", description: "", predicate_help: "", input: "text", priority: 1000 },
     { name: "weather", description: "W", predicate_help: "", input: "weather_predicate", priority: 700 },
     { name: "time_of_day", description: "TOD", predicate_help: "", input: "time_of_day", priority: 800 },
@@ -17,15 +17,15 @@ vi.mock("../frontend/src/api.js", () => ({
   saveWeatherConfig: vi.fn(async () => ({ ok: true, warnings: [] })),
 }));
 
-import "../frontend/src/views/matchers-settings";
+import "../frontend/src/views/conditions-settings";
 
-describe("ambience-matchers-settings", () => {
+describe("ambience-conditions-settings", () => {
   let el: any;
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => el?.remove());
 
   async function mount() {
-    el = document.createElement("ambience-matchers-settings");
+    el = document.createElement("ambience-conditions-settings");
     el.hass = {};
     document.body.appendChild(el);
     await el.updateComplete;
@@ -34,11 +34,11 @@ describe("ambience-matchers-settings", () => {
     return el;
   }
 
-  test("renders a card per configurable matcher in priority order", async () => {
+  test("renders a card per configurable condition in priority order", async () => {
     el = await mount();
-    const cards = el.shadowRoot.querySelectorAll("ambience-matcher-card");
+    const cards = el.shadowRoot.querySelectorAll("ambience-condition-card");
     expect(cards.length).toBe(3);
-    const names = Array.from(cards).map((c: any) => c.matcherName);
+    const names = Array.from(cards).map((c: any) => c.conditionName);
     expect(names).toEqual(["day", "time_of_day", "weather"]);
   });
 });

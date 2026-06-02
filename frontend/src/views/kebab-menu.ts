@@ -17,7 +17,7 @@ export interface KebabItem {
 
 /**
  * A self-contained three-dots overflow menu. Renders a themed popup (with a
- * backdrop catcher and Escape-to-close, mirroring the group-filter popup in
+ * backdrop catcher and Escape-to-close, mirroring the category-filter popup in
  * scopes-view) and emits a bubbling, composed `menu-action` CustomEvent with
  * { id } when an item is selected. Deliberately does NOT depend on any HA menu
  * component — `ha-button-menu` was removed from HA in 2026.02, so a self-

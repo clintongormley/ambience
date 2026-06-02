@@ -3,7 +3,7 @@ import { describe, test, expect, vi } from "vitest";
 import { simulateInputs, simulate } from "../frontend/src/api";
 
 describe("simulate api", () => {
-  test("simulateInputs sends scope + group", async () => {
+  test("simulateInputs sends scope + category", async () => {
     const callWS = vi.fn().mockResolvedValue({ knobs: [], has_time: true });
     const hass: any = { callWS };
     const res = await simulateInputs(hass, { scope_kind: "area", scope_id: "kitchen" }, "g1");
@@ -11,13 +11,13 @@ describe("simulate api", () => {
       type: "ambience/simulate/inputs",
       scope_kind: "area",
       scope_id: "kitchen",
-      group: "g1",
+      category: "g1",
     });
     expect(res.has_time).toBe(true);
   });
 
   test("simulate unwraps the result", async () => {
-    const unit = { group: "g1", outcome: "acted" };
+    const unit = { category: "g1", outcome: "acted" };
     const callWS = vi.fn().mockResolvedValue({ result: unit });
     const hass: any = { callWS };
     const res = await simulate(
@@ -32,7 +32,7 @@ describe("simulate api", () => {
       type: "ambience/simulate",
       scope_kind: "area",
       scope_id: "kitchen",
-      group: "g1",
+      category: "g1",
       now: "2026-12-21T17:30:00.000Z",
       overrides: { "binary_sensor.motion": { state: "on" } },
       verdicts: {},
@@ -41,7 +41,7 @@ describe("simulate api", () => {
   });
 
   test("simulate sends verdicts alongside overrides", async () => {
-    const callWS = vi.fn().mockResolvedValue({ result: { group: "g1" } });
+    const callWS = vi.fn().mockResolvedValue({ result: { category: "g1" } });
     const hass: any = { callWS };
     await simulate(
       hass,
@@ -55,7 +55,7 @@ describe("simulate api", () => {
       type: "ambience/simulate",
       scope_kind: "area",
       scope_id: "kitchen",
-      group: "g1",
+      category: "g1",
       now: "2026-12-21T17:30:00.000Z",
       overrides: { "binary_sensor.motion": { state: "on" } },
       verdicts: { script: { k: true } },

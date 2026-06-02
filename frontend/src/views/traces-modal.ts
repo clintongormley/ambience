@@ -6,13 +6,13 @@ import type { BufferedUnit, ServiceSchema } from "../types.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 
 /**
- * Modal showing recent trace evaluations for one (scope, group) bucket.
+ * Modal showing recent trace evaluations for one (scope, category) bucket.
  *
  * Properties:
  *   hass       – HA connection (required)
  *   scope      – { scope_kind, scope_id } identifying the scope to filter by
- *   group      – group id to filter by
- *   groupName  – display name for the group (falls back to `group` if absent)
+ *   category   – category id to filter by
+ *   categoryName  – display name for the category (falls back to `category` if absent)
  *   open       – whether the modal is visible
  *
  * Events:
@@ -69,8 +69,8 @@ export class AmbienceTracesModal extends LitElement {
 
   @property({ attribute: false }) hass!: HassConnection;
   @property({ attribute: false }) scope!: { scope_kind: string; scope_id: string | null };
-  @property() group = "";
-  @property() groupName: string | null = null;
+  @property() category = "";
+  @property() categoryName: string | null = null;
   @property({ type: Boolean, reflect: true }) open = false;
 
   @state() private _records: BufferedUnit[] = [];
@@ -87,7 +87,7 @@ export class AmbienceTracesModal extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    // While open, watch for newer traces for this group without disturbing the
+    // While open, watch for newer traces for this category without disturbing the
     // list the user is reading — just flag the Refresh button.
     this._poll = setInterval(() => this._checkNew(), 5000);
   }
@@ -98,18 +98,18 @@ export class AmbienceTracesModal extends LitElement {
   }
 
   override updated(changed: Map<string, unknown>): void {
-    if (this.open && (changed.has("open") || changed.has("group") || changed.has("scope"))) {
+    if (this.open && (changed.has("open") || changed.has("category") || changed.has("scope"))) {
       this._load();
     }
   }
 
-  // The buffered records belonging to this (scope, group) bucket, newest-first.
+  // The buffered records belonging to this (scope, category) bucket, newest-first.
   private _mine(all: BufferedUnit[]): BufferedUnit[] {
     return all.filter(
       (u) =>
         u.scope_kind === this.scope.scope_kind &&
         u.scope_id === this.scope.scope_id &&
-        u.group === this.group,
+        u.category === this.category,
     );
   }
 
@@ -179,7 +179,7 @@ export class AmbienceTracesModal extends LitElement {
 
   override render() {
     if (!this.open) return nothing;
-    const title = this.groupName ?? this.group;
+    const title = this.categoryName ?? this.category;
     return html`
       <div class="modal" role="dialog" aria-modal="true">
         <div class="header">
@@ -195,7 +195,7 @@ export class AmbienceTracesModal extends LitElement {
             : this._loading
               ? html`<p class="empty">Loading…</p>`
               : this._records.length === 0
-                ? html`<p class="empty">No traces for this group yet.</p>`
+                ? html`<p class="empty">No traces for this category yet.</p>`
                 : html`<div class="list">${this._records.map((u, i) => {
                     const key = `${u.event_id ?? i}|${u.timestamp ?? ""}`;
                     return renderEvaluation(

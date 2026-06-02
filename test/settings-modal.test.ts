@@ -3,7 +3,7 @@ import { describe, test, expect, afterEach, beforeEach, vi } from "vitest";
 // The modal hosts <ambience-settings-view>, whose children fetch on mount.
 // Stub the API so those background calls resolve harmlessly.
 vi.mock("../frontend/src/api.js", () => ({
-  listMatchers: vi.fn(async () => []),
+  listConditions: vi.fn(async () => []),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
   saveDayConfig: vi.fn(async () => ({ ok: true, warnings: [] })),
   listPeriods: vi.fn(async () => ({ builtins: {}, custom: {}, hidden: [] })),

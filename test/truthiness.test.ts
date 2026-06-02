@@ -3,7 +3,7 @@ import { describe, test, expect } from "vitest";
 import { resultAsBoolean } from "../frontend/src/truthiness";
 
 // Mirrors homeassistant.helpers.template.result_as_boolean — keep in sync with
-// the backend TemplateMatcher's truthiness rule.
+// the backend TemplateCondition's truthiness rule.
 describe("resultAsBoolean", () => {
   test("native booleans pass through", () => {
     expect(resultAsBoolean(true)).toBe(true);

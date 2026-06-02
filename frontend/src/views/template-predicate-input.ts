@@ -22,7 +22,7 @@ function formatResult(result: unknown): string {
 }
 
 /**
- * Editor for a `template` matcher predicate: a multiline Jinja template that
+ * Editor for a `template` condition predicate: a multiline Jinja template that
  * Home Assistant renders against current state and coerces to a boolean.
  *
  * Below the textarea it shows a live render preview — the same

@@ -11,8 +11,8 @@ function unit(over: Partial<BufferedUnit> = {}): BufferedUnit {
     scope_kind: "area",
     scope_id: "kitchen",
     scope_name: "Kitchen",
-    group: "g1",
-    group_name: "Evening",
+    category: "g1",
+    category_name: "Evening",
     switch_state: "on",
     outcome: "acted",
     winner_name: "Evening",
@@ -22,8 +22,8 @@ function unit(over: Partial<BufferedUnit> = {}): BufferedUnit {
     explanation: {
       winner_index: 1,
       rules: [
-        { index: 0, name: "Night", matched: false, evaluated: true, predicates: [{ matcher_key: "tod", passed: false, detail: "evening" }] },
-        { index: 1, name: "Evening", matched: true, evaluated: true, predicates: [{ matcher_key: "tod", passed: true, detail: "evening" }] },
+        { index: 0, name: "Night", matched: false, evaluated: true, predicates: [{ condition_key: "tod", passed: false, detail: "evening" }] },
+        { index: 1, name: "Evening", matched: true, evaluated: true, predicates: [{ condition_key: "tod", passed: true, detail: "evening" }] },
       ],
     },
     ...over,
@@ -106,7 +106,7 @@ describe("trace-detail", () => {
   test("expanded rule evaluation shows per-predicate pass/fail and the losing rule", () => {
     const host = renderToHost({}, true);
     expect(host.querySelector(".why")).toBeTruthy();
-    expect(host.textContent).toContain("Tod"); // matcher key humanized
+    expect(host.textContent).toContain("Tod"); // condition key humanized
     expect(host.textContent).toContain("Night");
     expect(host.querySelector(".pred.fail")).toBeTruthy();
     expect(host.querySelector(".pred.pass")).toBeTruthy();
@@ -180,12 +180,12 @@ describe("trace-detail", () => {
     expect(host.textContent).not.toContain("rule #");
   });
 
-  test("matcher keys are shown as human labels (time_of_day → 'Time of day')", () => {
+  test("condition keys are shown as human labels (time_of_day → 'Time of day')", () => {
     const host = renderToHost({ explanation: { winner_index: 0, rules: [
       { index: 0, name: "Afternoon", matched: true, evaluated: true,
-        predicates: [{ matcher_key: "time_of_day", passed: true, detail: "afternoon" }] },
+        predicates: [{ condition_key: "time_of_day", passed: true, detail: "afternoon" }] },
     ] } }, true);
-    expect(host.textContent).toContain("Time of day"); // humanized matcher key
+    expect(host.textContent).toContain("Time of day"); // humanized condition key
     expect(host.textContent).not.toContain("time_of_day");
     expect(host.textContent).toContain("Afternoon"); // humanized period detail
     expect(host.textContent).not.toContain("[afternoon]");
@@ -194,7 +194,7 @@ describe("trace-detail", () => {
   test("weather condition detail is humanized (partlycloudy → 'Partly cloudy')", () => {
     const host = renderToHost({ explanation: { winner_index: 0, rules: [
       { index: 0, name: "Cloudy", matched: true, evaluated: true,
-        predicates: [{ matcher_key: "weather", passed: true, detail: "partlycloudy" }] },
+        predicates: [{ condition_key: "weather", passed: true, detail: "partlycloudy" }] },
     ] } }, true);
     expect(host.textContent).toContain("Partly cloudy");
     expect(host.textContent).not.toContain("partlycloudy");
@@ -203,7 +203,7 @@ describe("trace-detail", () => {
   test("already-human detail phrases are shown verbatim, not lower-cased", () => {
     const host = renderToHost({ explanation: { winner_index: 0, rules: [
       { index: 0, name: "Home", matched: true, evaluated: true,
-        predicates: [{ matcher_key: "people", passed: true, detail: "3 of 5 home (Alice, Bob)" }] },
+        predicates: [{ condition_key: "people", passed: true, detail: "3 of 5 home (Alice, Bob)" }] },
     ] } }, true);
     expect(host.textContent).toContain("3 of 5 home (Alice, Bob)");
   });

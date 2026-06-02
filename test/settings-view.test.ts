@@ -1,7 +1,7 @@
 import { describe, test, expect, afterEach, beforeEach, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
-  listMatchers: vi.fn(async () => []),
+  listConditions: vi.fn(async () => []),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
   saveDayConfig: vi.fn(async () => ({ ok: true, warnings: [] })),
   listPeriods: vi.fn(async () => ({ builtins: {}, custom: {}, hidden: [] })),
@@ -40,12 +40,12 @@ describe("ambience-settings-view", () => {
     expect(el.shadowRoot.querySelector("ambience-ambience-settings")).not.toBeNull();
   });
 
-  test("clicking Matchers swaps the body", async () => {
+  test("clicking Conditions swaps the body", async () => {
     el = await mount();
     const buttons = el.shadowRoot.querySelectorAll("nav button");
     (buttons[1] as HTMLButtonElement).click();
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector("ambience-matchers-settings")).not.toBeNull();
+    expect(el.shadowRoot.querySelector("ambience-conditions-settings")).not.toBeNull();
     expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
   });
 

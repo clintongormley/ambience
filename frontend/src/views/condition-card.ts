@@ -1,11 +1,11 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { matcherLabel } from "../i18n.js";
+import { conditionLabel } from "../i18n.js";
 import type { HassConnection } from "../api.js";
 
-@customElement("ambience-matcher-card")
-export class AmbienceMatcherCard extends LitElement {
+@customElement("ambience-condition-card")
+export class AmbienceConditionCard extends LitElement {
   static override styles = css`
     :host {
       display: block;
@@ -54,8 +54,8 @@ export class AmbienceMatcherCard extends LitElement {
   `;
 
   @property({ attribute: false }) hass?: HassConnection;
-  @property() matcherName = "";
-  @property() matcherDescription = "";
+  @property() conditionName = "";
+  @property() conditionDescription = "";
 
   @state() private _expanded = false;
 
@@ -64,14 +64,14 @@ export class AmbienceMatcherCard extends LitElement {
   }
 
   override render() {
-    const label = matcherLabel(this.hass as any, this.matcherName);
+    const label = conditionLabel(this.hass as any, this.conditionName);
     return html`
       <div class="card">
         <header @click=${this._toggleExpand}>
           <span class="chevron ${this._expanded ? "open" : ""}">▶</span>
           <label>
             <div class="name">${label}</div>
-            <div class="description">${this.matcherDescription}</div>
+            <div class="description">${this.conditionDescription}</div>
           </label>
         </header>
         <div class="body ${this._expanded ? "" : "collapsed"}">

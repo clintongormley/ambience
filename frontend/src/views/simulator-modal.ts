@@ -36,7 +36,7 @@ function localDate(d: Date): string { return `${d.getFullYear()}-${pad(d.getMont
 function localTime(d: Date): string { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 
 /**
- * Per-group what-if simulator. Loads the group's editable inputs (pre-filled
+ * Per-category what-if simulator. Loads the category's editable inputs (pre-filled
  * live), lets the user bend a date+time, entity controls, and opaque-predicate
  * verdicts, runs the simulation, and renders the result with the shared
  * trace-detail card. Read-only.
@@ -70,7 +70,7 @@ export class AmbienceSimulatorModal extends LitElement {
       .row-ctrl { margin-top: -2px; }
       .row.attr { border-bottom: 0; padding-top: 0.1rem; }
       /* the weather row + its attrs read as one unit (no inner dividers), with
-         the divider restored after the last attribute to separate the group */
+         the divider restored after the last attribute to separate the category */
       .row.attr.last-attr { border-bottom: 1px solid var(--divider-color, #e0e0e0); }
       .row.has-attrs { border-bottom: 0; }
       .row-ctrl { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; }
@@ -90,8 +90,8 @@ export class AmbienceSimulatorModal extends LitElement {
 
   @property({ attribute: false }) hass!: HassConnection;
   @property({ attribute: false }) scope!: { scope_kind: string; scope_id: string | null };
-  @property() group = "";
-  @property() groupName: string | null = null;
+  @property() category = "";
+  @property() categoryName: string | null = null;
   @property({ type: Boolean, reflect: true }) open = false;
 
   @state() private _knobs: SimulateKnob[] = [];
@@ -106,19 +106,19 @@ export class AmbienceSimulatorModal extends LitElement {
   @state() private _expanded = false;
 
   override updated(changed: Map<string, unknown>): void {
-    if (this.open && (changed.has("open") || changed.has("group") || changed.has("scope"))) {
+    if (this.open && (changed.has("open") || changed.has("category") || changed.has("scope"))) {
       void this._load();
     }
   }
 
-  private _vkey(k: SimulateVerdictKnob): string { return `${k.matcher}:${k.key}`; }
+  private _vkey(k: SimulateVerdictKnob): string { return `${k.condition}:${k.key}`; }
 
   private async _load(): Promise<void> {
     this._error = ""; this._loading = true; this._result = null; this._expanded = false;
     const now = new Date();
     this._date = localDate(now); this._time = localTime(now);
     try {
-      const inputs = await simulateInputs(this.hass, this.scope, this.group);
+      const inputs = await simulateInputs(this.hass, this.scope, this.category);
       if (!this.isConnected) return;
       this._knobs = inputs.knobs;
       this._hasTime = inputs.has_time;
@@ -189,7 +189,7 @@ export class AmbienceSimulatorModal extends LitElement {
     const out: SimulateVerdicts = {};
     for (const k of this._knobs) {
       if (k.kind !== "verdict") continue;
-      (out[k.matcher] ??= {})[k.key] = this._verdicts[this._vkey(k)] ?? k.live_value;
+      (out[k.condition] ??= {})[k.key] = this._verdicts[this._vkey(k)] ?? k.live_value;
     }
     return out;
   }
@@ -198,7 +198,7 @@ export class AmbienceSimulatorModal extends LitElement {
     this._error = "";
     const now = new Date(`${this._date}T${this._time}`).toISOString();
     try {
-      this._result = await simulate(this.hass, this.scope, this.group, now, this._buildOverrides(), this._buildVerdicts());
+      this._result = await simulate(this.hass, this.scope, this.category, now, this._buildOverrides(), this._buildVerdicts());
       this._expanded = false;
     } catch (e) {
       this._error = (e as Error).message || String(e);
@@ -214,7 +214,7 @@ export class AmbienceSimulatorModal extends LitElement {
     return html`
       <div class="modal" role="dialog" aria-modal="true">
         <div class="header">
-          <h3>Simulate · ${this.groupName ?? this.group}</h3>
+          <h3>Simulate · ${this.categoryName ?? this.category}</h3>
           <button class="close" @click=${this._onClose} aria-label="Close">✕</button>
         </div>
         <div class="body">
@@ -230,7 +230,7 @@ export class AmbienceSimulatorModal extends LitElement {
                 <span class="hint">drives sun, time-of-day, weekday &amp; workday</span>
               </div>` : nothing}
             ${this._knobs.length ? html`
-              <p class="sec-title">Inputs this group depends on</p>
+              <p class="sec-title">Inputs this category depends on</p>
               ${this._knobs.map((k) => k.kind === "entity" ? this._renderEntity(k) : this._renderVerdict(k))}` : nothing}
             <div class="run-row"><button class="runbtn" @click=${() => void this._run()}>Simulate ▸</button></div>
             ${this._result ? html`<div class="result">${renderEvaluation(this._result, this._expanded, () => (this._expanded = !this._expanded))}</div>` : nothing}

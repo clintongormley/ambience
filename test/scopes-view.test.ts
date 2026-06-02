@@ -4,10 +4,10 @@ import type {
   AreaListItem,
   ExposedAction,
   FloorListItem,
-  MatcherInfo,
+  ConditionInfo,
   PeriodStoreView,
   Rule,
-  RuleGroup,
+  RuleCategory,
   Scope,
   ScopeConfig,
   ScopeSwitch,
@@ -25,9 +25,9 @@ vi.mock("../frontend/src/api", () => ({
   getHouse: vi.fn(),
   saveHouse: vi.fn(),
   listSwitches: vi.fn(async () => []),
-  listMatchers: vi.fn(),
+  listConditions: vi.fn(),
   listExposedActions: vi.fn(),
-  listGroups: vi.fn(async () => []),
+  listCategories: vi.fn(async () => []),
   getServiceSchema: vi.fn(async () => ({})),
   listPeriods: vi.fn(),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
@@ -50,7 +50,7 @@ const baseFloors: FloorListItem[] = [
 
 const baseConfig: ScopeConfig = { rules: [] };
 
-const matchers: MatcherInfo[] = [
+const conditions: ConditionInfo[] = [
   { name: "mode", description: "", predicate_help: "", input: "text", priority: 0 },
   { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day", priority: 200 },
 ];
@@ -98,7 +98,7 @@ async function mount(opts: MountOpts = {}): Promise<any> {
   );
   vi.mocked(api.getHouse).mockResolvedValue(houseConfig);
   vi.mocked(api.listSwitches).mockResolvedValue(opts.switches ?? []);
-  vi.mocked(api.listMatchers).mockResolvedValue(matchers);
+  vi.mocked(api.listConditions).mockResolvedValue(conditions);
   vi.mocked(api.listExposedActions).mockResolvedValue(actions);
   vi.mocked(api.listPeriods).mockResolvedValue(periods);
   vi.mocked(api.saveArea).mockResolvedValue({ ok: true, config: baseConfig });
@@ -457,7 +457,7 @@ describe("ambience-scopes-view", () => {
 
   test("duplicating a pinned rule drops the pin and its fixed priority", async () => {
     const rule: Rule = {
-      name: "Pinned", when: {}, actions: [], group: "a", pinned: true, priority: 4096,
+      name: "Pinned", when: {}, actions: [], category: "a", pinned: true, priority: 4096,
     };
     el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
     const row = el.shadowRoot.querySelector(
@@ -474,13 +474,13 @@ describe("ambience-scopes-view", () => {
     const editor: any = el.shadowRoot.querySelector("ambience-rule-editor");
     expect(editor.rule.pinned).toBeUndefined();
     expect(editor.rule.priority).toBeUndefined();
-    expect(editor.rule.group).toBe("a"); // group is preserved
+    expect(editor.rule.category).toBe("a"); // category is preserved
     // the original is untouched
     expect(rule.pinned).toBe(true);
   });
 
   test("duplicate makes the destination area directly editable", async () => {
-    const rule: Rule = { name: "Orig", when: {}, actions: [], group: "a" };
+    const rule: Rule = { name: "Orig", when: {}, actions: [], category: "a" };
     el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
@@ -498,7 +498,7 @@ describe("ambience-scopes-view", () => {
   });
 
   test("editing an existing rule does not auto-open the destination", async () => {
-    const rule: Rule = { name: "Orig", when: {}, actions: [], group: "a" };
+    const rule: Rule = { name: "Orig", when: {}, actions: [], category: "a" };
     el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
@@ -753,98 +753,98 @@ describe("ambience-scopes-view", () => {
     el = null; // already removed, don't double-remove in afterEach
   });
 
-  // --- global group filter ------------------------------------------------
+  // --- global category filter ------------------------------------------------
 
-  test("renders a global group filter only when >1 group", async () => {
+  test("renders a global category filter only when >1 category", async () => {
     el = await mount();
-    el._groups = [
+    el._categories = [
       { id: "a", name: "Awn" },
       { id: "b", name: "Bee" },
-    ] as RuleGroup[];
+    ] as RuleCategory[];
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".group-filter-trigger")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".category-filter-trigger")).toBeTruthy();
 
-    el._groups = [{ id: "a", name: "Awn" }] as RuleGroup[];
+    el._categories = [{ id: "a", name: "Awn" }] as RuleCategory[];
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".group-filter-trigger")).toBeNull();
+    expect(el.shadowRoot.querySelector(".category-filter-trigger")).toBeNull();
   });
 
   test("the filter dropdown lists colour-coded swatch+icon+name options and selecting one sets the filter", async () => {
     el = await mount();
-    el._groups = [
+    el._categories = [
       { id: "a", name: "Awn", color: "green", icon: "mdi:blinds" },
       { id: "b", name: "Bee" },
-    ] as RuleGroup[];
+    ] as RuleCategory[];
     await el.updateComplete;
     // Open the menu.
-    (el.shadowRoot.querySelector(".group-filter-trigger") as HTMLButtonElement).click();
+    (el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
     await el.updateComplete;
-    const options = Array.from(el.shadowRoot.querySelectorAll(".group-filter-option")) as HTMLElement[];
-    // All groups + 2 groups.
+    const options = Array.from(el.shadowRoot.querySelectorAll(".category-filter-option")) as HTMLElement[];
+    // All categories + 2 categories.
     expect(options.length).toBe(3);
     // The "Awn" option carries a coloured swatch with its icon.
     const awn = options.find((o) => o.textContent!.includes("Awn"))!;
-    const swatch = awn.querySelector(".group-swatch") as HTMLElement;
+    const swatch = awn.querySelector(".category-swatch") as HTMLElement;
     expect((swatch.getAttribute("style") || "")).toContain("#4caf50");
     expect(swatch.querySelector('ha-icon[icon="mdi:blinds"]')).toBeTruthy();
     // Selecting it sets the filter and closes the menu.
     awn.click();
     await el.updateComplete;
-    expect(el._filterGroup).toBe("a");
-    expect(el.shadowRoot.querySelector(".group-filter-menu")).toBeNull();
+    expect(el._filterCategory).toBe("a");
+    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeNull();
   });
 
   test("per-scope summary counts rules matching the active filter", async () => {
     el = await mount();
     const cfg = {
       rules: [
-        { when: {}, actions: [], group: "a" },
-        { when: {}, actions: [], group: "b" },
-        { when: {}, actions: [], group: "a" },
+        { when: {}, actions: [], category: "a" },
+        { when: {}, actions: [], category: "b" },
+        { when: {}, actions: [], category: "a" },
       ],
     };
-    el._filterGroup = "";
+    el._filterCategory = "";
     expect(el._summary(cfg)).toBe("3 rules");
-    el._filterGroup = "a";
+    el._filterCategory = "a";
     expect(el._summary(cfg)).toBe("2 rules");
-    el._filterGroup = "b";
+    el._filterCategory = "b";
     expect(el._summary(cfg)).toBe("1 rule");
     // A genuinely empty scope is always "not configured".
     expect(el._summary({ rules: [] })).toBe("not configured");
     // A scope with rules but none in the active filter shows "0 rules".
-    el._filterGroup = "c";
+    el._filterCategory = "c";
     expect(el._summary(cfg)).toBe("0 rules");
   });
 
-  test("a new rule defaults to the active filtered group", async () => {
+  test("a new rule defaults to the active filtered category", async () => {
     el = await mount();
-    el._groups = [
+    el._categories = [
       { id: "a", name: "Awn" },
       { id: "b", name: "Bee" },
-    ] as RuleGroup[];
-    el._filterGroup = "b";
+    ] as RuleCategory[];
+    el._filterCategory = "b";
     await el.updateComplete;
     el._addRule({ kind: "house" });
-    expect(el._editingRule.group).toBe("b");
+    expect(el._editingRule.category).toBe("b");
   });
 
-  test("a new rule under All defaults to the alphabetically-first group", async () => {
+  test("a new rule under All defaults to the alphabetically-first category", async () => {
     el = await mount();
-    el._filterGroup = "";
-    el._groups = [
+    el._filterCategory = "";
+    el._categories = [
       { id: "z", name: "Zed" },
       { id: "a", name: "Awn" },
-    ] as RuleGroup[];
+    ] as RuleCategory[];
     await el.updateComplete;
     el._addRule({ kind: "house" });
-    expect(el._editingRule.group).toBe("a");
+    expect(el._editingRule.category).toBe("a");
   });
 
-  test("reorder rejects a cross-group drop (no mutation)", async () => {
+  test("reorder rejects a cross-category drop (no mutation)", async () => {
     const cfg: ScopeConfig = {
       rules: [
-        { name: "a", when: {}, actions: [], group: "a", priority: 2048 },
-        { name: "b", when: {}, actions: [], group: "b", priority: 1024 },
+        { name: "a", when: {}, actions: [], category: "a", priority: 2048 },
+        { name: "b", when: {}, actions: [], category: "b", priority: 1024 },
       ] as Rule[],
     };
     el = await mount({ houseConfig: structuredClone(cfg) });
@@ -869,7 +869,7 @@ describe("ambience-scopes-view", () => {
     vi.mocked(api.listFloors).mockResolvedValue(baseFloors);
     vi.mocked(api.getFloor).mockResolvedValue(baseConfig);
     vi.mocked(api.getHouse).mockResolvedValue(baseConfig);
-    vi.mocked(api.listMatchers).mockResolvedValue(matchers);
+    vi.mocked(api.listConditions).mockResolvedValue(conditions);
     vi.mocked(api.listExposedActions).mockResolvedValue(actions);
     vi.mocked(api.listPeriods).mockResolvedValue(periods);
 
@@ -1000,7 +1000,7 @@ describe("ambience-scopes-view", () => {
   test("run-rule-actions event from a rule list calls api.runRuleActions", async () => {
     el = await mount({
       areaConfigs: {
-        living_room: { rules: [{ name: "R", group: "g", when: {}, actions: [] }] },
+        living_room: { rules: [{ name: "R", category: "g", when: {}, actions: [] }] },
       },
     });
     const header = el.shadowRoot.querySelector(
@@ -1028,10 +1028,10 @@ describe("ambience-scopes-view", () => {
     expect(vi.mocked(api.runRuleActions).mock.calls[0][2]).toBe(0);
   });
 
-  test("apply-group event calls api.applyRules with the group id", async () => {
+  test("apply-category event calls api.applyRules with the category id", async () => {
     el = await mount({
       areaConfigs: {
-        living_room: { rules: [{ name: "R", group: "g", when: {}, actions: [] }] },
+        living_room: { rules: [{ name: "R", category: "g", when: {}, actions: [] }] },
       },
     });
     const header = el.shadowRoot.querySelector(
@@ -1043,8 +1043,8 @@ describe("ambience-scopes-view", () => {
       "li.scope-row.area[data-id='living_room'] ambience-rules-list",
     ) as HTMLElement;
     list.dispatchEvent(
-      new CustomEvent("apply-group", {
-        detail: { groupId: "g" },
+      new CustomEvent("apply-category", {
+        detail: { categoryId: "g" },
         bubbles: true,
         composed: true,
       }),

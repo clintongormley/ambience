@@ -5,12 +5,12 @@
 
 export type Rule = {
   name?: string;
-  // The group this rule belongs to (RuleGroup.id). Required — every rule is
-  // grouped; a fresh install seeds a "General" group.
-  group: string;
-  // Uniform {matcher_name: predicate} map.
-  // An absent key or `null` value is a wildcard for that matcher.
-  when: { [matcher: string]: unknown };
+  // The category this rule belongs to (RuleCategory.id). Required — every rule is
+  // categorised; a fresh install seeds a "General" category.
+  category: string;
+  // Uniform {condition_name: predicate} map.
+  // An absent key or `null` value is a wildcard for that condition.
+  when: { [condition: string]: unknown };
   actions: ActionSpec[];
   // Sole sort key; higher = more important. Maintained by the backend.
   priority?: number;
@@ -25,9 +25,9 @@ export type Rule = {
 };
 
 // A user-defined grouping of rules. Stored separately; rules reference it by id.
-// Every rule belongs to exactly one group; at least one group always exists.
-// `icon` is an mdi name (e.g. "mdi:lightbulb"); `color` is a GROUP_COLORS id.
-export type RuleGroup = { id: string; name: string; icon?: string; color?: string };
+// Every rule belongs to exactly one category; at least one category always exists.
+// `icon` is an mdi name (e.g. "mdi:lightbulb"); `color` is a CATEGORY_COLORS id.
+export type RuleCategory = { id: string; name: string; icon?: string; color?: string };
 
 export type ActionSpec = {
   service: string;            // "domain.service"
@@ -111,7 +111,7 @@ export type AreaListItem = {
   name: string;
 };
 
-export type MatcherInfo = {
+export type ConditionInfo = {
   name: string;
   description: string;
   predicate_help: string;
@@ -200,7 +200,7 @@ export type WeatherPredicate =
   | null
   | { groups: string[]; thresholds: WeatherThreshold[] };
 
-// --- sun matcher ----------------------------------------------------------
+// --- sun condition ----------------------------------------------------------
 
 export type SunElevation = { min?: number; max?: number };
 export type SunRange = { from: number; to: number };
@@ -212,7 +212,7 @@ export type SunPredicate =
   | null
   | { elevation?: SunElevation; azimuth?: SunAzimuth };
 
-// --- state matcher --------------------------------------------------------
+// --- state condition --------------------------------------------------------
 
 export type StateForDuration = { h: number; m: number; s: number };
 
@@ -236,7 +236,7 @@ export type StateExpr = StateAtom | StateGroup | StateNot;
 /** Top-level state predicate. `null` = no constraint. */
 export type StatePredicate = StateExpr | null;
 
-// --- people matcher -------------------------------------------------------
+// --- people condition -------------------------------------------------------
 
 export type PeopleQuant = "any" | "everyone" | "nobody";
 
@@ -249,14 +249,14 @@ export interface PeoplePredicate {
   for?: { h: number; m: number; s: number } | null;
 }
 
-// --- script matcher -------------------------------------------------------
+// --- script condition -------------------------------------------------------
 
 /** Per-rule predicate. `null` = wildcard. */
 export type ScriptPredicate =
   | null
   | { script: string; args?: Record<string, unknown>; triggers?: string[] };
 
-// --- template matcher -----------------------------------------------------
+// --- template condition -----------------------------------------------------
 
 /** Per-rule predicate: a Jinja template rendered to a bool. `null` = wildcard. */
 export type TemplatePredicate = null | { template: string };
@@ -300,7 +300,7 @@ export type TraceCause = {
   new: string | null;
   detail: string | null;
 };
-export type TracePredicate = { matcher_key: string; passed: boolean; detail: string | null };
+export type TracePredicate = { condition_key: string; passed: boolean; detail: string | null };
 export type TraceRuleEval = {
   index: number;
   name: string | null;
@@ -318,8 +318,8 @@ export type BufferedUnit = {
   scope_kind: "area" | "floor" | "house";
   scope_id: string | null;
   scope_name: string | null;
-  group: string;
-  group_name: string | null;
+  category: string;
+  category_name: string | null;
   switch_state: string;
   outcome: TraceOutcome;
   winner_name: string | null;
@@ -345,7 +345,7 @@ export type SimulateEntityKnob = {
 
 export type SimulateVerdictKnob = {
   kind: "verdict";
-  matcher: "script" | "template";
+  condition: "script" | "template";
   key: string;
   label: string;
   entity_id?: string;

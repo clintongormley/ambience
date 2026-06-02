@@ -1,30 +1,30 @@
 import { describe, test, expect, afterEach } from "vitest";
 import { render } from "lit";
 
-import { groupSwatch, groupSwatchStyles } from "../frontend/src/group-swatch";
+import { categorySwatch, categorySwatchStyles } from "../frontend/src/category-swatch";
 
 function draw(color: string | undefined, icon: string | undefined): HTMLElement {
   const c = document.createElement("div");
-  render(groupSwatch(color, icon), c);
-  return c.querySelector(".group-swatch")!;
+  render(categorySwatch(color, icon), c);
+  return c.querySelector(".category-swatch")!;
 }
 
-describe("groupSwatch", () => {
+describe("categorySwatch", () => {
   let swatch: HTMLElement | undefined;
   afterEach(() => swatch?.remove());
 
-  test("renders a span.group-swatch", () => {
+  test("renders a span.category-swatch", () => {
     swatch = draw("green", "mdi:blinds");
     expect(swatch).toBeTruthy();
     expect(swatch.tagName).toBe("SPAN");
   });
 
-  test("a coloured group paints the swatch with its colour", () => {
+  test("a coloured category paints the swatch with its colour", () => {
     swatch = draw("green", "mdi:blinds");
     expect(swatch.getAttribute("style") || "").toContain("#4caf50");
   });
 
-  test("renders the group's icon", () => {
+  test("renders the category's icon", () => {
     swatch = draw("green", "mdi:blinds");
     expect(swatch.querySelector('ha-icon[icon="mdi:blinds"]')).toBeTruthy();
   });
@@ -41,11 +41,11 @@ describe("groupSwatch", () => {
   });
 });
 
-describe("groupSwatchStyles", () => {
-  test("styles the .group-swatch shell with a parameterised size", () => {
-    const cssText = groupSwatchStyles.cssText;
-    expect(cssText).toContain(".group-swatch");
-    expect(cssText).toContain("--group-swatch-size");
-    expect(cssText).toContain("--group-swatch-icon-size");
+describe("categorySwatchStyles", () => {
+  test("styles the .category-swatch shell with a parameterised size", () => {
+    const cssText = categorySwatchStyles.cssText;
+    expect(cssText).toContain(".category-swatch");
+    expect(cssText).toContain("--category-swatch-size");
+    expect(cssText).toContain("--category-swatch-icon-size");
   });
 });

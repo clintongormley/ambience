@@ -24,7 +24,7 @@ const DEFAULT_RANGE: TimeRange = {
 };
 
 /**
- * Predicate input for the time_of_day matcher.
+ * Predicate input for the time_of_day condition.
  *
  * UI: a primary dropdown ("Any time" / "Custom range" / named periods). When
  * "Custom range" is selected, the from/to editors render below. Entries can be

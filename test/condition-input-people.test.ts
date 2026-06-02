@@ -1,6 +1,6 @@
 import { describe, test, expect, afterEach } from "vitest";
 import "../frontend/src/views/people-predicate-input";
-import "../frontend/src/views/matcher-input";
+import "../frontend/src/views/condition-input";
 import type { PeoplePredicate } from "../frontend/src/types";
 
 // Minimal hass stub exposing two persons and one (non-home) zone.
@@ -570,11 +570,11 @@ describe("ambience-people-predicate-input", () => {
     expect(Object.keys(emitted?.for ?? {}).sort()).toEqual(["h", "m", "s"]);
   });
 
-  // --- matcher-input dispatch ----------------------------------------------
+  // --- condition-input dispatch ----------------------------------------------
 
-  test("matcher-input dispatches to the people widget for input=people_predicate", async () => {
-    const di: any = document.createElement("ambience-matcher-input");
-    di.matcher = { name: "people", description: "", predicate_help: "", input: "people_predicate", priority: 75 };
+  test("condition-input dispatches to the people widget for input=people_predicate", async () => {
+    const di: any = document.createElement("ambience-condition-input");
+    di.condition = { name: "people", description: "", predicate_help: "", input: "people_predicate", priority: 75 };
     di.value = null;
     di.hass = hass;
     document.body.appendChild(di);

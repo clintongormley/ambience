@@ -1,26 +1,26 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { listGroups, saveGroups, deleteGroup, type HassConnection } from "../api.js";
-import { GROUP_COLORS, colorHex } from "../group-colors.js";
+import { listCategories, saveCategories, deleteCategory, type HassConnection } from "../api.js";
+import { CATEGORY_COLORS, colorHex } from "../category-colors.js";
 import { localize } from "../i18n.js";
-import type { RuleGroup } from "../types.js";
+import type { RuleCategory } from "../types.js";
 
-@customElement("ambience-groups-settings")
-export class AmbienceGroupsSettings extends LitElement {
+@customElement("ambience-categories-settings")
+export class AmbienceCategoriesSettings extends LitElement {
   static override styles = css`
     :host { display: block; }
     .list {
       display: flex; flex-direction: column;
       margin-bottom: 0.75rem;
     }
-    button.group-row {
+    button.category-row {
       display: flex; align-items: center; gap: 1rem;
       width: 100%; text-align: left;
       background: none; border: none; border-top: 1px solid var(--divider-color, #e0e0e0);
       padding: 0.75rem 0.5rem; cursor: pointer; color: inherit; font: inherit;
     }
-    button.group-row:last-of-type { border-bottom: 1px solid var(--divider-color, #e0e0e0); }
+    button.category-row:last-of-type { border-bottom: 1px solid var(--divider-color, #e0e0e0); }
     .row-icon {
       flex: 0 0 1.5rem; display: inline-flex; justify-content: center;
       color: var(--secondary-text-color, #555);
@@ -115,42 +115,42 @@ export class AmbienceGroupsSettings extends LitElement {
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
-  @state() private _groups: RuleGroup[] = [];
+  @state() private _categories: RuleCategory[] = [];
   @state() private _error = "";
   // The draft being edited; null = modal closed. When the draft's id matches an
-  // existing group it's an edit, otherwise it's a new group.
-  @state() private _editing: RuleGroup | null = null;
+  // existing category it's an edit, otherwise it's a new category.
+  @state() private _editing: RuleCategory | null = null;
   // Validation error shown inside the open modal.
   @state() private _modalError = "";
 
   override async connectedCallback() {
     super.connectedCallback();
     try {
-      this._groups = await listGroups(this.hass);
+      this._categories = await listCategories(this.hass);
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
   }
 
-  /** Groups shown alphabetically by name. */
-  private _sorted(): RuleGroup[] {
-    return [...this._groups].sort((a, b) => a.name.localeCompare(b.name));
+  /** Categories shown alphabetically by name. */
+  private _sorted(): RuleCategory[] {
+    return [...this._categories].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  /** Validate the draft against the OTHER groups; returns a localized error
+  /** Validate the draft against the OTHER categories; returns a localized error
    *  message, or "" if OK. */
-  private _validate(draft: RuleGroup): string {
+  private _validate(draft: RuleCategory): string {
     const name = draft.name.trim();
     if (name === "") {
-      return localize(this.hass, "ui.group_name_blank_error", "Group names can't be empty.");
+      return localize(this.hass, "ui.category_name_blank_error", "Category names can't be empty.");
     }
     const key = name.toLocaleLowerCase();
-    const clash = this._groups.some((g) => g.id !== draft.id && g.name.trim().toLocaleLowerCase() === key);
+    const clash = this._categories.some((g) => g.id !== draft.id && g.name.trim().toLocaleLowerCase() === key);
     if (clash) {
       return localize(
         this.hass,
-        "ui.group_name_duplicate_error",
-        "Two groups can't have the same name.",
+        "ui.category_name_duplicate_error",
+        "Two categories can't have the same name.",
       );
     }
     return "";
@@ -158,14 +158,14 @@ export class AmbienceGroupsSettings extends LitElement {
 
   // --- modal open/close ---
 
-  _openEditor(group: RuleGroup) {
-    // Edit an existing group: work on a copy so cancelling discards changes.
-    this._editing = { ...group };
+  _openEditor(category: RuleCategory) {
+    // Edit an existing category: work on a copy so cancelling discards changes.
+    this._editing = { ...category };
     this._modalError = "";
   }
 
-  _addGroup() {
-    // New groups start blank; not persisted until given a valid, unique name.
+  _addCategory() {
+    // New categories start blank; not persisted until given a valid, unique name.
     const id = crypto.randomUUID().replace(/-/g, "");
     this._editing = { id, name: "" };
     this._modalError = "";
@@ -178,7 +178,7 @@ export class AmbienceGroupsSettings extends LitElement {
 
   // --- draft mutation ---
 
-  private _patchDraft(patch: Partial<RuleGroup>) {
+  private _patchDraft(patch: Partial<RuleCategory>) {
     if (!this._editing) return;
     this._editing = { ...this._editing, ...patch };
   }
@@ -205,44 +205,44 @@ export class AmbienceGroupsSettings extends LitElement {
       return;
     }
     const draft = { ...this._editing, name: this._editing.name.trim() };
-    const exists = this._groups.some((g) => g.id === draft.id);
-    this._groups = exists
-      ? this._groups.map((g) => (g.id === draft.id ? draft : g))
-      : [...this._groups, draft];
+    const exists = this._categories.some((g) => g.id === draft.id);
+    this._categories = exists
+      ? this._categories.map((g) => (g.id === draft.id ? draft : g))
+      : [...this._categories, draft];
     this._closeModal();
-    void saveGroups(this.hass, this._groups).catch((e) => {
+    void saveCategories(this.hass, this._categories).catch((e) => {
       this._error = (e as Error).message || String(e);
     });
   }
 
-  _deleteGroup() {
+  _deleteCategory() {
     if (!this._editing) return;
     const id = this._editing.id;
-    if (this._groups.length <= 1) {
+    if (this._categories.length <= 1) {
       this._modalError = localize(
         this.hass,
-        "ui.group_delete_blocked_last",
-        "You can't delete the last group.",
+        "ui.category_delete_blocked_last",
+        "You can't delete the last category.",
       );
       return;
     }
     // Optimistic local removal, but keep the modal open until the server
-    // confirms. If the server refuses (group still has rules), restore and
+    // confirms. If the server refuses (category still has rules), restore and
     // show the reason — do not close.
-    const previous = this._groups;
-    this._groups = this._groups.filter((g) => g.id !== id);
-    void deleteGroup(this.hass, id)
+    const previous = this._categories;
+    this._categories = this._categories.filter((g) => g.id !== id);
+    void deleteCategory(this.hass, id)
       .then(() => this._closeModal())
       .catch((e) => {
-        this._groups = previous;
+        this._categories = previous;
         // The backend tags an in-use refusal with a stable error code; show the
         // localized reason for it, and the raw message for anything unexpected.
         const code = (e as { code?: string }).code;
-        this._modalError = code === "group_in_use"
+        this._modalError = code === "category_in_use"
           ? localize(
               this.hass,
-              "ui.group_delete_blocked_in_use",
-              "This group still has rules — move or delete them first.",
+              "ui.category_delete_blocked_in_use",
+              "This category still has rules — move or delete them first.",
             )
           : (e as Error).message || String(e);
       });
@@ -265,7 +265,7 @@ export class AmbienceGroupsSettings extends LitElement {
     return html`<input
       class="icon-input"
       .value=${this._editing!.icon ?? ""}
-      placeholder=${localize(this.hass, "ui.group_icon", "Icon")}
+      placeholder=${localize(this.hass, "ui.category_icon", "Icon")}
       @change=${(e: Event) => this._onIcon((e.target as HTMLInputElement).value)}
     />`;
   }
@@ -274,7 +274,7 @@ export class AmbienceGroupsSettings extends LitElement {
     const current = this._editing!.color;
     return html`
       <div class="swatches">
-        ${GROUP_COLORS.map(
+        ${CATEGORY_COLORS.map(
           (c) => html`<button
             type="button"
             class="swatch ${current === c.id ? "selected" : ""}"
@@ -288,8 +288,8 @@ export class AmbienceGroupsSettings extends LitElement {
         <button
           type="button"
           class="swatch none ${current == null ? "selected" : ""}"
-          title=${localize(this.hass, "ui.group_color_none", "No colour")}
-          aria-label=${localize(this.hass, "ui.group_color_none", "No colour")}
+          title=${localize(this.hass, "ui.category_color_none", "No colour")}
+          aria-label=${localize(this.hass, "ui.category_color_none", "No colour")}
           aria-pressed=${current == null}
           @click=${() => this._onColor(undefined)}
         >✕</button>
@@ -299,10 +299,10 @@ export class AmbienceGroupsSettings extends LitElement {
 
   private _renderModal() {
     if (!this._editing) return "";
-    const isEdit = this._groups.some((g) => g.id === this._editing!.id);
+    const isEdit = this._categories.some((g) => g.id === this._editing!.id);
     const title = isEdit
-      ? localize(this.hass, "ui.group_edit_title", "Edit group")
-      : localize(this.hass, "ui.group_add_title", "Add group");
+      ? localize(this.hass, "ui.category_edit_title", "Edit category")
+      : localize(this.hass, "ui.category_add_title", "Add category");
     return html`
       <div
         class="overlay"
@@ -321,32 +321,32 @@ export class AmbienceGroupsSettings extends LitElement {
             >✕</button>
           </div>
           <div class="modal-content">
-            <label>${localize(this.hass, "ui.group_name_placeholder", "Group name")}</label>
+            <label>${localize(this.hass, "ui.category_name_placeholder", "Category name")}</label>
             <input
               class="name"
               .value=${this._editing.name}
-              placeholder=${localize(this.hass, "ui.group_name_placeholder", "Group name")}
-              aria-label=${localize(this.hass, "ui.group_name_placeholder", "Group name")}
+              placeholder=${localize(this.hass, "ui.category_name_placeholder", "Category name")}
+              aria-label=${localize(this.hass, "ui.category_name_placeholder", "Category name")}
               @input=${this._onName}
             />
 
-            <label>${localize(this.hass, "ui.group_icon", "Icon")}</label>
+            <label>${localize(this.hass, "ui.category_icon", "Icon")}</label>
             ${this._renderIconField()}
 
-            <label>${localize(this.hass, "ui.group_color", "Colour")}</label>
+            <label>${localize(this.hass, "ui.category_color", "Colour")}</label>
             ${this._renderSwatches()}
 
             ${this._modalError ? html`<p class="modal-error">${this._modalError}</p>` : ""}
           </div>
           <div class="modal-footer">
             ${isEdit
-              ? html`<button class="delete" @click=${() => this._deleteGroup()}>
+              ? html`<button class="delete" @click=${() => this._deleteCategory()}>
                   ${localize(this.hass, "ui.title_delete", "Delete")}
                 </button>`
               : html`<span></span>`}
             <div class="right">
               <button class="primary" @click=${() => this._save()}>
-                ${localize(this.hass, "ui.group_save", "Save")}
+                ${localize(this.hass, "ui.category_save", "Save")}
               </button>
             </div>
           </div>
@@ -361,15 +361,15 @@ export class AmbienceGroupsSettings extends LitElement {
       <div class="list">
         ${this._sorted().map((g) => {
           const hex = colorHex(g.color);
-          return html`<button class="group-row" @click=${() => this._openEditor(g)}>
+          return html`<button class="category-row" @click=${() => this._openEditor(g)}>
             <span class="row-icon">${g.icon ? html`<ha-icon icon=${g.icon}></ha-icon>` : ""}</span>
             <span class="row-swatch ${hex ? "" : "none"}" style=${hex ? `background: ${hex}` : ""}></span>
             <span class="row-name">${g.name}</span>
           </button>`;
         })}
       </div>
-      <button class="add" @click=${() => this._addGroup()}>
-        ${localize(this.hass, "ui.group_add", "+ Add group")}
+      <button class="add" @click=${() => this._addCategory()}>
+        ${localize(this.hass, "ui.category_add", "+ Add category")}
       </button>
       ${this._renderModal()}
     `;

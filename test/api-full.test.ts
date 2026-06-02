@@ -1,13 +1,13 @@
 /**
  * Tests for the remaining api.ts functions not covered by api.test.ts
- * (listAreas, getArea, saveArea, listMatchers, listActions, validateConfig, dryRun)
+ * (listAreas, getArea, saveArea, listConditions, listActions, validateConfig, dryRun)
  */
 import { describe, test, expect, vi } from "vitest";
 import {
   listAreas,
   getArea,
   saveArea,
-  listMatchers,
+  listConditions,
   listExposedActions,
   listServices,
   getServiceSchema,
@@ -35,7 +35,7 @@ function makeFakeHass() {
     if (msg.type === "ambience/area/save") {
       return { ok: true, config: msg.config };
     }
-    if (msg.type === "ambience/matchers/list") {
+    if (msg.type === "ambience/conditions/list") {
       return [{ name: "time_of_day" }];
     }
     if (msg.type === "ambience/exposed_actions/list") {
@@ -94,11 +94,11 @@ describe("API: saveArea", () => {
   });
 });
 
-describe("API: listMatchers", () => {
-  test("sends correct WS message and returns matchers", async () => {
+describe("API: listConditions", () => {
+  test("sends correct WS message and returns conditions", async () => {
     const { callWS, sent } = makeFakeHass();
-    const res = await listMatchers({ callWS } as any);
-    expect(sent[0]).toEqual({ type: "ambience/matchers/list" });
+    const res = await listConditions({ callWS } as any);
+    expect(sent[0]).toEqual({ type: "ambience/conditions/list" });
     expect(res).toEqual([{ name: "time_of_day" }]);
   });
 });

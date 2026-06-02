@@ -55,7 +55,6 @@ from .matchers.template import TemplateMatcher
 from .matchers.time_of_day import TimeOfDayMatcher
 from .matchers.weather import WeatherMatcher
 from .periods import PeriodStore
-from .registry import register_matcher
 from .service import async_apply_scene, clear_last_applied
 from .store import AmbienceStore
 from .trace import BufferSink, LogSink
@@ -113,7 +112,6 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data = hass.data.setdefault(DOMAIN, {})
-    domain_data[DATA_MATCHERS] = {}
     domain_data[DATA_SWITCHES] = {}
     domain_data[DATA_LAST_APPLIED] = {}
     trace_buffer = BufferSink()
@@ -145,14 +143,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     period_store = PeriodStore(store)
     domain_data[DATA_PERIODS] = period_store
 
-    register_matcher(hass, TimeOfDayMatcher(period_lookup=period_store.effective))
-    register_matcher(hass, DayMatcher(hass=hass))
-    register_matcher(hass, WeatherMatcher(hass=hass))
-    register_matcher(hass, SunMatcher(hass=hass))
-    register_matcher(hass, StateMatcher(hass=hass))
-    register_matcher(hass, PeopleMatcher(hass=hass))
-    register_matcher(hass, ScriptMatcher(hass=hass))
-    register_matcher(hass, TemplateMatcher(hass=hass))
+    # The built-in matchers, keyed by their `name`. Matchers are an internal
+    # implementation detail — there is deliberately no registration hook for
+    # third-party matchers.
+    domain_data[DATA_MATCHERS] = {
+        "time_of_day": TimeOfDayMatcher(period_lookup=period_store.effective),
+        "day": DayMatcher(hass=hass),
+        "weather": WeatherMatcher(hass=hass),
+        "sun": SunMatcher(hass=hass),
+        "state": StateMatcher(hass=hass),
+        "people": PeopleMatcher(hass=hass),
+        "script": ScriptMatcher(hass=hass),
+        "template": TemplateMatcher(hass=hass),
+    }
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
         if "area" in call.data:

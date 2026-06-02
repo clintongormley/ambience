@@ -1,18 +1,17 @@
-"""Public protocols for Ambience pluggable matchers."""
+"""Internal interface for Ambience's built-in matchers."""
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
 
 
-@runtime_checkable
 class Matcher(Protocol):
-    """A pluggable predicate evaluator.
+    """A predicate evaluator. The built-in matchers all conform to this shape.
 
     Optional (duck-typed, read via getattr with defaults — not part of the
-    Protocol so they stay optional for isinstance checks):
+    Protocol so they stay optional):
       - ``contains(outer, inner) -> bool``: True iff every state matching
         ``inner`` also matches ``outer``. The hard-constraint primitive for
         the rule sort. Absent => no containment edges from this matcher.

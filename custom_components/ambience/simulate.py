@@ -21,8 +21,10 @@ from .const import DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from .engine import evaluate_explained
 from .matchers.script import ScriptSnapshot
 from .matchers.template import TemplateSnapshot
+from .matchers.weather import WEATHER_CONDITIONS
 from .naming import group_names, scope_display_name
-from .scope_triggers import scope_trigger_spec
+from .scope_triggers import iter_predicate_specs, scope_trigger_spec
+from .state_options import known_states_for
 from .sun_position import synthetic_sun_state
 from .trace import (
     BufferedUnit,
@@ -180,6 +182,87 @@ def _referenced_attributes(hass: HomeAssistant, group_cfg: dict[str, Any]) -> di
                 if isinstance(threshold, dict) and threshold.get("attribute"):
                     names.add(threshold["attribute"])
     return {weather_entity: sorted(names)} if names else {}
+
+
+_TIME_DERIVED_MATCHERS = ("day", "sun", "time_of_day")
+
+
+def _time_derived_entities(matchers: dict[str, Any], group_cfg: dict[str, Any]) -> set[str]:
+    """Entities contributed by the date/sun/time matchers — folded under the
+    `When` field, so they are not shown as separate knobs."""
+    out: set[str] = set()
+    for _idx, matcher_key, spec in iter_predicate_specs(matchers, group_cfg):
+        if matcher_key in _TIME_DERIVED_MATCHERS:
+            out |= spec.entities
+    return out
+
+
+def _is_number(value: str | None) -> bool:
+    if value is None:
+        return False
+    try:
+        float(value)
+        return True
+    except ValueError:
+        return False
+
+
+def _entity_knob(
+    hass: HomeAssistant, entity_id: str, attr_names: list[str], weather_entity: str | None
+) -> dict[str, Any]:
+    live = hass.states.get(entity_id)
+    live_state = live.state if live is not None else None
+    options: list[str] | None
+    if entity_id == weather_entity:
+        control, options = "select", list(WEATHER_CONDITIONS)
+    else:
+        opts = known_states_for(hass, entity_id)
+        # If the only "options" are all numeric (e.g. a sensor whose live state
+        # was echoed back by known_states_for), treat it as a number control.
+        # (Edge: a select whose options are all numeric strings becomes a number
+        # field too — acceptable for v1, a number still yields a valid value.)
+        categorical = [o for o in opts if not _is_number(o)]
+        if categorical:
+            control, options = "select", opts
+        elif _is_number(live_state):
+            control, options = "number", None
+        else:
+            control, options = "text", None
+    knob: dict[str, Any] = {
+        "kind": "entity",
+        "entity_id": entity_id,
+        "control": control,
+        "live_state": live_state,
+        "attributes": [
+            {
+                "name": name,
+                "control": "number",
+                "live_value": (live.attributes.get(name) if live is not None else None),
+            }
+            for name in attr_names
+        ],
+    }
+    if options is not None:
+        knob["options"] = options
+    return knob
+
+
+def simulate_inputs_entities(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None, group: str
+) -> list[dict[str, Any]]:
+    """The entity knobs for a group's panel (date/sun/time entities excluded),
+    each with a control hint + options. Verdict knobs are added separately."""
+    matchers: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
+    store = hass.data[DOMAIN][DATA_STORE]
+    group_cfg = _group_config(hass, scope_kind, scope_id, group)
+    spec = scope_trigger_spec(matchers, group_cfg)
+    excluded = _time_derived_entities(matchers, group_cfg)
+    attrs_by_entity = _referenced_attributes(hass, group_cfg)
+    weather_entity = store.get_matcher_config("weather").get("entity")
+    return [
+        _entity_knob(hass, entity_id, attrs_by_entity.get(entity_id, []), weather_entity)
+        for entity_id in sorted(spec.entities - excluded)
+    ]
 
 
 def simulate_inputs(

@@ -11,6 +11,7 @@ from custom_components.ambience.simulate import (
     build_simulated_snapshots,
     run_simulation,
     simulate_inputs,
+    simulate_inputs_entities,
 )
 from custom_components.ambience.trace import CauseKind, TriggerCause
 
@@ -253,3 +254,75 @@ async def test_build_simulated_snapshots_uses_verdicts_for_script():
     snaps = await build_simulated_snapshots(hass, world)
     assert called["snapshot"] is False
     assert snaps["script"].results == {key: True}
+
+
+# ---------------------------------------------------------------------------
+# Task 4: simulate_inputs_entities
+# ---------------------------------------------------------------------------
+
+
+def test_simulate_inputs_excludes_time_derived_entities():
+    rules = [
+        {
+            "group": "g1",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]},
+                "day": {"include": [{"kind": "workday"}]},
+            },
+        }
+    ]
+    from custom_components.ambience.matchers.day import DayMatcher
+    from custom_components.ambience.matchers.state import StateMatcher
+
+    hass = _Hass([_State("binary_sensor.motion", "off")])
+
+    class _Store2:
+        def scope_config(self, sk, si):
+            return {"rules": rules}
+
+        def get_matcher_config(self, name):
+            if name == "day":
+                return {"workday_sensor": "binary_sensor.workday", "workday_calendar": None}
+            if name == "weather":
+                return {"entity": None, "groups": []}
+            return {}
+
+    hass.data[DOMAIN] = {
+        DATA_MATCHERS: {"state": StateMatcher(hass), "day": DayMatcher(hass)},
+        DATA_STORE: _Store2(),
+    }
+    result = simulate_inputs_entities(hass, "area", "kitchen", "g1")
+    ids = [k["entity_id"] for k in result]
+    assert ids == ["binary_sensor.motion"]  # workday sensor excluded (day matcher)
+
+
+def test_simulate_inputs_control_kinds():
+    rules = [
+        {
+            "group": "g1",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+        },
+        {
+            "group": "g1",
+            "when": {"state": {"kind": "is", "entity_id": "sensor.count", "states": ["2.0"]}},
+        },
+    ]
+    from custom_components.ambience.matchers.state import StateMatcher
+
+    hass = _Hass([_State("binary_sensor.motion", "off"), _State("sensor.count", "2.0")])
+
+    class _Store3:
+        def scope_config(self, sk, si):
+            return {"rules": rules}
+
+        def get_matcher_config(self, name):
+            return {"entity": None, "groups": []} if name == "weather" else {}
+
+    hass.data[DOMAIN] = {DATA_MATCHERS: {"state": StateMatcher(hass)}, DATA_STORE: _Store3()}
+    knobs = {k["entity_id"]: k for k in simulate_inputs_entities(hass, "area", "kitchen", "g1")}
+    assert knobs["binary_sensor.motion"]["control"] == "select"
+    assert knobs["binary_sensor.motion"]["options"] == ["on", "off"]
+    assert knobs["sensor.count"]["control"] == "number"
+    assert "options" not in knobs["sensor.count"]

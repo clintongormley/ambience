@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 
-vi.mock("../frontend/src/api", () => ({ listTraces: vi.fn() }));
+vi.mock("../frontend/src/api", () => ({ listTraces: vi.fn(), getServiceSchema: vi.fn() }));
 
 import "../frontend/src/views/traces-modal";
 import * as api from "../frontend/src/api";
@@ -111,6 +111,33 @@ describe("ambience-traces-modal", () => {
     await el._checkNew();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".refresh.has-new")).toBeFalsy();
+  });
+
+  test("threads service schemas so action param labels use HA's field names", async () => {
+    vi.mocked(api.getServiceSchema).mockResolvedValue({
+      fields: { brightness_pct: { name: "Brightness" } },
+      target: null,
+    } as never);
+    el = await mount([
+      unit({
+        actions: [
+          { service: "light.turn_on", entity_ids: ["light.k"], params: { brightness_pct: 60 } },
+        ],
+        explanation: {
+          winner_index: 0,
+          rules: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
+        },
+      }),
+    ]);
+    // Expand the row to reveal the "Actions taken" section.
+    el.shadowRoot.querySelector(".why-toggle").click();
+    await el.updateComplete;
+    // Let the schema fetch resolve and the label refine.
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(vi.mocked(api.getServiceSchema)).toHaveBeenCalledWith(el.hass, "light.turn_on");
+    expect(el.shadowRoot.textContent).toContain("Brightness: 60");
+    expect(el.shadowRoot.textContent).not.toContain("Brightness pct");
   });
 
   test("error state when listTraces rejects", async () => {

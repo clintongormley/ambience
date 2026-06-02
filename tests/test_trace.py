@@ -77,10 +77,11 @@ def test_format_acted_unit_lists_predicates():
     event = TraceEvent(cause=TriggerCause(kind="clock", detail="08:00"), units=[unit])
     text = "\n".join(format_trace_event(event))
     assert "trigger: clock 08:00" in text
-    assert "area/kitchen/General: acted" in text
-    assert "rule #1 'day': WON" in text
+    # Rule numbers are shown 1-based: winner_index 1 → rule #2.
+    assert "area/kitchen/General: acted -> rule #2 'day'" in text
+    assert "rule #2 'day': WON" in text
     assert "tod: pass [value=day]" in text
-    assert "rule #0 'night': no" in text
+    assert "rule #1 'night': no" in text
     assert "tod: FAIL [value=day]" in text
 
 
@@ -103,7 +104,7 @@ def test_format_marks_unevaluated_rules():
     event = TraceEvent(TriggerCause(kind="startup"), [unit])
     text = "\n".join(format_trace_event(event))
     assert "house/-/General: acted" in text
-    assert "rule #1 'b': not evaluated (winner found)" in text
+    assert "rule #2 'b': not evaluated (winner found)" in text
 
 
 class _Hass:
@@ -470,7 +471,7 @@ def test_format_marks_disabled_rules():
     unit = UnitTrace("house", None, "General", "on", "acted", explanation, winner_name="win")
     event = TraceEvent(TriggerCause(kind="startup"), [unit])
     text = "\n".join(format_trace_event(event))
-    assert "rule #0 'off': disabled" in text
+    assert "rule #1 'off': disabled" in text
     assert "not evaluated" not in text
 
 

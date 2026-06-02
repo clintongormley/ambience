@@ -249,24 +249,26 @@ def format_trace_event(event: TraceEvent) -> list[str]:
         explanation = unit.explanation
         winner = ""
         if explanation is not None and explanation.winner_index is not None:
-            winner = f" -> rule #{explanation.winner_index} {unit.winner_name!r}"
+            # Rule numbers are shown 1-based; winner_index is the 0-based position.
+            winner = f" -> rule #{explanation.winner_index + 1} {unit.winner_name!r}"
         elif explanation is None and unit.winner_name is not None:
             # Re-apply: no resolution happened, so no rule index — name only.
             winner = f" -> {unit.winner_name!r}"
         lines.append(f"  {scope}: {unit.outcome}{winner}")
         if explanation is not None:
             for rule_eval in explanation.rules:
+                # Rule numbers are shown 1-based; index is the 0-based position.
+                num = rule_eval.index + 1
                 if rule_eval.disabled:
-                    lines.append(f"      rule #{rule_eval.index} {rule_eval.name!r}: disabled")
+                    lines.append(f"      rule #{num} {rule_eval.name!r}: disabled")
                     continue
                 if not rule_eval.evaluated:
                     lines.append(
-                        f"      rule #{rule_eval.index} {rule_eval.name!r}: "
-                        "not evaluated (winner found)"
+                        f"      rule #{num} {rule_eval.name!r}: not evaluated (winner found)"
                     )
                     continue
                 mark = "WON" if rule_eval.matched else "no"
-                lines.append(f"      rule #{rule_eval.index} {rule_eval.name!r}: {mark}")
+                lines.append(f"      rule #{num} {rule_eval.name!r}: {mark}")
                 for pred in rule_eval.predicates:
                     pmark = "pass" if pred.passed else "FAIL"
                     detail = f" [{pred.detail}]" if pred.detail else ""

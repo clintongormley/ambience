@@ -377,6 +377,12 @@ function _entityDisplayName(ctx: MatcherContext, entity_id: string): string {
   return typeof name === "string" && name ? name : entity_id;
 }
 
+/** Public, hass-first wrapper around {@link _entityDisplayName}: an entity's
+ *  friendly_name when set, else the raw entity_id. */
+export function entityDisplayName(hass: HassLike | undefined, entity_id: string): string {
+  return _entityDisplayName({ hass }, entity_id);
+}
+
 export function summariseState(pred: StatePredicate, ctx: MatcherContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
   return _renderStateExpr(pred, ctx);

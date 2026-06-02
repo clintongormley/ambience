@@ -1,8 +1,8 @@
 import { LitElement, html, css, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { listTraces, type HassConnection } from "../api.js";
-import type { BufferedUnit } from "../types.js";
+import { getServiceSchema, listTraces, type HassConnection } from "../api.js";
+import type { BufferedUnit, ServiceSchema } from "../types.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 
 /**
@@ -74,6 +74,11 @@ export class AmbienceTracesModal extends LitElement {
   @property({ type: Boolean, reflect: true }) open = false;
 
   @state() private _records: BufferedUnit[] = [];
+  // Service schemas keyed by service id, so action param keys render with HA's
+  // friendly field names (e.g. "Brightness" not "Brightness pct"). Fetched
+  // lazily after the records load; a service stays absent on fetch failure and
+  // its params fall back to humanized field ids.
+  @state() private _schemas: Record<string, ServiceSchema> = {};
   @state() private _expanded = new Set<string>();
   @state() private _loading = true;
   @state() private _error = "";
@@ -118,10 +123,36 @@ export class AmbienceTracesModal extends LitElement {
       if (!this.isConnected) return;
       this._records = this._mine(all);
       this._loading = false;
+      // Refine param labels once schemas arrive; the list renders immediately
+      // without waiting on these extra round-trips.
+      void this._loadSchemas();
     } catch (e) {
       this._error = (e as Error).message || String(e);
       this._loading = false;
     }
+  }
+
+  // Fetch (and cache) the service schema for every distinct service referenced
+  // by the loaded records' actions. Cached across reloads — schemas are global
+  // per service — so a refresh only fetches services not seen before.
+  private async _loadSchemas(): Promise<void> {
+    const services = [
+      ...new Set(this._records.flatMap((r) => r.actions.map((a) => a.service))),
+    ].filter((svc) => !(svc in this._schemas));
+    if (services.length === 0) return;
+    const entries = await Promise.all(
+      services.map(async (svc) => {
+        try {
+          return [svc, await getServiceSchema(this.hass, svc)] as const;
+        } catch {
+          return null; // missing schema → param keys fall back to humanized ids
+        }
+      }),
+    );
+    if (!this.isConnected) return;
+    const merged = { ...this._schemas };
+    for (const e of entries) if (e) merged[e[0]] = e[1];
+    this._schemas = merged;
   }
 
   private async _checkNew(): Promise<void> {
@@ -167,7 +198,13 @@ export class AmbienceTracesModal extends LitElement {
                 ? html`<p class="empty">No traces for this group yet.</p>`
                 : html`<div class="list">${this._records.map((u, i) => {
                     const key = `${u.event_id ?? i}|${u.timestamp ?? ""}`;
-                    return renderEvaluation(u, this._expanded.has(key), () => this._toggle(key));
+                    return renderEvaluation(
+                      u,
+                      this._expanded.has(key),
+                      () => this._toggle(key),
+                      this.hass,
+                      this._schemas,
+                    );
                   })}</div>`}
         </div>
       </div>

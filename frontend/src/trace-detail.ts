@@ -1,9 +1,28 @@
 import { html, css, nothing, type TemplateResult } from "lit";
 
-import type { BufferedUnit, TraceCause, TraceRuleEval } from "./types.js";
-import { humanizeId } from "./i18n.js";
+import type { BufferedUnit, ServiceSchema, TraceCause, TraceRuleEval } from "./types.js";
+import {
+  deriveActionLabel,
+  humanizeId,
+  matcherLabel,
+  periodLabel,
+  weatherConditionLabel,
+} from "./i18n.js";
+import { entityDisplayName, formatArgValue, paramLabel } from "./summary.js";
 
 type Action = { service: string; entity_ids?: string[]; params?: Record<string, unknown> };
+
+type HassLike = { localize?: (key: string) => string | undefined; [key: string]: unknown };
+
+// A predicate's `detail` is the matcher's `describe()` output. Most matchers
+// already return a human phrase (e.g. "3 of 5 home (Alice, Bob)"); a couple
+// emit a raw enum id that needs a friendly label. Humanize only those — passing
+// the human phrases through untouched (humanizeId would lower-case them).
+function formatDetail(hass: HassLike | undefined, matcherKey: string, detail: string): string {
+  if (matcherKey === "time_of_day") return periodLabel(hass, detail, {});
+  if (matcherKey === "weather") return weatherConditionLabel(hass, detail);
+  return detail;
+}
 
 // Styles for the evaluation card; hosts include this in their `static styles`.
 export const traceDetailStyles = css`
@@ -44,30 +63,45 @@ export function formatCause(c: TraceCause): string {
   return humanizeId(c.kind);
 }
 
-// The action's service plus its params — NOT its entities (those are listed
-// one-per-line beneath it in the "Actions taken" section).
-export function formatActionHeader(a: Action): string {
-  const params = a.params && Object.keys(a.params).length ? ` ${JSON.stringify(a.params)}` : "";
-  return `${a.service}${params}`;
+// The action's humanized service label plus its params (key: value) — NOT its
+// entities (those are listed one-per-line beneath it in the "Actions taken"
+// section). e.g. `light.turn_on {brightness_pct: 60}` → "Turn on light ·
+// Brightness: 60". Param keys use the service schema's `field.name` when
+// `schemas` is supplied, else fall back to the humanized field id.
+export function formatActionHeader(
+  a: Action,
+  hass?: HassLike,
+  schemas?: Record<string, ServiceSchema>,
+): string {
+  const params = Object.entries(a.params ?? {})
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => `${paramLabel(k, a.service, schemas)}: ${formatArgValue(hass, v)}`)
+    .join(", ");
+  const label = deriveActionLabel(a.service);
+  return params ? `${label} · ${params}` : label;
 }
 
 function entityCount(actions: Action[]): number {
   return actions.reduce((n, a) => n + (a.entity_ids?.length ?? 0), 0);
 }
 
-function renderRule(r: TraceRuleEval): TemplateResult {
+function renderRule(r: TraceRuleEval, hass: HassLike | undefined): TemplateResult {
+  // `index` is the 0-based position in the rule list; rule numbers are shown 1-based.
+  const num = r.index + 1;
   if (r.disabled) {
-    return html`<div class="rule disabled">rule #${r.index} ${r.name ?? "—"}: disabled</div>`;
+    return html`<div class="rule disabled">Rule #${num} ${r.name ?? "—"}: disabled</div>`;
   }
   if (!r.evaluated) {
-    return html`<div class="rule skipped">rule #${r.index} ${r.name ?? "—"}: not evaluated</div>`;
+    return html`<div class="rule skipped">Rule #${num} ${r.name ?? "—"}: not evaluated</div>`;
   }
   return html`
-    <div class="rule ${r.matched ? "won" : ""}">rule #${r.index} ${r.name ?? "—"}: ${r.matched ? "WON" : "no"}</div>
+    <div class="rule ${r.matched ? "won" : ""}">Rule #${num} ${r.name ?? "—"}: ${r.matched ? "WON" : "no"}</div>
     ${r.predicates.map(
       (p) => html`
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
-          ${p.passed ? "✓" : "✗"} ${p.matcher_key}${p.detail ? html` <span class="dim">[${p.detail}]</span>` : nothing}
+          ${p.passed ? "✓" : "✗"} ${matcherLabel(hass, p.matcher_key)}${p.detail
+            ? html` <span class="dim">[${formatDetail(hass, p.matcher_key, p.detail)}]</span>`
+            : nothing}
         </div>`,
     )}
   `;
@@ -78,8 +112,10 @@ export function renderEvaluation(
   u: BufferedUnit,
   expanded: boolean,
   onToggle: () => void,
+  hass?: HassLike,
+  schemas?: Record<string, ServiceSchema>,
 ): TemplateResult {
-  const services = u.actions.map((a) => a.service).join(", ");
+  const services = u.actions.map((a) => deriveActionLabel(a.service)).join(", ");
   const n = entityCount(u.actions);
   const canExpand = u.explanation !== null || u.actions.length > 0;
   return html`
@@ -105,18 +141,22 @@ export function renderEvaluation(
                 : "▸ Details"}
           </button>`
         : nothing}
-      ${expanded ? renderExpansion(u) : nothing}
+      ${expanded ? renderExpansion(u, hass, schemas) : nothing}
     </div>
   `;
 }
 
-function renderExpansion(u: BufferedUnit): TemplateResult {
+function renderExpansion(
+  u: BufferedUnit,
+  hass: HassLike | undefined,
+  schemas: Record<string, ServiceSchema> | undefined,
+): TemplateResult {
   return html`
     <div class="why">
       ${u.explanation
         ? html`<div class="section">
             <div class="section-title">Rule evaluation</div>
-            <div class="rules">${u.explanation.rules.map((r) => renderRule(r))}</div>
+            <div class="rules">${u.explanation.rules.map((r) => renderRule(r, hass))}</div>
           </div>`
         : nothing}
       ${u.actions.length
@@ -124,8 +164,10 @@ function renderExpansion(u: BufferedUnit): TemplateResult {
             <div class="section-title">Actions taken</div>
             ${u.actions.map(
               (a) => html`<div class="action-block">
-                <div class="action-head">${formatActionHeader(a)}</div>
-                ${(a.entity_ids ?? []).map((e) => html`<div class="entity">${e}</div>`)}
+                <div class="action-head">${formatActionHeader(a, hass, schemas)}</div>
+                ${(a.entity_ids ?? []).map(
+                  (e) => html`<div class="entity">${entityDisplayName(hass, e)}</div>`,
+                )}
               </div>`,
             )}
           </div>`

@@ -34,6 +34,31 @@ function _friendlyFallback(id: string): string {
   return humanizeId(id);
 }
 
+/**
+ * Derive a human-friendly label from a service id, e.g.
+ * `light.turn_on` → "Turn on light".
+ *
+ * The humanized service name is suffixed with the domain word(s), unless the
+ * service already mentions every domain word (`cover.open_cover` → "Open cover",
+ * not "Open cover cover"). The first letter is capitalized.
+ */
+export function deriveActionLabel(serviceId: string): string {
+  const dotIdx = serviceId.indexOf(".");
+  const domain = dotIdx === -1 ? "" : serviceId.slice(0, dotIdx);
+  const service = dotIdx === -1 ? serviceId : serviceId.slice(dotIdx + 1);
+  const serviceWords = service.replaceAll("_", " ").trim().toLowerCase();
+  const domainWords = domain.replaceAll("_", " ").trim().toLowerCase();
+
+  const serviceTokens = serviceWords ? serviceWords.split(" ") : [];
+  const domainTokens = domainWords ? domainWords.split(" ") : [];
+  const mentionsDomain =
+    domainTokens.length > 0 && domainTokens.every((t) => serviceTokens.includes(t));
+
+  const result =
+    !domainWords || mentionsDomain ? serviceWords : `${serviceWords} ${domainWords}`;
+  return result.charAt(0).toUpperCase() + result.slice(1);
+}
+
 export function matcherLabel(hass: HassLike | undefined, name: string): string {
   return _resolve(hass, `component.ambience.matcher.${name}`, _friendlyFallback(name));
 }

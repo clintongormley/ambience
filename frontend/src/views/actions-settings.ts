@@ -1,7 +1,11 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { localize } from "../i18n.js";
+import { deriveActionLabel, localize } from "../i18n.js";
+
+// Re-exported from i18n.js (its home is the side-effect-free label module) so
+// existing importers of this view keep working.
+export { deriveActionLabel };
 import { DEFAULT_REAPPLY_SECONDS, parseReapplyConfigSeconds } from "../reapply.js";
 import {
   getServiceSchema,
@@ -20,31 +24,6 @@ import type {
   ServiceSchema,
 } from "../types.js";
 import type { HaFormSchemaEntry } from "../ha-form.js";
-
-/**
- * Derive a human-friendly label from a service id, e.g.
- * `light.turn_on` → "Turn on light".
- *
- * The humanized service name is suffixed with the domain word(s), unless the
- * service already mentions every domain word (`cover.open_cover` → "Open cover",
- * not "Open cover cover"). The first letter is capitalized.
- */
-export function deriveActionLabel(serviceId: string): string {
-  const dotIdx = serviceId.indexOf(".");
-  const domain = dotIdx === -1 ? "" : serviceId.slice(0, dotIdx);
-  const service = dotIdx === -1 ? serviceId : serviceId.slice(dotIdx + 1);
-  const serviceWords = service.replaceAll("_", " ").trim().toLowerCase();
-  const domainWords = domain.replaceAll("_", " ").trim().toLowerCase();
-
-  const serviceTokens = serviceWords ? serviceWords.split(" ") : [];
-  const domainTokens = domainWords ? domainWords.split(" ") : [];
-  const mentionsDomain =
-    domainTokens.length > 0 && domainTokens.every((t) => serviceTokens.includes(t));
-
-  const result =
-    !domainWords || mentionsDomain ? serviceWords : `${serviceWords} ${domainWords}`;
-  return result.charAt(0).toUpperCase() + result.slice(1);
-}
 
 @customElement("ambience-actions-settings")
 export class AmbienceActionsSettings extends LitElement {

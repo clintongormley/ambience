@@ -263,11 +263,8 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         self.hass.async_create_task(self.async_turn_on())
 
     @callback
-    def _handle_config_updated(self, payload: tuple[str, str | None] | None) -> None:
-        # payload=None means "global defaults changed — every entity refresh".
-        # payload=(kind, id) targets a single scope.
-        if payload is not None and payload != self.scope_key:
-            return
+    def _handle_config_updated(self, _payload: None = None) -> None:
+        # Fired when the global switch defaults change — refresh every entity.
         old_name = self._attr_name
         self._refresh_name_from_store()
         if not self._attr_is_on:

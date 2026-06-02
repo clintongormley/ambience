@@ -1352,13 +1352,10 @@ async def _ws_simulate_inputs(
 ) -> None:
     """The editable inputs for a group's simulator panel (read-only)."""
     try:
-        result = simulate_inputs(hass, msg["scope_kind"], msg.get("scope_id"), msg["group"])
+        result = await simulate_inputs(hass, msg["scope_kind"], msg.get("scope_id"), msg["group"])
     except (ValueError, ServiceValidationError) as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    # Enrich entity knobs with plausible state options for the dropdown.
-    for knob in result["knobs"]:
-        knob["states"] = known_states_for(hass, knob["entity_id"])
     connection.send_result(msg["id"], result)
 
 
@@ -1373,6 +1370,8 @@ async def _ws_simulate_inputs(
         # Each override is {state?: str, attributes?: dict}; require dict values
         # so a malformed payload is rejected at the schema layer, not mid-resolve.
         vol.Optional("overrides", default=dict): {str: dict},
+        # Per opaque-matcher verdicts: matcher_key -> {result_key: bool}.
+        vol.Optional("verdicts", default=dict): {str: {str: bool}},
     }
 )
 @websocket_api.async_response
@@ -1386,7 +1385,11 @@ async def _ws_simulate(
     if now is None:
         connection.send_error(msg["id"], "validation_error", f"unparseable now: {msg['now']!r}")
         return
-    world = SimulatedWorld(now=now, overrides=msg.get("overrides") or {})
+    world = SimulatedWorld(
+        now=now,
+        overrides=msg.get("overrides") or {},
+        verdicts=msg.get("verdicts") or {},
+    )
     try:
         result = await run_simulation(
             hass, msg["scope_kind"], msg.get("scope_id"), msg["group"], world

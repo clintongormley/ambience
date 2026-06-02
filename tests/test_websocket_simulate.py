@@ -108,7 +108,6 @@ async def test_simulate_rejects_malformed_override(
 async def test_simulate_inputs_returns_panel_shape(
     hass: HomeAssistant, hass_ws_client, seeded_area
 ) -> None:
-    """`ambience/simulate/inputs` returns knobs/has_time/opaque for a group."""
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/simulate/inputs",
@@ -118,8 +117,23 @@ async def test_simulate_inputs_returns_panel_shape(
     )
     assert resp["success"] is True
     result = resp["result"]
-    assert "has_time" in result and "opaque" in result
-    # The group's state rule references binary_sensor.motion → one entity knob.
-    ids = [k["entity_id"] for k in result["knobs"]]
-    assert "binary_sensor.motion" in ids
-    assert "states" in result["knobs"][0]  # enriched with plausible options
+    assert "has_time" in result
+    motion = next(k for k in result["knobs"] if k.get("entity_id") == "binary_sensor.motion")
+    assert motion["kind"] == "entity"
+    assert motion["control"] == "select"
+    assert motion["options"] == ["on", "off"]
+
+
+async def test_simulate_accepts_verdicts(hass: HomeAssistant, hass_ws_client, seeded_area) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        group="g1",
+        now="2026-12-21T17:30:00+00:00",
+        overrides={},
+        verdicts={"script": {"somekey": True}},
+    )
+    assert resp["success"] is True
+    assert resp["result"]["result"]["group"] == "g1"

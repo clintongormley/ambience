@@ -4,7 +4,7 @@ import { simulateInputs, simulate } from "../frontend/src/api";
 
 describe("simulate api", () => {
   test("simulateInputs sends scope + group", async () => {
-    const callWS = vi.fn().mockResolvedValue({ knobs: [], has_time: true, opaque: false });
+    const callWS = vi.fn().mockResolvedValue({ knobs: [], has_time: true });
     const hass: any = { callWS };
     const res = await simulateInputs(hass, { scope_kind: "area", scope_id: "kitchen" }, "g1");
     expect(callWS).toHaveBeenCalledWith({

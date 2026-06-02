@@ -27,13 +27,11 @@ from .const import (
 )
 from .exposed_actions import ExposedActionsStore
 from .matchers.weather import WEATHER_CONDITIONS
-from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
     async_apply_scene,
     async_resolve_groups_only,
     async_resolve_only,
     async_run_rule_actions,
-    scope_reapply_intervals,
 )
 from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import matcher_priority, resolve_order, shadowed_by
@@ -73,13 +71,6 @@ _WS_COMMANDS = (
     "ambience/switch_defaults/list",
     "ambience/switch_defaults/save",
     "ambience/switches/list",
-    "ambience/house/switch/save",
-    "ambience/floor/switch/save",
-    "ambience/area/switch/save",
-    "ambience/auto_triggers/get",
-    "ambience/auto_triggers/set",
-    "ambience/auto_triggers/list",
-    "ambience/auto_triggers/set_trigger",
     "ambience/groups/list",
     "ambience/groups/save",
     "ambience/groups/delete",
@@ -119,13 +110,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_switch_defaults_list)
     websocket_api.async_register_command(hass, _ws_switch_defaults_save)
     websocket_api.async_register_command(hass, _ws_switches_list)
-    websocket_api.async_register_command(hass, _ws_house_switch_save)
-    websocket_api.async_register_command(hass, _ws_floor_switch_save)
-    websocket_api.async_register_command(hass, _ws_area_switch_save)
-    websocket_api.async_register_command(hass, _ws_auto_triggers_get)
-    websocket_api.async_register_command(hass, _ws_auto_triggers_set)
-    websocket_api.async_register_command(hass, _ws_auto_triggers_list)
-    websocket_api.async_register_command(hass, _ws_auto_triggers_set_trigger)
     websocket_api.async_register_command(hass, _ws_groups_list)
     websocket_api.async_register_command(hass, _ws_groups_save)
     websocket_api.async_register_command(hass, _ws_groups_delete)
@@ -986,27 +970,6 @@ async def _ws_switch_defaults_save(
     connection.send_result(msg["id"], {"ok": True})
 
 
-async def _save_scope_switch(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-    scope_kind: str,
-    scope_id: str | None,
-) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    try:
-        await store.async_save_scope_switch(
-            scope_kind,
-            scope_id,
-            {"name": msg["name"], "auto_on_delay_seconds": msg["auto_on_delay_seconds"]},
-        )
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
-        return
-    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, (scope_kind, scope_id))
-    connection.send_result(msg["id"], {"ok": True})
-
-
 @websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "ambience/switches/list"})
 @websocket_api.async_response
@@ -1027,185 +990,6 @@ async def _ws_switches_list(
         for (kind, scope_id), sw in switches.items()
     ]
     connection.send_result(msg["id"], result)
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/house/switch/save",
-        vol.Required("name"): vol.Any(str, None),
-        vol.Required("auto_on_delay_seconds"): vol.Any(int, None),
-    }
-)
-@websocket_api.async_response
-async def _ws_house_switch_save(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    await _save_scope_switch(hass, connection, msg, "house", None)
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/floor/switch/save",
-        vol.Required("floor_id"): str,
-        vol.Required("name"): vol.Any(str, None),
-        vol.Required("auto_on_delay_seconds"): vol.Any(int, None),
-    }
-)
-@websocket_api.async_response
-async def _ws_floor_switch_save(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    floor_id = msg["floor_id"]
-    if fr.async_get(hass).async_get_floor(floor_id) is None:
-        connection.send_error(msg["id"], "validation_error", f"unknown floor: {floor_id}")
-        return
-    await _save_scope_switch(hass, connection, msg, "floor", floor_id)
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/area/switch/save",
-        vol.Required("area_id"): str,
-        vol.Required("name"): vol.Any(str, None),
-        vol.Required("auto_on_delay_seconds"): vol.Any(int, None),
-    }
-)
-@websocket_api.async_response
-async def _ws_area_switch_save(
-    hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
-    msg: dict[str, Any],
-) -> None:
-    area_id = msg["area_id"]
-    if ar.async_get(hass).async_get_area(area_id) is None:
-        connection.send_error(msg["id"], "validation_error", f"unknown area: {area_id}")
-        return
-    await _save_scope_switch(hass, connection, msg, "area", area_id)
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/auto_triggers/get",
-        vol.Required("scope_kind"): str,
-        vol.Optional("scope_id"): vol.Any(str, None),
-    }
-)
-@websocket_api.async_response
-async def _ws_auto_triggers_get(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
-) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    try:
-        enabled = store.auto_triggers_enabled(msg["scope_kind"], msg.get("scope_id"))
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
-        return
-    connection.send_result(msg["id"], {"enabled": enabled})
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/auto_triggers/set",
-        vol.Required("scope_kind"): str,
-        vol.Optional("scope_id"): vol.Any(str, None),
-        vol.Required("enabled"): bool,
-    }
-)
-@websocket_api.async_response
-async def _ws_auto_triggers_set(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
-) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    try:
-        await store.async_set_auto_triggers_enabled(
-            msg["scope_kind"], msg.get("scope_id"), msg["enabled"]
-        )
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
-        return
-    connection.send_result(msg["id"], {"ok": True})
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/auto_triggers/list",
-        vol.Required("scope_kind"): str,
-        vol.Optional("scope_id"): vol.Any(str, None),
-    }
-)
-@websocket_api.async_response
-async def _ws_auto_triggers_list(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
-) -> None:
-    """The watches derived from a scope's rules, each tagged enabled/disabled.
-
-    Triggers are computed live from the scope's rules (matchers' ``trigger_deps``);
-    ``enabled`` reflects whether the user has disabled that key for the scope.
-    """
-    store = hass.data[DOMAIN][DATA_STORE]
-    matchers = hass.data[DOMAIN][DATA_MATCHERS]
-    scope_kind = msg["scope_kind"]
-    scope_id = msg.get("scope_id")
-    try:
-        cfg = store.scope_config(scope_kind, scope_id)
-        disabled = store.auto_triggers_disabled(scope_kind, scope_id)
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
-        return
-    spec = scope_trigger_spec(matchers, cfg)
-    triggers = [{**row, "enabled": row["key"] not in disabled} for row in trigger_descriptors(spec)]
-    exposed = hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
-    for interval in scope_reapply_intervals(cfg, exposed):
-        triggers.append(
-            {
-                "key": f"reapply:{interval}",
-                "kind": "reapply",
-                "interval_seconds": interval,
-                "enabled": True,
-            }
-        )
-    connection.send_result(msg["id"], {"triggers": triggers, "opaque": spec.opaque})
-
-
-@websocket_api.require_admin
-@websocket_api.websocket_command(
-    {
-        vol.Required("type"): "ambience/auto_triggers/set_trigger",
-        vol.Required("scope_kind"): str,
-        vol.Optional("scope_id"): vol.Any(str, None),
-        vol.Required("key"): str,
-        vol.Required("enabled"): bool,
-    }
-)
-@websocket_api.async_response
-async def _ws_auto_triggers_set_trigger(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
-) -> None:
-    """Enable/disable a single derived trigger for a scope."""
-    # `reapply:*` rows are read-only/informational (re-apply is configured
-    # per-action), so they must never be written to disabled_triggers.
-    if msg["key"].startswith("reapply:"):
-        connection.send_error(msg["id"], "validation_error", "re-apply triggers are not toggleable")
-        return
-    store = hass.data[DOMAIN][DATA_STORE]
-    try:
-        await store.async_set_trigger_disabled(
-            msg["scope_kind"], msg.get("scope_id"), msg["key"], not msg["enabled"]
-        )
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
-        return
-    connection.send_result(msg["id"], {"ok": True})
 
 
 @websocket_api.require_admin

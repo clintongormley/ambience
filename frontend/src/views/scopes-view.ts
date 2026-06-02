@@ -48,7 +48,6 @@ import type {
 import "./rules-list.js";
 import "./rule-editor.js";
 import "./kebab-menu.js";
-import "./auto-triggers-modal.js";
 import "./traces-modal.js";
 import "./simulator-modal.js";
 import type { KebabItem } from "./kebab-menu.js";
@@ -224,7 +223,6 @@ export class AmbienceScopesView extends LitElement {
   @state() private _error = "";
   @state() private _editing: EditingState | null = null;
   @state() private _viewingTraces: { scope: { scope_kind: string; scope_id: string | null }; group: string; groupName: string | null } | null = null;
-  @state() private _autoTriggers: { scope: Scope; name: string; rules: Rule[] } | null = null;
   @state() private _viewingSimulator: { scope: { scope_kind: string; scope_id: string | null }; group: string; groupName: string | null } | null = null;
   // Global group filter shared by every scope: "" = All, else a group id.
   // Sticky for the session (component lifetime).
@@ -664,9 +662,8 @@ export class AmbienceScopesView extends LitElement {
     this._editing = null;
   }
 
-  private _onScopeMenu(scope: Scope, name: string, cfg: ScopeConfig, id: string) {
+  private _onScopeMenu(scope: Scope, _name: string, _cfg: ScopeConfig, id: string) {
     if (id === "run") void this._applyRules(scope);
-    else if (id === "auto") this._autoTriggers = { scope, name, rules: cfg.rules };
   }
 
   private _showTraces(scope: Scope, group: string) {
@@ -890,14 +887,6 @@ export class AmbienceScopesView extends LitElement {
         .groupName=${this._viewingTraces?.groupName ?? null}
         @close=${() => { this._viewingTraces = null; }}
       ></ambience-traces-modal>
-      <ambience-auto-triggers-modal
-        ?open=${this._autoTriggers !== null}
-        .hass=${this.hass}
-        .scope=${this._autoTriggers?.scope ?? { kind: "house" }}
-        .scopeName=${this._autoTriggers?.name ?? ""}
-        .rules=${this._autoTriggers?.rules ?? []}
-        @close=${() => { this._autoTriggers = null; }}
-      ></ambience-auto-triggers-modal>
       <ambience-simulator-modal
         ?open=${this._viewingSimulator !== null}
         .hass=${this.hass}
@@ -932,11 +921,6 @@ export class AmbienceScopesView extends LitElement {
             .hass=${this.hass}
             .items=${[
               { id: "run", label: localize(this.hass, "ui.run", "Run"), icon: "mdi:play" },
-              {
-                id: "auto",
-                label: localize(this.hass, "ui.auto_triggers_section", "Auto-triggers"),
-                icon: "mdi:flash-auto",
-              },
             ] satisfies KebabItem[]}
             @menu-action=${(e: CustomEvent<{ id: string }>) =>
               this._onScopeMenu(scope, name, cfg, e.detail.id)}

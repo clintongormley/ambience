@@ -205,9 +205,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         return self.hass.data[DOMAIN][DATA_STORE]
 
     def _resolved_delay(self) -> int:
-        return self._store().resolved_scope_switch_config(self._scope_kind, self._scope_id)[
-            "auto_on_delay_seconds"
-        ]
+        return self._store().get_switch_defaults()["auto_on_delay_seconds"]
 
     def _scope_prefix(self) -> str:
         """Live name of the scope: 'Global' / floor name / area name.
@@ -221,19 +219,13 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         )
 
     def _refresh_name_from_store(self) -> None:
-        """Compose display name from override (verbatim) or `<prefix> <default>`.
+        """Compose the display name as `<prefix> <default>`.
 
-        A per-scope `name` override replaces the entire display name (the user
-        intentionally chose a custom label). Otherwise the displayed name is
-        the scope context (Global / floor / area name) followed by the global
-        default name ("Ambience" unless overridden).
+        The displayed name is the scope context (Global / floor / area name)
+        followed by the global default switch name ("Ambience" unless changed in
+        the defaults).
         """
-        store = self._store()
-        override = store.get_scope_switch_config(self._scope_kind, self._scope_id)
-        if override["name"] is not None:
-            self._attr_name = override["name"]
-            return
-        default_name = store.get_switch_defaults()["name"]
+        default_name = self._store().get_switch_defaults()["name"]
         self._attr_name = f"{self._scope_prefix()} {default_name}"
 
     def _schedule_auto_on(self, seconds: int) -> None:
@@ -247,11 +239,10 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         self._timer = _CancellableTimer(unsub)
 
     def _schedule_auto_on_from_store(self, *, turn_on_if_expired: bool) -> None:
-        cfg = self._store().resolved_scope_switch_config(self._scope_kind, self._scope_id)
-        delay = cfg["auto_on_delay_seconds"]
+        delay = self._resolved_delay()
         if delay <= 0:
             return
-        off_at_iso = cfg["off_at"]
+        off_at_iso = self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id)
         if not off_at_iso:
             return
         try:

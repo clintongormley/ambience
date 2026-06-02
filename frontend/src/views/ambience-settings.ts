@@ -1,43 +1,10 @@
 import { LitElement, html, css } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import {
-  getSwitchDefaults,
-  saveSwitchDefaults,
-  listAreas,
-  listFloors,
-  getArea,
-  getFloor,
-  getHouse,
-  saveHouseSwitch,
-  saveFloorSwitch,
-  saveAreaSwitch,
-  setAutoTriggersEnabled,
-  type HassConnection,
-} from "../api.js";
+import { getSwitchDefaults, saveSwitchDefaults, type HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
 import "./groups-settings.js";
-import type {
-  AreaListItem,
-  FloorListItem,
-  ScopeConfig,
-  ScopeSwitchOverride,
-  SwitchDefaults,
-} from "../types.js";
-
-type Row = {
-  kind: "house" | "floor" | "area";
-  id: string | null;
-  name: string;              // row header label (e.g. "Floor: Upstairs")
-  scopePrefix: string;       // raw scope name for the entity-name preview
-  override: ScopeSwitchOverride;
-  expanded: boolean;
-  autoTriggersEnabled: boolean;
-};
-
-function _rowKey(r: Row): string {
-  return r.kind === "house" ? "house" : `${r.kind}-${r.id}`;
-}
+import type { SwitchDefaults } from "../types.js";
 
 @customElement("ambience-ambience-settings")
 export class AmbienceAmbienceSettings extends LitElement {
@@ -62,104 +29,21 @@ export class AmbienceAmbienceSettings extends LitElement {
       background: var(--card-background-color, #fff);
       color: var(--primary-text-color, inherit);
     }
-    .scope-row {
-      border-top: 1px solid var(--divider-color, #e0e0e0);
-      padding: 0.6rem 0;
-    }
-    .scope-row:first-of-type { border-top: none; }
-    .scope-header {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      cursor: pointer;
-    }
-    .chevron {
-      color: var(--secondary-text-color, #888);
-      width: 0.8em;
-      transition: transform 0.15s ease;
-    }
-    .chevron.open { transform: rotate(90deg); }
-    .scope-name { flex: 1; font-weight: 600; }
-    .scope-status { color: var(--secondary-text-color, #888); font-size: 0.85em; }
-    .scope-body { padding: 0.5rem 0 0.5rem 1.3rem; }
-    button.reset {
-      background: transparent;
-      border: 1px solid var(--divider-color, #e0e0e0);
-      border-radius: 4px;
-      padding: 0.3rem 0.7rem;
-      cursor: pointer;
-      color: var(--primary-text-color, inherit);
-      margin-top: 0.5rem;
-    }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
 
   @state() private _defaults: SwitchDefaults = { name: "Ambience", auto_on_delay_seconds: 7200 };
-  @state() private _rows: Row[] = [];
   @state() private _error = "";
 
   override async connectedCallback() {
     super.connectedCallback();
     try {
-      const [defaults, areas, floors, house] = await Promise.all([
-        getSwitchDefaults(this.hass),
-        listAreas(this.hass),
-        listFloors(this.hass),
-        getHouse(this.hass),
-      ]);
-      this._defaults = defaults;
-
-      const houseRow: Row = {
-        kind: "house",
-        id: null,
-        name: localize(this.hass, "ui.settings_ambience_house_row", "Global"),
-        scopePrefix: "Global",
-        override: this._toOverride((house as ScopeConfig).switch),
-        expanded: false,
-        autoTriggersEnabled: (house as ScopeConfig).auto_triggers_enabled ?? true,
-      };
-
-      const sortedFloors = floors.slice().sort((a, b) => a.name.localeCompare(b.name));
-      const floorConfigs = await Promise.all(sortedFloors.map((f) => getFloor(this.hass, f.floor_id)));
-      const floorPrefix = localize(this.hass, "ui.settings_ambience_floor_prefix", "Floor: ");
-      const floorRows: Row[] = sortedFloors.map((f: FloorListItem, i) => ({
-        kind: "floor",
-        id: f.floor_id,
-        name: `${floorPrefix}${f.name}`,
-        scopePrefix: f.name,
-        override: this._toOverride((floorConfigs[i] as ScopeConfig).switch),
-        expanded: false,
-        autoTriggersEnabled: (floorConfigs[i] as ScopeConfig).auto_triggers_enabled ?? true,
-      }));
-
-      const sortedAreas = areas.slice().sort((a, b) => a.name.localeCompare(b.name));
-      const areaConfigs = await Promise.all(sortedAreas.map((a) => getArea(this.hass, a.area_id)));
-      const areaPrefix = localize(this.hass, "ui.settings_ambience_area_prefix", "Area: ");
-      const areaRows: Row[] = sortedAreas.map((a: AreaListItem, i) => ({
-        kind: "area",
-        id: a.area_id,
-        name: `${areaPrefix}${a.name}`,
-        scopePrefix: a.name,
-        override: this._toOverride((areaConfigs[i] as ScopeConfig).switch),
-        expanded: false,
-        autoTriggersEnabled: (areaConfigs[i] as ScopeConfig).auto_triggers_enabled ?? true,
-      }));
-
-      this._rows = [houseRow, ...floorRows, ...areaRows];
+      this._defaults = await getSwitchDefaults(this.hass);
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
   }
-
-  private _toOverride(sw: { name?: string | null; auto_on_delay_seconds?: number | null } | undefined): ScopeSwitchOverride {
-    return {
-      name: sw?.name ?? null,
-      auto_on_delay_seconds: sw?.auto_on_delay_seconds ?? null,
-    };
-  }
-
-  // --- error handling ---
 
   private async _safeSave(fn: () => Promise<unknown>): Promise<void> {
     try {
@@ -169,8 +53,6 @@ export class AmbienceAmbienceSettings extends LitElement {
       this._error = (e as Error).message || String(e);
     }
   }
-
-  // --- defaults ---
 
   private _onDefaultName(e: Event) {
     const value = (e.target as HTMLInputElement).value.trim();
@@ -184,62 +66,6 @@ export class AmbienceAmbienceSettings extends LitElement {
     if (raw === "" || !Number.isFinite(Number(raw)) || Number(raw) < 0) return;
     this._defaults = { ...this._defaults, auto_on_delay_seconds: Math.floor(Number(raw)) };
     void this._safeSave(() => saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds));
-  }
-
-  // --- per-row ---
-
-  private _toggle(idx: number) {
-    this._rows = this._rows.map((r, i) => (i === idx ? { ...r, expanded: !r.expanded } : r));
-  }
-
-  private _saveRow(row: Row) {
-    const { name, auto_on_delay_seconds } = row.override;
-    void this._safeSave(() => {
-      if (row.kind === "house") return saveHouseSwitch(this.hass, name, auto_on_delay_seconds);
-      if (row.kind === "floor") return saveFloorSwitch(this.hass, row.id!, name, auto_on_delay_seconds);
-      return saveAreaSwitch(this.hass, row.id!, name, auto_on_delay_seconds);
-    });
-  }
-
-  private _onOverrideName(idx: number, e: Event) {
-    const raw = (e.target as HTMLInputElement).value.trim();
-    const value = raw === "" ? null : raw;
-    this._rows = this._rows.map((r, i) =>
-      i === idx ? { ...r, override: { ...r.override, name: value } } : r,
-    );
-    this._saveRow(this._rows[idx]);
-  }
-
-  private _onOverrideDelay(idx: number, e: Event) {
-    const raw = (e.target as HTMLInputElement).value;
-    if (raw !== "" && (!Number.isFinite(Number(raw)) || Number(raw) < 0)) return;
-    const value = raw === "" ? null : Math.floor(Number(raw));
-    this._rows = this._rows.map((r, i) =>
-      i === idx ? { ...r, override: { ...r.override, auto_on_delay_seconds: value } } : r,
-    );
-    this._saveRow(this._rows[idx]);
-  }
-
-  private _reset(idx: number) {
-    this._rows = this._rows.map((r, i) =>
-      i === idx ? { ...r, override: { name: null, auto_on_delay_seconds: null } } : r,
-    );
-    this._saveRow(this._rows[idx]);
-  }
-
-  private _onAutoTriggers(idx: number, enabled: boolean) {
-    this._rows = this._rows.map((r, i) =>
-      i === idx ? { ...r, autoTriggersEnabled: enabled } : r,
-    );
-    const row = this._rows[idx];
-    void this._safeSave(() =>
-      setAutoTriggersEnabled(this.hass, row.kind, row.id, enabled),
-    );
-  }
-
-  /** The entity name HA will display when no per-scope `name` override is set. */
-  private _defaultDisplayName(row: Row): string {
-    return `${row.scopePrefix} ${this._defaults.name}`;
   }
 
   override render() {
@@ -257,43 +83,6 @@ export class AmbienceAmbienceSettings extends LitElement {
           <input data-test="defaults-delay-seconds" type="number" min="0" .value=${String(this._defaults.auto_on_delay_seconds)} @change=${(e: Event) => this._onDefaultDelay(e)} />
           <div class="help">${localize(this.hass, "ui.settings_ambience_delay_help", "0 = never auto-on")}</div>
         </div>
-      </div>
-
-      <div class="card">
-        <h3>${localize(this.hass, "ui.settings_ambience_overrides_card", "Per-scope overrides")}</h3>
-        ${this._rows.map((r, idx) => {
-          const key = _rowKey(r);
-          return html`
-            <div class="scope-row" data-test="scope-row">
-              <div class="scope-header" data-test="expand" @click=${() => this._toggle(idx)}>
-                <span class="chevron ${r.expanded ? "open" : ""}">▶</span>
-                <div class="scope-name">${r.name}</div>
-              </div>
-              ${r.expanded ? html`
-                <div class="scope-body">
-                  <div class="row">
-                    <label>${localize(this.hass, "ui.settings_ambience_field_name", "Switch name")}</label>
-                    <input data-test=${`override-name-${key}`} type="text" .value=${r.override.name ?? ""} placeholder=${this._defaultDisplayName(r)} @change=${(e: Event) => this._onOverrideName(idx, e)} />
-                  </div>
-                  <div class="row">
-                    <label>${localize(this.hass, "ui.settings_ambience_field_delay", "Auto-on delay (seconds)")}</label>
-                    <input data-test=${`override-delay-${key}`} type="number" min="0" .value=${r.override.auto_on_delay_seconds === null ? "" : String(r.override.auto_on_delay_seconds)} placeholder=${String(this._defaults.auto_on_delay_seconds)} @change=${(e: Event) => this._onOverrideDelay(idx, e)} />
-                  </div>
-                  <div class="row">
-                    <label>${localize(this.hass, "ui.settings_ambience_auto_triggers", "Automatic triggers")}</label>
-                    <input
-                      data-test=${`auto-triggers-${key}`}
-                      type="checkbox"
-                      .checked=${r.autoTriggersEnabled}
-                      @change=${(e: Event) => this._onAutoTriggers(idx, (e.target as HTMLInputElement).checked)}
-                    />
-                  </div>
-                  <button class="reset" data-test=${`reset-${key}`} @click=${() => this._reset(idx)}>${localize(this.hass, "ui.settings_ambience_reset_to_defaults", "Reset to defaults")}</button>
-                </div>
-              ` : ""}
-            </div>
-          `;
-        })}
       </div>
 
       <div class="card">

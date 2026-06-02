@@ -32,8 +32,6 @@ vi.mock("../frontend/src/api", () => ({
   listPeriods: vi.fn(),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
   getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
-  listAutoTriggers: vi.fn(async () => ({ triggers: [], opaque: false })),
-  setAutoTrigger: vi.fn(async () => ({ ok: true })),
   applyRules: vi.fn(async () => ({ ok: true })),
   runRuleActions: vi.fn(async () => ({ ran: 1, rule_name: "R" })),
 }));
@@ -997,15 +995,6 @@ describe("ambience-scopes-view", () => {
     await pickScopeKebab(el, "li.scope-row.house", "run");
     expect(vi.mocked(api.applyRules)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(api.applyRules).mock.calls[0][1]).toEqual({ kind: "house" });
-  });
-
-  test("kebab Auto-triggers opens the auto-triggers modal", async () => {
-    el = await mount();
-    await pickScopeKebab(el, "li.scope-row.house", "auto");
-    await el.updateComplete;
-    const modal = el.shadowRoot.querySelector("ambience-auto-triggers-modal") as HTMLElement;
-    expect(modal).toBeTruthy();
-    expect(modal.hasAttribute("open")).toBe(true);
   });
 
   test("run-rule-actions event from a rule list calls api.runRuleActions", async () => {

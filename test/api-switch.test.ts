@@ -3,9 +3,6 @@ import {
   getSwitchDefaults,
   listSwitches,
   saveSwitchDefaults,
-  saveHouseSwitch,
-  saveFloorSwitch,
-  saveAreaSwitch,
 } from "../frontend/src/api.js";
 
 function mockHass(impl: (msg: any) => any) {
@@ -36,37 +33,5 @@ describe("switch API wrappers", () => {
     const r = await listSwitches(hass);
     expect(hass.callWS).toHaveBeenCalledWith({ type: "ambience/switches/list" });
     expect(r).toEqual(rows);
-  });
-
-  test("saveHouseSwitch", async () => {
-    const hass = mockHass(() => ({ ok: true }));
-    await saveHouseSwitch(hass, "Manor", 300);
-    expect(hass.callWS).toHaveBeenCalledWith({
-      type: "ambience/house/switch/save",
-      name: "Manor",
-      auto_on_delay_seconds: 300,
-    });
-  });
-
-  test("saveFloorSwitch with nulls", async () => {
-    const hass = mockHass(() => ({ ok: true }));
-    await saveFloorSwitch(hass, "f1", null, null);
-    expect(hass.callWS).toHaveBeenCalledWith({
-      type: "ambience/floor/switch/save",
-      floor_id: "f1",
-      name: null,
-      auto_on_delay_seconds: null,
-    });
-  });
-
-  test("saveAreaSwitch with nulls", async () => {
-    const hass = mockHass(() => ({ ok: true }));
-    await saveAreaSwitch(hass, "a1", null, null);
-    expect(hass.callWS).toHaveBeenCalledWith({
-      type: "ambience/area/switch/save",
-      area_id: "a1",
-      name: null,
-      auto_on_delay_seconds: null,
-    });
   });
 });

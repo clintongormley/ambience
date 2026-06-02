@@ -92,11 +92,6 @@ export type SwitchDefaults = {
   auto_on_delay_seconds: number;
 };
 
-export type ScopeSwitchOverride = {
-  name: string | null;
-  auto_on_delay_seconds: number | null;
-};
-
 // One scope's Ambience switch entity, as resolved by the backend (the
 // entity_id can be user-renamed, so it can't be derived client-side).
 export type ScopeSwitch = {
@@ -108,34 +103,6 @@ export type ScopeSwitch = {
 export type AreaConfig = {
   // Ordered list — array order is authoritative for the engine.
   rules: Rule[];
-  switch?: ScopeSwitchOverride & { off_at?: string | null };
-  auto_triggers_enabled?: boolean;
-  // Trigger keys the user has disabled for this scope (see AutoTrigger.key).
-  disabled_triggers?: string[];
-};
-
-// One trigger row derived from a scope's rules, as returned by
-// auto_triggers/list. Entities are one row each; clock/periodic watches collapse
-// into a single `time` group and sun/date-rollover watches into a `sun` group.
-// `kind` discriminates which structured fields are present.
-export type AutoTrigger = {
-  key: string;
-  enabled: boolean;
-} & (
-  | { kind: "entity"; entity_id: string }
-  | {
-      kind: "time";
-      clocks: { hour: number; minute: number }[];
-      has_time: boolean;
-      date_rollover: boolean;
-    }
-  | { kind: "sun"; suns: { anchor: string; offset: number }[] }
-  | { kind: "reapply"; interval_seconds: number }
-);
-
-export type AutoTriggerList = {
-  triggers: AutoTrigger[];
-  opaque: boolean;
 };
 
 // `name` is resolved by the backend from HA's area registry, not stored.

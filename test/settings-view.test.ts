@@ -16,9 +16,6 @@ vi.mock("../frontend/src/api.js", () => ({
   getArea: vi.fn(async () => ({ rules: [] })),
   getFloor: vi.fn(async () => ({ rules: [] })),
   getHouse: vi.fn(async () => ({ rules: [] })),
-  saveHouseSwitch: vi.fn(async () => ({ ok: true })),
-  saveFloorSwitch: vi.fn(async () => ({ ok: true })),
-  saveAreaSwitch: vi.fn(async () => ({ ok: true })),
 }));
 
 import "../frontend/src/views/settings-view";

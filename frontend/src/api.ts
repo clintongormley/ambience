@@ -5,7 +5,6 @@
 import type {
   AreaConfig,
   AreaListItem,
-  AutoTriggerList,
   BufferedUnit,
   DayConfig,
   DryRunResult,
@@ -279,67 +278,6 @@ export async function saveSwitchDefaults(
   });
 }
 
-export async function saveHouseSwitch(
-  hass: HassConnection,
-  name: string | null,
-  auto_on_delay_seconds: number | null,
-): Promise<{ ok: true }> {
-  return hass.callWS({
-    type: "ambience/house/switch/save",
-    name,
-    auto_on_delay_seconds,
-  });
-}
-
-export async function saveFloorSwitch(
-  hass: HassConnection,
-  floor_id: string,
-  name: string | null,
-  auto_on_delay_seconds: number | null,
-): Promise<{ ok: true }> {
-  return hass.callWS({
-    type: "ambience/floor/switch/save",
-    floor_id,
-    name,
-    auto_on_delay_seconds,
-  });
-}
-
-export async function saveAreaSwitch(
-  hass: HassConnection,
-  area_id: string,
-  name: string | null,
-  auto_on_delay_seconds: number | null,
-): Promise<{ ok: true }> {
-  return hass.callWS({
-    type: "ambience/area/switch/save",
-    area_id,
-    name,
-    auto_on_delay_seconds,
-  });
-}
-
-export async function getAutoTriggersEnabled(
-  hass: HassConnection,
-  scope_kind: "area" | "floor" | "house",
-  scope_id?: string | null,
-): Promise<{ enabled: boolean }> {
-  const msg: Record<string, unknown> = { type: "ambience/auto_triggers/get", scope_kind };
-  if (scope_id != null) msg.scope_id = scope_id;
-  return hass.callWS(msg);
-}
-
-export async function setAutoTriggersEnabled(
-  hass: HassConnection,
-  scope_kind: "area" | "floor" | "house",
-  scope_id: string | null,
-  enabled: boolean,
-): Promise<{ ok: true }> {
-  const msg: Record<string, unknown> = { type: "ambience/auto_triggers/set", scope_kind, enabled };
-  if (scope_id != null) msg.scope_id = scope_id;
-  return hass.callWS(msg);
-}
-
 export async function listGroups(hass: HassConnection): Promise<RuleGroup[]> {
   const res = await hass.callWS<{ groups: RuleGroup[] }>({
     type: "ambience/groups/list",
@@ -399,31 +337,3 @@ export async function simulate(
   return res.result;
 }
 
-export async function listAutoTriggers(
-  hass: HassConnection,
-  scope_kind: "area" | "floor" | "house",
-  scope_id?: string | null,
-): Promise<AutoTriggerList> {
-  const msg: Record<string, unknown> = { type: "ambience/auto_triggers/list", scope_kind };
-  if (scope_id != null) msg.scope_id = scope_id;
-  return hass.callWS(msg);
-}
-
-// Retained for backend command parity; the auto-triggers UI is now a read-only
-// modal, so no view currently calls this.
-export async function setAutoTrigger(
-  hass: HassConnection,
-  scope_kind: "area" | "floor" | "house",
-  scope_id: string | null,
-  key: string,
-  enabled: boolean,
-): Promise<{ ok: true }> {
-  const msg: Record<string, unknown> = {
-    type: "ambience/auto_triggers/set_trigger",
-    scope_kind,
-    key,
-    enabled,
-  };
-  if (scope_id != null) msg.scope_id = scope_id;
-  return hass.callWS(msg);
-}

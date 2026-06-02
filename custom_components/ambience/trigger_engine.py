@@ -35,7 +35,7 @@ from .const import (
     DOMAIN,
 )
 from .matchers.time_of_day import ANCHOR_ATTR
-from .scope_triggers import filter_spec, iter_predicate_specs
+from .scope_triggers import iter_predicate_specs
 from .service import (
     _log_apply,
     _switch_state,
@@ -80,7 +80,7 @@ class AutoTriggerEngine:
         self._hass = hass
         # Per-predicate last-known boolean; the flip detector compares against it.
         self._predicate_state: dict[PredKey, bool] = {}
-        # Enabled-scope configs captured at the last rebuild, for predicate lookup.
+        # Scope configs captured at the last rebuild, for predicate lookup.
         self._scope_cfgs: dict[tuple[str, str | None], dict[str, Any]] = {}
         self._index: TriggerIndex = build_index([])
         self._snapshots: dict[str, Any] = {}
@@ -112,12 +112,10 @@ class AutoTriggerEngine:
         return self._hass.data[DOMAIN][DATA_MATCHERS]
 
     def async_rebuild(self) -> None:
-        """Recapture enabled scopes and rebuild the trigger index from them."""
+        """Recapture every scope and rebuild the trigger index from them."""
         store = self._store()
         self._scope_cfgs = {
-            (scope_kind, scope_id): cfg
-            for scope_kind, scope_id, cfg in store.all_scope_configs()
-            if store.auto_triggers_enabled(scope_kind, scope_id)
+            (scope_kind, scope_id): cfg for scope_kind, scope_id, cfg in store.all_scope_configs()
         }
         self._index = build_index(self._build_entries())
         # Drop flip-state for predicates that no longer exist (rules removed /
@@ -131,26 +129,21 @@ class AutoTriggerEngine:
     def _build_entries(self) -> list[tuple[PredKey, TriggerSpec]]:
         """Return (PredKey, TriggerSpec) for every non-wildcard predicate with deps.
 
-        Watches the user has disabled for a scope (``store.auto_triggers_disabled``)
-        are stripped per predicate, so a disabled entity/time stops waking the
-        scope while every other watch keeps working.
+        Every watch a scope's rules imply is registered — auto-triggers are
+        always on.
         """
-        store = self._store()
         matchers = self._matchers()
         entries: list[tuple[PredKey, TriggerSpec]] = []
         for (scope_kind, scope_id), cfg in self._scope_cfgs.items():
-            disabled = store.auto_triggers_disabled(scope_kind, scope_id)
             for rule_index, matcher_key, spec in iter_predicate_specs(matchers, cfg):
-                spec = filter_spec(spec, disabled)
                 if spec == EMPTY:
                     continue
                 entries.append(((scope_kind, scope_id, rule_index, matcher_key), spec))
         return entries
 
     def _build_reapply_intervals(self) -> dict[int, set[tuple[str, str | None]]]:
-        """Map each distinct re-apply interval to the enabled scopes that have
-        at least one action using it. `_scope_cfgs` already excludes scopes with
-        auto-triggers disabled, so those never get scheduled."""
+        """Map each distinct re-apply interval to the scopes that have at least
+        one action using it."""
         exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
         by_interval: dict[int, set[tuple[str, str | None]]] = {}
         for scope_key, cfg in self._scope_cfgs.items():

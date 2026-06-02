@@ -70,7 +70,7 @@ async def test_house_off_cascades_all_switches_off(hass, mock_config_entry, fixe
     for kind, sid in _all_descendants(ids):
         ent = _switch(hass, kind, sid)
         assert ent.is_on is False, (kind, sid)
-        assert store.get_scope_switch_config(kind, sid)["off_at"] is not None, (kind, sid)
+        assert store.get_scope_switch_off_at(kind, sid) is not None, (kind, sid)
         assert ent._timer is not None, (kind, sid)
 
 
@@ -133,7 +133,7 @@ async def test_cascade_off_preserves_already_off_child_off_at(
     # Turn the bedroom off individually at T0.
     await _switch(hass, "area", ids["bedroom"]).async_turn_off()
     await hass.async_block_till_done()
-    t0 = store.get_scope_switch_config("area", ids["bedroom"])["off_at"]
+    t0 = store.get_scope_switch_off_at("area", ids["bedroom"])
     assert t0 is not None
 
     # Advance the clock, then turn the house off (cascades).
@@ -142,11 +142,11 @@ async def test_cascade_off_preserves_already_off_child_off_at(
     await hass.async_block_till_done()
 
     # Bedroom was already off -> its off_at AND timer must be untouched.
-    assert store.get_scope_switch_config("area", ids["bedroom"])["off_at"] == t0
+    assert store.get_scope_switch_off_at("area", ids["bedroom"]) == t0
     assert _switch(hass, "area", ids["bedroom"])._timer is not None
     # Kitchen was on -> now off at the later time.
-    assert store.get_scope_switch_config("area", ids["kitchen"])["off_at"] is not None
-    assert store.get_scope_switch_config("area", ids["kitchen"])["off_at"] != t0
+    assert store.get_scope_switch_off_at("area", ids["kitchen"]) is not None
+    assert store.get_scope_switch_off_at("area", ids["kitchen"]) != t0
 
 
 async def test_house_on_overrides_individually_off_child(hass, mock_config_entry, fixed_utcnow):

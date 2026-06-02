@@ -99,7 +99,7 @@ async def test_turn_off_writes_off_at_and_schedules_timer(hass, mock_config_entr
 
     store = hass.data[DOMAIN][DATA_STORE]
     assert ent.is_on is False
-    assert store.get_scope_switch_config("house", None)["off_at"] == fixed_utcnow["now"].isoformat()
+    assert store.get_scope_switch_off_at("house", None) == fixed_utcnow["now"].isoformat()
     assert ent._timer is not None
 
 
@@ -114,7 +114,7 @@ async def test_turn_on_cancels_timer_and_clears_off_at(hass, mock_config_entry, 
     assert ent.is_on is True
     assert ent._timer is None
     assert timer.cancelled()
-    assert hass.data[DOMAIN][DATA_STORE].get_scope_switch_config("house", None)["off_at"] is None
+    assert hass.data[DOMAIN][DATA_STORE].get_scope_switch_off_at("house", None) is None
 
 
 async def test_zero_delay_disables_timer(hass, mock_config_entry, fixed_utcnow):
@@ -125,7 +125,7 @@ async def test_zero_delay_disables_timer(hass, mock_config_entry, fixed_utcnow):
     await ent.async_turn_off()
     await hass.async_block_till_done()
     assert ent._timer is None
-    assert store.get_scope_switch_config("house", None)["off_at"] is not None
+    assert store.get_scope_switch_off_at("house", None) is not None
 
 
 async def test_auto_on_fires_after_delay(hass, mock_config_entry, fixed_utcnow):
@@ -202,23 +202,21 @@ async def test_dispatcher_signal_global_updates_all_names(hass, mock_config_entr
     assert names == {"Global Master", "Upstairs Master", "Living Room Master"}
 
 
-async def test_dispatcher_signal_scoped_updates_only_that_scope(hass, mock_config_entry):
-    """A per-scope name override replaces the whole display name (verbatim)."""
+async def test_name_ignores_legacy_per_scope_override(hass, mock_config_entry):
+    """Per-scope name overrides were removed: a legacy ``switch.name`` in stored
+    config is inert — the display name is always '<prefix> <defaults.name>'."""
     ar.async_get(hass).async_create("Living Room")
     await _setup(hass, mock_config_entry)
 
     store = hass.data[DOMAIN][DATA_STORE]
     area_entries = [k for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "area"]
     area_kind, area_id = area_entries[0]
-    await store.async_save_scope_switch(
-        area_kind, area_id, {"name": "Kitchen lights", "auto_on_delay_seconds": None}
-    )
-    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, (area_kind, area_id))
+    # Inject a legacy override directly into stored config, then refresh.
+    store.scope_config(area_kind, area_id).setdefault("switch", {})["name"] = "Kitchen lights"
+    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
 
-    # Override: verbatim, no prefix.
-    assert _switch(hass, area_kind, area_id).name == "Kitchen lights"
-    # House untouched: still the default '<prefix> Ambience'.
+    assert _switch(hass, area_kind, area_id).name == "Living Room Ambience"
     assert _switch(hass, "house", None).name == "Global Ambience"
 
 

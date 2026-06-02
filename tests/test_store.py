@@ -480,98 +480,6 @@ async def test_all_scope_configs_yields_every_scope(hass: HomeAssistant) -> None
     assert by_kind[("house", None)]["rules"][0]["name"] == "h"
 
 
-async def test_auto_triggers_enabled_defaults_true_for_area(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    await store.async_save_area("a", {"rules": []})
-    assert store.auto_triggers_enabled("area", "a") is True
-
-
-async def test_auto_triggers_enabled_defaults_true_for_house(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    assert store.auto_triggers_enabled("house", None) is True
-
-
-async def test_set_auto_triggers_enabled_persists(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    await store.async_save_area("a", {"rules": []})
-    await store.async_set_auto_triggers_enabled("area", "a", False)
-    assert store.auto_triggers_enabled("area", "a") is False
-    await store.async_set_auto_triggers_enabled("area", "a", True)
-    assert store.auto_triggers_enabled("area", "a") is True
-
-
-async def test_auto_triggers_enabled_true_for_never_saved_scope(hass: HomeAssistant) -> None:
-    # The primary default path: a scope with no stored config at all reads True.
-    store = AmbienceStore(hass)
-    await store.async_load()
-    assert store.auto_triggers_enabled("area", "nonexistent") is True
-    assert store.auto_triggers_enabled("floor", "nonexistent") is True
-
-
-async def test_set_auto_triggers_enabled_for_floor(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    await store.async_set_auto_triggers_enabled("floor", "ground", False)
-    assert store.auto_triggers_enabled("floor", "ground") is False
-
-
-async def test_auto_triggers_enabled_unknown_scope_raises(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    with pytest.raises(ValueError):
-        store.auto_triggers_enabled("galaxy", "x")
-
-
-async def test_disabled_triggers_defaults_empty(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    assert store.auto_triggers_disabled("area", "a") == frozenset()
-    assert store.auto_triggers_disabled("house", None) == frozenset()
-
-
-async def test_set_trigger_disabled_persists_and_reenables(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    await store.async_set_trigger_disabled("area", "a", "entity:binary_sensor.motion", True)
-    assert store.auto_triggers_disabled("area", "a") == frozenset({"entity:binary_sensor.motion"})
-    # idempotent add
-    await store.async_set_trigger_disabled("area", "a", "entity:binary_sensor.motion", True)
-    assert store.auto_triggers_disabled("area", "a") == frozenset({"entity:binary_sensor.motion"})
-    # re-enable removes
-    await store.async_set_trigger_disabled("area", "a", "entity:binary_sensor.motion", False)
-    assert store.auto_triggers_disabled("area", "a") == frozenset()
-
-
-async def test_disabled_triggers_survive_rule_save(hass: HomeAssistant) -> None:
-    """Saving rules must not wipe a scope's disabled-trigger list (merge save)."""
-    store = AmbienceStore(hass)
-    await store.async_load()
-    await store.async_set_trigger_disabled("area", "a", "clock:18:00", True)
-    await store.async_save_area("a", {"rules": [{"when": {}, "actions": []}]})
-    assert store.auto_triggers_disabled("area", "a") == frozenset({"clock:18:00"})
-
-
-async def test_disabled_triggers_non_list_is_empty(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    await store.async_save_area("a", {"rules": [], "disabled_triggers": "oops"})
-    assert store.auto_triggers_disabled("area", "a") == frozenset()
-
-
-async def test_set_trigger_disabled_fires_config_changed(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    calls: list = []
-    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
-    await store.async_set_trigger_disabled("area", "a", "entity:light.x", True)
-    await hass.async_block_till_done()
-    unsub()
-    assert len(calls) == 1
-
-
 async def test_save_area_fires_config_changed(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
@@ -589,18 +497,6 @@ async def test_save_matcher_config_fires_config_changed(hass: HomeAssistant) -> 
     calls: list = []
     unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
     await store.async_save_matcher_config("weather", {"entity": "weather.home"})
-    await hass.async_block_till_done()
-    unsub()
-    assert len(calls) == 1
-
-
-async def test_set_auto_triggers_enabled_fires_config_changed(hass: HomeAssistant) -> None:
-    store = AmbienceStore(hass)
-    await store.async_load()
-    await store.async_save_area("a", {"rules": []})
-    calls: list = []
-    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
-    await store.async_set_auto_triggers_enabled("area", "a", False)
     await hass.async_block_till_done()
     unsub()
     assert len(calls) == 1

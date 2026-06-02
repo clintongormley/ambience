@@ -12,13 +12,23 @@ import type {
 } from "../types.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import { entityName, renderEntityIcon, entityRowStyles } from "./entity-row.js";
+import { humanizeId } from "../i18n.js";
 
 // Display label for a raw option value (the sent value stays raw).
 const _OPTION_LABEL: Record<string, string> = { not_home: "Away", home: "Home" };
 function optionLabel(value: string): string {
-  if (_OPTION_LABEL[value]) return _OPTION_LABEL[value];
-  const spaced = value.replace(/_/g, " ");
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  return _OPTION_LABEL[value] ?? humanizeId(value);
+}
+
+// The editable values for an entity knob, pre-filled from its live state +
+// attributes. Shared by the initial load and the per-row reset.
+function entityDefaults(k: SimulateEntityKnob): { state: string; attributes: Record<string, string> } {
+  return {
+    state: k.live_state ?? "",
+    attributes: Object.fromEntries(
+      k.attributes.map((a) => [a.name, a.live_value == null ? "" : String(a.live_value)]),
+    ),
+  };
 }
 
 function pad(n: number): string { return String(n).padStart(2, "0"); }
@@ -116,12 +126,7 @@ export class AmbienceSimulatorModal extends LitElement {
       const verdicts: typeof this._verdicts = {};
       for (const k of inputs.knobs) {
         if (k.kind === "entity") {
-          values[k.entity_id] = {
-            state: k.live_state ?? "",
-            attributes: Object.fromEntries(
-              k.attributes.map((a) => [a.name, a.live_value == null ? "" : String(a.live_value)]),
-            ),
-          };
+          values[k.entity_id] = entityDefaults(k);
         } else {
           verdicts[this._vkey(k)] = k.live_value;
         }
@@ -145,15 +150,7 @@ export class AmbienceSimulatorModal extends LitElement {
   }
 
   private _resetEntity(k: SimulateEntityKnob): void {
-    this._values = {
-      ...this._values,
-      [k.entity_id]: {
-        state: k.live_state ?? "",
-        attributes: Object.fromEntries(
-          k.attributes.map((a) => [a.name, a.live_value == null ? "" : String(a.live_value)]),
-        ),
-      },
-    };
+    this._values = { ...this._values, [k.entity_id]: entityDefaults(k) };
   }
   private _resetVerdict(k: SimulateVerdictKnob): void {
     this._verdicts = { ...this._verdicts, [this._vkey(k)]: k.live_value };

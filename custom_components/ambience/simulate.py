@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant, State
 
 from .const import DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from .engine import evaluate_explained
-from .matchers.script import ScriptSnapshot, _cache_key
+from .matchers.script import ScriptSnapshot
 from .matchers.template import TemplateSnapshot
 from .matchers.weather import WEATHER_CONDITIONS
 from .naming import group_names, scope_display_name
@@ -304,20 +304,17 @@ def simulate_inputs_entities(
 
 
 def _verdict_identity(
-    matcher_key: str, predicate: dict[str, Any], rule: dict[str, Any]
+    matcher: Any, matcher_key: str, predicate: dict[str, Any], rule: dict[str, Any]
 ) -> tuple[str, str | None, str]:
-    """(result_key, entity_id|None, label) for an opaque predicate's verdict knob."""
+    """(result_key, entity_id|None, label) for an opaque predicate's verdict knob.
+
+    The result key comes from the matcher's own `result_key()` so the simulator
+    and `matches()` always agree on the identity."""
+    key = matcher.result_key(predicate) if matcher is not None else ""
     if matcher_key == "script":
         script = predicate.get("script")
-        args = predicate.get("args") or {}
-        key = _cache_key(
-            script if isinstance(script, str) else "",
-            args if isinstance(args, dict) else {},
-        )
         label = script if isinstance(script, str) else "script"
         return key, (script if isinstance(script, str) else None), label
-    tmpl = predicate.get("template")
-    key = tmpl if isinstance(tmpl, str) else ""
     return key, None, (rule.get("name") or "Template")
 
 
@@ -343,11 +340,12 @@ async def _verdict_knobs(
             predicate = when.get(name)
             if not isinstance(predicate, dict):
                 continue
-            key, entity_id, label = _verdict_identity(name, predicate, rule)
+            matcher = matchers.get(name)
+            key, entity_id, label = _verdict_identity(matcher, name, predicate, rule)
             if (name, key) in seen:
                 continue
             seen.add((name, key))
-            matcher, snap = matchers.get(name), live_snaps.get(name)
+            snap = live_snaps.get(name)
             live_value = (
                 bool(matcher.matches(predicate, snap)) if (matcher and snap is not None) else False
             )

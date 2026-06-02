@@ -105,15 +105,20 @@ class TemplateMatcher:
 
     # --- evaluation --------------------------------------------------------
 
+    def result_key(self, predicate: Any) -> str:
+        """The key this predicate's result is stored under in the snapshot (the
+        template string), or "" if malformed. Shared by `matches()` and the
+        simulator's verdict knobs so both agree on the identity."""
+        if not isinstance(predicate, dict):
+            return ""
+        tmpl = predicate.get("template")
+        return tmpl if isinstance(tmpl, str) else ""
+
     def matches(self, predicate: Any, snapshot: TemplateSnapshot) -> bool:
         if predicate is None:
             return True
-        if not isinstance(predicate, dict):
-            return False
-        tmpl = predicate.get("template")
-        if not isinstance(tmpl, str):
-            return False
-        return snapshot.results.get(tmpl, False) is True
+        key = self.result_key(predicate)
+        return bool(key) and snapshot.results.get(key, False) is True
 
     # --- trigger dependencies ---------------------------------------------
 

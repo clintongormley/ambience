@@ -101,18 +101,23 @@ class ScriptMatcher:
 
     # --- evaluation --------------------------------------------------------
 
+    def result_key(self, predicate: Any) -> str:
+        """The key this predicate's result is stored under in the snapshot, or
+        "" if the predicate is malformed. Shared by `matches()` and the
+        simulator's verdict knobs so both agree on the identity."""
+        if not isinstance(predicate, dict):
+            return ""
+        script = predicate.get("script")
+        args = predicate.get("args") or {}
+        if not isinstance(script, str) or not isinstance(args, dict):
+            return ""
+        return _cache_key(script, args)
+
     def matches(self, predicate: Any, snapshot: ScriptSnapshot) -> bool:
         if predicate is None:
             return True
-        if not isinstance(predicate, dict):
-            return False
-        script = predicate.get("script")
-        if not isinstance(script, str):
-            return False
-        args = predicate.get("args") or {}
-        if not isinstance(args, dict):
-            return False
-        return snapshot.results.get(_cache_key(script, args), False) is True
+        key = self.result_key(predicate)
+        return bool(key) and snapshot.results.get(key, False) is True
 
     # --- trigger dependencies ---------------------------------------------
 

@@ -105,8 +105,14 @@ class DayMatcher:
         store = hass.data[DOMAIN][DATA_STORE]
         cfg = store.get_matcher_config("day")
         today = dt_util.as_local(now).date() if now is not None else dt_util.now().date()
-        workday_state = self._read_workday_sensor(hass, cfg.get("workday_sensor"))
         month_workdays = await self._fetch_month_workdays(hass, cfg.get("workday_calendar"), today)
+        if now is not None and cfg.get("workday_calendar") and month_workdays is not None:
+            # Simulating a specific date with a calendar configured: derive
+            # workday from the calendar so it is correct for the chosen date,
+            # rather than reading the live "is today a workday" binary sensor.
+            workday_state = "on" if today in month_workdays else "off"
+        else:
+            workday_state = self._read_workday_sensor(hass, cfg.get("workday_sensor"))
         return DaySnapshot(
             today=today,
             weekday=today.weekday(),

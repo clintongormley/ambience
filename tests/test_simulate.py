@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from custom_components.ambience.const import DATA_MATCHERS, DATA_STORE, DOMAIN
+from custom_components.ambience.matchers.script import ScriptMatcher, _cache_key
 from custom_components.ambience.simulate import (
     SimulatedWorld,
     build_simulated_snapshots,
@@ -228,3 +229,27 @@ async def test_run_simulation_reports_no_match():
     result = await run_simulation(hass, "area", "kitchen", "g1", world)
     assert result["outcome"] == "no_match"
     assert result["winner_name"] is None
+
+
+# ---------------------------------------------------------------------------
+# Task 3: verdict overrides for opaque matchers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_build_simulated_snapshots_uses_verdicts_for_script():
+    called = {"snapshot": False}
+
+    class _Spy(ScriptMatcher):
+        async def snapshot(self, hass, *, now=None):  # must NOT be called
+            called["snapshot"] = True
+            raise AssertionError("real script snapshot should not run under verdicts")
+
+    hass = _Hass([])
+    hass.data[DOMAIN] = {DATA_MATCHERS: {"script": _Spy(hass)}}
+    key = _cache_key("script.holiday", {})
+    world = SimulatedWorld(now=FIXED, overrides={}, verdicts={"script": {key: True}})
+
+    snaps = await build_simulated_snapshots(hass, world)
+    assert called["snapshot"] is False
+    assert snaps["script"].results == {key: True}

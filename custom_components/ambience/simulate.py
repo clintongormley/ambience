@@ -19,6 +19,8 @@ from homeassistant.core import HomeAssistant, State
 
 from .const import DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from .engine import evaluate_explained
+from .matchers.script import ScriptSnapshot
+from .matchers.template import TemplateSnapshot
 from .naming import group_names, scope_display_name
 from .scope_triggers import scope_trigger_spec
 from .sun_position import synthetic_sun_state
@@ -33,6 +35,11 @@ from .trace import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Matchers whose predicates evaluate live (call a real script / render a
+# template) and so cannot honour entity overrides. The simulator drives them
+# with explicit per-predicate verdicts instead of running them.
+_OPAQUE_MATCHERS = ("script", "template")
+
 
 @dataclass(frozen=True)
 class SimulatedWorld:
@@ -40,10 +47,13 @@ class SimulatedWorld:
 
     `overrides` maps entity_id -> {"state": str, "attributes": {name: value}};
     `attributes` is optional and merged over the entity's live attributes.
+    `verdicts` maps an opaque matcher_key -> {result_key: bool}, forcing each
+    `script`/`template` predicate's result (the simulator computes the keys).
     """
 
     now: datetime
     overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
+    verdicts: dict[str, dict[str, bool]] = field(default_factory=dict)
 
 
 class _SimulatedStates:
@@ -100,27 +110,45 @@ def _build_override_states(hass: HomeAssistant, world: SimulatedWorld) -> dict[s
     return overrides
 
 
+def _verdict_snapshot(matcher_key: str, verdicts: dict[str, bool]) -> Any:
+    """Build an opaque matcher's snapshot from forced verdicts.
+
+    Both script and template snapshots are a `results: dict[str, bool]` looked
+    up by `matches()`, so a verdict map is a complete snapshot."""
+    if matcher_key == "script":
+        return ScriptSnapshot(results=dict(verdicts))
+    if matcher_key == "template":
+        return TemplateSnapshot(results=dict(verdicts))
+    raise ValueError(f"no verdict snapshot for opaque matcher {matcher_key!r}")
+
+
 async def build_simulated_snapshots(hass: HomeAssistant, world: SimulatedWorld) -> dict[str, Any]:
     """Snapshot every registered matcher against the simulated world.
 
-    Returns {matcher_name: snapshot}; a matcher whose snapshot raises degrades
-    to None (same policy as the live `_snapshot_all`)."""
+    Entity-reading matchers snapshot against the overlay (with injected `now`);
+    opaque matchers (script/template) are built from `world.verdicts` so no real
+    script runs and overrides are honoured. A live matcher whose snapshot raises
+    degrades to None (same policy as `_snapshot_all`)."""
     matchers: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
     overlay = _SimulatedHass(
         hass,
         _SimulatedStates(hass.states, _build_override_states(hass, world)),
     )
+    live = {name: m for name, m in matchers.items() if name not in _OPAQUE_MATCHERS}
     results = await asyncio.gather(
-        *[m.snapshot(overlay, now=world.now) for m in matchers.values()],
+        *[m.snapshot(overlay, now=world.now) for m in live.values()],
         return_exceptions=True,
     )
     snapshots: dict[str, Any] = {}
-    for name, result in zip(matchers.keys(), results, strict=True):
+    for name, result in zip(live.keys(), results, strict=True):
         if isinstance(result, BaseException):
             _LOGGER.warning("ambience: simulated snapshot for %r failed: %s", name, result)
             snapshots[name] = None
         else:
             snapshots[name] = result
+    for name in matchers:
+        if name in _OPAQUE_MATCHERS:
+            snapshots[name] = _verdict_snapshot(name, world.verdicts.get(name, {}))
     return snapshots
 
 

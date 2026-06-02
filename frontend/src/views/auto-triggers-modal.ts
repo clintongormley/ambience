@@ -5,27 +5,7 @@ import { listAutoTriggers, type HassConnection } from "../api.js";
 import { anchorLabel, localize } from "../i18n.js";
 import { formatReapplyInterval } from "../reapply.js";
 import type { AutoTrigger, Rule, Scope } from "../types.js";
-
-// Per-domain entity icons — only a fallback for when <ha-state-icon> isn't
-// registered (it resolves the real icon otherwise). A short list of the
-// domains a rule is most likely to watch; anything else gets a neutral glyph.
-const _DOMAIN_ICON: Record<string, string> = {
-  light: "mdi:lightbulb",
-  switch: "mdi:toggle-switch-variant",
-  binary_sensor: "mdi:motion-sensor",
-  sensor: "mdi:eye",
-  person: "mdi:account",
-  device_tracker: "mdi:account",
-  climate: "mdi:thermostat",
-  cover: "mdi:window-shutter",
-  media_player: "mdi:cast",
-  lock: "mdi:lock",
-  fan: "mdi:fan",
-  weather: "mdi:weather-partly-cloudy",
-  input_boolean: "mdi:toggle-switch",
-  event: "mdi:eye-check",
-};
-const _DEFAULT_ENTITY_ICON = "mdi:eye";
+import { entityName, renderEntityIcon, DEFAULT_ENTITY_ICON } from "./entity-row.js";
 
 // Representative icons for the derived non-entity trigger groups.
 const _GROUP_ICON: Record<string, string> = {
@@ -207,18 +187,9 @@ export class AmbienceAutoTriggersModal extends LitElement {
   }
 
   private _entityName(entity_id: string): string {
-    const name = this.hass?.states?.[entity_id]?.attributes?.friendly_name;
-    return typeof name === "string" && name ? name : entity_id;
+    return entityName(this.hass, entity_id);
   }
 
-  /** Icon for an entity row: the entity's own `icon` attribute when set,
-   *  otherwise a per-domain default, otherwise a neutral glyph. */
-  private _entityIcon(entity_id: string): string {
-    const custom = this.hass?.states?.[entity_id]?.attributes?.icon;
-    if (typeof custom === "string" && custom) return custom;
-    const domain = entity_id.split(".")[0];
-    return _DOMAIN_ICON[domain] ?? _DEFAULT_ENTITY_ICON;
-  }
 
   /** Entity rows sorted alphabetically by display name (case-insensitive), then
    *  group rows in backend order (time, sun, then read-only re-apply rows). */
@@ -280,19 +251,11 @@ export class AmbienceAutoTriggersModal extends LitElement {
    *  registered. Group rows use a representative glyph. */
   private _renderRowIcon(t: AutoTrigger) {
     if (t.kind === "entity") {
-      const stateObj = this.hass?.states?.[t.entity_id];
-      if (stateObj && customElements.get("ha-state-icon")) {
-        return html`<ha-state-icon
-          class="row-icon"
-          .hass=${this.hass}
-          .stateObj=${stateObj}
-        ></ha-state-icon>`;
-      }
-      return html`<ha-icon class="row-icon" icon=${this._entityIcon(t.entity_id)}></ha-icon>`;
+      return renderEntityIcon(this.hass, t.entity_id);
     }
     return html`<ha-icon
       class="row-icon"
-      icon=${_GROUP_ICON[t.kind] ?? _DEFAULT_ENTITY_ICON}
+      icon=${_GROUP_ICON[t.kind] ?? DEFAULT_ENTITY_ICON}
     ></ha-icon>`;
   }
 

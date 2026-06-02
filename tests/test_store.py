@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -675,3 +677,108 @@ async def test_delete_empty_non_last_category_succeeds(hass: HomeAssistant, hass
     await store.async_load()
     await store.async_delete_category("a")
     assert [g["id"] for g in store.categories()] == ["b"]
+
+
+def test_migrate_groups_to_categories_renames_keys_and_fields(hass: HomeAssistant) -> None:
+    """Legacy `groups` top-level + per-rule `group` field upgrade to categories/category."""
+    store = AmbienceStore(hass)
+    store._data = {
+        "version": 1,
+        "groups": [{"id": "general", "name": "General"}, {"id": "movie", "name": "Movie"}],
+        "areas": {
+            "lr": {"rules": [{"group": "movie", "when": {}}, {"group": "general", "when": {}}]}
+        },
+        "floors": {},
+        "house": {"rules": [{"group": "movie", "when": {}}]},
+    }
+    store._migrate_groups_to_categories()
+    assert "groups" not in store._data
+    assert store._data["categories"] == [
+        {"id": "general", "name": "General"},
+        {"id": "movie", "name": "Movie"},
+    ]
+    assert [r["category"] for r in store._data["areas"]["lr"]["rules"]] == ["movie", "general"]
+    assert "group" not in store._data["areas"]["lr"]["rules"][0]
+    assert store._data["house"]["rules"][0]["category"] == "movie"
+
+
+def test_migrate_groups_to_categories_is_idempotent(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    store._data = {
+        "version": 1,
+        "categories": [{"id": "general", "name": "General"}],
+        "areas": {"lr": {"rules": [{"category": "general", "when": {}}]}},
+        "floors": {},
+        "house": {"rules": []},
+    }
+    snapshot = copy.deepcopy(store._data)
+    store._migrate_groups_to_categories()
+    assert store._data == snapshot
+
+
+def test_migrate_matchers_to_conditions_renames_namespace(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    store._data = {
+        "version": 1,
+        "matchers": {
+            "time_of_day": {"custom": {}, "hidden": []},
+            "weather": {
+                "entity": "weather.home",
+                "groups": [{"id": "g1", "conditions": ["sunny"]}],
+            },
+        },
+        "areas": {},
+        "floors": {},
+        "house": {"rules": []},
+    }
+    store._migrate_matchers_to_conditions()
+    assert "matchers" not in store._data
+    # nested weather.groups + its inner `conditions` field preserved verbatim
+    assert store._data["conditions"]["weather"]["groups"] == [{"id": "g1", "conditions": ["sunny"]}]
+    assert store._data["conditions"]["time_of_day"] == {"custom": {}, "hidden": []}
+
+
+def test_migrate_matchers_to_conditions_is_idempotent(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    store._data = {
+        "version": 1,
+        "conditions": {"day": {}},
+        "areas": {},
+        "floors": {},
+        "house": {"rules": []},
+    }
+    snapshot = copy.deepcopy(store._data)
+    store._migrate_matchers_to_conditions()
+    assert store._data == snapshot
+
+
+async def test_async_load_upgrades_legacy_groups_matchers_payload(hass: HomeAssistant) -> None:
+    """Full end-to-end: a legacy on-disk payload loads and exposes new vocabulary."""
+    from homeassistant.helpers.storage import Store
+
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "groups": [
+                {"id": "general", "name": "General", "icon": "mdi:home", "color": "blue-grey"},
+                {"id": "movie", "name": "Movie", "icon": "mdi:movie", "color": "red"},
+            ],
+            "areas": {
+                "lr": {
+                    "rules": [
+                        {"group": "movie", "when": {}, "actions": []},
+                        {"group": "general", "when": {}, "actions": []},
+                    ]
+                }
+            },
+            "floors": {},
+            "house": {"rules": []},
+            "matchers": {"time_of_day": {"custom": {}, "hidden": []}},
+        }
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert {c["id"] for c in store.categories()} == {"general", "movie"}
+    assert [r["category"] for r in store.get_area("lr")["rules"]] == ["movie", "general"]
+    assert store.get_condition_config("time_of_day") == {"custom": {}, "hidden": []}

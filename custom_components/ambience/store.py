@@ -156,6 +156,23 @@ class AmbienceStore:
             "nighttime" if h == "night" else "daytime" if h == "day" else h for h in hidden
         ]
 
+    def _migrate_groups_to_categories(self) -> None:
+        """Rename the legacy top-level `groups` key to `categories`, and each rule's
+        legacy `group` field to `category`. Idempotent: a no-op once migrated."""
+        if "groups" in self._data and "categories" not in self._data:
+            self._data["categories"] = self._data.pop("groups")
+        for _kind, _id, cfg in self.all_scope_configs():
+            for rule in cfg.get("rules", []):
+                if "group" in rule and "category" not in rule:
+                    rule["category"] = rule.pop("group")
+
+    def _migrate_matchers_to_conditions(self) -> None:
+        """Rename the legacy top-level `matchers` namespace to `conditions`. The nested
+        `weather.groups` sub-key (and its inner `conditions` field) ride along untouched.
+        Idempotent: a no-op once migrated."""
+        if "matchers" in self._data and "conditions" not in self._data:
+            self._data["conditions"] = self._data.pop("matchers")
+
     def _migrate_drop_area_conditions(self) -> None:
         """Per-area `conditions` is no longer a UI gate — drop the field from every area."""
         for area_cfg in self._data.get("areas", {}).values():
@@ -221,6 +238,8 @@ class AmbienceStore:
             self._data = self._empty()
             return
         self._data = raw
+        self._migrate_groups_to_categories()
+        self._migrate_matchers_to_conditions()
         self._migrate_actions()
         self._migrate_periods()
         self._migrate_drop_area_conditions()

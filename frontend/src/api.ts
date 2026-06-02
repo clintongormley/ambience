@@ -24,6 +24,7 @@ import type {
   SimulateInputs,
   SimulateOverrides,
   SimulateScope,
+  SimulateVerdicts,
   SwitchDefaults,
   WeatherConfig,
   WeatherGroup,
@@ -384,6 +385,7 @@ export async function simulate(
   group: string,
   now: string,
   overrides: SimulateOverrides,
+  verdicts: SimulateVerdicts,
 ): Promise<BufferedUnit> {
   const res = await hass.callWS<{ result: BufferedUnit }>({
     type: "ambience/simulate",
@@ -392,6 +394,7 @@ export async function simulate(
     group,
     now,
     overrides,
+    verdicts,
   });
   return res.result;
 }

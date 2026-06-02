@@ -26,6 +26,7 @@ describe("simulate api", () => {
       "g1",
       "2026-12-21T17:30:00.000Z",
       { "binary_sensor.motion": { state: "on" } },
+      {},
     );
     expect(callWS).toHaveBeenCalledWith({
       type: "ambience/simulate",
@@ -34,7 +35,30 @@ describe("simulate api", () => {
       group: "g1",
       now: "2026-12-21T17:30:00.000Z",
       overrides: { "binary_sensor.motion": { state: "on" } },
+      verdicts: {},
     });
     expect(res).toEqual(unit);
+  });
+
+  test("simulate sends verdicts alongside overrides", async () => {
+    const callWS = vi.fn().mockResolvedValue({ result: { group: "g1" } });
+    const hass: any = { callWS };
+    await simulate(
+      hass,
+      { scope_kind: "area", scope_id: "kitchen" },
+      "g1",
+      "2026-12-21T17:30:00.000Z",
+      { "binary_sensor.motion": { state: "on" } },
+      { script: { k: true } },
+    );
+    expect(callWS).toHaveBeenCalledWith({
+      type: "ambience/simulate",
+      scope_kind: "area",
+      scope_id: "kitchen",
+      group: "g1",
+      now: "2026-12-21T17:30:00.000Z",
+      overrides: { "binary_sensor.motion": { state: "on" } },
+      verdicts: { script: { k: true } },
+    });
   });
 });

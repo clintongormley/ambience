@@ -363,22 +363,35 @@ export type BufferedUnit = {
 
 // --- what-if simulator (mirrors custom_components/ambience/simulate.py) ---
 
-export type SimulateKnobAttribute = { name: string; live_value: unknown };
-export type SimulateKnob = {
+export type SimulateControl = "select" | "number" | "text";
+
+export type SimulateAttribute = { name: string; control: "number"; live_value: unknown };
+
+export type SimulateEntityKnob = {
   kind: "entity";
   entity_id: string;
+  control: SimulateControl;
+  options?: string[];
   live_state: string | null;
-  states: string[];
-  attributes: SimulateKnobAttribute[];
+  attributes: SimulateAttribute[];
 };
-export type SimulateInputs = {
-  knobs: SimulateKnob[];
-  has_time: boolean;
-  opaque: boolean;
+
+export type SimulateVerdictKnob = {
+  kind: "verdict";
+  matcher: "script" | "template";
+  key: string;
+  label: string;
+  entity_id?: string;
+  live_value: boolean;
 };
-// The result reuses BufferedUnit — a simulation renders through the same UI.
+
+export type SimulateKnob = SimulateEntityKnob | SimulateVerdictKnob;
+
+export type SimulateInputs = { knobs: SimulateKnob[]; has_time: boolean };
+
 export type SimulateScope = { scope_kind: string; scope_id: string | null };
 export type SimulateOverrides = Record<
   string,
   { state?: string; attributes?: Record<string, unknown> }
 >;
+export type SimulateVerdicts = Record<string, Record<string, boolean>>;

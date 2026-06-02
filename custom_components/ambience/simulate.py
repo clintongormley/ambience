@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant, State
 
 from .const import DATA_MATCHERS, DATA_STORE, DATA_SWITCHES, DOMAIN
 from .engine import evaluate_explained
-from .matchers.script import ScriptSnapshot
+from .matchers.script import ScriptSnapshot, _cache_key
 from .matchers.template import TemplateSnapshot
 from .matchers.weather import WEATHER_CONDITIONS
 from .naming import group_names, scope_display_name
@@ -265,40 +265,81 @@ def simulate_inputs_entities(
     ]
 
 
-def simulate_inputs(
+def _verdict_identity(
+    matcher_key: str, predicate: dict[str, Any], rule: dict[str, Any]
+) -> tuple[str, str | None, str]:
+    """(result_key, entity_id|None, label) for an opaque predicate's verdict knob."""
+    if matcher_key == "script":
+        script = predicate.get("script")
+        args = predicate.get("args") or {}
+        key = _cache_key(
+            script if isinstance(script, str) else "",
+            args if isinstance(args, dict) else {},
+        )
+        label = script if isinstance(script, str) else "script"
+        return key, (script if isinstance(script, str) else None), label
+    tmpl = predicate.get("template")
+    key = tmpl if isinstance(tmpl, str) else ""
+    return key, None, (rule.get("name") or "Template")
+
+
+async def _verdict_knobs(
+    hass: HomeAssistant, matchers: dict[str, Any], group_cfg: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """One true/false knob per opaque (script/template) predicate in the group,
+    defaulting to its live verdict (computed once per opaque matcher)."""
+    live_snaps: dict[str, Any] = {}
+    for name in _OPAQUE_MATCHERS:
+        matcher = matchers.get(name)
+        if matcher is not None:
+            try:
+                live_snaps[name] = await matcher.snapshot(hass)
+            except Exception as exc:  # noqa: BLE001 — a failing live verdict defaults to False
+                _LOGGER.warning("ambience: live verdict snapshot for %r failed: %s", name, exc)
+                live_snaps[name] = None
+    knobs: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for rule in group_cfg["rules"]:
+        when = rule.get("when") or {}
+        for name in _OPAQUE_MATCHERS:
+            predicate = when.get(name)
+            if not isinstance(predicate, dict):
+                continue
+            key, entity_id, label = _verdict_identity(name, predicate, rule)
+            if (name, key) in seen:
+                continue
+            seen.add((name, key))
+            matcher, snap = matchers.get(name), live_snaps.get(name)
+            live_value = (
+                bool(matcher.matches(predicate, snap)) if (matcher and snap is not None) else False
+            )
+            knob: dict[str, Any] = {
+                "kind": "verdict",
+                "matcher": name,
+                "key": key,
+                "label": label,
+                "live_value": live_value,
+            }
+            if entity_id:
+                knob["entity_id"] = entity_id
+            knobs.append(knob)
+    return knobs
+
+
+async def simulate_inputs(
     hass: HomeAssistant, scope_kind: str, scope_id: str | None, group: str
 ) -> dict[str, Any]:
-    """The editable inputs for a group's simulator panel.
-
-    Returns {knobs, has_time, opaque}. Each entity knob carries its live state
-    and any referenced-attribute sub-rows pre-filled live. `has_time` is True
-    when the group depends on the clock/sun (the panel shows a date+time
-    picker). `opaque` flags incomplete deps (e.g. a template rule).
-    """
+    """The editable inputs for a group's simulator panel: entity knobs (with
+    control hints) plus verdict knobs for opaque predicates. `has_time` is True
+    when the group depends on the clock/sun (the panel shows a date+time picker;
+    the day/sun/time entities themselves are folded under it, not listed)."""
     matchers: dict[str, Any] = hass.data[DOMAIN][DATA_MATCHERS]
     group_cfg = _group_config(hass, scope_kind, scope_id, group)
     spec = scope_trigger_spec(matchers, group_cfg)
-    attrs_by_entity = _referenced_attributes(hass, group_cfg)
-
-    knobs: list[dict[str, Any]] = []
-    for entity_id in sorted(spec.entities):
-        live = hass.states.get(entity_id)
-        knobs.append(
-            {
-                "kind": "entity",
-                "entity_id": entity_id,
-                "live_state": live.state if live is not None else None,
-                "attributes": [
-                    {
-                        "name": name,
-                        "live_value": (live.attributes.get(name) if live is not None else None),
-                    }
-                    for name in attrs_by_entity.get(entity_id, [])
-                ],
-            }
-        )
+    knobs = simulate_inputs_entities(hass, scope_kind, scope_id, group)
+    knobs.extend(await _verdict_knobs(hass, matchers, group_cfg))
     has_time = bool(spec.clock_times or spec.has_time or spec.date_rollover or spec.sun_events)
-    return {"knobs": knobs, "has_time": has_time, "opaque": spec.opaque}
+    return {"knobs": knobs, "has_time": has_time}
 
 
 def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:

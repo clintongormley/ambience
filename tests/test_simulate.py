@@ -134,7 +134,8 @@ def _inputs_hass(rules, states, weather_entity=None):
     return hass
 
 
-def test_simulate_inputs_lists_entity_knobs_for_the_group():
+@pytest.mark.asyncio
+async def test_simulate_inputs_lists_entity_knobs_for_the_group():
     rules = [
         {
             "group": "g1",
@@ -148,14 +149,15 @@ def test_simulate_inputs_lists_entity_knobs_for_the_group():
         },
     ]
     hass = _inputs_hass(rules, [_State("binary_sensor.motion", "off")])
-    result = simulate_inputs(hass, "area", "kitchen", "g1")
-    ids = [k["entity_id"] for k in result["knobs"]]
+    result = await simulate_inputs(hass, "area", "kitchen", "g1")
+    ids = [k["entity_id"] for k in result["knobs"] if k["kind"] == "entity"]
     assert ids == ["binary_sensor.motion"]  # only g1's dependency
     assert result["knobs"][0]["live_state"] == "off"
     assert result["knobs"][0]["attributes"] == []
 
 
-def test_simulate_inputs_surfaces_weather_threshold_attributes():
+@pytest.mark.asyncio
+async def test_simulate_inputs_surfaces_weather_threshold_attributes():
     rules = [
         {
             "group": "g1",
@@ -169,10 +171,43 @@ def test_simulate_inputs_surfaces_weather_threshold_attributes():
         [_State("weather.home", "rainy", {"temperature": 9.0, "humidity": 80})],
         weather_entity="weather.home",
     )
-    result = simulate_inputs(hass, "area", "kitchen", "g1")
-    weather_knob = next(k for k in result["knobs"] if k["entity_id"] == "weather.home")
+    result = await simulate_inputs(hass, "area", "kitchen", "g1")
+    weather_knob = next(k for k in result["knobs"] if k.get("entity_id") == "weather.home")
     assert weather_knob["live_state"] == "rainy"
-    assert weather_knob["attributes"] == [{"name": "temperature", "live_value": 9.0}]
+    assert weather_knob["attributes"] == [
+        {"name": "temperature", "control": "number", "live_value": 9.0}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_simulate_inputs_emits_script_verdict_knob():
+    from custom_components.ambience.matchers.script import ScriptMatcher, ScriptSnapshot, _cache_key
+
+    class _ScriptStub(ScriptMatcher):
+        async def snapshot(self, hass, *, now=None):
+            return ScriptSnapshot(results={_cache_key("script.holiday", {}): True})
+
+    rules = [{"group": "g1", "name": "Holiday", "when": {"script": {"script": "script.holiday"}}}]
+
+    class _Store4:
+        def scope_config(self, sk, si):
+            return {"rules": rules}
+
+        def get_matcher_config(self, name):
+            return {"entity": None, "groups": []} if name == "weather" else {}
+
+    hass = _Hass([])
+    hass.data[DOMAIN] = {DATA_MATCHERS: {"script": _ScriptStub(hass)}, DATA_STORE: _Store4()}
+
+    result = await simulate_inputs(hass, "area", "kitchen", "g1")
+    verdicts = [k for k in result["knobs"] if k["kind"] == "verdict"]
+    assert len(verdicts) == 1
+    v = verdicts[0]
+    assert v["matcher"] == "script"
+    assert v["key"] == _cache_key("script.holiday", {})
+    assert v["entity_id"] == "script.holiday"
+    assert v["live_value"] is True
+    assert "has_time" in result
 
 
 # ---------------------------------------------------------------------------

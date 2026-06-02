@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import "./kebab-menu";
 import type { KebabItem } from "./kebab-menu";
 import { groupSwatchStyle } from "../group-colors.js";
+import { entityName, type HassWithStates } from "./entity-row.js";
 import { actionLabel, localize, matcherLabel } from "../i18n.js";
 import { formatArgValue, paramLabel, ruleDisplayName, summariseMatcher } from "../summary.js";
 import { DragReorderController } from "../drag-reorder.js";
@@ -340,9 +341,7 @@ export class AmbienceRulesList extends LitElement {
 
   /** Render-friendly name for an entity: friendly_name attribute, else entity_id. */
   private _entityName(entity_id: string): string {
-    const states = (this.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
-    const name = states?.[entity_id]?.attributes?.friendly_name;
-    return typeof name === "string" && name ? name : entity_id;
+    return entityName(this.hass as HassWithStates | undefined, entity_id);
   }
 
   /** "Key: value, ..." string for the expanded action header. Keys use

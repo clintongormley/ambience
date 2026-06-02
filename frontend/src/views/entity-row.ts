@@ -24,7 +24,7 @@ const DOMAIN_ICON: Record<string, string> = {
 };
 export const DEFAULT_ENTITY_ICON = "mdi:eye";
 
-type HassWithStates = {
+export type HassWithStates = {
   states?: Record<string, { attributes?: Record<string, unknown> }>;
 };
 

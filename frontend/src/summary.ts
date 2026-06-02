@@ -9,6 +9,7 @@ import {
   weatherAttrLabel,
   weekdayLabel,
 } from "./i18n.js";
+import { entityName, type HassWithStates } from "./views/entity-row.js";
 import type {
   ActionSpec,
   DayItem,
@@ -370,11 +371,9 @@ export function summariseSun(pred: SunPredicate, ctx: MatcherContext = {}): stri
 }
 
 /** Best-effort display name for an entity: friendly_name attribute when set,
- *  otherwise the raw entity_id. */
+ *  otherwise the raw entity_id. Thin ctx-first adapter over {@link entityName}. */
 function _entityDisplayName(ctx: MatcherContext, entity_id: string): string {
-  const states = (ctx.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
-  const name = states?.[entity_id]?.attributes?.friendly_name;
-  return typeof name === "string" && name ? name : entity_id;
+  return entityName(ctx.hass as HassWithStates | undefined, entity_id);
 }
 
 /** Public, hass-first wrapper around {@link _entityDisplayName}: an entity's

@@ -5,6 +5,7 @@ import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
 import type { PeoplePredicate, PeopleQuant } from "../types.js";
 import type { HaFormSchema } from "../ha-form.js";
+import { entityName } from "./entity-row.js";
 
 /** The six user-facing modes. The first three ("base") emit no `who`; the last
  *  three ("…these people") carry the selected person ids. Each maps to a
@@ -114,10 +115,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     return Object.keys(states)
       .filter((id) => id.startsWith(prefix))
       .sort()
-      .map((id) => ({
-        id,
-        name: (states[id]?.attributes?.friendly_name as string | undefined) ?? id,
-      }));
+      .map((id) => ({ id, name: entityName(this.hass, id) }));
   }
 
   _persons(): { id: string; name: string }[] {

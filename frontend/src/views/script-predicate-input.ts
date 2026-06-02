@@ -7,6 +7,7 @@ import { localize } from "../i18n.js";
 import type { ScriptPredicate } from "../types.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { scriptFieldLabel } from "../summary.js";
+import { entityName } from "./entity-row.js";
 
 type ScriptField = {
   name?: string;
@@ -146,9 +147,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
 
   /** Friendly name for a script entity, or the entity_id if unset. */
   private _label(entityId: string): string {
-    const states = (this.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
-    const fn = states?.[entityId]?.attributes?.friendly_name;
-    return typeof fn === "string" && fn ? fn : entityId;
+    return entityName(this.hass, entityId);
   }
 
   /** Look up the fields:{} block of the picked script, or undefined. */

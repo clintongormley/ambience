@@ -43,7 +43,7 @@ export class AmbienceFrontend extends LitElement {
     }
     h1 .ambience-logo {
       display: block;
-      height: 2rem;
+      height: 3rem;
       width: auto;
     }
     .settings-btn {

@@ -3881,7 +3881,7 @@ var In=Object.defineProperty;var Mn=Object.getOwnPropertyDescriptor;var u=(t,n,e
     }
     h1 .ambience-logo {
       display: block;
-      height: 2rem;
+      height: 3rem;
       width: auto;
     }
     .settings-btn {

@@ -1101,6 +1101,1053 @@ describe("ambience-scopes-view", () => {
     expect(savedRule).toMatchObject({ name: "R" });
   });
 
+  // --- cancel-rule ---------------------------------------------------------
+
+  test("cancel-rule closes the editor without saving", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { rules: [{ name: "R", when: {}, actions: [] }] } },
+    });
+    vi.clearAllMocks();
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    // Open the editor
+    row
+      .querySelector("ambience-rules-list")!
+      .dispatchEvent(new CustomEvent("add-rule", { detail: {}, bubbles: true, composed: true }));
+    await el.updateComplete;
+    const editor: any = el.shadowRoot.querySelector("ambience-rule-editor");
+    expect(editor.open).toBe(true);
+    // Fire cancel-rule
+    editor.dispatchEvent(new CustomEvent("cancel-rule", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(editor.open).toBe(false);
+    expect(api.saveArea).not.toHaveBeenCalled();
+  });
+
+  // --- unpin-rule ----------------------------------------------------------
+
+  test("unpin-rule sets pinned:false on the targeted rule and saves", async () => {
+    const rule: Rule = { name: "Pinned", when: {}, actions: [], pinned: true, priority: 1024 };
+    el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-rules-list")!
+      .dispatchEvent(
+        new CustomEvent("unpin-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+      );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.saveArea).toHaveBeenCalledWith(
+      expect.anything(),
+      "living_room",
+      expect.objectContaining({
+        rules: [expect.objectContaining({ name: "Pinned", pinned: false })],
+      }),
+    );
+  });
+
+  // --- show-traces / show-simulator ----------------------------------------
+
+  test("show-traces event opens the traces modal with correct props", async () => {
+    el = await mount();
+    el._categories = [{ id: "lights", name: "Lights", color: null, icon: null }] as RuleCategory[];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("show-traces", {
+        detail: { category: "lights" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-traces-modal");
+    expect(modal.open).toBe(true);
+    expect(modal.category).toBe("lights");
+    expect(modal.categoryName).toBe("Lights");
+    expect(modal.scope).toMatchObject({ scope_kind: "area", scope_id: "living_room" });
+  });
+
+  test("show-traces with unknown category passes null categoryName", async () => {
+    el = await mount();
+    el._categories = [] as RuleCategory[];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("show-traces", {
+        detail: { category: "unknown_cat" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-traces-modal");
+    expect(modal.open).toBe(true);
+    expect(modal.categoryName).toBeNull();
+  });
+
+  test("closing the traces modal sets _viewingTraces to null", async () => {
+    el = await mount();
+    el._categories = [{ id: "lights", name: "Lights", color: null, icon: null }] as RuleCategory[];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("show-traces", {
+        detail: { category: "lights" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-traces-modal");
+    expect(modal.open).toBe(true);
+    modal.dispatchEvent(new CustomEvent("close", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(modal.open).toBe(false);
+  });
+
+  test("show-simulator event opens the simulator modal with correct props", async () => {
+    el = await mount();
+    el._categories = [{ id: "lights", name: "Lights", color: null, icon: null }] as RuleCategory[];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("show-simulator", {
+        detail: { category: "lights" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-simulator-modal");
+    expect(modal.open).toBe(true);
+    expect(modal.category).toBe("lights");
+    expect(modal.categoryName).toBe("Lights");
+    expect(modal.scope).toMatchObject({ scope_kind: "house", scope_id: null });
+  });
+
+  test("closing the simulator modal sets _viewingSimulator to null", async () => {
+    el = await mount();
+    el._categories = [{ id: "g1", name: "G1", color: null, icon: null }] as RuleCategory[];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("show-simulator", {
+        detail: { category: "g1" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-simulator-modal");
+    expect(modal.open).toBe(true);
+    modal.dispatchEvent(new CustomEvent("close", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    expect(modal.open).toBe(false);
+  });
+
+  // --- traces/simulator scope fallbacks when modal props come from null ----
+
+  test("traces-modal scope prop uses fallback when _viewingTraces is null", async () => {
+    el = await mount();
+    // When _viewingTraces is null the template uses a default scope
+    const modal: any = el.shadowRoot.querySelector("ambience-traces-modal");
+    expect(modal.scope).toMatchObject({ scope_kind: "house", scope_id: null });
+  });
+
+  test("simulator-modal scope prop uses fallback when _viewingSimulator is null", async () => {
+    el = await mount();
+    const modal: any = el.shadowRoot.querySelector("ambience-simulator-modal");
+    expect(modal.scope).toMatchObject({ scope_kind: "house", scope_id: null });
+  });
+
+  // --- no-areas empty state ------------------------------------------------
+
+  test("renders no-areas message when listAreas returns empty", async () => {
+    el = await mount({ areas: [] });
+    expect(el.shadowRoot.textContent).toContain("No areas found");
+  });
+
+  // --- _saveRule: same scope, edit existing rule (non-new) ----------------
+
+  test("save-rule replaces an existing rule at its index when editing same scope", async () => {
+    const rules = [
+      { name: "Old", when: {}, actions: [] },
+      { name: "Other", when: {}, actions: [] },
+    ];
+    el = await mount({ areaConfigs: { living_room: { rules } } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    rulesList.dispatchEvent(
+      new CustomEvent("edit-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+    const editor = el.shadowRoot.querySelector("ambience-rule-editor")!;
+    editor.dispatchEvent(
+      new CustomEvent("save-rule", {
+        detail: {
+          rule: { name: "Renamed", when: {}, actions: [] },
+          scope: { kind: "area", id: "living_room" },
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.saveArea).toHaveBeenCalledWith(
+      expect.anything(),
+      "living_room",
+      expect.objectContaining({
+        rules: expect.arrayContaining([expect.objectContaining({ name: "Renamed" })]),
+      }),
+    );
+  });
+
+  // --- _mutate floor and error ------------------------------------------
+
+  test("saveFloor error is displayed", async () => {
+    vi.mocked(api.saveFloor).mockRejectedValueOnce(new Error("Floor save failed"));
+    el = await mount({
+      floorConfigs: { ground: { rules: [{ name: "R", when: {}, actions: [] }] } },
+    });
+    const row = el.shadowRoot.querySelector(".scope-row.floor[data-id='ground']") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-rules-list")!
+      .dispatchEvent(
+        new CustomEvent("delete-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+      );
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+  });
+
+  // --- _filterOpen toggle and backdrop click --------------------------------
+
+  test("clicking the category filter backdrop closes the dropdown", async () => {
+    el = await mount();
+    el._categories = [
+      { id: "a", name: "Awn" },
+      { id: "b", name: "Bee" },
+    ] as RuleCategory[];
+    await el.updateComplete;
+    // Open it
+    (el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeTruthy();
+    // Click the backdrop to close
+    (el.shadowRoot.querySelector(".category-filter-backdrop") as HTMLElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeNull();
+  });
+
+  test("clicking the filter trigger again toggles the dropdown closed", async () => {
+    el = await mount();
+    el._categories = [
+      { id: "a", name: "Awn" },
+      { id: "b", name: "Bee" },
+    ] as RuleCategory[];
+    await el.updateComplete;
+    const trigger = el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement;
+    trigger.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeTruthy();
+    trigger.click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeNull();
+  });
+
+  // --- _defaultCategoryId with no categories --------------------------------
+
+  test("_defaultCategoryId returns empty string when no categories exist", async () => {
+    el = await mount();
+    el._categories = [] as RuleCategory[];
+    el._filterCategory = "";
+    expect(el._defaultCategoryId()).toBe("");
+  });
+
+  // --- area_registry_updated update (non-remove) refreshes without deleting -----
+
+  test("area_registry_updated update event refreshes areas without clearing expanded state", async () => {
+    el = await mount();
+    const subCall = vi.mocked(el.hass.connection.subscribeEvents);
+    const areaCallback = subCall.mock.calls.find((c: any) => c[1] === "area_registry_updated")?.[0];
+    if (!areaCallback) throw new Error("no area_registry_updated subscription");
+    // Expand living_room
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    expect(row.querySelector(".scope-body")).toBeTruthy();
+    // Fire an update (not remove) event
+    vi.mocked(api.listAreas).mockResolvedValue(baseAreas);
+    areaCallback({ data: { action: "update", area_id: "living_room" } });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // Row still present and still expanded
+    expect(el.shadowRoot.textContent).toContain("Living Room");
+  });
+
+  // --- floor_registry_updated update (non-remove) ---------------------------
+
+  test("floor_registry_updated update event refreshes floors without clearing expanded state", async () => {
+    el = await mount();
+    const subCall = vi.mocked(el.hass.connection.subscribeEvents);
+    const floorCallback = subCall.mock.calls.find(
+      (c: any) => c[1] === "floor_registry_updated",
+    )?.[0];
+    if (!floorCallback) throw new Error("no floor_registry_updated subscription");
+    // Expand ground row
+    const row = el.shadowRoot.querySelector(".scope-row.floor[data-id='ground']") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    // Fire update (not remove) - should NOT call _refreshSwitches
+    vi.mocked(api.listFloors).mockResolvedValue(baseFloors);
+    vi.clearAllMocks();
+    floorCallback({ data: { action: "update", floor_id: "ground" } });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).toContain("Ground");
+  });
+
+  // --- area_registry_updated remove clears _editing when it targets the area ---
+
+  test("area_registry_updated remove clears editing state when editing that area's rule", async () => {
+    const rule: Rule = { name: "R", when: {}, actions: [] };
+    el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
+    const subCall = vi.mocked(el.hass.connection.subscribeEvents);
+    const areaCallback = subCall.mock.calls.find((c: any) => c[1] === "area_registry_updated")?.[0];
+    if (!areaCallback) throw new Error("no area_registry_updated subscription");
+    // Open the editor for living_room
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-rules-list")!
+      .dispatchEvent(
+        new CustomEvent("edit-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+      );
+    await el.updateComplete;
+    expect(el._editing?.scope).toEqual({ kind: "area", id: "living_room" });
+    // Fire remove for living_room
+    vi.mocked(api.listAreas).mockResolvedValue([baseAreas[1]]);
+    areaCallback({ data: { action: "remove", area_id: "living_room" } });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el._editing).toBeNull();
+  });
+
+  // --- floor_registry_updated remove clears _editing -----------------------
+
+  test("floor_registry_updated remove clears editing state when editing that floor's rule", async () => {
+    const rule: Rule = { name: "FR", when: {}, actions: [] };
+    el = await mount({ floorConfigs: { ground: { rules: [rule] } } });
+    const subCall = vi.mocked(el.hass.connection.subscribeEvents);
+    const floorCallback = subCall.mock.calls.find(
+      (c: any) => c[1] === "floor_registry_updated",
+    )?.[0];
+    if (!floorCallback) throw new Error("no floor_registry_updated subscription");
+    const row = el.shadowRoot.querySelector(".scope-row.floor[data-id='ground']") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-rules-list")!
+      .dispatchEvent(
+        new CustomEvent("edit-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+      );
+    await el.updateComplete;
+    expect(el._editing?.scope).toEqual({ kind: "floor", id: "ground" });
+    vi.mocked(api.listFloors).mockResolvedValue([baseFloors[1]]);
+    floorCallback({ data: { action: "remove", floor_id: "ground" } });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el._editing).toBeNull();
+  });
+
+  // --- _mutate: saveHouse error reverts to prev ----------------------------
+
+  test("saveHouse error displays the error message", async () => {
+    vi.mocked(api.saveHouse).mockRejectedValueOnce(new Error("House save failed"));
+    el = await mount({
+      houseConfig: { rules: [{ name: "H", when: {}, actions: [] }] },
+    });
+    const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-rules-list")!
+      .dispatchEvent(
+        new CustomEvent("delete-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+      );
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+  });
+
+  // --- _callApi || String(e) branch ----------------------------------------
+
+  test("applyRules error with a non-Error thrown value shows stringified message", async () => {
+    vi.mocked(api.applyRules).mockRejectedValueOnce("plain string error");
+    el = await mount();
+    await pickScopeKebab(el, "li.scope-row.house", "run");
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+    expect(el.shadowRoot.textContent).toContain("plain string error");
+  });
+
+  // --- _normalize: rules missing from config payload (??[]) ----------------
+
+  test("_normalize treats a missing rules field as empty array", async () => {
+    // getHouse returns a config without a rules field; _normalize should use []
+    vi.mocked(api.getHouse).mockResolvedValueOnce({} as any);
+    el = await mount();
+    // The house scope should have an empty rules array, not crash
+    const cfg = el._getConfig({ kind: "house" });
+    expect(cfg.rules).toEqual([]);
+  });
+
+  // --- _pinPriority: both above and below undefined (single rule at top) ---
+
+  test("dropping the only rule to itself (no neighbours) assigns PIN_GAP priority", async () => {
+    const cfg: ScopeConfig = {
+      rules: [{ name: "solo", when: {}, actions: [], category: "a", priority: 1024 }],
+    };
+    vi.mocked(api.saveArea).mockImplementation(async (_hass, _areaId, saved) => ({
+      ok: true,
+      config: saved,
+    }));
+    el = await mount({ areaConfigs: { living_room: cfg } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    const rulesList = row.querySelector("ambience-rules-list")!;
+    // Move index 0 to index 0 — single same-category rule, both above+below are undefined
+    rulesList.dispatchEvent(
+      new CustomEvent("reorder-rules", {
+        detail: { from: 0, to: 0 },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.saveArea).toHaveBeenCalled();
+    const savedCfg: ScopeConfig = vi.mocked(api.saveArea).mock.calls.at(-1)![2];
+    // both above=undefined, below=undefined → PIN_GAP = 1024
+    expect(savedCfg.rules[0].priority).toBe(1024);
+  });
+
+  // --- _loadStatic || String(e) branch -------------------------------------
+
+  test("non-Error thrown in _loadStatic is stringified and shown", async () => {
+    vi.mocked(api.listConditions).mockRejectedValueOnce("string-only error");
+    el = await mount();
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+    expect(el.shadowRoot.textContent).toContain("string-only error");
+  });
+
+  // --- _refreshAreas || String(e) branch -----------------------------------
+
+  test("non-Error thrown in _refreshAreas is stringified and shown", async () => {
+    vi.mocked(api.listAreas).mockRejectedValueOnce("areas string error");
+    el = await mount();
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+    expect(el.shadowRoot.textContent).toContain("areas string error");
+  });
+
+  // --- _refreshFloors || String(e) branch ----------------------------------
+
+  test("non-Error thrown in _refreshFloors is stringified and shown", async () => {
+    vi.mocked(api.listFloors).mockRejectedValueOnce("floors string error");
+    el = await mount();
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+    expect(el.shadowRoot.textContent).toContain("floors string error");
+  });
+
+  // --- _refreshHouse || String(e) branch -----------------------------------
+
+  test("non-Error thrown in _refreshHouse is stringified and shown", async () => {
+    vi.mocked(api.getHouse).mockRejectedValueOnce("house string error");
+    el = await mount();
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+    expect(el.shadowRoot.textContent).toContain("house string error");
+  });
+
+  // --- _refreshSwitches || String(e) branch --------------------------------
+
+  test("non-Error thrown in _refreshSwitches is stringified and shown", async () => {
+    vi.mocked(api.listSwitches).mockRejectedValueOnce("switches string error");
+    el = await mount();
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+    expect(el.shadowRoot.textContent).toContain("switches string error");
+  });
+
+  // --- isConnected guards: disconnect before async resolves ----------------
+
+  test("_loadStatic: bails out silently when element is removed before response", async () => {
+    let resolveConditions!: (v: any) => void;
+    vi.mocked(api.listConditions).mockReturnValue(
+      new Promise((r) => {
+        resolveConditions = r;
+      }),
+    );
+    const localEl: any = document.createElement("ambience-scopes-view");
+    localEl.hass = makeFakeHass();
+    document.body.appendChild(localEl);
+    await localEl.updateComplete;
+    // Remove before the API call resolves
+    localEl.remove();
+    resolveConditions(conditions);
+    await new Promise((r) => setTimeout(r, 0));
+    // No error, no crash — just silently aborted
+    expect(localEl._conditions).toEqual([]);
+  });
+
+  test("_refreshAreas: bails out silently when element is removed before response", async () => {
+    let resolveAreas!: (v: any) => void;
+    vi.mocked(api.listAreas).mockReturnValue(
+      new Promise((r) => {
+        resolveAreas = r;
+      }),
+    );
+    const localEl: any = document.createElement("ambience-scopes-view");
+    localEl.hass = makeFakeHass();
+    document.body.appendChild(localEl);
+    await localEl.updateComplete;
+    localEl.remove();
+    resolveAreas(baseAreas);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(localEl._areas).toEqual([]);
+  });
+
+  test("_refreshHouse: bails out silently when element is removed before response", async () => {
+    let resolveHouse!: (v: any) => void;
+    vi.mocked(api.getHouse).mockReturnValue(
+      new Promise((r) => {
+        resolveHouse = r;
+      }),
+    );
+    const localEl: any = document.createElement("ambience-scopes-view");
+    localEl.hass = makeFakeHass();
+    document.body.appendChild(localEl);
+    await localEl.updateComplete;
+    localEl.remove();
+    resolveHouse(baseConfig);
+    await new Promise((r) => setTimeout(r, 0));
+    // House remains at default empty config
+    expect(localEl._house).toEqual({ rules: [] });
+  });
+
+  test("_onExposedActionsChanged: bails out when element is removed before listExposedActions resolves", async () => {
+    el = await mount();
+    let resolveActions!: (v: any) => void;
+    vi.mocked(api.listExposedActions).mockReturnValue(
+      new Promise((r) => {
+        resolveActions = r;
+      }),
+    );
+    window.dispatchEvent(new CustomEvent("ambience-exposed-actions-changed"));
+    await el.updateComplete;
+    // Remove before the call resolves
+    el.remove();
+    // Resolve with a DIFFERENT array reference so we can tell if the guard fires
+    const newActions: ExposedAction[] = [
+      { id: "new.action", label: "New", visible_fields: [], defaults: {} },
+    ];
+    resolveActions(newActions);
+    await new Promise((r) => setTimeout(r, 0));
+    // _actions should NOT have been updated to newActions (isConnected=false bail)
+    expect(el._actions).not.toBe(newActions);
+    el = null; // already removed
+  });
+
+  test("_refreshSchemas: bails out when element is removed before getServiceSchema resolves", async () => {
+    el = await mount();
+    let resolveSchema!: (v: any) => void;
+    vi.mocked(api.getServiceSchema).mockReturnValue(
+      new Promise((r) => {
+        resolveSchema = r;
+      }),
+    );
+    vi.mocked(api.listExposedActions).mockResolvedValue(actions);
+    window.dispatchEvent(new CustomEvent("ambience-exposed-actions-changed"));
+    await new Promise((r) => setTimeout(r, 0)); // let listExposedActions resolve
+    await el.updateComplete;
+    // Remove before schema resolves
+    el.remove();
+    const prevSchemas = el._schemas;
+    resolveSchema({ fields: {} });
+    await new Promise((r) => setTimeout(r, 0));
+    // _schemas should NOT have been updated
+    expect(el._schemas).toBe(prevSchemas);
+    el = null;
+  });
+
+  test("_refreshSwitches: bails out silently when element is removed before response", async () => {
+    let resolveSwitches!: (v: any) => void;
+    vi.mocked(api.listSwitches).mockReturnValue(
+      new Promise((r) => {
+        resolveSwitches = r;
+      }),
+    );
+    const localEl: any = document.createElement("ambience-scopes-view");
+    localEl.hass = makeFakeHass();
+    document.body.appendChild(localEl);
+    await localEl.updateComplete;
+    localEl.remove();
+    resolveSwitches([]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(localEl._switchEntityIds.size).toBe(0);
+  });
+
+  // --- _mutate || String(e) branch -----------------------------------------
+
+  test("non-Error thrown in _mutate is stringified and shown", async () => {
+    vi.mocked(api.saveArea).mockRejectedValueOnce("mutate string error");
+    el = await mount({
+      areaConfigs: { living_room: { rules: [{ name: "R", when: {}, actions: [] }] } },
+    });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-rules-list")!
+      .dispatchEvent(
+        new CustomEvent("delete-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+      );
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+    expect(el.shadowRoot.textContent).toContain("mutate string error");
+  });
+
+  // --- _subscribe: disconnects before subscribe resolves -------------------
+
+  test("_subscribe unsubscribes immediately when element is disconnected before subscriptions resolve", async () => {
+    const unsubArea = vi.fn();
+    const unsubFloor = vi.fn();
+    // Use a two-step deferred: the first call to subscribeEvents returns a promise
+    // that won't resolve until after we remove the element.
+    const deferredArea = { resolve: null as null | ((v: any) => void) };
+    const deferredFloor = { resolve: null as null | ((v: any) => void) };
+
+    vi.mocked(api.listAreas).mockResolvedValue(baseAreas);
+    vi.mocked(api.getArea).mockResolvedValue(baseConfig);
+    vi.mocked(api.listFloors).mockResolvedValue(baseFloors);
+    vi.mocked(api.getFloor).mockResolvedValue(baseConfig);
+    vi.mocked(api.getHouse).mockResolvedValue(baseConfig);
+    vi.mocked(api.listConditions).mockResolvedValue(conditions);
+    vi.mocked(api.listExposedActions).mockResolvedValue(actions);
+    vi.mocked(api.listPeriods).mockResolvedValue(periods);
+
+    const hass = {
+      connection: {
+        subscribeEvents: vi.fn().mockImplementation((_cb: any, type: string) => {
+          if (type === "area_registry_updated") {
+            return new Promise<typeof unsubArea>((r) => {
+              deferredArea.resolve = r;
+            });
+          }
+          return new Promise<typeof unsubFloor>((r) => {
+            deferredFloor.resolve = r;
+          });
+        }),
+      },
+    };
+
+    const localEl: any = document.createElement("ambience-scopes-view");
+    localEl.hass = hass;
+    document.body.appendChild(localEl);
+    await localEl.updateComplete;
+    await new Promise((r) => setTimeout(r, 0)); // let _loadStatic + refreshes run
+
+    // Remove BEFORE the subscriptions have resolved
+    localEl.remove();
+
+    // Now let the subscription promises resolve — element is already disconnected
+    deferredArea.resolve!(unsubArea);
+    deferredFloor.resolve!(unsubFloor);
+    await new Promise((r) => setTimeout(r, 0));
+
+    // The element should have called unsubscribe immediately (isConnected=false path)
+    expect(unsubArea).toHaveBeenCalled();
+    expect(unsubFloor).toHaveBeenCalled();
+  });
+
+  // --- _onExposedActionsChanged: silent catch path -------------------------
+
+  test("listExposedActions failure in _onExposedActionsChanged is silently swallowed", async () => {
+    el = await mount();
+    vi.mocked(api.listExposedActions).mockRejectedValueOnce(new Error("network"));
+    window.dispatchEvent(new CustomEvent("ambience-exposed-actions-changed"));
+    await new Promise((r) => setTimeout(r, 0));
+    // No error displayed — the failure is silent
+    expect(el.shadowRoot.querySelector(".error")).toBeFalsy();
+  });
+
+  // --- _refreshSchemas: per-service failure is skipped ---------------------
+
+  test("getServiceSchema failure for one action is skipped silently", async () => {
+    vi.mocked(api.getServiceSchema).mockRejectedValueOnce(new Error("schema fail"));
+    el = await mount();
+    // No error shown; the schema is just absent from _schemas
+    expect(el.shadowRoot.querySelector(".error")).toBeFalsy();
+  });
+
+  // --- _saveRule: cross-scope new rule (added:true, isNew:true = no removal) ----
+
+  test("cross-scope save of a NEW rule does not try to remove from source", async () => {
+    el = await mount();
+    // Open editor for living_room (isNew=true, no source rule to remove)
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-rules-list")!
+      .dispatchEvent(new CustomEvent("add-rule", { detail: {}, bubbles: true, composed: true }));
+    await el.updateComplete;
+    // Save to bedroom instead (cross-scope, isNew=true)
+    const editor = el.shadowRoot.querySelector("ambience-rule-editor")!;
+    editor.dispatchEvent(
+      new CustomEvent("save-rule", {
+        detail: {
+          rule: { name: "New", when: {}, actions: [] },
+          scope: { kind: "area", id: "bedroom" },
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    // bedroom was saved...
+    expect(api.saveArea).toHaveBeenCalledWith(expect.anything(), "bedroom", expect.anything());
+    // ...but NOT living_room (no removal since isNew)
+    const livingRoomCalls = vi
+      .mocked(api.saveArea)
+      .mock.calls.filter((c: any) => c[1] === "living_room");
+    expect(livingRoomCalls.length).toBe(0);
+  });
+
+  // --- _toggleExpand: collapsing (true branch of next.has(key)) -----------
+
+  test("clicking an already-expanded scope header collapses it", async () => {
+    el = await mount();
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    const header = row.querySelector(".scope-header") as HTMLElement;
+    // First click: expand
+    header.click();
+    await el.updateComplete;
+    expect(row.querySelector(".scope-body")).toBeTruthy();
+    // Second click: collapse
+    header.click();
+    await el.updateComplete;
+    expect(row.querySelector(".scope-body")).toBeFalsy();
+  });
+
+  // --- _showTraces / _showSimulator with house scope (scope_id: null) -----
+
+  test("show-traces on the house scope sets scope_id to null", async () => {
+    el = await mount();
+    el._categories = [{ id: "g", name: "G", color: null, icon: null }] as RuleCategory[];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("show-traces", {
+        detail: { category: "g" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-traces-modal");
+    expect(modal.scope).toMatchObject({ scope_kind: "house", scope_id: null });
+  });
+
+  test("show-simulator on the house scope sets scope_id to null", async () => {
+    el = await mount();
+    el._categories = [{ id: "g", name: "G", color: null, icon: null }] as RuleCategory[];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("show-simulator", {
+        detail: { category: "g" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-simulator-modal");
+    expect(modal.scope).toMatchObject({ scope_kind: "house", scope_id: null });
+  });
+
+  test("show-simulator with unknown category passes null categoryName", async () => {
+    el = await mount();
+    el._categories = [] as RuleCategory[];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("show-simulator", {
+        detail: { category: "no_such_cat" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-simulator-modal");
+    expect(modal.open).toBe(true);
+    expect(modal.categoryName).toBeNull();
+  });
+
+  // --- _saveRule: spurious save when editing is null -----------------------
+
+  test("save-rule is a no-op when _editing is null (defensive guard)", async () => {
+    el = await mount();
+    // Ensure _editing is null before firing save-rule
+    el._editing = null;
+    const editor = el.shadowRoot.querySelector("ambience-rule-editor")!;
+    editor.dispatchEvent(
+      new CustomEvent("save-rule", {
+        detail: { rule: { name: "Ghost", when: {}, actions: [] }, scope: { kind: "house" } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    // Nothing should have been saved
+    expect(api.saveHouse).not.toHaveBeenCalled();
+    expect(api.saveArea).not.toHaveBeenCalled();
+    expect(api.saveFloor).not.toHaveBeenCalled();
+  });
+
+  // --- reorder with skip-category neighbour scan ---------------------------
+
+  test("reorder scans past non-category rules to find same-category neighbours", async () => {
+    // Layout: [b1(b,3072), a1(a,2048), a2(a,1024)]
+    // Move a2 (from=2) to to=1. After splice(2,1): [b1, a1], then splice(1,0,a2): [b1, a2, a1]
+    // Scan above: a = to-1 = 0, sameCategory(0) = b1.cat=b != a → WHILE BODY executes, a-- → a=-1
+    //   above = undefined (a<0)
+    // Scan below: b = to+1 = 2, sameCategory(2) = a1.cat=a = a → WHILE BODY does NOT execute
+    //   below = rules[2].priority = 2048
+    // _pinPriority(undefined, 2048, [a1,a2]) → max(2048,1024)+1024 = 3072
+    const cfg: ScopeConfig = {
+      rules: [
+        { name: "b1", when: {}, actions: [], category: "b", priority: 3072 },
+        { name: "a1", when: {}, actions: [], category: "a", priority: 2048 },
+        { name: "a2", when: {}, actions: [], category: "a", priority: 1024 },
+      ] as Rule[],
+    };
+    vi.mocked(api.saveArea).mockImplementation(async (_hass, _areaId, saved) => ({
+      ok: true,
+      config: saved,
+    }));
+    el = await mount({ areaConfigs: { living_room: structuredClone(cfg) } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("reorder-rules", {
+        detail: { from: 2, to: 1 },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.saveArea).toHaveBeenCalled();
+    const saved: ScopeConfig = vi.mocked(api.saveArea).mock.calls.at(-1)![2];
+    expect(saved.rules[1].name).toBe("a2");
+    expect(saved.rules[1].pinned).toBe(true);
+    // above=undefined (scanned past b1 to find nothing), below=2048 → top slot within category
+    // max(2048,1024)+1024 = 3072
+    expect(saved.rules[1].priority).toBe(3072);
+  });
+
+  test("reorder scans past non-category below when the immediate below is different category", async () => {
+    // Layout: [a1(a,3072), a2(a,2048), b1(b,1024)]
+    // Move a1 (from=0) to to=1. After splice(0,1): [a2, b1], then splice(1,0,a1): [a2, a1, b1]
+    // Scan above: a = to-1 = 0, sameCategory(0) = a2.cat=a = a → WHILE does NOT execute
+    //   above = rules[0].priority = 2048
+    // Scan below: b = to+1 = 2, sameCategory(2) = b1.cat=b != a → WHILE BODY executes, b++ → b=3
+    //   b=3 >= rules.length=3, below = undefined
+    // _pinPriority(2048, undefined, [a1,a2]) → min(3072,2048)-1024 = 1024
+    const cfg: ScopeConfig = {
+      rules: [
+        { name: "a1", when: {}, actions: [], category: "a", priority: 3072 },
+        { name: "a2", when: {}, actions: [], category: "a", priority: 2048 },
+        { name: "b1", when: {}, actions: [], category: "b", priority: 1024 },
+      ] as Rule[],
+    };
+    vi.mocked(api.saveArea).mockImplementation(async (_hass, _areaId, saved) => ({
+      ok: true,
+      config: saved,
+    }));
+    el = await mount({ areaConfigs: { living_room: structuredClone(cfg) } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("reorder-rules", {
+        detail: { from: 0, to: 1 },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.saveArea).toHaveBeenCalled();
+    const saved: ScopeConfig = vi.mocked(api.saveArea).mock.calls.at(-1)![2];
+    expect(saved.rules[1].name).toBe("a1");
+    expect(saved.rules[1].pinned).toBe(true);
+    // above=2048, below=undefined (scanned past b1 to find nothing) → bottom slot
+    // min(3072,2048)-1024 = 1024
+    expect(saved.rules[1].priority).toBe(1024);
+  });
+
+  // --- _toggleRuleEnabled with multiple rules: non-targeted rule returned as-is ---
+
+  test("disabling rule at index 0 in a 2-rule config leaves rule at index 1 unchanged", async () => {
+    const cfg: ScopeConfig = {
+      rules: [
+        { name: "A", when: {}, actions: [] },
+        { name: "B", when: {}, actions: [] },
+      ],
+    };
+    el = await mount({ areaConfigs: { living_room: cfg } });
+    await toggleRuleInArea("living_room", { index: 0, enabled: false });
+    const call = vi.mocked(api.saveArea).mock.calls.at(-1)!;
+    const saved = (call[2] as ScopeConfig).rules;
+    expect(saved[0]).toMatchObject({ name: "A", enabled: false });
+    expect(saved[1]).toMatchObject({ name: "B" });
+    expect(saved[1]).not.toHaveProperty("enabled");
+  });
+
+  // --- _pinPriority: rules with undefined priority use 0 fallback ----------
+
+  test("reorder with rules missing priority treats them as priority=0", async () => {
+    const cfg: ScopeConfig = {
+      rules: [
+        { name: "a", when: {}, actions: [], category: "x" },
+        { name: "b", when: {}, actions: [], category: "x" },
+      ] as Rule[],
+    };
+    vi.mocked(api.saveArea).mockImplementation(async (_hass, _areaId, saved) => ({
+      ok: true,
+      config: saved,
+    }));
+    el = await mount({ areaConfigs: { living_room: structuredClone(cfg) } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("reorder-rules", {
+        detail: { from: 1, to: 0 },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.saveArea).toHaveBeenCalled();
+    // priority ?? 0 → max(0,0)+1024=1024 for top slot
+    const saved: ScopeConfig = vi.mocked(api.saveArea).mock.calls.at(-1)![2];
+    expect(saved.rules[0].priority).toBe(1024);
+  });
+
+  // --- _unpin: the targeted index IS matched (ternary true branch) ---------
+
+  test("unpin-rule: the ternary truthy branch applies pinned:false to the matched rule", async () => {
+    // Two rules: unpin index 0 — map produces [{...r0, pinned:false}, r1]
+    const rules = [
+      { name: "P0", when: {}, actions: [], pinned: true, priority: 2048 },
+      { name: "P1", when: {}, actions: [], pinned: true, priority: 1024 },
+    ];
+    el = await mount({ areaConfigs: { living_room: { rules } } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-rules-list")!
+      .dispatchEvent(
+        new CustomEvent("unpin-rule", { detail: { index: 0 }, bubbles: true, composed: true }),
+      );
+    await new Promise((r) => setTimeout(r, 0));
+    const call = vi.mocked(api.saveArea).mock.calls.at(-1)!;
+    const saved = (call[2] as ScopeConfig).rules;
+    expect(saved[0].pinned).toBe(false);
+    expect(saved[1].pinned).toBe(true); // untouched
+  });
+
+  // --- show-simulator with house scope (scope_id: null) --------------------
+
+  test("show-simulator on a floor scope sets scope_kind to floor", async () => {
+    el = await mount();
+    el._categories = [{ id: "g1", name: "G1", color: null, icon: null }] as RuleCategory[];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(".scope-row.floor[data-id='ground']") as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row.querySelector("ambience-rules-list")!.dispatchEvent(
+      new CustomEvent("show-simulator", {
+        detail: { category: "g1" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-simulator-modal");
+    expect(modal.open).toBe(true);
+    expect(modal.scope).toMatchObject({ scope_kind: "floor", scope_id: "ground" });
+  });
+
   // Keep last: registering <ha-switch> is global and switches the toggle widget
   // for any mount that runs after this test.
   test("uses <ha-switch> when it is registered and toggles via callService", async () => {

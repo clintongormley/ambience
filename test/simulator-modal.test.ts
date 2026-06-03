@@ -162,4 +162,450 @@ describe("ambience-simulator-modal", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".eval")).toBeTruthy();
   });
+
+  // --- render guard: open=false returns nothing ----------------------------
+
+  test("renders nothing when open is false", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "kitchen" };
+    el.category = "g1";
+    el.open = false;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".modal")).toBeNull();
+    // simulateInputs must NOT have been called (open=false → _load skipped)
+    expect(api.simulateInputs).not.toHaveBeenCalled();
+  });
+
+  // --- categoryName fallback -----------------------------------------------
+
+  test("header shows category id when categoryName is null", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue({ has_time: false, knobs: [] } as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "raw_cat_id";
+    el.categoryName = null;
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("h3").textContent).toContain("raw_cat_id");
+  });
+
+  // --- loading error path --------------------------------------------------
+
+  test("shows an error paragraph when simulateInputs rejects", async () => {
+    vi.mocked(api.simulateInputs).mockRejectedValue(new Error("network fail"));
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const err = el.shadowRoot.querySelector(".error");
+    expect(err).toBeTruthy();
+    expect(err.textContent).toContain("network fail");
+  });
+
+  // --- _run error path -----------------------------------------------------
+
+  test("shows an error when simulate() rejects", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue({ has_time: false, knobs: [] } as any);
+    vi.mocked(api.simulate).mockRejectedValue(new Error("sim boom"));
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const err = el.shadowRoot.querySelector(".error");
+    expect(err).toBeTruthy();
+    expect(err.textContent).toContain("sim boom");
+  });
+
+  // --- _onClose fires a close event ----------------------------------------
+
+  test("close button dispatches a 'close' custom event", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue({ has_time: false, knobs: [] } as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const fired: Event[] = [];
+    el.addEventListener("close", (e: Event) => fired.push(e));
+    el.shadowRoot.querySelector(".close").click();
+    expect(fired.length).toBe(1);
+  });
+
+  // --- no time section when has_time=false ---------------------------------
+
+  test("does not render the When section when has_time is false", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue({ has_time: false, knobs: [] } as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('input[type="date"]')).toBeNull();
+    expect(el.shadowRoot.querySelector('input[type="time"]')).toBeNull();
+  });
+
+  // --- no knobs section when knobs=[] --------------------------------------
+
+  test("does not render the Inputs section when there are no knobs", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue({ has_time: false, knobs: [] } as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).not.toContain("Inputs this category depends on");
+  });
+
+  // --- number attribute sends coerced number, not string -------------------
+
+  test("number attribute input sends a numeric value in the override", async () => {
+    const inputs = {
+      has_time: false,
+      knobs: [
+        {
+          kind: "entity",
+          entity_id: "sensor.temp",
+          control: "text",
+          live_state: "20",
+          attributes: [{ name: "humidity", control: "number", live_value: 50 }],
+        },
+      ],
+    };
+    vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const input = el.shadowRoot.querySelector(
+      "input[data-attr='sensor.temp:humidity']",
+    ) as HTMLInputElement;
+    expect(input).toBeTruthy();
+    expect(input.type).toBe("number");
+    input.value = "75";
+    input.dispatchEvent(new Event("input"));
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    const args = vi.mocked(api.simulate).mock.calls[0];
+    expect(args[4]["sensor.temp"].attributes.humidity).toBe(75);
+    expect(typeof args[4]["sensor.temp"].attributes.humidity).toBe("number");
+  });
+
+  // --- number entity control renders a number input -----------------------
+
+  test("number control entity renders a number input (not select)", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector(
+      "input[data-entity='sensor.count']",
+    ) as HTMLInputElement;
+    expect(input).toBeTruthy();
+    expect(input.type).toBe("number");
+    expect(input.classList.contains("num")).toBe(true);
+  });
+
+  // --- verdict knob without entity_id (label-only row) --------------------
+
+  test("verdict knob without entity_id renders label text and generic icon", async () => {
+    const inputs = {
+      has_time: false,
+      knobs: [
+        {
+          kind: "verdict",
+          condition: "template",
+          key: "mykey",
+          label: "custom template",
+          entity_id: null,
+          live_value: true,
+        },
+      ],
+    };
+    vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const text = el.shadowRoot.textContent;
+    expect(text).toContain("custom template");
+    // No entity_id subtitle should be rendered for this knob
+    expect(el.shadowRoot.querySelector(".row-detail")).toBeNull();
+  });
+
+  // --- _setVerdict and _resetVerdict ----------------------------------------
+
+  test("changing a verdict select updates the sent verdict", async () => {
+    el = await mount();
+    const sel = el.shadowRoot.querySelector(
+      "select[data-verdict='script:k1']",
+    ) as HTMLSelectElement;
+    // Default is false; change to true
+    sel.value = "true";
+    sel.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    const args = vi.mocked(api.simulate).mock.calls[0];
+    expect(args[5]).toEqual({ script: { k1: true } });
+  });
+
+  test("resetting a verdict restores the live value", async () => {
+    el = await mount();
+    const sel = el.shadowRoot.querySelector(
+      "select[data-verdict='script:k1']",
+    ) as HTMLSelectElement;
+    // Change away from live (false → true)
+    sel.value = "true";
+    sel.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    // Now reset
+    // The last button in a verdict row is the reset
+    const buttons = Array.from(
+      el.shadowRoot.querySelectorAll(".row button.reset"),
+    ) as HTMLButtonElement[];
+    // Find the reset for the verdict row (script:k1)
+    const verdictReset = buttons.find((b) =>
+      b.closest(".row")?.querySelector("select[data-verdict='script:k1']"),
+    );
+    expect(verdictReset).toBeTruthy();
+    verdictReset!.click();
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    const args = vi.mocked(api.simulate).mock.calls[0];
+    expect(args[5]).toEqual({ script: { k1: false } });
+  });
+
+  // --- entity row with attributes: last-attr class -------------------------
+
+  test("last attribute row gets the 'last-attr' CSS class", async () => {
+    el = await mount();
+    // calendar.work has exactly one attribute (description), it should be last-attr
+    const attrRows = Array.from(el.shadowRoot.querySelectorAll(".row.attr")) as HTMLElement[];
+    const lastAttrRows = attrRows.filter((r) => r.classList.contains("last-attr"));
+    expect(lastAttrRows.length).toBeGreaterThan(0);
+  });
+
+  // --- entity row without attributes: no has-attrs class ------------------
+
+  test("entity row without attributes does not get 'has-attrs' class", async () => {
+    el = await mount();
+    // binary_sensor.motion has no attributes
+    const rows = Array.from(el.shadowRoot.querySelectorAll(".row")) as HTMLElement[];
+    // The motion row should not have has-attrs
+    const motionRow = rows.find((r) =>
+      r.querySelector("select[data-entity='binary_sensor.motion']"),
+    );
+    expect(motionRow).toBeTruthy();
+    expect(motionRow!.classList.contains("has-attrs")).toBe(false);
+  });
+
+  // --- _buildVerdicts ?? fallback (verdicts dict not containing the key) ---
+
+  test("_buildVerdicts falls back to live_value when no manual verdict was set", async () => {
+    const inputs = {
+      has_time: false,
+      knobs: [
+        {
+          kind: "verdict",
+          condition: "script",
+          key: "fresh",
+          label: "fresh key",
+          entity_id: null,
+          live_value: true,
+        },
+      ],
+    };
+    vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
+    vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // Manually clear verdicts so the ?? path fires
+    el._verdicts = {};
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    const args = vi.mocked(api.simulate).mock.calls[0];
+    // Should fall back to live_value=true
+    expect(args[5]).toEqual({ script: { fresh: true } });
+  });
+
+  // --- entity with multiple attributes: middle attr lacks last-attr class --
+
+  test("entity with multiple attributes: only the last row has last-attr class", async () => {
+    const inputs = {
+      has_time: false,
+      knobs: [
+        {
+          kind: "entity",
+          entity_id: "weather.home",
+          control: "text",
+          live_state: "sunny",
+          attributes: [
+            { name: "temperature", control: "number", live_value: 20 },
+            { name: "humidity", control: "number", live_value: 60 },
+          ],
+        },
+      ],
+    };
+    vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
+    vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const attrRows = Array.from(el.shadowRoot.querySelectorAll(".row.attr")) as HTMLElement[];
+    expect(attrRows.length).toBe(2);
+    expect(attrRows[0].classList.contains("last-attr")).toBe(false);
+    expect(attrRows[1].classList.contains("last-attr")).toBe(true);
+  });
+
+  // --- select control with no options field (uses ?? [value]) -------------
+
+  test("select control with no options falls back to rendering just the current value", async () => {
+    const inputs = {
+      has_time: false,
+      knobs: [
+        {
+          kind: "entity",
+          entity_id: "input_select.test",
+          control: "select",
+          // no options field — should fall back to [value]
+          live_state: "option_a",
+          attributes: [],
+        },
+      ],
+    };
+    vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const sel = el.shadowRoot.querySelector(
+      "select[data-entity='input_select.test']",
+    ) as HTMLSelectElement;
+    expect(sel).toBeTruthy();
+    const options = Array.from(sel.querySelectorAll("option")) as HTMLOptionElement[];
+    expect(options.length).toBe(1);
+    expect(options[0].value).toBe("option_a");
+  });
+
+  // --- error fallback: || String(e) when thrown value has no .message ------
+
+  test("shows stringified error when simulateInputs throws a non-Error", async () => {
+    // Throw a plain string (no .message property) to hit the String(e) branch
+    vi.mocked(api.simulateInputs).mockRejectedValue("raw string error");
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const err = el.shadowRoot.querySelector(".error");
+    expect(err).toBeTruthy();
+    expect(err.textContent).toContain("raw string error");
+  });
+
+  test("shows stringified error when simulate() throws a non-Error", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue({ has_time: false, knobs: [] } as any);
+    vi.mocked(api.simulate).mockRejectedValue("sim string error");
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const err = el.shadowRoot.querySelector(".error");
+    expect(err).toBeTruthy();
+    expect(err.textContent).toContain("sim string error");
+  });
+
+  // --- isConnected guard: load aborts when detached before response --------
+
+  test("_load silently aborts when the element is removed before simulateInputs resolves", async () => {
+    let resolveInputs!: (v: any) => void;
+    vi.mocked(api.simulateInputs).mockReturnValue(
+      new Promise((r) => {
+        resolveInputs = r;
+      }),
+    );
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "k" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    // Remove before the promise resolves
+    el.remove();
+    resolveInputs({ has_time: false, knobs: [] });
+    await new Promise((r) => setTimeout(r, 0));
+    // No error, and the element should still have empty knobs (_load bailed out)
+    expect(el._knobs).toEqual([]);
+  });
 });

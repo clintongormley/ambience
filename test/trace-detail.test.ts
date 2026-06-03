@@ -323,4 +323,214 @@ describe("trace-detail", () => {
     expect(host.textContent).toContain("disabled");
     expect(host.textContent).not.toContain("not evaluated");
   });
+
+  // -------------------------------------------------------------------------
+  // NEW: branch coverage additions
+  // -------------------------------------------------------------------------
+
+  // formatCause — line 61-63: kind != "entity" AND detail is null/falsy
+  // Branch 8: returns humanizeId(c.kind) with no detail
+  test("formatCause returns humanized kind when kind is not 'entity' and detail is null", () => {
+    const result = formatCause({
+      kind: "startup",
+      entity_id: null,
+      old: null,
+      new: null,
+      detail: null,
+    });
+    // detail is null → falls through to `return humanizeId(c.kind)`
+    expect(result).toBe("Startup");
+    expect(result).not.toContain("null");
+  });
+
+  // formatCause — line 61: kind != "entity" AND detail is falsy string ""
+  test("formatCause returns humanized kind when detail is empty string", () => {
+    const result = formatCause({
+      kind: "manual",
+      entity_id: null,
+      old: null,
+      new: null,
+      detail: "" as unknown as null, // coerce — empty string is falsy
+    });
+    expect(result).toBe("Manual");
+  });
+
+  // entityCount — line 84: entity_ids absent → `?? 0`
+  // Branch 17: action has no entity_ids field at all
+  test("formatActionHeader handles action with no entity_ids (absent field)", () => {
+    const result = formatActionHeader({ service: "scene.turn_on" });
+    // Should not throw; service is humanized, no params.
+    expect(result).toBe("Turn on scene");
+  });
+
+  // renderRule — line 91: rule name is null → fallback "—"
+  // Branch 20: r.name ?? "—" uses "—" (disabled rule with null name)
+  test("disabled rule with null name shows '—' placeholder", () => {
+    const host = renderToHost(
+      {
+        explanation: {
+          winner_index: 0,
+          rules: [
+            {
+              index: 0,
+              name: null,
+              matched: false,
+              evaluated: false,
+              disabled: true,
+              predicates: [],
+            },
+          ],
+        },
+      },
+      true,
+    );
+    expect(host.textContent).toContain("—");
+    expect(host.textContent).toContain("disabled");
+  });
+
+  // renderRule — line 94: not-evaluated rule with null name → fallback "—"
+  // Branch 23: r.name ?? "—" in the skipped path
+  test("not-evaluated rule with null name shows '—' placeholder", () => {
+    const host = renderToHost(
+      {
+        explanation: {
+          winner_index: 0,
+          rules: [
+            { index: 0, name: null, matched: false, evaluated: false, predicates: [] },
+            { index: 1, name: "Win", matched: true, evaluated: true, predicates: [] },
+          ],
+        },
+      },
+      true,
+    );
+    expect(host.textContent).toContain("not evaluated");
+    expect(host.textContent).toContain("—");
+  });
+
+  // renderRule — line 97: r.name null in matched rule ("no" branch) + null-name
+  // Branch 27: r.name ?? "—" in the normal evaluated rule path
+  test("evaluated rule with null name shows '—' placeholder", () => {
+    const host = renderToHost(
+      {
+        explanation: {
+          winner_index: null,
+          rules: [{ index: 0, name: null, matched: false, evaluated: true, predicates: [] }],
+        },
+      },
+      true,
+    );
+    expect(host.textContent).toContain("Rule #1");
+    expect(host.textContent).toContain("—");
+    expect(host.textContent).toContain("no");
+  });
+
+  // renderRule — line 103: predicate with no detail → `nothing` branch
+  // Branch 35: p.detail is null → no dim span rendered
+  test("predicate with null detail renders no dim bracket text", () => {
+    const host = renderToHost(
+      {
+        explanation: {
+          winner_index: 0,
+          rules: [
+            {
+              index: 0,
+              name: "R",
+              matched: true,
+              evaluated: true,
+              predicates: [{ condition_key: "people", passed: true, detail: null }],
+            },
+          ],
+        },
+      },
+      true,
+    );
+    // Condition key is humanized, but no "[...]" detail bracket.
+    expect(host.textContent).toContain("People");
+    expect(host.querySelector(".dim")).toBeFalsy();
+  });
+
+  // renderEvaluation — line 127: timestamp is null → empty string
+  // Branch 38: u.timestamp falsy → ""
+  test("missing timestamp renders no time text", () => {
+    const host = renderToHost({ timestamp: null }, false);
+    // .ts span exists but is empty
+    const ts = host.querySelector(".ts");
+    expect(ts).toBeTruthy();
+    expect(ts?.textContent?.trim()).toBe("");
+  });
+
+  // renderEvaluation — line 133-134: actions.length but entity count n=0
+  // Branches 43 & 44: `n ? ... : nothing` when n=0 — service shown, no entity span
+  test("action summary omits entity count span when all actions have no entity_ids", () => {
+    const host = renderToHost(
+      {
+        actions: [{ service: "scene.turn_on", entity_ids: [], params: {} }],
+      },
+      false,
+    );
+    // Service is listed.
+    expect(host.textContent).toContain("Turn on scene");
+    // No entity count badge.
+    expect(host.querySelector(".action-summary .n")).toBeFalsy();
+    expect(host.textContent).not.toContain("entities");
+    expect(host.textContent).not.toContain("entity");
+  });
+
+  // renderEvaluation — line 144-145: collapsed toggle, has explanation AND winner_name
+  // Branch 49: `▸ Why this rule won (N rules)` label
+  test("collapsed toggle reads 'Why this rule won' when explanation and winner_name are present", () => {
+    const host = renderToHost({}, false); // winner_name set, explanation present
+    expect(host.textContent).toContain("Why this rule won");
+    expect(host.textContent).toContain("2 rules");
+    expect(host.textContent).not.toContain("Hide details");
+  });
+
+  // renderEvaluation — line 147: collapsed toggle, no explanation but has actions → "▸ Details"
+  // Branch 50: `▸ Details` label when explanation=null but canExpand=true
+  test("collapsed toggle reads '▸ Details' when there is no explanation but actions exist", () => {
+    const host = renderToHost({ explanation: null }, false);
+    expect(host.textContent).toContain("Details");
+    expect(host.textContent).not.toContain("Why");
+    expect(host.textContent).not.toContain("Hide details");
+  });
+
+  // renderExpansion — line 178: entity_ids absent in expanded action block
+  // Branch 60: `(a.entity_ids ?? [])` falls back to [] — no .entity divs
+  test("expanded action block with no entity_ids renders no entity rows", () => {
+    const host = renderToHost(
+      {
+        explanation: null,
+        actions: [{ service: "script.run_scene", params: {} }],
+      },
+      true,
+    );
+    expect(host.textContent).toContain("Run scene");
+    expect(host.querySelectorAll(".entity")).toHaveLength(0);
+  });
+
+  // renderExpansion — line 182-184: actions.length = 0 in expanded view
+  // Branch 57: `u.actions.length` falsy → nothing (no "Actions taken" section)
+  test("expanded view with empty actions has no 'Actions taken' section", () => {
+    const host = renderToHost({ actions: [] }, true);
+    const titles = [...host.querySelectorAll(".section-title")].map((e) => e.textContent?.trim());
+    expect(titles).not.toContain("Actions taken");
+    // Rule evaluation section still present.
+    expect(titles).toContain("Rule evaluation");
+  });
+
+  // renderEvaluation — expanded button shows "▾ Hide details"
+  // Branch 48 (line 141): expanded=true → "▾ Hide details"
+  test("expanded toggle button reads '▾ Hide details'", () => {
+    const host = renderToHost({}, true);
+    expect(host.querySelector(".why-toggle")?.textContent?.trim()).toContain("Hide details");
+  });
+
+  // renderEvaluation — line 147/149: canExpand=false → no why-toggle rendered
+  // canExpand is false when explanation=null AND actions=[] (no-op outcome with nothing to show)
+  test("no expand button rendered when unit has no actions and no explanation", () => {
+    const host = renderToHost({ actions: [], explanation: null }, false);
+    expect(host.querySelector(".why-toggle")).toBeFalsy();
+    // The .why section is also absent.
+    expect(host.querySelector(".why")).toBeFalsy();
+  });
 });

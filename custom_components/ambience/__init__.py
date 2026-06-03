@@ -21,6 +21,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
@@ -165,7 +166,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:  # house
             await async_apply_scene(hass, "house", None)
 
-    hass.services.async_register(
+    # Admin-only: applying a scene dispatches real device service calls, so it must
+    # not be reachable by non-admin users (HA services are not admin-gated by default).
+    async_register_admin_service(
+        hass,
         DOMAIN,
         "apply_scene",
         _handle_apply_scene,

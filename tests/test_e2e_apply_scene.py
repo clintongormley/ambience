@@ -228,6 +228,38 @@ async def test_apply_scene_rejects_scene_field(
         )
 
 
+async def test_apply_scene_rejects_non_admin_user(
+    hass: HomeAssistant, installed: MockConfigEntry, hass_read_only_user
+) -> None:
+    """A non-admin user must not be able to trigger scene application."""
+    from homeassistant.core import Context
+    from homeassistant.exceptions import Unauthorized
+
+    with pytest.raises(Unauthorized):
+        await hass.services.async_call(
+            DOMAIN,
+            "apply_scene",
+            {"house": True},
+            blocking=True,
+            context=Context(user_id=hass_read_only_user.id),
+        )
+
+
+async def test_apply_scene_allows_admin_user(
+    hass: HomeAssistant, installed: MockConfigEntry, hass_admin_user
+) -> None:
+    """An admin user may trigger scene application."""
+    from homeassistant.core import Context
+
+    await hass.services.async_call(
+        DOMAIN,
+        "apply_scene",
+        {"house": True},
+        blocking=True,
+        context=Context(user_id=hass_admin_user.id),
+    )
+
+
 async def test_apply_scene_rejects_multiple_scope_fields(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:

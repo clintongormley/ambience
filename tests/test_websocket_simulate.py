@@ -105,6 +105,25 @@ async def test_simulate_rejects_malformed_override(
     assert resp["success"] is False
 
 
+async def test_simulate_rejects_too_many_overrides(
+    hass: HomeAssistant, hass_ws_client, seeded_area
+) -> None:
+    """An oversized overrides map is rejected at the schema layer (bounded work)."""
+    from custom_components.ambience.websocket import MAX_SIMULATE_ENTRIES
+
+    overrides = {f"sensor.s{i}": {"state": "on"} for i in range(MAX_SIMULATE_ENTRIES + 1)}
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        category="g1",
+        now="2026-12-21T17:30:00+00:00",
+        overrides=overrides,
+    )
+    assert resp["success"] is False
+
+
 async def test_simulate_inputs_returns_panel_shape(
     hass: HomeAssistant, hass_ws_client, seeded_area
 ) -> None:

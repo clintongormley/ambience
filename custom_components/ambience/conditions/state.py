@@ -171,10 +171,16 @@ class StateCondition:
     def _dur_seconds(dur: Any) -> float:
         if not isinstance(dur, dict):
             return 0.0
-        h = dur.get("h") or 0
-        m = dur.get("m") or 0
-        s = dur.get("s") or 0
-        return float(h) * 3600 + float(m) * 60 + float(s)
+
+        def _num(key: str) -> float:
+            # Defensive: the save path validates these as ints, but the matching
+            # path runs against stored data that may have been hand-edited.
+            try:
+                return float(dur.get(key) or 0)
+            except (TypeError, ValueError):
+                return 0.0
+
+        return _num("h") * 3600 + _num("m") * 60 + _num("s")
 
     # --- validation -----------------------------------------------------
 

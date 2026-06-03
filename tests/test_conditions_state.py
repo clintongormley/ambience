@@ -677,3 +677,11 @@ def test_trigger_deps_collects_from_or_group() -> None:
     spec = m.trigger_deps(pred)
     assert spec.entities == frozenset({"person.alice", "person.bob"})
     assert spec.entity_durations == frozenset()
+
+
+def test_dur_seconds_tolerates_non_numeric_stored_fields() -> None:
+    """A malformed stored `for:` duration must not raise during matching."""
+    from custom_components.ambience.conditions.state import StateCondition
+
+    assert StateCondition._dur_seconds({"h": "abc"}) == 0.0
+    assert StateCondition._dur_seconds({"h": 1, "m": "x", "s": None}) == 3600.0

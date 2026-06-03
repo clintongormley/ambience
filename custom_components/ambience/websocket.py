@@ -42,6 +42,11 @@ from .validators import validate_reapply_seconds
 
 _LOGGER = logging.getLogger(__name__)
 
+# Upper bound on simulate `overrides`/`verdicts` entries. The simulator UI only
+# tweaks a handful of inputs; this cap stops a malformed/abusive admin request
+# from materialising an unbounded number of State objects on the event loop.
+MAX_SIMULATE_ENTRIES = 1000
+
 _WS_COMMANDS = (
     "ambience/areas/list",
     "ambience/area/get",
@@ -146,6 +151,10 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
             entity_ids = action_spec.get("entity_ids", [])
             if not isinstance(entity_ids, list):
                 raise ValueError(f"rule {rule_idx} action {action_idx}: entity_ids must be a list")
+            if not all(isinstance(eid, str) and eid for eid in entity_ids):
+                raise ValueError(
+                    f"rule {rule_idx} action {action_idx}: entity_ids must be non-empty strings"
+                )
             params = action_spec.get("params", {})
             if not isinstance(params, dict):
                 raise ValueError(f"rule {rule_idx} action {action_idx}: params must be an object")
@@ -1164,9 +1173,14 @@ async def _ws_simulate_inputs(
         vol.Required("now"): str,
         # Each override is {state?: str, attributes?: dict}; require dict values
         # so a malformed payload is rejected at the schema layer, not mid-resolve.
-        vol.Optional("overrides", default=dict): {str: dict},
+        # Length-capped so an oversized map can't stall the event loop.
+        vol.Optional("overrides", default=dict): vol.All(
+            {str: dict}, vol.Length(max=MAX_SIMULATE_ENTRIES)
+        ),
         # Per opaque-condition verdicts: condition_key -> {result_key: bool}.
-        vol.Optional("verdicts", default=dict): {str: {str: bool}},
+        vol.Optional("verdicts", default=dict): vol.All(
+            {str: {str: bool}}, vol.Length(max=MAX_SIMULATE_ENTRIES)
+        ),
     }
 )
 @websocket_api.async_response

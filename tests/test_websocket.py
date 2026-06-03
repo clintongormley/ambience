@@ -625,6 +625,33 @@ async def test_area_save_rejects_non_dict_params(
     assert "params" in resp["error"]["message"]
 
 
+async def test_area_save_rejects_non_string_entity_id_element(
+    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
+) -> None:
+    config = {
+        "rules": [
+            {
+                "when": {},
+                "actions": [
+                    {
+                        "service": "light.turn_on",
+                        "entity_ids": ["light.a", 123],  # element must be a string
+                        "params": {},
+                    }
+                ],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=config,
+    )
+    assert resp["success"] is False
+    assert "entity_ids" in resp["error"]["message"]
+
+
 async def test_area_save_accepts_param_not_in_visible_fields(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:

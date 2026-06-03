@@ -2,7 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { emitValueChanged } from "../dom.js";
 import { anchorLabel, localize } from "../i18n.js";
-import type { SunAnchor, TimeEndpoint } from "../types.js";
+import type { SunAnchor, SunClamp, TimeEndpoint } from "../types.js";
 
 const ANCHORS: SunAnchor[] = ["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"];
 
@@ -32,6 +32,17 @@ export class AmbienceTimeEndpoint extends LitElement {
       color: var(--secondary-text-color, #888);
       font-size: 0.85em;
       min-width: 3em;
+    }
+    .sun {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      align-items: flex-start;
+    }
+    .row {
+      display: inline-flex;
+      gap: 0.5rem;
+      align-items: center;
     }
   `;
 
@@ -63,14 +74,34 @@ export class AmbienceTimeEndpoint extends LitElement {
   private _onAnchorChange(e: Event) {
     if (this.value.kind !== "sun") return;
     const anchor = (e.target as HTMLSelectElement).value as SunAnchor;
-    this._emit({ kind: "sun", anchor, offset_min: this.value.offset_min });
+    this._emit({ ...this.value, anchor });
   }
 
   private _onOffsetChange(e: Event) {
     if (this.value.kind !== "sun") return;
     const offset_min = parseInt((e.target as HTMLInputElement).value, 10);
     if (Number.isNaN(offset_min)) return;
-    this._emit({ kind: "sun", anchor: this.value.anchor, offset_min });
+    this._emit({ ...this.value, offset_min });
+  }
+
+  private _onClampDirChange(e: Event) {
+    if (this.value.kind !== "sun") return;
+    const dir = (e.target as HTMLSelectElement).value as "" | "not_before" | "not_after";
+    if (dir === "") {
+      // Canonical "no clamp" = key absent.
+      this._emit({ kind: "sun", anchor: this.value.anchor, offset_min: this.value.offset_min });
+      return;
+    }
+    const seed = this.value.clamp ?? _nowClock();
+    this._emit({ ...this.value, clamp: { dir, hh: seed.hh, mm: seed.mm } });
+  }
+
+  private _onClampTimeChange(e: Event) {
+    if (this.value.kind !== "sun" || !this.value.clamp) return;
+    const raw = (e.target as HTMLInputElement).value;
+    const [hh, mm] = raw.split(":").map((n) => parseInt(n, 10));
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return;
+    this._emit({ ...this.value, clamp: { dir: this.value.clamp.dir, hh, mm } });
   }
 
   private _renderTime(v: { hh: number; mm: number }) {
@@ -78,23 +109,43 @@ export class AmbienceTimeEndpoint extends LitElement {
     return html`<input type="time" .value=${padded} @input=${this._onTimeChange} />`;
   }
 
-  private _renderSun(v: { anchor: SunAnchor; offset_min: number }) {
+  private _renderSun(v: { anchor: SunAnchor; offset_min: number; clamp?: SunClamp | null }) {
     const hint = _formatOffsetHint(v.offset_min, this.hass);
+    const clampDir = v.clamp?.dir ?? "";
+    const clampTime = v.clamp
+      ? `${String(v.clamp.hh).padStart(2, "0")}:${String(v.clamp.mm).padStart(2, "0")}`
+      : "";
     return html`
-      <select @change=${this._onAnchorChange}>
-        ${ANCHORS.map(
-          (a) =>
-            html`<option value=${a} ?selected=${a === v.anchor}>${anchorLabel(this.hass, a)}</option>`,
-        )}
-      </select>
-      <input
-        type="number"
-        step="1"
-        placeholder=${localize(this.hass, "ui.offset_placeholder", "±min, e.g. -30")}
-        .value=${String(v.offset_min)}
-        @input=${this._onOffsetChange}
-      />
-      <span class="offset-hint">${hint}</span>
+      <div class="sun">
+        <div class="row">
+          <select @change=${this._onAnchorChange}>
+            ${ANCHORS.map(
+              (a) =>
+                html`<option value=${a} ?selected=${a === v.anchor}>${anchorLabel(this.hass, a)}</option>`,
+            )}
+          </select>
+          <input
+            type="number"
+            step="1"
+            placeholder=${localize(this.hass, "ui.offset_placeholder", "Offset")}
+            .value=${String(v.offset_min)}
+            @input=${this._onOffsetChange}
+          />
+          <span class="offset-hint">${hint}</span>
+        </div>
+        <div class="row">
+          <select @change=${this._onClampDirChange}>
+            <option value="" ?selected=${clampDir === ""}>${localize(this.hass, "ui.clamp_none", "—")}</option>
+            <option value="not_before" ?selected=${clampDir === "not_before"}>${localize(this.hass, "ui.clamp_not_before", "not before")}</option>
+            <option value="not_after" ?selected=${clampDir === "not_after"}>${localize(this.hass, "ui.clamp_not_after", "not after")}</option>
+          </select>
+          ${
+            v.clamp
+              ? html`<input type="time" .value=${clampTime} @input=${this._onClampTimeChange} />`
+              : ""
+          }
+        </div>
+      </div>
     `;
   }
 
@@ -107,6 +158,12 @@ export class AmbienceTimeEndpoint extends LitElement {
       ${this.value.kind === "time" ? this._renderTime(this.value) : this._renderSun(this.value)}
     `;
   }
+}
+
+function _nowClock(): { hh: number; mm: number } {
+  // Local wall-clock — the seed time the user sees must match their timezone.
+  const d = new Date();
+  return { hh: d.getHours(), mm: d.getMinutes() };
 }
 
 function _formatOffsetHint(

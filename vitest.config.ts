@@ -27,11 +27,13 @@ export default defineConfig({
         "frontend/src/types.ts",
         "frontend/src/ha-form.ts",
       ],
+      // Locked to ~the achieved levels (99.0 lines / 94.7 branch / 98.4 funcs),
+      // with a couple of points of headroom against flake.
       thresholds: {
-        lines: 90,
-        functions: 90,
-        branches: 85,
-        statements: 90,
+        lines: 97,
+        functions: 97,
+        branches: 92,
+        statements: 97,
       },
     },
   },

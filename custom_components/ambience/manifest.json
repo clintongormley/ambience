@@ -5,7 +5,7 @@
   "codeowners": ["@clintongormley"],
   "config_flow": true,
   "dependencies": ["http"],
-  "documentation": "https://github.com/clintongormley/ambience",
+  "documentation": "https://clintongormley.github.io/ambience",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/clintongormley/ambience/issues",

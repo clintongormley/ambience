@@ -1,5 +1,6 @@
 site_name: Ambience
 site_description: A condition-based scene engine for Home Assistant.
+site_url: https://clintongormley.github.io/ambience/
 repo_url: https://github.com/clintongormley/ambience
 docs_dir: docs
 

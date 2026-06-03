@@ -280,6 +280,18 @@ class TimeOfDayCondition:
             offset = endpoint.get("offset_min", 0)
             if anchor in ANCHOR_ATTR and isinstance(offset, int) and not isinstance(offset, bool):
                 sun_events.add((anchor, offset))
+            clamp = endpoint.get("clamp")
+            if isinstance(clamp, dict):
+                hh, mm = clamp.get("hh"), clamp.get("mm")
+                if (
+                    isinstance(hh, int)
+                    and not isinstance(hh, bool)
+                    and 0 <= hh <= 23
+                    and isinstance(mm, int)
+                    and not isinstance(mm, bool)
+                    and 0 <= mm <= 59
+                ):
+                    clock_times.add((hh, mm))
 
 
 def _has_clamped_inversion(item: dict) -> bool:

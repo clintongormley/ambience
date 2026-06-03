@@ -695,3 +695,11 @@ def test_non_binding_clamp_behaves_like_plain_anchor() -> None:
     cond = _condition()
     assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 22, 0, tzinfo=UTC))) is True
     assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))) is False
+
+
+def test_trigger_deps_includes_clamp_clock_time() -> None:
+    pred = _range(_sun_clamp("sunrise", "not_before", 8, 30), _sun("dusk"))
+    spec = _condition().trigger_deps(pred)
+    assert (8, 30) in spec.clock_times
+    assert ("sunrise", 0) in spec.sun_events
+    assert ("dusk", 0) in spec.sun_events

@@ -181,10 +181,8 @@ class TimeOfDayCondition:
         if direction not in ("not_before", "not_after"):
             raise ValueError(f"invalid clamp dir: {direction!r}")
         hh, mm = clamp.get("hh"), clamp.get("mm")
-        if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
-            raise ValueError(f"invalid clamp hh: {hh!r}")
-        if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
-            raise ValueError(f"invalid clamp mm: {mm!r}")
+        if not _valid_clock(hh, mm):
+            raise ValueError(f"invalid clamp time: {hh!r}:{mm!r}")
         clamp_dt = dt_util.as_local(anchor_dt).replace(hour=hh, minute=mm, second=0, microsecond=0)
         if direction == "not_before":
             return max(anchor_dt, clamp_dt)
@@ -301,24 +299,27 @@ class TimeOfDayCondition:
             if anchor in ANCHOR_ATTR and isinstance(offset, int) and not isinstance(offset, bool):
                 sun_events.add((anchor, offset))
             clamp = endpoint.get("clamp")
-            if isinstance(clamp, dict):
-                hh, mm = clamp.get("hh"), clamp.get("mm")
-                if (
-                    isinstance(hh, int)
-                    and not isinstance(hh, bool)
-                    and 0 <= hh <= 23
-                    and isinstance(mm, int)
-                    and not isinstance(mm, bool)
-                    and 0 <= mm <= 59
-                ):
-                    clock_times.add((hh, mm))
+            if isinstance(clamp, dict) and _valid_clock(clamp.get("hh"), clamp.get("mm")):
+                clock_times.add((clamp["hh"], clamp["mm"]))
+
+
+def _valid_clock(hh: Any, mm: Any) -> bool:
+    """True if hh/mm are in-range clock ints (rejecting bool, an int subclass)."""
+    return (
+        isinstance(hh, int)
+        and not isinstance(hh, bool)
+        and 0 <= hh <= 23
+        and isinstance(mm, int)
+        and not isinstance(mm, bool)
+        and 0 <= mm <= 59
+    )
 
 
 def _strip_clamp(ep: Any) -> Any:
     """Return the endpoint without its clamp (used to resolve the pre-clamp range)."""
     if isinstance(ep, dict) and "clamp" in ep:
         bare = dict(ep)
-        bare.pop("clamp", None)
+        bare.pop("clamp")
         return bare
     return ep
 

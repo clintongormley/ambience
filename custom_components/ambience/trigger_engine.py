@@ -333,4 +333,3 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         traces = await self._apply_units(units)
         if traces:
             emit_trace(self._hass, TraceEvent(TriggerCause(kind=CauseKind.STARTUP), traces))
-

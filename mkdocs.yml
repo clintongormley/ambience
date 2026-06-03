@@ -38,3 +38,20 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Getting started: getting-started.md
+  - Concepts:
+      - Scopes & switches: concepts/scopes-and-switches.md
+      - Scenes & resolution: concepts/scenes-and-resolution.md
+      - Categories: concepts/categories.md
+  - Conditions:
+      - Overview: conditions/index.md
+      - Time of day: conditions/time-of-day.md
+      - Entity state: conditions/entity-state.md
+      - Sun: conditions/sun.md
+      - Weather: conditions/weather.md
+      - People: conditions/people.md
+      - Day: conditions/day.md
+      - Template: conditions/template.md
+      - Script: conditions/script.md
+  - Actions: actions.md
+  - Settings reference: settings-reference.md
+  - Tips & testing: tips-and-testing.md

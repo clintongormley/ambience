@@ -121,4 +121,4 @@ Evening       ← evening or night, someone home  → warm, dim light
 
 Ambience re-evaluates this list whenever any of the tracked inputs change — occupancy, time of day, weather, or entity state. You do not need automations, helpers, or `input_boolean` flags. Each scene is self-contained: name, conditions (the "when"), actions (the "then").
 
-To learn exactly how scenes, categories, and the resolution algorithm fit together, see the Concepts section. To understand why a particular scene was (or was not) applied, see the Tips & testing page — it covers the trace viewer that shows Ambience's decision for every evaluation.
+To learn exactly how scenes, categories, and the resolution order fit together, see [Scenes & resolution](concepts/scenes-and-resolution.md). To understand why a particular scene was (or was not) applied, see [Tips & testing](tips-and-testing.md), which covers the trace viewer that shows Ambience's decision for every evaluation.

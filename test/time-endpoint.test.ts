@@ -148,4 +148,62 @@ describe("ambience-time-endpoint", () => {
     const labels = Array.from(anchorSelect.options).map((o) => o.textContent?.trim());
     expect(labels).toEqual(["Dawn", "Sunrise", "Noon", "Sunset", "Dusk", "Midnight"]);
   });
+
+  // ── missing-branch coverage ──────────────────────────────────────────────
+
+  test("switching kind to same value does not emit (early return branch)", async () => {
+    el = await mount({ kind: "time", hh: 9, mm: 0 });
+    const get = captureEmit(el);
+    const kindSelect = el.shadowRoot.querySelector("select") as HTMLSelectElement;
+    // dispatch change with the same kind that is already set
+    kindSelect.value = "time";
+    kindSelect.dispatchEvent(new Event("change"));
+    expect(get()).toBeUndefined();
+  });
+
+  test("_onTimeChange guard: does not emit when value.kind is sun", async () => {
+    // mount as sun so value.kind !== "time"
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: 0 });
+    const get = captureEmit(el);
+    // call the private handler directly with a synthetic event pointing at a mock input
+    const fakeInput = { value: "10:30" } as HTMLInputElement;
+    (el as any)._onTimeChange({ target: fakeInput });
+    expect(get()).toBeUndefined();
+  });
+
+  test("_onTimeChange does not emit when parsed hh or mm is NaN", async () => {
+    el = await mount({ kind: "time", hh: 9, mm: 0 });
+    const get = captureEmit(el);
+    const timeInput = el.shadowRoot.querySelector('input[type="time"]') as HTMLInputElement;
+    // An empty string produces NaN after parseInt
+    timeInput.value = "";
+    timeInput.dispatchEvent(new Event("input"));
+    expect(get()).toBeUndefined();
+  });
+
+  test("_onAnchorChange guard: does not emit when value.kind is time", async () => {
+    // mount as time so value.kind !== "sun"
+    el = await mount({ kind: "time", hh: 9, mm: 0 });
+    const get = captureEmit(el);
+    const fakeSelect = { value: "sunrise" } as HTMLSelectElement;
+    (el as any)._onAnchorChange({ target: fakeSelect });
+    expect(get()).toBeUndefined();
+  });
+
+  test("_onOffsetChange guard: does not emit when value.kind is time", async () => {
+    el = await mount({ kind: "time", hh: 9, mm: 0 });
+    const get = captureEmit(el);
+    const fakeInput = { value: "30" } as HTMLInputElement;
+    (el as any)._onOffsetChange({ target: fakeInput });
+    expect(get()).toBeUndefined();
+  });
+
+  test("_onOffsetChange does not emit when offset is NaN", async () => {
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: 0 });
+    const get = captureEmit(el);
+    const offsetInput = el.shadowRoot.querySelector('input[type="number"]') as HTMLInputElement;
+    offsetInput.value = "abc";
+    offsetInput.dispatchEvent(new Event("input"));
+    expect(get()).toBeUndefined();
+  });
 });

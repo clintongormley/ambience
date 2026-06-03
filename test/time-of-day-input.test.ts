@@ -214,6 +214,85 @@ describe("ambience-time-of-day-input", () => {
     expect(chip.textContent!.trim().length).toBeGreaterThan(0);
   });
 
+  // ── missing-branch coverage ──────────────────────────────────────────────
+
+  test("range value-changed from time-endpoint updates the from endpoint and emits", async () => {
+    // Mount with a range entry so _onRangeChange happy path (lines 149-152) is hit
+    el = await mount({ from: { kind: "time", hh: 9, mm: 0 }, to: { kind: "time", hh: 17, mm: 0 } });
+    const get = captureEmit(el);
+    (el as any)._onRangeChange(
+      0,
+      "from",
+      new CustomEvent("value-changed", {
+        detail: { value: { kind: "time", hh: 10, mm: 30 } },
+      }),
+    );
+    const v = get() as any;
+    expect(v).toHaveProperty("from", { kind: "time", hh: 10, mm: 30 });
+    expect(v).toHaveProperty("to", { kind: "time", hh: 17, mm: 0 });
+  });
+
+  test("_onRangeChange guard: does not emit when entry is not a range", async () => {
+    // Mount with a period entry so the first entry is kind:"period", not kind:"range"
+    el = await mount({ period: "afternoon" });
+    const get = captureEmit(el);
+    // Fire a synthetic value-changed event targeting the element itself;
+    // _onRangeChange is only wired to ambience-time-endpoint children, so call
+    // the private handler directly with idx=0 (period entry).
+    (el as any)._onRangeChange(
+      0,
+      "from",
+      new CustomEvent("value-changed", {
+        detail: { value: { kind: "time", hh: 10, mm: 0 } },
+      }),
+    );
+    expect(get()).toBeUndefined();
+  });
+
+  test("willUpdate clamps openIdx when a non-value property change leaves it out of bounds", async () => {
+    // mount with a range entry so add-btn is shown, then add a second entry (openIdx=1)
+    el = await mount({ from: { kind: "time", hh: 9, mm: 0 }, to: { kind: "time", hh: 17, mm: 0 } });
+    const addBtn = el.shadowRoot.querySelector(".add-btn") as HTMLButtonElement;
+    addBtn.click();
+    await el.updateComplete;
+    // openIdx is now 1 (last); forcibly set it out of bounds
+    (el as any)._openIdx = 5;
+    // trigger willUpdate with a non-value property change
+    el.hass = {};
+    await el.updateComplete;
+    // willUpdate should have clamped _openIdx back to entries.length - 1 (= 1)
+    expect((el as any)._openIdx).toBeLessThan((el as any)._entries.length);
+  });
+
+  test("removing an entry whose index is before openIdx (and openIdx stays in bounds) shifts openIdx down", async () => {
+    // 3 entries with openIdx at the middle one (index 1)
+    el = document.createElement("ambience-time-of-day-input") as any;
+    el.value = [{ period: "afternoon" }, { period: "evening" }, { period: "wind_down" }];
+    el.periods = periods;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    // openIdx starts at last (2); click the chip for index 1 to make openIdx=1
+    const chips = el.shadowRoot.querySelectorAll(".summary-chip") as NodeListOf<HTMLElement>;
+    // chips[0] = index 0 (afternoon), chips[1] = index 1 (evening); index 2 is expanded
+    chips[1].click();
+    await el.updateComplete;
+    // openIdx is now 1; remove entry at index 0 via its chip remove button
+    const updatedChips = el.shadowRoot.querySelectorAll(".summary-chip") as NodeListOf<HTMLElement>;
+    // After changing openIdx to 1, chips for indices 0 and 2 should be visible
+    const get = captureEmit(el);
+    const chip0RemoveBtn = updatedChips[0].querySelector(".remove") as HTMLButtonElement;
+    chip0RemoveBtn.click();
+    await el.updateComplete;
+    // openIdx should have shifted from 1 → 0; the expanded entry is now the one
+    // that was at index 1 (evening), now at index 0
+    const expandedSelect = el.shadowRoot.querySelector(".entry select") as HTMLSelectElement;
+    expect(expandedSelect.value).toBe("evening");
+    // Emit: 2 remaining entries (evening + wind_down), both non-any → array
+    const v = get() as any;
+    expect(Array.isArray(v)).toBe(true);
+    expect(v[0]).toEqual({ period: "evening" });
+  });
+
   test("summary chip for an 'any' entry shows '(any)'", async () => {
     // Start with a period so the add-btn appears, then add a second entry
     el = await mount({ period: "afternoon" });

@@ -242,4 +242,385 @@ describe("ambience-day-predicate-input", () => {
     expect(el._computeFieldHelper({ name: "month" })).toBe("");
     expect(el._computeFieldHelper({ name: "kind" })).toBe("");
   });
+
+  // --- _defaultItem exhaustive coverage -----------------------------------
+
+  test("_defaultItem returns correct shape for day_of_month", async () => {
+    el = await mount();
+    // internal function tested indirectly; call _addItem to trigger it
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    el._addItem("include", "day_of_month");
+    expect(detail.value.include[0]).toEqual({ kind: "day_of_month", days: "" });
+  });
+
+  test("_defaultItem returns correct shape for date_range", async () => {
+    el = await mount();
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    el._addItem("include", "date_range");
+    expect(detail.value.include[0]).toEqual({
+      kind: "date_range",
+      from: { month: 1, day: 1 },
+      to: { month: 12, day: 31 },
+    });
+  });
+
+  test("_defaultItem returns bare kind object for entity-only kinds (last_day, workday, etc.)", async () => {
+    // These kinds have no body fields; default is just { kind }.
+    el = await mount({
+      dayConfig: { workday_sensor: "binary_sensor.workday", workday_calendar: "calendar.workday" },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    for (const kind of [
+      "last_day",
+      "workday",
+      "holiday",
+      "first_workday",
+      "last_workday",
+    ] as const) {
+      el._addItem("include", kind);
+      expect(detail.value.include[detail.value.include.length - 1]).toEqual({ kind });
+    }
+  });
+
+  // --- _bodyData / _bodyPatch non-day_of_month paths ----------------------
+
+  test("_bodyData returns empty object for non-day_of_month kinds", async () => {
+    el = await mount();
+    expect(el._bodyData({ kind: "weekday", days: [] })).toEqual({});
+    expect(el._bodyData({ kind: "last_day" })).toEqual({});
+    expect(el._bodyData({ kind: "date", month: 1, day: 1 })).toEqual({});
+  });
+
+  test("_bodyPatch returns item unchanged for non-day_of_month kinds", async () => {
+    el = await mount();
+    const weekdayItem = { kind: "weekday", days: [1, 2] };
+    expect(el._bodyPatch(weekdayItem, { some: "value" })).toBe(weekdayItem);
+    const lastDayItem = { kind: "last_day" };
+    expect(el._bodyPatch(lastDayItem, {})).toBe(lastDayItem);
+  });
+
+  // --- _setDatePart returns item unchanged for non-date/date_range kinds --
+
+  test("_setDatePart returns item unchanged for kinds that have no date parts", async () => {
+    el = await mount();
+    const item = { kind: "last_day" };
+    // Providing a valid numeric value should still return the original item
+    // because the kind is neither 'date' nor 'date_range'.
+    expect(el._setDatePart(item, "month", "3")).toBe(item);
+  });
+
+  // --- _onBodyForm (ha-form body change) ----------------------------------
+
+  test("_onBodyForm applies _bodyPatch and updates the item at the given index", async () => {
+    el = await mount({
+      value: { include: [{ kind: "day_of_month", days: "" }], exclude: [] },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    el._onBodyForm("include", 0, { kind: "day_of_month", days: "" }, { days: "5, 10-15" });
+    expect(detail.value.include[0]).toEqual({ kind: "day_of_month", days: "5, 10-15" });
+  });
+
+  // --- _renderWeekday checkbox DOM interaction ----------------------------
+
+  test("checking a weekday checkbox adds it to the days array and emits", async () => {
+    el = await mount({
+      value: { include: [{ kind: "weekday", days: [] }], exclude: [] },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    // Get the first checkbox (day 0 = Monday)
+    const checkbox = el.shadowRoot.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail.value.include[0].days).toContain(0);
+  });
+
+  test("unchecking a weekday checkbox removes it from the days array", async () => {
+    el = await mount({
+      value: { include: [{ kind: "weekday", days: [0, 1, 2] }], exclude: [] },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    // Uncheck day 0
+    const checkbox = el.shadowRoot.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail.value.include[0].days).not.toContain(0);
+    expect(detail.value.include[0].days).toEqual([1, 2]);
+  });
+
+  // --- kind picker native select DOM interaction --------------------------
+
+  test("kind select change to a new enabled kind switches the item", async () => {
+    el = await mount({
+      value: { include: [{ kind: "weekday", days: [] }], exclude: [] },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    const select = el.shadowRoot.querySelector("select.kind") as HTMLSelectElement;
+    select.value = "date";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail.value.include[0]).toEqual({ kind: "date", month: 1, day: 1 });
+  });
+
+  test("kind select change to the same kind is a no-op (no emit)", async () => {
+    el = await mount({
+      value: { include: [{ kind: "date", month: 3, day: 15 }], exclude: [] },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    const select = el.shadowRoot.querySelector("select.kind") as HTMLSelectElement;
+    select.value = "date"; // same kind
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail).toBeUndefined();
+  });
+
+  test("kind select change to a disabled kind is a no-op (no emit)", async () => {
+    el = await mount({
+      value: { include: [{ kind: "weekday", days: [] }], exclude: [] },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    const select = el.shadowRoot.querySelector("select.kind") as HTMLSelectElement;
+    // workday is disabled with no sensor
+    select.value = "workday";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail).toBeUndefined();
+  });
+
+  // --- _renderNativeBody DOM rendering ------------------------------------
+
+  test("native body for day_of_month renders a text input with the current days value", async () => {
+    el = await mount({
+      value: { include: [{ kind: "day_of_month", days: "1-5" }], exclude: [] },
+    });
+    const input = el.shadowRoot.querySelector('input[type="text"]') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    expect(input.value).toBe("1-5");
+  });
+
+  test("native body day_of_month shows error div for invalid spec", async () => {
+    el = await mount({
+      value: { include: [{ kind: "day_of_month", days: "abc" }], exclude: [] },
+    });
+    const err = el.shadowRoot.querySelector(".field-error");
+    expect(err).not.toBeNull();
+    expect(err.textContent).toBeTruthy();
+  });
+
+  test("native body day_of_month shows no error div for empty spec", async () => {
+    el = await mount({
+      value: { include: [{ kind: "day_of_month", days: "" }], exclude: [] },
+    });
+    const err = el.shadowRoot.querySelector(".field-error");
+    expect(err).toBeNull();
+  });
+
+  test("native body day_of_month change event updates the days value and emits", async () => {
+    el = await mount({
+      value: { include: [{ kind: "day_of_month", days: "" }], exclude: [] },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    const input = el.shadowRoot.querySelector('input[type="text"]') as HTMLInputElement;
+    input.value = "3, 7-10";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail.value.include[0]).toEqual({ kind: "day_of_month", days: "3, 7-10" });
+  });
+
+  test("native body for date renders two number inputs (month and day)", async () => {
+    el = await mount({
+      value: { include: [{ kind: "date", month: 3, day: 15 }], exclude: [] },
+    });
+    const inputs = el.shadowRoot.querySelectorAll('input[type="number"]');
+    expect(inputs.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("native body date month input change updates month and clamps day", async () => {
+    el = await mount({
+      value: { include: [{ kind: "date", month: 1, day: 31 }], exclude: [] },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    const [monthInput] = Array.from(
+      el.shadowRoot.querySelectorAll('input[type="number"]'),
+    ) as HTMLInputElement[];
+    monthInput.value = "2"; // Feb — day 31 → clamp to 29
+    monthInput.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail.value.include[0]).toEqual({ kind: "date", month: 2, day: 29 });
+  });
+
+  test("native body date day input change updates day", async () => {
+    el = await mount({
+      value: { include: [{ kind: "date", month: 6, day: 1 }], exclude: [] },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    const inputs = Array.from(
+      el.shadowRoot.querySelectorAll('input[type="number"]'),
+    ) as HTMLInputElement[];
+    const dayInput = inputs[1]; // second number input is day
+    dayInput.value = "15";
+    dayInput.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail.value.include[0]).toEqual({ kind: "date", month: 6, day: 15 });
+  });
+
+  test("native body for date_range renders four number inputs (from/to month+day)", async () => {
+    el = await mount({
+      value: {
+        include: [{ kind: "date_range", from: { month: 3, day: 1 }, to: { month: 6, day: 30 } }],
+        exclude: [],
+      },
+    });
+    const inputs = el.shadowRoot.querySelectorAll('input[type="number"]');
+    expect(inputs.length).toBeGreaterThanOrEqual(4);
+  });
+
+  test("native body date_range to_month change updates the to month with clamping", async () => {
+    el = await mount({
+      value: {
+        include: [{ kind: "date_range", from: { month: 1, day: 31 }, to: { month: 1, day: 31 } }],
+        exclude: [],
+      },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    const inputs = Array.from(
+      el.shadowRoot.querySelectorAll('input[type="number"]'),
+    ) as HTMLInputElement[];
+    // Inputs: from_month[0], from_day[1], to_month[2], to_day[3]
+    const toMonthInput = inputs[2];
+    toMonthInput.value = "2"; // Feb — day 31 → clamp to 29
+    toMonthInput.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail.value.include[0].to).toEqual({ month: 2, day: 29 });
+  });
+
+  // --- _renderAddPicker native select empty value guard -------------------
+
+  test("add picker select ignores empty value (no emit)", async () => {
+    el = await mount();
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    // The add-picker selects are in the include/exclude sections.
+    // Find the last select in include section (the add-picker).
+    // When value is empty string, the handler returns immediately without adding.
+    const selects = Array.from(el.shadowRoot.querySelectorAll("select")) as HTMLSelectElement[];
+    // With no items, the only select is the add picker for include section.
+    const addPicker = selects[0];
+    addPicker.value = ""; // empty option selected
+    addPicker.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail).toBeUndefined();
+    expect(el.value).toBeNull();
+  });
+
+  test("add picker select with a valid kind adds the item and resets the select", async () => {
+    el = await mount();
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    const selects = Array.from(el.shadowRoot.querySelectorAll("select")) as HTMLSelectElement[];
+    const addPicker = selects[0]; // include section add picker
+    addPicker.value = "weekday";
+    addPicker.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(detail.value.include[0]).toEqual({ kind: "weekday", days: [] });
+    // The select should be reset to empty after adding
+    expect(addPicker.value).toBe("");
+  });
+
+  // --- branch coverage gaps -----------------------------------------------
+
+  test("_bodyPatch falls back to empty string when value.days is undefined", async () => {
+    el = await mount();
+    // The `value.days ?? ""` branch fires when days is undefined.
+    expect(el._bodyPatch({ kind: "day_of_month", days: "old" }, {})).toEqual({
+      kind: "day_of_month",
+      days: "",
+    });
+  });
+
+  test("_setDatePart handles from_day part on a date_range item", async () => {
+    el = await mount();
+    const item = { kind: "date_range", from: { month: 3, day: 1 }, to: { month: 6, day: 30 } };
+    const result = el._setDatePart(item, "from_day", "20");
+    expect(result.from.day).toBe(20);
+    expect(result.to).toEqual({ month: 6, day: 30 });
+  });
+
+  test("_onKindForm with the same kind as current item is a no-op (no emit)", async () => {
+    el = await mount({
+      value: { include: [{ kind: "weekday", days: [1] }], exclude: [] },
+    });
+    let detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    // Pass the same kind — _onKindForm guards against same-kind updates
+    el._onKindForm("include", 0, { kind: "weekday" });
+    expect(detail).toBeUndefined();
+    expect(el.value.include[0].days).toEqual([1]);
+  });
+
+  test("_daySelector caps at 31 for out-of-range month (internal _daysInMonth fallback)", async () => {
+    el = await mount();
+    // Month 13 is out-of-range; _daysInMonth falls back to 31.
+    expect(el._daySelector(13).number.max).toBe(31);
+    expect(el._daySelector(0).number.max).toBe(31);
+  });
+
+  test("_updateItem leaves items at other indices unchanged (ternary false branch)", async () => {
+    el = await mount({
+      value: {
+        include: [{ kind: "weekday", days: [0] }, { kind: "last_day" }],
+        exclude: [],
+      },
+    });
+    // Update only index 0; index 1 must remain untouched.
+    el._updateItem("include", 0, { kind: "weekday", days: [1] });
+    expect(el.value.include[0]).toEqual({ kind: "weekday", days: [1] });
+    expect(el.value.include[1]).toEqual({ kind: "last_day" });
+  });
 });

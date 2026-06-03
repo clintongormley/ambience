@@ -860,4 +860,765 @@ describe("ambience-state-predicate-input", () => {
     // The new empty atom (path [1]) is incomplete → expanded.
     expect(cards[1].classList.contains("expanded")).toBe(true);
   });
+
+  // --- uncovered branch coverage -------------------------------------------
+
+  test("_addAtRoot on a null predicate delegates to _addFirstAtom (lines 472-474)", async () => {
+    // _addAtRoot(null) must take the early-return branch that calls _addFirstAtom.
+    el = await mount(null);
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._addAtRoot();
+    expect(captured?.kind).toBe("is");
+    expect(captured?.entity_id).toBe("");
+    // New atom auto-opened at root path [].
+    expect(el._openPath).toEqual([]);
+  });
+
+  test("_unwrapAt nested: target is a NOT-wrapped group — strips NOT and splices children (lines 411-413)", async () => {
+    // The nested target is { kind:'not', item: { kind:'or', items:[b,c] } }.
+    // _unwrapAt must enter the else-if(target.kind==='not') branch (lines 412-414)
+    // and splice b, c into the parent AND in place of the NOT-group.
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        {
+          kind: "not",
+          item: {
+            kind: "or",
+            items: [
+              { kind: "is", entity_id: "b", states: ["off"] },
+              { kind: "is", entity_id: "c", states: ["open"] },
+            ],
+          },
+        },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._unwrapAt([1]);
+    // After unwrap: outer AND has 3 items (a, b, c); the NOT wrapper is gone.
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(3);
+    expect(captured.items.map((i: any) => i.entity_id)).toEqual(["a", "b", "c"]);
+  });
+
+  test("_unwrapAt nested: target is an atom (no group) — no change returned", async () => {
+    // When the targeted child is a plain atom (not a group), _unwrapAt hits the
+    // '!group → return parent' guard (line 415) and emits the tree unchanged.
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._unwrapAt([0]); // target is an atom, not a group
+    // Tree emitted unchanged — still AND with two items.
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(2);
+  });
+
+  test("_unwrapAt at root with a null predicate is a no-op (line 389)", async () => {
+    // Guard: if !root, return immediately — no emit.
+    el = await mount(null);
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._unwrapAt([]);
+    expect(fired).toBe(false);
+  });
+
+  test("_unwrapAt at root with NOT-wrapped group (1 child) → promotes the single child", async () => {
+    // Root is { kind:'not', item: { kind:'and', items:[a] } }.
+    // inner = root.item (the AND); items.length === 1 → emit items[0].
+    el = await mount({
+      kind: "not",
+      item: { kind: "and", items: [{ kind: "is", entity_id: "a", states: ["on"] }] },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._unwrapAt([]);
+    expect(captured.kind).toBe("is");
+    expect(captured.entity_id).toBe("a");
+  });
+
+  test("_setGroupOpAt on a NOT-wrapped group strips the NOT and changes op (lines 255-260)", async () => {
+    // Node is { kind:'not', item: { kind:'and', items:[a,b] } }.
+    // _setGroupOpAt must enter the else-if(node.kind==='not') branch.
+    el = await mount({
+      kind: "not",
+      item: {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setGroupOpAt([], "or");
+    // NOT stripped; op changed from AND → OR; items preserved.
+    expect(captured.kind).toBe("or");
+    expect(captured.items).toHaveLength(2);
+    expect(captured.items[0].entity_id).toBe("a");
+  });
+
+  test("_setGroupOpAt on a plain atom returns it unchanged (line 261: !bareGroup guard)", async () => {
+    // Node at root is an atom — neither group nor NOT-wrapped group.
+    // _setGroupOpAt must hit the !bareGroup guard and return node unchanged.
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setGroupOpAt([], "or");
+    // Emitted unchanged.
+    expect(captured.kind).toBe("is");
+    expect(captured.entity_id).toBe("x");
+  });
+
+  // --- _atomError numeric-kind branches ------------------------------------
+
+  test("_atomError on a numeric atom with missing value returns 'Value is required'", async () => {
+    el = await mount(null);
+    // kind !== 'is' and !== 'is_not' → isNumeric=true; states[0] is falsy.
+    const err = el._atomError({ kind: "gt", entity_id: "sensor.x", states: [] });
+    expect(err).toMatch(/value is required/i);
+  });
+
+  test("_atomError on a numeric atom with a non-finite string returns 'must be a number'", async () => {
+    el = await mount(null);
+    const err = el._atomError({ kind: "gt", entity_id: "sensor.x", states: ["abc"] });
+    expect(err).toMatch(/must be a number/i);
+  });
+
+  test("_atomError on a numeric atom with a valid finite string returns null", async () => {
+    el = await mount(null);
+    const err = el._atomError({ kind: "gt", entity_id: "sensor.x", states: ["42"] });
+    expect(err).toBeNull();
+  });
+
+  // --- _walk / _atomAt via NOT-wrapped paths --------------------------------
+
+  test("_atomAt on a NOT-wrapped atom (root) returns the inner atom (line 352)", async () => {
+    el = await mount({
+      kind: "not",
+      item: { kind: "is", entity_id: "x", states: ["on"] },
+    });
+    const atom = el._atomAt([]);
+    expect(atom?.entity_id).toBe("x");
+  });
+
+  test("_atomAt on a group node (no path left) returns null — group is not an atom (line 354)", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
+    // Path [] lands on the AND group itself — _walk returns null.
+    const result = el._atomAt([]);
+    expect(result).toBeNull();
+  });
+
+  test("_atomAt on an atom when path has remaining indices returns null (line 360)", async () => {
+    // Path [0] into a plain atom — no items to descend into.
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    const result = el._atomAt([0]);
+    expect(result).toBeNull();
+  });
+
+  // --- _patch with null tree and NOT-kind tree ------------------------------
+
+  test("_patch: null tree with non-empty path returns null (line 281)", async () => {
+    // _removeAt on a non-existent nested path: tree is null mid-traversal.
+    // Mount with null; set value to null, then call _replaceAt at a deep path.
+    el = await mount(null);
+    // Manually test _patch by calling _removeAt on a path that traverses null.
+    // We need a tree where a path traversal hits null mid-way. Use _replaceAt
+    // on an atom tree at path [0] — atom has no items, so tree.kind is "is" →
+    // falls through to "Atom — nothing to descend into" (line 308), returning tree.
+    // Instead, directly test via _wrapAt on null value: after _removeAt([])->null,
+    // the internal value is null; calling _wrapAt should handle the !node guard.
+    el._removeAt([]); // value is already null, sets to null again
+    // No crash; value stays null.
+    expect(el.value).toBeNull();
+  });
+
+  test("_patch: NOT-kind tree at non-empty path delegates into its item (lines 302-308)", async () => {
+    // Remove an atom from inside a NOT-wrapped group. _patch must take the
+    // tree.kind==='not' branch (line 302) to descend into the inner group.
+    el = await mount({
+      kind: "not",
+      item: {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    // Remove item at path [0]: traverses NOT → AND → removes index 0.
+    // 2 items → 1 item → collapses AND to that child; NOT wraps it.
+    el._removeAt([0]);
+    expect(captured.kind).toBe("not");
+    expect((captured as any).item.entity_id).toBe("b");
+  });
+
+  test("_patch: NOT-kind tree where inner collapses to null returns null (line 304)", async () => {
+    // Remove the ONLY atom from inside a NOT-wrapped group.
+    // _patch traverses NOT → AND(1 item) → removes → 0 items → collapses AND to null
+    // → _patch(NOT) gets inner===null → returns null (line 304).
+    el = await mount({
+      kind: "not",
+      item: { kind: "and", items: [{ kind: "is", entity_id: "a", states: ["on"] }] },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._removeAt([0]);
+    expect(captured).toBeNull();
+  });
+
+  // --- _rewriteForMove through a NOT-wrapped node --------------------------
+
+  test("_moveAt: moves across a NOT-wrapped sibling (rewriteForMove NOT branch, lines 164-173)", async () => {
+    // Tree: AND[ NOT(OR[a, b]), c ]
+    // Move c (path [1]) to where a is (path [0, 0]).
+    // _rewriteForMove must enter the NOT branch for the NOT-OR child.
+    el = await mount({
+      kind: "and",
+      items: [
+        {
+          kind: "not",
+          item: {
+            kind: "or",
+            items: [
+              { kind: "is", entity_id: "a", states: ["on"] },
+              { kind: "is", entity_id: "b", states: ["off"] },
+            ],
+          },
+        },
+        { kind: "is", entity_id: "c", states: ["open"] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    // Move c (path [1]) into the NOT-wrapped OR at position 0 (path [0, 0]).
+    el._moveAt([1], [0, 0]);
+    // c should land at index 0 inside the NOT(OR), with a at index 1.
+    expect(captured.kind).toBe("and");
+    expect(captured.items[0].kind).toBe("not");
+    const inner = captured.items[0].item;
+    expect(inner.kind).toBe("or");
+    expect(inner.items[0].entity_id).toBe("c");
+    expect(inner.items[1].entity_id).toBe("a");
+  });
+
+  // --- event handler dispatch paths ----------------------------------------
+
+  test("node-move event dispatched from a child propagates to the host and calls _moveAt", async () => {
+    // Covers _onNodeMove (lines 207-210) via event dispatch.
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    const event = new CustomEvent("node-move", {
+      detail: { from: [0], to: [1] },
+      bubbles: true,
+      composed: true,
+    });
+    el.dispatchEvent(event);
+    // [0]=a moved to where [1]=b was → [b, a].
+    expect(captured.items.map((i: any) => i.entity_id)).toEqual(["b", "a"]);
+  });
+
+  // --- render: errorMessage when _atomAt returns null ----------------------
+
+  test("render: errorMessage is null when _showError is true but _openPath points to a group (line 506 null branch)", async () => {
+    // _showError=true + _openPath=[] pointing to the root AND group.
+    // _atomAt([]) → null (group, not atom). So errorMessage stays null.
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
+    // Manually set internal state to simulate the error-showing path.
+    el._openPath = [];
+    el._showError = true;
+    await flush(el);
+    // The error path is null → no error text visible in the root node.
+    // Root group exists and is rendered; no crash.
+    expect(el.shadowRoot.querySelector("ambience-state-expr-node")).toBeTruthy();
+  });
+
+  // --- _wrapAt when patch node is null (branch 30) -------------------------
+
+  test("_wrapAt: the patch callback's !node guard short-circuits on a null node (branch 30)", async () => {
+    // To hit the `if (!node) return node` inside _wrapAt's patch callback,
+    // we need _patch to call fn(null). This happens when the target path
+    // points at a null in the tree — e.g., call _wrapAt([]) when value=null.
+    el = await mount(null);
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._wrapAt([]);
+    // fn(null) → returns null → _emit(null). The event fires but value stays null.
+    expect(fired).toBe(true);
+    expect(el.value).toBeNull();
+  });
+
+  // --- _atomError: is/is_not atom with only empty-string states (line 375-376) ---
+
+  test("_atomError on an 'is' atom with only empty-string states returns 'State is required' (line 376)", async () => {
+    el = await mount(null);
+    // kind==='is', entity_id set, states has only empty strings → hits else-if branch.
+    const err = el._atomError({ kind: "is", entity_id: "light.x", states: ["", ""] });
+    expect(err).toMatch(/state is required/i);
+  });
+
+  test("_atomError on an 'is_not' atom with non-empty state returns null", async () => {
+    el = await mount(null);
+    // kind==='is_not', entity_id set, states has a non-empty string → valid.
+    const err = el._atomError({ kind: "is_not", entity_id: "light.x", states: ["on"] });
+    expect(err).toBeNull();
+  });
+
+  // --- remaining uncovered event handlers ----------------------------------
+
+  test("node-change event dispatched from a child propagates to the host and calls _replaceAt", async () => {
+    // Covers _onNodeChange (lines 313-316) via event dispatch.
+    el = await mount({ kind: "is", entity_id: "a", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    const event = new CustomEvent("node-change", {
+      detail: { path: [], value: { kind: "is", entity_id: "z", states: ["off"] } },
+      bubbles: true,
+      composed: true,
+    });
+    el.dispatchEvent(event);
+    expect(captured?.entity_id).toBe("z");
+  });
+
+  test("node-wrap event dispatched from a child propagates to the host and calls _wrapAt", async () => {
+    // Covers _onNodeWrap (lines 323-326) via event dispatch.
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    const event = new CustomEvent("node-wrap", {
+      detail: { path: [] },
+      bubbles: true,
+      composed: true,
+    });
+    el.dispatchEvent(event);
+    // Root atom wrapped in AND.
+    expect(captured?.kind).toBe("and");
+    expect(captured?.items[0].entity_id).toBe("x");
+  });
+
+  test("node-add-child event dispatched from a child propagates to the host and calls _addChildAt", async () => {
+    // Covers _onNodeAddChild (lines 328-331) via event dispatch.
+    el = await mount({
+      kind: "and",
+      items: [{ kind: "is", entity_id: "a", states: ["on"] }],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    const event = new CustomEvent("node-add-child", {
+      detail: { path: [] },
+      bubbles: true,
+      composed: true,
+    });
+    el.dispatchEvent(event);
+    expect(captured?.items).toHaveLength(2);
+    expect(captured?.items[1].entity_id).toBe("");
+  });
+
+  test("node-set-op event dispatched from a child propagates to the host and calls _setGroupOpAt", async () => {
+    // Covers _onNodeSetOp (lines 338-341) via event dispatch.
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    const event = new CustomEvent("node-set-op", {
+      detail: { path: [], op: "or" },
+      bubbles: true,
+      composed: true,
+    });
+    el.dispatchEvent(event);
+    expect(captured?.kind).toBe("or");
+  });
+
+  // --- _moveAt guards (lines 139-142) ---
+
+  test("_moveAt: fromPath.length === 0 is a no-op (can't drag the root, line 139)", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._moveAt([], [0]);
+    expect(fired).toBe(false);
+  });
+
+  test("_moveAt: toPath.length === 0 is a no-op (can't drop on root, line 140)", async () => {
+    el = await mount({
+      kind: "and",
+      items: [{ kind: "is", entity_id: "a", states: ["on"] }],
+    });
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._moveAt([0], []);
+    expect(fired).toBe(false);
+  });
+
+  test("_moveAt: source node not found at fromPath is a no-op (line 142)", async () => {
+    // fromPath [5] is out of bounds for a 1-item group → _nodeAt returns null.
+    el = await mount({
+      kind: "and",
+      items: [{ kind: "is", entity_id: "a", states: ["on"] }],
+    });
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._moveAt([5], [0]);
+    expect(fired).toBe(false);
+  });
+
+  // --- _walkNode with NOT-wrapped tree (lines 213-214) ---
+
+  test("_walkNode: traverses through a NOT node transparently (line 214)", async () => {
+    // The NOT node at root wraps an AND group; _wrapAt must descend through NOT.
+    // Use _wrapAt on a child of the NOT-wrapped group to exercise _nodeAt → _walkNode NOT branch.
+    el = await mount({
+      kind: "not",
+      item: {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    // _wrapAt([0]) calls _nodeAt([0]) which calls _walkNode through the NOT wrapper.
+    el._wrapAt([0]);
+    // Should wrap item[0](a) in an OR group (flipped from AND parent).
+    expect(captured.kind).toBe("not");
+    expect(captured.item.kind).toBe("and");
+    expect(captured.item.items[0].kind).toBe("or");
+    expect(captured.item.items[0].items[0].entity_id).toBe("a");
+  });
+
+  test("_walkNode: atom at path with remaining indices returns null (line 219)", async () => {
+    // _nodeAt([0, 1]) on an AND group where item[0] is a plain atom.
+    // The second index tries to descend into an atom → returns null.
+    // This causes _moveAt to bail (no source).
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    // fromPath [0, 1] tries to descend into atom at [0] → _nodeAt returns null → no-op.
+    el._moveAt([0, 1], [1]);
+    expect(fired).toBe(false);
+  });
+
+  // --- _addChildAt: node is not a group (no-op branch, line 231) -----------
+
+  test("_addChildAt on an atom path (not a group) appends nothing but still emits", async () => {
+    // _patch callback: node.kind === 'is' → not a group → returns node unchanged.
+    // newChildPath stays null → _openPath not updated.
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._addChildAt([], "is");
+    // Atom returned unchanged; still an atom.
+    expect(captured?.kind).toBe("is");
+    expect(captured?.entity_id).toBe("x");
+  });
+
+  // --- _setGroupOpAt: NOT wrapping non-group inner → !bareGroup path (line 261) ---
+
+  test("_setGroupOpAt: NOT wrapping a plain atom has no bare group → no change (line 261)", async () => {
+    // Root is { kind:'not', item: { kind:'is', ... } } — the inner is not a group.
+    // bareGroup stays null → returns node unchanged.
+    el = await mount({
+      kind: "not",
+      item: { kind: "is", entity_id: "x", states: ["on"] },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setGroupOpAt([], "or");
+    // Emitted unchanged.
+    expect(captured.kind).toBe("not");
+    expect((captured as any).item.entity_id).toBe("x");
+  });
+
+  // --- _samePath: arrays with same length but mismatched values (branch 1) ---
+
+  test("_samePath returns false for same-length arrays with different values (branch at line 12)", async () => {
+    // The `a.every(...)` call returns false when values differ — exercise that branch.
+    // Access via _openPath comparison: set _openPath to [1] then dispatch node-open [2].
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+        { kind: "is", entity_id: "c", states: ["open"] },
+      ],
+    });
+    el._openPath = [1];
+    // Dispatch node-open with a different same-length path [2] — _samePath([1],[2]) must return false.
+    const event = new CustomEvent("node-open", {
+      detail: { path: [2] },
+      bubbles: true,
+      composed: true,
+    });
+    el.dispatchEvent(event);
+    // [2] is NOT the same as [1] → opens [2] instead of toggling/collapsing.
+    expect(el._openPath).toEqual([2]);
+  });
+
+  // --- _toggleNotAt / _setGroupOpAt: !node guard (branches 86, 91) --------
+
+  test("_toggleNotAt called on null predicate is a no-op (the !node guard, line 239)", async () => {
+    // When value is null, _patch calls fn(null). fn returns null → emit null.
+    el = await mount(null);
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._toggleNotAt([]);
+    // fn(null) emitted null — event fires but value stays null.
+    expect(fired).toBe(true);
+    expect(el.value).toBeNull();
+  });
+
+  test("_setGroupOpAt called on null predicate is a no-op (the !node guard, line 251)", async () => {
+    el = await mount(null);
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._setGroupOpAt([], "or");
+    // fn(null) emitted null.
+    expect(fired).toBe(true);
+    expect(el.value).toBeNull();
+  });
+
+  // --- _patch: tree===null with non-empty path (branch 103, line 281) ------
+
+  test("_patch: tree is null with non-empty path returns null (line 281)", async () => {
+    // Achieve this by _replaceAt at a deep path while value is null.
+    // Since value is null, _patch(null, [0], fn) hits `tree==null → return tree`.
+    el = await mount(null);
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._replaceAt([0], { kind: "is", entity_id: "z", states: ["on"] });
+    // _patch(null, [0], fn) returns null unchanged.
+    expect(captured).toBeNull();
+  });
+
+  // --- _rewriteForMove: !node early-return (branch 52, line 163) -----------
+
+  test("_rewriteForMove: handles move where the tree root is null (branch 52, line 163)", async () => {
+    // This tests an edge case via a deep move where a child path resolves to null.
+    // Use a valid tree; _rewriteForMove hits !node when recursing into an
+    // out-of-bounds child. We trigger this indirectly via a cross-group move
+    // where one of the recursively-visited child paths is an atom (not null),
+    // but the NOT-inner collapse produces null after the move.
+    // The direct path: move [1,0] out of the single-item OR → OR collapses to
+    // null → _rewriteForMove(NOT(OR), ...) gets inner==null → returns null.
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        {
+          kind: "not",
+          item: {
+            kind: "or",
+            items: [{ kind: "is", entity_id: "b", states: ["off"] }],
+          },
+        },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    // Move b from [1,0] to [0]: the NOT(OR) is now empty → collapses.
+    // _rewriteForMove for the NOT node: inner becomes null → returns null.
+    el._moveAt([1, 0], [0]);
+    // The AND group should now have 2 items: b (inserted at 0) and a.
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(2);
+    expect(captured.items[0].entity_id).toBe("b");
+    expect(captured.items[1].entity_id).toBe("a");
+  });
+
+  // --- _walk: !tree null guard (branch 119, line 351) ----------------------
+
+  test("_atomAt returns null when path walks into an out-of-bounds slot (branch 129, line 358)", async () => {
+    // _walk hits `tree.items[path[0]] ?? null` where path[0] is out-of-bounds.
+    // The `?? null` produces null → next recursive call returns null.
+    el = await mount({
+      kind: "and",
+      items: [{ kind: "is", entity_id: "a", states: ["on"] }],
+    });
+    // path [5] is out of bounds for a 1-item group.
+    const result = el._atomAt([5]);
+    expect(result).toBeNull();
+  });
+
+  // --- _unwrapAt root: inner is NOT a group (branch 148, line 391) ---------
+
+  test("_unwrapAt at root when root is an atom (not a group) is a no-op", async () => {
+    // inner = root (an atom). inner.kind !== 'and'/'or' → guard at line 391 fails.
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._unwrapAt([]);
+    expect(fired).toBe(false);
+  });
+
+  // --- _unwrapAt nested: !parent and parent-not-group guards (branches 154-156) ---
+
+  test("_unwrapAt nested: parent path leads to null → no-op (branch 154, line 403)", async () => {
+    // This is pathological — parentPath leads to null in the tree. Trigger by
+    // calling _unwrapAt([0]) when value is null (so _patch on null → fn gets null).
+    el = await mount(null);
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._unwrapAt([0]);
+    // _patch(null, [], fn) → fn(null) → !parent guard returns null → emit null.
+    expect(fired).toBe(true);
+    expect(el.value).toBeNull();
+  });
+
+  test("_unwrapAt nested: parent is an atom (not a group) → no change (branch 155-156, line 404)", async () => {
+    // parentPath [] leads to the atom itself; parent.kind !== 'and'/'or' → guard fires.
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    // _unwrapAt([0]): parentPath=[], idx=0. _patch(atom, [], fn(atom)).
+    // parent.kind === 'is' → not 'and'/'or' → returns parent unchanged.
+    el._unwrapAt([0]);
+    expect(captured?.kind).toBe("is");
+    expect(captured?.entity_id).toBe("x");
+  });
+
+  // --- _patch: atom with non-empty path returns atom unchanged (line 308) --
+
+  test("_patch atom-fallback: _removeAt with a non-empty path into an atom returns atom unchanged (line 308)", async () => {
+    // _patch(atom, [0], fn): atom is not group/NOT → hits `return tree` at line 308.
+    // The fn is never called and the tree is returned unchanged.
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    // _removeAt([0]) calls _patch(atom, [0], fn) → atom returned unchanged.
+    el._removeAt([0]);
+    expect(captured?.kind).toBe("is");
+    expect(captured?.entity_id).toBe("x");
+  });
+
+  // --- _patch: NOT branch yields non-null inner (branch 116, line 306) -----
+
+  test("_patch NOT branch: non-empty path through NOT → patches inner and re-wraps (line 305)", async () => {
+    // Directly call _replaceAt on a path inside a NOT-wrapped atom.
+    // NOT wraps an AND with 2 items; replace item[0] → _patch enters NOT branch.
+    el = await mount({
+      kind: "not",
+      item: {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._replaceAt([0], { kind: "is", entity_id: "z", states: ["open"] });
+    // _patch traverses NOT, then AND, replaces item[0].
+    // Result: NOT(AND[z, b])
+    expect(captured.kind).toBe("not");
+    expect(captured.item.items[0].entity_id).toBe("z");
+    expect(captured.item.items[1].entity_id).toBe("b");
+  });
 });

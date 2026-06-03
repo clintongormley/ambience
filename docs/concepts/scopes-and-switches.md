@@ -28,7 +28,7 @@ Every scope has one switch entity, named after the scope and ending in "Ambience
 
 | Scope | Entity |
 |---|---|
-| House | `switch.global_ambience` |
+| House | `switch.house_ambience` |
 | A floor named "Ground floor" | `switch.ground_floor_floor_ambience` |
 | An area named "Living room" | `switch.living_room_ambience` |
 
@@ -91,7 +91,7 @@ You could equally turn off just the Living room switch if you only want to freez
 ## Summary
 
 - **House, Floor, Area** — three levels, mirroring your HA area/floor registry.
-- **One switch per scope**, named `switch.<scope>_ambience` (floors: `switch.<scope>_floor_ambience`; House: `switch.global_ambience`).
+- **One switch per scope**, named `switch.<scope>_ambience` (floors: `switch.<scope>_floor_ambience`; House: `switch.house_ambience`).
 - **Turning off cascades down**; turning on cascades down too. Turning off a leaf (area) affects only that area.
 - **Off means paused**: Ambience skips automatic scene application for that scope. Manual "Run actions" still works.
 - **Auto-on** brings the switch back after the configured delay (default: two hours). Setting the delay to 0 disables it.

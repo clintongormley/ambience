@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import json
 import logging
 from typing import Any
 
@@ -16,7 +15,6 @@ from .const import (
     DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
     DEFAULT_SWITCH_NAME,
     GENERAL_CATEGORY,
-    GENERAL_CATEGORY_ID,
     SIGNAL_CONFIG_CHANGED,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -35,8 +33,8 @@ class CategoryInUseError(ValueError):
 
 def reassign_orphan_rules(rules: list[dict[str, Any]], known: set[str], target: str) -> bool:
     """Point any rule with no category or an unknown category at `target`. Mutates the
-    rules in place; returns True if anything was changed. Shared by the store's
-    load-time migration and the websocket's save-time coercion."""
+    rules in place; returns True if anything was changed. Used by the websocket's
+    save-time coercion to keep every persisted rule pointed at a real category."""
     changed = False
     for rule in rules:
         cid = rule.get("category")
@@ -78,116 +76,6 @@ class AmbienceStore:
             "exposed_actions": [],
         }
 
-    @staticmethod
-    def _migrate_one_action(action: dict[str, Any]) -> list[dict[str, Any]]:
-        """Convert a single action dict from old to new shape.
-
-        Returns one or more new-shape actions. New-shape actions are passed
-        through unchanged. Old-shape actions (with `targets` dict) are split
-        by params group into one new-shape action per distinct params dict.
-        """
-        if "entity_ids" in action and "params" in action:
-            return [action]
-        targets = action.get("targets")
-        if not isinstance(targets, dict):
-            return [action]
-        if not targets:
-            return [
-                {
-                    "action": action.get("action", ""),
-                    "entity_ids": [],
-                    "params": {},
-                }
-            ]
-        groups: dict[str, dict[str, Any]] = {}
-        for entity_id, params in targets.items():
-            key = json.dumps(params, sort_keys=True)
-            if key not in groups:
-                groups[key] = {
-                    "action": action.get("action", ""),
-                    "entity_ids": [],
-                    "params": params,
-                }
-            groups[key]["entity_ids"].append(entity_id)
-        return list(groups.values())
-
-    def _migrate_actions(self) -> None:
-        """Walk every persisted rule and convert old-shape actions to new shape."""
-        for area_cfg in self._data.get("areas", {}).values():
-            for rule in area_cfg.get("rules", []):
-                new_actions: list[dict[str, Any]] = []
-                for action in rule.get("actions", []):
-                    new_actions.extend(self._migrate_one_action(action))
-                rule["actions"] = new_actions
-
-    @staticmethod
-    def _migrate_period_in_predicate(pred: Any) -> Any:
-        """Rename old period ids (night→nighttime, day→daytime) inside a
-        time_of_day predicate. Idempotent and lossless for already-renamed
-        predicates. Returns the (possibly new) predicate value."""
-        renames = {"night": "nighttime", "day": "daytime"}
-        if isinstance(pred, list):
-            return [AmbienceStore._migrate_period_in_predicate(item) for item in pred]
-        if isinstance(pred, dict) and "period" in pred:
-            new_pid = renames.get(pred["period"], pred["period"])
-            if new_pid != pred["period"]:
-                return {**pred, "period": new_pid}
-        return pred
-
-    def _migrate_periods(self) -> None:
-        """Walk every persisted rule and rename old period ids in time_of_day predicates,
-        and rename old period ids in the time_of_day_periods.custom map."""
-        # Rules
-        for area_cfg in self._data.get("areas", {}).values():
-            for rule in area_cfg.get("rules", []):
-                when = rule.get("when", {})
-                if "time_of_day" in when:
-                    when["time_of_day"] = self._migrate_period_in_predicate(when["time_of_day"])
-        # Custom-period store
-        periods_data = self._data.get("time_of_day_periods", {})
-        custom = periods_data.get("custom", {})
-        if "night" in custom:
-            custom["nighttime"] = custom.pop("night")
-        if "day" in custom:
-            custom["daytime"] = custom.pop("day")
-        # Hidden list
-        hidden = periods_data.get("hidden", [])
-        periods_data["hidden"] = [
-            "nighttime" if h == "night" else "daytime" if h == "day" else h for h in hidden
-        ]
-
-    def _migrate_groups_to_categories(self) -> None:
-        """Rename the legacy top-level `groups` key to `categories`, and each rule's
-        legacy `group` field to `category`. Idempotent: a no-op once migrated."""
-        if "groups" in self._data and "categories" not in self._data:
-            self._data["categories"] = self._data.pop("groups")
-        for _kind, _id, cfg in self.all_scope_configs():
-            for rule in cfg.get("rules", []):
-                if "group" in rule and "category" not in rule:
-                    rule["category"] = rule.pop("group")
-
-    def _migrate_matchers_to_conditions(self) -> None:
-        """Rename the legacy top-level `matchers` namespace to `conditions`. The nested
-        `weather.groups` sub-key (and its inner `conditions` field) ride along untouched.
-        Idempotent: a no-op once migrated."""
-        if "matchers" in self._data and "conditions" not in self._data:
-            self._data["conditions"] = self._data.pop("matchers")
-
-    def _migrate_drop_area_matchers(self) -> None:
-        """Per-area `matchers` is a removed legacy UI gate — drop the field from every
-        area. `matchers` here is the historical on-disk field name (pre-rename); it is
-        not the current top-level `conditions` namespace, so it must stay literal."""
-        for area_cfg in self._data.get("areas", {}).values():
-            area_cfg.pop("matchers", None)
-
-    def _migrate_relocate_periods(self) -> None:
-        """Move top-level `time_of_day_periods` to `conditions.time_of_day`."""
-        if "time_of_day_periods" not in self._data:
-            return
-        self._data.setdefault("conditions", {})["time_of_day"] = self._data.pop(
-            "time_of_day_periods"
-        )
-
     def _ensure_conditions_namespace(self) -> None:
         """Make sure `conditions.day` (and any future per-condition key) has a default."""
         namespace = self._data.setdefault("conditions", {})
@@ -204,26 +92,9 @@ class AmbienceStore:
 
     def _ensure_categories(self) -> None:
         """Seed the General category when no categories exist. Categories are
-        required: a store must always have at least one (see _migrate_categories)."""
+        required: a store must always have at least one."""
         if not self._data.get("categories"):
             self._data["categories"] = [dict(GENERAL_CATEGORY)]
-
-    def _migrate_categories(self) -> None:
-        """Reassign every uncategorised / unknown-category rule to General, seeding
-        General on demand if a store with other categories never had one.
-        `_ensure_categories` runs first, so at least one category already exists."""
-        known = {c["id"] for c in self._data.get("categories", [])}
-        rules = [
-            rule for _kind, _id, cfg in self.all_scope_configs() for rule in cfg.get("rules", [])
-        ]
-        if not any(r.get("category") is None or r.get("category") not in known for r in rules):
-            return
-        # Orphaned rules need a home: seed General if a store with other categories
-        # never had one, then point them all at it.
-        if GENERAL_CATEGORY_ID not in known:
-            self._data["categories"].append(dict(GENERAL_CATEGORY))
-            known = known | {GENERAL_CATEGORY_ID}
-        reassign_orphan_rules(rules, known, GENERAL_CATEGORY_ID)
 
     def _ensure_switch_defaults(self) -> None:
         sd = self._data.setdefault("switch_defaults", {})
@@ -240,16 +111,9 @@ class AmbienceStore:
             self._data = self._empty()
             return
         self._data = raw
-        self._migrate_groups_to_categories()
-        self._migrate_matchers_to_conditions()
-        self._migrate_actions()
-        self._migrate_periods()
-        self._migrate_drop_area_matchers()
-        self._migrate_relocate_periods()
         self._ensure_conditions_namespace()
         self._ensure_scope_buckets()
         self._ensure_categories()
-        self._migrate_categories()
         self._ensure_switch_defaults()
 
     def as_dict(self) -> dict[str, Any]:

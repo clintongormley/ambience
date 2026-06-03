@@ -122,7 +122,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
 def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise ValueError("config must be an object")
-    config.pop("matchers", None)  # legacy per-area gate (historical name); dropped silently
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
     for rule_idx, rule in enumerate(config.get("rules", [])):
@@ -164,10 +163,10 @@ def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
 
 
 def _canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
-    """Resolve rule order + numbers for storage. Strips legacy `auto_sort` and
-    the transient per-rule `shadowed_by` hint so neither is persisted."""
+    """Resolve rule order + numbers for storage. Strips the transient per-rule
+    `shadowed_by` hint so it isn't persisted."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
-    out = {k: v for k, v in config.items() if k != "auto_sort"}
+    out = dict(config)
     rules = [{k: v for k, v in r.items() if k != "shadowed_by"} for r in config.get("rules", [])]
     out["rules"] = resolve_order(rules, conditions_registry)
     return out
@@ -187,8 +186,8 @@ def _with_shadows(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]
 
 def _coerce_rule_categories(store, config: dict) -> None:
     """Point any rule with no category / an unknown category at General (or, if General
-    was deleted, the first existing category), logging once. Mutates `config`.
-    Shares the per-rule reassignment with store._migrate_categories."""
+    was deleted, the first existing category), logging once. Mutates `config`. This is
+    the single place that enforces the every-rule-has-a-real-category invariant."""
     known = {c["id"] for c in store.categories()}
     target = (
         GENERAL_CATEGORY_ID

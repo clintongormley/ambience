@@ -12,6 +12,8 @@ exclude_docs: |
 
 theme:
   name: material
+  logo: assets/logo-dark.svg
+  favicon: assets/icon-dark.svg
   features:
     - navigation.sections
     - navigation.top
@@ -19,13 +21,20 @@ theme:
     - toc.integrate
   palette:
     - scheme: default
+      primary: deep purple
+      accent: deep orange
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - scheme: slate
+      primary: deep purple
+      accent: deep orange
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
+
+extra_css:
+  - stylesheets/extra.css
 
 markdown_extensions:
   - admonition

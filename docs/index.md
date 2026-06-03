@@ -1,3 +1,8 @@
+<div class="ambience-hero" markdown>
+![Ambience](assets/logo-light.svg#only-light)
+![Ambience](assets/logo-dark.svg#only-dark)
+</div>
+
 # Ambience
 
 Ambience is a condition-based scene engine for Home Assistant. You describe scenes for each room and give each one the conditions that should bring it about. Ambience watches your home and applies the best-matching scene automatically.

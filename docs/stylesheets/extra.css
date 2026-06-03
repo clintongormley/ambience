@@ -1,0 +1,25 @@
+/* Ambience brand colours for the Material theme. */
+:root {
+  --md-primary-fg-color: #4a3e9e;
+  --md-primary-fg-color--light: #6f63c4;
+  --md-primary-fg-color--dark: #372e78;
+  --md-accent-fg-color: #e8901e;
+}
+
+/* The header logo keeps its own gradient colours, so give it a little room. */
+.md-header__button.md-logo img {
+  height: 1.6rem;
+}
+
+/* Centred wordmark hero at the top of the home page. */
+.ambience-hero {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0 2.5rem;
+}
+
+.ambience-hero img {
+  width: 100%;
+  max-width: 28rem;
+  height: auto;
+}

@@ -654,6 +654,13 @@ def test_clamp_degenerate_inversion_never_matches() -> None:
     assert _condition().matches(pred, snap) is False
 
 
+def test_validate_predicate_rejects_bool_offset() -> None:
+    # bool is an int subclass — reject it so `True` can't become a 1-min offset.
+    bad = {"kind": "sun", "anchor": "sunrise", "offset_min": True}
+    with pytest.raises(ValueError):
+        _condition().validate_predicate(_range(bad, _sun("dusk")))
+
+
 def test_clamp_validation_rejects_bad_dir() -> None:
     bad = {
         "kind": "sun",

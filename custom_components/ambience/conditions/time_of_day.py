@@ -155,7 +155,7 @@ class TimeOfDayCondition:
             if anchor not in ANCHOR_ATTR:
                 raise ValueError(f"invalid anchor: {anchor!r}")
             offset = ep.get("offset_min", 0)
-            if not isinstance(offset, int):
+            if not isinstance(offset, int) or isinstance(offset, bool):
                 raise ValueError(f"offset_min must be int: {offset!r}")
             anchor_dt: datetime = getattr(snapshot, anchor)
             if snapshot.now - anchor_dt > _HALF_DAY:

@@ -282,6 +282,17 @@ def test_validate_definition_accepts_clamped_sun() -> None:
     )  # no raise
 
 
+def test_validate_definition_rejects_bool_offset() -> None:
+    # bool is an int subclass — reject it so `True` can't become a 1-min offset.
+    with pytest.raises(ValueError):
+        PeriodStore(_FakeStorage()).validate_definition(
+            {
+                "from": {"kind": "sun", "anchor": "sunrise", "offset_min": True},
+                "to": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
+            }
+        )
+
+
 def test_validate_definition_rejects_bad_clamp_dir() -> None:
     with pytest.raises(ValueError):
         PeriodStore(_FakeStorage()).validate_definition(

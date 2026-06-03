@@ -67,8 +67,9 @@ def _validate_endpoint(ep: Any) -> None:
     elif kind == "sun":
         if ep.get("anchor") not in _VALID_ANCHORS:
             raise ValueError(f"invalid anchor: {ep.get('anchor')!r}")
-        if not isinstance(ep.get("offset_min"), int):
-            raise ValueError(f"offset_min must be int: {ep.get('offset_min')!r}")
+        offset = ep.get("offset_min")
+        if not isinstance(offset, int) or isinstance(offset, bool):
+            raise ValueError(f"offset_min must be int: {offset!r}")
         clamp = ep.get("clamp")
         if clamp is not None:
             _validate_clamp(clamp)

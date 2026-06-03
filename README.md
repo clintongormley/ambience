@@ -1,6 +1,10 @@
 # Ambience
 
-Home Assistant custom integration.
+A condition-based scene engine for Home Assistant.
+
+## What it does
+
+You describe scenes for each room and give each one the conditions that should bring it about — time of day, weather, who is home, and so on. Ambience watches your home and applies the best-matching scene automatically. Home Assistant's built-in Scenes are saved snapshots; Ambience scenes are conditional, so the right lighting, temperature, and mood follow you without manual intervention.
 
 ## Installation
 
@@ -15,76 +19,15 @@ Home Assistant custom integration.
 
 Copy `custom_components/ambience/` into your Home Assistant `config/custom_components/` directory and restart.
 
-## Development
+Requires Home Assistant **2024.1.0** or newer.
 
-This repo is wired into the local HA dev environment at `~/workspace/`:
+See the [full documentation](docs/index.md) for details.
 
-- Alias: `amb`
-- Component dir: `custom_components/ambience`
-- Main container: `ha-amb-main` (start with `ha-wt amb-main`)
-- Feature worktrees: `/new-worktree amb <branch>`
+## Documentation
 
-Run tests:
+Full documentation — concepts, configuration reference, and tips — lives in [`docs/`](docs/index.md). It is also published to GitHub Pages once the site is live.
 
-```sh
-pip install -e '.[test]'
-pytest
-```
+## For developers
 
-## Usage
-
-Configure Ambience via the **Ambience** panel (sidebar, admin-only). Add an area, define scene names, pick which conditions participate, then author scenes. Activating a scene picks the first matching scene from an ordered list (based on time of day, weather, etc.) and runs its actions.
-
-### Per-scope switches
-
-Each scope (the house, every HA floor, and every HA area) gets its own
-`switch.*_ambience` entity. Each switch independently gates only its own
-scope's scenes — `ambience.apply_scene` for an area is a no-op iff *that
-area's* switch is off; same for floor and house. There is no cascade, so
-turning a floor off does not affect rooms on that floor. Switches
-auto-turn-on after a configurable delay (default 2h; 0 disables). Defaults
-and per-scope overrides live in **Settings → Ambience**.
-
-### Service: `ambience.apply_scene`
-
-```yaml
-service: ambience.apply_scene
-data:
-  area: living_room
-  scene: movie_night
-```
-
-### Building the panel
-
-The panel is a Lit + TypeScript app bundled to `custom_components/ambience/frontend/ambience-panel.js`. The bundle is checked in so HACS installs need no build step.
-
-To rebuild:
-
-```sh
-npm install
-npm run build
-```
-
-CI verifies that the committed bundle matches a fresh build — keep them in sync.
-
-### WebSocket API
-
-All commands are admin-only.
-
-| Command | Payload | Returns |
-|---|---|---|
-| `ambience/areas/list` | – | `[{area_id, name}]` |
-| `ambience/area/get` | `{area_id}` | full area config |
-| `ambience/area/save` | `{area_id, config}` | `{ok: true}` or error |
-| `ambience/area/delete` | `{area_id}` | `{ok: true}` |
-| `ambience/conditions/list` | – | conditions + descriptions + predicate help |
-| `ambience/services/list` | – | HA services available for use as actions |
-| `ambience/exposed_actions/list` | – | configured action definitions (id, label, service, …) |
-| `ambience/exposed_actions/save` | `{actions}` | `{ok: true}` |
-| `ambience/validate` | `{config}` | `{ok: true}` or error |
-| `ambience/dry_run` | `{area_id, scene}` | resolved-scene preview |
-| `ambience/switch_defaults/list` | – | `{name, auto_on_delay_seconds}` |
-| `ambience/switch_defaults/save` | `{name, auto_on_delay_seconds}` | `{ok: true}` |
-| `ambience/house/switch/save` | `{name\|null, auto_on_delay_seconds\|null}` | `{ok: true}` |
-| `ambience/floor/switch/save` | `{floor_id, name\|null, auto_on_delay_seconds\|null}` | `{ok: true}` |
-| `ambience/area/switch/save` | `{area_id, name\|null, auto_on_delay_seconds\|null}` | `{ok: true}` |
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — how Ambience works inside: the engine, scene resolution, WebSocket API, and the frontend build pipeline.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — dev environment setup, quality gates, and how to run tests.

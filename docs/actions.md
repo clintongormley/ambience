@@ -48,7 +48,7 @@ The interval you set here is the default for every scene that uses this action. 
 
 ## Using an exposed action in a scene
 
-When you edit a scene, the **Then** section (or **Actions** heading) is where you add what Ambience should do.
+When you edit a scene, the **Actions** section is where you add what Ambience should do (the "then" of the scene).
 
 1. Click **+ Add action…** in the scene editor.
 2. Choose an exposed action from the picker. Only actions you have set up in Settings → Actions appear here.

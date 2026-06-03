@@ -60,7 +60,7 @@ When you turn a switch **on**, all the switches below it come on with it, so you
 
 While a switch is **off**, Ambience does not apply that scope's scenes automatically. The auto-trigger engine skips the scope entirely — it will not react to changes in occupancy, time of day, weather, or entity state for that scope.
 
-There is one exception: the **Run actions** button in the Ambience panel applies a scene immediately regardless of the switch state. This lets you apply a scene manually even when automatic triggering is paused.
+There is one exception: the **Run actions** option in a scene's action menu applies that scene immediately regardless of the switch state. This lets you apply a scene manually even when automatic triggering is paused.
 
 ---
 

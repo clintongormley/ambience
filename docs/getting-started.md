@@ -68,7 +68,7 @@ During the day you probably want more light. When the sky is dull you want even 
 1. Click **+ Add scene** and name it **Sunny day**.
 2. Add a **People** condition — someone present.
 3. Add a **Time of day** condition and select **Daytime** (dawn until sunset).
-4. Add a **Weather** condition. Open the condition and pick a group that represents good weather (for example "Sunny" or "Partly cloudy"), or set a solar-elevation threshold if you prefer.
+4. Add a **Weather** condition. Open the condition and pick a group that represents good weather (for example **Sunny**), or add a numeric threshold (such as humidity or temperature) if you prefer.
 5. Add a light action at a moderate daytime brightness (for example 70 %).
 6. Click **Save scene**.
 
@@ -83,7 +83,7 @@ During the day you probably want more light. When the sky is dull you want even 
 Place both of these below "Empty" but above "Evening" in the list. Because the first match wins, only one of the two daytime scenes will apply at any moment — whichever one's weather condition passes first. If neither daytime scene matches (because it is not daytime), Ambience moves on to "Evening".
 
 !!! info "📷 Screenshot"
-    The scene editor with a Weather condition open, showing the condition groups (Sunny, Partly cloudy, Cloudy, etc.).
+    The scene editor with a Weather condition open, showing the condition groups (Sunny, Dim, Dark, Wet, Windy).
 
 ---
 

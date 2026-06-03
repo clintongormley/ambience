@@ -17,8 +17,8 @@ The first dropdown sets whose presence is checked. It has six options:
 | **Everybody** | Every tracked person must be at the chosen location. |
 | **Anybody** | At least one tracked person must be at the chosen location. |
 | **Nobody** | No tracked person must be at the chosen location. |
-| **All of:** | Every person you tick must be at the chosen location. |
 | **Any of:** | At least one person you tick must be at the chosen location. |
+| **All of:** | Every person you tick must be at the chosen location. |
 | **None of:** | None of the people you tick must be at the chosen location. |
 
 The first three options apply to your whole household — anyone Home Assistant

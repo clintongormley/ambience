@@ -14,7 +14,6 @@ from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
-from .conditions.weather import WEATHER_CONDITIONS
 from .const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -23,7 +22,6 @@ from .const import (
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
     DOMAIN,
-    GENERAL_CATEGORY_ID,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from .exposed_actions import ExposedActionsStore
@@ -34,11 +32,20 @@ from .service import (
     async_run_rule_actions,
 )
 from .simulate import SimulatedWorld, run_simulation, simulate_inputs
-from .sorting import condition_priority, resolve_order, shadowed_by
+from .sorting import condition_priority
 from .state_options import known_states_for
-from .store import CategoryInUseError, LastCategoryError, reassign_orphan_rules
+from .store import CategoryInUseError, LastCategoryError
 from .trace import buffered_unit_to_dict
-from .validators import validate_reapply_seconds
+from .websocket_helpers import (
+    canonicalise,
+    coerce_rule_categories,
+    dangling_day_entity_warnings,
+    dangling_weather_warnings,
+    missing_period_refs,
+    validate_scope_config,
+    validate_weather_groups,
+    with_shadows,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -122,91 +129,6 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_traces_clear)
     websocket_api.async_register_command(hass, _ws_simulate_inputs)
     websocket_api.async_register_command(hass, _ws_simulate)
-
-
-def _validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
-    if not isinstance(config, dict):
-        raise ValueError("config must be an object")
-    conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
-    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
-    for rule_idx, rule in enumerate(config.get("rules", [])):
-        when = rule.get("when", {})
-        for key, predicate in when.items():
-            if predicate is None:
-                continue
-            if key not in conditions_registry:
-                raise ValueError(f"rule {rule_idx}: unknown condition {key}")
-            conditions_registry[key].validate_predicate(predicate)
-        for action_idx, action_spec in enumerate(rule.get("actions", [])):
-            service_id = action_spec.get("service")
-            if not isinstance(service_id, str) or "." not in service_id:
-                raise ValueError(
-                    f"rule {rule_idx} action {action_idx}: missing or malformed `service`"
-                )
-            exposed = exposed_store.get(service_id)
-            if exposed is None:
-                raise ValueError(
-                    f"rule {rule_idx} action {action_idx}: service {service_id!r} not exposed"
-                )
-            entity_ids = action_spec.get("entity_ids", [])
-            if not isinstance(entity_ids, list):
-                raise ValueError(f"rule {rule_idx} action {action_idx}: entity_ids must be a list")
-            if not all(isinstance(eid, str) and eid for eid in entity_ids):
-                raise ValueError(
-                    f"rule {rule_idx} action {action_idx}: entity_ids must be non-empty strings"
-                )
-            params = action_spec.get("params", {})
-            if not isinstance(params, dict):
-                raise ValueError(f"rule {rule_idx} action {action_idx}: params must be an object")
-            # Note: params keys are NOT whitelisted against visible_fields.
-            # A rule may carry extra params for fields that have since been
-            # hidden in settings (or were never exposed); they're still sent
-            # at execution. The save-time dangling-rule warnings surface this
-            # to the user; the engine treats them as overrides.
-            # `exposed` is used here only for the existence check above.
-            _ = exposed
-            if "reapply_seconds" in action_spec:
-                validate_reapply_seconds(
-                    f"rule {rule_idx} action {action_idx}", action_spec["reapply_seconds"]
-                )
-
-
-def _canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
-    """Resolve rule order + numbers for storage. Strips the transient per-rule
-    `shadowed_by` hint so it isn't persisted."""
-    conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
-    out = dict(config)
-    rules = [{k: v for k, v in r.items() if k != "shadowed_by"} for r in config.get("rules", [])]
-    out["rules"] = resolve_order(rules, conditions_registry)
-    return out
-
-
-def _with_shadows(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy whose rules carry a transient `shadowed_by` index (or None).
-    Not persisted — only sent to the frontend."""
-    conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
-    rules = config.get("rules", [])
-    shadows = shadowed_by(rules, conditions_registry)
-    return {
-        **config,
-        "rules": [{**r, "shadowed_by": shadows.get(idx)} for idx, r in enumerate(rules)],
-    }
-
-
-def _coerce_rule_categories(store, config: dict) -> None:
-    """Point any rule with no category / an unknown category at General (or, if General
-    was deleted, the first existing category), logging once. Mutates `config`. This is
-    the single place that enforces the every-rule-has-a-real-category invariant."""
-    known = {c["id"] for c in store.categories()}
-    target = (
-        GENERAL_CATEGORY_ID
-        if GENERAL_CATEGORY_ID in known
-        else next(iter(known), GENERAL_CATEGORY_ID)
-    )
-    if reassign_orphan_rules(config.get("rules", []), known, target):
-        _LOGGER.warning(
-            "ambience: scope save had uncategorised/unknown-category rule(s); set to General"
-        )
 
 
 @websocket_api.require_admin
@@ -407,7 +329,7 @@ async def _ws_area_get(
         return
     store = hass.data[DOMAIN][DATA_STORE]
     area = store.get_area(area_id) or {"rules": []}
-    connection.send_result(msg["id"], _with_shadows(hass, area))
+    connection.send_result(msg["id"], with_shadows(hass, area))
 
 
 @websocket_api.require_admin
@@ -433,17 +355,17 @@ async def _ws_area_save(
         )
         return
     try:
-        _validate_scope_config(hass, msg["config"])
+        validate_scope_config(hass, msg["config"])
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
     # Coerce categories BEFORE canonicalising so each rule is ordered in its final
     # (post-coercion) category bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    _coerce_rule_categories(store, msg["config"])
-    config = _canonicalise(hass, msg["config"])
+    coerce_rule_categories(store, msg["config"])
+    config = canonicalise(hass, msg["config"])
     await store.async_save_area(area_id, config)
-    connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
+    connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
 
 
 @websocket_api.require_admin
@@ -465,7 +387,7 @@ async def _ws_floor_get(
         return
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = store.get_floor(floor_id) or {"rules": []}
-    connection.send_result(msg["id"], _with_shadows(hass, cfg))
+    connection.send_result(msg["id"], with_shadows(hass, cfg))
 
 
 @websocket_api.require_admin
@@ -491,17 +413,17 @@ async def _ws_floor_save(
         )
         return
     try:
-        _validate_scope_config(hass, msg["config"])
+        validate_scope_config(hass, msg["config"])
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
     # Coerce categories BEFORE canonicalising so each rule is ordered in its final
     # (post-coercion) category bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    _coerce_rule_categories(store, msg["config"])
-    config = _canonicalise(hass, msg["config"])
+    coerce_rule_categories(store, msg["config"])
+    config = canonicalise(hass, msg["config"])
     await store.async_save_floor(floor_id, config)
-    connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
+    connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
 
 
 @websocket_api.require_admin
@@ -514,7 +436,7 @@ async def _ws_house_get(
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     house = store.get_house() or {"rules": []}
-    connection.send_result(msg["id"], _with_shadows(hass, house))
+    connection.send_result(msg["id"], with_shadows(hass, house))
 
 
 @websocket_api.require_admin
@@ -531,17 +453,17 @@ async def _ws_house_save(
     msg: dict[str, Any],
 ) -> None:
     try:
-        _validate_scope_config(hass, msg["config"])
+        validate_scope_config(hass, msg["config"])
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
     # Coerce categories BEFORE canonicalising so each rule is ordered in its final
     # (post-coercion) category bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    _coerce_rule_categories(store, msg["config"])
-    config = _canonicalise(hass, msg["config"])
+    coerce_rule_categories(store, msg["config"])
+    config = canonicalise(hass, msg["config"])
     await store.async_save_house(config)
-    connection.send_result(msg["id"], {"ok": True, "config": _with_shadows(hass, config)})
+    connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
 
 
 @websocket_api.require_admin
@@ -558,7 +480,7 @@ async def _ws_validate(
     msg: dict[str, Any],
 ) -> None:
     try:
-        _validate_scope_config(hass, msg["config"])
+        validate_scope_config(hass, msg["config"])
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
@@ -666,22 +588,6 @@ async def _ws_run_rule_actions(
     connection.send_result(msg["id"], result)
 
 
-def _missing_period_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
-    """Return a list of period ids referenced by predicate that are not in effective_ids."""
-    if predicate is None:
-        return []
-    if isinstance(predicate, list):
-        result: list[str] = []
-        for item in predicate:
-            result.extend(_missing_period_refs(item, effective_ids))
-        return result
-    if isinstance(predicate, dict) and "period" in predicate:
-        pid = predicate["period"]
-        if isinstance(pid, str) and pid not in effective_ids:
-            return [pid]
-    return []
-
-
 @websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "ambience/time_of_day_periods/list"})
 @websocket_api.async_response
@@ -722,7 +628,7 @@ async def _ws_periods_save(
     for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
         for rule in scope_cfg.get("rules", []):
             pred = rule.get("when", {}).get("time_of_day")
-            for missing in _missing_period_refs(pred, effective_ids):
+            for missing in missing_period_refs(pred, effective_ids):
                 warnings.append(
                     {
                         "scope_kind": scope_kind,
@@ -780,45 +686,8 @@ async def _ws_day_config_save(
     }
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_condition_config("day", new_cfg)
-    warnings = _dangling_day_entity_warnings(hass, new_cfg)
+    warnings = dangling_day_entity_warnings(hass, new_cfg)
     connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
-
-
-_SENSOR_DEPENDENT_KINDS = {"workday", "holiday"}
-_CALENDAR_DEPENDENT_KINDS = {"first_workday", "last_workday"}
-
-
-def _dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> list[dict[str, Any]]:
-    store = hass.data[DOMAIN][DATA_STORE]
-    sensor_ok = bool(cfg.get("workday_sensor"))
-    calendar_ok = bool(cfg.get("workday_calendar"))
-    warnings: list[dict[str, Any]] = []
-    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for rule in scope_cfg.get("rules", []):
-            pred = rule.get("when", {}).get("day")
-            if not isinstance(pred, dict):
-                continue
-            for slot in (pred.get("include") or []) + (pred.get("exclude") or []):
-                kind = (slot or {}).get("kind")
-                if kind in _SENSOR_DEPENDENT_KINDS and not sensor_ok:
-                    warnings.append(
-                        {
-                            "scope_kind": scope_kind,
-                            "scope_id": scope_id,
-                            "rule_name": rule.get("name", ""),
-                            "reason": f"uses `{kind}` item but `workday_sensor` is unset",
-                        }
-                    )
-                if kind in _CALENDAR_DEPENDENT_KINDS and not calendar_ok:
-                    warnings.append(
-                        {
-                            "scope_kind": scope_kind,
-                            "scope_id": scope_id,
-                            "rule_name": rule.get("name", ""),
-                            "reason": f"uses `{kind}` item but `workday_calendar` is unset",
-                        }
-                    )
-    return warnings
 
 
 @websocket_api.require_admin
@@ -848,7 +717,7 @@ async def _ws_weather_config_save(
     msg: dict[str, Any],
 ) -> None:
     try:
-        groups = _validate_weather_groups(msg.get("groups"))
+        groups = validate_weather_groups(msg.get("groups"))
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
@@ -856,80 +725,8 @@ async def _ws_weather_config_save(
     store = hass.data[DOMAIN][DATA_STORE]
     old_cfg = store.get_condition_config("weather")
     await store.async_save_condition_config("weather", new_cfg)
-    warnings = _dangling_weather_warnings(hass, old_cfg, new_cfg)
+    warnings = dangling_weather_warnings(hass, old_cfg, new_cfg)
     connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
-
-
-def _validate_weather_groups(groups: Any) -> list[dict[str, Any]]:
-    if groups is None:
-        return []
-    if not isinstance(groups, list):
-        raise ValueError("groups must be a list")
-    seen_ids: set[str] = set()
-    valid_conditions = set(WEATHER_CONDITIONS)
-    cleaned: list[dict[str, Any]] = []
-    for raw in groups:
-        if not isinstance(raw, dict):
-            raise ValueError("each group must be an object")
-        gid = raw.get("id")
-        label = raw.get("label")
-        conds = raw.get("conditions")
-        if not isinstance(gid, str) or not gid:
-            raise ValueError(f"group id must be a non-empty string: {gid!r}")
-        if gid in seen_ids:
-            raise ValueError(f"duplicate group id: {gid!r}")
-        seen_ids.add(gid)
-        if not isinstance(label, str) or not label:
-            raise ValueError(f"group {gid!r} label must be a non-empty string")
-        if not isinstance(conds, list) or any(
-            not isinstance(c, str) or c not in valid_conditions for c in conds
-        ):
-            raise ValueError(f"group {gid!r} has invalid condition(s)")
-        cleaned.append({"id": gid, "label": label, "conditions": list(conds)})
-    return cleaned
-
-
-def _weather_predicate_active(pred: Any) -> bool:
-    return isinstance(pred, dict) and bool(pred.get("groups") or pred.get("thresholds"))
-
-
-def _dangling_weather_warnings(
-    hass: HomeAssistant,
-    old_cfg: dict[str, Any],
-    new_cfg: dict[str, Any],
-) -> list[dict[str, Any]]:
-    store = hass.data[DOMAIN][DATA_STORE]
-    new_ids = {g["id"] for g in (new_cfg.get("groups") or [])}
-    old_ids = {g["id"] for g in (old_cfg.get("groups") or [])}
-    removed_ids = old_ids - new_ids
-    entity_cleared = not new_cfg.get("entity")
-
-    warnings: list[dict[str, Any]] = []
-    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for rule in scope_cfg.get("rules", []):
-            pred = rule.get("when", {}).get("weather")
-            if not _weather_predicate_active(pred):
-                continue
-            if entity_cleared:
-                warnings.append(
-                    {
-                        "scope_kind": scope_kind,
-                        "scope_id": scope_id,
-                        "rule_name": rule.get("name", ""),
-                        "reason": "uses a weather predicate but the weather entity is unset",
-                    }
-                )
-            for gid in pred.get("groups", []):
-                if gid in removed_ids:
-                    warnings.append(
-                        {
-                            "scope_kind": scope_kind,
-                            "scope_id": scope_id,
-                            "rule_name": rule.get("name", ""),
-                            "reason": f"references deleted weather group {gid!r}",
-                        }
-                    )
-    return warnings
 
 
 @websocket_api.require_admin

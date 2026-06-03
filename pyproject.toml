@@ -16,6 +16,7 @@ test = [
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
@@ -23,3 +24,19 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+
+[tool.coverage.run]
+source = ["custom_components.ambience"]
+branch = true
+
+[tool.coverage.report]
+# Floor set to the current measured branch-coverage level so CI is green
+# immediately; raised in the final task once backfill lands.
+fail_under = 93
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(typing\\.)?overload",
+    "\\.\\.\\.",
+]

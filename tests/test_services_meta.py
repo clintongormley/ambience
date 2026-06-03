@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from custom_components.ambience.services_meta import (
+    _flatten_field_groups,
+    _registry_is_dict_stubbed,
     get_service_schema,
     list_services,
 )
@@ -96,6 +98,62 @@ async def test_get_service_schema_handles_malformed_id() -> None:
 
     with pytest.raises(ValueError):
         await get_service_schema(hass, "no_dot")
+
+
+def test_flatten_field_groups_returns_empty_dict_for_non_dict_input() -> None:
+    """Line 41: non-dict input short-circuits to {}."""
+    assert _flatten_field_groups(None) == {}
+    assert _flatten_field_groups([]) == {}
+    assert _flatten_field_groups("string") == {}
+
+
+def test_registry_is_dict_stubbed_skips_empty_domain_maps() -> None:
+    """Line 61: domains with no services are skipped; if all domains are empty
+    the registry is treated as real (found_any stays False → returns False)."""
+    # Empty domain map — the `continue` branch on line 61.
+    registry = {"light": {}, "switch": {}}
+    assert _registry_is_dict_stubbed(registry) is False
+
+
+def test_registry_is_dict_stubbed_returns_false_for_non_dict_service_objects() -> None:
+    """Line 65: a domain map whose first value is a Service object (not dict)
+    returns False immediately — this is a real HA registry, not a stub."""
+
+    class _FakeService:
+        pass
+
+    registry = {"light": {"turn_on": _FakeService()}}
+    assert _registry_is_dict_stubbed(registry) is False
+
+
+async def test_descriptions_falls_back_to_runtime_registry_when_loader_raises() -> None:
+    """Lines 83-95: when async_get_all_descriptions raises, list_services
+    falls back to a degraded runtime-registry view (ids present, no fields)."""
+    # Provide a Service object so _registry_is_dict_stubbed returns False,
+    # forcing the code to call async_get_all_descriptions.
+
+    class _FakeService:
+        pass
+
+    hass = MagicMock()
+    hass.services.async_services.return_value = {"light": {"turn_on": _FakeService()}}
+
+    # The import happens inside the try block; patching the module attribute
+    # means the `from X import Y` picks up the mock.
+    import homeassistant.helpers.service as _svc_module
+
+    async def _raise(*_a, **_kw):
+        raise RuntimeError("no descriptions on disk")
+
+    with patch.object(_svc_module, "async_get_all_descriptions", _raise):
+        items = await list_services(hass)
+
+    assert len(items) == 1
+    assert items[0]["id"] == "light.turn_on"
+    # Degraded path: no name/description/target populated from spec
+    assert items[0]["name"] == ""
+    assert items[0]["description"] == ""
+    assert items[0]["target"] is None
 
 
 async def test_get_service_schema_flattens_nested_field_groups() -> None:

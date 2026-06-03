@@ -5,7 +5,13 @@ from __future__ import annotations
 import itertools
 from typing import Any
 
-from custom_components.ambience.sorting import resolve_order, shadowed_by, sort_rules
+from custom_components.ambience.sorting import (
+    GAP,
+    _slot,
+    resolve_order,
+    shadowed_by,
+    sort_rules,
+)
 
 
 class IntervalCondition:
@@ -367,4 +373,76 @@ def test_disabled_rule_is_not_reported_as_shadowed() -> None:
     ]
     # The disabled rule below is not flagged shadowed — its disabled state
     # is what the UI shows instead.
+    assert shadowed_by(ordered, conditions) == {}
+
+
+# ---------------------------------------------------------------------------
+# _slot coverage: upper-only and lower-only open-ended cases (lines 127, 129)
+# ---------------------------------------------------------------------------
+
+
+def test_slot_upper_none_lower_set_places_above_lower() -> None:
+    # upper=None, lower=L → values land at L + (m-k)*GAP (open-ended upward).
+    # k=0, m=1: single item above lower=100 → 100 + (1-0)*GAP = 100 + GAP
+    assert _slot(None, 100, 0, 1) == 100 + GAP
+
+
+def test_slot_upper_none_lower_set_multiple_items_decrease_upward() -> None:
+    # Three items above lower=0: k=0 highest, k=2 lowest.
+    lower = 0
+    v0 = _slot(None, lower, 0, 3)
+    v1 = _slot(None, lower, 1, 3)
+    v2 = _slot(None, lower, 2, 3)
+    assert v0 > v1 > v2 > lower
+
+
+def test_slot_lower_none_upper_set_places_below_upper() -> None:
+    # lower=None, upper=U → values land below U at U - (k+1)*GAP.
+    # k=0, m=1: single item below upper=5000 → 5000 - GAP
+    assert _slot(5000, None, 0, 1) == 5000 - GAP
+
+
+def test_slot_lower_none_upper_set_multiple_items_decrease_downward() -> None:
+    # Three items below upper=10000: k=0 highest, k=2 lowest.
+    upper = 10000
+    v0 = _slot(upper, None, 0, 3)
+    v1 = _slot(upper, None, 1, 3)
+    v2 = _slot(upper, None, 2, 3)
+    assert upper > v0 > v1 > v2
+
+
+# ---------------------------------------------------------------------------
+# resolve_order: pinned rule with no priority gets assigned 0 (line 182)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_assigns_zero_to_pinned_rule_missing_priority() -> None:
+    # A rule flagged pinned=True but with no 'priority' key is an edge case that
+    # "shouldn't happen via the UI" per the source comment. The code assigns 0.
+    conditions = {"mode": StringCondition()}
+    rules = [
+        {"name": "normal", "when": {"mode": "a"}, "actions": []},
+        {"name": "pinned-no-prio", "when": {"mode": "b"}, "actions": [], "pinned": True},
+    ]
+    out = resolve_order(rules, conditions)
+    by_name = {r["name"]: r for r in out}
+    # After resolve_order the pinned rule must have a valid integer priority.
+    assert isinstance(by_name["pinned-no-prio"]["priority"], int)
+
+
+# ---------------------------------------------------------------------------
+# _superset_or_equal: contains callable returns False (line 224)
+# ---------------------------------------------------------------------------
+
+
+def test_shadowed_by_contains_callable_returns_false_is_not_superset() -> None:
+    # IntervalCondition.contains(outer=(5,6), inner=(0,24)) is False
+    # (the narrow interval does NOT contain the wide one), so the earlier
+    # rule does NOT shadow the later one.
+    conditions = {"tod": IntervalCondition()}
+    ordered = [
+        _rule("narrow", {"tod": (5, 6)}),
+        _rule("wide", {"tod": (0, 24)}),
+    ]
+    # narrow does not contain wide, so wide is not shadowed.
     assert shadowed_by(ordered, conditions) == {}

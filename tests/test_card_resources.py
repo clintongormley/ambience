@@ -116,3 +116,96 @@ async def test_unregister_falls_back_to_extra_js_when_no_resource_id(hass: HomeA
         await async_unregister_card_resource(hass, CARD_URL)
 
     mock_frontend.remove_extra_js_url.assert_called_once_with(hass, CARD_URL)
+
+
+async def test_register_skips_async_load_when_already_loaded(hass: HomeAssistant) -> None:
+    """When resources.loaded is True, async_load() must NOT be called again."""
+    resources = FakeResources()
+    resources.loaded = True  # pre-set to skip the load call
+    hass.data["lovelace"] = FakeLovelace(resources)
+
+    # Spy on async_load to make sure it isn't called.
+    original_load = resources.async_load
+    load_calls = []
+
+    async def spy_load() -> None:
+        load_calls.append(True)
+        await original_load()
+
+    resources.async_load = spy_load
+
+    await async_register_card_resource(hass, BASE_URL, CARD_URL)
+
+    assert load_calls == []  # branch 48->51: skip load when already loaded
+    assert resources.created == [{"id": "res_1", "res_type": "module", "url": CARD_URL}]
+
+
+async def test_register_skips_non_matching_item_and_creates_new(hass: HomeAssistant) -> None:
+    """An item whose URL neither equals nor starts with base_url is ignored (56->51 branch)."""
+    unrelated = {"id": "res_3", "res_type": "module", "url": "/other-component/card.js?hash=xyz"}
+    resources = FakeResources([unrelated])
+    hass.data["lovelace"] = FakeLovelace(resources)
+
+    await async_register_card_resource(hass, BASE_URL, CARD_URL)
+
+    # The unrelated item is left alone and a new one is created.
+    assert resources.updated == []
+    assert len(resources.created) == 1
+    assert resources.created[0]["url"] == CARD_URL
+    assert resources.created[0]["res_type"] == "module"
+    new_id = resources.created[0]["id"]
+    assert hass.data[DOMAIN][DATA_CARD_RESOURCE_ID] == new_id
+
+
+async def test_register_falls_back_to_extra_js_on_exception(hass: HomeAssistant) -> None:
+    """If any exception is raised by the resource API, fall back to add_extra_js_url."""
+    resources = FakeResources()
+
+    async def boom() -> None:
+        raise RuntimeError("storage unavailable")
+
+    resources.async_load = boom
+    hass.data["lovelace"] = FakeLovelace(resources)
+
+    with patch("custom_components.ambience.card_resources.frontend") as mock_frontend:
+        await async_register_card_resource(hass, BASE_URL, CARD_URL)
+
+    # Lines 63-64: exception is caught, falls through to add_extra_js_url.
+    mock_frontend.add_extra_js_url.assert_called_once_with(hass, CARD_URL)
+
+
+async def test_unregister_swallows_remove_extra_js_error(hass: HomeAssistant) -> None:
+    """remove_extra_js_url raising must be silently swallowed (lines 79-80)."""
+    with patch("custom_components.ambience.card_resources.frontend") as mock_frontend:
+        mock_frontend.remove_extra_js_url.side_effect = RuntimeError("url not registered")
+        # Must not raise.
+        await async_unregister_card_resource(hass, CARD_URL)
+
+    mock_frontend.remove_extra_js_url.assert_called_once_with(hass, CARD_URL)
+
+
+async def test_unregister_skips_delete_when_no_resources_available(hass: HomeAssistant) -> None:
+    """If resources collection is unavailable (84->exit), nothing is deleted."""
+    # Store a resource_id but provide no lovelace → _get_resources returns None.
+    hass.data.setdefault(DOMAIN, {})[DATA_CARD_RESOURCE_ID] = "res_42"
+
+    # Should complete without error and without trying to delete.
+    await async_unregister_card_resource(hass, CARD_URL)
+
+    # resource_id was popped from hass.data.
+    assert DATA_CARD_RESOURCE_ID not in hass.data.get(DOMAIN, {})
+
+
+async def test_unregister_swallows_delete_exception(hass: HomeAssistant) -> None:
+    """async_delete_item raising must be silently swallowed (lines 87-88)."""
+    resources = FakeResources([{"id": "res_9", "res_type": "module", "url": CARD_URL}])
+
+    async def boom(item_id: str) -> None:
+        raise RuntimeError("storage write error")
+
+    resources.async_delete_item = boom
+    hass.data["lovelace"] = FakeLovelace(resources)
+    hass.data.setdefault(DOMAIN, {})[DATA_CARD_RESOURCE_ID] = "res_9"
+
+    # Must not raise.
+    await async_unregister_card_resource(hass, CARD_URL)

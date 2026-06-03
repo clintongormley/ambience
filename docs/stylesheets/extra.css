@@ -35,6 +35,21 @@
   background-image: url("../assets/logo-dark.svg");
 }
 
+/* The hero logo is the home page's visible title, so the "Ambience" H1 below
+   it would be a duplicate. Keep the heading in the DOM (Material needs an H1,
+   and it helps a11y / SEO / the browser tab) but hide it from view. */
+.ambience-hero ~ h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 /* Centred wordmark hero at the top of the home page. */
 .ambience-hero {
   display: flex;

@@ -23,6 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import TemplateError
 from homeassistant.helpers.template import Template, result_as_boolean
 
+from ..const import get_store
 from ..triggers import EMPTY, TriggerSpec
 from ._collect import collect_scope_predicates
 
@@ -154,12 +155,9 @@ class TemplateCondition:
         """Distinct, non-empty template strings carried by `when.template`
         predicates across all scopes (areas, floors, house). Insertion order;
         duplicates and malformed predicates dropped."""
-        hass = self._hass
-        if hass is None:
+        if self._hass is None:
             return []
-        from ..const import DATA_STORE, DOMAIN
-
-        store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+        store = get_store(self._hass)
         if store is None:
             return []
         seen: set[str] = set()

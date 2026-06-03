@@ -20,10 +20,11 @@ from homeassistant.core import HomeAssistant, State
 from .conditions.script import ScriptSnapshot
 from .conditions.template import TemplateSnapshot
 from .conditions.weather import WEATHER_CONDITIONS
-from .const import DATA_CONDITIONS, DATA_STORE, DATA_SWITCHES, DOMAIN
+from .const import DATA_CONDITIONS, DATA_STORE, DOMAIN
 from .engine import evaluate_explained
 from .naming import category_names, scope_display_name
 from .scope_triggers import iter_predicate_specs, scope_trigger_spec
+from .service import _switch_state
 from .state_options import known_states_for
 from .sun_position import synthetic_sun_state
 from .trace import (
@@ -378,17 +379,6 @@ async def simulate_inputs(
     knobs.extend(await _verdict_knobs(hass, conditions, category_cfg))
     has_time = bool(spec.clock_times or spec.has_time or spec.date_rollover or spec.sun_events)
     return {"knobs": knobs, "has_time": has_time}
-
-
-def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
-    """The scope switch's on/off state, or 'unknown' when unavailable. Mirrors
-    service._switch_state but tolerates a missing switch registry (simulations
-    can run before switches register)."""
-    switches = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {})
-    switch = switches.get((scope_kind, scope_id))
-    if switch is None:
-        return "unknown"
-    return "on" if switch.is_on else "off"
 
 
 def _safe_scope_name(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str | None:

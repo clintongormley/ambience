@@ -10,8 +10,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..triggers import EMPTY, TriggerSpec
+from ._common import UNAVAILABLE, dur_seconds, validate_for
 
-_UNAVAILABLE = {"unavailable", "unknown"}
 _HOME = "home"
 _QUANTS = ("any", "everyone", "nobody")
 
@@ -96,7 +96,7 @@ class PeopleCondition:
         quant = predicate.get("quant") or "any"
         where = predicate.get("where") or _HOME
         negate = bool(predicate.get("negate"))
-        seconds = self._dur_seconds(predicate.get("for"))
+        seconds = dur_seconds(predicate.get("for"))
 
         person_ids = list(who) if who else list(snapshot.persons)
 
@@ -136,7 +136,7 @@ class PeopleCondition:
         # Empty/absent `who` means "all persons": enumerate the current person.*
         # entities the same way snapshot() does.
         persons = [p for p in who if isinstance(p, str) and p] if who else self._all_person_ids()
-        seconds = self._dur_seconds(predicate.get("for"))
+        seconds = dur_seconds(predicate.get("for"))
         durations = frozenset((p, seconds) for p in persons) if seconds > 0 else frozenset()
         return TriggerSpec(entities=frozenset(persons), entity_durations=durations)
 
@@ -166,7 +166,7 @@ class PeopleCondition:
         attribute is absent. `where`: 'home' or a 'zone.*' id. Caller applies
         any `negate` inversion.
         """
-        if state in _UNAVAILABLE:
+        if state in UNAVAILABLE:
             return None  # unobservable
         if in_zones is not None:
             # Attribute present: authoritative membership (overlaps included).
@@ -222,14 +222,7 @@ class PeopleCondition:
         negate = predicate.get("negate")
         if negate is not None and not isinstance(negate, bool):
             raise ValueError(f"`negate` must be a bool, got {negate!r}")
-        dur = predicate.get("for")
-        if dur is not None:
-            if not isinstance(dur, dict):
-                raise ValueError("`for` must be a dict {h,m,s} or null")
-            for k in ("h", "m", "s"):
-                v = dur.get(k, 0)
-                if not isinstance(v, int) or isinstance(v, bool) or v < 0:
-                    raise ValueError(f"`for.{k}` must be a non-negative int")
+        validate_for(predicate.get("for"))
 
     # --- sorting (containment lattice) ----------------------------------
     # No `order_key`: there is no meaningful total order among people
@@ -248,7 +241,7 @@ class PeopleCondition:
         if bool(outer.get("negate")) != bool(inner.get("negate")):
             return False
         # inner must hold at least as long as outer (longer for = more specific).
-        if self._dur_seconds(inner.get("for")) < self._dur_seconds(outer.get("for")):
+        if dur_seconds(inner.get("for")) < dur_seconds(outer.get("for")):
             return False
         qo = outer.get("quant") or "any"
         qi = inner.get("quant") or "any"
@@ -287,18 +280,3 @@ class PeopleCondition:
         if a is None or b is None:
             return True
         return bool(a & b)
-
-    @staticmethod
-    def _dur_seconds(dur: Any) -> float:
-        if not isinstance(dur, dict):
-            return 0.0
-
-        def _num(key: str) -> float:
-            # Defensive: the save path validates these as ints, but the matching
-            # path runs against stored data that may have been hand-edited.
-            try:
-                return float(dur.get(key) or 0)
-            except (TypeError, ValueError):
-                return 0.0
-
-        return _num("h") * 3600 + _num("m") * 60 + _num("s")

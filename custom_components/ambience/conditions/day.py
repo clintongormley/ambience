@@ -11,6 +11,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..const import get_store
 from ..triggers import TriggerSpec
 
 _LOGGER = logging.getLogger(__name__)
@@ -92,9 +93,7 @@ class DayCondition:
     def _day_config(self) -> dict[str, Any]:
         if self._hass is None:
             return {"workday_sensor": None, "workday_calendar": None}
-        from ..const import DATA_STORE, DOMAIN
-
-        store = self._hass.data.get(DOMAIN, {}).get(DATA_STORE)
+        store = get_store(self._hass)
         if store is None:
             return {"workday_sensor": None, "workday_calendar": None}
         return store.get_condition_config("day")

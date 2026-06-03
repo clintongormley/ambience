@@ -501,11 +501,3 @@ async def test_trigger_deps_empty_who_watches_all_persons(hass: HomeAssistant) -
     spec = m.trigger_deps({"quant": "everyone"})  # who absent → all current persons
     assert spec.entities == frozenset({"person.alice", "person.bob"})
     assert spec.entity_durations == frozenset()
-
-
-def test_dur_seconds_tolerates_non_numeric_stored_fields() -> None:
-    """A malformed stored `for:` duration must not raise during matching."""
-    from custom_components.ambience.conditions.people import PeopleCondition
-
-    assert PeopleCondition._dur_seconds({"h": "abc"}) == 0.0
-    assert PeopleCondition._dur_seconds({"h": 1, "m": "x", "s": None}) == 3600.0

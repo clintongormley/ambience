@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..triggers import EMPTY, TriggerSpec
+from ._common import UNAVAILABLE, dur_seconds, validate_for
 
 
 @dataclass(frozen=True)
@@ -27,9 +28,6 @@ class StateSnapshot:
     # entity_id -> attribute dict. Populated alongside states for atoms that
     # compare an attribute instead of the state itself.
     attributes: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-
-_UNAVAILABLE = {"unavailable", "unknown"}
 
 
 class StateCondition:
@@ -109,7 +107,7 @@ class StateCondition:
         if cur is None:
             return False
         state, last_changed, last_updated = cur
-        if state in _UNAVAILABLE:
+        if state in UNAVAILABLE:
             return False
         # When `attribute` is set, swap the LHS from entity.state to
         # entity.attributes[attribute]. Missing attribute → no match.
@@ -134,7 +132,7 @@ class StateCondition:
                 return False
         dur = atom.get("for")
         if dur:
-            seconds = self._dur_seconds(dur)
+            seconds = dur_seconds(dur)
             if seconds > 0:
                 # State-mode atoms clock off last_changed (the state string has
                 # been stable that long); attribute-mode atoms clock off
@@ -166,21 +164,6 @@ class StateCondition:
         if kind == "<=":
             return actual <= threshold
         return False
-
-    @staticmethod
-    def _dur_seconds(dur: Any) -> float:
-        if not isinstance(dur, dict):
-            return 0.0
-
-        def _num(key: str) -> float:
-            # Defensive: the save path validates these as ints, but the matching
-            # path runs against stored data that may have been hand-edited.
-            try:
-                return float(dur.get(key) or 0)
-            except (TypeError, ValueError):
-                return 0.0
-
-        return _num("h") * 3600 + _num("m") * 60 + _num("s")
 
     # --- validation -----------------------------------------------------
 
@@ -239,15 +222,7 @@ class StateCondition:
         attribute = atom.get("attribute")
         if attribute is not None and (not isinstance(attribute, str) or not attribute.strip()):
             raise ValueError("`attribute` must be a non-empty string or null")
-        dur = atom.get("for")
-        if dur is None:
-            return
-        if not isinstance(dur, dict):
-            raise ValueError("`for` must be a dict {h,m,s} or null")
-        for k in ("h", "m", "s"):
-            v = dur.get(k, 0)
-            if not isinstance(v, int) or isinstance(v, bool) or v < 0:
-                raise ValueError(f"`for.{k}` must be a non-negative int")
+        validate_for(atom.get("for"))
 
     # --- linearisation --------------------------------------------------
 
@@ -297,7 +272,7 @@ class StateCondition:
             entity_id = expr.get("entity_id")
             if isinstance(entity_id, str) and entity_id:
                 entities.add(entity_id)
-                seconds = self._dur_seconds(expr.get("for"))
+                seconds = dur_seconds(expr.get("for"))
                 if seconds > 0:
                     durations.add((entity_id, seconds))
             return

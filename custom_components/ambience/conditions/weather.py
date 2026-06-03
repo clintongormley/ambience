@@ -8,7 +8,9 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..const import get_store
 from ..triggers import EMPTY, TriggerSpec
+from ._common import UNAVAILABLE
 
 WEATHER_CONDITIONS = (
     "clear-night",
@@ -74,8 +76,6 @@ DEFAULT_WEATHER_GROUPS: list[dict[str, Any]] = [
     },
 ]
 
-_UNAVAILABLE = ("unknown", "unavailable")
-
 
 @dataclass(frozen=True)
 class WeatherSnapshot:
@@ -110,12 +110,9 @@ class WeatherCondition:
         self._hass = hass
 
     def _entity(self) -> str | None:
-        hass = self._hass
-        if hass is None:
+        if self._hass is None:
             return None
-        from ..const import DATA_STORE, DOMAIN
-
-        store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+        store = get_store(self._hass)
         if store is None:
             return None
         return store.get_condition_config("weather").get("entity")
@@ -130,7 +127,7 @@ class WeatherCondition:
         if not entity_id:
             return WeatherSnapshot(condition=None, attributes={})
         state = hass.states.get(entity_id)
-        if state is None or state.state in _UNAVAILABLE:
+        if state is None or state.state in UNAVAILABLE:
             return WeatherSnapshot(condition=None, attributes={})
         attributes: dict[str, float] = {}
         for key, val in state.attributes.items():
@@ -154,12 +151,9 @@ class WeatherCondition:
         return all(self._threshold_ok(t, snapshot) for t in thresholds)
 
     def _configured_groups(self) -> list[dict[str, Any]]:
-        hass = self._hass
-        if hass is None:
+        if self._hass is None:
             return []
-        from ..const import DATA_STORE, DOMAIN
-
-        store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+        store = get_store(self._hass)
         if store is None:
             return []
         return list(store.get_condition_config("weather").get("groups") or [])

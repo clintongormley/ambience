@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..triggers import TriggerSpec
+from ._common import merge_intervals
 
 ANCHOR_ATTR = {
     "sunrise": "next_rising",
@@ -184,7 +185,7 @@ class TimeOfDayCondition:
         return result
 
     def contains(self, outer: Any, inner: Any) -> bool:
-        outer_intervals = _merge_intervals(self._intervals(outer))
+        outer_intervals = merge_intervals(self._intervals(outer))
         inner_intervals = self._intervals(inner)
         return all(
             any(o_start <= i_start and i_end <= o_end for o_start, o_end in outer_intervals)
@@ -262,22 +263,6 @@ def _in_range(now: datetime, start: datetime, end: datetime) -> bool:
 
 def _minute_of_day(value: datetime) -> float:
     return value.hour * 60 + value.minute + value.second / 60
-
-
-def _merge_intervals(
-    intervals: list[tuple[float, float]],
-) -> list[tuple[float, float]]:
-    if not intervals:
-        return []
-    ordered = sorted(intervals)
-    merged = [ordered[0]]
-    for start, end in ordered[1:]:
-        last_start, last_end = merged[-1]
-        if start <= last_end:
-            merged[-1] = (last_start, max(last_end, end))
-        else:
-            merged.append((start, end))
-    return merged
 
 
 def _synthetic_snapshot() -> TimeOfDaySnapshot:

@@ -1,5 +1,14 @@
 """Constants for the Ambience integration."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+    from .store import AmbienceStore
+
 DOMAIN = "ambience"
 STORAGE_KEY = "ambience"
 STORAGE_VERSION = 1
@@ -57,3 +66,10 @@ DATA_CARD_RESOURCE_ID = "card_resource_id"
 # hass.data key holding the versioned card URL, needed by the add_extra_js_url
 # fallback's removal on unload.
 DATA_CARD_RESOURCE_URL = "card_resource_url"
+
+
+def get_store(hass: HomeAssistant) -> AmbienceStore | None:
+    """The Ambience store for this hass, or None when the integration isn't set
+    up yet. Tolerant lookup for read paths that may run before/around setup;
+    paths that require the store to exist still index ``hass.data`` directly."""
+    return hass.data.get(DOMAIN, {}).get(DATA_STORE)

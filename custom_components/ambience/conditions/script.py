@@ -21,6 +21,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from ..const import get_store
 from ..triggers import TriggerSpec
 from ._collect import collect_scope_predicates
 
@@ -135,12 +136,9 @@ class ScriptCondition:
         """Walk every scope's rules (areas, floors, house) and return distinct
         (script, args-json) pairs carried by `when.script` predicates. Malformed
         predicates are skipped. Order is insertion order; duplicates are removed."""
-        hass = self._hass
-        if hass is None:
+        if self._hass is None:
             return []
-        from ..const import DATA_STORE, DOMAIN
-
-        store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+        store = get_store(self._hass)
         if store is None:
             return []
         seen: set[tuple[str, str]] = set()

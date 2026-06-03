@@ -9,8 +9,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from ..triggers import EMPTY, TriggerSpec
-
-_UNAVAILABLE = ("unknown", "unavailable")
+from ._common import UNAVAILABLE, as_float, merge_intervals
 
 # 8-point compass sectors as 45°-wide (from, to) arcs; from > to wraps past 360.
 SECTORS: dict[str, tuple[float, float]] = {
@@ -50,11 +49,11 @@ class SunCondition:
 
     async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> SunSnapshot:
         state = hass.states.get("sun.sun")
-        if state is None or state.state in _UNAVAILABLE:
+        if state is None or state.state in UNAVAILABLE:
             return SunSnapshot(elevation=None, azimuth=None)
         return SunSnapshot(
-            elevation=_as_float(state.attributes.get("elevation")),
-            azimuth=_as_float(state.attributes.get("azimuth")),
+            elevation=as_float(state.attributes.get("elevation")),
+            azimuth=as_float(state.attributes.get("azimuth")),
         )
 
     def matches(self, predicate: Any, snapshot: SunSnapshot) -> bool:
@@ -95,7 +94,7 @@ class SunCondition:
 
     @staticmethod
     def _azimuth_contains(outer: Any, inner: Any) -> bool:
-        outer_intervals = _merge_intervals(_azimuth_intervals(outer))
+        outer_intervals = merge_intervals(_azimuth_intervals(outer))
         inner_intervals = _azimuth_intervals(inner)
         return all(
             any(o0 <= i0 and i1 <= o1 for o0, o1 in outer_intervals) for i0, i1 in inner_intervals
@@ -179,8 +178,8 @@ class SunCondition:
     def _elevation_ok(constraint: Any, elevation: float | None) -> bool:
         if elevation is None or not isinstance(constraint, dict):
             return False
-        lo = _as_float(constraint.get("min"))
-        hi = _as_float(constraint.get("max"))
+        lo = as_float(constraint.get("min"))
+        hi = as_float(constraint.get("max"))
         if lo is not None and elevation < lo:
             return False
         return hi is None or elevation <= hi
@@ -248,28 +247,8 @@ def _azimuth_intervals(predicate: Any) -> list[tuple[float, float]]:
     return intervals
 
 
-def _merge_intervals(intervals: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    if not intervals:
-        return []
-    ordered = sorted(intervals)
-    merged = [ordered[0]]
-    for start, end in ordered[1:]:
-        last_start, last_end = merged[-1]
-        if start <= last_end:
-            merged[-1] = (last_start, max(last_end, end))
-        else:
-            merged.append((start, end))
-    return merged
-
-
 def _sector_label(azimuth: float) -> str:
     for label, arc in SECTORS.items():
         if _in_arc(azimuth, *arc):
             return label
     return "N"
-
-
-def _as_float(value: Any) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return float(value)

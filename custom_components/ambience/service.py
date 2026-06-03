@@ -67,11 +67,12 @@ def category_ids(cfg: dict[str, Any]) -> set[str]:
 def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
     """Return the on/off state of the scope's own switch.
 
-    Returns 'on', 'off', or 'unknown' (entity not yet registered).
+    Returns 'on', 'off', or 'unknown' (entity not yet registered, or the switch
+    registry not yet set up — simulations can run before switches register).
     Gating reads only the scope's own switch; parent toggles cascade state
     onto descendant switches at turn-on/off time (see switch.py), not here.
     """
-    switch = hass.data[DOMAIN].get(DATA_SWITCHES, {}).get((scope_kind, scope_id))
+    switch = hass.data.get(DOMAIN, {}).get(DATA_SWITCHES, {}).get((scope_kind, scope_id))
     if switch is None:
         return "unknown"
     return "on" if switch.is_on else "off"

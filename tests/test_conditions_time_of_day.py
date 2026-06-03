@@ -596,3 +596,102 @@ def test_trigger_deps_unknown_kind_produces_no_deps() -> None:
     spec = m.trigger_deps(pred)
     assert spec.clock_times == frozenset()
     assert spec.sun_events == frozenset()
+
+
+# ── clock-clamped sun endpoints ───────────────────────────────────────────────
+
+
+def _sun_clamp(anchor: str, direction: str, hh: int, mm: int, offset_min: int = 0) -> dict:
+    return {
+        "kind": "sun",
+        "anchor": anchor,
+        "offset_min": offset_min,
+        "clamp": {"dir": direction, "hh": hh, "mm": mm},
+    }
+
+
+def test_clamp_not_before_holds_floor_when_anchor_earlier() -> None:
+    # sunrise 06:00, clamp not-before 08:30 → start = 08:30. now=07:00 is outside.
+    snap = _build_snapshot(datetime(2026, 5, 13, 7, 0, tzinfo=UTC))
+    pred = _range(_sun_clamp("sunrise", "not_before", 8, 30), _sun("dusk"))
+    assert _condition().matches(pred, snap) is False
+
+
+def test_clamp_not_before_inside_after_floor() -> None:
+    snap = _build_snapshot(datetime(2026, 5, 13, 9, 0, tzinfo=UTC))
+    pred = _range(_sun_clamp("sunrise", "not_before", 8, 30), _sun("dusk"))
+    assert _condition().matches(pred, snap) is True
+
+
+def test_clamp_not_before_anchor_wins_when_later() -> None:
+    # sunrise 09:00 (override) is later than the 08:30 floor → start = 09:00.
+    snap = _build_snapshot(
+        datetime(2026, 5, 13, 8, 45, tzinfo=UTC),
+        sunrise=datetime(2026, 5, 13, 9, 0, tzinfo=UTC),
+    )
+    pred = _range(_sun_clamp("sunrise", "not_before", 8, 30), _sun("dusk"))
+    assert _condition().matches(pred, snap) is False  # 08:45 < 09:00
+
+
+def test_clamp_not_after_caps_ceiling_when_anchor_later() -> None:
+    # sunset 18:00, clamp not-after 17:00 → end = 17:00. now=17:30 is outside.
+    snap = _build_snapshot(datetime(2026, 5, 13, 17, 30, tzinfo=UTC))
+    pred = _range(_sun("sunrise"), _sun_clamp("sunset", "not_after", 17, 0))
+    assert _condition().matches(pred, snap) is False
+
+
+def test_clamp_combines_with_offset() -> None:
+    # sunrise 06:00 +60min = 07:00, clamp not-before 08:30 → start = 08:30.
+    snap = _build_snapshot(datetime(2026, 5, 13, 8, 0, tzinfo=UTC))
+    pred = _range(_sun_clamp("sunrise", "not_before", 8, 30, offset_min=60), _sun("dusk"))
+    assert _condition().matches(pred, snap) is False  # 08:00 < 08:30
+
+
+def test_clamp_degenerate_inversion_never_matches() -> None:
+    # not-before pushes start past a fixed end → empty range, never matches.
+    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    pred = _range(_sun_clamp("sunrise", "not_before", 20, 0), _time(18, 0))
+    assert _condition().matches(pred, snap) is False
+
+
+def test_clamp_validation_rejects_bad_dir() -> None:
+    bad = {
+        "kind": "sun",
+        "anchor": "sunrise",
+        "offset_min": 0,
+        "clamp": {"dir": "sideways", "hh": 8, "mm": 30},
+    }
+    with pytest.raises(ValueError):
+        _condition().validate_predicate(_range(bad, _sun("dusk")))
+
+
+def test_clamp_validation_rejects_bad_time() -> None:
+    bad = {
+        "kind": "sun",
+        "anchor": "sunrise",
+        "offset_min": 0,
+        "clamp": {"dir": "not_before", "hh": 25, "mm": 0},
+    }
+    with pytest.raises(ValueError):
+        _condition().validate_predicate(_range(bad, _sun("dusk")))
+
+
+def test_clamp_preserves_legitimate_overnight_wrap() -> None:
+    # dusk(not before 20:00) → dawn is a genuine overnight range, NOT a
+    # degenerate inversion: it must still match across midnight.
+    pred = _range(_sun_clamp("dusk", "not_before", 20, 0), _sun("dawn"))
+    cond = _condition()
+    assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 22, 0, tzinfo=UTC))) is True
+    assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 4, 0, tzinfo=UTC))) is True
+    assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 20, 30, tzinfo=UTC))) is True
+    # Outside the range: before the 20:00 floor, and at noon.
+    assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 19, 0, tzinfo=UTC))) is False
+    assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))) is False
+
+
+def test_non_binding_clamp_behaves_like_plain_anchor() -> None:
+    # A not-before floor far earlier than the anchor never binds → dusk → dawn.
+    pred = _range(_sun_clamp("dusk", "not_before", 6, 0), _sun("dawn"))
+    cond = _condition()
+    assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 22, 0, tzinfo=UTC))) is True
+    assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))) is False

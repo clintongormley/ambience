@@ -90,6 +90,8 @@ class TimeOfDayCondition:
 
     def _match_one(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
         start, end = self._resolve_range(item, snapshot)
+        if start >= end and isinstance(item, dict) and _has_clamped_inversion(item):
+            return False
         return _in_range(snapshot.now, start, end)
 
     def _resolve_range(
@@ -142,8 +144,33 @@ class TimeOfDayCondition:
                 anchor_dt += _DAY
             elif anchor_dt - snapshot.now > _HALF_DAY:
                 anchor_dt -= _DAY
-            return anchor_dt + timedelta(minutes=offset)
+            anchor_dt = anchor_dt + timedelta(minutes=offset)
+            clamp = ep.get("clamp")
+            if clamp is not None:
+                anchor_dt = self._apply_clamp(anchor_dt, clamp)
+            return anchor_dt
         raise ValueError(f"invalid endpoint kind: {kind!r}")
+
+    def _apply_clamp(self, anchor_dt: datetime, clamp: Any) -> datetime:
+        """Clamp a resolved sun datetime by a local clock time.
+
+        not_before → max(anchor, clock); not_after → min(anchor, clock). The
+        clock time is interpreted as HA-local on the anchor's local date, so a
+        clamp commutes with DST the same way a `time` endpoint does."""
+        if not isinstance(clamp, dict):
+            raise ValueError(f"clamp must be an object: {clamp!r}")
+        direction = clamp.get("dir")
+        if direction not in ("not_before", "not_after"):
+            raise ValueError(f"invalid clamp dir: {direction!r}")
+        hh, mm = clamp.get("hh"), clamp.get("mm")
+        if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
+            raise ValueError(f"invalid clamp hh: {hh!r}")
+        if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
+            raise ValueError(f"invalid clamp mm: {mm!r}")
+        clamp_dt = dt_util.as_local(anchor_dt).replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if direction == "not_before":
+            return max(anchor_dt, clamp_dt)
+        return min(anchor_dt, clamp_dt)
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:
@@ -253,6 +280,27 @@ class TimeOfDayCondition:
             offset = endpoint.get("offset_min", 0)
             if anchor in ANCHOR_ATTR and isinstance(offset, int) and not isinstance(offset, bool):
                 sun_events.add((anchor, offset))
+
+
+def _has_clamped_inversion(item: dict) -> bool:
+    """Return True if this predicate item has a clamp that can produce a
+    degenerate (start >= end) inversion rather than an overnight wrap.
+
+    A ``not_before`` clamp on the ``from`` endpoint only pushes start later;
+    a ``not_after`` clamp on the ``to`` endpoint only pulls end earlier. In
+    both cases an apparent start >= end is a same-day inversion (empty range),
+    never a genuine midnight wrap."""
+    from_ep = item.get("from")
+    to_ep = item.get("to")
+    if isinstance(from_ep, dict):
+        clamp = from_ep.get("clamp")
+        if isinstance(clamp, dict) and clamp.get("dir") == "not_before":
+            return True
+    if isinstance(to_ep, dict):
+        clamp = to_ep.get("clamp")
+        if isinstance(clamp, dict) and clamp.get("dir") == "not_after":
+            return True
+    return False
 
 
 def _in_range(now: datetime, start: datetime, end: datetime) -> bool:

@@ -677,3 +677,117 @@ def test_trigger_deps_collects_from_or_group() -> None:
     spec = m.trigger_deps(pred)
     assert spec.entities == frozenset({"person.alice", "person.bob"})
     assert spec.entity_durations == frozenset()
+
+
+# --- new coverage tests ------------------------------------------------
+
+
+def test_eval_atom_non_string_entity_id_is_false() -> None:
+    """_eval_atom returns False when entity_id is not a string (line 105)."""
+    m = StateCondition()
+    snap = _snap({"sensor.x": ("on", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
+    # entity_id is an int, not a str
+    pred = {"kind": "is", "entity_id": 123, "states": ["on"]}
+    assert m.matches(pred, snap) is False
+
+
+def test_eval_atom_for_all_zeros_still_matches() -> None:
+    """A `for` dict that totals 0 seconds skips the duration check (line 136->144)
+    and the atom still matches — the `if seconds > 0` branch is False."""
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    # last_changed is very recent — would fail a real duration gate
+    snap = _snap(
+        {"person.bob": ("home", now - timedelta(seconds=1))},
+        now=now,
+    )
+    pred = {
+        "kind": "is",
+        "entity_id": "person.bob",
+        "states": ["home"],
+        "for": {"h": 0, "m": 0, "s": 0},
+    }
+    assert m.matches(pred, snap) is True
+
+
+def test_numeric_op_fallthrough_unknown_kind_returns_false() -> None:
+    """_numeric_op returns False for a kind that passes none of the if-chains (line 166).
+    This exercises the final `return False` in the static method."""
+    # Call the static method directly with a kind that isn't >, >=, <, <=
+    result = StateCondition._numeric_op("==", "5", ["5"])
+    assert result is False
+
+
+def test_validate_numeric_threshold_empty_string_rejected() -> None:
+    """validate_atom raises when the numeric threshold is an empty string (line 210)."""
+    m = StateCondition()
+    with pytest.raises(ValueError, match="non-empty string"):
+        m.validate_predicate({"kind": ">", "entity_id": "sensor.x", "states": [""]})
+
+
+def test_first_atom_skips_none_result_items_in_and() -> None:
+    """_first_atom iterates past items that return None and returns the first real
+    atom (lines 241->245 and 243->241 — the loop-continue and loop-return branches)."""
+    m = StateCondition()
+    # First item has unknown kind → _first_atom returns None for it.
+    # Second item is a valid atom → returned as the first atom.
+    expr = {
+        "kind": "and",
+        "items": [
+            {"kind": "xor", "entity_id": "sensor.a", "states": ["on"]},
+            {"kind": "is", "entity_id": "sensor.b", "states": ["on"]},
+        ],
+    }
+    atom = m._first_atom(expr)
+    assert atom is not None
+    assert atom["entity_id"] == "sensor.b"
+    # order_key should resolve to the second entity
+    assert m.order_key(expr) == "sensor.b"
+
+
+def test_first_atom_returns_none_for_unknown_kind() -> None:
+    """_first_atom hits the final `return None` for a dict with an unknown kind (line 247)."""
+    m = StateCondition()
+    # A dict whose kind isn't an atom, and/or, or not
+    result = m._first_atom({"kind": "xor", "items": []})
+    assert result is None
+    # order_key must return an empty string when no atom is found
+    assert m.order_key({"kind": "xor", "items": []}) == ""
+
+
+def test_first_atom_and_exhausts_all_items_without_match() -> None:
+    """_first_atom exhausts the and/or loop without finding any atom (line 241->245).
+    All items return None from _first_atom (unknown kinds), so the loop falls
+    through to the `if kind == 'not'` check and ultimately returns None."""
+    m = StateCondition()
+    expr = {
+        "kind": "and",
+        "items": [
+            {"kind": "xor", "entity_id": "sensor.a", "states": ["on"]},
+            {"kind": "xor", "entity_id": "sensor.b", "states": ["on"]},
+        ],
+    }
+    atom = m._first_atom(expr)
+    assert atom is None
+    assert m.order_key(expr) == ""
+
+
+def test_collect_deps_ignores_non_dict_expr() -> None:
+    """_collect_deps returns early without modifying sets for a non-dict (line 269).
+    Reached via trigger_deps with a non-None, non-dict top-level expression."""
+    m = StateCondition()
+    # trigger_deps only short-circuits on None; any other value falls into _collect_deps
+    spec = m.trigger_deps("not-a-dict")
+    assert spec.entities == frozenset()
+    assert spec.entity_durations == frozenset()
+
+
+def test_collect_deps_skips_atom_with_invalid_entity_id() -> None:
+    """_collect_deps does not add an entity when entity_id is not a valid string (line 273->278).
+    Ensures the `if isinstance(entity_id, str) and entity_id:` false-branch is taken."""
+    m = StateCondition()
+    # entity_id is None — the inner if-branch is False, nothing is added
+    pred = {"kind": "is", "entity_id": None, "states": ["on"]}
+    spec = m.trigger_deps(pred)
+    assert spec.entities == frozenset()
+    assert spec.entity_durations == frozenset()

@@ -340,3 +340,175 @@ def test_trigger_deps_entity_not_configured_returns_empty_entities() -> None:
     m = _condition_with_entity(None)
     spec = m.trigger_deps({"groups": ["dim"]})
     assert spec.entities == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# Line 95: _op_satisfied fallthrough (unknown operator)
+# ---------------------------------------------------------------------------
+
+
+def test_op_satisfied_unknown_operator_returns_false() -> None:
+    """_op_satisfied returns False for any op not in ('<', '<=', '>', '>=')."""
+    from custom_components.ambience.conditions.weather import _op_satisfied
+
+    assert _op_satisfied(5.0, "==", 5.0) is False
+    assert _op_satisfied(5.0, "!=", 3.0) is False
+    assert _op_satisfied(5.0, "", 5.0) is False
+
+
+# ---------------------------------------------------------------------------
+# Line 114: _entity() returns None when self._hass is None
+# ---------------------------------------------------------------------------
+
+
+def test_entity_returns_none_when_no_hass() -> None:
+    """WeatherCondition._entity() must return None when constructed without hass."""
+    m = WeatherCondition()  # hass=None
+    assert m._entity() is None  # noqa: SLF001
+
+
+# ---------------------------------------------------------------------------
+# Line 117: _entity() returns None when get_store returns None
+# ---------------------------------------------------------------------------
+
+
+def test_entity_returns_none_when_store_missing(hass: HomeAssistant) -> None:
+    """_entity() returns None when hass.data has no store (integration not set up)."""
+    # Don't install any store → hass.data has no DOMAIN key
+    m = WeatherCondition(hass=hass)
+    assert m._entity() is None  # noqa: SLF001
+
+
+# ---------------------------------------------------------------------------
+# Line 142: matches() returns True when predicate is None
+# ---------------------------------------------------------------------------
+
+
+def test_matches_none_predicate_is_true() -> None:
+    """matches() with predicate=None is always True (wildcard)."""
+    m = WeatherCondition()
+    assert m.matches(None, _snap("rainy")) is True
+    assert m.matches(None, _snap(None)) is True
+
+
+# ---------------------------------------------------------------------------
+# Line 155: _configured_groups() returns [] when self._hass is None
+# ---------------------------------------------------------------------------
+
+
+def test_configured_groups_returns_empty_when_no_hass() -> None:
+    """_configured_groups() returns [] when the instance has no hass."""
+    m = WeatherCondition()
+    assert m._configured_groups() == []  # noqa: SLF001
+
+
+# ---------------------------------------------------------------------------
+# Line 158: _configured_groups() returns [] when get_store returns None
+# ---------------------------------------------------------------------------
+
+
+def test_configured_groups_returns_empty_when_store_missing(hass: HomeAssistant) -> None:
+    """_configured_groups() returns [] when the store is absent from hass.data."""
+    m = WeatherCondition(hass=hass)
+    assert m._configured_groups() == []  # noqa: SLF001
+
+
+# ---------------------------------------------------------------------------
+# Line 172: _threshold_ok returns False when threshold is not a dict
+# ---------------------------------------------------------------------------
+
+
+def test_threshold_ok_rejects_non_dict() -> None:
+    """_threshold_ok returns False when the threshold entry is not a dict."""
+    snap = _snap("rainy", temperature=10.0)
+    _ok = WeatherCondition._threshold_ok  # noqa: SLF001
+    assert _ok("temperature < 5", snap) is False
+    assert _ok(42, snap) is False
+    assert _ok(None, snap) is False
+
+
+# ---------------------------------------------------------------------------
+# Line 178: _threshold_ok returns False when value is bool or non-numeric
+# ---------------------------------------------------------------------------
+
+
+def test_threshold_ok_rejects_bool_and_non_numeric_value() -> None:
+    """_threshold_ok returns False when threshold value is a bool or a string.
+
+    The snap uses temperature=0.5 so that float(True)==1.0 makes the op hold
+    (0.5 < 1.0 is True) — without the ``isinstance(value, bool)`` guard the
+    mutation would return True instead of False, making the assertion fail.
+    """
+    snap = _snap("rainy", temperature=0.5)
+    # bool is a subclass of int — must be explicitly rejected even when op would hold
+    _ok = WeatherCondition._threshold_ok  # noqa: SLF001
+    assert _ok({"attribute": "temperature", "op": "<", "value": True}, snap) is False
+    assert _ok({"attribute": "temperature", "op": ">", "value": False}, snap) is False
+    assert _ok({"attribute": "temperature", "op": "<", "value": "10"}, snap) is False
+    assert _ok({"attribute": "temperature", "op": "<", "value": None}, snap) is False
+
+
+# ---------------------------------------------------------------------------
+# Line 182: describe() returns snapshot.condition
+# ---------------------------------------------------------------------------
+
+
+def test_describe_returns_condition() -> None:
+    """describe() returns the condition string from the snapshot."""
+    m = WeatherCondition()
+    assert m.describe(_snap("sunny")) == "sunny"
+    assert m.describe(_snap(None)) is None
+
+
+# ---------------------------------------------------------------------------
+# Line 192: validate_predicate raises when groups is not a list
+# ---------------------------------------------------------------------------
+
+
+def test_validate_rejects_groups_not_a_list(m_no_entity: WeatherCondition) -> None:
+    """validate_predicate raises ValueError when groups is a non-list."""
+    with pytest.raises(ValueError, match="groups"):
+        m_no_entity.validate_predicate({"groups": "sunny", "thresholds": []})
+    with pytest.raises(ValueError, match="groups"):
+        m_no_entity.validate_predicate({"groups": {"sunny"}, "thresholds": []})
+
+
+# ---------------------------------------------------------------------------
+# Line 194: validate_predicate raises when thresholds is not a list
+# ---------------------------------------------------------------------------
+
+
+def test_validate_rejects_thresholds_not_a_list(m_no_entity: WeatherCondition) -> None:
+    """validate_predicate raises ValueError when thresholds is not a list."""
+    with pytest.raises(ValueError, match="thresholds"):
+        m_no_entity.validate_predicate({"groups": [], "thresholds": "bad"})
+    with pytest.raises(ValueError, match="thresholds"):
+        m_no_entity.validate_predicate({"groups": [], "thresholds": {}})
+
+
+# ---------------------------------------------------------------------------
+# Line 197: validate_predicate raises when a group id is empty or non-string
+# ---------------------------------------------------------------------------
+
+
+def test_validate_rejects_empty_and_non_string_group_ids(m_no_entity: WeatherCondition) -> None:
+    """validate_predicate raises ValueError for blank or non-string group ids."""
+    with pytest.raises(ValueError, match="non-empty string"):
+        m_no_entity.validate_predicate({"groups": [""], "thresholds": []})
+    with pytest.raises(ValueError, match="non-empty string"):
+        m_no_entity.validate_predicate({"groups": [42], "thresholds": []})
+    with pytest.raises(ValueError, match="non-empty string"):
+        m_no_entity.validate_predicate({"groups": [None], "thresholds": []})
+
+
+# ---------------------------------------------------------------------------
+# Line 221: _validate_threshold raises when threshold is not a dict
+# ---------------------------------------------------------------------------
+
+
+def test_validate_threshold_rejects_non_dict(m_no_entity: WeatherCondition) -> None:
+    """validate_predicate raises ValueError when a threshold entry is not a dict."""
+    with pytest.raises(ValueError, match="threshold must be an object"):
+        m_no_entity.validate_predicate({"groups": [], "thresholds": ["temp < 5"]})
+    with pytest.raises(ValueError, match="threshold must be an object"):
+        m_no_entity.validate_predicate({"groups": [], "thresholds": [42]})

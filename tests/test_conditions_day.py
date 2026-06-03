@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from datetime import date
-from unittest.mock import MagicMock, patch
+from datetime import UTC, date, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from custom_components.ambience.conditions.day import DayCondition, DaySnapshot
+from custom_components.ambience.conditions.day import (
+    DayCondition,
+    DaySnapshot,
+    _fetch_calendar_events,
+)
 from custom_components.ambience.const import DATA_STORE, DOMAIN
 
 
@@ -435,3 +439,193 @@ def test_trigger_deps_tolerates_garbage_input() -> None:
         spec = m.trigger_deps(bad)
         assert spec.date_rollover is True
         assert spec.entities == frozenset()
+
+
+# ---------------------------------------------------------------------------
+# _fetch_calendar_events — real function (lines 34-40)
+# ---------------------------------------------------------------------------
+
+
+async def test_fetch_calendar_events_raises_when_calendar_component_missing(
+    hass: HomeAssistant,
+) -> None:
+    """No 'calendar' key in entity_components → RuntimeError."""
+    hass.data.pop("entity_components", None)
+    start = dt_util.as_local(datetime(2026, 5, 1, 0, 0, tzinfo=UTC))
+    end = dt_util.as_local(datetime(2026, 6, 1, 0, 0, tzinfo=UTC))
+    with pytest.raises(RuntimeError, match="calendar component not loaded"):
+        await _fetch_calendar_events(hass, "calendar.work", start, end)
+
+
+async def test_fetch_calendar_events_raises_when_entity_missing(
+    hass: HomeAssistant,
+) -> None:
+    """Calendar component present but entity_id not found → RuntimeError."""
+    component = MagicMock()
+    component.get_entity.return_value = None
+    hass.data.setdefault("entity_components", {})["calendar"] = component
+    start = dt_util.as_local(datetime(2026, 5, 1, 0, 0, tzinfo=UTC))
+    end = dt_util.as_local(datetime(2026, 6, 1, 0, 0, tzinfo=UTC))
+    with pytest.raises(RuntimeError, match="calendar entity not found: calendar.work"):
+        await _fetch_calendar_events(hass, "calendar.work", start, end)
+
+
+async def test_fetch_calendar_events_delegates_to_entity(
+    hass: HomeAssistant,
+) -> None:
+    """Happy path: entity.async_get_events is called and its result returned."""
+    fake_events = [object(), object()]
+    entity = MagicMock()
+    entity.async_get_events = AsyncMock(return_value=fake_events)
+    component = MagicMock()
+    component.get_entity.return_value = entity
+    hass.data.setdefault("entity_components", {})["calendar"] = component
+    start = dt_util.as_local(datetime(2026, 5, 1, 0, 0, tzinfo=UTC))
+    end = dt_util.as_local(datetime(2026, 6, 1, 0, 0, tzinfo=UTC))
+    result = await _fetch_calendar_events(hass, "calendar.work", start, end)
+    assert result is fake_events
+    entity.async_get_events.assert_awaited_once_with(hass, start, end)
+
+
+# ---------------------------------------------------------------------------
+# _day_config — hass-is-None and store-is-None branches (lines 95, 98)
+# ---------------------------------------------------------------------------
+
+
+def test_day_config_returns_defaults_when_hass_is_none() -> None:
+    """DayCondition(hass=None)._day_config() should return sentinel defaults (line 95)."""
+    m = DayCondition(hass=None)
+    cfg = m._day_config()
+    assert cfg == {"workday_sensor": None, "workday_calendar": None}
+
+
+def test_day_config_returns_defaults_when_store_is_none() -> None:
+    """_day_config() returns defaults when get_store returns None (line 98)."""
+    hass = MagicMock()
+    # hass.data has no DOMAIN key → get_store returns None
+    hass.data = {}
+    m = DayCondition(hass=hass)
+    cfg = m._day_config()
+    assert cfg == {"workday_sensor": None, "workday_calendar": None}
+
+
+# ---------------------------------------------------------------------------
+# matches — non-dict predicate (line 160)
+# ---------------------------------------------------------------------------
+
+
+def test_matches_non_dict_predicate_returns_false() -> None:
+    """A non-dict, non-None predicate must return False (line 160)."""
+    m = DayCondition()
+    snap = _snap(date(2026, 5, 18))
+    for bad in ["string", 42, [{"kind": "weekday", "days": [0]}], True]:
+        assert m.matches(bad, snap) is False
+
+
+# ---------------------------------------------------------------------------
+# _item_matches — non-dict item (line 169)
+# ---------------------------------------------------------------------------
+
+
+def test_item_matches_non_dict_item_returns_false() -> None:
+    """Items that are not dicts should return False (line 169)."""
+    m = DayCondition()
+    snap = _snap(date(2026, 5, 18))
+    for bad_item in [None, "weekday", 42, [{"kind": "weekday"}]]:
+        pred = {"include": [bad_item], "exclude": []}
+        assert m.matches(pred, snap) is False
+
+
+# ---------------------------------------------------------------------------
+# _date_range_matches — None in from/to fields (line 210)
+# ---------------------------------------------------------------------------
+
+
+def test_date_range_returns_false_when_from_incomplete() -> None:
+    """Missing 'month' or 'day' in from/to → False (line 210)."""
+    m = DayCondition()
+    snap = _snap(date(2026, 7, 20))
+    # 'from' missing 'day'
+    pred = {
+        "include": [{"kind": "date_range", "from": {"month": 7}, "to": {"month": 8, "day": 31}}],
+        "exclude": [],
+    }
+    assert m.matches(pred, snap) is False
+
+
+def test_date_range_returns_false_when_to_incomplete() -> None:
+    """Missing key in 'to' dict → False (line 210)."""
+    m = DayCondition()
+    snap = _snap(date(2026, 7, 20))
+    pred = {
+        "include": [{"kind": "date_range", "from": {"month": 7, "day": 1}, "to": {"month": 8}}],
+        "exclude": [],
+    }
+    assert m.matches(pred, snap) is False
+
+
+# ---------------------------------------------------------------------------
+# describe — always returns None (line 217)
+# ---------------------------------------------------------------------------
+
+
+def test_describe_returns_none() -> None:
+    """describe() is defined to return None always (line 217)."""
+    m = DayCondition()
+    assert m.describe(_snap(date(2026, 5, 18))) is None
+
+
+# ---------------------------------------------------------------------------
+# validate_predicate — non-list include/exclude (line 227)
+# ---------------------------------------------------------------------------
+
+
+def test_validate_rejects_non_list_include() -> None:
+    """include/exclude must be lists; a non-list value raises ValueError (line 227)."""
+    m = DayCondition()
+    with pytest.raises(ValueError, match="must be a list"):
+        m.validate_predicate({"include": {"kind": "weekday", "days": [0]}, "exclude": []})
+
+
+def test_validate_rejects_non_list_exclude() -> None:
+    """Validates both include and exclude keys (line 227 via exclude)."""
+    m = DayCondition()
+    with pytest.raises(ValueError, match="must be a list"):
+        m.validate_predicate({"include": [], "exclude": "weekend"})
+
+
+# ---------------------------------------------------------------------------
+# _validate_item — last_day pass branch (line 251)
+# ---------------------------------------------------------------------------
+
+
+def test_validate_last_day_item_is_accepted() -> None:
+    """last_day item has no fields to validate — pass branch (line 251)."""
+    m = DayCondition()
+    m.validate_predicate({"include": [{"kind": "last_day"}], "exclude": []})
+
+
+# ---------------------------------------------------------------------------
+# _validate_int_list — loop exit without raise (lines 265->exit, 266->265)
+# ---------------------------------------------------------------------------
+
+
+def test_validate_int_list_valid_values_do_not_raise() -> None:
+    """All valid ints pass through the loop without raising (lines 265->exit, 266->265)."""
+    m = DayCondition()
+    # weekday list [0,1,2,3,4] — all valid ints in [0,6]; loop exits cleanly
+    m.validate_predicate({"include": [{"kind": "weekday", "days": [0, 1, 2, 3, 4]}], "exclude": []})
+
+
+# ---------------------------------------------------------------------------
+# trigger_deps — workday/holiday kind but sensor is None (line 291->296)
+# ---------------------------------------------------------------------------
+
+
+def test_trigger_deps_workday_kind_no_sensor_configured_yields_empty_entities() -> None:
+    """When workday/holiday kind is used but no sensor is configured, entities stays
+    empty (branch 291->296: sensor is falsy so entities.add is skipped)."""
+    m = _condition_with_workday_sensor(None)
+    spec = m.trigger_deps({"include": [{"kind": "workday"}]})
+    assert spec.date_rollover is True
+    assert spec.entities == frozenset()

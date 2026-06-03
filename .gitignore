@@ -6,6 +6,11 @@ __pycache__/
 .coverage
 htmlcov/
 coverage.xml
+coverage/
+coverage*.json
+cov-*/
+coverage-out*/
+*,cover
 
 # Test / lint caches
 .pytest_cache/
@@ -25,4 +30,3 @@ docs/superpowers/
 node_modules/
 frontend/dist/
 .superpowers/
-coverage/

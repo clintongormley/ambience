@@ -5,9 +5,18 @@
   --md-accent-fg-color: #e8901e;
 }
 
-/* The logo already reads "Ambience", so hide the redundant header title. */
-.md-header__title {
+/* The logo already reads "Ambience", so hide the redundant title text. Keep
+   the .md-header__title element itself, since its flex-grow is the spacer that
+   keeps the search box and GitHub link over on the right. */
+.md-header__topic {
   display: none;
+}
+
+/* Give the freed-up space to a wider search box; GitHub stays on the right. */
+@media screen and (min-width: 60em) {
+  .md-search__inner {
+    width: 24rem;
+  }
 }
 
 /* Header wordmark: hide the single <img> and paint the palette-appropriate

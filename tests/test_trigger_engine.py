@@ -981,3 +981,246 @@ async def test_reapply_distinct_intervals_fire_independently(hass):
     kinds = [c[0] for c in calls]
     assert "on" in kinds and "off" not in kinds
     eng._teardown()
+
+
+# ---------------------------------------------------------------------------
+# Lines 159, 163 — _category_for: None-scope and out-of-range rule_index
+# ---------------------------------------------------------------------------
+
+
+async def test_category_for_returns_none_for_unknown_scope(hass) -> None:
+    """Line 159: _category_for returns None when the scope is not in _scope_cfgs."""
+    engine = _engine_with_state(hass)  # only has ("area", "a")
+    result = engine._category_for("area", "ghost", 0)
+    assert result is None
+
+
+async def test_category_for_returns_none_for_out_of_range_rule(hass) -> None:
+    """Line 163: _category_for returns None when rule_index >= len(rules)."""
+    engine = _engine_with_state(hass)  # area "a" has exactly 1 rule (index 0)
+    result = engine._category_for("area", "a", 99)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Line 180 — _recompute: condition key present in fired predicate but
+#             missing from the conditions registry → skip without crashing
+# ---------------------------------------------------------------------------
+
+
+async def test_recompute_missing_condition_key_is_skipped(hass) -> None:
+    """Line 180: a predicate whose condition key is not in DATA_CONDITIONS is skipped."""
+    # Build engine with scope that has a 'tod' predicate but clear conditions.
+    engine = _engine_with_state(hass)
+    # Wipe conditions so 'tod' is no longer registered.
+    hass.data[DOMAIN][DATA_CONDITIONS] = {}
+    key = ("area", "a", 0, "tod")
+    dirty = engine._recompute({key}, {"tod": "evening"})
+    assert dirty == set()
+    assert key not in engine._predicate_state
+
+
+# ---------------------------------------------------------------------------
+# Lines 197, 200-202 — _refresh_snapshots: condition absent / snapshot raises
+# ---------------------------------------------------------------------------
+
+
+async def test_refresh_snapshots_skips_unknown_condition_key(hass) -> None:
+    """Line 197: condition key absent from DATA_CONDITIONS → no crash, no entry."""
+    engine = _engine_with_state(hass)
+    # 'nonexistent' is not in conditions; should be silently skipped.
+    await engine._refresh_snapshots({"nonexistent"})
+    assert "nonexistent" not in engine._snapshots
+
+
+async def test_refresh_snapshots_stores_none_on_snapshot_exception(hass) -> None:
+    """Lines 200-202: snapshot() raises → warning logged, snapshot stored as None."""
+
+    class BrokenCondition:
+        def trigger_deps(self, predicate: Any) -> TriggerSpec:
+            return TriggerSpec(entities=frozenset())
+
+        async def snapshot(self, hass: Any) -> Any:
+            raise RuntimeError("simulated snapshot failure")
+
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return False
+
+    scopes = [("area", "a", {"rules": [{"when": {"bad": "p"}, "category": "g"}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"bad": BrokenCondition()},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    await engine._refresh_snapshots({"bad"})
+    # The exception must have been caught and None stored.
+    assert "bad" in engine._snapshots
+    assert engine._snapshots["bad"] is None
+
+
+# ---------------------------------------------------------------------------
+# Line 217 — _resolve_and_apply: switch off AND tracing active → UnitTrace
+# ---------------------------------------------------------------------------
+
+
+async def test_resolve_and_apply_returns_unit_trace_when_switch_off_and_tracing(hass) -> None:
+    """Line 217: switch is off and tracing is active → returns a SKIPPED_SWITCH_OFF UnitTrace."""
+    from custom_components.ambience.trace import Outcome
+
+    engine, _tod = _apply_engine(hass, switch_on=False)
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g")
+        assert result is not None
+        assert result.outcome == Outcome.SKIPPED_SWITCH_OFF
+        assert result.scope_kind == "area"
+        assert result.scope_id == "a"
+        assert result.category == "g"
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
+# ---------------------------------------------------------------------------
+# Line 239 — _resolve_and_apply: no match AND tracing active → NO_MATCH UnitTrace
+# ---------------------------------------------------------------------------
+
+
+async def test_resolve_and_apply_returns_no_match_trace_when_no_rule_matches(hass) -> None:
+    """Line 239: no rule matches (index is None) and tracing active → NO_MATCH UnitTrace."""
+    from custom_components.ambience.trace import Outcome
+
+    # tod condition returns "afternoon"; neither rule matches (they need "evening"/"morning").
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "afternoon")
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "rules": [
+                    {"when": {"tod": "evening"}, "category": "g", "actions": []},
+                    {"when": {"tod": "morning"}, "category": "g", "actions": []},
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    # Seed a snapshot so resolution sees "afternoon".
+    engine._snapshots = {"tod": "afternoon"}
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g")
+        assert result is not None
+        assert result.outcome == Outcome.NO_MATCH
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
+# ---------------------------------------------------------------------------
+# Lines 244-254 — _resolve_and_apply: same winner (no-op) AND tracing active → NO_OP UnitTrace
+# ---------------------------------------------------------------------------
+
+
+async def test_resolve_and_apply_returns_no_op_trace_when_winner_unchanged(hass) -> None:
+    """Lines 244-253: winner == last-applied AND tracing active → NO_OP UnitTrace."""
+    from custom_components.ambience.trace import Outcome
+
+    engine, _tod = _apply_engine(hass)
+    # tod="evening" → rule 0 wins; mark rule 0 as already applied.
+    engine._snapshots = {"tod": "evening"}
+    hass.data[DOMAIN].setdefault(DATA_LAST_APPLIED, {})[("area", "a", "g")] = 0
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g")
+        assert result is not None
+        assert result.outcome == Outcome.NO_OP
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
+async def test_resolve_and_apply_returns_none_when_winner_unchanged_and_tracing_inactive(
+    hass,
+) -> None:
+    """Line 254: winner == last-applied, not forced, tracing inactive → returns None."""
+    engine, _tod = _apply_engine(hass)
+    # tod="evening" → rule 0 wins; mark rule 0 as already applied.
+    engine._snapshots = {"tod": "evening"}
+    hass.data[DOMAIN].setdefault(DATA_LAST_APPLIED, {})[("area", "a", "g")] = 0
+    # Ensure tracing is off (default logging level, no trace sinks).
+    result = await engine._resolve_and_apply("area", "a", "g")
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Line 286 — _apply_units: exception from _resolve_and_apply → warning logged
+# ---------------------------------------------------------------------------
+
+
+async def test_apply_units_logs_warning_on_exception(hass) -> None:
+    """Line 286: if _resolve_and_apply raises, the exception is logged as a warning
+    rather than propagating, and other units are still processed."""
+    engine, _tod = _apply_engine(hass)
+    call_count = 0
+
+    async def _exploding(scope_kind, scope_id, category_id, *, force=False):
+        nonlocal call_count
+        call_count += 1
+        raise RuntimeError("boom")
+
+    engine._resolve_and_apply = _exploding  # type: ignore[assignment]
+
+    # Must not raise — the warning branch silently absorbs the exception.
+    traces = await engine._apply_units([("area", "a", "g")])
+    assert traces == []
+    assert call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# Line 296 — async_evaluate: empty fired set → early return, no snapshots taken
+# ---------------------------------------------------------------------------
+
+
+async def test_evaluate_empty_fired_set_returns_immediately(hass) -> None:
+    """Line 296: async_evaluate with an empty fired set returns without doing work."""
+    engine, tod = _apply_engine(hass)
+    await engine.async_initial_sync()
+    # Mark a sentinel so we can detect any unwanted side-effect.
+    hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] = 99
+    await engine.async_evaluate(set())  # empty → early return
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 99  # untouched
+
+
+# ---------------------------------------------------------------------------
+# Line 335 — async_initial_sync: startup trace emitted when tracing is active
+# ---------------------------------------------------------------------------
+
+
+async def test_initial_sync_emits_startup_trace_when_tracing_active(hass) -> None:
+    """Line 335: when tracing is active and there are units to apply, async_initial_sync
+    emits a STARTUP TraceEvent."""
+    from custom_components.ambience.trace import CauseKind
+
+    captured: list[TraceEvent] = []
+
+    class CaptureSink:
+        def emit(self, event: TraceEvent) -> None:
+            captured.append(event)
+
+    engine, _tod = _apply_engine(hass)
+    # tod="evening" → rule 0 wins; engine hasn't applied anything yet.
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [CaptureSink()]
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        await engine.async_initial_sync()
+        assert captured, "expected a STARTUP TraceEvent"
+        event = captured[-1]
+        assert event.cause.kind == CauseKind.STARTUP
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)

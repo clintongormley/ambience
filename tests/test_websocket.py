@@ -2077,3 +2077,227 @@ async def test_ws_run_rule_actions_requires_exactly_one_scope(
     resp = await _ws_send(hass_ws_client, type="ambience/rule/run_actions", rule_index=0)
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
+
+
+# ---------------------------------------------------------------------------
+# Newly added tests to cover previously-uncovered branches
+# ---------------------------------------------------------------------------
+
+
+# --- exposed_actions/save warning loop: non-string service (line 277 continue) ---
+
+
+async def test_exposed_actions_save_skips_action_with_non_string_service(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """An action whose 'service' value is not a string is silently skipped in the
+    dangling-warning scan (line 277 continue).  Save still succeeds and returns
+    no warnings."""
+    _seed_services_catalog(hass)
+    # Bypass WS validation and write the config directly so the rule carries a
+    # non-string service value that would otherwise be rejected by
+    # validate_scope_config.
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "rules": [
+                {
+                    "name": "bad svc",
+                    "when": {},
+                    # service is a dict, not a string — the scan must skip it
+                    "actions": [
+                        {"service": {"domain": "light", "service": "turn_on"}, "params": {}}
+                    ],
+                }
+            ]
+        },
+    )
+    # Now save exposed actions; the warning loop must hit the non-string branch.
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/exposed_actions/save",
+        actions=[
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": [],
+                "defaults": {},
+            }
+        ],
+    )
+    assert resp["success"] is True
+    assert resp["result"]["warnings"] == []
+
+
+# --- exposed_actions/save warning loop: service not in old OR new list (line 291 continue) ---
+
+
+async def test_exposed_actions_save_skips_action_with_service_never_exposed(
+    hass: HomeAssistant, installed, area_id, hass_ws_client
+) -> None:
+    """An action whose service was never in the exposed list (not old, not new) is
+    skipped in the dangling-warning scan (line 291 continue).  No warning is emitted
+    for it."""
+    _seed_services_catalog(hass)
+    # Write a rule that references a service that will never be in the exposed list.
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "rules": [
+                {
+                    "name": "phantom",
+                    "when": {},
+                    "actions": [{"service": "switch.turn_on", "entity_ids": [], "params": {}}],
+                }
+            ]
+        },
+    )
+    # Save exposed actions that don't include switch.turn_on — neither old nor new.
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/exposed_actions/save",
+        actions=[
+            {
+                "id": "light.turn_on",
+                "label": "",
+                "visible_fields": [],
+                "defaults": {},
+            }
+        ],
+    )
+    assert resp["success"] is True
+    # No warning — the service was never exposed, so there's nothing to flag.
+    assert all("switch.turn_on" not in w.get("reason", "") for w in resp["result"]["warnings"])
+
+
+# --- floor/save: validate_scope_config raises ValueError (lines 417-419) ---
+
+
+async def test_floor_save_rejects_invalid_config(
+    hass: HomeAssistant, installed, hass_ws_client, floor_id
+) -> None:
+    """floor/save returns a validation_error when validate_scope_config raises."""
+    # An action with a missing 'service' key triggers the ValueError path.
+    config = {
+        "rules": [
+            {
+                "when": {},
+                "actions": [{"entity_ids": [], "params": {}}],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/floor/save",
+        floor_id=floor_id,
+        config=config,
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "service" in resp["error"]["message"]
+
+
+# --- house/save: validate_scope_config raises ValueError (lines 457-459) ---
+
+
+async def test_house_save_rejects_invalid_config(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """house/save returns a validation_error when validate_scope_config raises."""
+    config = {
+        "rules": [
+            {
+                "when": {},
+                "actions": [{"entity_ids": [], "params": {}}],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/house/save",
+        config=config,
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "service" in resp["error"]["message"]
+
+
+# --- validate: validate_scope_config raises ValueError (lines 484-486) ---
+
+
+async def test_validate_rejects_invalid_config(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """ambience/validate returns a validation_error when the config is invalid."""
+    config = {
+        "rules": [
+            {
+                "when": {},
+                "actions": [{"entity_ids": [], "params": {}}],
+            }
+        ],
+    }
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/validate",
+        config=config,
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+# --- _house_must_be_true: non-True value rejected at schema layer (line 492) ---
+
+
+async def test_dry_run_house_false_is_schema_error(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """Passing house=False to dry_run invokes _house_must_be_true(False), which
+    raises vol.Invalid, causing a schema-level error response."""
+    resp = await _ws_send(hass_ws_client, type="ambience/dry_run", house=False)
+    assert resp["success"] is False
+
+
+# --- categories/save: blank/whitespace-only category id (lines 847-850) ---
+
+
+async def test_categories_save_rejects_whitespace_only_id(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """A category whose id is an empty or whitespace-only string is rejected
+    with invalid_categories (lines 847-850)."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/categories/save",
+        categories=[{"id": "   ", "name": "Lights"}],
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "invalid_categories"
+    assert "non-empty string" in resp["error"]["message"]
+
+
+# --- categories/delete: plain ValueError fallback (lines 896-898) ---
+
+
+async def test_categories_delete_plain_value_error_returns_validation_error(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """If async_delete_category raises a plain ValueError (not the more-specific
+    subclass errors), the handler maps it to validation_error (lines 896-898)."""
+    from unittest.mock import AsyncMock, patch
+
+    with patch.object(
+        hass.data[DOMAIN][DATA_STORE],
+        "async_delete_category",
+        new=AsyncMock(side_effect=ValueError("something went wrong")),
+    ):
+        resp = await _ws_send(
+            hass_ws_client,
+            type="ambience/categories/delete",
+            category_id="general",
+        )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+    assert "something went wrong" in resp["error"]["message"]

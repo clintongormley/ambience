@@ -156,3 +156,42 @@ async def test_simulate_accepts_verdicts(hass: HomeAssistant, hass_ws_client, se
     )
     assert resp["success"] is True
     assert resp["result"]["result"]["category"] == "g1"
+
+
+# --- simulate/inputs: ValueError/ServiceValidationError path (lines 957-959) ---
+
+
+async def test_simulate_inputs_unknown_scope_kind_returns_validation_error(
+    hass: HomeAssistant, hass_ws_client, seeded_area
+) -> None:
+    """simulate/inputs maps ValueError (from an unknown scope_kind) to a
+    validation_error response (lines 957-959)."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate/inputs",
+        scope_kind="not_a_real_scope",
+        scope_id=seeded_area,
+        category="g1",
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+# --- simulate: ValueError/ServiceValidationError path (lines 1003-1005) ---
+
+
+async def test_simulate_unknown_scope_kind_returns_validation_error(
+    hass: HomeAssistant, hass_ws_client, seeded_area
+) -> None:
+    """simulate maps ValueError (from an unknown scope_kind) to a
+    validation_error response (lines 1003-1005)."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="not_a_real_scope",
+        scope_id=seeded_area,
+        category="g1",
+        now="2026-12-21T17:30:00+00:00",
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"

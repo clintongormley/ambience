@@ -109,3 +109,15 @@ async def test_traces_list_rejects_non_positive_limit(hass, installed, hass_ws_c
     await client.send_json({"id": 1, "type": "ambience/traces/list", "limit": 0})
     response = await client.receive_json()
     assert response["success"] is False
+
+
+# --- traces/clear: no buffer installed (line 932->934 branch) ---
+
+
+async def test_traces_clear_succeeds_when_no_buffer(hass, installed, hass_ws_client) -> None:
+    """traces/clear is a no-op (and still succeeds) when the trace buffer is absent.
+    This covers the branch at line 932 where buffer is None."""
+    # Remove the buffer that async_setup_entry installed.
+    hass.data.setdefault(DOMAIN, {}).pop(DATA_TRACE_BUFFER, None)
+    resp = await _ws_send(hass_ws_client, type="ambience/traces/clear")
+    assert resp["success"] is True

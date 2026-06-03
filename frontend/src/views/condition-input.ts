@@ -12,6 +12,7 @@ import "./sun-predicate-input.js";
 import "./state-predicate-input.js";
 import "./people-predicate-input.js";
 import "./template-predicate-input.js";
+import { emitValueChanged } from "../dom.js";
 
 /**
  * Dispatcher element for one condition's predicate input. Given a condition's
@@ -53,13 +54,7 @@ export class AmbienceConditionInput extends LitElement {
   @property({ attribute: false }) hass?: HassConnection;
 
   private _emit(value: unknown) {
-    this.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    emitValueChanged(this, value);
   }
 
   private _onText(e: InputEvent) {

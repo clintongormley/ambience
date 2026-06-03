@@ -10,6 +10,7 @@ import type {
   TimeRange,
 } from "../types.js";
 import "./time-endpoint.js";
+import { emitValueChanged } from "../dom.js";
 
 type Entry =
   | { kind: "any" }
@@ -122,13 +123,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
       );
     const value: TimeOfDayPredicate =
       items.length === 0 ? null : items.length === 1 ? items[0]! : items;
-    this.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    emitValueChanged(this, value);
   }
 
   private _effectiveIds(): string[] {

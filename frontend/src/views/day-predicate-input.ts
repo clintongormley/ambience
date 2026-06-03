@@ -6,6 +6,7 @@ import { isValidDaySpec } from "../day-spec.js";
 import { dayItemKindLabel, localize, monthLabel, weekdayLabel } from "../i18n.js";
 import type { DayConfig, DayItem, DayPredicate } from "../types.js";
 import type { HaFormSchema } from "../ha-form.js";
+import { emitValueChanged } from "../dom.js";
 
 const KINDS: DayItem["kind"][] = [
   "weekday", "day_of_month", "date", "date_range",
@@ -83,10 +84,7 @@ export class AmbienceDayPredicateInput extends LitElement {
   private _emit(next: { include: DayItem[]; exclude: DayItem[] }) {
     const isEmpty = next.include.length === 0 && next.exclude.length === 0;
     this.value = isEmpty ? null : next;
-    this.dispatchEvent(new CustomEvent("value-changed", {
-      detail: { value: this.value },
-      bubbles: true, composed: true,
-    }));
+    emitValueChanged(this, this.value);
   }
 
   _addItem(section: "include" | "exclude", kind: DayItem["kind"]) {

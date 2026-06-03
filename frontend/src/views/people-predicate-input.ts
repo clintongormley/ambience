@@ -5,7 +5,8 @@ import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
 import type { PeoplePredicate, PeopleQuant } from "../types.js";
 import type { HaFormSchema } from "../ha-form.js";
-import { entityName } from "./entity-row.js";
+import { entitiesOfDomain } from "./hass-states.js";
+import { emitValueChanged } from "../dom.js";
 
 /** The six user-facing modes. The first three ("base") emit no `who`; the last
  *  three ("…these people") carry the selected person ids. Each maps to a
@@ -100,30 +101,14 @@ export class AmbiencePeoplePredicateInput extends LitElement {
    *  `value.who`. Updated in the toggle handler. */
   private _lastSelected: string[] = [];
 
-  // --- hass entity listing (mirrors state-expr-atom's hass.states access) --
-
-  private _statesMap(): Record<string, { attributes?: Record<string, unknown> }> {
-    return (
-      (this.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)
-        ?.states ?? {}
-    );
-  }
-
-  private _entitiesOfDomain(domain: string): { id: string; name: string }[] {
-    const states = this._statesMap();
-    const prefix = `${domain}.`;
-    return Object.keys(states)
-      .filter((id) => id.startsWith(prefix))
-      .sort()
-      .map((id) => ({ id, name: entityName(this.hass, id) }));
-  }
+  // --- hass entity listing -------------------------------------------------
 
   _persons(): { id: string; name: string }[] {
-    return this._entitiesOfDomain("person");
+    return entitiesOfDomain(this.hass, "person");
   }
 
   _zones(): { id: string; name: string }[] {
-    return this._entitiesOfDomain("zone");
+    return entitiesOfDomain(this.hass, "zone");
   }
 
   // --- value round-trip ----------------------------------------------------
@@ -217,13 +202,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
 
   private _emit(value: PeoplePredicate) {
     this.value = value;
-    this.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    emitValueChanged(this, value);
   }
 
   private _setMode(mode: Mode) {

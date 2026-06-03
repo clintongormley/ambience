@@ -4,6 +4,7 @@ import { customElement, property } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
 import type { SunAzimuth, SunElevation, SunPredicate, SunRange } from "../types.js";
+import { emitValueChanged } from "../dom.js";
 
 // 3×3 compass grid laid out as the sky looks from below — North at the top,
 // `null` is the empty centre cell. Row-major order drives both the DOM and the
@@ -75,9 +76,7 @@ export class AmbienceSunPredicateInput extends LitElement {
     if (next.range) az.ranges = [next.range];
     if (az.sectors || az.ranges) pred.azimuth = az;
     this.value = pred.elevation || pred.azimuth ? pred : null;
-    this.dispatchEvent(new CustomEvent("value-changed", {
-      detail: { value: this.value }, bubbles: true, composed: true,
-    }));
+    emitValueChanged(this, this.value);
   }
 
   _setElevation(elevation: SunElevation | null) {

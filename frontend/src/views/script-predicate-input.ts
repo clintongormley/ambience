@@ -8,6 +8,7 @@ import type { ScriptPredicate } from "../types.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { scriptFieldLabel } from "../summary.js";
 import { entityName } from "./entity-row.js";
+import { emitValueChanged } from "../dom.js";
 
 type ScriptField = {
   name?: string;
@@ -133,9 +134,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
 
   private _emit(next: ScriptPredicate) {
     this.value = next;
-    this.dispatchEvent(new CustomEvent("value-changed", {
-      detail: { value: this.value }, bubbles: true, composed: true,
-    }));
+    emitValueChanged(this, this.value);
   }
 
   /** All registered `script.*` services, sorted alphabetically by entity_id. */

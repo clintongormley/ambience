@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { resultAsBoolean } from "../truthiness.js";
 import type { TemplatePredicate } from "../types.js";
+import { emitValueChanged } from "../dom.js";
 
 type RenderEvent = { result?: unknown; error?: string };
 type Preview = { value: string; truthy: boolean } | { error: string };
@@ -211,13 +212,7 @@ export class AmbienceTemplatePredicateInput extends LitElement {
     const raw = (e.target as HTMLTextAreaElement).value;
     const next: TemplatePredicate = raw.trim() === "" ? null : { template: raw };
     this.value = next;
-    this.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value: next },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    emitValueChanged(this, next);
   }
 
   private _renderPreview() {

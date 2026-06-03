@@ -5,6 +5,7 @@ import type { HassConnection } from "../api.js";
 import { localize, weatherAttrLabel, weatherAttrUnit } from "../i18n.js";
 import type { WeatherGroup, WeatherPredicate, WeatherThreshold } from "../types.js";
 import type { HaFormSchema } from "../ha-form.js";
+import { emitValueChanged } from "../dom.js";
 
 const ATTRIBUTES = ["temperature", "apparent_temperature", "humidity", "wind_speed", "pressure"];
 const OPS: WeatherThreshold["op"][] = ["<", "<=", ">", ">="];
@@ -76,9 +77,7 @@ export class AmbienceWeatherPredicateInput extends LitElement {
   private _emit(next: { groups: string[]; thresholds: WeatherThreshold[] }) {
     const empty = next.groups.length === 0 && next.thresholds.length === 0;
     this.value = empty ? null : next;
-    this.dispatchEvent(new CustomEvent("value-changed", {
-      detail: { value: this.value }, bubbles: true, composed: true,
-    }));
+    emitValueChanged(this, this.value);
   }
 
   _setGroups(groups: string[]) {

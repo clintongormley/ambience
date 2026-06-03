@@ -5,6 +5,8 @@ import { getKnownStates, type HassConnection } from "../api.js";
 import { localize, stateOpLabel } from "../i18n.js";
 import type { StateAtom, StateForDuration } from "../types.js";
 import type { HaFormSchema } from "../ha-form.js";
+import { emitValueChanged } from "../dom.js";
+import { statesMap } from "./hass-states.js";
 
 /**
  * Single atom of a state-predicate tree, laid out like HA's automation State
@@ -89,9 +91,7 @@ export class AmbienceStateExprAtom extends LitElement {
   private _emit(next: StateAtom) {
     const normalized = this._normalize(next);
     this.value = normalized;
-    this.dispatchEvent(new CustomEvent("value-changed", {
-      detail: { value: normalized }, bubbles: true, composed: true,
-    }));
+    emitValueChanged(this, normalized);
   }
 
   /** Keep the op type in step with the target type: numeric targets use a
@@ -166,8 +166,7 @@ export class AmbienceStateExprAtom extends LitElement {
    *  unset or not in hass.states. */
   private _knownAttributesFor(entity_id: string): string[] {
     if (!entity_id) return [];
-    const states = (this.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
-    const attrs = states?.[entity_id]?.attributes;
+    const attrs = statesMap(this.hass)[entity_id]?.attributes;
     if (!attrs) return [];
     return Object.keys(attrs).sort();
   }
@@ -236,8 +235,7 @@ export class AmbienceStateExprAtom extends LitElement {
   /** Does the current target (entity.state or entity.attributes[x]) hold
    *  a value we'd compare numerically? */
   private _isNumericTargetFor(atom: StateAtom): boolean {
-    const states = (this.hass as { states?: Record<string, { state?: unknown; attributes?: Record<string, unknown> }> } | undefined)?.states;
-    const entity = states?.[atom.entity_id];
+    const entity = statesMap(this.hass)[atom.entity_id];
     if (!entity) return false;
     if (atom.attribute) {
       return typeof entity.attributes?.[atom.attribute] === "number";
@@ -278,8 +276,7 @@ export class AmbienceStateExprAtom extends LitElement {
    *  fetched _knownStates list instead). */
   private _currentAttributeValue(): unknown {
     if (!this.value.attribute) return undefined;
-    const states = (this.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined)?.states;
-    return states?.[this.value.entity_id]?.attributes?.[this.value.attribute];
+    return statesMap(this.hass)[this.value.entity_id]?.attributes?.[this.value.attribute];
   }
 
   /** ha-form schema for a single value row.

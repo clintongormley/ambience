@@ -3,6 +3,7 @@ import { customElement, property } from "lit/decorators.js";
 
 import type { SunAnchor, TimeEndpoint } from "../types.js";
 import { anchorLabel, localize } from "../i18n.js";
+import { emitValueChanged } from "../dom.js";
 
 const ANCHORS: SunAnchor[] = ["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"];
 
@@ -39,13 +40,7 @@ export class AmbienceTimeEndpoint extends LitElement {
   @property({ attribute: false }) value: TimeEndpoint = { kind: "time", hh: 12, mm: 0 };
 
   private _emit(value: TimeEndpoint) {
-    this.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    emitValueChanged(this, value);
   }
 
   private _onKindChange(e: Event) {

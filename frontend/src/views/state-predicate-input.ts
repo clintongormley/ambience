@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import "./state-expr-node.js";
 import type { HassConnection } from "../api.js";
+import { emitValueChanged } from "../dom.js";
 import { localize } from "../i18n.js";
 
 function _samePath(a: number[] | null, b: number[] | null): boolean {
@@ -68,9 +69,7 @@ export class AmbienceStatePredicateInput extends LitElement {
 
   private _emit(value: StatePredicate) {
     this.value = value;
-    this.dispatchEvent(new CustomEvent("value-changed", {
-      detail: { value }, bubbles: true, composed: true,
-    }));
+    emitValueChanged(this, value);
   }
 
   // --- mutation helpers (exposed for tests) ----------------------------

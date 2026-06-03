@@ -5,6 +5,7 @@ import { filterEntities, type HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
 import type { HassConnection } from "../api.js";
+import { emitValueChanged } from "../dom.js";
 
 /**
  * Target picker: ha-form's entity selector when ha-form is registered,
@@ -63,13 +64,7 @@ export class AmbienceTargetPicker extends LitElement {
   }
 
   private _emit(value: string[]) {
-    this.dispatchEvent(
-      new CustomEvent("value-changed", {
-        detail: { value },
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    emitValueChanged(this, value);
   }
 
   /* v8 ignore start -- ha-form not registered in jsdom */

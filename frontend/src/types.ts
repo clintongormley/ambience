@@ -131,9 +131,11 @@ export type DryRunResult = {
 
 export type SunAnchor = "sunrise" | "sunset" | "noon" | "midnight" | "dawn" | "dusk";
 
+export type SunClamp = { dir: "not_before" | "not_after"; hh: number; mm: number };
+
 export type TimeEndpoint =
   | { kind: "time"; hh: number; mm: number }
-  | { kind: "sun"; anchor: SunAnchor; offset_min: number };
+  | { kind: "sun"; anchor: SunAnchor; offset_min: number; clamp?: SunClamp | null };
 
 export type TimeRange = { from: TimeEndpoint; to: TimeEndpoint };
 

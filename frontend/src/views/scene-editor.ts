@@ -199,10 +199,7 @@ export class AmbienceSceneEditor extends LitElement {
       margin-top: 0.5rem;
       padding: 0.3rem 0;
     }
-    .destination {
-      margin-bottom: 0.75rem;
-    }
-    /* Scope icon in the destination summary + dropdown — matches the
+    /* Scope icon in the destination summary + option list — matches the
        scope-header icon (HA's area/floor icon, or a per-kind default). */
     .scope-icon {
       flex: 0 0 auto;
@@ -210,81 +207,21 @@ export class AmbienceSceneEditor extends LitElement {
       color: var(--secondary-text-color, #888);
       vertical-align: middle;
     }
-    /* Custom scope picker — a dropdown whose options carry icons (native and
-       ha-form selects can't). Mirrors the category-filter dropdown. */
-    .scope-dropdown {
-      position: relative;
+    .scope-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    /* Scope picker: the option list shown directly when expanded, each with its
+       scope icon. Mirrors the category menu (native/ha-form selects can't carry
+       per-option icons, and HA's icon-capable lists churn across versions). */
+    .scope-menu { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.35rem; }
+    .scope-option {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%;
+      min-height: 40px; box-sizing: border-box;
+      padding: 0.3rem 0.5rem; border: 0; border-radius: 6px;
+      background: none; color: var(--primary-text-color, inherit);
+      cursor: pointer; font: inherit; font-size: 1rem; text-align: left;
     }
-    .scope-dropdown-trigger {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      width: 100%;
-      min-height: 40px;
-      box-sizing: border-box;
-      padding: 0.4rem 0.6rem;
-      border: 1px solid var(--divider-color, #e0e0e0);
-      border-radius: 6px;
-      background: var(--card-background-color, #fff);
-      color: var(--primary-text-color, #212121);
-      cursor: pointer;
-      font: inherit;
-      font-size: 1rem;
-    }
-    .scope-dropdown-trigger:hover {
-      background: var(--secondary-background-color, #f5f5f5);
-    }
-    .scope-dropdown .scope-name {
-      flex: 1;
-      text-align: left;
-    }
-    .scope-dropdown .caret {
-      flex: 0 0 auto;
-      color: var(--secondary-text-color, #888);
-    }
-    /* Transparent full-screen catcher so any outside click closes the menu. */
-    .scope-dropdown-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-    }
-    .scope-dropdown-menu {
-      position: absolute;
-      top: calc(100% + 4px);
-      left: 0;
-      right: 0;
-      z-index: 11;
-      max-height: 50vh;
-      overflow-y: auto;
-      background: var(--card-background-color, #fff);
-      border: 1px solid var(--divider-color, #e0e0e0);
-      border-radius: 6px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-      padding: 0.3rem;
-    }
-    .scope-dropdown-option {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      width: 100%;
-      min-height: 40px;
-      box-sizing: border-box;
-      padding: 0.4rem 0.6rem;
-      border: 0;
-      border-radius: 6px;
-      background: none;
-      color: var(--primary-text-color, #212121);
-      cursor: pointer;
-      font: inherit;
-      font-size: 1rem;
-      text-align: left;
-    }
-    .scope-dropdown-option:hover {
-      background: var(--secondary-background-color, #f5f5f5);
-    }
-    .scope-dropdown-option[aria-selected="true"] {
-      background: var(--secondary-background-color, #eee);
-      font-weight: 600;
+    .scope-option:hover { background: var(--secondary-background-color, #f5f5f5); }
+    .scope-option[aria-selected="true"] {
+      background: var(--secondary-background-color, #eee); font-weight: 600;
     }
     /* Category field: colour-coded swatch + icon (shell from categorySwatchStyles),
        matching the scenes-list filter. */
@@ -323,8 +260,6 @@ export class AmbienceSceneEditor extends LitElement {
   @state() private _draft: Scene | null = null;
   @state() private _scope?: Scope;
   @state() private _open: OpenSlot = null;
-  // Whether the custom scope (destination) dropdown menu is expanded.
-  @state() private _destOpen = false;
   @state() private _showError = false;
   /**
    * Tracks whether each action's service requires a target. Keyed by service
@@ -400,66 +335,28 @@ export class AmbienceSceneEditor extends LitElement {
     };
   }
 
-  private _selectDestination(idx: number) {
-    this._destOpen = false;
-    this._setDestination(idx);
-  }
-
-  /** One scope row: its icon (HA's area/floor icon, or a per-kind default)
-   *  followed by the label — used in both the dropdown trigger and the menu. */
-  private _renderScopeEntry(o: ScopeOption) {
-    return html`
-      <ha-icon class="scope-icon" icon=${scopeIcon(o.scope, this.hass as any)}></ha-icon>
-      <span class="scope-name">${o.label}</span>
-    `;
-  }
-
-  // A custom dropdown (not <select>/<ha-form>) so each option can show its
-  // scope icon — native and ha-form selects render text-only options, and HA's
-  // icon-capable list components churn across versions (mwc → webawesome). This
-  // mirrors the category-filter dropdown in scopes-view.
+  // Expanded scope picker: the option list shown directly (like the category
+  // field), so one click on the summary opens it. Each option carries its scope
+  // icon — native/ha-form selects render text-only options, and HA's
+  // icon-capable list components churn across versions (mwc → webawesome).
+  // Picking an option closes the slot, mirroring the category menu.
   private _renderDestination() {
-    if (this.scopes.length === 0) return "";
-    const current = this.scopes.find((o) => sameScope(o.scope, this._scope)) ?? this.scopes[0];
     return html`
-      <div class="destination">
-        <div class="scope-dropdown">
-          <button
-            class="scope-dropdown-trigger"
-            aria-haspopup="listbox"
-            aria-expanded=${this._destOpen}
+      <div class="scope-menu" role="listbox">
+        ${this.scopes.map(
+          (o, i) => html`<button
+            class="scope-option"
+            role="option"
+            aria-selected=${sameScope(o.scope, this._scope)}
             @click=${() => {
-              this._destOpen = !this._destOpen;
+              this._setDestination(i);
+              this._open = null;
             }}
           >
-            ${this._renderScopeEntry(current)}
-            <ha-icon class="caret" icon="mdi:menu-down"></ha-icon>
-          </button>
-          ${
-            this._destOpen
-              ? html`
-                <div
-                  class="scope-dropdown-backdrop"
-                  @click=${() => {
-                    this._destOpen = false;
-                  }}
-                ></div>
-                <div class="scope-dropdown-menu" role="listbox">
-                  ${this.scopes.map(
-                    (o, i) => html`<button
-                      class="scope-dropdown-option"
-                      role="option"
-                      aria-selected=${sameScope(o.scope, this._scope)}
-                      @click=${() => this._selectDestination(i)}
-                    >
-                      ${this._renderScopeEntry(o)}
-                    </button>`,
-                  )}
-                </div>
-              `
-              : ""
-          }
-        </div>
+            <ha-icon class="scope-icon" icon=${scopeIcon(o.scope, this.hass as any)}></ha-icon>
+            <span class="scope-name">${o.label}</span>
+          </button>`,
+        )}
       </div>
     `;
   }
@@ -481,18 +378,9 @@ export class AmbienceSceneEditor extends LitElement {
     return html`
       <div class="slot collapsed" data-slot-id="destination">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "destination" })}>
-          <span class="summary-label"
-            ><strong>${localize(this.hass, "ui.scope", "Scope")}:</strong>
-            ${
-              current
-                ? html`<ha-icon
-                    class="scope-icon"
-                    icon=${scopeIcon(current.scope, this.hass as any)}
-                  ></ha-icon>`
-                : ""
-            }
-            ${current?.label ?? ""}</span
-          >
+          <strong>${localize(this.hass, "ui.scope", "Scope")}:</strong>
+          <ha-icon class="scope-icon" icon=${scopeIcon(current.scope, this.hass as any)}></ha-icon>
+          <span class="scope-name">${current.label}</span>
         </div>
       </div>
     `;
@@ -693,8 +581,6 @@ export class AmbienceSceneEditor extends LitElement {
     if (this._open !== null && !this._tryCloseCurrent()) return;
     this._open = slot;
     this._showError = false;
-    // A freshly-opened scope slot starts with its dropdown menu collapsed.
-    this._destOpen = false;
   }
 
   private _onModalClick(e: MouseEvent) {

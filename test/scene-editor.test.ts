@@ -2001,27 +2001,19 @@ describe("ambience-scene-editor — destination selector", () => {
     return e;
   }
 
-  // Open the custom scope dropdown (expand the slot, then open the menu).
+  // Expanding the scope slot shows the option list directly (like the category
+  // field) — one click, no trigger.
   async function openScopeMenu(e: any): Promise<NodeListOf<HTMLElement>> {
     await openSlot(e, "destination");
-    (e.shadowRoot.querySelector(".scope-dropdown-trigger") as HTMLElement).click();
-    await e.updateComplete;
-    return e.shadowRoot.querySelectorAll(".scope-dropdown-option");
+    return e.shadowRoot.querySelectorAll(".scope-option");
   }
 
   test("renders a destination option per scope, defaulting to the scene's scope", async () => {
     el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "bedroom" });
-    await openSlot(el, "destination");
-    const trigger = el.shadowRoot.querySelector(".scope-dropdown-trigger") as HTMLElement;
-    expect(trigger).toBeTruthy();
-    // Trigger shows the current selection.
-    expect(trigger.textContent).toContain("Area: Bedroom");
-    trigger.click();
-    await el.updateComplete;
-    const options = el.shadowRoot.querySelectorAll(".scope-dropdown-option");
+    const options = await openScopeMenu(el);
     expect(options.length).toBe(3);
     const selected = el.shadowRoot.querySelector(
-      '.scope-dropdown-option[aria-selected="true"]',
+      '.scope-option[aria-selected="true"]',
     ) as HTMLElement;
     expect(selected.textContent).toContain("Area: Bedroom");
   });
@@ -2042,7 +2034,7 @@ describe("ambience-scene-editor — destination selector", () => {
     expect(summary).toBeTruthy();
     expect(summary.textContent).toContain("Area: Bedroom");
     // collapsed by default: the picker is not in the DOM until clicked open.
-    expect(el.shadowRoot.querySelector(".scope-dropdown-trigger")).toBeNull();
+    expect(el.shadowRoot.querySelector(".scope-option")).toBeNull();
   });
 
   test("the destination summary label reads 'Scope' (not 'Destination')", async () => {
@@ -2154,6 +2146,6 @@ describe("ambience-scene-editor — destination selector", () => {
     await e.updateComplete;
     el = e;
     // Expanded straight away: the picker trigger is in the DOM without a click.
-    expect(el.shadowRoot.querySelector(".scope-dropdown-trigger")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".scope-option")).toBeTruthy();
   });
 });

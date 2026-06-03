@@ -212,9 +212,15 @@ export class AmbienceCategoriesSettings extends LitElement {
       ? this._categories.map((g) => (g.id === draft.id ? draft : g))
       : [...this._categories, draft];
     this._closeModal();
-    void saveCategories(this.hass, this._categories).catch((e) => {
-      this._error = (e as Error).message || String(e);
-    });
+    void saveCategories(this.hass, this._categories)
+      .then(() => {
+        // Tell the scopes view to re-fetch so the scene list + editor pick up
+        // the edit (mirrors the exposed-actions-changed pattern).
+        window.dispatchEvent(new CustomEvent("ambience-categories-changed"));
+      })
+      .catch((e) => {
+        this._error = (e as Error).message || String(e);
+      });
   }
 
   _deleteCategory() {
@@ -234,7 +240,10 @@ export class AmbienceCategoriesSettings extends LitElement {
     const previous = this._categories;
     this._categories = this._categories.filter((g) => g.id !== id);
     void deleteCategory(this.hass, id)
-      .then(() => this._closeModal())
+      .then(() => {
+        this._closeModal();
+        window.dispatchEvent(new CustomEvent("ambience-categories-changed"));
+      })
       .catch((e) => {
         this._categories = previous;
         // The backend tags its refusals with stable error codes; localize the

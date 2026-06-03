@@ -155,6 +155,36 @@ describe("ambience-scopes-view", () => {
     expect(floorRows.length).toBe(0);
   });
 
+  // --- scope icons --------------------------------------------------------
+
+  const iconFor = (root: any, sel: string): string | null =>
+    (
+      root.shadowRoot.querySelector(`${sel} .scope-header ha-icon.scope-icon`) as Element
+    )?.getAttribute("icon") ?? null;
+
+  test("each scope header shows a per-kind default icon when HA has none", async () => {
+    el = await mount();
+    expect(iconFor(el, ".scope-row.house")).toBe("mdi:home");
+    expect(iconFor(el, ".scope-row.floor[data-id='ground']")).toBe("mdi:layers");
+    expect(iconFor(el, ".scope-row.area[data-id='living_room']")).toBe("mdi:texture-box");
+  });
+
+  test("scope headers use the icon assigned in HA's area/floor registry", async () => {
+    el = await mount();
+    el.hass = {
+      ...el.hass,
+      areas: { living_room: { icon: "mdi:sofa" } },
+      floors: { ground: { icon: "mdi:home-floor-g" } },
+    };
+    await el.updateComplete;
+    expect(iconFor(el, ".scope-row.area[data-id='living_room']")).toBe("mdi:sofa");
+    expect(iconFor(el, ".scope-row.floor[data-id='ground']")).toBe("mdi:home-floor-g");
+    // An area with no registry icon still falls back to the default.
+    expect(iconFor(el, ".scope-row.area[data-id='bedroom']")).toBe("mdi:texture-box");
+    // House has no HA registry entry → always the default.
+    expect(iconFor(el, ".scope-row.house")).toBe("mdi:home");
+  });
+
   // --- ordering -----------------------------------------------------------
 
   test("flat list order: House first, then floors, then areas", async () => {
@@ -751,6 +781,34 @@ describe("ambience-scopes-view", () => {
     // No additional call after disconnect
     expect(vi.mocked(api.listExposedActions).mock.calls.length).toBe(callsBefore);
     el = null; // already removed, don't double-remove in afterEach
+  });
+
+  test("ambience-categories-changed event re-fetches listCategories", async () => {
+    el = await mount();
+    const initialCallCount = vi.mocked(api.listCategories).mock.calls.length;
+
+    const updated: SceneCategory[] = [{ id: "movie", name: "Movie night" }];
+    vi.mocked(api.listCategories).mockResolvedValueOnce(updated);
+
+    window.dispatchEvent(new CustomEvent("ambience-categories-changed"));
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    expect(vi.mocked(api.listCategories).mock.calls.length).toBe(initialCallCount + 1);
+    expect(el._categories).toEqual(updated);
+  });
+
+  test("ambience-categories-changed listener is removed on disconnect", async () => {
+    el = await mount();
+    el.remove();
+    await new Promise((r) => setTimeout(r, 0));
+
+    const callsBefore = vi.mocked(api.listCategories).mock.calls.length;
+    window.dispatchEvent(new CustomEvent("ambience-categories-changed"));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(vi.mocked(api.listCategories).mock.calls.length).toBe(callsBefore);
+    el = null;
   });
 
   // --- global category filter ------------------------------------------------

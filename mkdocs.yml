@@ -1,0 +1,39 @@
+site_name: Ambience
+site_description: A condition-based scene engine for Home Assistant.
+repo_url: https://github.com/clintongormley/ambience
+docs_dir: docs
+
+# Keep internal working docs out of the published site.
+exclude_docs: |
+  superpowers/
+  handoffs/
+  reference/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - toc.integrate
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md

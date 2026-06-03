@@ -31,3 +31,7 @@ docs/superpowers/
 node_modules/
 frontend/dist/
 .superpowers/
+
+# Docs build
+.venv-docs/
+site/

@@ -96,7 +96,7 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     new_scene: "New scene",
     name_optional: "Name (optional)",
     category: "Category",
-    destination: "Destination",
+    scope: "Scope",
     when_heading: "When",
     actions_heading: "Actions",
     target: "Target",

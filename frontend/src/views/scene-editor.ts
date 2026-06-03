@@ -7,6 +7,7 @@ import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { conditionLabel, localize } from "../i18n.js";
 import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
 import { stripPositionMetadata } from "../scene.js";
+import { scopeIcon } from "../scope-icon.js";
 import { sceneDisplayName, summariseAction, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
@@ -201,6 +202,13 @@ export class AmbienceSceneEditor extends LitElement {
     .destination {
       margin-bottom: 0.75rem;
     }
+    /* Scope icon in the destination summary — matches the scope-header icon
+       (HA's area/floor icon, or a per-kind default). */
+    .scope-icon {
+      --mdc-icon-size: 18px;
+      color: var(--secondary-text-color, #888);
+      vertical-align: middle;
+    }
     .destination label {
       display: block;
       color: var(--secondary-text-color, #888);
@@ -341,7 +349,7 @@ export class AmbienceSceneEditor extends LitElement {
     }
     return html`
       <div class="destination">
-        <label>${localize(this.hass, "ui.destination", "Destination")}</label>
+        <label>${localize(this.hass, "ui.scope", "Scope")}</label>
         <select
           .value=${String(currentIdx)}
           @change=${this._onDestinationChange}
@@ -376,7 +384,7 @@ export class AmbienceSceneEditor extends LitElement {
           .hass=${this.hass}
           .schema=${schema}
           .data=${{ destination: String(currentIdx) }}
-          .computeLabel=${() => localize(this.hass, "ui.destination", "Destination")}
+          .computeLabel=${() => localize(this.hass, "ui.scope", "Scope")}
           @value-changed=${this._onDestinationChangeHaForm}
         ></ha-form>
       </div>
@@ -401,7 +409,18 @@ export class AmbienceSceneEditor extends LitElement {
     return html`
       <div class="slot collapsed" data-slot-id="destination">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "destination" })}>
-          <span class="summary-label"><strong>${localize(this.hass, "ui.destination", "Destination")}:</strong> ${current?.label ?? ""}</span>
+          <span class="summary-label"
+            ><strong>${localize(this.hass, "ui.scope", "Scope")}:</strong>
+            ${
+              current
+                ? html`<ha-icon
+                    class="scope-icon"
+                    icon=${scopeIcon(current.scope, this.hass as any)}
+                  ></ha-icon>`
+                : ""
+            }
+            ${current?.label ?? ""}</span
+          >
         </div>
       </div>
     `;
@@ -764,6 +783,14 @@ export class AmbienceSceneEditor extends LitElement {
     }
   }
 
+  // A condition that depends on extra configuration is greyed out in the
+  // add-condition dropdown until that configuration exists — selecting it would
+  // only fail validation on save. Currently only `weather`, which needs a
+  // weather entity to be configured (see weather.py validate_predicate).
+  private _conditionDisabled(name: string): boolean {
+    return name === "weather" && !this.weatherConfig?.entity;
+  }
+
   private _renderAddCondition() {
     const unused = this._unusedConditions();
     if (unused.length === 0) return "";
@@ -775,7 +802,7 @@ export class AmbienceSceneEditor extends LitElement {
       <div class="add-condition">
         <select class="add-condition" @change=${this._onAddCondition}>
           <option value="">${localize(this.hass, "ui.add_condition", "+ Add condition…")}</option>
-          ${unused.map((m) => html`<option value=${m.name}>${conditionLabel(this.hass as any, m.name)}</option>`)}
+          ${unused.map((m) => html`<option value=${m.name} ?disabled=${this._conditionDisabled(m.name)}>${conditionLabel(this.hass as any, m.name)}</option>`)}
         </select>
       </div>
     `;
@@ -795,6 +822,7 @@ export class AmbienceSceneEditor extends LitElement {
               ...unused.map((m) => ({
                 value: m.name,
                 label: conditionLabel(this.hass as any, m.name),
+                disabled: this._conditionDisabled(m.name),
               })),
             ],
           },

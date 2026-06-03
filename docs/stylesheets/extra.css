@@ -1,14 +1,29 @@
-/* Ambience brand colours for the Material theme. */
+/* Ambience brand accent for the Material theme. The header background comes
+   from the palette (white in light mode, near-black in dark mode), so the
+   logo always sits on a contrasting surface. */
 :root {
-  --md-primary-fg-color: #4a3e9e;
-  --md-primary-fg-color--light: #6f63c4;
-  --md-primary-fg-color--dark: #372e78;
   --md-accent-fg-color: #e8901e;
 }
 
-/* The header logo keeps its own gradient colours, so give it a little room. */
-.md-header__button.md-logo img {
+/* The logo already reads "Ambience", so hide the redundant header title. */
+.md-header__title {
+  display: none;
+}
+
+/* Header wordmark: hide the single <img> and paint the palette-appropriate
+   variant as a background so it stays legible in both light and dark modes. */
+.md-header__button.md-logo {
+  width: 7rem;
   height: 1.6rem;
+  background: url("../assets/logo-light.svg") left center / contain no-repeat;
+}
+
+.md-header__button.md-logo img {
+  display: none;
+}
+
+[data-md-color-scheme="slate"] .md-header__button.md-logo {
+  background-image: url("../assets/logo-dark.svg");
 }
 
 /* Centred wordmark hero at the top of the home page. */

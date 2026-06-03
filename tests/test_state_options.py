@@ -44,3 +44,64 @@ def test_person_includes_zone_names():
     )
     result = known_states_for(hass, "person.alice")
     assert "home" in result and "not_home" in result and "Work" in result
+
+
+def test_select_entity_options_are_included() -> None:
+    """Lines 57-59: entities with an `options` list attribute (input_select /
+    select) have each string option added to the result."""
+    hass = _Hass(
+        {
+            "input_select.mode": _State("away", {"options": ["home", "away", "night"]}),
+        }
+    )
+    result = known_states_for(hass, "input_select.mode")
+    assert "home" in result
+    assert "away" in result
+    assert "night" in result
+
+
+def test_select_entity_non_string_options_are_skipped() -> None:
+    """Branch 58->57: non-string items in the `options` list are silently
+    skipped; only string entries are added to the result."""
+    hass = _Hass(
+        {
+            "input_select.mode": _State("home", {"options": [1, None, "home", True]}),
+        }
+    )
+    result = known_states_for(hass, "input_select.mode")
+    assert result.count("home") == 1
+    assert 1 not in result
+    assert None not in result
+
+
+def test_zone_without_friendly_name_uses_entity_id_suffix() -> None:
+    """Line 67: when a zone has no friendly_name attribute, the part after the
+    dot in its entity_id is used as the zone label."""
+
+    class _StateWithId(_State):
+        """_State extended with entity_id, matching real HA state objects."""
+
+        def __init__(self, entity_id, state, attributes=None):
+            super().__init__(state, attributes)
+            self.entity_id = entity_id
+
+    hass = _Hass(
+        {
+            "person.bob": _StateWithId("person.bob", "home"),
+            "zone.countryside": _StateWithId("zone.countryside", "0"),  # no friendly_name
+        }
+    )
+    result = known_states_for(hass, "person.bob")
+    assert "countryside" in result
+
+
+def test_unavailable_state_is_not_added_to_options() -> None:
+    """Line 69->72: when the entity's current state is 'unavailable' or
+    'unknown', it is not appended to the options list."""
+    hass_unavailable = _Hass({"binary_sensor.door": _State("unavailable")})
+    result_unavailable = known_states_for(hass_unavailable, "binary_sensor.door")
+    assert "unavailable" not in result_unavailable
+
+    hass_unknown = _Hass({"binary_sensor.door": _State("unknown")})
+    result_unknown = known_states_for(hass_unknown, "binary_sensor.door")
+    assert "unknown" not in result_unknown

@@ -263,6 +263,95 @@ def test_validate_shape_rejects_bool_reapply():
         store.validate_shape([_entry(reapply_seconds=True)])
 
 
+def test_validate_shape_rejects_non_list_input() -> None:
+    """validate_shape raises when actions is not a list (line 54)."""
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="exposed actions must be a list"):
+        store.validate_shape({"id": "light.turn_on"})  # type: ignore[arg-type]
+
+
+def test_validate_shape_rejects_non_dict_entry() -> None:
+    """validate_shape raises when an entry is not a dict (line 58)."""
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="entry must be an object"):
+        store.validate_shape(["light.turn_on"])  # type: ignore[list-item]
+
+
+def test_validate_shape_rejects_service_id_with_empty_domain() -> None:
+    """validate_shape raises when a service id has an empty domain segment (line 64)."""
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="invalid service id"):
+        store.validate_shape(
+            [{"id": ".turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+        )
+
+
+def test_validate_shape_rejects_service_id_with_empty_name() -> None:
+    """validate_shape raises when a service id has an empty name segment (line 64)."""
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="invalid service id"):
+        store.validate_shape([{"id": "light.", "label": "", "visible_fields": [], "defaults": {}}])
+
+
+def test_validate_shape_rejects_non_string_label() -> None:
+    """validate_shape raises when label is not a string (line 70)."""
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="label must be a string"):
+        store.validate_shape(
+            [{"id": "light.turn_on", "label": 42, "visible_fields": [], "defaults": {}}]
+        )
+
+
+def test_validate_shape_rejects_non_list_visible_fields() -> None:
+    """validate_shape raises when visible_fields is not a list of strings (line 74)."""
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="visible_fields must be a list of strings"):
+        store.validate_shape(
+            [
+                {
+                    "id": "light.turn_on",
+                    "label": "",
+                    "visible_fields": "brightness_pct",
+                    "defaults": {},
+                }
+            ]
+        )
+
+
+def test_validate_shape_rejects_visible_fields_with_non_string_elements() -> None:
+    """validate_shape raises when visible_fields contains a non-string (line 74)."""
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="visible_fields must be a list of strings"):
+        store.validate_shape(
+            [{"id": "light.turn_on", "label": "", "visible_fields": [123], "defaults": {}}]
+        )
+
+
+def test_validate_shape_rejects_non_dict_defaults() -> None:
+    """validate_shape raises when defaults is not a dict (line 76)."""
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="defaults must be an object keyed by string"):
+        store.validate_shape(
+            [
+                {
+                    "id": "light.turn_on",
+                    "label": "",
+                    "visible_fields": [],
+                    "defaults": ["brightness_pct"],
+                }
+            ]
+        )
+
+
+def test_validate_shape_rejects_defaults_with_non_string_key() -> None:
+    """validate_shape raises when defaults has a non-string key (line 76)."""
+    store = ExposedActionsStore(_FakeStorage())
+    with pytest.raises(ValueError, match="defaults must be an object keyed by string"):
+        store.validate_shape(
+            [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {1: "val"}}]  # type: ignore[dict-item]
+        )
+
+
 async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
     """When async_get_all_descriptions raises, field validation is skipped.
 

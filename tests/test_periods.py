@@ -200,6 +200,69 @@ async def test_reset_clears_custom_and_hidden() -> None:
     assert storage.saved == [{"custom": {}, "hidden": []}]
 
 
+# ---------------------------------------------------------------------------
+# Line 46 – _validate_endpoint: non-dict or dict missing 'kind'
+# ---------------------------------------------------------------------------
+
+
+def test_validate_definition_rejects_endpoint_not_a_dict() -> None:
+    """_validate_endpoint raises when an endpoint is not a dict (line 46)."""
+    with pytest.raises(ValueError, match="endpoint must be an object"):
+        PeriodStore(_FakeStorage()).validate_definition(
+            {"from": "08:00", "to": {"kind": "time", "hh": 10, "mm": 0}}
+        )
+
+
+def test_validate_definition_rejects_endpoint_without_kind() -> None:
+    """_validate_endpoint raises when an endpoint dict has no 'kind' key (line 46)."""
+    with pytest.raises(ValueError, match="endpoint must be an object"):
+        PeriodStore(_FakeStorage()).validate_definition(
+            {"from": {"hh": 8, "mm": 0}, "to": {"kind": "time", "hh": 10, "mm": 0}}
+        )
+
+
+# ---------------------------------------------------------------------------
+# Line 106 – validate_definition: defn is not a dict
+# ---------------------------------------------------------------------------
+
+
+def test_validate_definition_rejects_non_dict() -> None:
+    """validate_definition raises when defn is not a dict (line 106)."""
+    with pytest.raises(ValueError, match="period definition must be an object"):
+        PeriodStore(_FakeStorage()).validate_definition("not-a-dict")
+
+
+# ---------------------------------------------------------------------------
+# Lines 117 / 119 – save(): custom not a dict; hidden not a list
+# ---------------------------------------------------------------------------
+
+
+async def test_save_rejects_custom_not_a_dict() -> None:
+    """save() raises when custom is not a dict (line 117)."""
+    store = PeriodStore(_FakeStorage())
+    with pytest.raises(ValueError, match="custom must be an object"):
+        await store.save(["not", "a", "dict"], [])  # type: ignore[arg-type]
+
+
+async def test_save_rejects_hidden_not_a_list() -> None:
+    """save() raises when hidden is not a list (line 119)."""
+    store = PeriodStore(_FakeStorage())
+    with pytest.raises(ValueError, match="hidden must be a list"):
+        await store.save({}, "daytime")  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Line 126 – save(): hidden id that is not a built-in
+# ---------------------------------------------------------------------------
+
+
+async def test_save_rejects_hiding_non_builtin_id() -> None:
+    """save() raises when hidden contains an id that is not a built-in (line 126)."""
+    store = PeriodStore(_FakeStorage())
+    with pytest.raises(ValueError, match="only built-in ids can be hidden"):
+        await store.save({}, ["wind_down"])  # custom id, not a built-in
+
+
 def test_view_for_ui_returns_builtins_custom_hidden() -> None:
     storage = _FakeStorage(
         {

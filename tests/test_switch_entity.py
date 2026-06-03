@@ -229,3 +229,159 @@ async def test_unload_cancels_pending_timers(hass, mock_config_entry, fixed_utcn
     await hass.config_entries.async_unload(mock_config_entry.entry_id)
     await hass.async_block_till_done()
     assert timer.cancelled()
+
+
+# --- _CancellableTimer -------------------------------------------------------
+
+
+async def test_cancellable_timer_double_cancel_is_noop(hass, mock_config_entry, fixed_utcnow):
+    """Calling cancel() a second time after the timer is already cancelled must
+    not raise and must not call the underlying unsub a second time."""
+    from unittest.mock import MagicMock
+
+    from custom_components.ambience.switch import _CancellableTimer
+
+    unsub = MagicMock()
+    timer = _CancellableTimer(unsub)
+    timer.cancel()
+    assert timer.cancelled()
+    assert unsub.call_count == 1
+
+    # Second cancel — the `if not self._cancelled` guard must short-circuit.
+    timer.cancel()
+    assert unsub.call_count == 1  # still 1, not 2
+
+
+# --- _schedule_auto_on replaces an existing timer ----------------------------
+
+
+async def test_schedule_auto_on_replaces_existing_timer(hass, mock_config_entry, fixed_utcnow):
+    """If a timer is already running when _schedule_auto_on is called again,
+    the old timer is cancelled and replaced (lines 233-234)."""
+    await _setup(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
+    ent = _switch(hass, "house", None)
+
+    # First turn-off schedules timer_a.
+    await ent.async_turn_off()
+    await hass.async_block_till_done()
+    timer_a = ent._timer
+    assert timer_a is not None
+
+    # Manually call _apply_off again (simulating a second turn-off while off):
+    # this exercises the cancel-existing-timer branch inside _schedule_auto_on.
+    await ent._apply_off()
+    await hass.async_block_till_done()
+    timer_b = ent._timer
+
+    assert timer_a.cancelled()
+    assert timer_b is not None
+    assert timer_b is not timer_a
+
+
+# --- _schedule_auto_on_from_store edge cases ---------------------------------
+
+
+async def test_schedule_auto_on_from_store_zero_delay_returns_early(
+    hass, mock_config_entry, fixed_utcnow
+):
+    """When auto_on_delay_seconds is 0, _schedule_auto_on_from_store must return
+    immediately without scheduling a timer (line 244)."""
+    await _setup(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 0})
+    ent = _switch(hass, "house", None)
+    # Manually set the switch as off so the call is meaningful.
+    ent._attr_is_on = False
+
+    # Calling _schedule_auto_on_from_store with delay=0 must not schedule.
+    ent._schedule_auto_on_from_store(turn_on_if_expired=True)
+    assert ent._timer is None
+
+
+async def test_schedule_auto_on_from_store_no_off_at_returns_early(
+    hass, mock_config_entry, fixed_utcnow
+):
+    """When the store has no off_at recorded, _schedule_auto_on_from_store must
+    return without scheduling a timer (line 247)."""
+    await _setup(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
+    ent = _switch(hass, "house", None)
+    ent._attr_is_on = False
+    # Store has no off_at for this scope (never been turned off).
+    assert store.get_scope_switch_off_at("house", None) is None
+
+    ent._schedule_auto_on_from_store(turn_on_if_expired=True)
+    assert ent._timer is None
+
+
+async def test_schedule_auto_on_from_store_invalid_off_at_logs_warning(
+    hass, mock_config_entry, fixed_utcnow, caplog
+):
+    """A corrupt/unparseable off_at string must be ignored with a warning
+    (lines 251-253)."""
+    import logging
+
+    await _setup(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
+    ent = _switch(hass, "house", None)
+    ent._attr_is_on = False
+    # Inject a corrupt timestamp directly into the store.
+    await store.async_set_scope_switch_off_at("house", None, "not-a-valid-iso-timestamp")
+
+    with caplog.at_level(logging.WARNING, logger="custom_components.ambience.switch"):
+        ent._schedule_auto_on_from_store(turn_on_if_expired=True)
+
+    assert ent._timer is None
+    assert "invalid off_at" in caplog.text
+
+
+async def test_schedule_auto_on_from_store_expired_turn_on_false_does_not_turn_on(
+    hass, mock_config_entry, fixed_utcnow
+):
+    """When remaining <= 0 and turn_on_if_expired=False, the switch must NOT be
+    turned on and no timer is scheduled (line 255->257 False branch)."""
+    await _setup(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
+    ent = _switch(hass, "house", None)
+    ent._attr_is_on = False
+    # Record an off_at that is older than the delay (expired).
+    expired_off_at = (fixed_utcnow["now"] - timedelta(hours=2)).isoformat()
+    await store.async_set_scope_switch_off_at("house", None, expired_off_at)
+
+    ent._schedule_auto_on_from_store(turn_on_if_expired=False)
+    await hass.async_block_till_done()
+
+    assert ent.is_on is False
+    assert ent._timer is None
+
+
+# --- _handle_config_updated with switch off ----------------------------------
+
+
+async def test_config_updated_while_off_reschedules_auto_on(hass, mock_config_entry, fixed_utcnow):
+    """When the global config-updated signal fires while the switch is off,
+    _handle_config_updated must call _schedule_auto_on_from_store (line 271)."""
+    await _setup(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 3600})
+    ent = _switch(hass, "house", None)
+
+    # Turn off to install a timer.
+    await ent.async_turn_off()
+    await hass.async_block_till_done()
+    old_timer = ent._timer
+    assert old_timer is not None
+
+    # Now update the defaults with a longer delay and fire the signal while off.
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 7200})
+    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
+    await hass.async_block_till_done()
+
+    # The switch is still off and a (possibly new) timer is active.
+    assert ent.is_on is False
+    assert ent._timer is not None

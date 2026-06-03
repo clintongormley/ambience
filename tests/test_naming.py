@@ -52,9 +52,9 @@ def test_category_names_empty_when_store_missing() -> None:
 # --- scope display names ------------------------------------------------------
 
 
-def test_scope_display_name_house_is_global() -> None:
+def test_scope_display_name_house_is_house() -> None:
     # House returns before any registry access, so a bare stub hass is fine.
-    assert scope_display_name(_Hass({}), "house", None) == "Global"
+    assert scope_display_name(_Hass({}), "house", None) == "House"
 
 
 async def test_scope_display_name_area_uses_registry(hass: HomeAssistant) -> None:

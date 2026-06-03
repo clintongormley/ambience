@@ -333,7 +333,7 @@ def _safe_scope_display_name(hass: HomeAssistant, unit: UnitTrace) -> str | None
 
 def _resolve_names(hass: HomeAssistant, event: TraceEvent) -> TraceEvent:
     """Fill each unit's `category_name` (store id -> name) and `scope_name`
-    (area/floor friendly name, 'Global' for house) so logs show human names
+    (area/floor friendly name, 'House' for house) so logs show human names
     rather than opaque ids. Best-effort: leaves a name unresolved when the
     store/registry isn't available (e.g. test doubles)."""
     names = category_names(hass)

@@ -41,7 +41,7 @@ def _switch(hass: HomeAssistant, kind: str, sid: str | None) -> Any:
 async def test_house_switch_always_exists(hass, mock_config_entry):
     await _setup(hass, mock_config_entry)
     ent = _switch(hass, "house", None)
-    assert ent.unique_id == "ambience_switch_global"
+    assert ent.unique_id == "ambience_switch_house"
     assert ent.is_on is True
 
 
@@ -145,7 +145,7 @@ async def test_auto_on_fires_after_delay(hass, mock_config_entry, fixed_utcnow):
 
 
 async def test_restore_off_with_remaining_delay_reschedules(hass, mock_config_entry, fixed_utcnow):
-    mock_restore_cache(hass, (State("switch.global_ambience", "off"),))
+    mock_restore_cache(hass, (State("switch.house_ambience", "off"),))
     from custom_components.ambience.store import AmbienceStore
 
     pre = AmbienceStore(hass)
@@ -161,7 +161,7 @@ async def test_restore_off_with_remaining_delay_reschedules(hass, mock_config_en
 
 
 async def test_restore_off_expired_turns_on_immediately(hass, mock_config_entry, fixed_utcnow):
-    mock_restore_cache(hass, (State("switch.global_ambience", "off"),))
+    mock_restore_cache(hass, (State("switch.house_ambience", "off"),))
     from custom_components.ambience.store import AmbienceStore
 
     pre = AmbienceStore(hass)
@@ -179,13 +179,13 @@ async def test_restore_off_expired_turns_on_immediately(hass, mock_config_entry,
 
 
 async def test_default_display_names_include_scope_prefix(hass, mock_config_entry):
-    """Default display name is '<Global|floor|area> <defaults.name>'."""
+    """Default display name is '<House|floor|area> <defaults.name>'."""
     ar.async_get(hass).async_create("Master Bedroom")
     fr.async_get(hass).async_create("Upstairs")
     await _setup(hass, mock_config_entry)
 
     names = {ent.name for ent in hass.data[DOMAIN][DATA_SWITCHES].values()}
-    assert names == {"Global Ambience", "Upstairs Ambience", "Master Bedroom Ambience"}
+    assert names == {"House Ambience", "Upstairs Ambience", "Master Bedroom Ambience"}
 
 
 async def test_dispatcher_signal_global_updates_all_names(hass, mock_config_entry):
@@ -199,7 +199,7 @@ async def test_dispatcher_signal_global_updates_all_names(hass, mock_config_entr
     await hass.async_block_till_done()
 
     names = {ent.name for ent in hass.data[DOMAIN][DATA_SWITCHES].values()}
-    assert names == {"Global Master", "Upstairs Master", "Living Room Master"}
+    assert names == {"House Master", "Upstairs Master", "Living Room Master"}
 
 
 async def test_name_ignores_legacy_per_scope_override(hass, mock_config_entry):
@@ -217,7 +217,7 @@ async def test_name_ignores_legacy_per_scope_override(hass, mock_config_entry):
     await hass.async_block_till_done()
 
     assert _switch(hass, area_kind, area_id).name == "Living Room Ambience"
-    assert _switch(hass, "house", None).name == "Global Ambience"
+    assert _switch(hass, "house", None).name == "House Ambience"
 
 
 async def test_unload_cancels_pending_timers(hass, mock_config_entry, fixed_utcnow):

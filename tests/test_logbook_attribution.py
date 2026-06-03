@@ -313,7 +313,7 @@ async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockC
     await hass.async_block_till_done()
 
     msgs = [e.data["message"] for e in entries if e.data.get("name") == "Ambience"]
-    assert "applied 'Movie' in Global" in msgs
+    assert "applied 'Movie' in House" in msgs
 
 
 # --- run_scene_actions: own "ran ..." wording + shared context -----------------

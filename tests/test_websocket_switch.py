@@ -91,7 +91,7 @@ async def test_switches_list_returns_entity_id_per_scope(hass, installed, hass_w
     resp = await _ws_send(hass_ws_client, type="ambience/switches/list")
     assert resp["success"]
     by_key = {(e["scope_kind"], e["scope_id"]): e["entity_id"] for e in resp["result"]}
-    assert by_key[("house", None)] == "switch.global_ambience"
+    assert by_key[("house", None)] == "switch.house_ambience"
     assert by_key[("floor", fid)] == "switch.upstairs_floor_ambience"
     assert by_key[("area", aid)] == "switch.living_room_ambience"
 

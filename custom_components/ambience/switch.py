@@ -54,7 +54,7 @@ class _CancellableTimer:
 
 def _entity_id_for(scope_kind: str, display_name: str) -> str:
     if scope_kind == "house":
-        return "switch.global_ambience"
+        return "switch.house_ambience"
     if scope_kind == "floor":
         # Suffix with `_floor_ambience` so a floor and an area with the same
         # name don't collide on the entity_id slug.
@@ -101,10 +101,10 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         self._scope_kind = scope_kind
         self._scope_id = scope_id
         # Fallback prefix if the area/floor disappears from the registry mid-
-        # session. House always uses the literal "Global".
-        self._fallback_prefix = "Global" if scope_kind == "house" else display_name
+        # session. House always uses the literal "House".
+        self._fallback_prefix = "House" if scope_kind == "house" else display_name
         if scope_kind == "house":
-            self._attr_unique_id = "ambience_switch_global"
+            self._attr_unique_id = "ambience_switch_house"
         else:
             self._attr_unique_id = f"ambience_switch_{scope_kind}_{scope_id}"
         # Area-bound switches show up under the area in HA UI; floor and house
@@ -208,7 +208,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         return self._store().get_switch_defaults()["auto_on_delay_seconds"]
 
     def _scope_prefix(self) -> str:
-        """Live name of the scope: 'Global' / floor name / area name.
+        """Live name of the scope: 'House' / floor name / area name.
 
         Read from the HA registry so renames are reflected on the next
         refresh. Falls back to the construction-time name if the registry
@@ -221,7 +221,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     def _refresh_name_from_store(self) -> None:
         """Compose the display name as `<prefix> <default>`.
 
-        The displayed name is the scope context (Global / floor / area name)
+        The displayed name is the scope context (House / floor / area name)
         followed by the global default switch name ("Ambience" unless changed in
         the defaults).
         """

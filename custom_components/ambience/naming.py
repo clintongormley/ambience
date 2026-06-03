@@ -22,13 +22,13 @@ def scope_display_name(
     scope_id: str | None,
     fallback: str | None = None,
 ) -> str:
-    """Human label for a scope: area/floor name, or 'Global' for the house.
+    """Human label for a scope: area/floor name, or 'House' for the house.
 
     When the registry entry is missing (e.g. a deleted area/floor, or a test
     with no registered areas), returns `fallback` if given, else the raw
     scope_id."""
     if scope_kind == "house":
-        return "Global"
+        return "House"
     if scope_kind == "floor":
         floor = fr.async_get(hass).async_get_floor(scope_id)
         if floor is not None:

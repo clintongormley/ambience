@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 120">
+  <defs>
+    <linearGradient id="a" x1="25.5" y1="0" x2="94.5" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5145A6"/>
+      <stop offset="35%" stop-color="#9152A8"/>
+      <stop offset="62%" stop-color="#E8617F"/>
+      <stop offset="100%" stop-color="#FFC861"/>
+    </linearGradient>
+    <linearGradient id="spec" x1="104" y1="0" x2="470" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFC861"/>
+      <stop offset="28%" stop-color="#FF8E72"/>
+      <stop offset="52%" stop-color="#E8617F"/>
+      <stop offset="76%" stop-color="#9B5BC0"/>
+      <stop offset="100%" stop-color="#6FA8FF"/>
+    </linearGradient>
+  </defs>
+  <!-- sun -->
+  <g stroke="#FFC861" stroke-width="3" stroke-linecap="round">
+    <line x1="98" y1="11" x2="98" y2="6"/>
+    <line x1="98" y1="37" x2="98" y2="42"/>
+    <line x1="85" y1="24" x2="80" y2="24"/>
+    <line x1="111" y1="24" x2="116" y2="24"/>
+    <line x1="107.19" y1="14.81" x2="110.73" y2="11.27"/>
+    <line x1="88.81" y1="14.81" x2="85.27" y2="11.27"/>
+    <line x1="107.19" y1="33.19" x2="110.73" y2="36.73"/>
+    <line x1="88.81" y1="33.19" x2="85.27" y2="36.73"/>
+  </g>
+  <circle cx="98" cy="24" r="10" fill="#FFCB6A"/>
+  <!-- stylised A -->
+  <path d="M32 96 L60 28 L88 96" fill="none" stroke="url(#a)" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- mbience -->
+  <text x="104" y="96" font-family="Avenir Next" font-weight="600" font-size="80" letter-spacing="-1" fill="url(#spec)">mbience</text>
+</svg>

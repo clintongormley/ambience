@@ -35,3 +35,6 @@ frontend/dist/
 # Docs build
 .venv-docs/
 site/
+
+# Editor
+.vscode/

@@ -1,0 +1,63 @@
+/* Ambience brand accent for the Material theme. The header background comes
+   from the palette (white in light mode, near-black in dark mode), so the
+   logo always sits on a contrasting surface. */
+:root {
+  --md-accent-fg-color: #e8901e;
+}
+
+/* The logo already reads "Ambience", so hide the redundant title text. Keep
+   the .md-header__title element itself, since its flex-grow is the spacer that
+   keeps the search box and GitHub link over on the right. */
+.md-header__topic {
+  display: none;
+}
+
+/* Give the freed-up space to a wider search box; GitHub stays on the right. */
+@media screen and (min-width: 60em) {
+  .md-search__inner {
+    width: 24rem;
+  }
+}
+
+/* Header wordmark: hide the single <img> and paint the palette-appropriate
+   variant as a background so it stays legible in both light and dark modes. */
+.md-header__button.md-logo {
+  width: 7rem;
+  height: 1.6rem;
+  background: url("../assets/logo-light.svg") left center / contain no-repeat;
+}
+
+.md-header__button.md-logo img {
+  display: none;
+}
+
+[data-md-color-scheme="slate"] .md-header__button.md-logo {
+  background-image: url("../assets/logo-dark.svg");
+}
+
+/* The hero logo is the home page's visible title, so the "Ambience" H1 below
+   it would be a duplicate. Keep the heading in the DOM (Material needs an H1,
+   and it helps a11y / SEO / the browser tab) but hide it from view. */
+.ambience-hero ~ h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Centred wordmark hero at the top of the home page. */
+.ambience-hero {
+  display: flex;
+  justify-content: center;
+}
+
+.ambience-hero img {
+  width: 100%;
+  max-width: 28rem;
+  height: auto;
+}

@@ -265,8 +265,12 @@ describe("summariseTimeOfDay", () => {
 
   test("summarises a not-before clamp suffix on a sun endpoint", () => {
     const pred = {
-      from: { kind: "sun", anchor: "sunrise", offset_min: 0,
-              clamp: { dir: "not_before", hh: 8, mm: 30 } },
+      from: {
+        kind: "sun",
+        anchor: "sunrise",
+        offset_min: 0,
+        clamp: { dir: "not_before", hh: 8, mm: 30 },
+      },
       to: { kind: "sun", anchor: "dusk", offset_min: 0 },
     } as any;
     expect(summariseTimeOfDay(pred, {})).toBe("Sunrise (not before 08:30) → Dusk");
@@ -275,16 +279,24 @@ describe("summariseTimeOfDay", () => {
   test("summarises a not-after clamp suffix", () => {
     const pred = {
       from: { kind: "sun", anchor: "sunrise", offset_min: 0 },
-      to: { kind: "sun", anchor: "sunset", offset_min: 0,
-            clamp: { dir: "not_after", hh: 22, mm: 0 } },
+      to: {
+        kind: "sun",
+        anchor: "sunset",
+        offset_min: 0,
+        clamp: { dir: "not_after", hh: 22, mm: 0 },
+      },
     } as any;
     expect(summariseTimeOfDay(pred, {})).toBe("Sunrise → Sunset (not after 22:00)");
   });
 
   test("clamp suffix composes with an offset", () => {
     const pred = {
-      from: { kind: "sun", anchor: "sunrise", offset_min: 60,
-              clamp: { dir: "not_before", hh: 8, mm: 30 } },
+      from: {
+        kind: "sun",
+        anchor: "sunrise",
+        offset_min: 60,
+        clamp: { dir: "not_before", hh: 8, mm: 30 },
+      },
       to: { kind: "sun", anchor: "dusk", offset_min: 0 },
     } as any;
     expect(summariseTimeOfDay(pred, {})).toBe("Sunrise+1h (not before 08:30) → Dusk");

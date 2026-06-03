@@ -30,9 +30,10 @@ source = ["custom_components.ambience"]
 branch = true
 
 [tool.coverage.report]
-# Floor set to the current measured branch-coverage level so CI is green
-# immediately; raised in the final task once backfill lands.
-fail_under = 93
+# Locked to ~the achieved branch-coverage level (99.95%), 1 point of headroom.
+# Only two genuinely-unreachable lines remain (config_flow.py:28 dead abort
+# guard behind single_config_entry, trace.py import-time setLevel).
+fail_under = 99
 show_missing = true
 exclude_also = [
     "if TYPE_CHECKING:",

@@ -286,11 +286,6 @@ export class AmbienceSceneEditor extends LitElement {
       background: var(--secondary-background-color, #eee);
       font-weight: 600;
     }
-    .destination label {
-      display: block;
-      color: var(--secondary-text-color, #888);
-      font-size: 0.9em;
-    }
     /* Category field: colour-coded swatch + icon (shell from categorySwatchStyles),
        matching the scenes-list filter. */
     .category-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
@@ -428,7 +423,6 @@ export class AmbienceSceneEditor extends LitElement {
     const current = this.scopes.find((o) => sameScope(o.scope, this._scope)) ?? this.scopes[0];
     return html`
       <div class="destination">
-        <label>${localize(this.hass, "ui.scope", "Scope")}</label>
         <div class="scope-dropdown">
           <button
             class="scope-dropdown-trigger"

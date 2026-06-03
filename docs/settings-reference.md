@@ -12,13 +12,13 @@ The Ambience tab has two sections: **Defaults** and **Scene categories**.
 
 ### Defaults
 
-These values apply to every scope that has not been individually configured. See [Scopes & switches](concepts/scopes-and-switches.md) for an explanation of how scopes relate to switch entities.
+These values apply to every scope. See [Scopes & switches](concepts/scopes-and-switches.md) for an explanation of how scopes relate to switch entities.
 
 **Switch name**
-The name used for the Ambience switch entity in every scope. The default is `Ambience`. Changing this field renames all switch entities that have not been overridden at the scope level.
+The name used for the Ambience switch entities. The default is `Ambience`. Changing this field renames all of the Ambience switch entities.
 
 **Auto-on delay (seconds)**
-How long (in seconds) Ambience waits after the active scene's actions run before automatically turning the switch back on, if someone has turned it off manually. The default is `7200` (two hours). Set it to `0` to disable auto-on entirely — the switch will stay off until you turn it on again by hand.
+How long (in seconds) Ambience waits after you turn a switch off before automatically turning it back on. The default is `7200` (two hours). Set it to `0` to disable auto-on entirely — the switch will stay off until you turn it on again by hand.
 
 Changes take effect immediately and are persisted to the integration's storage.
 

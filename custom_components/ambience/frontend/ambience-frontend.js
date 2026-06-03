@@ -2014,7 +2014,7 @@ var Kn=Object.defineProperty;var Vn=Object.getOwnPropertyDescriptor;var u=(t,n,e
     .modal {
       background: var(--card-background-color, #fff); color: inherit;
       width: 90%; max-width: 40rem;
-      height: 85vh;
+      height: calc(100vh - 24px);
       display: flex; flex-direction: column;
     }
     .content {

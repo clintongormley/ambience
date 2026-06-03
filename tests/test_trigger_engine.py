@@ -6,6 +6,7 @@ import logging
 from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
@@ -1153,8 +1154,11 @@ async def test_resolve_and_apply_returns_none_when_winner_unchanged_and_tracing_
     # tod="evening" → rule 0 wins; mark rule 0 as already applied.
     engine._snapshots = {"tod": "evening"}
     hass.data[DOMAIN].setdefault(DATA_LAST_APPLIED, {})[("area", "a", "g")] = 0
-    # Ensure tracing is off (default logging level, no trace sinks).
-    result = await engine._resolve_and_apply("area", "a", "g")
+    # Force tracing OFF. We can't rely on the default logger level: under the HA
+    # test harness (notably in CI) the ambience trace logger inherits DEBUG, so
+    # `tracing_active` would return True. Patch it to isolate the inactive path.
+    with patch("custom_components.ambience.trigger_engine.tracing_active", return_value=False):
+        result = await engine._resolve_and_apply("area", "a", "g")
     assert result is None
 
 

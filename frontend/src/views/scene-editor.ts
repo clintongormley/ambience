@@ -69,7 +69,9 @@ export class AmbienceSceneEditor extends LitElement {
     :host {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.4); z-index: 100;
-      align-items: stretch; justify-content: center;
+      /* Centre the fixed-height modal so it leaves a little space above and
+         below the viewport edges, matching the config (settings) modal. */
+      align-items: center; justify-content: center;
       --category-swatch-size: 1.75rem;
       --category-swatch-icon-size: 18px;
     }
@@ -77,7 +79,7 @@ export class AmbienceSceneEditor extends LitElement {
     .modal {
       background: var(--card-background-color, #fff); color: inherit;
       width: 90%; max-width: 40rem;
-      height: 100vh; max-height: 100vh;
+      height: calc(100vh - 24px);
       display: flex; flex-direction: column;
     }
     .content {

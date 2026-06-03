@@ -263,6 +263,55 @@ async def test_save_rejects_hiding_non_builtin_id() -> None:
         await store.save({}, ["wind_down"])  # custom id, not a built-in
 
 
+# ---------------------------------------------------------------------------
+# Clamped sun endpoints
+# ---------------------------------------------------------------------------
+
+
+def test_validate_definition_accepts_clamped_sun() -> None:
+    PeriodStore(_FakeStorage()).validate_definition(
+        {
+            "from": {
+                "kind": "sun",
+                "anchor": "sunrise",
+                "offset_min": 0,
+                "clamp": {"dir": "not_before", "hh": 8, "mm": 30},
+            },
+            "to": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
+        }
+    )  # no raise
+
+
+def test_validate_definition_rejects_bad_clamp_dir() -> None:
+    with pytest.raises(ValueError):
+        PeriodStore(_FakeStorage()).validate_definition(
+            {
+                "from": {
+                    "kind": "sun",
+                    "anchor": "sunrise",
+                    "offset_min": 0,
+                    "clamp": {"dir": "nope", "hh": 8, "mm": 30},
+                },
+                "to": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
+            }
+        )
+
+
+def test_validate_definition_rejects_bad_clamp_time() -> None:
+    with pytest.raises(ValueError):
+        PeriodStore(_FakeStorage()).validate_definition(
+            {
+                "from": {
+                    "kind": "sun",
+                    "anchor": "sunrise",
+                    "offset_min": 0,
+                    "clamp": {"dir": "not_before", "hh": 8, "mm": 99},
+                },
+                "to": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
+            }
+        )
+
+
 def test_view_for_ui_returns_builtins_custom_hidden() -> None:
     storage = _FakeStorage(
         {

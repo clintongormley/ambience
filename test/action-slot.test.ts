@@ -434,6 +434,64 @@ describe("ambience-action-slot", () => {
     expect(label.textContent).toContain("Brightness pct");
   });
 
+  test("jsdom fallback: hint span is rendered when field has a default value", async () => {
+    // This test must run BEFORE ha-form is registered (jsdom fallback path).
+    // Exercises the `hint ? html<span class="field-default-hint">...` truthy
+    // branch in _renderFieldsForm's jsdom branch.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { transition: { selector: { number: { min: 0, max: 60 } } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["transition"],
+        defaults: { transition: 5 },
+      },
+      schema,
+      params: {},
+    });
+
+    // jsdom fallback renders a <label> for the field.
+    const label = el.shadowRoot.querySelector(".field-row label.field-label") as HTMLElement;
+    // Only relevant in jsdom fallback (no ha-form).
+    if (label) {
+      const hint = el.shadowRoot.querySelector(".field-default-hint");
+      expect(hint).not.toBeNull();
+      expect(hint!.textContent).toContain("5");
+    }
+  });
+
+  test("jsdom fallback: default hint includes unit suffix when selector has unit_of_measurement", async () => {
+    // Exercises the `unit ? ` ${unit}` : ""` truthy branch in _defaultHintSuffix.
+    // Must run BEFORE ha-form is registered.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        transition: {
+          selector: { number: { min: 0, max: 60, unit_of_measurement: "s" } },
+        },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["transition"],
+        defaults: { transition: 3 },
+      },
+      schema,
+      params: {},
+    });
+
+    const hint = el.shadowRoot.querySelector(".field-default-hint");
+    expect(hint).not.toBeNull();
+    // Hint must contain the value AND the unit suffix.
+    expect(hint!.textContent).toContain("3");
+    expect(hint!.textContent).toContain("s");
+  });
+
   // Fix (color_rgb): ha-form data must NOT include "" for unset non-text fields
   test("ha-form data omits unset fields rather than filling them with empty string", async () => {
     // Register a stub ha-form so the ha-form branch (not jsdom fallback) is taken.
@@ -1101,5 +1159,206 @@ describe("ambience-action-slot", () => {
     if (input) {
       expect(input.value).toBe("");
     }
+  });
+
+  // --- Missing branch coverage additions ---
+
+  test("_loadSchema skips fetch and clears schema when hass is not set at call time", async () => {
+    // Mount with exposed but WITHOUT hass — triggers _loadSchema with !this.hass
+    // which hits the `!id || !this.hass` early-return branch (lines 164-168).
+    el = document.createElement("ambience-action-slot");
+    // hass deliberately left unset
+    el.scope = { kind: "area", id: "living_room" };
+    el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
+    el.entityIds = [];
+    el.params = {};
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // Without hass, _loadSchema returns early → _schema stays undefined → loading state.
+    expect(el.shadowRoot.textContent.toLowerCase()).toContain("loading");
+    // getServiceSchema should never have been called without hass.
+    expect(vi.mocked(api.getServiceSchema)).not.toHaveBeenCalled();
+  });
+
+  test("_buildFormSchema propagates a string description from the service field", async () => {
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        transition: {
+          selector: { number: { min: 0, max: 60 } },
+          description: "Transition time in seconds",
+        },
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["transition"],
+        defaults: {},
+      },
+      schema,
+    });
+
+    // The description should end up in the ha-form schema entry. Verify by
+    // checking the jsdom fallback label (description shows up via the
+    // field-default-hint or can be checked via the internal _formSchema).
+    const formSchema: any[] = (el as any)._formSchema;
+    expect(formSchema.length).toBe(1);
+    expect(formSchema[0].description).toBe("Transition time in seconds");
+  });
+
+  test("hasTarget() returns false (conservative) while schema is still loading", async () => {
+    // Keep schema pending so _schema stays undefined.
+    vi.mocked(api.getServiceSchema).mockReturnValueOnce(new Promise(() => {}));
+    el = document.createElement("ambience-action-slot");
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
+    el.entityIds = [];
+    el.params = {};
+    document.body.appendChild(el);
+    await el.updateComplete;
+
+    // _schema is still undefined (loading) → hasTarget() must return false conservatively.
+    expect((el as any)._schema).toBeUndefined();
+    expect(el.hasTarget()).toBe(false);
+  });
+
+  test("schema null from a successful fetch (no error) renders the 'service unavailable' fallback", async () => {
+    // getServiceSchema resolves with null (not a rejection) — this is the
+    // _schemaError=null path where localize() provides the fallback text.
+    vi.mocked(api.getServiceSchema).mockResolvedValueOnce(null);
+    el = document.createElement("ambience-action-slot");
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
+    el.entityIds = [];
+    el.params = {};
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // _schemaError is null, _schema is null, _exposedMissing is false →
+    // renders the fallback localize text (service unavailable).
+    const errEl = el.shadowRoot.querySelector(".schema-error") as HTMLElement;
+    expect(errEl).not.toBeNull();
+    // _schemaError is null → falls through to localize default text.
+    expect((el as any)._schemaError).toBeNull();
+    // The ?? right-hand side (localize fallback) must be visible in the error text.
+    expect(errEl.textContent).toContain("not available");
+  });
+
+  test("no default-hint text when the field has no default (hint branch=false in jsdom fallback)", async () => {
+    // This test exercises the `hint ? html<span>... : ""` falsy branch in the
+    // jsdom fallback renderer (_renderFieldsForm). A field with no default in
+    // exposed.defaults produces an empty hint string.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { brightness_pct: { selector: { number: { min: 0, max: 100 } } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: {}, // no default → hint = ""
+      },
+      schema,
+      params: {},
+    });
+
+    // jsdom fallback (no ha-form): label element with no hint span next to it.
+    const label = el.shadowRoot.querySelector(".field-row .field-label-group label") as HTMLElement;
+    if (label) {
+      // The hint span should not be rendered alongside the label.
+      const hint = label.parentElement?.querySelector(".field-default-hint");
+      expect(hint).toBeNull();
+    }
+    // Also verify via the field-default-hint check.
+    expect(el.shadowRoot.querySelector(".field-default-hint")).toBeNull();
+  });
+
+  test("'Extra fields' notice shows without any visible fields (schema=0, extrasNotice branch)", async () => {
+    // When visible_fields is empty but params contains extra keys, the code path
+    // `extrasNotice !== "" ? html<div class="fields-form">... : ""`
+    // (the non-empty extrasNotice with schema.length=0) is exercised.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { brightness_pct: { selector: { number: {} } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: [], // no visible fields → schema.length === 0
+        defaults: {},
+      },
+      schema,
+      params: { brightness_pct: 80 }, // extra param (not in visible_fields, not in defaults)
+    });
+
+    // Should render the extras notice inside a .fields-form wrapper.
+    const fieldsForm = el.shadowRoot.querySelector(".fields-form");
+    expect(fieldsForm).not.toBeNull();
+    const notice = el.shadowRoot.querySelector("[data-extra-params]");
+    expect(notice).not.toBeNull();
+    expect(notice!.textContent).toContain("brightness_pct");
+  });
+
+  test("field with no selector falls back to { text: {} } in the form schema", async () => {
+    // Exercises the `field.selector ?? { text: {} }` branch in _buildFormSchema.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: {
+        note: {
+          // No selector provided — should fall back to text selector.
+          name: "Note",
+        } as any,
+      },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["note"],
+        defaults: {},
+      },
+      schema,
+    });
+
+    const formSchema: any[] = (el as any)._formSchema;
+    expect(formSchema.length).toBe(1);
+    expect(formSchema[0].selector).toEqual({ text: {} });
+  });
+
+  test("_defaultHintSuffix returns empty string for a selector with no unit_of_measurement", async () => {
+    // Exercises the `unit ? ... : ""` falsy branch in _defaultHintSuffix.
+    // A text selector has no unit — the suffix should be empty.
+    const schema: ServiceSchema = {
+      target: null,
+      fields: { message: { selector: { text: {} } } },
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["message"],
+        defaults: { message: "hello" }, // default set so hint is rendered
+      },
+      schema,
+      params: {},
+    });
+
+    const hint = el.shadowRoot.querySelector(".field-default-hint");
+    expect(hint).not.toBeNull();
+    // Hint text should contain the value but no unit suffix.
+    expect(hint!.textContent).toContain("hello");
+    // No " s" or " %" or similar unit suffix.
+    expect(hint!.textContent).not.toMatch(/Default: hello\s+\S/);
   });
 });

@@ -58,4 +58,109 @@ describe("ambience-ambience-settings", () => {
     el = await mount();
     expect(el.shadowRoot.querySelectorAll("[data-test=scope-row]").length).toBe(0);
   });
+
+  // ── missing-branch coverage ────────────────────────────────────────────────
+
+  test("shows error paragraph when getSwitchDefaults rejects", async () => {
+    mocks.getSwitchDefaults.mockRejectedValue(new Error("network error"));
+    el = await mount();
+    expect(el.shadowRoot.textContent).toContain("network error");
+  });
+
+  test("shows stringified error when getSwitchDefaults rejects with a non-Error", async () => {
+    mocks.getSwitchDefaults.mockRejectedValue("plain string error");
+    el = await mount();
+    expect(el.shadowRoot.textContent).toContain("plain string error");
+  });
+
+  test("shows stringified error when save rejects with a non-Error", async () => {
+    el = await mount();
+    mocks.saveSwitchDefaults.mockRejectedValue(42);
+    const input = el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement;
+    input.value = "Trigger";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).toContain("42");
+  });
+
+  test("shows error paragraph when save rejects", async () => {
+    el = await mount();
+    mocks.saveSwitchDefaults.mockRejectedValue(new Error("save failed"));
+    const input = el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement;
+    input.value = "New Name";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).toContain("save failed");
+  });
+
+  test("empty-string name is ignored — no save, no update", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement;
+    input.value = "";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    // saveSwitchDefaults should not have been called (only getSwitchDefaults on mount)
+    expect(mocks.saveSwitchDefaults).not.toHaveBeenCalled();
+  });
+
+  test("whitespace-only name is ignored — no save", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement;
+    input.value = "   ";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(mocks.saveSwitchDefaults).not.toHaveBeenCalled();
+  });
+
+  test("empty-string delay value is ignored — no save", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector(
+      "[data-test=defaults-delay-seconds]",
+    ) as HTMLInputElement;
+    input.value = "";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(mocks.saveSwitchDefaults).not.toHaveBeenCalled();
+  });
+
+  test("non-numeric delay value is ignored — no save", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector(
+      "[data-test=defaults-delay-seconds]",
+    ) as HTMLInputElement;
+    input.value = "abc";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(mocks.saveSwitchDefaults).not.toHaveBeenCalled();
+  });
+
+  test("negative delay value is ignored — no save", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector(
+      "[data-test=defaults-delay-seconds]",
+    ) as HTMLInputElement;
+    input.value = "-1";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(mocks.saveSwitchDefaults).not.toHaveBeenCalled();
+  });
+
+  test("successful save clears a previous error", async () => {
+    mocks.getSwitchDefaults.mockRejectedValue(new Error("initial error"));
+    el = await mount();
+    expect(el.shadowRoot.textContent).toContain("initial error");
+    // Now fix the mock so the next save succeeds
+    mocks.saveSwitchDefaults.mockResolvedValue({ ok: true });
+    const input = el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement;
+    input.value = "Fixed";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("p")).toBeFalsy();
+  });
 });

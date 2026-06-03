@@ -168,4 +168,142 @@ describe("ambience-traces-modal", () => {
     expect(e.shadowRoot.textContent).toContain("boom");
     e.remove();
   });
+
+  // ── missing-branch coverage ────────────────────────────────────────────────
+
+  test("renders nothing when open is false", async () => {
+    vi.mocked(api.listTraces).mockResolvedValue([]);
+    el = document.createElement("ambience-traces-modal");
+    el.hass = { callWS: vi.fn() };
+    el.scope = { scope_kind: "area", scope_id: "kitchen" };
+    el.category = "g1";
+    el.categoryName = "Evening";
+    el.open = false;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".modal")).toBeFalsy();
+    expect(vi.mocked(api.listTraces)).not.toHaveBeenCalled();
+  });
+
+  test("title falls back to category id when categoryName is null", async () => {
+    vi.mocked(api.listTraces).mockResolvedValue([]);
+    el = document.createElement("ambience-traces-modal");
+    el.hass = { callWS: vi.fn() };
+    el.scope = { scope_kind: "area", scope_id: "kitchen" };
+    el.category = "cat-fallback-id";
+    el.categoryName = null;
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("h3")!.textContent).toContain("cat-fallback-id");
+  });
+
+  test("close button dispatches the close event", async () => {
+    el = await mount([unit()]);
+    const events: Event[] = [];
+    el.addEventListener("close", (e: Event) => events.push(e));
+    el.shadowRoot.querySelector(".close").click();
+    expect(events.length).toBe(1);
+  });
+
+  test("clicking an expanded row collapses it", async () => {
+    const withExpl = unit({
+      explanation: {
+        winner_index: 0,
+        rules: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
+      },
+    });
+    el = await mount([withExpl]);
+    const toggle = el.shadowRoot.querySelector(".why-toggle");
+    toggle.click(); // expand
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".why")).toBeTruthy();
+    toggle.click(); // collapse — exercises the delete-from-Set branch
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".why")).toBeFalsy();
+  });
+
+  test("_checkNew skips the poll when modal is closed", async () => {
+    el = await mount([unit({ timestamp: "2026-06-01T10:00:00+00:00" })]);
+    const callsBefore = vi.mocked(api.listTraces).mock.calls.length;
+    el.open = false;
+    await el.updateComplete;
+    await el._checkNew(); // should return early
+    expect(vi.mocked(api.listTraces).mock.calls.length).toBe(callsBefore);
+  });
+
+  test("_checkNew sets has-new when current records are empty but a new trace arrives", async () => {
+    // Mount with empty trace list so _records is empty (shown timestamp = null)
+    el = await mount([]);
+    expect(el.shadowRoot.querySelector(".refresh.has-new")).toBeFalsy();
+    vi.mocked(api.listTraces).mockResolvedValue([
+      unit({ event_id: "new", timestamp: "2026-06-01T09:00:00+00:00" }),
+    ]);
+    await el._checkNew();
+    await el.updateComplete;
+    // newest is truthy, shown is null → (!shown) branch taken → has-new set
+    expect(el.shadowRoot.querySelector(".refresh.has-new")).toBeTruthy();
+  });
+
+  test("error state stringifies non-Error rejects from listTraces", async () => {
+    vi.mocked(api.listTraces).mockRejectedValue("string rejection");
+    const e: any = document.createElement("ambience-traces-modal");
+    e.hass = { callWS: vi.fn() };
+    e.scope = { scope_kind: "area", scope_id: "kitchen" };
+    e.category = "g1";
+    e.categoryName = "Evening";
+    e.open = true;
+    document.body.appendChild(e);
+    await e.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await e.updateComplete;
+    expect(e.shadowRoot.textContent).toContain("string rejection");
+    e.remove();
+  });
+
+  test("_checkNew stays silent when listTraces rejects", async () => {
+    el = await mount([unit({ timestamp: "2026-06-01T10:00:00+00:00" })]);
+    vi.mocked(api.listTraces).mockRejectedValue(new Error("poll error"));
+    // Should not throw; error is swallowed
+    await expect(el._checkNew()).resolves.toBeUndefined();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".refresh.has-new")).toBeFalsy();
+  });
+
+  test("failed service-schema fetch is tolerated — falls back to raw param keys", async () => {
+    vi.mocked(api.getServiceSchema).mockRejectedValue(new Error("schema unavailable"));
+    el = await mount([
+      unit({
+        actions: [
+          { service: "light.turn_on", entity_ids: ["light.k"], params: { brightness_pct: 80 } },
+        ],
+        explanation: {
+          winner_index: 0,
+          rules: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
+        },
+      }),
+    ]);
+    // Let the (failing) schema fetch settle
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // Expand the row to verify the fallback humanized key is used
+    el.shadowRoot.querySelector(".why-toggle").click();
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).toContain("80"); // value still present
+    // Schema is absent, so raw/humanized key is shown
+    expect(el.shadowRoot.textContent).not.toContain("Brightness:");
+  });
+
+  test("records with null event_id or timestamp render without error", async () => {
+    const noIds = unit({
+      event_id: null as unknown as string,
+      timestamp: null as unknown as string,
+    });
+    el = await mount([noIds]);
+    // The index fallback (event_id ?? i) and ("") fallback are exercised.
+    // Element renders and the eval row is present.
+    expect(el.shadowRoot.querySelectorAll(".eval").length).toBe(1);
+  });
 });

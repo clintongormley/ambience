@@ -1427,4 +1427,231 @@ describe("ambience-actions-settings", () => {
     const lastCall = vi.mocked(saveExposedActions).mock.calls.at(-1)!;
     expect(lastCall[1][0]).not.toHaveProperty("reapply_seconds");
   });
+
+  // --- Missing branch coverage additions ---
+
+  test("_ensureSchema catch branch: schema fetch error marks service as null", async () => {
+    // First call (for light.turn_on during load) succeeds. Second call (expand
+    // to fetch light.turn_off schema) throws so the catch branch is exercised.
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "light.turn_off", label: "", visible_fields: [], defaults: {} },
+    ]);
+    vi.mocked(getServiceSchema).mockRejectedValueOnce(new Error("service gone"));
+    el = await mount();
+    // Card is loaded; expand to trigger _ensureSchema → it throws → schema=null.
+    clickToggle(el.shadowRoot);
+    await flush(el);
+
+    // Schema=null should render the "service unavailable" warning inside the body.
+    const body = el.shadowRoot.querySelector("[data-card] .body") as HTMLElement;
+    expect(body).not.toBeNull();
+    expect(body.textContent).toContain("not available");
+  });
+
+  test("expanded card shows 'Loading…' while schema is still fetching", async () => {
+    // Use an action id that is NOT in the default getServiceSchema mock
+    // (returns empty fields for anything other than light.turn_on).
+    // We intercept the SECOND getServiceSchema call (the one triggered by
+    // _toggleExpand) with a never-resolving promise so the schema stays undefined.
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
+    ]);
+    let resolveSchema!: (v: unknown) => void;
+    const slowSchema = new Promise<unknown>((r) => (resolveSchema = r));
+
+    // First call resolves fast (during _reload pre-fetch), second never resolves.
+    vi.mocked(getServiceSchema)
+      .mockResolvedValueOnce({ fields: {}, target: null })
+      .mockReturnValueOnce(slowSchema as any);
+
+    el = document.createElement("ambience-actions-settings");
+    el.hass = { localize: () => "" };
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // At this point _loaded=true and the card for light.turn_on is shown.
+    // _schemas["light.turn_on"] is set (from the first fast mock).
+
+    // Remove the schema cache entry so _toggleExpand triggers a fresh fetch.
+    delete (el as any)._schemas["light.turn_on"];
+
+    // Expand the card — _ensureSchema is called and calls getServiceSchema
+    // (the slow/never-resolving mock). Before the promise resolves, the render
+    // sees schema=undefined → "Loading…".
+    clickToggle(el.shadowRoot);
+    await el.updateComplete; // one microtask — schema still pending
+
+    const body = el.shadowRoot.querySelector("[data-card] .body") as HTMLElement;
+    expect(body).not.toBeNull();
+    expect(body.textContent?.toLowerCase()).toContain("loading");
+
+    // Resolve to allow clean teardown.
+    resolveSchema({ fields: {}, target: null });
+  });
+
+  test("cancel-add button collapses the add form", async () => {
+    el = await mount();
+    el.shadowRoot.querySelector("button[data-action='add']").click();
+    await el.updateComplete;
+    expect(el._adding).toBe(true);
+
+    const cancelBtn = el.shadowRoot.querySelector(
+      "button[data-action='cancel-add']",
+    ) as HTMLButtonElement;
+    expect(cancelBtn).not.toBeNull();
+    cancelBtn.click();
+    await el.updateComplete;
+
+    expect(el._adding).toBe(false);
+    expect(el.shadowRoot.querySelector("button[data-action='add']")).not.toBeNull();
+  });
+
+  test("_formatDefaultSummary returns '' for null/undefined default values", async () => {
+    // Seed with an action where a field's default is explicitly null.
+    // We use object default to also cover the JSON.stringify branch below.
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        // Use a field that won't have the default key set — null trigger is tested
+        // by entering edit mode on a field with no default, which calls
+        // _formatDefaultSummary(undefined) via the summary cell.
+        defaults: {},
+      },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    // Enter edit mode for brightness_pct (no default → _startEditingDefault
+    // records _editingOriginalHad=false, _editingOriginalValue=undefined).
+    const setDefaultBtn = el.shadowRoot.querySelector(
+      "button[data-set-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    setDefaultBtn.click();
+    await el.updateComplete;
+
+    // While editing, the summary-cell shows "Editing…" — no summary is rendered.
+    // Cancel to restore the no-default state and confirm the Set default btn is back.
+    const cancelBtn = el.shadowRoot.querySelector(
+      "button[data-cancel-default='brightness_pct']",
+    ) as HTMLButtonElement;
+    cancelBtn.click();
+    await el.updateComplete;
+
+    // "Set default" must be back (summary was "" → branch exercised).
+    expect(el.shadowRoot.querySelector("button[data-set-default='brightness_pct']")).not.toBeNull();
+  });
+
+  test("_formatDefaultSummary returns JSON.stringify for object default values", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: { brightness_pct: { r: 255, g: 0, b: 0 } },
+      },
+    ]);
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    // The default-summary button should contain the JSON-stringified object.
+    const summary = el.shadowRoot.querySelector(
+      "button[data-default-summary='brightness_pct']",
+    ) as HTMLButtonElement;
+    expect(summary).not.toBeNull();
+    expect(summary.textContent).toContain('{"r":255,"g":0,"b":0}');
+  });
+
+  test("field description is shown as secondary text when present in schema", async () => {
+    vi.mocked(getServiceSchema).mockResolvedValueOnce({
+      fields: {
+        brightness_pct: {
+          selector: { number: { min: 0, max: 100 } },
+          description: "0–100%",
+        },
+      },
+      target: null,
+    });
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const nameSpan = el.shadowRoot.querySelector(".field-row .name") as HTMLElement;
+    expect(nameSpan).not.toBeNull();
+    expect(nameSpan.textContent).toContain("0–100%");
+  });
+
+  test("_renderWarnings omits '/scope_id' when scope_id is absent", async () => {
+    vi.mocked(saveExposedActions).mockResolvedValueOnce({
+      ok: true,
+      warnings: [
+        // No scope_id — the "/${w.scope_id}" branch should be skipped.
+        { scope_kind: "house", scope_id: "", rule_name: "Night", reason: "field removed" },
+      ],
+    });
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const checkbox = el.shadowRoot.querySelector(
+      "input[type='checkbox'][data-show-in-editor='brightness_pct']",
+    ) as HTMLInputElement;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
+    const warnings = el.shadowRoot.querySelector(".warning");
+    expect(warnings).not.toBeNull();
+    const txt = warnings!.textContent ?? "";
+    // scope_kind is present, scope_id separator is NOT rendered
+    expect(txt).toContain("house");
+    expect(txt).not.toMatch(/house\//);
+    expect(txt).toContain("Night");
+  });
+
+  test("_renderWarnings omits rule_name annotation when rule_name is absent", async () => {
+    vi.mocked(saveExposedActions).mockResolvedValueOnce({
+      ok: true,
+      warnings: [
+        // No rule_name — the "— rule_name" branch should be skipped.
+        { scope_kind: "area", scope_id: "bedroom", rule_name: "", reason: "field removed" },
+      ],
+    });
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const checkbox = el.shadowRoot.querySelector(
+      "input[type='checkbox'][data-show-in-editor='brightness_pct']",
+    ) as HTMLInputElement;
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
+    const warnings = el.shadowRoot.querySelector(".warning");
+    expect(warnings).not.toBeNull();
+    const txt = warnings!.textContent ?? "";
+    expect(txt).toContain("bedroom");
+    // The "— rule_name" annotation should not be present.
+    expect(txt).not.toContain("—");
+  });
+
+  test("service with no fields renders 'no fields' message in body", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "script.adjust_covers", label: "", visible_fields: [], defaults: {} },
+    ]);
+    // Default getServiceSchema mock returns { fields: {}, target: null } for
+    // anything other than light.turn_on — so fields.length === 0.
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await flush(el);
+
+    const body = el.shadowRoot.querySelector("[data-card] .body") as HTMLElement;
+    expect(body).not.toBeNull();
+    expect(body.textContent).toContain("no fields");
+  });
 });

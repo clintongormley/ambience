@@ -31,7 +31,7 @@ class StateSnapshot:
 
 
 class StateCondition:
-    """Match a rule against a boolean expression over entity states.
+    """Match a scene against a boolean expression over entity states.
 
     Predicate is a recursive tree:
       atom:  {kind: 'is' | 'is_not', entity_id, states: [...], for?: {h,m,s}}
@@ -51,7 +51,7 @@ class StateCondition:
         "match-anything."
     )
     input = "state_predicate"
-    # Above day (900): state is the most specific world-fact a rule can name,
+    # Above day (900): state is the most specific world-fact a scene can name,
     # so it ranks highest among world-fact conditions in the linearisation
     # tiebreaker.
     priority = 950
@@ -147,7 +147,7 @@ class StateCondition:
     def _numeric_op(kind: str, value: str, rhs: list) -> bool:
         """Parse both sides as float and apply the comparison. Returns
         False on any parse failure or unexpected RHS shape (we don't fail
-        the predicate hard — the rule just doesn't match)."""
+        the predicate hard — the scene just doesn't match)."""
         if len(rhs) != 1:
             return False
         try:

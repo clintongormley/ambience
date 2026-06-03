@@ -28,5 +28,5 @@ def test_rejects_non_int(value):
 
 
 def test_error_message_includes_context():
-    with pytest.raises(ValueError, match="rule 2 action 1"):
-        validate_reapply_seconds("rule 2 action 1", 5)
+    with pytest.raises(ValueError, match="scene 2 action 1"):
+        validate_reapply_seconds("scene 2 action 1", 5)

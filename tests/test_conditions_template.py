@@ -138,9 +138,9 @@ def test_matches_returns_false_on_malformed_predicate() -> None:
 async def test_snapshot_collects_from_area_floor_and_house(hass: HomeAssistant) -> None:
     _install_store(
         hass,
-        areas={"kitchen": {"rules": [{"when": {"template": {"template": "{{ true }}"}}}]}},
-        floors={"f1": {"rules": [{"when": {"template": {"template": "{{ false }}"}}}]}},
-        house={"rules": [{"when": {"template": {"template": "{{ 1 == 1 }}"}}}]},
+        areas={"kitchen": {"scenes": [{"when": {"template": {"template": "{{ true }}"}}}]}},
+        floors={"f1": {"scenes": [{"when": {"template": {"template": "{{ false }}"}}}]}},
+        house={"scenes": [{"when": {"template": {"template": "{{ 1 == 1 }}"}}}]},
     )
     snap = await TemplateCondition(hass=hass).snapshot(hass)
     assert snap.results["{{ true }}"] is True
@@ -166,7 +166,7 @@ async def test_snapshot_collects_from_area_floor_and_house(hass: HomeAssistant) 
     ],
 )
 async def test_snapshot_truthiness(hass: HomeAssistant, tmpl: str, expected: bool) -> None:
-    _install_store(hass, areas={"a": {"rules": [{"when": {"template": {"template": tmpl}}}]}})
+    _install_store(hass, areas={"a": {"scenes": [{"when": {"template": {"template": tmpl}}}]}})
     snap = await TemplateCondition(hass=hass).snapshot(hass)
     assert snap.results[tmpl] is expected
 
@@ -174,14 +174,14 @@ async def test_snapshot_truthiness(hass: HomeAssistant, tmpl: str, expected: boo
 async def test_snapshot_renders_against_current_state(hass: HomeAssistant) -> None:
     hass.states.async_set("sensor.lux", "42")
     tmpl = "{{ states('sensor.lux') | int < 50 }}"
-    _install_store(hass, areas={"a": {"rules": [{"when": {"template": {"template": tmpl}}}]}})
+    _install_store(hass, areas={"a": {"scenes": [{"when": {"template": {"template": tmpl}}}]}})
     snap = await TemplateCondition(hass=hass).snapshot(hass)
     assert snap.results[tmpl] is True
 
 
 async def test_snapshot_render_error_records_false(hass: HomeAssistant, caplog) -> None:
     tmpl = "{{ 1 / 0 }}"
-    _install_store(hass, areas={"a": {"rules": [{"when": {"template": {"template": tmpl}}}]}})
+    _install_store(hass, areas={"a": {"scenes": [{"when": {"template": {"template": tmpl}}}]}})
     snap = await TemplateCondition(hass=hass).snapshot(hass)
     assert snap.results[tmpl] is False
     assert "template" in caplog.text.lower()
@@ -192,8 +192,8 @@ async def test_snapshot_dedups_identical_templates(hass: HomeAssistant) -> None:
     _install_store(
         hass,
         areas={
-            "a": {"rules": [{"when": {"template": {"template": tmpl}}}]},
-            "b": {"rules": [{"when": {"template": {"template": tmpl}}}]},
+            "a": {"scenes": [{"when": {"template": {"template": tmpl}}}]},
+            "b": {"scenes": [{"when": {"template": {"template": tmpl}}}]},
         },
     )
     snap = await TemplateCondition(hass=hass).snapshot(hass)
@@ -201,7 +201,7 @@ async def test_snapshot_dedups_identical_templates(hass: HomeAssistant) -> None:
 
 
 async def test_snapshot_empty_when_no_template_predicates(hass: HomeAssistant) -> None:
-    _install_store(hass, areas={"a": {"rules": [{"when": {"state": {"x": 1}}}]}})
+    _install_store(hass, areas={"a": {"scenes": [{"when": {"state": {"x": 1}}}]}})
     snap = await TemplateCondition(hass=hass).snapshot(hass)
     assert snap.results == {}
 
@@ -211,7 +211,7 @@ async def test_snapshot_skips_malformed_predicates(hass: HomeAssistant) -> None:
         hass,
         areas={
             "a": {
-                "rules": [
+                "scenes": [
                     {"when": {"template": "not a dict"}},
                     {"when": {"template": {"template": 42}}},
                     {"when": {"template": {"template": "{{ true }}"}}},
@@ -235,7 +235,7 @@ async def test_snapshot_no_store_is_empty(hass: HomeAssistant) -> None:
 async def test_snapshot_captures_entity_dependencies(hass: HomeAssistant) -> None:
     hass.states.async_set("sensor.lux", "10")
     tmpl = "{{ states('sensor.lux') | int < 50 }}"
-    _install_store(hass, areas={"a": {"rules": [{"when": {"template": {"template": tmpl}}}]}})
+    _install_store(hass, areas={"a": {"scenes": [{"when": {"template": {"template": tmpl}}}]}})
     snap = await TemplateCondition(hass=hass).snapshot(hass)
     assert "sensor.lux" in snap.deps[tmpl].entities
 

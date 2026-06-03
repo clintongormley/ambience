@@ -26,7 +26,7 @@ async def _install(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> s
     await store.async_save_area(
         area.id,
         {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {},

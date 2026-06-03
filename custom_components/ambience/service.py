@@ -1,7 +1,7 @@
 """ambience.apply_scene service handler.
 
-`apply_scene` is the service name; it resolves a scope's rules against the
-current world (condition snapshots) and dispatches the winning rule's actions.
+`apply_scene` is the service name; it resolves a scope's scenes against the
+current world (condition snapshots) and dispatches the winning scene's actions.
 """
 
 from __future__ import annotations
@@ -59,9 +59,9 @@ def _scope_config(store, scope_kind: str, scope_id: str | None) -> dict[str, Any
 
 
 def category_ids(cfg: dict[str, Any]) -> set[str]:
-    """The distinct category ids a scope's rules fall into. Every rule is categorised,
-    so these are always real ids. Empty when the scope has no rules."""
-    return {r["category"] for r in cfg.get("rules", []) if r.get("category") is not None}
+    """The distinct category ids a scope's scenes fall into. Every scene is categorised,
+    so these are always real ids. Empty when the scope has no scenes."""
+    return {r["category"] for r in cfg.get("scenes", []) if r.get("category") is not None}
 
 
 def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
@@ -91,14 +91,14 @@ async def async_resolve_with_snapshots(
     """Resolve a scope against a pre-built `{condition_name: snapshot}` dict.
 
     Does NOT call any condition's `snapshot()` — the caller supplies them (the
-    engine passes its own cache). Returns {matched_rule_index, rule_name,
+    engine passes its own cache). Returns {matched_scene_index, scene_name,
     actions, snapshots_described, switch_state, explanation}.
 
-    `explanation` is an `Explanation` (rule list relative to the resolved
+    `explanation` is an `Explanation` (scene list relative to the resolved
     category) when `explain=True`, else None.
 
     A `when` key naming a condition that isn't registered (e.g. a stale config
-    key) fails the rule, since `resolve()` cannot evaluate it.
+    key) fails the scene, since `resolve()` cannot evaluate it.
     """
     store = hass.data[DOMAIN][DATA_STORE]
     conditions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
@@ -114,17 +114,17 @@ async def async_resolve_with_snapshots(
         else {}
     )
 
-    rules = scope_cfg.get("rules", [])
+    scenes = scope_cfg.get("scenes", [])
     if category is None:
-        candidates = rules
-        to_full = None  # candidate index already is the full-rule index
+        candidates = scenes
+        to_full = None  # candidate index already is the full-scene index
     else:
-        to_full = [i for i, r in enumerate(rules) if r.get("category") == category]
-        candidates = [rules[i] for i in to_full]
+        to_full = [i for i, r in enumerate(scenes) if r.get("category") == category]
+        candidates = [scenes[i] for i in to_full]
 
     # Evaluate the candidate list exactly once: when explaining, derive the
     # winner from the Explanation (resolve() is itself a thin wrapper over
-    # evaluate_explained, so calling both would walk the rules twice).
+    # evaluate_explained, so calling both would walk the scenes twice).
     if explain:
         # describe=True calls condition.describe() per predicate. With the always-on
         # BufferSink (Increment B), `explain` is true on every evaluation, so this
@@ -142,18 +142,18 @@ async def async_resolve_with_snapshots(
     switch_state = _switch_state(hass, scope_kind, scope_id)
     if match is None:
         return {
-            "matched_rule_index": None,
-            "rule_name": None,
+            "matched_scene_index": None,
+            "scene_name": None,
             "actions": [],
             "snapshots_described": described,
             "switch_state": switch_state,
             "explanation": explanation,
         }
-    idx, rule = match
+    idx, scene = match
     return {
-        "matched_rule_index": idx,
-        "rule_name": rule.get("name"),
-        "actions": rule.get("actions", []),
+        "matched_scene_index": idx,
+        "scene_name": scene.get("name"),
+        "actions": scene.get("actions", []),
         "snapshots_described": described,
         "switch_state": switch_state,
         "explanation": explanation,
@@ -186,7 +186,7 @@ async def async_resolve_only(
     """Like apply_scene, but does not execute actions.
 
     Snapshots every condition fresh, then delegates. Return shape:
-    {matched_rule_index, rule_name, actions, snapshots_described, switch_state}.
+    {matched_scene_index, scene_name, actions, snapshots_described, switch_state}.
     """
     snapshots = await _snapshot_all(hass)
     return await async_resolve_with_snapshots(
@@ -228,10 +228,10 @@ async def async_apply_scene(
     category: str | None = None,
     force: bool = False,
 ) -> None:
-    """Apply a scene at the given scope according to configured rules.
+    """Apply a scene at the given scope according to configured scenes.
 
     `scope_kind` is one of "area", "floor", "house". For "house", scope_id is
-    None. `category` limits the apply to that single rule-category (None = every
+    None. `category` limits the apply to that single scene-category (None = every
     category). `force=True` applies even when the scope's switch is off (used by
     the manual UI buttons).
     """
@@ -259,9 +259,9 @@ async def async_apply_scene(
             hass, scope_kind, scope_id, snapshots, category=category_id, explain=active
         )
         explanation = plan.get("explanation")
-        if plan["matched_rule_index"] is None:
+        if plan["matched_scene_index"] is None:
             _LOGGER.info(
-                "ambience: no rule matched for scope=%s/%s category=%s snapshots=%s",
+                "ambience: no scene matched for scope=%s/%s category=%s snapshots=%s",
                 scope_kind,
                 scope_id,
                 category_id,
@@ -281,7 +281,7 @@ async def async_apply_scene(
                 switch_state,
                 Outcome.ACTED,
                 explanation,
-                winner_name=plan["rule_name"],
+                winner_name=plan["scene_name"],
                 actions=plan["actions"],
             )
         return None
@@ -306,14 +306,14 @@ async def async_execute_actions(
     scope_kind: str,
     scope_id: str | None,
     actions: list[dict[str, Any]],
-    rule_index: int | None = None,
+    scene_index: int | None = None,
     context: Context | None = None,
 ) -> None:
     """Dispatch a list of action specs.
 
     Malformed / unexposed actions are logged and skipped; a raised action is
     logged but does not abort the rest. Does NOT record last-applied — callers
-    that represent a full apply do that themselves. `rule_index` is used only
+    that represent a full apply do that themselves. `scene_index` is used only
     for log context.
     """
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
@@ -322,8 +322,8 @@ async def async_execute_actions(
         service_id = action_spec.get("service")
         if not service_id or "." not in service_id:
             _LOGGER.warning(
-                "ambience: rule %s in scope=%s/%s has malformed action %r; skipping",
-                rule_index,
+                "ambience: scene %s in scope=%s/%s has malformed action %r; skipping",
+                scene_index,
                 scope_kind,
                 scope_id,
                 action_spec,
@@ -332,9 +332,9 @@ async def async_execute_actions(
         exposed = exposed_store.get(service_id)
         if exposed is None:
             _LOGGER.warning(
-                "ambience: service %r not exposed; skipping (rule %s, scope=%s/%s)",
+                "ambience: service %r not exposed; skipping (scene %s, scope=%s/%s)",
                 service_id,
-                rule_index,
+                scene_index,
                 scope_kind,
                 scope_id,
             )
@@ -355,34 +355,34 @@ async def async_execute_actions(
             _LOGGER.warning("ambience: action raised: %s", result)
 
 
-async def async_run_rule_actions(
+async def async_run_scene_actions(
     hass: HomeAssistant,
     scope_kind: str,
     scope_id: str | None,
-    rule_index: int,
+    scene_index: int,
 ) -> dict[str, Any]:
-    """Run one rule's actions unconditionally.
+    """Run one scene's actions unconditionally.
 
-    Does NOT evaluate the rule's `when`, does NOT gate on the scope switch, and
+    Does NOT evaluate the scene's `when`, does NOT gate on the scope switch, and
     does NOT touch last_applied (it is an out-of-band manual override, not a
-    resolution). Returns {ran, rule_name} for UI feedback. An out-of-range
-    `rule_index` raises ServiceValidationError.
+    resolution). Returns {ran, scene_name} for UI feedback. An out-of-range
+    `scene_index` raises ServiceValidationError.
     """
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = _scope_config(store, scope_kind, scope_id)
-    rules = cfg.get("rules", [])
-    if not 0 <= rule_index < len(rules):
-        raise ServiceValidationError(f"rule_index out of range: {rule_index}")
-    rule = rules[rule_index]
-    actions = rule.get("actions", [])
-    rule_name = rule.get("name")
+    scenes = cfg.get("scenes", [])
+    if not 0 <= scene_index < len(scenes):
+        raise ServiceValidationError(f"scene_index out of range: {scene_index}")
+    scene = scenes[scene_index]
+    actions = scene.get("actions", [])
+    scene_name = scene.get("name")
     context = (
-        log_run_actions(hass, scope_kind, scope_id, rule_name, rule_index) if actions else None
+        log_run_actions(hass, scope_kind, scope_id, scene_name, scene_index) if actions else None
     )
     await async_execute_actions(
-        hass, scope_kind, scope_id, actions, rule_index=rule_index, context=context
+        hass, scope_kind, scope_id, actions, scene_index=scene_index, context=context
     )
-    return {"ran": len(actions), "rule_name": rule_name}
+    return {"ran": len(actions), "scene_name": scene_name}
 
 
 async def async_execute_plan(
@@ -395,21 +395,21 @@ async def async_execute_plan(
     """Dispatch a resolved plan's actions and record it as last-applied.
 
     The caller must have already gated on the switch and confirmed a non-None
-    `matched_rule_index`. Malformed / unexposed actions are logged and skipped;
+    `matched_scene_index`. Malformed / unexposed actions are logged and skipped;
     a raised action is logged but does not abort the rest. `last_applied` is
     keyed per (scope_kind, scope_id, category_id); category_id is always a real category.
     """
-    index = plan["matched_rule_index"]
+    index = plan["matched_scene_index"]
     actions = plan["actions"]
     context = (
         log_apply(
-            hass, scope_kind, scope_id, category_id, plan["rule_name"], index, reapplied=False
+            hass, scope_kind, scope_id, category_id, plan["scene_name"], index, reapplied=False
         )
         if actions
         else None
     )
     await async_execute_actions(
-        hass, scope_kind, scope_id, actions, rule_index=index, context=context
+        hass, scope_kind, scope_id, actions, scene_index=index, context=context
     )
     domain_data = hass.data[DOMAIN]
     domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id, category_id)] = index
@@ -418,7 +418,7 @@ async def async_execute_plan(
 def get_last_applied(
     hass: HomeAssistant, scope_kind: str, scope_id: str | None, category_id: str
 ) -> int | None:
-    """The rule index last applied to this (scope, category), or None if never applied."""
+    """The scene index last applied to this (scope, category), or None if never applied."""
     return hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).get((scope_kind, scope_id, category_id))
 
 
@@ -431,10 +431,10 @@ def clear_last_applied(hass: HomeAssistant, scope_kind: str, scope_id: str | Non
 
 def scope_reapply_intervals(cfg: dict[str, Any], exposed_store: Any) -> list[int]:
     """Distinct, sorted effective re-apply intervals (seconds) across a scope's
-    rule actions. Empty when no action re-applies."""
+    scene actions. Empty when no action re-applies."""
     intervals: set[int] = set()
-    for rule in cfg.get("rules", []):
-        for action in rule.get("actions", []):
+    for scene in cfg.get("scenes", []):
+        for action in scene.get("actions", []):
             seconds = effective_reapply_seconds(action, exposed_store)
             if seconds:
                 intervals.add(seconds)

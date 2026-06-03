@@ -186,19 +186,19 @@ def _explanation_to_dict(explanation: Explanation | None) -> dict[str, Any] | No
         return None
     return {
         "winner_index": explanation.winner_index,
-        "rules": [
+        "scenes": [
             {
-                "index": rule.index,
-                "name": rule.name,
-                "matched": rule.matched,
-                "evaluated": rule.evaluated,
-                "disabled": rule.disabled,
+                "index": scene.index,
+                "name": scene.name,
+                "matched": scene.matched,
+                "evaluated": scene.evaluated,
+                "disabled": scene.disabled,
                 "predicates": [
                     {"condition_key": p.condition_key, "passed": p.passed, "detail": p.detail}
-                    for p in rule.predicates
+                    for p in scene.predicates
                 ],
             }
-            for rule in explanation.rules
+            for scene in explanation.scenes
         ],
     }
 
@@ -252,27 +252,27 @@ def format_trace_event(event: TraceEvent) -> list[str]:
         explanation = unit.explanation
         winner = ""
         if explanation is not None and explanation.winner_index is not None:
-            # Rule numbers are shown 1-based; winner_index is the 0-based position.
-            winner = f" -> rule #{explanation.winner_index + 1} {unit.winner_name!r}"
+            # Scene numbers are shown 1-based; winner_index is the 0-based position.
+            winner = f" -> scene #{explanation.winner_index + 1} {unit.winner_name!r}"
         elif explanation is None and unit.winner_name is not None:
-            # Re-apply: no resolution happened, so no rule index — name only.
+            # Re-apply: no resolution happened, so no scene index — name only.
             winner = f" -> {unit.winner_name!r}"
         lines.append(f"  {scope}: {unit.outcome}{winner}")
         if explanation is not None:
-            for rule_eval in explanation.rules:
-                # Rule numbers are shown 1-based; index is the 0-based position.
-                num = rule_eval.index + 1
-                if rule_eval.disabled:
-                    lines.append(f"      rule #{num} {rule_eval.name!r}: disabled")
+            for scene_eval in explanation.scenes:
+                # Scene numbers are shown 1-based; index is the 0-based position.
+                num = scene_eval.index + 1
+                if scene_eval.disabled:
+                    lines.append(f"      scene #{num} {scene_eval.name!r}: disabled")
                     continue
-                if not rule_eval.evaluated:
+                if not scene_eval.evaluated:
                     lines.append(
-                        f"      rule #{num} {rule_eval.name!r}: not evaluated (winner found)"
+                        f"      scene #{num} {scene_eval.name!r}: not evaluated (winner found)"
                     )
                     continue
-                mark = "WON" if rule_eval.matched else "no"
-                lines.append(f"      rule #{num} {rule_eval.name!r}: {mark}")
-                for pred in rule_eval.predicates:
+                mark = "WON" if scene_eval.matched else "no"
+                lines.append(f"      scene #{num} {scene_eval.name!r}: {mark}")
+                for pred in scene_eval.predicates:
                     pmark = "pass" if pred.passed else "FAIL"
                     detail = f" [{pred.detail}]" if pred.detail else ""
                     lines.append(f"          {pred.condition_key}: {pmark}{detail}")
@@ -299,7 +299,7 @@ class LogSink:
         # One whole event = one log record (lines joined). Concurrent
         # evaluations therefore can't interleave their lines in the log; each
         # trigger is a single self-contained entry, and indentation within it
-        # ties every line to its scope/category/rule. Partition only inside each
+        # ties every line to its scope/category/scene. Partition only inside each
         # guard, so an off stream costs nothing.
         if _LOGGER.isEnabledFor(logging.DEBUG):
             changes = [u for u in event.units if u.outcome in _CHANGES_OUTCOMES]

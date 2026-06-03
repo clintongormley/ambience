@@ -90,7 +90,7 @@ async def test_save_rejects_duplicate_ids() -> None:
 async def test_save_accepts_field_in_both_visible_and_defaults() -> None:
     """A field may appear in BOTH visible_fields and defaults.
 
-    Meaning: shown in the rule editor pre-filled with the default value.
+    Meaning: shown in the scene editor pre-filled with the default value.
     The old "cannot be both visible and locked" exclusion no longer applies.
     """
     storage = _FakeStorage()

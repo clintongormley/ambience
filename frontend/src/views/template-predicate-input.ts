@@ -188,7 +188,7 @@ export class AmbienceTemplatePredicateInput extends LitElement {
   }
 
   /** Set the preview and notify listeners whether the template currently
-   *  errors, so the rule editor can block closing an erroring slot. */
+   *  errors, so the scene editor can block closing an erroring slot. */
   private _setPreview(p: Preview | null) {
     this._preview = p;
     this._emitValidity(p != null && "error" in p ? p.error : null);

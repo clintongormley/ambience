@@ -1,4 +1,4 @@
-"""scope_triggers — merge a scope's rule predicates into one TriggerSpec."""
+"""scope_triggers — merge a scope's scene predicates into one TriggerSpec."""
 
 from __future__ import annotations
 
@@ -22,13 +22,13 @@ class _NoDepsCondition:
     """A condition with no trigger_deps method -> opaque."""
 
 
-def test_scope_spec_merges_across_rules() -> None:
+def test_scope_spec_merges_across_scenes() -> None:
     conditions = {
         "state": _FakeCondition(TriggerSpec(entities=frozenset({"binary_sensor.motion"}))),
         "people": _FakeCondition(TriggerSpec(entities=frozenset({"person.bob"}))),
     }
     cfg = {
-        "rules": [
+        "scenes": [
             {"when": {"state": {"x": 1}}},
             {"when": {"people": {"y": 2}}},
         ]
@@ -40,7 +40,7 @@ def test_scope_spec_merges_across_rules() -> None:
 def test_scope_spec_skips_wildcard_and_unknown_condition() -> None:
     conditions = {"state": _FakeCondition(TriggerSpec(entities=frozenset({"a.b"})))}
     cfg = {
-        "rules": [
+        "scenes": [
             {"when": {"state": None, "ghost": {"z": 1}}},  # wildcard + unknown
             {"when": {"state": {"x": 1}}},
         ]
@@ -51,29 +51,29 @@ def test_scope_spec_skips_wildcard_and_unknown_condition() -> None:
 
 def test_scope_spec_missing_trigger_deps_is_opaque() -> None:
     conditions = {"script": _NoDepsCondition()}
-    cfg = {"rules": [{"when": {"script": {"script": "script.s"}}}]}
+    cfg = {"scenes": [{"when": {"script": {"script": "script.s"}}}]}
     spec = scope_trigger_spec(conditions, cfg)
     assert spec.opaque is True
 
 
-def test_scope_spec_skips_disabled_rule() -> None:
-    """A rule with ``enabled: False`` contributes no watches — a disabled rule
+def test_scope_spec_skips_disabled_scene() -> None:
+    """A scene with ``enabled: False`` contributes no watches — a disabled scene
     can never win, so its predicates must not wake the scope."""
     conditions = {
         "state": _FakeCondition(TriggerSpec(entities=frozenset({"binary_sensor.motion"})))
     }
-    cfg = {"rules": [{"enabled": False, "when": {"state": {"x": 1}}}]}
+    cfg = {"scenes": [{"enabled": False, "when": {"state": {"x": 1}}}]}
     spec = scope_trigger_spec(conditions, cfg)
     assert spec.entities == frozenset()
 
 
-def test_scope_spec_disabled_rule_excluded_enabled_kept() -> None:
+def test_scope_spec_disabled_scene_excluded_enabled_kept() -> None:
     conditions = {
         "state": _FakeCondition(TriggerSpec(entities=frozenset({"binary_sensor.motion"}))),
         "people": _FakeCondition(TriggerSpec(entities=frozenset({"person.bob"}))),
     }
     cfg = {
-        "rules": [
+        "scenes": [
             {"enabled": False, "when": {"state": {"x": 1}}},
             {"when": {"people": {"y": 2}}},
         ]
@@ -82,15 +82,15 @@ def test_scope_spec_disabled_rule_excluded_enabled_kept() -> None:
     assert spec.entities == frozenset({"person.bob"})
 
 
-def test_iter_predicate_specs_skips_disabled_keeps_rule_index() -> None:
-    """``iter_predicate_specs`` skips disabled rules entirely; the rule_index of
-    surviving rules stays aligned with their position in ``cfg['rules']``."""
+def test_iter_predicate_specs_skips_disabled_keeps_scene_index() -> None:
+    """``iter_predicate_specs`` skips disabled scenes entirely; the scene_index of
+    surviving scenes stays aligned with their position in ``cfg['scenes']``."""
     conditions = {
         "state": _FakeCondition(TriggerSpec(entities=frozenset({"binary_sensor.motion"}))),
         "people": _FakeCondition(TriggerSpec(entities=frozenset({"person.bob"}))),
     }
     cfg = {
-        "rules": [
+        "scenes": [
             {"enabled": False, "when": {"state": {"x": 1}}},
             {"when": {"people": {"y": 2}}},
         ]

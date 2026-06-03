@@ -18,7 +18,7 @@ from custom_components.ambience.store import AmbienceStore
 
 @pytest.fixture
 async def seeded_store(hass: HomeAssistant) -> AmbienceStore:
-    """A store populated with rules and condition config carrying sensitive data."""
+    """A store populated with scenes and condition config carrying sensitive data."""
     store = AmbienceStore(hass)
     await store.async_load()
     await store.async_save_condition_config(
@@ -29,7 +29,7 @@ async def seeded_store(hass: HomeAssistant) -> AmbienceStore:
     await store.async_save_area(
         "living_room",
         {
-            "rules": [
+            "scenes": [
                 {
                     "category": "general",
                     "when": {
@@ -58,10 +58,10 @@ async def test_config_entry_diagnostics_dumps_full_store(
 
     # Full store is dumped: structure and non-sensitive content survive.
     assert "living_room" in result["areas"]
-    rule = result["areas"]["living_room"]["rules"][0]
-    assert rule["category"] == "general"
-    assert rule["actions"][0]["entity_ids"] == ["light.lamp"]
-    assert rule["actions"][0]["params"] == {"brightness_pct": 30}
+    scene = result["areas"]["living_room"]["scenes"][0]
+    assert scene["category"] == "general"
+    assert scene["actions"][0]["entity_ids"] == ["light.lamp"]
+    assert scene["actions"][0]["params"] == {"brightness_pct": 30}
 
 
 async def test_config_entry_diagnostics_redacts_sensitive_keys(
@@ -73,11 +73,11 @@ async def test_config_entry_diagnostics_redacts_sensitive_keys(
     assert result["conditions"]["day"]["workday_calendar"] == REDACTED
     assert result["conditions"]["weather"]["entity"] == REDACTED
 
-    when = result["areas"]["living_room"]["rules"][0]["when"]
+    when = result["areas"]["living_room"]["scenes"][0]["when"]
     assert when["people"]["who"] == REDACTED
     assert when["people"]["where"] == REDACTED
     # The template condition's predicate key is itself `template`, so the whole
-    # predicate value is redacted (the key — i.e. that a template rule exists —
+    # predicate value is redacted (the key — i.e. that a template scene exists —
     # still survives).
     assert when["template"] == REDACTED
 

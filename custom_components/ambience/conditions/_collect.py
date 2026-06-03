@@ -1,8 +1,8 @@
-"""Shared helper for collecting per-rule predicates across all scopes.
+"""Shared helper for collecting per-scene predicates across all scopes.
 
-Both `script` and `template` conditions need the same walk: visit every rule in
+Both `script` and `template` conditions need the same walk: visit every scene in
 every scope (areas, floors, house) and yield the predicate carried by
-`when[key]`, skipping rules that don't set the key or set it to `None`
+`when[key]`, skipping scenes that don't set the key or set it to `None`
 (the wildcard). Dedup / normalisation is condition-specific and stays in the
 caller.
 """
@@ -21,10 +21,10 @@ def collect_scope_predicates(store: _StoreLike, key: str) -> Iterator[Any]:
     """Yield each non-None `when[key]` predicate across every scope.
 
     Scope order (areas, then floors, then house) is owned by the store's
-    ``all_scope_configs()`` — the same walk every other full-rule handler uses.
+    ``all_scope_configs()`` — the same walk every other full-scene handler uses.
     """
     for _kind, _scope_id, scope_cfg in store.all_scope_configs():
-        for rule in scope_cfg.get("rules", []):
-            pred = rule.get("when", {}).get(key)
+        for scene in scope_cfg.get("scenes", []):
+            pred = scene.get("when", {}).get(key)
             if pred is not None:
                 yield pred

@@ -1,4 +1,4 @@
-"""async_run_rule_actions fires a rule's actions unconditionally."""
+"""async_run_scene_actions fires a scene's actions unconditionally."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
 
 from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DATA_SWITCHES, DOMAIN
-from custom_components.ambience.service import async_run_rule_actions, get_last_applied
+from custom_components.ambience.service import async_run_scene_actions, get_last_applied
 
 
 async def _install(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> str:
@@ -23,7 +23,7 @@ async def _install(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> s
     await store.async_save_area(
         area.id,
         {
-            "rules": [
+            "scenes": [
                 {
                     "name": "Never matches",
                     "category": "lighting",
@@ -49,10 +49,10 @@ async def test_runs_actions_even_when_when_would_not_match(hass, mock_config_ent
     area_id = await _install(hass, mock_config_entry)
     calls = async_mock_service(hass, "light", "turn_on")
 
-    result = await async_run_rule_actions(hass, "area", area_id, 0)
+    result = await async_run_scene_actions(hass, "area", area_id, 0)
 
     assert len(calls) == 1
-    assert result == {"ran": 1, "rule_name": "Never matches"}
+    assert result == {"ran": 1, "scene_name": "Never matches"}
 
 
 async def test_runs_even_when_switch_off(hass, mock_config_entry):
@@ -62,7 +62,7 @@ async def test_runs_even_when_switch_off(hass, mock_config_entry):
     await switch.async_turn_off()
     await hass.async_block_till_done()
 
-    await async_run_rule_actions(hass, "area", area_id, 0)
+    await async_run_scene_actions(hass, "area", area_id, 0)
 
     assert len(calls) == 1
 
@@ -71,7 +71,7 @@ async def test_does_not_record_last_applied(hass, mock_config_entry):
     area_id = await _install(hass, mock_config_entry)
     async_mock_service(hass, "light", "turn_on")
 
-    await async_run_rule_actions(hass, "area", area_id, 0)
+    await async_run_scene_actions(hass, "area", area_id, 0)
 
     assert get_last_applied(hass, "area", area_id, "lighting") is None
 
@@ -79,4 +79,4 @@ async def test_does_not_record_last_applied(hass, mock_config_entry):
 async def test_out_of_range_index_raises(hass, mock_config_entry):
     area_id = await _install(hass, mock_config_entry)
     with pytest.raises(ServiceValidationError):
-        await async_run_rule_actions(hass, "area", area_id, 5)
+        await async_run_scene_actions(hass, "area", area_id, 5)

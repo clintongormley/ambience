@@ -102,9 +102,9 @@ describe("ambience-kebab-menu", () => {
   });
 
   test("custom label overrides the trigger aria-label", async () => {
-    el = await mount({ label: "Rule actions" });
+    el = await mount({ label: "Scene actions" });
     const trigger = el.shadowRoot.querySelector(".kebab-trigger") as HTMLButtonElement;
-    expect(trigger.getAttribute("aria-label")).toBe("Rule actions");
+    expect(trigger.getAttribute("aria-label")).toBe("Scene actions");
   });
 
   test("empty items does not throw and renders no menu items", async () => {

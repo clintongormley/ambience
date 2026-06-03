@@ -29,14 +29,14 @@ async def _ws_send(hass_ws_client, **payload: Any) -> dict:
 
 @pytest.fixture
 async def seeded_area(hass: HomeAssistant, installed) -> str:
-    """Create an HA area with one grouped state rule; returns its area_id."""
+    """Create an HA area with one grouped state scene; returns its area_id."""
     area = ar.async_get(hass).async_create("Kitchen")
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_area(
         area.id,
         {
             "conditions": [],
-            "rules": [
+            "scenes": [
                 {
                     "category": "g1",
                     "name": "Motion on",
@@ -69,7 +69,7 @@ async def test_simulate_returns_result(hass: HomeAssistant, hass_ws_client, seed
     result = resp["result"]["result"]
     assert result["cause"]["kind"] == "simulated"
     assert result["category"] == "g1"
-    # Overriding motion → on makes the rule match.
+    # Overriding motion → on makes the scene match.
     assert result["outcome"] == "acted"
     assert result["winner_name"] == "Motion on"
 

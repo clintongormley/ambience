@@ -7,7 +7,7 @@ import {
   weatherConditionLabel,
 } from "./i18n.js";
 import { entityDisplayName, formatArgValue, paramLabel } from "./summary.js";
-import type { BufferedUnit, ServiceSchema, TraceCause, TraceRuleEval } from "./types.js";
+import type { BufferedUnit, ServiceSchema, TraceCause, TraceSceneEval } from "./types.js";
 
 type Action = { service: string; entity_ids?: string[]; params?: Record<string, unknown> };
 
@@ -45,9 +45,9 @@ export const traceDetailStyles = css`
   .section + .section { margin-top: 1.25rem; }
   .section-title { font-size: 0.95rem; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.05em; color: var(--primary-text-color, #fff); margin-bottom: 0.5rem; }
-  .rules { font-family: monospace; font-size: 0.8rem; line-height: 1.7; }
-  .rule.won { color: var(--success-color, #4caf50); }
-  .rule.skipped { opacity: 0.5; }
+  .scenes { font-family: monospace; font-size: 0.8rem; line-height: 1.7; }
+  .scene.won { color: var(--success-color, #4caf50); }
+  .scene.skipped { opacity: 0.5; }
   .pred.pass { color: var(--success-color, #4caf50); }
   .pred.fail { color: var(--error-color, #e57373); }
   .pred .dim { color: var(--secondary-text-color, #888); }
@@ -84,17 +84,17 @@ function entityCount(actions: Action[]): number {
   return actions.reduce((n, a) => n + (a.entity_ids?.length ?? 0), 0);
 }
 
-function renderRule(r: TraceRuleEval, hass: HassLike | undefined): TemplateResult {
-  // `index` is the 0-based position in the rule list; rule numbers are shown 1-based.
+function renderScene(r: TraceSceneEval, hass: HassLike | undefined): TemplateResult {
+  // `index` is the 0-based position in the scene list; scene numbers are shown 1-based.
   const num = r.index + 1;
   if (r.disabled) {
-    return html`<div class="rule disabled">Rule #${num} ${r.name ?? "—"}: disabled</div>`;
+    return html`<div class="scene disabled">Scene #${num} ${r.name ?? "—"}: disabled</div>`;
   }
   if (!r.evaluated) {
-    return html`<div class="rule skipped">Rule #${num} ${r.name ?? "—"}: not evaluated</div>`;
+    return html`<div class="scene skipped">Scene #${num} ${r.name ?? "—"}: not evaluated</div>`;
   }
   return html`
-    <div class="rule ${r.matched ? "won" : ""}">Rule #${num} ${r.name ?? "—"}: ${r.matched ? "WON" : "no"}</div>
+    <div class="scene ${r.matched ? "won" : ""}">Scene #${num} ${r.name ?? "—"}: ${r.matched ? "WON" : "no"}</div>
     ${r.predicates.map(
       (p) => html`
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
@@ -141,8 +141,8 @@ export function renderEvaluation(
                 ? "▾ Hide details"
                 : u.explanation
                   ? u.winner_name
-                    ? `▸ Why this rule won (${u.explanation.rules.length} rules)`
-                    : `▸ Why nothing matched (${u.explanation.rules.length} rules)`
+                    ? `▸ Why this scene won (${u.explanation.scenes.length} scenes)`
+                    : `▸ Why nothing matched (${u.explanation.scenes.length} scenes)`
                   : "▸ Details"
             }
           </button>`
@@ -163,8 +163,8 @@ function renderExpansion(
       ${
         u.explanation
           ? html`<div class="section">
-            <div class="section-title">Rule evaluation</div>
-            <div class="rules">${u.explanation.rules.map((r) => renderRule(r, hass))}</div>
+            <div class="section-title">Scene evaluation</div>
+            <div class="scenes">${u.explanation.scenes.map((r) => renderScene(r, hass))}</div>
           </div>`
           : nothing
       }

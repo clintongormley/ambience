@@ -135,7 +135,7 @@ export class AmbienceAmbienceSettings extends LitElement {
 
       <div class="card">
         <h3>
-          ${localize(this.hass, "ui.settings_tab_categories", "Rule categories")}
+          ${localize(this.hass, "ui.settings_tab_categories", "Scene categories")}
         </h3>
         <ambience-categories-settings
           .hass=${this.hass}

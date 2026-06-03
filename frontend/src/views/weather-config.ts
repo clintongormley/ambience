@@ -24,7 +24,7 @@ const ALL_CONDITIONS = [
   "exceptional",
 ];
 
-type Warning = { scope_kind: string; scope_id: string | null; rule_name: string; reason: string };
+type Warning = { scope_kind: string; scope_id: string | null; scene_name: string; reason: string };
 
 @customElement("ambience-weather-config")
 export class AmbienceWeatherConfig extends LitElement {
@@ -255,8 +255,8 @@ export class AmbienceWeatherConfig extends LitElement {
           ? html`
         <div class="warnings">
           <strong>${localize(this.hass, "ui.day_warning_prefix", "Warning:")}</strong>
-          ${localize(this.hass, "ui.weather_warning_text", "rules now reference an unconfigured weather entity:")}
-          <ul>${this._warnings.map((w) => html`<li>${scopeLabel(w)} / "${w.rule_name}" → ${w.reason}</li>`)}</ul>
+          ${localize(this.hass, "ui.weather_warning_text", "scenes now reference an unconfigured weather entity:")}
+          <ul>${this._warnings.map((w) => html`<li>${scopeLabel(w)} / "${w.scene_name}" → ${w.reason}</li>`)}</ul>
         </div>
       `
           : ""

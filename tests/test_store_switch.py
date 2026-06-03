@@ -62,7 +62,7 @@ async def test_legacy_load_backfills_switch_defaults(hass: HomeAssistant) -> Non
             "version": 1,
             "areas": {},
             "floors": {},
-            "house": {"rules": []},
+            "house": {"scenes": []},
             "conditions": {},
         }
     )
@@ -111,20 +111,20 @@ async def test_off_at_ignores_legacy_name_and_delay(hass: HomeAssistant) -> None
     await store.async_load()
     await store.async_save_area(
         "a1",
-        {"rules": [], "switch": {"name": "Legacy", "auto_on_delay_seconds": 5, "off_at": "ts"}},
+        {"scenes": [], "switch": {"name": "Legacy", "auto_on_delay_seconds": 5, "off_at": "ts"}},
     )
     assert store.get_scope_switch_off_at("area", "a1") == "ts"
     # The defaults are untouched by the legacy override.
     assert store.get_switch_defaults() == {"name": "Ambience", "auto_on_delay_seconds": 7200}
 
 
-async def test_save_rules_preserves_off_at(hass: HomeAssistant) -> None:
-    """Saving rules to a scope must not wipe its switch sub-dict (off_at)."""
+async def test_save_scenes_preserves_off_at(hass: HomeAssistant) -> None:
+    """Saving scenes to a scope must not wipe its switch sub-dict (off_at)."""
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_area("a1", {"rules": []})
+    await store.async_save_area("a1", {"scenes": []})
     await store.async_set_scope_switch_off_at("area", "a1", "2026-05-27T12:00:00+00:00")
-    await store.async_save_area("a1", {"rules": [{"name": "r", "when": {}, "actions": []}]})
+    await store.async_save_area("a1", {"scenes": [{"name": "r", "when": {}, "actions": []}]})
     assert store.get_scope_switch_off_at("area", "a1") == "2026-05-27T12:00:00+00:00"
 
 
@@ -168,9 +168,9 @@ async def test_scope_config_floor_returns_config(hass: HomeAssistant) -> None:
     """scope_config returns the floor dict when it exists."""
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_floor("f2", {"rules": [{"name": "r", "when": {}, "actions": []}]})
+    await store.async_save_floor("f2", {"scenes": [{"name": "r", "when": {}, "actions": []}]})
     cfg = store.scope_config("floor", "f2")
-    assert cfg["rules"][0]["name"] == "r"
+    assert cfg["scenes"][0]["name"] == "r"
 
 
 async def test_scope_config_floor_absent_returns_empty(hass: HomeAssistant) -> None:

@@ -15,11 +15,11 @@ class Condition(Protocol):
     Protocol so they stay optional):
       - ``contains(outer, inner) -> bool``: True iff every state matching
         ``inner`` also matches ``outer``. The hard-constraint primitive for
-        the rule sort. Absent => no containment edges from this condition.
+        the scene sort. Absent => no containment edges from this condition.
       - ``order_key(predicate)``: a sortable linearisation key for the
         predicate (e.g. start-minute-of-day). Absent => the slot sorts last.
       - ``priority: int``: linearisation-slot order, lower first. Default 1000.
-      - ``input: str``: rule-editor widget hint. Default "text".
+      - ``input: str``: scene-editor widget hint. Default "text".
     """
 
     name: str

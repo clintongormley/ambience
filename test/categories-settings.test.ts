@@ -125,7 +125,7 @@ describe("ambience-categories-settings", () => {
     // The backend rejects with a stable code; the UI localizes the in-use message.
     (deleteCategory as any).mockRejectedValueOnce({
       code: "category_in_use",
-      message: "category 'blinds' still has rules",
+      message: "category 'blinds' still has scenes",
     });
     el = await mount();
     // ensure >1 category so the last-category guard doesn't fire
@@ -138,7 +138,7 @@ describe("ambience-categories-settings", () => {
     (el.shadowRoot.querySelector("button.delete") as HTMLButtonElement).click();
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".modal-error")?.textContent).toContain("still has rules");
+    expect(el.shadowRoot.querySelector(".modal-error")?.textContent).toContain("still has scenes");
     expect(el._categories.some((g: any) => g.id === "blinds")).toBe(true); // restored
   });
 

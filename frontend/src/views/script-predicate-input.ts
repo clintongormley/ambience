@@ -311,7 +311,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
           ${localize(
             this.hass,
             "ui.script_triggers_help",
-            "Re-evaluate this rule when these entities change. A script is opaque, so templated references may be missed — add any it depends on.",
+            "Re-evaluate this scene when these entities change. A script is opaque, so templated references may be missed — add any it depends on.",
           )}
         </p>
         ${this._renderTriggerPicker(current)}

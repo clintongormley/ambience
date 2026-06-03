@@ -319,7 +319,7 @@ export class AmbienceActionsSettings extends LitElement {
       font: inherit;
       cursor: pointer;
     }
-    /* Primary "Add action" button — filled blue, matching the rules list. */
+    /* Primary "Add action" button — filled blue, matching the scenes list. */
     button.add {
       background: var(--primary-color, #03a9f4);
       border-color: var(--primary-color, #03a9f4);
@@ -778,7 +778,7 @@ export class AmbienceActionsSettings extends LitElement {
         ${localize(
           this.hass,
           "ui.actions_field_help",
-          "Tick a checkbox to make a field editable per rule. Set a default to pre-fill it.",
+          "Tick a checkbox to make a field editable per scene. Set a default to pre-fill it.",
         )}
       </p>
       ${fields.map(([name, field]) => this._renderFieldRow(action, name, field))}
@@ -815,7 +815,7 @@ export class AmbienceActionsSettings extends LitElement {
             <input
               type="checkbox"
               data-show-in-editor=${name}
-              title="Show in rule editor"
+              title="Show in scene editor"
               .checked=${shown}
               @change=${(e: Event) =>
                 this._setShowInEditor(action.id, name, (e.target as HTMLInputElement).checked)}
@@ -1046,7 +1046,7 @@ export class AmbienceActionsSettings extends LitElement {
     return html`<ul class="warning">
       ${this._warnings.map(
         (w) => html`<li>
-          ${w.scope_kind}${w.scope_id ? `/${w.scope_id}` : ""}${w.rule_name ? html` — <em>${w.rule_name}</em>` : ""}: ${w.reason}
+          ${w.scope_kind}${w.scope_id ? `/${w.scope_id}` : ""}${w.scene_name ? html` — <em>${w.scene_name}</em>` : ""}: ${w.reason}
         </li>`,
       )}
     </ul>`;

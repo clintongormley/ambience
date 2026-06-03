@@ -5,20 +5,20 @@ import "./kebab-menu";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
 import { actionLabel, conditionLabel, localize } from "../i18n.js";
-import { formatArgValue, paramLabel, ruleDisplayName, summariseCondition } from "../summary.js";
+import { formatArgValue, paramLabel, sceneDisplayName, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
   ConditionInfo,
   ExposedAction,
   PeriodStoreView,
-  Rule,
-  RuleCategory,
+  Scene,
+  SceneCategory,
 } from "../types.js";
 import { entityName, type HassWithStates } from "./entity-row.js";
 import type { KebabItem } from "./kebab-menu";
 
-@customElement("ambience-rules-list")
-export class AmbienceRulesList extends LitElement {
+@customElement("ambience-scenes-list")
+export class AmbienceScenesList extends LitElement {
   static override styles = css`
     :host {
       display: block;
@@ -65,7 +65,7 @@ export class AmbienceRulesList extends LitElement {
       font-family: monospace;
       color: var(--secondary-text-color, #888);
       margin-right: 0.25rem;
-      /* Wide enough for two digits — we don't expect >99 rules. */
+      /* Wide enough for two digits — we don't expect >99 scenes. */
       min-width: 1.4em;
       text-align: right;
     }
@@ -80,7 +80,7 @@ export class AmbienceRulesList extends LitElement {
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
     }
-    .rule-detail {
+    .scene-detail {
       margin-top: 0.35rem;
       padding-left: 0.75rem;
       border-left: 2px solid var(--divider-color, #e0e0e0);
@@ -159,8 +159,8 @@ export class AmbienceRulesList extends LitElement {
       cursor: help;
       line-height: 1;
     }
-    /* Full-width coloured bar before each category's rules. The colour + text
-       colour are set inline per category; this rule carries layout + the neutral
+    /* Full-width coloured bar before each category's scenes. The colour + text
+       colour are set inline per category; this CSS rule carries layout + the neutral
        fallback used when a category has no colour. */
     .category-section-header {
       display: flex;
@@ -185,7 +185,7 @@ export class AmbienceRulesList extends LitElement {
       margin-left: auto;
       --kebab-trigger-color: currentColor;
       /* Cancel the header's right padding so the kebab sits flush at the bar's
-         right edge — aligning it with the scope-header and rule-row kebabs. */
+         right edge — aligning it with the scope-header and scene-row kebabs. */
       margin-right: -0.75rem;
     }
     .row-kebab {
@@ -197,7 +197,7 @@ export class AmbienceRulesList extends LitElement {
     }
   `;
 
-  @property({ attribute: false }) rules: Rule[] = [];
+  @property({ attribute: false }) scenes: Scene[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false })
   weatherConfig?: import("../types.js").WeatherConfig;
@@ -210,33 +210,33 @@ export class AmbienceRulesList extends LitElement {
   // priority first). Undefined → falls back to `when`-dict insertion order.
   @property({ attribute: false }) conditions?: ConditionInfo[];
   // Exposed-actions registry — used to resolve a friendly label for each
-  // action when rendering the expanded detail under a rule. Optional;
+  // action when rendering the expanded detail under a scene. Optional;
   // when missing, falls back to the service id (snake-case → title-case).
   @property({ attribute: false }) availableActions: ExposedAction[] = [];
   // Per-service schemas — used to look up HA's `field.name` attribute
   // for each param key in the expanded action detail. Optional; when
   // missing, the param key is humanized (snake_case → "Title case").
   @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
-  // Available rule categories, used to render the section header bars. Empty ⇒ no
-  // category sections (every rule rendered as one flat list).
-  @property({ attribute: false }) categories: RuleCategory[] = [];
+  // Available scene categories, used to render the section header bars. Empty ⇒ no
+  // category sections (every scene rendered as one flat list).
+  @property({ attribute: false }) categories: SceneCategory[] = [];
 
   // The active category filter, OWNED BY THE PARENT (scopes-view): "" = All,
   // otherwise a category id. Presentation-only.
   @property({ attribute: false }) filterCategory: string = "";
 
-  // Drag-to-reorder controller. On drop it emits "reorder-rules" {from,to};
+  // Drag-to-reorder controller. On drop it emits "reorder-scenes" {from,to};
   // the parent (scopes-view) performs the actual move.
   private _drag = new DragReorderController(this, (from, to) =>
-    this._emit("reorder-rules", { from, to }),
+    this._emit("reorder-scenes", { from, to }),
   );
-  // Rule indices whose action list is expanded inline.
+  // Scene indices whose action list is expanded inline.
   @state() private _expanded = new Set<number>();
 
   /** A full-width coloured header bar for a category's section: the category's
    *  colour as background (auto-contrast text), its icon, then its name. Falls
    *  back to neutral theme colours when the category has no colour. */
-  private _renderSectionHeader(category: RuleCategory) {
+  private _renderSectionHeader(category: SceneCategory) {
     return html`<div
       class="category-section-header"
       style=${categorySwatchStyle(category.color)}
@@ -272,17 +272,17 @@ export class AmbienceRulesList extends LitElement {
   }
 
   /**
-   * Rules paired with their ORIGINAL index, partitioned into render sections.
-   * filterCategory="" (All) → one section per category that has rules, sorted by
+   * Scenes paired with their ORIGINAL index, partitioned into render sections.
+   * filterCategory="" (All) → one section per category that has scenes, sorted by
    * category name; each labelled. filterCategory=<id> → a single unlabelled
-   * section with only that category's rules. Original indices are preserved so
+   * section with only that category's scenes. Original indices are preserved so
    * edit/delete/duplicate/reorder reference the correct underlying entry.
    */
   private _sections(): Array<{
-    category: RuleCategory | undefined;
-    rows: Array<[number, Rule]>;
+    category: SceneCategory | undefined;
+    rows: Array<[number, Scene]>;
   }> {
-    const pairs = this.rules.map((rule, i) => [i, rule] as [number, Rule]);
+    const pairs = this.scenes.map((scene, i) => [i, scene] as [number, Scene]);
     if (this.filterCategory !== "") {
       return [
         {
@@ -291,7 +291,7 @@ export class AmbienceRulesList extends LitElement {
         },
       ];
     }
-    const byId = new Map<string, Array<[number, Rule]>>();
+    const byId = new Map<string, Array<[number, Scene]>>();
     for (const [i, r] of pairs) {
       const list = byId.get(r.category) ?? [];
       list.push([i, r]);
@@ -310,7 +310,7 @@ export class AmbienceRulesList extends LitElement {
   }
 
   // Memoised name→priority map, rebuilt only when the `conditions` array
-  // identity changes (not on every _whenKeys call — it runs twice per rule
+  // identity changes (not on every _whenKeys call — it runs twice per scene
   // per render).
   private _priorityOfCache?: {
     src: ConditionInfo[] | undefined;
@@ -329,21 +329,21 @@ export class AmbienceRulesList extends LitElement {
   }
 
   /** Sorted list of active `when` keys (higher priority first). */
-  private _whenKeys(rule: Rule): string[] {
+  private _whenKeys(scene: Scene): string[] {
     const priorityOf = this._priorityMap();
-    return Object.keys(rule.when)
-      .filter((k) => rule.when[k] != null)
+    return Object.keys(scene.when)
+      .filter((k) => scene.when[k] != null)
       .sort((a, b) => (priorityOf.get(b) ?? -Infinity) - (priorityOf.get(a) ?? -Infinity));
   }
 
   /** Inline (collapsed) "when" summary: condition entries joined by `, ` with
    *  each condition label wrapped in <strong>. */
-  private _whenSummary(rule: Rule) {
-    const keys = this._whenKeys(rule);
+  private _whenSummary(scene: Scene) {
+    const keys = this._whenKeys(scene);
     if (keys.length === 0) return localize(this.hass, "ui.summary_any", "any");
     return keys.map((k, i) => {
       const label = conditionLabel(this.hass as any, k);
-      const body = summariseCondition(k, rule.when[k], {
+      const body = summariseCondition(k, scene.when[k], {
         hass: this.hass as any,
         periods: this.periods,
         weatherGroups: this.weatherConfig?.groups,
@@ -354,8 +354,8 @@ export class AmbienceRulesList extends LitElement {
   }
 
   /** Expanded "when" detail: one condition per line. */
-  private _whenStacked(rule: Rule) {
-    const keys = this._whenKeys(rule);
+  private _whenStacked(scene: Scene) {
+    const keys = this._whenKeys(scene);
     if (keys.length === 0) {
       return html`<div class="condition-line">
         ${localize(this.hass, "ui.summary_any", "any")}
@@ -363,7 +363,7 @@ export class AmbienceRulesList extends LitElement {
     }
     return keys.map((k) => {
       const label = conditionLabel(this.hass as any, k);
-      const body = summariseCondition(k, rule.when[k], {
+      const body = summariseCondition(k, scene.when[k], {
         hass: this.hass as any,
         periods: this.periods,
         weatherGroups: this.weatherConfig?.groups,
@@ -375,8 +375,8 @@ export class AmbienceRulesList extends LitElement {
   }
 
   /** "N actions" / "1 action" / "0 actions" label. */
-  private _actionCountLabel(rule: Rule): string {
-    const n = rule.actions.length;
+  private _actionCountLabel(scene: Scene): string {
+    const n = scene.actions.length;
     const word =
       n === 1
         ? localize(this.hass, "ui.action_singular", "action")
@@ -384,7 +384,7 @@ export class AmbienceRulesList extends LitElement {
     return `${n} ${word}`;
   }
 
-  private _toggleRule(i: number) {
+  private _toggleScene(i: number) {
     const next = new Set(this._expanded);
     if (next.has(i)) next.delete(i);
     else next.add(i);
@@ -420,28 +420,28 @@ export class AmbienceRulesList extends LitElement {
     return actionLabel(this.hass as any, action.service);
   }
 
-  private _onCategoryMenu(category: RuleCategory, id: string) {
+  private _onCategoryMenu(category: SceneCategory, id: string) {
     if (id === "run") this._emit("apply-category", { categoryId: category.id });
     else if (id === "traces") this._emit("show-traces", { category: category.id });
     else if (id === "simulate") this._emit("show-simulator", { category: category.id });
   }
 
-  private _onRuleMenu(i: number, id: string) {
-    if (id === "edit") this._emit("edit-rule", { index: i });
-    else if (id === "duplicate") this._emit("duplicate-rule", { index: i });
-    else if (id === "run") this._emit("run-rule-actions", { index: i });
-    else if (id === "delete") this._emit("delete-rule", { index: i });
+  private _onSceneMenu(i: number, id: string) {
+    if (id === "edit") this._emit("edit-scene", { index: i });
+    else if (id === "duplicate") this._emit("duplicate-scene", { index: i });
+    else if (id === "run") this._emit("run-scene-actions", { index: i });
+    else if (id === "delete") this._emit("delete-scene", { index: i });
   }
 
-  /** A single rule row. `i` is the rule's ORIGINAL index in `this.rules`
+  /** A single scene row. `i` is the scene's ORIGINAL index in `this.scenes`
    *  (used for every emitted event and drag handler); `displayNum` is the
    *  1-based position WITHIN its render section. */
-  private _renderRow(i: number, rule: Rule, displayNum: number) {
+  private _renderRow(i: number, scene: Scene, displayNum: number) {
     const unpinLabel = localize(this.hass, "ui.unpin", "Unpin (return to automatic order)");
-    const isDisabled = rule.enabled === false;
+    const isDisabled = scene.enabled === false;
     const toggleLabel = isDisabled
-      ? localize(this.hass, "ui.enable_rule", "Enable rule")
-      : localize(this.hass, "ui.disable_rule", "Disable rule");
+      ? localize(this.hass, "ui.enable_scene", "Enable scene")
+      : localize(this.hass, "ui.disable_scene", "Disable scene");
     return html`
       <li
         class="${this._drag.over === i ? "drag-over " : ""}${isDisabled ? "disabled" : ""}"
@@ -453,14 +453,14 @@ export class AmbienceRulesList extends LitElement {
       >
         <span class="lead">
           ${
-            rule.pinned
+            scene.pinned
               ? html`<button
                 class="pin"
                 title=${unpinLabel}
                 aria-label=${unpinLabel}
                 @click=${(e: Event) => {
                   e.stopPropagation();
-                  this._emit("unpin-rule", { index: i });
+                  this._emit("unpin-scene", { index: i });
                 }}
               >
                 📌
@@ -475,46 +475,46 @@ export class AmbienceRulesList extends LitElement {
         <span class="idx">${displayNum}</span>
         <span class="warn-slot">
           ${
-            rule.shadowed_by != null && !isDisabled
+            scene.shadowed_by != null && !isDisabled
               ? html`<span
                 class="shadow-warning"
                 title=${localize(
                   this.hass,
                   "ui.shadowed",
-                  "Never fires — shadowed by an earlier rule.",
+                  "Never fires — shadowed by an earlier scene.",
                 )}
                 >⚠️</span
               >`
               : ""
           }
         </span>
-        <div class="body" @click=${() => this._toggleRule(i)}>
+        <div class="body" @click=${() => this._toggleScene(i)}>
           <div class="name">
-            ${ruleDisplayName(
-              rule,
-              localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(displayNum)),
+            ${sceneDisplayName(
+              scene,
+              localize(this.hass, "ui.scene_n", "Scene {n}").replace("{n}", String(displayNum)),
             )}
           </div>
           <div class="summary">
             ${
               this._expanded.has(i)
                 ? ""
-                : html`${this._whenSummary(rule)} ·
+                : html`${this._whenSummary(scene)} ·
                   <span class="action-count"
-                    >${this._actionCountLabel(rule)}</span
+                    >${this._actionCountLabel(scene)}</span
                   >`
             }
           </div>
           ${
             this._expanded.has(i)
               ? html`
-                <div class="rule-detail">
-                  ${this._whenStacked(rule)}
+                <div class="scene-detail">
+                  ${this._whenStacked(scene)}
                   ${
-                    rule.actions.length === 0
+                    scene.actions.length === 0
                       ? ""
                       : html`<div class="actions-detail">
-                        ${rule.actions.map((a) => {
+                        ${scene.actions.map((a) => {
                           const params = this._actionParamsString(a);
                           const label = this._actionLabel(a);
                           const header = params ? `${label} · ${params}` : label;
@@ -546,7 +546,7 @@ export class AmbienceRulesList extends LitElement {
           class="toggle"
           @click=${(e: Event) => {
             e.stopPropagation();
-            this._emit("toggle-rule-enabled", {
+            this._emit("toggle-scene-enabled", {
               index: i,
               enabled: isDisabled,
             });
@@ -561,7 +561,7 @@ export class AmbienceRulesList extends LitElement {
         <ambience-kebab-menu
           class="row-kebab"
           .hass=${this.hass}
-          .label=${localize(this.hass, "ui.rule_actions", "Rule actions")}
+          .label=${localize(this.hass, "ui.scene_actions", "Scene actions")}
           .items=${
             [
               {
@@ -588,29 +588,29 @@ export class AmbienceRulesList extends LitElement {
               },
             ] satisfies KebabItem[]
           }
-          @menu-action=${(e: CustomEvent<{ id: string }>) => this._onRuleMenu(i, e.detail.id)}
+          @menu-action=${(e: CustomEvent<{ id: string }>) => this._onSceneMenu(i, e.detail.id)}
         ></ambience-kebab-menu>
       </li>
     `;
   }
 
   override render() {
-    if (this.rules.length === 0) {
+    if (this.scenes.length === 0) {
       return html`
         <p class="empty">
-          ${localize(this.hass, "ui.no_rules_yet", "No rules yet.")}
+          ${localize(this.hass, "ui.no_scenes_yet", "No scenes yet.")}
         </p>
-        <button class="add" @click=${() => this._emit("add-rule", {})}>
-          ${localize(this.hass, "ui.add_rule", "+ Add rule")}
+        <button class="add" @click=${() => this._emit("add-scene", {})}>
+          ${localize(this.hass, "ui.add_scene", "+ Add scene")}
         </button>
       `;
     }
-    // Only render sections that actually have rules — when filtering to a
-    // single category, a scope with no rules in that category shows nothing (no
+    // Only render sections that actually have scenes — when filtering to a
+    // single category, a scope with no scenes in that category shows nothing (no
     // empty header bar).
     const sections = this._sections().filter((section) => section.rows.length > 0);
     // Show the coloured category header for every section, including when a single
-    // category is filtered — the bar labels which category these rules belong to.
+    // category is filtered — the bar labels which category these scenes belong to.
     const showHeaders = this.categories.length > 0;
     return html`
       ${sections.map(
@@ -618,13 +618,13 @@ export class AmbienceRulesList extends LitElement {
           <div class="category-section">
             ${showHeaders && section.category ? this._renderSectionHeader(section.category) : ""}
             <ul>
-              ${section.rows.map(([i, rule], n) => this._renderRow(i, rule, n + 1))}
+              ${section.rows.map(([i, scene], n) => this._renderRow(i, scene, n + 1))}
             </ul>
           </div>
         `,
       )}
-      <button class="add" @click=${() => this._emit("add-rule", {})}>
-        ${localize(this.hass, "ui.add_rule", "+ Add rule")}
+      <button class="add" @click=${() => this._emit("add-scene", {})}>
+        ${localize(this.hass, "ui.add_scene", "+ Add scene")}
       </button>
     `;
   }

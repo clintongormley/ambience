@@ -83,7 +83,7 @@ describe("ambience-traces-modal", () => {
     const withExpl = unit({
       explanation: {
         winner_index: 0,
-        rules: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
+        scenes: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
       },
     });
     el = await mount([withExpl]);
@@ -138,7 +138,7 @@ describe("ambience-traces-modal", () => {
         ],
         explanation: {
           winner_index: 0,
-          rules: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
+          scenes: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
         },
       }),
     ]);
@@ -212,7 +212,7 @@ describe("ambience-traces-modal", () => {
     const withExpl = unit({
       explanation: {
         winner_index: 0,
-        rules: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
+        scenes: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
       },
     });
     el = await mount([withExpl]);
@@ -281,7 +281,7 @@ describe("ambience-traces-modal", () => {
         ],
         explanation: {
           winner_index: 0,
-          rules: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
+          scenes: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
         },
       }),
     ]);

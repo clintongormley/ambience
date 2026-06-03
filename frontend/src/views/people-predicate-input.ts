@@ -31,7 +31,7 @@ const MODE_QUANT: Record<Mode, PeopleQuant> = {
  * any|all|none of these people), an optional person checklist (shown only for
  * the "…these people" modes), a two-part location control (an "Is at"/"Is not
  * at" toggle driving `negate`, plus a home/zone location dropdown), and an
- * optional per-rule `for` duration.
+ * optional per-scene `for` duration.
  *
  *   {who?: person.*[]   // empty/absent = the whole household
  *    quant?: any|everyone|nobody
@@ -53,7 +53,7 @@ const MODE_QUANT: Record<Mode, PeopleQuant> = {
  * the mode is derived purely from `value` — no reactive override machinery.
  *
  * `null` value = the condition isn't yet constrained: we show Everybody + Home but
- * do NOT emit on mount (the rule editor removes the condition via its own
+ * do NOT emit on mount (the scene editor removes the condition via its own
  * control). Every explicit selection is a real constraint, so we emit the
  * corresponding predicate on change.
  *

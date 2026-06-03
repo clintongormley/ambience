@@ -57,7 +57,7 @@ class FakeStore:
         return self._by_key.get(("floor", floor_id))
 
     def get_house(self) -> dict:
-        return self._by_key.get(("house", None), {"rules": []})
+        return self._by_key.get(("house", None), {"scenes": []})
 
 
 class _FakeExposedStorage:
@@ -165,7 +165,7 @@ async def test_subscribe_registers_clock_time_subscription(hass) -> None:
         def describe(self, snapshot: Any) -> str | None:
             return None
 
-    scopes = [("area", "a", {"rules": [{"when": {"clk": "x"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"clk": "x"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"clk": ClockCondition()},
@@ -199,7 +199,7 @@ async def test_subscribe_registers_midnight_when_index_has_midnight(hass) -> Non
         def describe(self, snapshot: Any) -> str | None:
             return None
 
-    scopes = [("area", "a", {"rules": [{"when": {"mid": "x"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"mid": "x"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"mid": MidnightCondition()},
@@ -227,7 +227,7 @@ async def test_on_state_event_ignores_entity_not_in_index(hass) -> None:
 
     engine = _minimal_engine(
         hass,
-        [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})],
+        [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})],
         conditions={"x": SimpleEntityCondition("binary_sensor.x")},
         switches={("area", "a"): SimpleNamespace(is_on=True)},
         last_applied={},
@@ -268,11 +268,11 @@ async def test_reapply_scope_skips_when_scope_config_is_missing(hass) -> None:
         "params": {},
         "reapply_seconds": 10,
     }
-    rule = {"when": {}, "category": "g", "actions": [action]}
+    scene = {"when": {}, "category": "g", "actions": [action]}
     # Build an engine for area "k", then tamper: remove the scope config so
     # _reapply_scope will not find it.
     hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
         DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
@@ -297,7 +297,7 @@ async def test_schedule_for_rechecks_cancels_existing_handles(hass) -> None:
     """Existing for-recheck handles for a key must be cancelled before new ones are set."""
     import custom_components.ambience.trigger_subscriptions as _ts_mod
 
-    scopes = [("area", "a", {"rules": [{"when": {"fc": "on"}, "category": "g"}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"fc": "on"}, "category": "g"}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {},
@@ -353,7 +353,7 @@ async def test_schedule_for_rechecks_skips_pred_without_durations(hass) -> None:
         def describe(self, snapshot: Any) -> str | None:
             return None
 
-    scopes = [("area", "a", {"rules": [{"when": {"nd": "x"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"nd": "x"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"nd": NoDurationCondition()},
@@ -401,7 +401,7 @@ async def test_for_recheck_callback_fires_and_clears_handle(hass) -> None:
         def describe(self, snapshot: Any) -> str | None:
             return snapshot
 
-    scopes = [("area", "a", {"rules": [{"when": {"fc": "on"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"fc": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"fc": ForCondition()},
@@ -443,7 +443,7 @@ async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
         def describe(self, snapshot: Any) -> str | None:
             return snapshot
 
-    scopes = [("area", "a", {"rules": [{"when": {"fc": "on"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"fc": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"fc": ForCondition()},
@@ -483,7 +483,7 @@ async def test_on_switch_event_ignores_transition_to_off(hass) -> None:
     from homeassistant.core import Event, EventOrigin
 
     switch = SimpleNamespace(is_on=False, entity_id="switch.ambience_a")
-    scopes = [("area", "a", {"rules": [{"when": {}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {},
@@ -568,7 +568,7 @@ async def test_on_switch_event_ignores_on_to_on_transition(hass) -> None:
     from homeassistant.core import Event, EventOrigin, State
 
     switch = SimpleNamespace(is_on=True, entity_id="switch.ambience_b")
-    scopes = [("area", "b", {"rules": [{"when": {}, "category": "g", "actions": []}]})]
+    scopes = [("area", "b", {"scenes": [{"when": {}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {},
@@ -623,8 +623,8 @@ async def test_force_resync_scope_no_trace_when_no_categories(hass) -> None:
             captured.append(event)
 
     switch = SimpleNamespace(is_on=True, entity_id="switch.ambience_c")
-    # Scope has no rules → no categories → _apply_units returns [] → traces empty.
-    scopes = [("area", "c", {"rules": []})]
+    # Scope has no scenes → no categories → _apply_units returns [] → traces empty.
+    scopes = [("area", "c", {"scenes": []})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {},
@@ -646,7 +646,7 @@ async def test_force_resync_scope_no_trace_when_no_categories(hass) -> None:
     engine._teardown()
 
 
-async def test_force_resync_scope_emits_trace_when_rules_applied(hass) -> None:
+async def test_force_resync_scope_emits_trace_when_scenes_applied(hass) -> None:
     """_force_resync_scope calls emit_trace (line 288) when units were applied."""
     captured: list[TraceEvent] = []
 
@@ -656,7 +656,7 @@ async def test_force_resync_scope_emits_trace_when_rules_applied(hass) -> None:
 
     hass.states.async_set("binary_sensor.x", "on")
     switch = SimpleNamespace(is_on=True, entity_id="switch.ambience_d")
-    scopes = [("area", "d", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "d", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"x": SimpleEntityCondition("binary_sensor.x")},
@@ -672,7 +672,7 @@ async def test_force_resync_scope_emits_trace_when_rules_applied(hass) -> None:
         engine.async_subscribe()
         # Initial sync to seed predicate state.
         await engine.async_initial_sync()
-        # Force resync — this should apply the winning rule and emit a trace.
+        # Force resync — this should apply the winning scene and emit a trace.
         await engine._force_resync_scope(("area", "d"), "switch.ambience_d")
         switch_events = [e for e in captured if e.cause.kind == CauseKind.SWITCH]
         assert switch_events, "expected a SWITCH trace event from force_resync_scope"
@@ -760,7 +760,7 @@ async def test_schedule_sun_handler_fires_preds_and_reschedules(hass) -> None:
         "above_horizon",
         {"next_setting": (dt_util.utcnow() + timedelta(hours=2)).isoformat()},
     )
-    scopes = [("area", "a", {"rules": [{"when": {"sun": "x"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"sun": "x"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"sun": SunDepCondition()},

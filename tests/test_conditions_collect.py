@@ -28,9 +28,9 @@ class _StoreStub:
 
 def test_collects_from_areas_floors_and_house() -> None:
     store = _StoreStub(
-        areas={"kitchen": {"rules": [{"when": {"k": "area-pred"}}]}},
-        floors={"f1": {"rules": [{"when": {"k": "floor-pred"}}]}},
-        house={"rules": [{"when": {"k": "house-pred"}}]},
+        areas={"kitchen": {"scenes": [{"when": {"k": "area-pred"}}]}},
+        floors={"f1": {"scenes": [{"when": {"k": "floor-pred"}}]}},
+        house={"scenes": [{"when": {"k": "house-pred"}}]},
     )
     assert list(collect_scope_predicates(store, "k")) == [
         "area-pred",
@@ -39,11 +39,11 @@ def test_collects_from_areas_floors_and_house() -> None:
     ]
 
 
-def test_skips_rules_without_the_key() -> None:
+def test_skips_scenes_without_the_key() -> None:
     store = _StoreStub(
         areas={
             "kitchen": {
-                "rules": [
+                "scenes": [
                     {"when": {"other": "x"}},
                     {"when": {"k": "wanted"}},
                     {"when": {}},
@@ -57,7 +57,7 @@ def test_skips_rules_without_the_key() -> None:
 
 def test_skips_none_wildcard_predicates() -> None:
     store = _StoreStub(
-        areas={"kitchen": {"rules": [{"when": {"k": None}}, {"when": {"k": "real"}}]}},
+        areas={"kitchen": {"scenes": [{"when": {"k": None}}, {"when": {"k": "real"}}]}},
     )
     assert list(collect_scope_predicates(store, "k")) == ["real"]
 
@@ -73,5 +73,5 @@ def test_house_may_be_empty() -> None:
 
 def test_yields_dict_predicates_unchanged() -> None:
     pred = {"script": "script.foo", "args": {"x": 1}}
-    store = _StoreStub(areas={"a": {"rules": [{"when": {"script": pred}}]}})
+    store = _StoreStub(areas={"a": {"scenes": [{"when": {"script": pred}}]}})
     assert list(collect_scope_predicates(store, "script")) == [pred]

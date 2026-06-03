@@ -933,7 +933,7 @@ describe("ambience-actions-settings", () => {
     ) as HTMLInputElement;
     expect(checkbox).not.toBeNull();
     // title attribute should be set for accessibility.
-    expect(checkbox.getAttribute("title")).toBe("Show in rule editor");
+    expect(checkbox.getAttribute("title")).toBe("Show in scene editor");
   });
 
   test("a field can be hidden AND have a default (the old 'locked' mode)", async () => {
@@ -941,7 +941,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    // Uncheck brightness_pct → hidden from rule editor (auto-saves).
+    // Uncheck brightness_pct → hidden from scene editor (auto-saves).
     const checkbox = el.shadowRoot.querySelector(
       "input[type='checkbox'][data-show-in-editor='brightness_pct']",
     ) as HTMLInputElement;
@@ -1042,7 +1042,7 @@ describe("ambience-actions-settings", () => {
     vi.mocked(saveExposedActions).mockResolvedValueOnce({
       ok: true,
       warnings: [
-        { scope_kind: "area", scope_id: "lounge", rule_name: "Evening", reason: "field removed" },
+        { scope_kind: "area", scope_id: "lounge", scene_name: "Evening", reason: "field removed" },
       ],
     });
     el = await mount();
@@ -1590,7 +1590,7 @@ describe("ambience-actions-settings", () => {
       ok: true,
       warnings: [
         // No scope_id — the "/${w.scope_id}" branch should be skipped.
-        { scope_kind: "house", scope_id: "", rule_name: "Night", reason: "field removed" },
+        { scope_kind: "house", scope_id: "", scene_name: "Night", reason: "field removed" },
       ],
     });
     el = await mount();
@@ -1613,12 +1613,12 @@ describe("ambience-actions-settings", () => {
     expect(txt).toContain("Night");
   });
 
-  test("_renderWarnings omits rule_name annotation when rule_name is absent", async () => {
+  test("_renderWarnings omits scene_name annotation when scene_name is absent", async () => {
     vi.mocked(saveExposedActions).mockResolvedValueOnce({
       ok: true,
       warnings: [
-        // No rule_name — the "— rule_name" branch should be skipped.
-        { scope_kind: "area", scope_id: "bedroom", rule_name: "", reason: "field removed" },
+        // No scene_name — the "— scene_name" branch should be skipped.
+        { scope_kind: "area", scope_id: "bedroom", scene_name: "", reason: "field removed" },
       ],
     });
     el = await mount();
@@ -1636,7 +1636,7 @@ describe("ambience-actions-settings", () => {
     expect(warnings).not.toBeNull();
     const txt = warnings!.textContent ?? "";
     expect(txt).toContain("bedroom");
-    // The "— rule_name" annotation should not be present.
+    // The "— scene_name" annotation should not be present.
     expect(txt).not.toContain("—");
   });
 

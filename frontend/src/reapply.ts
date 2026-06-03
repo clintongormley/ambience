@@ -1,7 +1,7 @@
 /**
  * Shared helpers for parsing and displaying the "re-apply interval" value that
  * is stored as `reapply_seconds` (an integer ≥ 0, or absent) on both
- * `ExposedAction` (global default) and `ActionSpec` (per-rule override).
+ * `ExposedAction` (global default) and `ActionSpec` (per-scene override).
  */
 
 import type { ActionSpec } from "./types.js";
@@ -16,8 +16,8 @@ export const DEFAULT_REAPPLY_SECONDS = 300;
  * Parse a seconds input string into a stored `reapply_seconds` value.
  *
  * Empty/invalid input → `null` (the caller clears the key). For non-positive
- * input, `zeroMeansDisable` decides: the per-rule override stores `0` (disable
- * for this rule), while the exposed-action default returns `null` (off).
+ * input, `zeroMeansDisable` decides: the per-scene override stores `0` (disable
+ * for this scene), while the exposed-action default returns `null` (off).
  * Positive input clamps up to the floor.
  */
 function parseReapplySeconds(raw: string, zeroMeansDisable: boolean): number | null {
@@ -38,16 +38,16 @@ export function parseReapplyConfigSeconds(raw: string): number | null {
 }
 
 /**
- * Parse the per-rule override field. Returns `null` for empty/invalid input
+ * Parse the per-scene override field. Returns `null` for empty/invalid input
  * (caller REMOVEs the key → inherit the exposed default) and `0` for zero or
- * negative input (explicitly disable for this rule).
+ * negative input (explicitly disable for this scene).
  */
 export function parseReapplyOverrideSeconds(raw: string): number | null {
   return parseReapplySeconds(raw, true);
 }
 
 /**
- * The effective re-apply interval for a rule action: the per-rule override when
+ * The effective re-apply interval for a scene action: the per-scene override when
  * the key is PRESENT (so an explicit 0 does NOT fall back), else the exposed
  * default, else 0.
  */

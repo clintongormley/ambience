@@ -5,7 +5,7 @@ sun-event (the keys of this index) and, when one fires, fans out to every
 predicate in that key's set. Pure data — no HA imports, no I/O.
 
 A predicate is identified engine-wide by ``PredKey``:
-``(scope_kind, scope_id, rule_index, condition_key)``.
+``(scope_kind, scope_id, scene_index, condition_key)``.
 """
 
 from __future__ import annotations

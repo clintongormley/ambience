@@ -10,7 +10,7 @@ from custom_components.ambience.const import DATA_STORE, DATA_TRACE_BUFFER, DATA
 from custom_components.ambience.engine import (
     Explanation,
     PredicateResult,
-    RuleEval,
+    SceneEval,
 )
 from custom_components.ambience.trace import (
     BufferedUnit,
@@ -61,9 +61,9 @@ def test_cause_describe_clock_and_manual():
 def test_format_acted_unit_lists_predicates():
     explanation = Explanation(
         winner_index=1,
-        rules=[
-            RuleEval(0, "night", [PredicateResult("tod", False, "value=day")], False, True),
-            RuleEval(1, "day", [PredicateResult("tod", True, "value=day")], True, True),
+        scenes=[
+            SceneEval(0, "night", [PredicateResult("tod", False, "value=day")], False, True),
+            SceneEval(1, "day", [PredicateResult("tod", True, "value=day")], True, True),
         ],
     )
     unit = UnitTrace(
@@ -79,11 +79,11 @@ def test_format_acted_unit_lists_predicates():
     event = TraceEvent(cause=TriggerCause(kind="clock", detail="08:00"), units=[unit])
     text = "\n".join(format_trace_event(event))
     assert "trigger: clock 08:00" in text
-    # Rule numbers are shown 1-based: winner_index 1 → rule #2.
-    assert "area/kitchen/General: acted -> rule #2 'day'" in text
-    assert "rule #2 'day': WON" in text
+    # Scene numbers are shown 1-based: winner_index 1 → scene #2.
+    assert "area/kitchen/General: acted -> scene #2 'day'" in text
+    assert "scene #2 'day': WON" in text
     assert "tod: pass [value=day]" in text
-    assert "rule #1 'night': no" in text
+    assert "scene #1 'night': no" in text
     assert "tod: FAIL [value=day]" in text
 
 
@@ -94,19 +94,19 @@ def test_format_switch_off_unit_is_terse():
     assert "area/kitchen/General: skipped (switch off)" in text
 
 
-def test_format_marks_unevaluated_rules():
+def test_format_marks_unevaluated_scenes():
     explanation = Explanation(
         winner_index=0,
-        rules=[
-            RuleEval(0, "a", [PredicateResult("mode", True, None)], True, True),
-            RuleEval(1, "b", [], False, False),
+        scenes=[
+            SceneEval(0, "a", [PredicateResult("mode", True, None)], True, True),
+            SceneEval(1, "b", [], False, False),
         ],
     )
     unit = UnitTrace("house", None, "General", "on", "acted", explanation, winner_name="a")
     event = TraceEvent(TriggerCause(kind="startup"), [unit])
     text = "\n".join(format_trace_event(event))
     assert "house/-/General: acted" in text
-    assert "rule #2 'b': not evaluated (winner found)" in text
+    assert "scene #2 'b': not evaluated (winner found)" in text
 
 
 class _Hass:
@@ -185,7 +185,9 @@ def test_tracing_active_reflects_logger_levels(caplog):
 def test_format_renders_actions_for_acted_unit():
     explanation = Explanation(
         winner_index=0,
-        rules=[RuleEval(0, "evening", [PredicateResult("tod", True, "value=evening")], True, True)],
+        scenes=[
+            SceneEval(0, "evening", [PredicateResult("tod", True, "value=evening")], True, True)
+        ],
     )
     unit = UnitTrace(
         "area",
@@ -224,7 +226,7 @@ def test_format_renders_reapply_unit_with_actions():
         format_trace_event(TraceEvent(TriggerCause(kind="reapply", detail="10s"), [unit]))
     )
     assert "reapply (10s)" in text  # cause describes the interval
-    assert "reapplied -> 'evening'" in text  # winner name shown without a rule index
+    assert "reapplied -> 'evening'" in text  # winner name shown without a scene index
     assert "light.turn_on" in text
 
 
@@ -398,9 +400,9 @@ from custom_components.ambience.trace import buffered_unit_to_dict  # noqa: E402
 def test_buffered_unit_to_dict_acted_with_explanation():
     explanation = Explanation(
         winner_index=1,
-        rules=[
-            RuleEval(0, "night", [PredicateResult("tod", False, "evening")], False, True),
-            RuleEval(1, "evening", [PredicateResult("tod", True, "evening")], True, True),
+        scenes=[
+            SceneEval(0, "night", [PredicateResult("tod", False, "evening")], False, True),
+            SceneEval(1, "evening", [PredicateResult("tod", True, "evening")], True, True),
         ],
     )
     unit = UnitTrace(
@@ -441,7 +443,7 @@ def test_buffered_unit_to_dict_acted_with_explanation():
         {"service": "light.turn_on", "entity_ids": ["light.k"], "params": {"x": 1}}
     ]
     assert data["explanation"]["winner_index"] == 1
-    assert data["explanation"]["rules"][1] == {
+    assert data["explanation"]["scenes"][1] == {
         "index": 1,
         "name": "evening",
         "matched": True,
@@ -462,28 +464,28 @@ def test_buffered_unit_to_dict_reapplied_has_null_explanation():
     assert json.loads(json.dumps(data)) == data
 
 
-def test_format_marks_disabled_rules():
+def test_format_marks_disabled_scenes():
     explanation = Explanation(
         winner_index=1,
-        rules=[
-            RuleEval(0, "off", [], False, False, disabled=True),
-            RuleEval(1, "win", [PredicateResult("mode", True, None)], True, True),
+        scenes=[
+            SceneEval(0, "off", [], False, False, disabled=True),
+            SceneEval(1, "win", [PredicateResult("mode", True, None)], True, True),
         ],
     )
     unit = UnitTrace("house", None, "General", "on", "acted", explanation, winner_name="win")
     event = TraceEvent(TriggerCause(kind="startup"), [unit])
     text = "\n".join(format_trace_event(event))
-    assert "rule #1 'off': disabled" in text
+    assert "scene #1 'off': disabled" in text
     assert "not evaluated" not in text
 
 
 def test_explanation_to_dict_includes_disabled():
     explanation = Explanation(
         winner_index=None,
-        rules=[RuleEval(0, "off", [], False, False, disabled=True)],
+        scenes=[SceneEval(0, "off", [], False, False, disabled=True)],
     )
     result = _explanation_to_dict(explanation)
-    assert result["rules"][0]["disabled"] is True
+    assert result["scenes"][0]["disabled"] is True
 
 
 # ---------------------------------------------------------------------------

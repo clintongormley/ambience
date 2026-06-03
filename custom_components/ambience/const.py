@@ -22,8 +22,8 @@ DATA_STORE = "store"
 DATA_SWITCHES = "switches"
 DATA_SWITCH_ADD_ENTITIES = "switch_add_entities"
 
-# Per-scope last-applied rule index: {(scope_kind, scope_id): rule_index}.
-# Written by apply_scene; read by the auto-trigger engine's unchanged-rule guard.
+# Per-scope last-applied scene index: {(scope_kind, scope_id): scene_index}.
+# Written by apply_scene; read by the auto-trigger engine's unchanged-scene guard.
 DATA_LAST_APPLIED = "last_applied"
 
 # Auto-trigger engine instance.
@@ -37,7 +37,7 @@ TRACE_BUFFER_SIZE = 5
 # Dispatcher signal — payload: tuple (scope_kind, scope_id) or None (global defaults changed)
 SIGNAL_SWITCH_CONFIG_UPDATED = "ambience_switch_config_updated"
 
-# Dispatcher signal — fired when rules / condition config / a scope's
+# Dispatcher signal — fired when scenes / condition config / a scope's
 # auto_triggers flag change, so the auto-trigger engine rebuilds its watch-set.
 # No payload.
 SIGNAL_CONFIG_CHANGED = "ambience_config_changed"

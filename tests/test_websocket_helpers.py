@@ -21,7 +21,7 @@ from custom_components.ambience.const import (
 )
 from custom_components.ambience.websocket_helpers import (
     canonicalise,
-    coerce_rule_categories,
+    coerce_scene_categories,
     dangling_day_entity_warnings,
     dangling_weather_warnings,
     missing_period_refs,
@@ -72,7 +72,7 @@ class TestValidateScopeConfig:
 
     def test_rejects_unknown_condition_key(self) -> None:
         hass = _make_hass(conditions={})  # empty registry → all keys unknown
-        config = {"rules": [{"when": {"nonexistent_condition": {"some": "value"}}, "actions": []}]}
+        config = {"scenes": [{"when": {"nonexistent_condition": {"some": "value"}}, "actions": []}]}
         with pytest.raises(ValueError, match="unknown condition nonexistent_condition"):
             validate_scope_config(hass, config)
 
@@ -80,19 +80,19 @@ class TestValidateScopeConfig:
         """A None predicate is treated as 'no constraint' and skipped entirely —
         the condition need not be in the registry."""
         hass = _make_hass(conditions={})  # empty registry
-        config = {"rules": [{"when": {"some_condition": None}, "actions": []}]}
+        config = {"scenes": [{"when": {"some_condition": None}, "actions": []}]}
         # Should NOT raise even though 'some_condition' is not registered.
         validate_scope_config(hass, config)
 
-    def test_accepts_empty_rules(self) -> None:
+    def test_accepts_empty_scenes(self) -> None:
         hass = _make_hass()
-        validate_scope_config(hass, {"rules": []})  # no error
+        validate_scope_config(hass, {"scenes": []})  # no error
 
     def test_rejects_malformed_service_missing_dot(self) -> None:
         exposed = _make_exposed(["light.turn_on"])
         hass = _make_hass(exposed_actions=exposed)
         config = {
-            "rules": [
+            "scenes": [
                 {
                     "when": {},
                     "actions": [{"service": "no_dot", "entity_ids": [], "params": {}}],
@@ -105,7 +105,7 @@ class TestValidateScopeConfig:
     def test_rejects_service_not_exposed(self) -> None:
         hass = _make_hass(exposed_actions={})  # nothing exposed
         config = {
-            "rules": [
+            "scenes": [
                 {
                     "when": {},
                     "actions": [{"service": "light.turn_on", "entity_ids": [], "params": {}}],
@@ -119,7 +119,7 @@ class TestValidateScopeConfig:
         exposed = _make_exposed(["light.turn_on"])
         hass = _make_hass(exposed_actions=exposed)
         config = {
-            "rules": [
+            "scenes": [
                 {
                     "when": {},
                     "actions": [
@@ -139,7 +139,7 @@ class TestValidateScopeConfig:
         exposed = _make_exposed(["light.turn_on"])
         hass = _make_hass(exposed_actions=exposed)
         config = {
-            "rules": [
+            "scenes": [
                 {
                     "when": {},
                     "actions": [
@@ -159,7 +159,7 @@ class TestValidateScopeConfig:
         exposed = _make_exposed(["light.turn_on"])
         hass = _make_hass(exposed_actions=exposed)
         config = {
-            "rules": [
+            "scenes": [
                 {
                     "when": {},
                     "actions": [
@@ -179,7 +179,7 @@ class TestValidateScopeConfig:
         exposed = _make_exposed(["light.turn_on"])
         hass = _make_hass(exposed_actions=exposed)
         config = {
-            "rules": [
+            "scenes": [
                 {
                     "when": {},
                     "actions": [
@@ -199,7 +199,7 @@ class TestValidateScopeConfig:
         mock_condition = MagicMock()
         mock_condition.validate_predicate.side_effect = ValueError("bad predicate")
         hass = _make_hass(conditions={"time_of_day": mock_condition})
-        config = {"rules": [{"when": {"time_of_day": {"period": "garbage"}}, "actions": []}]}
+        config = {"scenes": [{"when": {"time_of_day": {"period": "garbage"}}, "actions": []}]}
         with pytest.raises(ValueError, match="bad predicate"):
             validate_scope_config(hass, config)
         mock_condition.validate_predicate.assert_called_once_with({"period": "garbage"})
@@ -209,7 +209,7 @@ class TestValidateScopeConfig:
         exposed = _make_exposed(["light.turn_on"])
         hass = _make_hass(exposed_actions=exposed)
         config = {
-            "rules": [
+            "scenes": [
                 {
                     "when": {},
                     "actions": [
@@ -231,7 +231,7 @@ class TestValidateScopeConfig:
         exposed = _make_exposed(["light.turn_on"])
         hass = _make_hass(exposed_actions=exposed)
         config = {
-            "rules": [
+            "scenes": [
                 {
                     "when": {},
                     "actions": [
@@ -316,29 +316,29 @@ class TestMissingPeriodRefs:
 # ---------------------------------------------------------------------------
 
 
-def _make_store_with_rules(rules_per_scope: list[tuple[str, str | None, dict]]) -> Any:
+def _make_store_with_scenes(scenes_per_scope: list[tuple[str, str | None, dict]]) -> Any:
     """Return a store stub whose all_scope_configs() yields the given triples."""
     store = MagicMock()
-    store.all_scope_configs.return_value = rules_per_scope
+    store.all_scope_configs.return_value = scenes_per_scope
     return store
 
 
 class TestDanglingDayEntityWarnings:
-    def test_no_rules_returns_empty(self) -> None:
-        store = _make_store_with_rules([])
+    def test_no_scenes_returns_empty(self) -> None:
+        store = _make_store_with_scenes([])
         hass = _make_hass(store=store)
         result = dangling_day_entity_warnings(hass, {"workday_sensor": None})
         assert result == []
 
-    def test_rule_with_non_dict_day_pred_is_skipped(self) -> None:
+    def test_scene_with_non_dict_day_pred_is_skipped(self) -> None:
         # Line 150: non-dict day predicate → continue
-        store = _make_store_with_rules(
+        store = _make_store_with_scenes(
             [
                 (
                     "area",
                     "area_1",
                     {
-                        "rules": [
+                        "scenes": [
                             {
                                 "name": "test",
                                 "when": {"day": "not_a_dict"},
@@ -355,13 +355,13 @@ class TestDanglingDayEntityWarnings:
 
     def test_workday_kind_without_sensor_emits_warning(self) -> None:
         # Lines 153→162: workday kind, sensor unset
-        store = _make_store_with_rules(
+        store = _make_store_with_scenes(
             [
                 (
                     "area",
                     "area_1",
                     {
-                        "rules": [
+                        "scenes": [
                             {
                                 "name": "Pay day",
                                 "when": {
@@ -383,20 +383,20 @@ class TestDanglingDayEntityWarnings:
         w = result[0]
         assert w["scope_kind"] == "area"
         assert w["scope_id"] == "area_1"
-        assert w["rule_name"] == "Pay day"
+        assert w["scene_name"] == "Pay day"
         assert "workday_sensor" in w["reason"]
 
     def test_holiday_kind_without_sensor_emits_warning(self) -> None:
         # holiday is also in _SENSOR_DEPENDENT_KINDS
-        store = _make_store_with_rules(
+        store = _make_store_with_scenes(
             [
                 (
                     "area",
                     "area_2",
                     {
-                        "rules": [
+                        "scenes": [
                             {
-                                "name": "Holiday rule",
+                                "name": "Holiday scene",
                                 "when": {
                                     "day": {
                                         "include": [{"kind": "holiday"}],
@@ -416,13 +416,13 @@ class TestDanglingDayEntityWarnings:
 
     def test_first_workday_kind_without_calendar_emits_warning(self) -> None:
         # Line 163: calendar-dependent kind, calendar_ok = False
-        store = _make_store_with_rules(
+        store = _make_store_with_scenes(
             [
                 (
                     "floor",
                     "floor_1",
                     {
-                        "rules": [
+                        "scenes": [
                             {
                                 "name": "First workday",
                                 "when": {
@@ -447,13 +447,13 @@ class TestDanglingDayEntityWarnings:
 
     def test_last_workday_kind_without_calendar_emits_warning(self) -> None:
         # last_workday is in _CALENDAR_DEPENDENT_KINDS
-        store = _make_store_with_rules(
+        store = _make_store_with_scenes(
             [
                 (
                     "area",
                     "area_3",
                     {
-                        "rules": [
+                        "scenes": [
                             {
                                 "name": "Month end",
                                 "when": {
@@ -474,15 +474,15 @@ class TestDanglingDayEntityWarnings:
         assert any("workday_calendar" in w["reason"] for w in result)
 
     def test_no_warning_when_sensor_is_set(self) -> None:
-        store = _make_store_with_rules(
+        store = _make_store_with_scenes(
             [
                 (
                     "area",
                     "area_1",
                     {
-                        "rules": [
+                        "scenes": [
                             {
-                                "name": "Workday rule",
+                                "name": "Workday scene",
                                 "when": {
                                     "day": {
                                         "include": [{"kind": "workday"}],
@@ -604,24 +604,24 @@ class TestWeatherPredicateActive:
 
 
 class TestDanglingWeatherWarnings:
-    def _make_hass_with_rules(self, rules_per_scope: list[tuple[str, str | None, dict]]) -> Any:
-        store = _make_store_with_rules(rules_per_scope)
+    def _make_hass_with_scenes(self, scenes_per_scope: list[tuple[str, str | None, dict]]) -> Any:
+        store = _make_store_with_scenes(scenes_per_scope)
         return _make_hass(store=store)
 
     def test_no_scopes_returns_empty(self) -> None:
-        hass = self._make_hass_with_rules([])
+        hass = self._make_hass_with_scenes([])
         result = dangling_weather_warnings(hass, {"groups": []}, {"groups": [], "entity": None})
         assert result == []
 
-    def test_entity_cleared_emits_warning_for_active_weather_rule(self) -> None:
+    def test_entity_cleared_emits_warning_for_active_weather_scene(self) -> None:
         # Line 223: entity_cleared branch
-        hass = self._make_hass_with_rules(
+        hass = self._make_hass_with_scenes(
             [
                 (
                     "area",
                     "area_1",
                     {
-                        "rules": [
+                        "scenes": [
                             {
                                 "name": "Rainy",
                                 "when": {"weather": {"groups": ["wet"], "thresholds": []}},
@@ -638,19 +638,19 @@ class TestDanglingWeatherWarnings:
         w = result[0]
         assert w["scope_kind"] == "area"
         assert w["scope_id"] == "area_1"
-        assert w["rule_name"] == "Rainy"
+        assert w["scene_name"] == "Rainy"
         assert "weather entity is unset" in w["reason"]
 
     def test_removed_group_emits_warning(self) -> None:
-        hass = self._make_hass_with_rules(
+        hass = self._make_hass_with_scenes(
             [
                 (
                     "area",
                     "area_1",
                     {
-                        "rules": [
+                        "scenes": [
                             {
-                                "name": "Wet rule",
+                                "name": "Wet scene",
                                 "when": {"weather": {"groups": ["wet"], "thresholds": []}},
                             }
                         ]
@@ -672,15 +672,15 @@ class TestDanglingWeatherWarnings:
         assert "wet" in w["reason"]
 
     def test_no_warning_when_nothing_changed(self) -> None:
-        hass = self._make_hass_with_rules(
+        hass = self._make_hass_with_scenes(
             [
                 (
                     "area",
                     "area_1",
                     {
-                        "rules": [
+                        "scenes": [
                             {
-                                "name": "Wet rule",
+                                "name": "Wet scene",
                                 "when": {"weather": {"groups": ["wet"], "thresholds": []}},
                             }
                         ]
@@ -697,13 +697,13 @@ class TestDanglingWeatherWarnings:
 
     def test_inactive_weather_predicate_is_not_warned(self) -> None:
         # weather predicate present but inactive (empty groups + empty thresholds)
-        hass = self._make_hass_with_rules(
+        hass = self._make_hass_with_scenes(
             [
                 (
                     "area",
                     "area_1",
                     {
-                        "rules": [
+                        "scenes": [
                             {
                                 "name": "No weather",
                                 "when": {"weather": {"groups": [], "thresholds": []}},
@@ -720,11 +720,11 @@ class TestDanglingWeatherWarnings:
 
 
 # ---------------------------------------------------------------------------
-# coerce_rule_categories
+# coerce_scene_categories
 # ---------------------------------------------------------------------------
 
 
-class TestCoerceRuleCategories:
+class TestCoerceSceneCategories:
     def _make_store(self, category_ids: list[str]) -> Any:
         store = MagicMock()
         store.categories.return_value = [{"id": cid} for cid in category_ids]
@@ -732,34 +732,34 @@ class TestCoerceRuleCategories:
 
     def test_unknown_category_is_coerced_to_general(self) -> None:
         store = self._make_store([GENERAL_CATEGORY_ID, "lighting"])
-        config = {"rules": [{"name": "rule", "category": "nonexistent"}]}
-        coerce_rule_categories(store, config)
-        assert config["rules"][0]["category"] == GENERAL_CATEGORY_ID
+        config = {"scenes": [{"name": "scene", "category": "nonexistent"}]}
+        coerce_scene_categories(store, config)
+        assert config["scenes"][0]["category"] == GENERAL_CATEGORY_ID
 
     def test_missing_category_key_is_coerced_to_general(self) -> None:
         store = self._make_store([GENERAL_CATEGORY_ID])
-        config = {"rules": [{"name": "no cat rule"}]}
-        coerce_rule_categories(store, config)
-        assert config["rules"][0]["category"] == GENERAL_CATEGORY_ID
+        config = {"scenes": [{"name": "no cat scene"}]}
+        coerce_scene_categories(store, config)
+        assert config["scenes"][0]["category"] == GENERAL_CATEGORY_ID
 
     def test_known_category_is_not_changed(self) -> None:
         store = self._make_store([GENERAL_CATEGORY_ID, "lighting"])
-        config = {"rules": [{"name": "light rule", "category": "lighting"}]}
-        coerce_rule_categories(store, config)
-        assert config["rules"][0]["category"] == "lighting"
+        config = {"scenes": [{"name": "light scene", "category": "lighting"}]}
+        coerce_scene_categories(store, config)
+        assert config["scenes"][0]["category"] == "lighting"
 
-    def test_empty_rules_is_a_no_op(self) -> None:
+    def test_empty_scenes_is_a_no_op(self) -> None:
         store = self._make_store([GENERAL_CATEGORY_ID])
-        config = {"rules": []}
-        coerce_rule_categories(store, config)  # should not raise
-        assert config["rules"] == []
+        config = {"scenes": []}
+        coerce_scene_categories(store, config)  # should not raise
+        assert config["scenes"] == []
 
     def test_when_general_deleted_falls_back_to_first_category(self) -> None:
         # If GENERAL_CATEGORY_ID is not in known, target becomes first category.
         store = self._make_store(["custom_cat"])
-        config = {"rules": [{"name": "rule", "category": "nonexistent"}]}
-        coerce_rule_categories(store, config)
-        assert config["rules"][0]["category"] == "custom_cat"
+        config = {"scenes": [{"name": "scene", "category": "nonexistent"}]}
+        coerce_scene_categories(store, config)
+        assert config["scenes"][0]["category"] == "custom_cat"
 
 
 # ---------------------------------------------------------------------------
@@ -768,27 +768,27 @@ class TestCoerceRuleCategories:
 
 
 class TestCanonicalise:
-    def test_strips_shadowed_by_from_rules(self) -> None:
-        # Build a minimal conditions registry (empty) and a config with one rule
+    def test_strips_shadowed_by_from_scenes(self) -> None:
+        # Build a minimal conditions registry (empty) and a config with one scene
         # that has a transient `shadowed_by` key.
         hass = _make_hass(conditions={})
         config = {
-            "rules": [
+            "scenes": [
                 {"name": "r1", "when": {}, "actions": [], "shadowed_by": 0},
             ]
         }
         result = canonicalise(hass, config)
-        assert "shadowed_by" not in result["rules"][0]
+        assert "shadowed_by" not in result["scenes"][0]
 
-    def test_preserves_other_rule_fields(self) -> None:
+    def test_preserves_other_scene_fields(self) -> None:
         hass = _make_hass(conditions={})
         config = {
-            "rules": [
+            "scenes": [
                 {"name": "keep me", "when": {}, "actions": [], "shadowed_by": None},
             ]
         }
         result = canonicalise(hass, config)
-        assert result["rules"][0]["name"] == "keep me"
+        assert result["scenes"][0]["name"] == "keep me"
 
 
 # ---------------------------------------------------------------------------
@@ -797,20 +797,20 @@ class TestCanonicalise:
 
 
 class TestWithShadows:
-    def test_adds_shadowed_by_key_to_every_rule(self) -> None:
+    def test_adds_shadowed_by_key_to_every_scene(self) -> None:
         hass = _make_hass(conditions={})
         config = {
-            "rules": [
+            "scenes": [
                 {"name": "r1", "when": {}, "actions": []},
                 {"name": "r2", "when": {}, "actions": []},
             ]
         }
         result = with_shadows(hass, config)
-        assert all("shadowed_by" in r for r in result["rules"])
+        assert all("shadowed_by" in r for r in result["scenes"])
 
     def test_does_not_mutate_original_config(self) -> None:
         hass = _make_hass(conditions={})
-        config = {"rules": [{"name": "r1", "when": {}, "actions": []}]}
+        config = {"scenes": [{"name": "r1", "when": {}, "actions": []}]}
         result = with_shadows(hass, config)
-        assert "shadowed_by" not in config["rules"][0]
-        assert "shadowed_by" in result["rules"][0]
+        assert "shadowed_by" not in config["scenes"][0]
+        assert "shadowed_by" in result["scenes"][0]

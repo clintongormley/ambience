@@ -6,16 +6,16 @@ import { entitiesForScope, scopeKey } from "../entities-for-scope.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { conditionLabel, localize } from "../i18n.js";
 import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
-import { stripPositionMetadata } from "../rule.js";
-import { ruleDisplayName, summariseAction, summariseCondition } from "../summary.js";
+import { stripPositionMetadata } from "../scene.js";
+import { sceneDisplayName, summariseAction, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
   ConditionInfo,
   DayConfig,
   ExposedAction,
   PeriodStoreView,
-  Rule,
-  RuleCategory,
+  Scene,
+  SceneCategory,
   Scope,
   ScopeOption,
 } from "../types.js";
@@ -60,8 +60,8 @@ function sameScope(a?: Scope, b?: Scope): boolean {
   return !!a && !!b && scopeKey(a) === scopeKey(b);
 }
 
-@customElement("ambience-rule-editor")
-export class AmbienceRuleEditor extends LitElement {
+@customElement("ambience-scene-editor")
+export class AmbienceSceneEditor extends LitElement {
   static override styles = [
     categorySwatchStyles,
     css`
@@ -207,7 +207,7 @@ export class AmbienceRuleEditor extends LitElement {
       font-size: 0.9em;
     }
     /* Category field: colour-coded swatch + icon (shell from categorySwatchStyles),
-       matching the rules-list filter. */
+       matching the scenes-list filter. */
     .category-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .category-menu { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.35rem; }
     .category-option {
@@ -225,13 +225,13 @@ export class AmbienceRuleEditor extends LitElement {
   ];
 
   @property({ type: Boolean, reflect: true }) open = false;
-  @property({ attribute: false }) rule: Rule | null = null;
+  @property({ attribute: false }) scene: Scene | null = null;
   @property({ attribute: false }) conditions: ConditionInfo[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) dayConfig?: DayConfig;
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) availableActions: ExposedAction[] = [];
-  @property({ attribute: false }) categories: RuleCategory[] = [];
+  @property({ attribute: false }) categories: SceneCategory[] = [];
   @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) scope?: Scope;
@@ -240,7 +240,7 @@ export class AmbienceRuleEditor extends LitElement {
   // Set by the parent when duplicating, where retargeting the area is the point.
   @property({ type: Boolean }) autoEditScope = false;
 
-  @state() private _draft: Rule | null = null;
+  @state() private _draft: Scene | null = null;
   @state() private _scope?: Scope;
   @state() private _open: OpenSlot = null;
   @state() private _showError = false;
@@ -274,13 +274,13 @@ export class AmbienceRuleEditor extends LitElement {
 
   override willUpdate(changed: Map<string, unknown>) {
     // Initialise the draft ONLY when the editor opens. Once open, ignore
-    // subsequent `rule` prop changes — the parent re-derives `rule` from a
+    // subsequent `scene` prop changes — the parent re-derives `scene` from a
     // possibly-refreshed config every time `area_registry_updated` fires,
     // and we don't want an unrelated refetch to clobber the user's
     // in-progress edits.
     const isOpening = changed.has("open") && this.open;
     if (isOpening) {
-      this._draft = this.rule ? JSON.parse(JSON.stringify(this.rule)) : null;
+      this._draft = this.scene ? JSON.parse(JSON.stringify(this.scene)) : null;
       this._scope = this.scope;
       // Everything collapsed by default; on a duplicate, open the destination
       // slot so the user can retarget the area straight away.
@@ -359,7 +359,7 @@ export class AmbienceRuleEditor extends LitElement {
     const schema = [
       {
         name: "destination",
-        // Required so the dropdown offers no clear/empty affordance — a rule
+        // Required so the dropdown offers no clear/empty affordance — a scene
         // always has a destination scope.
         required: true,
         selector: {
@@ -421,9 +421,9 @@ export class AmbienceRuleEditor extends LitElement {
         </div>
       `;
     }
-    const summaryText = ruleDisplayName(
+    const summaryText = sceneDisplayName(
       this._draft!,
-      localize(this.hass, "ui.new_rule", "New rule"),
+      localize(this.hass, "ui.new_scene", "New scene"),
     );
     return html`
       <div class="slot collapsed" data-slot-id="name">
@@ -455,12 +455,12 @@ export class AmbienceRuleEditor extends LitElement {
 
   // --- Category field ---
 
-  // A rule's category is required: the selector always has a value and there is
+  // A scene's category is required: the selector always has a value and there is
   // no "no category" option.
 
   private _setCategory(id: string) {
     if (!this._draft || !id || id === this._draft.category) return;
-    // Pin position and priority are per-category, so moving a rule to a different
+    // Pin position and priority are per-category, so moving a scene to a different
     // category invalidates them — drop the fixed-position fields so it falls back
     // to automatic ordering within the new category.
     this._draft = { ...stripPositionMetadata(this._draft), category: id };
@@ -469,7 +469,7 @@ export class AmbienceRuleEditor extends LitElement {
   /**
    * The category as a collapse/expand slot (like the name field): a swatch + name
    * summary, expanding to a colour-coded menu of swatch + name options (the same
-   * visual language as the rules-list category filter).
+   * visual language as the scenes-list category filter).
    */
   private _renderCategorySlot() {
     if (this.categories.length === 0) return "";
@@ -530,7 +530,7 @@ export class AmbienceRuleEditor extends LitElement {
    *   empty (an unfinished selection). A present-but-empty `who` is the error.
    * - Action slots: must have at least one target. Per-field required-ness
    *   is enforced by ha-form / native browser validation inside the slot;
-   *   the rule-editor only guards the cross-cutting "you forgot to pick a
+   *   the scene-editor only guards the cross-cutting "you forgot to pick a
    *   target" case.
    */
   private _validationError(slot: OpenSlot): string | null {
@@ -546,7 +546,7 @@ export class AmbienceRuleEditor extends LitElement {
         return localize(this.hass, "ui.people_select_one", "Select at least one person");
       }
       // A condition whose input widget reports an error (e.g. a `template` whose
-      // Jinja throws) must not be left in the rule.
+      // Jinja throws) must not be left in the scene.
       if (this._conditionError.has(slot.id)) {
         return localize(
           this.hass,
@@ -692,7 +692,7 @@ export class AmbienceRuleEditor extends LitElement {
    * Conditions shown as rows. A condition is visible only if it has a non-null
    * value in `when`, OR if it's the currently-open slot (just-added via
    * dropdown, no predicate set yet). A stored null predicate is treated as
-   * "not in the rule" — same as an absent key.
+   * "not in the scene" — same as an absent key.
    */
   private _visibleConditions(): ConditionInfo[] {
     if (!this._draft) return [];
@@ -732,7 +732,7 @@ export class AmbienceRuleEditor extends LitElement {
   private _onAddConditionHaForm = (e: CustomEvent<{ value: { add: string } }>) => {
     e.stopPropagation();
     const name = e.detail.value.add;
-    if (name === AmbienceRuleEditor._ADD_CONDITION_PLACEHOLDER) return;
+    if (name === AmbienceSceneEditor._ADD_CONDITION_PLACEHOLDER) return;
     this._addCondition(name);
   };
   /* v8 ignore stop */
@@ -791,7 +791,7 @@ export class AmbienceRuleEditor extends LitElement {
           select: {
             mode: "dropdown",
             options: [
-              { value: AmbienceRuleEditor._ADD_CONDITION_PLACEHOLDER, label: placeholderLabel },
+              { value: AmbienceSceneEditor._ADD_CONDITION_PLACEHOLDER, label: placeholderLabel },
               ...unused.map((m) => ({
                 value: m.name,
                 label: conditionLabel(this.hass as any, m.name),
@@ -806,7 +806,7 @@ export class AmbienceRuleEditor extends LitElement {
         <ha-form
           .hass=${this.hass}
           .schema=${schema}
-          .data=${{ add: AmbienceRuleEditor._ADD_CONDITION_PLACEHOLDER }}
+          .data=${{ add: AmbienceSceneEditor._ADD_CONDITION_PLACEHOLDER }}
           .computeLabel=${() => ""}
           @value-changed=${this._onAddConditionHaForm}
         ></ha-form>
@@ -830,7 +830,7 @@ export class AmbienceRuleEditor extends LitElement {
   private _onAddActionHaForm = (e: CustomEvent<{ value: { add: string } }>) => {
     e.stopPropagation();
     const name = e.detail.value.add;
-    if (name === AmbienceRuleEditor._ADD_ACTION_PLACEHOLDER) return;
+    if (name === AmbienceSceneEditor._ADD_ACTION_PLACEHOLDER) return;
     this._addActionSlot(name);
   };
   /* v8 ignore stop */
@@ -887,7 +887,7 @@ export class AmbienceRuleEditor extends LitElement {
           select: {
             mode: "dropdown",
             options: [
-              { value: AmbienceRuleEditor._ADD_ACTION_PLACEHOLDER, label: placeholderLabel },
+              { value: AmbienceSceneEditor._ADD_ACTION_PLACEHOLDER, label: placeholderLabel },
               ...this.availableActions.map((a) => ({
                 value: a.id,
                 label: this._actionOptionLabel(a),
@@ -902,7 +902,7 @@ export class AmbienceRuleEditor extends LitElement {
         <ha-form
           .hass=${this.hass}
           .schema=${schema}
-          .data=${{ add: AmbienceRuleEditor._ADD_ACTION_PLACEHOLDER }}
+          .data=${{ add: AmbienceSceneEditor._ADD_ACTION_PLACEHOLDER }}
           .computeLabel=${() => ""}
           @value-changed=${this._onAddActionHaForm}
         ></ha-form>
@@ -944,7 +944,7 @@ export class AmbienceRuleEditor extends LitElement {
         const { reapply_seconds: _removed, ...rest } = a;
         return rest as ActionSpec;
       }
-      // 0 = disable for this rule; >0 = custom seconds.
+      // 0 = disable for this scene; >0 = custom seconds.
       return { ...a, reapply_seconds: s };
     });
   }
@@ -1070,8 +1070,8 @@ export class AmbienceRuleEditor extends LitElement {
     // user input, but older storage / hand-edited JSON might still carry one.
     const when = Object.fromEntries(Object.entries(this._draft.when).filter(([, v]) => v != null));
     this.dispatchEvent(
-      new CustomEvent("save-rule", {
-        detail: { rule: { ...this._draft, when }, scope: this._scope },
+      new CustomEvent("save-scene", {
+        detail: { scene: { ...this._draft, when }, scope: this._scope },
         bubbles: true,
         composed: true,
       }),
@@ -1079,7 +1079,7 @@ export class AmbienceRuleEditor extends LitElement {
   }
 
   private _cancel() {
-    this.dispatchEvent(new CustomEvent("cancel-rule", { bubbles: true, composed: true }));
+    this.dispatchEvent(new CustomEvent("cancel-scene", { bubbles: true, composed: true }));
   }
 
   override render() {
@@ -1103,7 +1103,7 @@ export class AmbienceRuleEditor extends LitElement {
 
         <div class="actions-bar">
           <button class="secondary" @click=${this._cancel}>${localize(this.hass, "ui.cancel", "Cancel")}</button>
-          <button class="primary" @click=${this._save}>${localize(this.hass, "ui.save_rule", "Save rule")}</button>
+          <button class="primary" @click=${this._save}>${localize(this.hass, "ui.save_scene", "Save scene")}</button>
         </div>
       </div>
     `;

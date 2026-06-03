@@ -67,7 +67,7 @@ const RESULT = {
   actions: [],
   explanation: {
     winner_index: 0,
-    rules: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
+    scenes: [{ index: 0, name: "Evening", matched: true, evaluated: true, predicates: [] }],
   },
 };
 

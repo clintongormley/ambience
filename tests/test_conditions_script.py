@@ -133,18 +133,18 @@ def test_matches_returns_false_on_malformed_predicate() -> None:
     assert ScriptCondition().matches({"script": 42}, snap) is False
 
 
-def test_collect_pairs_walks_all_areas_and_rules(hass: HomeAssistant) -> None:
+def test_collect_pairs_walks_all_areas_and_scenes(hass: HomeAssistant) -> None:
     _install_store(
         hass,
         {
             "kitchen": {
-                "rules": [
+                "scenes": [
                     {"when": {"script": {"script": "script.a", "args": {"k": 1}}}},
                     {"when": {"script": {"script": "script.a", "args": {"k": 1}}}},  # dup
                 ],
             },
             "living": {
-                "rules": [
+                "scenes": [
                     {"when": {"script": {"script": "script.b"}}},
                     {"when": {"state": {"some": "thing"}}},  # skip
                     {"when": {"script": None}},  # wildcard, skip
@@ -162,7 +162,7 @@ def test_collect_pairs_walks_all_areas_and_rules(hass: HomeAssistant) -> None:
 def test_collect_pairs_walks_floors(hass: HomeAssistant) -> None:
     _install_store(
         hass,
-        floors={"f1": {"rules": [{"when": {"script": {"script": "script.floor_check"}}}]}},
+        floors={"f1": {"scenes": [{"when": {"script": {"script": "script.floor_check"}}}]}},
     )
     pairs = ScriptCondition(hass=hass)._collect_pairs()
     assert ("script.floor_check", "{}") in pairs
@@ -171,7 +171,7 @@ def test_collect_pairs_walks_floors(hass: HomeAssistant) -> None:
 def test_collect_pairs_walks_house(hass: HomeAssistant) -> None:
     _install_store(
         hass,
-        house={"rules": [{"when": {"script": {"script": "script.house_check"}}}]},
+        house={"scenes": [{"when": {"script": {"script": "script.house_check"}}}]},
     )
     pairs = ScriptCondition(hass=hass)._collect_pairs()
     assert ("script.house_check", "{}") in pairs
@@ -187,7 +187,7 @@ def test_collect_pairs_skips_malformed_predicates(hass: HomeAssistant) -> None:
         hass,
         {
             "kitchen": {
-                "rules": [
+                "scenes": [
                     {"when": {"script": "not a dict"}},
                     {"when": {"script": {"script": 42}}},
                     {"when": {"script": {"script": "script.ok"}}},
@@ -238,7 +238,7 @@ async def test_snapshot_calls_each_script_once_and_records_match(hass: HomeAssis
         hass,
         {
             "a": {
-                "rules": [
+                "scenes": [
                     {"when": {"script": {"script": "script.true_one", "args": {"x": 1}}}},
                     {"when": {"script": {"script": "script.false_one"}}},
                 ],
@@ -254,21 +254,21 @@ async def test_snapshot_calls_each_script_once_and_records_match(hass: HomeAssis
 
 
 async def test_snapshot_no_match_when_match_key_absent(hass: HomeAssistant) -> None:
-    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.no_key"}}}]}})
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": {"script": "script.no_key"}}}]}})
     _install_service(hass, "script", "no_key", response={"other": True})
     snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results[_cache_key("script.no_key", {})] is False
 
 
 async def test_snapshot_no_match_when_match_is_not_bool_true(hass: HomeAssistant) -> None:
-    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.truthy"}}}]}})
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": {"script": "script.truthy"}}}]}})
     _install_service(hass, "script", "truthy", response={"match": "yes"})  # truthy but not True
     snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results[_cache_key("script.truthy", {})] is False
 
 
 async def test_snapshot_missing_script_records_false(hass: HomeAssistant, caplog) -> None:
-    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.gone"}}}]}})
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": {"script": "script.gone"}}}]}})
     # No service registered.
     snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results[_cache_key("script.gone", {})] is False
@@ -276,7 +276,7 @@ async def test_snapshot_missing_script_records_false(hass: HomeAssistant, caplog
 
 
 async def test_snapshot_script_raises_records_false(hass: HomeAssistant, caplog) -> None:
-    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.boom"}}}]}})
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": {"script": "script.boom"}}}]}})
     _install_service(hass, "script", "boom", raises=RuntimeError("kaboom"))
     snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results[_cache_key("script.boom", {})] is False
@@ -284,7 +284,7 @@ async def test_snapshot_script_raises_records_false(hass: HomeAssistant, caplog)
 
 
 async def test_snapshot_timeout_records_false(hass: HomeAssistant, caplog) -> None:
-    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.slow"}}}]}})
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": {"script": "script.slow"}}}]}})
     # Delay longer than the override timeout.
     _install_service(hass, "script", "slow", response={"match": True}, delay=0.2)
     m = ScriptCondition(hass=hass)
@@ -297,7 +297,7 @@ async def test_snapshot_timeout_records_false(hass: HomeAssistant, caplog) -> No
 async def test_snapshot_passes_args_to_service_call(hass: HomeAssistant) -> None:
     _install_store(
         hass,
-        {"a": {"rules": [{"when": {"script": {"script": "script.echo", "args": {"k": 7}}}}]}},
+        {"a": {"scenes": [{"when": {"script": {"script": "script.echo", "args": {"k": 7}}}}]}},
     )
     spy = _install_service(hass, "script", "echo", response={"match": True})
     await ScriptCondition(hass=hass).snapshot(hass)
@@ -305,13 +305,13 @@ async def test_snapshot_passes_args_to_service_call(hass: HomeAssistant) -> None
 
 
 async def test_snapshot_empty_when_no_script_predicates(hass: HomeAssistant) -> None:
-    _install_store(hass, {"a": {"rules": [{"when": {"state": {"x": 1}}}]}})
+    _install_store(hass, {"a": {"scenes": [{"when": {"state": {"x": 1}}}]}})
     snap = await ScriptCondition(hass=hass).snapshot(hass)
     assert snap.results == {}
 
 
 async def test_snapshot_reuses_cached_result_within_ttl(hass: HomeAssistant) -> None:
-    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.cached"}}}]}})
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": {"script": "script.cached"}}}]}})
     spy = _install_service(hass, "script", "cached", response={"match": True})
 
     m = ScriptCondition(hass=hass)
@@ -324,7 +324,7 @@ async def test_snapshot_reuses_cached_result_within_ttl(hass: HomeAssistant) -> 
 
 
 async def test_snapshot_recalls_after_ttl_expiry(hass: HomeAssistant, monkeypatch) -> None:
-    _install_store(hass, {"a": {"rules": [{"when": {"script": {"script": "script.expires"}}}]}})
+    _install_store(hass, {"a": {"scenes": [{"when": {"script": {"script": "script.expires"}}}]}})
     spy = _install_service(hass, "script", "expires", response={"match": True})
 
     m = ScriptCondition(hass=hass)
@@ -349,7 +349,7 @@ async def test_snapshot_caches_per_args(hass: HomeAssistant) -> None:
         hass,
         {
             "a": {
-                "rules": [
+                "scenes": [
                     {"when": {"script": {"script": "script.same", "args": {"k": 1}}}},
                     {"when": {"script": {"script": "script.same", "args": {"k": 2}}}},
                 ],
@@ -433,7 +433,7 @@ def test_collect_pairs_skips_truthy_non_dict_args(hass: HomeAssistant) -> None:
         hass,
         {
             "kitchen": {
-                "rules": [
+                "scenes": [
                     {"when": {"script": {"script": "script.bad_args", "args": [1, 2]}}},
                     {"when": {"script": {"script": "script.ok"}}},
                 ],

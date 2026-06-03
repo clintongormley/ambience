@@ -52,7 +52,7 @@ async def test_service_call_invokes_light_turn_on(
 ) -> None:
     on_calls = async_mock_service(hass, "light", "turn_on")
     store = hass.data[DOMAIN][DATA_STORE]
-    # Pre-expose the service the rule will reference.
+    # Pre-expose the service the scene will reference.
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
     await exposed_store.save(
         [
@@ -68,10 +68,10 @@ async def test_service_call_invokes_light_turn_on(
         "lr",
         {
             "conditions": [],
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
-                    "when": {},  # wildcard rule ⇒ always matches
+                    "when": {},  # wildcard scene ⇒ always matches
                     "actions": [
                         {
                             "service": "light.turn_on",
@@ -116,7 +116,7 @@ async def test_apply_scene_applies_all_categories(
     await store.async_save_area(
         "lr",
         {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {},
@@ -147,11 +147,11 @@ async def test_apply_scene_applies_all_categories(
     assert len(cover_calls) == 1
 
 
-async def test_time_of_day_rule_matches_for_area_without_conditions_field(
+async def test_time_of_day_scene_matches_for_area_without_conditions_field(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
     """Regression: areas loaded from disk may have no per-area `conditions` field.
-    All registered conditions are always active, so a rule with a time_of_day
+    All registered conditions are always active, so a scene with a time_of_day
     predicate must still resolve regardless of whether the area has a conditions key.
     """
     store = hass.data[DOMAIN][DATA_STORE]
@@ -161,7 +161,7 @@ async def test_time_of_day_rule_matches_for_area_without_conditions_field(
     await store.async_save_area(
         "lr",
         {
-            "rules": [
+            "scenes": [
                 {
                     "name": "all-day",
                     # Full-day range (00:00 -> 00:00) is always active regardless of
@@ -182,10 +182,10 @@ async def test_time_of_day_rule_matches_for_area_without_conditions_field(
 
     # The time_of_day condition must have been activated (snapshot captured)...
     assert "time_of_day" in result["snapshots_described"]
-    # ...and the rule must match. Before the fix, no time_of_day snapshot is taken,
-    # so resolve() sees no value for the predicate and the rule does not match.
-    assert result["matched_rule_index"] == 0
-    assert result["rule_name"] == "all-day"
+    # ...and the scene must match. Before the fix, no time_of_day snapshot is taken,
+    # so resolve() sees no value for the predicate and the scene does not match.
+    assert result["matched_scene_index"] == 0
+    assert result["scene_name"] == "all-day"
 
 
 async def test_apply_scene_accepts_floor_field(
@@ -195,7 +195,7 @@ async def test_apply_scene_accepts_floor_field(
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_floor(
         "upstairs",
-        {"rules": [{"name": "x", "when": {}, "actions": []}]},
+        {"scenes": [{"name": "x", "when": {}, "actions": []}]},
     )
     await hass.services.async_call(DOMAIN, "apply_scene", {"floor": "upstairs"}, blocking=True)
 
@@ -283,10 +283,10 @@ async def test_apply_scene_rejects_house_false(
         await hass.services.async_call(DOMAIN, "apply_scene", {"house": False}, blocking=True)
 
 
-async def test_engine_auto_applies_state_rule_on_config_change(
+async def test_engine_auto_applies_state_scene_on_config_change(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """Saving an auto-rule that matches current state makes the engine apply it
+    """Saving an auto-scene that matches current state makes the engine apply it
     (SIGNAL_CONFIG_CHANGED -> rebuild -> initial_sync), exercising the wiring."""
     calls = async_mock_service(hass, "light", "turn_on")
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
@@ -298,7 +298,7 @@ async def test_engine_auto_applies_state_rule_on_config_change(
     await store.async_save_area(
         "lr",
         {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {
@@ -319,7 +319,7 @@ async def test_engine_auto_applies_state_rule_on_config_change(
     # The config-change refresh is debounced; advance past the cooldown.
     async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=1))
     await hass.async_block_till_done()
-    assert len(calls) >= 1  # the engine auto-applied the matching state rule
+    assert len(calls) >= 1  # the engine auto-applied the matching state scene
 
 
 async def test_engine_torn_down_on_unload(hass: HomeAssistant, installed: MockConfigEntry) -> None:
@@ -328,7 +328,7 @@ async def test_engine_torn_down_on_unload(hass: HomeAssistant, installed: MockCo
     await store.async_save_area(
         "lr",
         {
-            "rules": [
+            "scenes": [
                 {
                     "when": {
                         "state": {

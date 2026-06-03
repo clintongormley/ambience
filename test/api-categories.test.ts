@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { deleteCategory, listCategories, saveCategories } from "../frontend/src/api";
-import type { RuleCategory } from "../frontend/src/types";
+import type { SceneCategory } from "../frontend/src/types";
 
 function makeFakeHass(): { callWS: ReturnType<typeof vi.fn>; sent: any[] } {
   const sent: any[] = [];
@@ -37,7 +37,7 @@ describe("categories API", () => {
 
   test("saveCategories sends the categories payload", async () => {
     const { callWS, sent } = makeFakeHass();
-    const categories: RuleCategory[] = [{ id: "g1", name: "Evening" }];
+    const categories: SceneCategory[] = [{ id: "g1", name: "Evening" }];
     await saveCategories({ callWS } as any, categories);
     expect(sent[0]).toEqual({ type: "ambience/categories/save", categories });
   });

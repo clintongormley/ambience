@@ -1,7 +1,7 @@
 """Trigger-dependency value type shared by conditions and the auto-trigger engine.
 
 A condition's optional ``trigger_deps(predicate) -> TriggerSpec`` answers "what
-should wake this predicate up?".  The engine merges every rule's spec in a
+should wake this predicate up?".  The engine merges every scene's spec in a
 scope into one watch-set.  Pure data — no HA imports, no side effects.
 """
 

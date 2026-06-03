@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import type { AreaRegistryEvent, FloorRegistryEvent, HassConnection } from "../api.js";
 import {
-  applyRules,
+  applyScenes,
   getArea,
   getDayConfig,
   getFloor,
@@ -17,7 +17,7 @@ import {
   listFloors,
   listPeriods,
   listSwitches,
-  runRuleActions,
+  runSceneActions,
   saveArea,
   saveFloor,
   saveHouse,
@@ -25,7 +25,7 @@ import {
 import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
 import { scopeKey } from "../entities-for-scope.js";
 import { localize } from "../i18n.js";
-import { stripPositionMetadata } from "../rule.js";
+import { stripPositionMetadata } from "../scene.js";
 import type {
   AreaListItem,
   ConditionInfo,
@@ -33,16 +33,16 @@ import type {
   ExposedAction,
   FloorListItem,
   PeriodStoreView,
-  Rule,
-  RuleCategory,
+  Scene,
+  SceneCategory,
   Scope,
   ScopeConfig,
   ScopeOption,
   ServiceSchema,
   WeatherConfig,
 } from "../types.js";
-import "./rules-list.js";
-import "./rule-editor.js";
+import "./scenes-list.js";
+import "./scene-editor.js";
 import "./kebab-menu.js";
 import "./traces-modal.js";
 import "./simulator-modal.js";
@@ -52,21 +52,21 @@ type EditingState = {
   scope: Scope;
   index: number;
   isNew: boolean;
-  seed?: Rule;
+  seed?: Scene;
 };
 
 function _normalize(cfg: ScopeConfig): ScopeConfig {
-  return { rules: cfg.rules ?? [] };
+  return { scenes: cfg.scenes ?? [] };
 }
 
 // Must stay in sync with GAP in custom_components/ambience/sorting.py — the
 // midpoint math below assumes the backend spaces auto priorities by this much.
 const PIN_GAP = 1024;
 
-/** Pick a priority for a rule dropped between `above` and `below` (either may be
- *  undefined at the list ends). `all` is the current rule set for end fallbacks. */
-function _pinPriority(above: number | undefined, below: number | undefined, all: Rule[]): number {
-  // Common case: dropped between two rules — no need to scan the whole list.
+/** Pick a priority for a scene dropped between `above` and `below` (either may be
+ *  undefined at the list ends). `all` is the current scene set for end fallbacks. */
+function _pinPriority(above: number | undefined, below: number | undefined, all: Scene[]): number {
+  // Common case: dropped between two scenes — no need to scan the whole list.
   if (above !== undefined && below !== undefined) return Math.floor((above + below) / 2);
   const nums = all.map((r) => r.priority ?? 0);
   if (above === undefined && below === undefined) return PIN_GAP;
@@ -250,13 +250,13 @@ export class AmbienceScopesView extends LitElement {
   @state() private _floors: FloorListItem[] = [];
   @state() private _areaConfigs = new Map<string, ScopeConfig>();
   @state() private _floorConfigs = new Map<string, ScopeConfig>();
-  @state() private _house: ScopeConfig = { rules: [] };
+  @state() private _house: ScopeConfig = { scenes: [] };
   // scopeKey(scope) -> Ambience switch entity_id. Resolved by the backend
   // because user/registry renames make the entity_id non-derivable.
   @state() private _switchEntityIds = new Map<string, string>();
   @state() private _conditions: ConditionInfo[] = [];
   @state() private _actions: ExposedAction[] = [];
-  @state() private _categories: RuleCategory[] = [];
+  @state() private _categories: SceneCategory[] = [];
   // Per-service schemas, keyed by service id. Loaded after _actions so the
   // summary functions can show HA's `field.name` instead of the humanized
   // field id. Best-effort: services whose schema fetch fails are omitted.
@@ -372,7 +372,7 @@ export class AmbienceScopesView extends LitElement {
       const areas = await listAreas(this.hass);
       // Ambience configs only change when WE call saveArea — never via
       // area_registry_updated events. Reuse existing config references and
-      // only fetch for newly-discovered areas, to keep Rule references
+      // only fetch for newly-discovered areas, to keep Scene references
       // stable across rename/add/remove events.
       const previous = this._areaConfigs;
       const configs = new Map<string, ScopeConfig>();
@@ -545,127 +545,127 @@ export class AmbienceScopesView extends LitElement {
     this._expanded = next;
   }
 
-  // --- rules ---------------------------------------------------------------
+  // --- scenes ---------------------------------------------------------------
 
-  private _addRule(scope: Scope) {
+  private _addScene(scope: Scope) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
-    this._editing = { scope, index: cfg.rules.length, isNew: true };
+    this._editing = { scope, index: cfg.scenes.length, isNew: true };
   }
 
-  private _editRule(scope: Scope, e: CustomEvent<{ index: number }>) {
+  private _editScene(scope: Scope, e: CustomEvent<{ index: number }>) {
     this._editing = { scope, index: e.detail.index, isNew: false };
   }
 
-  private _duplicateRule(scope: Scope, e: CustomEvent<{ index: number }>) {
+  private _duplicateScene(scope: Scope, e: CustomEvent<{ index: number }>) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
-    const original = cfg.rules[e.detail.index];
+    const original = cfg.scenes[e.detail.index];
     if (!original) return;
-    // A duplicate is a fresh rule: drop the original's fixed position so it
+    // A duplicate is a fresh scene: drop the original's fixed position so it
     // doesn't inherit the pin/priority slot (the backend assigns a new one).
     const seed = stripPositionMetadata(JSON.parse(JSON.stringify(original)));
-    this._editing = { scope, index: cfg.rules.length, isNew: true, seed };
+    this._editing = { scope, index: cfg.scenes.length, isNew: true, seed };
   }
 
-  private _deleteRule(scope: Scope, e: CustomEvent<{ index: number }>) {
+  private _deleteScene(scope: Scope, e: CustomEvent<{ index: number }>) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
-    const rules = cfg.rules.filter((_, i) => i !== e.detail.index);
-    void this._mutate(scope, { ...cfg, rules });
+    const scenes = cfg.scenes.filter((_, i) => i !== e.detail.index);
+    void this._mutate(scope, { ...cfg, scenes });
   }
 
-  private _reorderRules(scope: Scope, e: CustomEvent<{ from: number; to: number }>) {
+  private _reorderScenes(scope: Scope, e: CustomEvent<{ from: number; to: number }>) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
     const { from, to } = e.detail;
-    const moved = cfg.rules[from];
+    const moved = cfg.scenes[from];
     // Reorder is per-category: a drop whose target row is in a different
     // category is rejected (categories are independent; cross-category moves
     // aren't meaningful).
-    if (!moved || cfg.rules[to]?.category !== moved.category) return;
-    const rules = [...cfg.rules];
-    rules.splice(from, 1);
-    rules.splice(to, 0, moved);
+    if (!moved || cfg.scenes[to]?.category !== moved.category) return;
+    const scenes = [...cfg.scenes];
+    scenes.splice(from, 1);
+    scenes.splice(to, 0, moved);
     // Pin priority is computed from the nearest SAME-CATEGORY neighbours around
     // the drop position (the backend keeps categories contiguous, so scanning
     // outward finds category-mates).
-    const sameCategory = (idx: number) => rules[idx] && rules[idx].category === moved.category;
+    const sameCategory = (idx: number) => scenes[idx] && scenes[idx].category === moved.category;
     let a = to - 1;
     while (a >= 0 && !sameCategory(a)) a--;
     let b = to + 1;
-    while (b < rules.length && !sameCategory(b)) b++;
-    const above = a >= 0 ? rules[a].priority : undefined;
-    const below = b < rules.length ? rules[b].priority : undefined;
+    while (b < scenes.length && !sameCategory(b)) b++;
+    const above = a >= 0 ? scenes[a].priority : undefined;
+    const below = b < scenes.length ? scenes[b].priority : undefined;
     const priority = _pinPriority(
       above,
       below,
-      cfg.rules.filter((r) => r.category === moved.category),
+      cfg.scenes.filter((r) => r.category === moved.category),
     );
-    rules[to] = { ...moved, priority, pinned: true };
-    void this._mutate(scope, { ...cfg, rules });
+    scenes[to] = { ...moved, priority, pinned: true };
+    void this._mutate(scope, { ...cfg, scenes });
   }
 
-  private _unpinRule(scope: Scope, e: CustomEvent<{ index: number }>) {
+  private _unpinScene(scope: Scope, e: CustomEvent<{ index: number }>) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
-    const rules = cfg.rules.map((r, i) => (i === e.detail.index ? { ...r, pinned: false } : r));
-    void this._mutate(scope, { ...cfg, rules });
+    const scenes = cfg.scenes.map((r, i) => (i === e.detail.index ? { ...r, pinned: false } : r));
+    void this._mutate(scope, { ...cfg, scenes });
   }
 
-  private _toggleRuleEnabled(scope: Scope, e: CustomEvent<{ index: number; enabled: boolean }>) {
+  private _toggleSceneEnabled(scope: Scope, e: CustomEvent<{ index: number; enabled: boolean }>) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
-    const rules = cfg.rules.map((r, i) => {
+    const scenes = cfg.scenes.map((r, i) => {
       if (i !== e.detail.index) return r;
       if (e.detail.enabled) {
         // Re-enable: drop the key entirely (absent = enabled) so default
-        // rules stay clean.
+        // scenes stay clean.
         const next = { ...r };
         delete next.enabled;
         return next;
       }
       return { ...r, enabled: false };
     });
-    void this._mutate(scope, { ...cfg, rules });
+    void this._mutate(scope, { ...cfg, scenes });
   }
 
-  private async _saveRule(e: CustomEvent<{ rule: Rule; scope: Scope }>) {
+  private async _saveScene(e: CustomEvent<{ scene: Scene; scope: Scope }>) {
     const editing = this._editing;
     this._editing = null;
     if (!editing) return;
-    const { rule, scope: target } = e.detail;
+    const { scene, scope: target } = e.detail;
 
     if (scopeKey(target) === scopeKey(editing.scope)) {
-      // Same scope: replace in place, or append a new rule.
+      // Same scope: replace in place, or append a new scene.
       const cfg = this._getConfig(target);
       if (!cfg) return;
-      const rules = [...cfg.rules];
-      if (editing.isNew) rules.push(rule);
-      else rules[editing.index] = rule;
-      await this._mutate(target, { ...cfg, rules });
+      const scenes = [...cfg.scenes];
+      if (editing.isNew) scenes.push(scene);
+      else scenes[editing.index] = scene;
+      await this._mutate(target, { ...cfg, scenes });
       return;
     }
 
-    // Different scope: the rule lands fresh. Strip ordering metadata so the
+    // Different scope: the scene lands fresh. Strip ordering metadata so the
     // backend assigns a new priority.
-    const fresh = stripPositionMetadata(rule);
+    const fresh = stripPositionMetadata(scene);
     const targetCfg = this._getConfig(target);
     if (!targetCfg) return;
     const added = await this._mutate(target, {
       ...targetCfg,
-      rules: [...targetCfg.rules, fresh],
+      scenes: [...targetCfg.scenes, fresh],
     });
 
     // Only remove the original once it is safely in the new scope — otherwise a
-    // failed add would lose the rule entirely. (A failed removal after a
+    // failed add would lose the scene entirely. (A failed removal after a
     // successful add merely leaves a duplicate, which is the accepted
     // non-atomic outcome.)
     if (added && !editing.isNew) {
       const srcCfg = this._getConfig(editing.scope);
       if (srcCfg) {
-        const rules = srcCfg.rules.filter((_, i) => i !== editing.index);
-        await this._mutate(editing.scope, { ...srcCfg, rules });
+        const scenes = srcCfg.scenes.filter((_, i) => i !== editing.index);
+        await this._mutate(editing.scope, { ...srcCfg, scenes });
       }
     }
   }
@@ -680,21 +680,21 @@ export class AmbienceScopesView extends LitElement {
     }
   }
 
-  private _applyRules(scope: Scope, categoryId?: string) {
-    return this._callApi(() => applyRules(this.hass, scope, categoryId));
+  private _applyScenes(scope: Scope, categoryId?: string) {
+    return this._callApi(() => applyScenes(this.hass, scope, categoryId));
   }
 
-  private _runRuleActions(scope: Scope, e: CustomEvent<{ index: number }>) {
-    return this._callApi(() => runRuleActions(this.hass, scope, e.detail.index));
+  private _runSceneActions(scope: Scope, e: CustomEvent<{ index: number }>) {
+    return this._callApi(() => runSceneActions(this.hass, scope, e.detail.index));
   }
 
-  private _cancelRule() {
-    // New rules are not added to the config until saved, so cancel is a no-op.
+  private _cancelScene() {
+    // New scenes are not added to the config until saved, so cancel is a no-op.
     this._editing = null;
   }
 
   private _onScopeMenu(scope: Scope, _name: string, _cfg: ScopeConfig, id: string) {
-    if (id === "run") void this._applyRules(scope);
+    if (id === "run") void this._applyScenes(scope);
   }
 
   private _showTraces(scope: Scope, category: string) {
@@ -731,7 +731,7 @@ export class AmbienceScopesView extends LitElement {
   /** A colour swatch (category colour bg + icon) followed by the category name.
    *  `null` renders the "All categories" entry with a neutral filter-icon swatch,
    *  so the trigger and option rows keep a consistent height across selections. */
-  private _renderFilterEntry(category: RuleCategory | null) {
+  private _renderFilterEntry(category: SceneCategory | null) {
     if (category === null) {
       return html`
         ${categorySwatch(undefined, "mdi:filter-variant")}
@@ -810,7 +810,7 @@ export class AmbienceScopesView extends LitElement {
 
   // --- derived -------------------------------------------------------------
 
-  /** The category a newly-added rule should default to: the active filter when a
+  /** The category a newly-added scene should default to: the active filter when a
    *  single category is selected, otherwise the alphabetically-first category. */
   private _defaultCategoryId(): string {
     if (this._filterCategory !== "") return this._filterCategory;
@@ -818,21 +818,21 @@ export class AmbienceScopesView extends LitElement {
     return sorted[0]?.id ?? "";
   }
 
-  private get _editingRule(): Rule | null {
+  private get _editingScene(): Scene | null {
     if (!this._editing) return null;
     if (this._editing.seed) return this._editing.seed;
     if (this._editing.isNew) return { when: {}, actions: [], category: this._defaultCategoryId() };
     const cfg = this._getConfig(this._editing.scope);
-    return cfg?.rules[this._editing.index] ?? null;
+    return cfg?.scenes[this._editing.index] ?? null;
   }
 
-  /** Condition rows for the rule editor — sorted by `priority` (higher first). */
+  /** Condition rows for the scene editor — sorted by `priority` (higher first). */
   private get _editorConditions(): ConditionInfo[] {
     if (!this._editing) return [];
     return this._conditions.slice().sort((a, b) => b.priority - a.priority);
   }
 
-  /** Selectable destinations for the rule editor: house, then floors, then areas. */
+  /** Selectable destinations for the scene editor: house, then floors, then areas. */
   private get _scopeOptions(): ScopeOption[] {
     const floorPrefix = localize(this.hass, "ui.scope_floor_prefix", "Floor: ");
     const areaPrefix = localize(this.hass, "ui.scope_area_prefix", "Area: ");
@@ -854,18 +854,18 @@ export class AmbienceScopesView extends LitElement {
 
   private _summary(cfg: ScopeConfig): string {
     // A genuinely empty scope reads "not configured" regardless of filter.
-    if (cfg.rules.length === 0) {
+    if (cfg.scenes.length === 0) {
       return localize(this.hass, "ui.not_configured", "not configured");
     }
-    // Otherwise count the rules matching the active filter (all when "").
+    // Otherwise count the scenes matching the active filter (all when "").
     const r =
       this._filterCategory === ""
-        ? cfg.rules.length
-        : cfg.rules.filter((rule) => rule.category === this._filterCategory).length;
+        ? cfg.scenes.length
+        : cfg.scenes.filter((scene) => scene.category === this._filterCategory).length;
     const noun =
       r === 1
-        ? localize(this.hass, "ui.rule_singular", "rule")
-        : localize(this.hass, "ui.rule_plural", "rules");
+        ? localize(this.hass, "ui.scene_singular", "scene")
+        : localize(this.hass, "ui.scene_plural", "scenes");
     return `${r} ${noun}`;
   }
 
@@ -914,13 +914,13 @@ export class AmbienceScopesView extends LitElement {
         }
       </ul>
 
-      <ambience-rule-editor
+      <ambience-scene-editor
         ?open=${this._editing !== null}
         .hass=${this.hass}
         .scope=${this._editing ? this._editing.scope : undefined}
         .scopes=${this._scopeOptions}
         .autoEditScope=${!!this._editing?.seed}
-        .rule=${this._editingRule}
+        .scene=${this._editingScene}
         .conditions=${this._editorConditions}
         .periods=${this._periods}
         .dayConfig=${this._dayConfig}
@@ -928,9 +928,9 @@ export class AmbienceScopesView extends LitElement {
         .availableActions=${this._actions}
         .schemas=${this._schemas}
         .categories=${this._categories}
-        @save-rule=${this._saveRule}
-        @cancel-rule=${this._cancelRule}
-      ></ambience-rule-editor>
+        @save-scene=${this._saveScene}
+        @cancel-scene=${this._cancelScene}
+      ></ambience-scene-editor>
       <ambience-traces-modal
         ?open=${this._viewingTraces !== null}
         .hass=${this.hass}
@@ -1003,8 +1003,8 @@ export class AmbienceScopesView extends LitElement {
           open
             ? html`
               <div class="scope-body">
-                <ambience-rules-list
-                  .rules=${cfg.rules}
+                <ambience-scenes-list
+                  .scenes=${cfg.scenes}
                   .periods=${this._periods}
                   .weatherConfig=${this._weatherConfig}
                   .conditions=${this._conditions}
@@ -1013,25 +1013,25 @@ export class AmbienceScopesView extends LitElement {
                   .categories=${this._categories}
                   .filterCategory=${this._filterCategory}
                   .hass=${this.hass}
-                  @add-rule=${() => this._addRule(scope)}
-                  @edit-rule=${(e: CustomEvent<{ index: number }>) => this._editRule(scope, e)}
-                  @duplicate-rule=${(e: CustomEvent<{ index: number }>) =>
-                    this._duplicateRule(scope, e)}
-                  @delete-rule=${(e: CustomEvent<{ index: number }>) => this._deleteRule(scope, e)}
-                  @reorder-rules=${(e: CustomEvent<{ from: number; to: number }>) =>
-                    this._reorderRules(scope, e)}
-                  @unpin-rule=${(e: CustomEvent<{ index: number }>) => this._unpinRule(scope, e)}
-                  @toggle-rule-enabled=${(e: CustomEvent<{ index: number; enabled: boolean }>) =>
-                    this._toggleRuleEnabled(scope, e)}
-                  @run-rule-actions=${(e: CustomEvent<{ index: number }>) =>
-                    this._runRuleActions(scope, e)}
+                  @add-scene=${() => this._addScene(scope)}
+                  @edit-scene=${(e: CustomEvent<{ index: number }>) => this._editScene(scope, e)}
+                  @duplicate-scene=${(e: CustomEvent<{ index: number }>) =>
+                    this._duplicateScene(scope, e)}
+                  @delete-scene=${(e: CustomEvent<{ index: number }>) => this._deleteScene(scope, e)}
+                  @reorder-scenes=${(e: CustomEvent<{ from: number; to: number }>) =>
+                    this._reorderScenes(scope, e)}
+                  @unpin-scene=${(e: CustomEvent<{ index: number }>) => this._unpinScene(scope, e)}
+                  @toggle-scene-enabled=${(e: CustomEvent<{ index: number; enabled: boolean }>) =>
+                    this._toggleSceneEnabled(scope, e)}
+                  @run-scene-actions=${(e: CustomEvent<{ index: number }>) =>
+                    this._runSceneActions(scope, e)}
                   @apply-category=${(e: CustomEvent<{ categoryId: string }>) =>
-                    this._applyRules(scope, e.detail.categoryId)}
+                    this._applyScenes(scope, e.detail.categoryId)}
                   @show-traces=${(e: CustomEvent<{ category: string }>) =>
                     this._showTraces(scope, e.detail.category)}
                   @show-simulator=${(e: CustomEvent<{ category: string }>) =>
                     this._showSimulator(scope, e.detail.category)}
-                ></ambience-rules-list>
+                ></ambience-scenes-list>
               </div>
             `
             : ""

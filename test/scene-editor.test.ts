@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-// The rule editor's per-action body lazily fetches the service schema via
+// The scene editor's per-action body lazily fetches the service schema via
 // `api.getServiceSchema`. Mock the api module so the tests don't depend on
 // a real HA connection.
 vi.mock("../frontend/src/api", () => ({
@@ -13,13 +13,13 @@ vi.mock("../frontend/src/api", () => ({
   })),
 }));
 
-import "../frontend/src/views/rule-editor";
+import "../frontend/src/views/scene-editor";
 import * as api from "../frontend/src/api";
 import type {
   ConditionInfo,
   ExposedAction,
-  Rule,
-  RuleCategory,
+  Scene,
+  SceneCategory,
   Scope,
   ScopeOption,
 } from "../frontend/src/types";
@@ -67,10 +67,10 @@ const hass = {
 } as any;
 
 async function mount(
-  rule: Rule | null,
-  opts: { scope?: Scope; hass?: any; categories?: RuleCategory[]; scopes?: ScopeOption[] } = {},
+  scene: Scene | null,
+  opts: { scope?: Scope; hass?: any; categories?: SceneCategory[]; scopes?: ScopeOption[] } = {},
 ): Promise<any> {
-  const el: any = document.createElement("ambience-rule-editor");
+  const el: any = document.createElement("ambience-scene-editor");
   el.conditions = conditions;
   el.availableActions = availableActions;
   el.periods = periods;
@@ -78,7 +78,7 @@ async function mount(
   el.scope = opts.scope ?? { kind: "area", id: "living_room" };
   if (opts.categories) el.categories = opts.categories;
   if (opts.scopes) el.scopes = opts.scopes;
-  el.rule = rule;
+  el.scene = scene;
   el.open = true;
   document.body.appendChild(el);
   await el.updateComplete;
@@ -98,7 +98,7 @@ async function openSlot(el: any, slotId: string): Promise<void> {
   await el.updateComplete;
 }
 
-describe("ambience-rule-editor — collapse + friendly labels", () => {
+describe("ambience-scene-editor — collapse + friendly labels", () => {
   let el: any;
   afterEach(() => {
     el?.remove();
@@ -196,7 +196,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   });
 
   test("add-condition selector lists conditions alphabetically by label", async () => {
-    const el2: any = document.createElement("ambience-rule-editor");
+    const el2: any = document.createElement("ambience-scene-editor");
     // Deliberately unsorted, and not in priority order either.
     el2.conditions = [
       {
@@ -214,7 +214,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     el2.periods = periods;
     el2.hass = {}; // no localize → friendly fallback labels
     el2.scope = { kind: "area", id: "living_room" };
-    el2.rule = { name: "", when: {}, actions: [] };
+    el2.scene = { name: "", when: {}, actions: [] };
     el2.open = true;
     document.body.appendChild(el2);
     await el2.updateComplete;
@@ -277,23 +277,23 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(action.querySelector("select.action-type")).toBeNull();
   });
 
-  test("emits save-rule with the draft", async () => {
+  test("emits save-scene with the draft", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
-    let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    let saved: Scene | undefined;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
-      (b: any) => b.textContent.trim() === "Save rule",
+      (b: any) => b.textContent.trim() === "Save scene",
     ) as HTMLButtonElement;
     saveBtn.click();
     expect(saved?.name).toBe("test");
   });
 
-  test("emits cancel-rule", async () => {
+  test("emits cancel-scene", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     let cancelled = false;
-    el.addEventListener("cancel-rule", () => {
+    el.addEventListener("cancel-scene", () => {
       cancelled = true;
     });
     const cancelBtn = Array.from(el.shadowRoot.querySelectorAll("button.secondary")).find(
@@ -401,36 +401,36 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
 
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     expect(saved?.name).toBe("renamed");
   });
 
   test("name slot renders as collapsed summary with current name", async () => {
-    el = await mount({ name: "My Rule", when: {}, actions: [] });
+    el = await mount({ name: "My Scene", when: {}, actions: [] });
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
     expect(nameRow.classList.contains("collapsed")).toBe(true);
-    expect(nameRow.textContent).toContain("My Rule");
+    expect(nameRow.textContent).toContain("My Scene");
   });
 
-  test("name slot summary shows 'New rule' when name is empty", async () => {
+  test("name slot summary shows 'New scene' when name is empty", async () => {
     el = await mount({ name: "", when: {}, actions: [] });
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
-    expect(nameRow.textContent).toContain("New rule");
+    expect(nameRow.textContent).toContain("New scene");
   });
 
-  test("name slot ignores mode — shows 'New rule' when rule name is empty", async () => {
+  test("name slot ignores mode — shows 'New scene' when scene name is empty", async () => {
     el = await mount({ name: "", when: { mode: "Cozy evening" }, actions: [] });
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
-    expect(nameRow.textContent).toContain("New rule");
+    expect(nameRow.textContent).toContain("New scene");
   });
 
   test("name slot prefers explicit name over mode", async () => {
-    el = await mount({ name: "My rule", when: { mode: "Cozy evening" }, actions: [] });
+    el = await mount({ name: "My scene", when: { mode: "Cozy evening" }, actions: [] });
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
-    expect(nameRow.textContent).toContain("My rule");
+    expect(nameRow.textContent).toContain("My scene");
   });
 
   test("clicking name summary expands the input", async () => {
@@ -486,8 +486,8 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
 
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     expect(saved?.when?.mode).toBe("relaxed");
@@ -659,7 +659,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   });
 
   test("expanded name slot renders just the input — no summary header, no duplicate label", async () => {
-    el = await mount({ name: "My rule", when: {}, actions: [] });
+    el = await mount({ name: "My scene", when: {}, actions: [] });
     const nameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
     // Open it
     nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -716,11 +716,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     expect(after.classList.contains("expanded")).toBe(true);
   });
 
-  test("re-passing the rule prop while the editor is open does NOT clobber the in-progress draft", async () => {
+  test("re-passing the scene prop while the editor is open does NOT clobber the in-progress draft", async () => {
     // Regression: when HA fires area_registry_updated (e.g. an unrelated
     // device was added), the parent refetches all area configs, which
-    // produces fresh rule objects. The editor used to deep-clone any new
-    // `rule` reference, wiping the user's unsaved edits. The fix: only
+    // produces fresh scene objects. The editor used to deep-clone any new
+    // `scene` reference, wiping the user's unsaved edits. The fix: only
     // initialize the draft when the editor *opens*; ignore prop changes
     // while open.
     el = await mount({ name: "original", when: {}, actions: [] });
@@ -729,38 +729,38 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     el._setName("user-edited name");
     await el.updateComplete;
 
-    // Simulate the upstream refetch: a fresh Rule object with the same
+    // Simulate the upstream refetch: a fresh Scene object with the same
     // *original* contents (as it would be after a no-op refresh).
-    el.rule = { name: "original", when: {}, actions: [] };
+    el.scene = { name: "original", when: {}, actions: [] };
     await el.updateComplete;
 
     // The user's edit must still be in the draft.
     expect((el as any)._draft.name).toBe("user-edited name");
 
     // Sanity: saving should emit the edited name, not the refetched one.
-    let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    let saved: Scene | undefined;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
-      (b: any) => b.textContent.trim() === "Save rule",
+      (b: any) => b.textContent.trim() === "Save scene",
     ) as HTMLButtonElement;
     saveBtn.click();
     expect(saved?.name).toBe("user-edited name");
   });
 
-  test("re-opening the editor on a different rule re-initializes the draft", async () => {
+  test("re-opening the editor on a different scene re-initializes the draft", async () => {
     // The flip side of the previous test: closing and re-opening on a new
-    // rule should pick up the new rule.
+    // scene should pick up the new scene.
     el = await mount({ name: "first", when: {}, actions: [] });
     el._setName("first-edited");
     await el.updateComplete;
     expect((el as any)._draft.name).toBe("first-edited");
 
-    // Close, then re-open with a different rule.
+    // Close, then re-open with a different scene.
     el.open = false;
     await el.updateComplete;
-    el.rule = { name: "second", when: {}, actions: [] };
+    el.scene = { name: "second", when: {}, actions: [] };
     el.open = true;
     await el.updateComplete;
 
@@ -768,7 +768,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   });
 });
 
-describe("ambience-rule-editor — action picker from exposed-actions list", () => {
+describe("ambience-scene-editor — action picker from exposed-actions list", () => {
   let el: any;
   afterEach(() => {
     el?.remove();
@@ -797,7 +797,7 @@ describe("ambience-rule-editor — action picker from exposed-actions list", () 
   });
 
   test("Add-action picker falls back to id when label is empty", async () => {
-    const el2: any = document.createElement("ambience-rule-editor");
+    const el2: any = document.createElement("ambience-scene-editor");
     el2.conditions = conditions;
     el2.availableActions = [
       { id: "homeassistant.reload_config", label: "", visible_fields: [], defaults: {} },
@@ -805,7 +805,7 @@ describe("ambience-rule-editor — action picker from exposed-actions list", () 
     el2.periods = periods;
     el2.hass = hass;
     el2.scope = { kind: "area", id: "living_room" };
-    el2.rule = { name: "x", when: {}, actions: [] };
+    el2.scene = { name: "x", when: {}, actions: [] };
     el2.open = true;
     document.body.appendChild(el2);
     await el2.updateComplete;
@@ -829,13 +829,13 @@ describe("ambience-rule-editor — action picker from exposed-actions list", () 
   });
 
   test("empty exposed-actions list renders a helpful inline note instead of a dropdown", async () => {
-    const el2: any = document.createElement("ambience-rule-editor");
+    const el2: any = document.createElement("ambience-scene-editor");
     el2.conditions = conditions;
     el2.availableActions = [];
     el2.periods = periods;
     el2.hass = hass;
     el2.scope = { kind: "area", id: "living_room" };
-    el2.rule = { name: "x", when: {}, actions: [] };
+    el2.scene = { name: "x", when: {}, actions: [] };
     el2.open = true;
     document.body.appendChild(el2);
     await el2.updateComplete;
@@ -849,7 +849,7 @@ describe("ambience-rule-editor — action picker from exposed-actions list", () 
   });
 });
 
-describe("ambience-rule-editor — template render-error gate", () => {
+describe("ambience-scene-editor — template render-error gate", () => {
   let el: any;
   afterEach(() => {
     el?.remove();
@@ -948,7 +948,7 @@ describe("ambience-rule-editor — template render-error gate", () => {
       actions: [validAction],
     });
     let saved = false;
-    el.addEventListener("save-rule", () => {
+    el.addEventListener("save-scene", () => {
       saved = true;
     });
 
@@ -974,7 +974,7 @@ describe("ambience-rule-editor — template render-error gate", () => {
       actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
     });
     let saved = false;
-    el.addEventListener("save-rule", () => {
+    el.addEventListener("save-scene", () => {
       saved = true;
     });
 
@@ -1004,13 +1004,13 @@ describe("ambience-rule-editor — template render-error gate", () => {
   });
 });
 
-describe("ambience-rule-editor — condition dropdown + full-height layout", () => {
+describe("ambience-scene-editor — condition dropdown + full-height layout", () => {
   let el: any;
   afterEach(() => {
     el?.remove();
   });
 
-  test("does not render a row for a toggleable condition that is not used in the rule", async () => {
+  test("does not render a row for a toggleable condition that is not used in the scene", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     // mode is toggleable and not in `when` → no row
     expect(el.shadowRoot.querySelector('.slot[data-slot-id="mode"]')).toBeNull();
@@ -1018,7 +1018,7 @@ describe("ambience-rule-editor — condition dropdown + full-height layout", () 
     expect(el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]')).toBeNull();
   });
 
-  test("renders a row for a toggleable condition that IS used in the rule", async () => {
+  test("renders a row for a toggleable condition that IS used in the scene", async () => {
     el = await mount({ name: "test", when: { time_of_day: { period: "afternoon" } }, actions: [] });
     expect(el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]')).toBeTruthy();
   });
@@ -1107,7 +1107,7 @@ describe("ambience-rule-editor — condition dropdown + full-height layout", () 
     }
   });
 
-  test("toggleable condition row has a remove button that drops it from the rule", async () => {
+  test("toggleable condition row has a remove button that drops it from the scene", async () => {
     el = await mount({ name: "test", when: { time_of_day: { period: "afternoon" } }, actions: [] });
     const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
     const remove = tod.querySelector(".remove") as HTMLButtonElement;
@@ -1122,22 +1122,22 @@ describe("ambience-rule-editor — condition dropdown + full-height layout", () 
     expect(values).toContain("time_of_day");
   });
 
-  test("removing a condition also clears its predicate from the saved rule", async () => {
+  test("removing a condition also clears its predicate from the saved scene", async () => {
     el = await mount({ name: "test", when: { time_of_day: { period: "afternoon" } }, actions: [] });
     const tod = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
     (tod.querySelector(".remove") as HTMLButtonElement).click();
     await el.updateComplete;
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     (Array.from(el.shadowRoot.querySelectorAll("button.primary")) as HTMLButtonElement[])
-      .find((b) => b.textContent?.trim() === "Save rule")!
+      .find((b) => b.textContent?.trim() === "Save scene")!
       .click();
     expect("time_of_day" in saved.when).toBe(false);
   });
 
-  test("mode appears in the +Add condition dropdown when not used in the rule", async () => {
+  test("mode appears in the +Add condition dropdown when not used in the scene", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     const select = el.shadowRoot.querySelector("select.add-condition") as HTMLSelectElement;
     const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
@@ -1165,11 +1165,11 @@ describe("ambience-rule-editor — condition dropdown + full-height layout", () 
   test("save strips null predicates from `when`", async () => {
     el = await mount({ name: "test", when: { time_of_day: null, mode: "movie" }, actions: [] });
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
-      (b: any) => b.textContent.trim() === "Save rule",
+      (b: any) => b.textContent.trim() === "Save scene",
     ) as HTMLButtonElement;
     saveBtn.click();
     expect("time_of_day" in saved.when).toBe(false);
@@ -1190,7 +1190,7 @@ describe("ambience-rule-editor — condition dropdown + full-height layout", () 
   });
 });
 
-describe("ambience-rule-editor — no-target services (Fix 1)", () => {
+describe("ambience-scene-editor — no-target services (Fix 1)", () => {
   let el: any;
 
   beforeEach(() => {
@@ -1221,13 +1221,13 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
   ];
 
   test("no-target service slot renders without a target picker", async () => {
-    const el2: any = document.createElement("ambience-rule-editor");
+    const el2: any = document.createElement("ambience-scene-editor");
     el2.conditions = conditions;
     el2.availableActions = noTargetActions;
     el2.periods = periods;
     el2.hass = hass;
     el2.scope = { kind: "area", id: "living_room" };
-    el2.rule = {
+    el2.scene = {
       name: "test",
       when: {},
       actions: [{ service: "notify.send_message", entity_ids: [], params: {} }],
@@ -1255,13 +1255,13 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
   });
 
   test("no-target service can be saved with empty entity_ids (validation does not block)", async () => {
-    const el2: any = document.createElement("ambience-rule-editor");
+    const el2: any = document.createElement("ambience-scene-editor");
     el2.conditions = conditions;
     el2.availableActions = noTargetActions;
     el2.periods = periods;
     el2.hass = hass;
     el2.scope = { kind: "area", id: "living_room" };
-    el2.rule = {
+    el2.scene = {
       name: "test",
       when: {},
       actions: [{ service: "notify.send_message", entity_ids: [], params: {} }],
@@ -1284,13 +1284,13 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
     await el2.updateComplete;
 
     // Save should succeed (no validation error)
-    let saved: Rule | undefined;
-    el2.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    let saved: Scene | undefined;
+    el2.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     el2.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
 
-    // Rule was saved
+    // Scene was saved
     expect(saved).toBeDefined();
     expect(saved!.actions[0].service).toBe("notify.send_message");
     expect(saved!.actions[0].entity_ids).toEqual([]);
@@ -1298,13 +1298,13 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
   });
 
   test("clicking outside an open no-target slot with empty entity_ids does NOT keep it open", async () => {
-    const el2: any = document.createElement("ambience-rule-editor");
+    const el2: any = document.createElement("ambience-scene-editor");
     el2.conditions = conditions;
     el2.availableActions = noTargetActions;
     el2.periods = periods;
     el2.hass = hass;
     el2.scope = { kind: "area", id: "living_room" };
-    el2.rule = {
+    el2.scene = {
       name: "test",
       when: {},
       actions: [{ service: "notify.send_message", entity_ids: [], params: {} }],
@@ -1344,13 +1344,13 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
     // _serviceHasTarget has no entry → undefined. The old `!== false` guard
     // treated undefined the same as true (has target), showing an error before
     // the schema even loaded. The fix: only enforce when serviceHasTarget === true.
-    const el2: any = document.createElement("ambience-rule-editor");
+    const el2: any = document.createElement("ambience-scene-editor");
     el2.conditions = conditions;
     el2.availableActions = noTargetActions;
     el2.periods = periods;
     el2.hass = hass;
     el2.scope = { kind: "area", id: "living_room" };
-    el2.rule = {
+    el2.scene = {
       name: "test",
       when: {},
       actions: [{ service: "notify.send_message", entity_ids: [], params: {} }],
@@ -1366,9 +1366,9 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
     expect((el2 as any)._serviceHasTarget.has("notify.send_message")).toBe(false);
 
     // Even with empty entity_ids and unknown hasTarget, validation must NOT block save.
-    let saved: Rule | undefined;
-    el2.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    let saved: Scene | undefined;
+    el2.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     el2.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
 
@@ -1378,7 +1378,7 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
   });
 });
 
-describe("ambience-rule-editor — people condition empty-selection validation", () => {
+describe("ambience-scene-editor — people condition empty-selection validation", () => {
   let el: any;
   afterEach(() => {
     el?.remove();
@@ -1470,12 +1470,12 @@ describe("ambience-rule-editor — people condition empty-selection validation",
       { name: "t", when: { people: { quant: "any", who: [], where: "home" } }, actions: [] },
       { hass: peopleHass },
     );
-    let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    let saved: Scene | undefined;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
-      (b: any) => b.textContent.trim() === "Save rule",
+      (b: any) => b.textContent.trim() === "Save scene",
     ) as HTMLButtonElement;
     saveBtn.click();
     await el.updateComplete;
@@ -1501,12 +1501,12 @@ describe("ambience-rule-editor — people condition empty-selection validation",
     await el.updateComplete;
     expect(el._validationError({ kind: "condition", id: "people" })).toBeNull();
 
-    let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    let saved: Scene | undefined;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
-      (b: any) => b.textContent.trim() === "Save rule",
+      (b: any) => b.textContent.trim() === "Save scene",
     ) as HTMLButtonElement;
     saveBtn.click();
     await el.updateComplete;
@@ -1516,10 +1516,10 @@ describe("ambience-rule-editor — people condition empty-selection validation",
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// Re-apply interval override in rule-editor action rows
+// Re-apply interval override in scene-editor action rows
 // ────────────────────────────────────────────────────────────────────────────
 
-describe("ambience-rule-editor — reapply interval override", () => {
+describe("ambience-scene-editor — reapply interval override", () => {
   let el: any;
   afterEach(() => {
     el?.remove();
@@ -1543,14 +1543,14 @@ describe("ambience-rule-editor — reapply interval override", () => {
     },
   ];
 
-  async function mountWithReapply(rule: import("../frontend/src/types").Rule): Promise<any> {
-    const editorEl: any = document.createElement("ambience-rule-editor");
+  async function mountWithReapply(scene: import("../frontend/src/types").Scene): Promise<any> {
+    const editorEl: any = document.createElement("ambience-scene-editor");
     editorEl.conditions = conditions;
     editorEl.availableActions = reapplyActions;
     editorEl.periods = periods;
     editorEl.hass = hass;
     editorEl.scope = { kind: "area", id: "living_room" };
-    editorEl.rule = rule;
+    editorEl.scene = scene;
     editorEl.open = true;
     document.body.appendChild(editorEl);
     await editorEl.updateComplete;
@@ -1646,7 +1646,7 @@ describe("ambience-rule-editor — reapply interval override", () => {
     expect("reapply_seconds" in el._draft.actions[0]).toBe(false);
   });
 
-  test("typing '0' stores reapply_seconds: 0 (disable for this rule)", async () => {
+  test("typing '0' stores reapply_seconds: 0 (disable for this scene)", async () => {
     el = await mountWithReapply({
       name: "t",
       when: {},
@@ -1725,15 +1725,15 @@ describe("ambience-rule-editor — reapply interval override", () => {
 
   // --- Save semantics (key-presence) ---
 
-  test("saved rule preserves absent reapply_seconds (inherit) in the emitted payload", async () => {
+  test("saved scene preserves absent reapply_seconds (inherit) in the emitted payload", async () => {
     el = await mountWithReapply({
       name: "t",
       when: {},
       actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {} }],
     });
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     await el.updateComplete;
@@ -1741,7 +1741,7 @@ describe("ambience-rule-editor — reapply interval override", () => {
     expect("reapply_seconds" in saved.actions[0]).toBe(false);
   });
 
-  test("saved rule preserves reapply_seconds: 0 (explicitly off) — key must NOT be stripped", async () => {
+  test("saved scene preserves reapply_seconds: 0 (explicitly off) — key must NOT be stripped", async () => {
     el = await mountWithReapply({
       name: "t",
       when: {},
@@ -1750,8 +1750,8 @@ describe("ambience-rule-editor — reapply interval override", () => {
       ],
     });
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     await el.updateComplete;
@@ -1760,13 +1760,13 @@ describe("ambience-rule-editor — reapply interval override", () => {
   });
 });
 
-describe("ambience-rule-editor — category selector", () => {
+describe("ambience-scene-editor — category selector", () => {
   let el: any;
   afterEach(() => {
     el?.remove();
   });
 
-  const categories: RuleCategory[] = [
+  const categories: SceneCategory[] = [
     { id: "morning", name: "Morning" },
     { id: "blinds", name: "Blinds" },
   ];
@@ -1783,7 +1783,7 @@ describe("ambience-rule-editor — category selector", () => {
     return { names, selected };
   }
 
-  test("category selector has no empty option and preselects the rule's category", async () => {
+  test("category selector has no empty option and preselects the scene's category", async () => {
     el = await mount(
       { name: "t", when: {}, actions: [], category: "b" },
       {
@@ -1808,7 +1808,7 @@ describe("ambience-rule-editor — category selector", () => {
     expect(el._draft.category).toBe("a");
   });
 
-  test("changing the category resets the rule's pinned priority", async () => {
+  test("changing the category resets the scene's pinned priority", async () => {
     el = await mount(
       { name: "t", when: {}, actions: [], category: "a", pinned: true, priority: 4096 },
       {
@@ -1839,13 +1839,13 @@ describe("ambience-rule-editor — category selector", () => {
     expect(el._draft.priority).toBe(4096);
   });
 
-  test("selector marks the rule's current category as selected", async () => {
+  test("selector marks the scene's current category as selected", async () => {
     el = await mount({ name: "t", when: {}, actions: [], category: "blinds" }, { categories });
     await openSlot(el, "category");
     expect(categoryOptions(el).selected).toBe("Blinds");
   });
 
-  test("a rule with an unset category defaults to the alphabetically-first category", async () => {
+  test("a scene with an unset category defaults to the alphabetically-first category", async () => {
     // category is required, but defend against a hand-edited/empty value: the
     // current selection still resolves to a real category (the first by name).
     el = await mount({ name: "t", when: {}, actions: [], category: "" }, { categories });
@@ -1866,12 +1866,12 @@ describe("ambience-rule-editor — category selector", () => {
     // picking an option collapses the slot again
     expect(el.shadowRoot.querySelector(".category-option")).toBeNull();
 
-    let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
-      saved = e.detail.rule;
+    let saved: Scene | undefined;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
     });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
-      (b: any) => b.textContent.trim() === "Save rule",
+      (b: any) => b.textContent.trim() === "Save scene",
     ) as HTMLButtonElement;
     saveBtn.click();
     expect(saved?.category).toBe("blinds");
@@ -1918,7 +1918,7 @@ describe("ambience-rule-editor — category selector", () => {
   });
 });
 
-describe("ambience-rule-editor — destination selector", () => {
+describe("ambience-scene-editor — destination selector", () => {
   let el: any;
   afterEach(() => {
     el?.remove();
@@ -1930,15 +1930,15 @@ describe("ambience-rule-editor — destination selector", () => {
     { scope: { kind: "area", id: "bedroom" }, label: "Area: Bedroom" },
   ];
 
-  async function mountWithScopes(rule: Rule, scope: Scope): Promise<any> {
-    const e: any = document.createElement("ambience-rule-editor");
+  async function mountWithScopes(scene: Scene, scope: Scope): Promise<any> {
+    const e: any = document.createElement("ambience-scene-editor");
     e.conditions = conditions;
     e.availableActions = availableActions;
     e.periods = periods;
     e.hass = hass;
     e.scope = scope;
     e.scopes = scopes;
-    e.rule = rule;
+    e.scene = scene;
     e.open = true;
     document.body.appendChild(e);
     await e.updateComplete;
@@ -1947,7 +1947,7 @@ describe("ambience-rule-editor — destination selector", () => {
     return e;
   }
 
-  test("renders a destination option per scope, defaulting to the rule's scope", async () => {
+  test("renders a destination option per scope, defaulting to the scene's scope", async () => {
     el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "bedroom" });
     await openSlot(el, "destination");
     const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
@@ -1988,14 +1988,14 @@ describe("ambience-rule-editor — destination selector", () => {
         "light.bed": { entity_id: "light.bed", area_id: "bedroom" },
       },
     } as any;
-    const e: any = document.createElement("ambience-rule-editor");
+    const e: any = document.createElement("ambience-scene-editor");
     e.conditions = conditions;
     e.availableActions = availableActions;
     e.periods = periods;
     e.hass = hass2;
     e.scope = { kind: "area", id: "living_room" };
     e.scopes = scopes;
-    e.rule = {
+    e.scene = {
       when: { state: { atom: { kind: "is", entity_id: "light.lamp_a", states: ["on"] } } },
       actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {} }],
     };
@@ -2018,7 +2018,7 @@ describe("ambience-rule-editor — destination selector", () => {
     expect(el._draft.when.state.atom.entity_id).toBe("light.lamp_a");
   });
 
-  test("save-rule carries the rule and the selected destination scope", async () => {
+  test("save-scene carries the scene and the selected destination scope", async () => {
     el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "living_room" });
     await openSlot(el, "destination");
     const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
@@ -2027,18 +2027,18 @@ describe("ambience-rule-editor — destination selector", () => {
     await el.updateComplete;
 
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => {
+    el.addEventListener("save-scene", (e: CustomEvent) => {
       saved = e.detail;
     });
     (el.shadowRoot.querySelector("button.primary") as HTMLElement).click();
     await el.updateComplete;
 
     expect(saved.scope).toEqual({ kind: "area", id: "bedroom" });
-    expect(saved.rule.when).toEqual({});
+    expect(saved.scene.when).toEqual({});
   });
 
   test("autoEditScope opens the destination slot on mount (used when duplicating)", async () => {
-    const e: any = document.createElement("ambience-rule-editor");
+    const e: any = document.createElement("ambience-scene-editor");
     e.conditions = conditions;
     e.availableActions = availableActions;
     e.periods = periods;
@@ -2046,7 +2046,7 @@ describe("ambience-rule-editor — destination selector", () => {
     e.scope = { kind: "area", id: "bedroom" };
     e.scopes = scopes;
     e.autoEditScope = true;
-    e.rule = { when: {}, actions: [] };
+    e.scene = { when: {}, actions: [] };
     e.open = true;
     document.body.appendChild(e);
     await e.updateComplete;

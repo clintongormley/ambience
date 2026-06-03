@@ -99,7 +99,7 @@ describe("pickHaTextInput — with components registered (run AFTER unregistered
       customElements.define("ha-textfield", class extends HTMLElement {});
     }
     // ha-input is already registered, so pickHaTextInput() will still return
-    // it — both elements are now present, the first-wins rule holds.
+    // it — both elements are now present, the first-wins scene holds.
     const result = pickHaTextInput();
     expect(result === "ha-input" || result === "ha-textfield").toBe(true);
   });

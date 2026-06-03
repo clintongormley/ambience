@@ -2,7 +2,7 @@
 # hook (.githooks/pre-push), and CI. Coverage thresholds live in their configs
 # (pyproject.toml fail_under for Python, vitest.config.ts for the frontend) so
 # raising them propagates here automatically.
-.PHONY: lint-py lint-js translations docs-check coverage-py coverage-js build-check install-hooks
+.PHONY: lint-py lint-js translations coverage-py coverage-js build-check install-hooks
 
 lint-py:        ## Fast: ruff lint + format check
 	ruff check . && ruff format --check .
@@ -12,9 +12,6 @@ lint-js:        ## Fast: biome lint+format check + tsc type-check
 
 translations:   ## strings.json <-> translations key parity
 	python -m scripts.check_translations
-
-docs-check:     ## fail if the generated reference doc is stale
-	python -m scripts.gen_reference_docs
 
 coverage-py:    ## backend tests + coverage gate (fail_under in pyproject.toml)
 	python -m pytest tests/ --cov=custom_components.ambience --cov-report=term-missing

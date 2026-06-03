@@ -49,7 +49,6 @@ if [ -n "$js_changed" ]; then echo "› biome+tsc";   make lint-js; fi
 
 # --- Step 2: always-cheap drift checks ---
 if [ -n "$py_changed$trans_changed" ]; then echo "› translations"; make translations; fi
-if [ -n "$py_changed" ];               then echo "› docs drift";   make docs-check; fi
 
 # --- Step 3: changed-language tests + coverage ---
 if [ -n "$py_changed" ];          then echo "› backend tests+coverage";  make coverage-py; fi

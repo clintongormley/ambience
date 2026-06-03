@@ -104,10 +104,6 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install dependencies
-        # pyyaml for the docs generator; HA (via the test harness) so the
-        # condition classes the docs generator imports are available.
-        run: pip install pyyaml pytest-homeassistant-custom-component
+        run: pip install pytest-homeassistant-custom-component
       - name: Translation key parity
         run: python -m scripts.check_translations
-      - name: Generated docs drift
-        run: python -m scripts.gen_reference_docs

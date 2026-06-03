@@ -26,8 +26,6 @@ the commits you are about to push and runs only what is relevant:
    - Frontend `.ts` changed → `make lint-js` (`npm run ci` Biome + `tsc`)
 2. **Cheap drift checks:**
    - `make translations` — `strings.json` ↔ `translations/*.json` key parity
-   - `make docs-check` — the generated `docs/reference/conditions-and-actions.md`
-     is regenerated and unchanged
 3. **Tests for the changed language + coverage gates:**
    - Python → `make coverage-py` (pytest + `fail_under` from `pyproject.toml`)
    - Frontend → `make coverage-js` (vitest + thresholds from `vitest.config.ts`)
@@ -46,15 +44,12 @@ command (see `Makefile`). Useful ones:
 | `make lint-py` / `make lint-js` | Fast lint + format checks |
 | `make coverage-py` / `make coverage-js` | Tests with coverage gates |
 | `make translations` | Translation key-parity check |
-| `make docs-check` | Generated-docs drift check |
 | `make build-check` | Rebuild bundle, fail on drift |
 
 ## Regenerating artifacts
 
 - **Frontend bundle:** after any `frontend/src` change run `npm run build` and
   commit `custom_components/ambience/frontend/*.js`.
-- **Reference docs:** after adding/changing a condition or action run
-  `python -m scripts.gen_reference_docs --write` and commit the result.
 - **Translations:** `strings.json` is the source of truth; keep
   `translations/en.json` in sync (the translation check enforces parity).
 

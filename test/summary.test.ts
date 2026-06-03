@@ -284,7 +284,8 @@ describe("summariseDay", () => {
       include: [{ kind: "weekday", days: [0, 1, 2, 3, 4] }],
       exclude: [{ kind: "holiday" }],
     };
-    expect(summariseDay(pred)).toBe("Mon/Tue/Wed/Thu/Fri (except Holiday)");
+    // "holiday" is lowercase in the bundled day_summary strings (matching en.json).
+    expect(summariseDay(pred)).toBe("Mon/Tue/Wed/Thu/Fri (except holiday)");
   });
 
   test("formats date, date_range, day_of_month, and month-position kinds", () => {
@@ -297,15 +298,16 @@ describe("summariseDay", () => {
         exclude: [],
       }),
     ).toBe("July 15 → August 31");
+    // day_summary strings are lowercase in the bundle (matching en.json).
     expect(
       summariseDay({ include: [{ kind: "day_of_month", days: "1-10, 15" }], exclude: [] }),
-    ).toBe("Day 1-10, 15");
-    expect(summariseDay({ include: [{ kind: "last_day" }], exclude: [] })).toBe("Last day");
-    expect(summariseDay({ include: [{ kind: "workday" }], exclude: [] })).toBe("Workday");
+    ).toBe("day 1-10, 15");
+    expect(summariseDay({ include: [{ kind: "last_day" }], exclude: [] })).toBe("last day");
+    expect(summariseDay({ include: [{ kind: "workday" }], exclude: [] })).toBe("workday");
     expect(summariseDay({ include: [{ kind: "first_workday" }], exclude: [] })).toBe(
-      "First workday",
+      "first workday",
     );
-    expect(summariseDay({ include: [{ kind: "last_workday" }], exclude: [] })).toBe("Last workday");
+    expect(summariseDay({ include: [{ kind: "last_workday" }], exclude: [] })).toBe("last workday");
   });
 
   test("summariseCondition delegates day to summariseDay", () => {

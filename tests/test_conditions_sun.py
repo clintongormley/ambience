@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.ambience.conditions.sun import SunCondition, SunSnapshot
+from custom_components.ambience.conditions.sun import (
+    SunCondition,
+    SunSnapshot,
+    _in_arc,
+    _sector_label,
+)
 
 
 def _snap(elevation: float | None = 0.0, azimuth: float | None = 180.0) -> SunSnapshot:
@@ -188,12 +193,16 @@ def test_validate_accepts_well_formed() -> None:
         {"elevation": {"min": 30, "max": 10}},  # min > max
         {"elevation": {"min": "hot"}},  # non-numeric
         {"elevation": {}},  # neither bound
+        {"elevation": "high"},  # elevation not a dict (covers line 137)
         {"azimuth": {}},  # neither sectors nor ranges
+        {"azimuth": "south"},  # azimuth not a dict (covers line 155)
         {"azimuth": {"sectors": ["X"]}},  # bad label
         {"azimuth": {"sectors": "S"}},  # not a list
+        {"azimuth": {"ranges": "bad"}},  # ranges not a list (covers line 163)
         {"azimuth": {"ranges": [{"from": 0, "to": 360}]}},  # 360 out of [0, 360)
         {"azimuth": {"ranges": [{"from": -1, "to": 90}]}},  # negative
         {"azimuth": {"ranges": [{"from": 0}]}},  # missing to
+        {"azimuth": {"ranges": ["not-a-dict"]}},  # range item not a dict (covers line 169)
     ],
 )
 def test_validate_rejects(predicate) -> None:
@@ -218,6 +227,22 @@ def test_describe_nearest_sector_wraps_north() -> None:
 
 def test_describe_none_when_no_data() -> None:
     assert SunCondition().describe(_snap(elevation=None, azimuth=None)) is None
+
+
+def test_describe_elevation_only() -> None:
+    """Only elevation present — azimuth branch is skipped (covers 115->117 miss)."""
+    out = SunCondition().describe(_snap(elevation=15, azimuth=None))
+    assert out is not None
+    assert "15" in out
+    assert "azimuth" not in out
+
+
+def test_describe_azimuth_only() -> None:
+    """Only azimuth present — elevation branch is skipped (covers 117->120 miss)."""
+    out = SunCondition().describe(_snap(elevation=None, azimuth=90))
+    assert out is not None
+    assert "90" in out
+    assert "elevation" not in out
 
 
 # ── contains: elevation ──────────────────────────────────────────────────────
@@ -343,3 +368,84 @@ def test_trigger_deps_none_or_garbage_is_empty() -> None:
     assert SunCondition().trigger_deps(None) == EMPTY
     assert SunCondition().trigger_deps("garbage") == EMPTY
     assert SunCondition().trigger_deps({}) == EMPTY
+
+
+# ── _in_arc: non-numeric bounds ──────────────────────────────────────────────
+
+
+def test_in_arc_non_numeric_lo_returns_false() -> None:
+    """_in_arc returns False when lo or hi is not a number (covers line 204)."""
+    assert _in_arc(180.0, None, 200.0) is False
+
+
+def test_in_arc_non_numeric_hi_returns_false() -> None:
+    """_in_arc returns False when hi is not a number (covers line 204)."""
+    assert _in_arc(180.0, 100.0, "east") is False
+
+
+# ── _azimuth_intervals: unknown sector / non-dict range / non-numeric bounds ─
+
+
+def test_contains_azimuth_unknown_sector_is_skipped() -> None:
+    """Unknown sector label in _azimuth_intervals yields no arc (covers 233->231).
+
+    An inner predicate with an unknown sector has no matching intervals, so
+    contains() returns True (vacuous — all-of-nothing is satisfied).
+    """
+    m = SunCondition()
+    outer = {"azimuth": {"sectors": ["S", "W"]}}
+    # "BOGUS" is not in SECTORS; _azimuth_intervals skips it → inner has no intervals
+    inner = {"azimuth": {"sectors": ["BOGUS"]}}
+    # all() over empty sequence is True
+    assert m.contains(outer, inner) is True
+
+
+def test_contains_azimuth_non_dict_range_is_skipped() -> None:
+    """Non-dict item in ranges list is skipped in _azimuth_intervals (covers 236->235).
+
+    After skipping, inner has no intervals → vacuously contained.
+    """
+    m = SunCondition()
+    outer = {"azimuth": {"sectors": ["S"]}}
+    inner = {"azimuth": {"ranges": ["not-a-dict"]}}
+    assert m.contains(outer, inner) is True
+
+
+def test_contains_azimuth_non_numeric_range_bounds_are_skipped() -> None:
+    """Non-numeric from/to in a range dict is skipped (covers 238->235).
+
+    After skipping, inner has no intervals → vacuously contained.
+    """
+    m = SunCondition()
+    outer = {"azimuth": {"sectors": ["S"]}}
+    inner = {"azimuth": {"ranges": [{"from": "east", "to": 90}]}}
+    assert m.contains(outer, inner) is True
+
+
+# ── _sector_label: no-match fallback ─────────────────────────────────────────
+
+
+def test_sector_label_fallback_returns_N() -> None:
+    """_sector_label returns 'N' when no sector arc matches (covers line 254).
+
+    337.5 is the exact boundary between NW and N; since _in_arc is [lo, hi)
+    NW = [292.5, 337.5) — 337.5 is not in NW, and N = [337.5, 22.5) wraps,
+    so 337.5 should match N. Use a value that genuinely misses all arcs by
+    calling _sector_label with a float that the coverage tool tracks as hitting
+    line 254's return.  The only way to reach line 254 is if every SECTORS
+    arc misses; we pass a non-float to force _in_arc to return False for all.
+    We call _sector_label via monkey-patching _in_arc — but since we can't
+    patch without modifying source, we verify the fallback indirectly: pass a
+    value that would be rejected by every _in_arc call if lo/hi were swapped
+    to trigger the False path.  The simplest approach: override SECTORS
+    temporarily to an empty dict.
+    """
+    import custom_components.ambience.conditions.sun as sun_module
+
+    original = sun_module.SECTORS
+    try:
+        sun_module.SECTORS = {}  # type: ignore[assignment]
+        result = _sector_label(180.0)
+    finally:
+        sun_module.SECTORS = original
+    assert result == "N"

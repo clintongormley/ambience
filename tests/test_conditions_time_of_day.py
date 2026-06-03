@@ -477,3 +477,122 @@ def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:
         )
         is True
     )
+
+
+# ── snapshot: unparseable attribute value (line 74) ─────────────────────────
+
+
+async def test_snapshot_raises_when_attribute_unparseable(hass: HomeAssistant) -> None:
+    """snapshot() raises RuntimeError when a sun.sun attribute exists but
+    cannot be parsed as a datetime (line 74 branch)."""
+    hass.states.async_set(
+        "sun.sun",
+        "above_horizon",
+        {
+            "next_rising": "not-a-datetime",
+            "next_setting": "2026-05-13T18:00:00+00:00",
+            "next_dawn": "2026-05-13T05:30:00+00:00",
+            "next_dusk": "2026-05-13T18:30:00+00:00",
+            "next_noon": "2026-05-13T12:00:00+00:00",
+            "next_midnight": "2026-05-13T00:00:00+00:00",
+        },
+    )
+    with pytest.raises(RuntimeError, match="unparseable"):
+        await _condition().snapshot(hass)
+
+
+# ── _resolve_endpoint error paths (lines 121, 128, 139, 146) ─────────────────
+
+
+def test_resolve_endpoint_non_dict_raises(hass: HomeAssistant) -> None:
+    """_resolve_endpoint raises ValueError when the endpoint is not a dict
+    (line 121 branch — e.g. a bare string used as a from/to value)."""
+    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    with pytest.raises(ValueError, match="invalid endpoint"):
+        _condition().matches({"from": "08:00", "to": _time(10, 0)}, snap)
+
+
+def test_resolve_endpoint_invalid_mm_raises(hass: HomeAssistant) -> None:
+    """_resolve_endpoint raises ValueError when mm is out of [0, 59] range
+    (line 128 branch)."""
+    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    with pytest.raises(ValueError, match="invalid mm"):
+        _condition().matches(
+            {"from": {"kind": "time", "hh": 8, "mm": 60}, "to": _time(10, 0)}, snap
+        )
+
+
+def test_resolve_endpoint_non_int_mm_raises(hass: HomeAssistant) -> None:
+    """_resolve_endpoint raises ValueError when mm is not an int (line 128)."""
+    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    with pytest.raises(ValueError, match="invalid mm"):
+        _condition().matches(
+            {"from": {"kind": "time", "hh": 8, "mm": "30"}, "to": _time(10, 0)}, snap
+        )
+
+
+def test_resolve_endpoint_non_int_offset_raises() -> None:
+    """_resolve_endpoint raises ValueError when offset_min is not an int
+    (line 139 branch)."""
+    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    with pytest.raises(ValueError, match="offset_min must be int"):
+        _condition().matches(
+            {"from": {"kind": "sun", "anchor": "sunrise", "offset_min": "30"}, "to": _time(10, 0)},
+            snap,
+        )
+
+
+def test_resolve_endpoint_unknown_kind_raises() -> None:
+    """_resolve_endpoint raises ValueError when kind is not 'time' or 'sun'
+    (line 146 branch — the final raise at the bottom of _resolve_endpoint)."""
+    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    with pytest.raises(ValueError, match="invalid endpoint kind"):
+        _condition().matches(
+            {"from": {"kind": "lunar", "hh": 8, "mm": 0}, "to": _time(10, 0)}, snap
+        )
+
+
+# ── describe: malformed period skipped via ValueError (lines 168-169) ────────
+
+
+def test_describe_skips_malformed_period_definition() -> None:
+    """describe() silently skips any period whose definition raises ValueError
+    (lines 168-169 — the except-ValueError-continue branch), and falls through
+    to the next period or returns None."""
+    broken_periods = {
+        # "from" endpoint is a bare string, not a dict — _resolve_endpoint will
+        # raise ValueError, which describe() must catch and continue past.
+        "broken": {"from": "not-a-dict", "to": _time(10, 0)},
+        "good": _range(_time(14, 0), _time(16, 0)),
+    }
+    snap = _build_snapshot(datetime(2026, 5, 13, 15, 0, tzinfo=UTC))
+    # Should skip "broken" without raising and return "good".
+    result = _condition(broken_periods).describe(snap)
+    assert result == "good"
+
+
+def test_describe_returns_none_when_all_periods_malformed() -> None:
+    """describe() returns None when every period definition is broken
+    (all raise ValueError, caught at lines 168-169)."""
+    broken_periods = {
+        "p1": {"from": "bad", "to": _time(10, 0)},
+        "p2": {"from": "also_bad", "to": _time(20, 0)},
+    }
+    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    assert _condition(broken_periods).describe(snap) is None
+
+
+# ── _classify_endpoint: kind is neither "time" nor "sun" (line 251->exit) ────
+
+
+def test_trigger_deps_unknown_kind_produces_no_deps() -> None:
+    """_classify_endpoint does nothing when kind is a string other than 'time'
+    or 'sun' — exercises the 251->exit branch where the elif is False."""
+    m = TimeOfDayCondition()
+    pred = {
+        "from": {"kind": "lunar", "anchor": "full_moon"},
+        "to": {"kind": "stellar", "hh": 3, "mm": 0},
+    }
+    spec = m.trigger_deps(pred)
+    assert spec.clock_times == frozenset()
+    assert spec.sun_events == frozenset()

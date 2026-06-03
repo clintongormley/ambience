@@ -410,3 +410,48 @@ def test_validate_predicate_rejects_empty_string_trigger() -> None:
 def test_validate_predicate_accepts_empty_triggers_list() -> None:
     # An empty list means "no declared triggers" — equivalent to omitting it.
     ScriptCondition().validate_predicate({"script": "script.foo", "triggers": []})
+
+
+def test_trigger_deps_skips_non_string_trigger_items() -> None:
+    # Line 129->128 branch: a non-string or empty-string item in `triggers`
+    # fails the isinstance guard and is silently skipped (loop continues).
+    spec = ScriptCondition().trigger_deps({"script": "script.foo", "triggers": [42, None, ""]})
+    assert spec.entities == frozenset()
+    assert spec.opaque is True
+
+
+def test_collect_pairs_returns_empty_without_hass() -> None:
+    # Line 140: _collect_pairs() returns [] immediately when hass is None.
+    assert ScriptCondition(hass=None)._collect_pairs() == []
+
+
+def test_collect_pairs_skips_truthy_non_dict_args(hass: HomeAssistant) -> None:
+    # Line 154: `args` resolves to a truthy non-dict (e.g. a list) → continue.
+    # `pred.get("args") or {}` only replaces falsy values, so [1, 2] passes
+    # through and hits the isinstance(args, dict) guard.
+    _install_store(
+        hass,
+        {
+            "kitchen": {
+                "rules": [
+                    {"when": {"script": {"script": "script.bad_args", "args": [1, 2]}}},
+                    {"when": {"script": {"script": "script.ok"}}},
+                ],
+            },
+        },
+    )
+    pairs = ScriptCondition(hass=hass)._collect_pairs()
+    # bad_args entry must be skipped; ok entry must be collected.
+    assert pairs == [("script.ok", "{}")]
+
+
+async def test_call_one_returns_false_for_non_dict_response() -> None:
+    # Line 216: when async_call returns a non-dict (e.g. a plain string),
+    # _call_one returns False. Tested via direct call with a minimal mock so
+    # HA's own response-validation layer is bypassed.
+    from unittest.mock import AsyncMock, MagicMock
+
+    mock_hass = MagicMock()
+    mock_hass.services.async_call = AsyncMock(return_value="not_a_dict")
+    result = await ScriptCondition()._call_one(mock_hass, "script.foo", "{}")
+    assert result is False

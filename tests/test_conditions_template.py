@@ -288,3 +288,31 @@ def test_trigger_deps_without_hass_is_opaque() -> None:
     spec = TemplateCondition().trigger_deps({"template": "{{ true }}"})
     assert spec.opaque is True
     assert spec.entities == frozenset()
+
+
+def test_trigger_deps_render_to_info_raises_template_error(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    # Lines 137-138: defensive except branch for the case where
+    # async_render_to_info raises TemplateError directly (e.g. due to a future
+    # HA change or an unusual template context). Simulated via monkeypatch.
+    from unittest.mock import MagicMock
+
+    from homeassistant.exceptions import TemplateError
+
+    mock_template = MagicMock()
+    mock_template.async_render_to_info.side_effect = TemplateError(Exception("forced"))
+
+    monkeypatch.setattr(
+        "custom_components.ambience.conditions.template.Template",
+        lambda *args, **kwargs: mock_template,
+    )
+    spec = TemplateCondition(hass=hass).trigger_deps({"template": "{{ something }}"})
+    assert spec.opaque is True
+    assert spec.entities == frozenset()
+
+
+def test_collect_templates_returns_empty_without_hass() -> None:
+    # Line 159: _collect_templates() returns [] immediately when hass is None.
+    result = TemplateCondition(hass=None)._collect_templates()
+    assert result == []

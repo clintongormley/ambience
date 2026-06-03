@@ -248,3 +248,51 @@ async def test_panel_is_removed_on_unload(
 
     panels = hass.data.get("frontend_panels", {})
     assert "ambience" not in panels
+
+
+def test_hash_bundle_returns_missing_on_oserror(tmp_path: Path) -> None:
+    """_hash_bundle returns 'missing' when the file does not exist (OSError path)."""
+    from custom_components.ambience import _hash_bundle
+
+    absent = tmp_path / "no_such_file.js"
+    assert _hash_bundle(absent) == "missing"
+
+
+async def test_setup_without_sidebar_panel_does_not_register_panel(
+    hass: HomeAssistant,
+) -> None:
+    """When CONF_SHOW_SIDEBAR_PANEL is False the panel is not registered (256->279 false branch)."""
+    from custom_components.ambience.const import CONF_SHOW_SIDEBAR_PANEL
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Ambience",
+        data={},
+        options={CONF_SHOW_SIDEBAR_PANEL: False},
+        unique_id="ambience_no_panel",
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    panels = hass.data.get("frontend_panels", {})
+    assert "ambience" not in panels
+
+
+async def test_update_listener_triggers_reload(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Updating config entry options reloads the entry (line 307 — _async_update_listener body)."""
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+
+    # Trigger the update listener by updating options on the entry.
+    hass.config_entries.async_update_entry(mock_config_entry, options={"show_sidebar_panel": True})
+    await hass.async_block_till_done()
+
+    # After the reload the entry should still be loaded.
+    assert mock_config_entry.state is ConfigEntryState.LOADED

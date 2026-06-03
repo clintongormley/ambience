@@ -19,7 +19,7 @@ DATA_LAST_APPLIED = "last_applied"
 
 # Auto-trigger engine instance.
 DATA_ENGINE = "engine"
-# Registered TraceSink instances (see trace.py).
+# Registered trace sinks — objects with an `emit(event)` method (see trace.py).
 DATA_TRACE_SINKS = "trace_sinks"
 # In-memory trace ring buffer (BufferSink) + its per-(scope,category) cap.
 DATA_TRACE_BUFFER = "trace_buffer"

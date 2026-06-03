@@ -12,7 +12,7 @@ import secrets
 from collections import deque
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
@@ -281,12 +281,6 @@ def format_trace_event(event: TraceEvent) -> list[str]:
     if event.event_id:
         lines = [f"[{event.event_id}] {line}" for line in lines]
     return lines
-
-
-class TraceSink(Protocol):
-    """Sink that receives trace events from emit_trace."""
-
-    def emit(self, event: TraceEvent) -> None: ...
 
 
 _CHANGES_OUTCOMES = (Outcome.ACTED, Outcome.REAPPLIED)

@@ -839,7 +839,7 @@ export class AmbienceScopesView extends LitElement {
     return [
       {
         scope: { kind: "house" },
-        label: localize(this.hass, "ui.scope_global", "Global"),
+        label: localize(this.hass, "ui.scope_house", "House"),
       },
       ...this._floors.map((f) => ({
         scope: { kind: "floor" as const, id: f.floor_id },
@@ -880,7 +880,7 @@ export class AmbienceScopesView extends LitElement {
       <ul>
         ${this._renderScopeRow(
           { kind: "house" },
-          localize(this.hass, "ui.scope_global", "Global"),
+          localize(this.hass, "ui.scope_house", "House"),
           this._house,
           "house",
         )}

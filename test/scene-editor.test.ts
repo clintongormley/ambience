@@ -1925,7 +1925,7 @@ describe("ambience-scene-editor — destination selector", () => {
   });
 
   const scopes = [
-    { scope: { kind: "house" }, label: "Global" },
+    { scope: { kind: "house" }, label: "House" },
     { scope: { kind: "area", id: "living_room" }, label: "Area: Living Room" },
     { scope: { kind: "area", id: "bedroom" }, label: "Area: Bedroom" },
   ];

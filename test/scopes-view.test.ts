@@ -130,11 +130,11 @@ describe("ambience-scopes-view", () => {
 
   // --- row labels ---------------------------------------------------------
 
-  test("renders the Global row for the house scope", async () => {
+  test("renders the House row for the house scope", async () => {
     el = await mount();
     const houseRow = el.shadowRoot.querySelector(".scope-row.house");
     expect(houseRow).toBeTruthy();
-    expect(houseRow.textContent).toContain("Global");
+    expect(houseRow.textContent).toContain("House");
   });
 
   test("renders one row per HA area with 'Area: ' prefix", async () => {
@@ -157,7 +157,7 @@ describe("ambience-scopes-view", () => {
 
   // --- ordering -----------------------------------------------------------
 
-  test("flat list order: Global first, then floors, then areas", async () => {
+  test("flat list order: House first, then floors, then areas", async () => {
     el = await mount();
     const rows = Array.from(el.shadowRoot.querySelectorAll(".scope-row")) as HTMLElement[];
     const kinds = rows.map((r) => {

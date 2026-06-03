@@ -1,3 +1,4 @@
+import { AMBIENCE_STRINGS } from "./i18n-data.js";
 import type { PeriodDef } from "./types.js";
 
 type Localizer = (key: string) => string | undefined;
@@ -7,9 +8,27 @@ interface HassLike {
   [key: string]: unknown;
 }
 
+/**
+ * Look up a `component.ambience.<subPath>` key in the bundled AMBIENCE_STRINGS.
+ * Returns the string value if found, or undefined otherwise.
+ */
+function _bundleLookup(key: string): string | undefined {
+  const PREFIX = "component.ambience.";
+  if (!key.startsWith(PREFIX)) return undefined;
+  const parts = key.slice(PREFIX.length).split(".");
+  let node: unknown = AMBIENCE_STRINGS;
+  for (const part of parts) {
+    if (node === null || typeof node !== "object") return undefined;
+    node = (node as Record<string, unknown>)[part];
+  }
+  return typeof node === "string" ? node : undefined;
+}
+
 function _resolve(hass: HassLike | undefined, key: string, fallback: string): string {
   const localised = hass?.localize?.(key);
   if (localised && localised !== key) return localised;
+  const bundled = _bundleLookup(key);
+  if (bundled !== undefined) return bundled;
   return fallback;
 }
 

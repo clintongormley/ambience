@@ -202,12 +202,89 @@ export class AmbienceSceneEditor extends LitElement {
     .destination {
       margin-bottom: 0.75rem;
     }
-    /* Scope icon in the destination summary — matches the scope-header icon
-       (HA's area/floor icon, or a per-kind default). */
+    /* Scope icon in the destination summary + dropdown — matches the
+       scope-header icon (HA's area/floor icon, or a per-kind default). */
     .scope-icon {
+      flex: 0 0 auto;
       --mdc-icon-size: 18px;
       color: var(--secondary-text-color, #888);
       vertical-align: middle;
+    }
+    /* Custom scope picker — a dropdown whose options carry icons (native and
+       ha-form selects can't). Mirrors the category-filter dropdown. */
+    .scope-dropdown {
+      position: relative;
+    }
+    .scope-dropdown-trigger {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+      min-height: 40px;
+      box-sizing: border-box;
+      padding: 0.4rem 0.6rem;
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 6px;
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color, #212121);
+      cursor: pointer;
+      font: inherit;
+      font-size: 1rem;
+    }
+    .scope-dropdown-trigger:hover {
+      background: var(--secondary-background-color, #f5f5f5);
+    }
+    .scope-dropdown .scope-name {
+      flex: 1;
+      text-align: left;
+    }
+    .scope-dropdown .caret {
+      flex: 0 0 auto;
+      color: var(--secondary-text-color, #888);
+    }
+    /* Transparent full-screen catcher so any outside click closes the menu. */
+    .scope-dropdown-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+    }
+    .scope-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      z-index: 11;
+      max-height: 50vh;
+      overflow-y: auto;
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+      padding: 0.3rem;
+    }
+    .scope-dropdown-option {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+      min-height: 40px;
+      box-sizing: border-box;
+      padding: 0.4rem 0.6rem;
+      border: 0;
+      border-radius: 6px;
+      background: none;
+      color: var(--primary-text-color, #212121);
+      cursor: pointer;
+      font: inherit;
+      font-size: 1rem;
+      text-align: left;
+    }
+    .scope-dropdown-option:hover {
+      background: var(--secondary-background-color, #f5f5f5);
+    }
+    .scope-dropdown-option[aria-selected="true"] {
+      background: var(--secondary-background-color, #eee);
+      font-weight: 600;
     }
     .destination label {
       display: block;
@@ -251,6 +328,8 @@ export class AmbienceSceneEditor extends LitElement {
   @state() private _draft: Scene | null = null;
   @state() private _scope?: Scope;
   @state() private _open: OpenSlot = null;
+  // Whether the custom scope (destination) dropdown menu is expanded.
+  @state() private _destOpen = false;
   @state() private _showError = false;
   /**
    * Tracks whether each action's service requires a target. Keyed by service
@@ -326,71 +405,70 @@ export class AmbienceSceneEditor extends LitElement {
     };
   }
 
-  private _onDestinationChange = (e: Event) => {
-    this._setDestination(Number((e.target as HTMLSelectElement).value));
-  };
+  private _selectDestination(idx: number) {
+    this._destOpen = false;
+    this._setDestination(idx);
+  }
 
-  /* v8 ignore start -- ha-form not registered in jsdom; jsdom hits the native fallback */
-  private _onDestinationChangeHaForm = (e: CustomEvent<{ value: { destination: string } }>) => {
-    e.stopPropagation();
-    this._setDestination(Number(e.detail.value.destination));
-  };
-  /* v8 ignore stop */
+  /** One scope row: its icon (HA's area/floor icon, or a per-kind default)
+   *  followed by the label — used in both the dropdown trigger and the menu. */
+  private _renderScopeEntry(o: ScopeOption) {
+    return html`
+      <ha-icon class="scope-icon" icon=${scopeIcon(o.scope, this.hass as any)}></ha-icon>
+      <span class="scope-name">${o.label}</span>
+    `;
+  }
 
+  // A custom dropdown (not <select>/<ha-form>) so each option can show its
+  // scope icon — native and ha-form selects render text-only options, and HA's
+  // icon-capable list components churn across versions (mwc → webawesome). This
+  // mirrors the category-filter dropdown in scopes-view.
   private _renderDestination() {
     if (this.scopes.length === 0) return "";
-    const currentIdx = Math.max(
-      0,
-      this.scopes.findIndex((o) => sameScope(o.scope, this._scope)),
-    );
-    /* v8 ignore next 3 -- ha-form not registered in jsdom; jsdom hits the native fallback below */
-    if (customElements.get("ha-form")) {
-      return this._renderDestinationHaForm(currentIdx);
-    }
+    const current = this.scopes.find((o) => sameScope(o.scope, this._scope)) ?? this.scopes[0];
     return html`
       <div class="destination">
         <label>${localize(this.hass, "ui.scope", "Scope")}</label>
-        <select
-          .value=${String(currentIdx)}
-          @change=${this._onDestinationChange}
-        >
-          ${this.scopes.map(
-            (o, i) => html`<option value=${i} ?selected=${i === currentIdx}>${o.label}</option>`,
-          )}
-        </select>
+        <div class="scope-dropdown">
+          <button
+            class="scope-dropdown-trigger"
+            aria-haspopup="listbox"
+            aria-expanded=${this._destOpen}
+            @click=${() => {
+              this._destOpen = !this._destOpen;
+            }}
+          >
+            ${this._renderScopeEntry(current)}
+            <ha-icon class="caret" icon="mdi:menu-down"></ha-icon>
+          </button>
+          ${
+            this._destOpen
+              ? html`
+                <div
+                  class="scope-dropdown-backdrop"
+                  @click=${() => {
+                    this._destOpen = false;
+                  }}
+                ></div>
+                <div class="scope-dropdown-menu" role="listbox">
+                  ${this.scopes.map(
+                    (o, i) => html`<button
+                      class="scope-dropdown-option"
+                      role="option"
+                      aria-selected=${sameScope(o.scope, this._scope)}
+                      @click=${() => this._selectDestination(i)}
+                    >
+                      ${this._renderScopeEntry(o)}
+                    </button>`,
+                  )}
+                </div>
+              `
+              : ""
+          }
+        </div>
       </div>
     `;
   }
-
-  /* v8 ignore start -- ha-form path (real HA only) */
-  private _renderDestinationHaForm(currentIdx: number) {
-    const schema = [
-      {
-        name: "destination",
-        // Required so the dropdown offers no clear/empty affordance — a scene
-        // always has a destination scope.
-        required: true,
-        selector: {
-          select: {
-            mode: "dropdown",
-            options: this.scopes.map((o, i) => ({ value: String(i), label: o.label })),
-          },
-        },
-      },
-    ];
-    return html`
-      <div class="destination">
-        <ha-form
-          .hass=${this.hass}
-          .schema=${schema}
-          .data=${{ destination: String(currentIdx) }}
-          .computeLabel=${() => localize(this.hass, "ui.scope", "Scope")}
-          @value-changed=${this._onDestinationChangeHaForm}
-        ></ha-form>
-      </div>
-    `;
-  }
-  /* v8 ignore stop */
 
   /**
    * The destination scope as a collapse/expand slot (like the name field): a
@@ -621,6 +699,8 @@ export class AmbienceSceneEditor extends LitElement {
     if (this._open !== null && !this._tryCloseCurrent()) return;
     this._open = slot;
     this._showError = false;
+    // A freshly-opened scope slot starts with its dropdown menu collapsed.
+    this._destOpen = false;
   }
 
   private _onModalClick(e: MouseEvent) {

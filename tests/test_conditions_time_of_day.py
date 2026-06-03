@@ -703,3 +703,38 @@ def test_trigger_deps_includes_clamp_clock_time() -> None:
     assert (8, 30) in spec.clock_times
     assert ("sunrise", 0) in spec.sun_events
     assert ("dusk", 0) in spec.sun_events
+
+
+def test_clamp_not_before_legit_wrap_with_close_anchors() -> None:
+    # sunrise(not before 20:00) → dawn is a real overnight window 20:00→05:30
+    # (the from/to anchors are close, so both day-adjust together — the case the
+    # old direction-only heuristic got wrong).
+    pred = _range(_sun_clamp("sunrise", "not_before", 20, 0), _sun("dawn"))
+    cond = _condition()
+    assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 21, 0, tzinfo=UTC))) is True
+    assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 2, 0, tzinfo=UTC))) is True
+    assert cond.matches(pred, _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))) is False
+
+
+def test_degenerate_clamp_in_named_period_never_matches() -> None:
+    # A degenerate clamp inside a custom period must be empty too, not a wrap.
+    custom = {
+        "bad": {
+            "from": {
+                "kind": "sun",
+                "anchor": "sunrise",
+                "offset_min": 0,
+                "clamp": {"dir": "not_before", "hh": 20, "mm": 0},
+            },
+            "to": {"kind": "time", "hh": 18, "mm": 0},
+        }
+    }
+    cond = _condition(custom)
+    assert (
+        cond.matches({"period": "bad"}, _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC)))
+        is False
+    )
+    assert (
+        cond.matches({"period": "bad"}, _build_snapshot(datetime(2026, 5, 13, 4, 0, tzinfo=UTC)))
+        is False
+    )

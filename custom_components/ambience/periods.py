@@ -48,9 +48,9 @@ def _validate_clamp(clamp: Any) -> None:
     if clamp.get("dir") not in ("not_before", "not_after"):
         raise ValueError(f"invalid clamp dir: {clamp.get('dir')!r}")
     hh, mm = clamp.get("hh"), clamp.get("mm")
-    if not isinstance(hh, int) or not 0 <= hh <= 23:
+    if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
         raise ValueError(f"invalid clamp hh: {hh!r}")
-    if not isinstance(mm, int) or not 0 <= mm <= 59:
+    if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
         raise ValueError(f"invalid clamp mm: {mm!r}")
 
 

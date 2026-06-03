@@ -90,9 +90,27 @@ class TimeOfDayCondition:
 
     def _match_one(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
         start, end = self._resolve_range(item, snapshot)
-        if start >= end and isinstance(item, dict) and _has_clamped_inversion(item):
+        if start >= end and self._clamp_emptied(item, snapshot):
             return False
         return _in_range(snapshot.now, start, end)
+
+    def _clamp_emptied(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
+        """True if a clamp turned an otherwise-forward range into an empty one.
+
+        Resolve the range with the clamps stripped: if that ran forward
+        (start < end) the range had no genuine overnight wrap, so a clamped
+        start >= end is a degenerate empty range (never matches) rather than a
+        real wrap. Works for named periods too, since `_dep_endpoints` resolves
+        the period definition's endpoints."""
+        endpoints = self._dep_endpoints(item)
+        if len(endpoints) != 2:
+            return False
+        from_ep, to_ep = endpoints
+        if not _endpoint_has_clamp(from_ep) and not _endpoint_has_clamp(to_ep):
+            return False
+        raw_start = self._resolve_endpoint(_strip_clamp(from_ep), snapshot)
+        raw_end = self._resolve_endpoint(_strip_clamp(to_ep), snapshot)
+        return raw_start < raw_end
 
     def _resolve_range(
         self, predicate: Any, snapshot: TimeOfDaySnapshot
@@ -205,6 +223,8 @@ class TimeOfDayCondition:
             start_min = _minute_of_day(start)
             end_min = _minute_of_day(end)
             if end_min <= start_min:
+                if self._clamp_emptied(item, snapshot):
+                    continue
                 result.append((start_min, 1440.0))
                 result.append((0.0, end_min))
             else:
@@ -294,25 +314,17 @@ class TimeOfDayCondition:
                     clock_times.add((hh, mm))
 
 
-def _has_clamped_inversion(item: dict) -> bool:
-    """Return True if this predicate item has a clamp that can produce a
-    degenerate (start >= end) inversion rather than an overnight wrap.
+def _strip_clamp(ep: Any) -> Any:
+    """Return the endpoint without its clamp (used to resolve the pre-clamp range)."""
+    if isinstance(ep, dict) and "clamp" in ep:
+        bare = dict(ep)
+        bare.pop("clamp", None)
+        return bare
+    return ep
 
-    A ``not_before`` clamp on the ``from`` endpoint only pushes start later;
-    a ``not_after`` clamp on the ``to`` endpoint only pulls end earlier. In
-    both cases an apparent start >= end is a same-day inversion (empty range),
-    never a genuine midnight wrap."""
-    from_ep = item.get("from")
-    to_ep = item.get("to")
-    if isinstance(from_ep, dict):
-        clamp = from_ep.get("clamp")
-        if isinstance(clamp, dict) and clamp.get("dir") == "not_before":
-            return True
-    if isinstance(to_ep, dict):
-        clamp = to_ep.get("clamp")
-        if isinstance(clamp, dict) and clamp.get("dir") == "not_after":
-            return True
-    return False
+
+def _endpoint_has_clamp(ep: Any) -> bool:
+    return isinstance(ep, dict) and ep.get("clamp") is not None
 
 
 def _in_range(now: datetime, start: datetime, end: datetime) -> bool:

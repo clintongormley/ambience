@@ -51,7 +51,7 @@ class FakeStore:
         return self._by_key.get(("floor", floor_id))
 
     def get_house(self) -> dict:
-        return self._by_key.get(("house", None), {"rules": []})
+        return self._by_key.get(("house", None), {"scenes": []})
 
 
 class DepsCondition:
@@ -77,7 +77,7 @@ def _engine(hass, scopes, conditions) -> AutoTriggerEngine:
 
 async def test_rebuild_indexes_enabled_scope_predicate(hass) -> None:
     scopes = [
-        ("area", "kitchen", {"rules": [{"when": {"state": "x"}}]}),
+        ("area", "kitchen", {"scenes": [{"when": {"state": "x"}}]}),
     ]
     conditions = {"state": DepsCondition(TriggerSpec(entities=frozenset({"binary_sensor.motion"})))}
     engine = _engine(hass, scopes, conditions)
@@ -89,13 +89,13 @@ async def test_rebuild_indexes_enabled_scope_predicate(hass) -> None:
 async def test_rebuild_watches_every_scope_unconditionally(hass) -> None:
     """Auto-triggers are always on: legacy ``auto_triggers_enabled`` /
     ``disabled_triggers`` keys in a scope's config are inert — every watch a
-    scope's rules imply is still registered."""
+    scope's scenes imply is still registered."""
     scopes = [
         (
             "area",
             "kitchen",
             {
-                "rules": [{"when": {"state": "x"}}],
+                "scenes": [{"when": {"state": "x"}}],
                 "auto_triggers_enabled": False,
                 "disabled_triggers": ["entity:binary_sensor.motion"],
             },
@@ -115,7 +115,7 @@ async def test_rebuild_skips_none_predicate_and_empty_deps(hass) -> None:
             "house",
             None,
             {
-                "rules": [
+                "scenes": [
                     {"when": {"state": None, "weather": "w"}},
                 ]
             },
@@ -132,7 +132,7 @@ async def test_rebuild_skips_none_predicate_and_empty_deps(hass) -> None:
 
 
 async def test_rebuild_unknown_condition_is_skipped(hass) -> None:
-    scopes = [("area", "a", {"rules": [{"when": {"mystery": "p"}}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"mystery": "p"}}]})]
     engine = _engine(hass, scopes, {})
     engine.async_rebuild()
     assert engine.index.entities == frozenset()
@@ -143,16 +143,16 @@ async def test_rebuild_condition_without_trigger_deps_is_opaque(hass) -> None:
         def matches(self, predicate, snapshot):
             return True
 
-    scopes = [("area", "a", {"rules": [{"when": {"legacy": "p"}}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"legacy": "p"}}]})]
     engine = _engine(hass, scopes, {"legacy": NoDeps()})
     engine.async_rebuild()
     assert engine.index.opaque == frozenset({("area", "a", 0, "legacy")})
 
 
 def _engine_with_state(hass) -> AutoTriggerEngine:
-    # One scope, one rule in category "g": tod predicate "evening", deps on sensor.x.
+    # One scope, one scene in category "g": tod predicate "evening", deps on sensor.x.
     scopes = [
-        ("area", "a", {"rules": [{"when": {"tod": "evening"}, "category": "g"}]}),
+        ("area", "a", {"scenes": [{"when": {"tod": "evening"}, "category": "g"}]}),
     ]
     conditions = {"tod": DepsCondition(TriggerSpec(entities=frozenset({"sensor.x"})))}
     engine = _engine(hass, scopes, conditions)
@@ -194,7 +194,7 @@ async def test_recompute_none_snapshot_evaluates_false(hass) -> None:
 
 async def test_recompute_stale_key_is_ignored(hass) -> None:
     engine = _engine_with_state(hass)
-    stale = ("area", "a", 9, "tod")  # rule index out of range
+    stale = ("area", "a", 9, "tod")  # scene index out of range
     dirty = engine._recompute({stale}, {"tod": "evening"})
     assert dirty == set()
 
@@ -206,7 +206,7 @@ async def test_recompute_one_flip_among_two_predicates_marks_scope_once(hass) ->
             "area",
             "a",
             {
-                "rules": [
+                "scenes": [
                     {"when": {"tod": "evening"}, "category": "g"},
                     {"when": {"tod": "night"}, "category": "g"},
                 ]
@@ -224,14 +224,14 @@ async def test_recompute_one_flip_among_two_predicates_marks_scope_once(hass) ->
 
 
 async def test_recompute_marks_only_flipped_categories_dirty(hass) -> None:
-    # Two rules in two categories; flip ONLY the predicate of rule idx0 (category
+    # Two scenes in two categories; flip ONLY the predicate of scene idx0 (category
     # "lighting"). The dirty unit set must name only that scope+category.
     scopes = [
         (
             "area",
             "lr",
             {
-                "rules": [
+                "scenes": [
                     {"when": {"tod": "evening"}, "category": "lighting"},
                     {"when": {"tod": "night"}, "category": "blinds"},
                 ]
@@ -249,7 +249,7 @@ async def test_recompute_marks_only_flipped_categories_dirty(hass) -> None:
 
 
 async def test_tier_executor_applies_areas_then_floors_then_house(hass) -> None:
-    scopes = [("area", "a", {"rules": []})]
+    scopes = [("area", "a", {"scenes": []})]
     conditions: dict = {}
     engine = _engine(hass, scopes, conditions)
     recorded: list[str] = []
@@ -274,18 +274,18 @@ async def test_recompute_key_for_removed_scope_is_ignored(hass) -> None:
     assert dirty == set()
 
 
-async def test_category_for_returns_rule_category(hass) -> None:
-    engine = _engine_with_state(hass)  # area a, rule0 in category "g"
+async def test_category_for_returns_scene_category(hass) -> None:
+    engine = _engine_with_state(hass)  # area a, scene0 in category "g"
     assert engine._category_for("area", "a", 0) == "g"
 
 
-async def test_recompute_drops_units_for_missing_rule(hass) -> None:
-    # A flipping predicate whose rule resolves to a None category (here: a rule
-    # with no category, but the same holds for a stale/out-of-range rule) must be
+async def test_recompute_drops_units_for_missing_scene(hass) -> None:
+    # A flipping predicate whose scene resolves to a None category (here: a scene
+    # with no category, but the same holds for a stale/out-of-range scene) must be
     # DROPPED, never added as a (kind, id, None) unit — a None category would
     # wrongly resolve the whole list in the apply path.
     scopes = [
-        ("area", "a", {"rules": [{"when": {"tod": "evening"}}]}),  # no category on the rule
+        ("area", "a", {"scenes": [{"when": {"tod": "evening"}}]}),  # no category on the scene
     ]
     conditions = {"tod": DepsCondition(TriggerSpec(entities=frozenset({"sensor.x"})))}
     engine = _engine(hass, scopes, conditions)
@@ -328,7 +328,7 @@ class _FakeExposedStorage:
 
 
 def _apply_engine(hass, *, switch_on: bool = True):
-    """Engine over one area 'a' with rules [evening->idx0, morning->idx1], the
+    """Engine over one area 'a' with scenes [evening->idx0, morning->idx1], the
     'tod' condition watching sensor.x, switch on, empty exposed actions."""
     tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
     scopes = [
@@ -336,7 +336,7 @@ def _apply_engine(hass, *, switch_on: bool = True):
             "area",
             "a",
             {
-                "rules": [
+                "scenes": [
                     {"when": {"tod": "evening"}, "category": "g", "actions": []},
                     {"when": {"tod": "morning"}, "category": "g", "actions": []},
                 ]
@@ -354,9 +354,9 @@ def _apply_engine(hass, *, switch_on: bool = True):
     return engine, tod
 
 
-async def test_initial_sync_applies_winning_rule(hass) -> None:
+async def test_initial_sync_applies_winning_scene(hass) -> None:
     engine, _tod = _apply_engine(hass)
-    await engine.async_initial_sync()  # tod="evening" -> rule 0 wins
+    await engine.async_initial_sync()  # tod="evening" -> scene 0 wins
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
 
 
@@ -368,10 +368,10 @@ async def test_evaluate_no_flip_does_not_reapply(hass) -> None:
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 99  # untouched (no flip)
 
 
-async def test_evaluate_flip_to_other_rule_reapplies(hass) -> None:
+async def test_evaluate_flip_to_other_scene_reapplies(hass) -> None:
     engine, tod = _apply_engine(hass)
     await engine.async_initial_sync()
-    tod.value = "morning"  # rule 1 now wins
+    tod.value = "morning"  # scene 1 now wins
     await engine.async_evaluate({("area", "a", 0, "tod"), ("area", "a", 1, "tod")})
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 1
 
@@ -422,7 +422,7 @@ async def test_evaluate_does_not_refresh_unfired_conditions(hass) -> None:
             "area",
             "a",
             {
-                "rules": [
+                "scenes": [
                     {"when": {"tod": "evening", "script": {"script": "script.s"}}, "actions": []}
                 ]
             },
@@ -458,8 +458,8 @@ class StateReadCondition:
 
 
 def _live_engine(hass) -> AutoTriggerEngine:
-    """Engine: area 'a', rule0 fires when binary_sensor.x == 'on'. Switch on."""
-    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    """Engine: area 'a', scene0 fires when binary_sensor.x == 'on'. Switch on."""
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"x": StateReadCondition()},
@@ -475,7 +475,7 @@ async def test_state_change_fires_and_applies(hass) -> None:
     hass.states.async_set("binary_sensor.x", "off")
     engine = _live_engine(hass)
     engine.async_subscribe()
-    await engine.async_initial_sync()  # x=off, rule needs "on" -> no match -> no apply
+    await engine.async_initial_sync()  # x=off, scene needs "on" -> no match -> no apply
     assert ("area", "a") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
 
     hass.states.async_set("binary_sensor.x", "on")
@@ -521,7 +521,7 @@ async def test_has_time_tick_fires(hass) -> None:
         def describe(self, snapshot):
             return None
 
-    scopes = [("area", "a", {"rules": [{"when": {"tmpl": "x"}, "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"tmpl": "x"}, "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"tmpl": HasTimeCondition()},
@@ -559,7 +559,7 @@ async def test_sun_event_scheduled_when_sun_available(hass) -> None:
         def describe(self, snapshot):
             return None
 
-    scopes = [("area", "a", {"rules": [{"when": {"sun": "x"}, "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"sun": "x"}, "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"sun": SunDepCondition()},
@@ -594,7 +594,7 @@ async def test_for_recheck_scheduled_on_state_change(hass) -> None:
         def describe(self, snapshot):
             return snapshot
 
-    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"x": ForCondition()},
@@ -614,7 +614,7 @@ async def test_for_recheck_scheduled_on_state_change(hass) -> None:
 
 async def test_async_start_builds_subscribes_and_syncs(hass) -> None:
     hass.states.async_set("binary_sensor.x", "on")
-    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"x": StateReadCondition()},
@@ -632,7 +632,7 @@ async def test_async_start_builds_subscribes_and_syncs(hass) -> None:
 async def test_switch_off_to_on_force_resyncs(hass) -> None:
     hass.states.async_set("binary_sensor.x", "on")
     switch = SimpleNamespace(is_on=True, entity_id="switch.ambience_a")
-    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"x": StateReadCondition()},
@@ -642,7 +642,7 @@ async def test_switch_off_to_on_force_resyncs(hass) -> None:
     engine = AutoTriggerEngine(hass)
     engine.async_rebuild()
     engine.async_subscribe()
-    await engine.async_initial_sync()  # applies rule 0
+    await engine.async_initial_sync()  # applies scene 0
     # Seed a WRONG last_applied: only a force-resync (which bypasses the
     # unchanged-winner guard) will correct it back to 0.
     hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] = 99
@@ -653,10 +653,10 @@ async def test_switch_off_to_on_force_resyncs(hass) -> None:
     engine._teardown()
 
 
-async def test_initial_sync_skips_rule_with_unregistered_condition(hass) -> None:
-    # A rule whose `when` names a condition that isn't registered (e.g. a stale
+async def test_initial_sync_skips_scene_with_unregistered_condition(hass) -> None:
+    # A scene whose `when` names a condition that isn't registered (e.g. a stale
     # config key) cannot be evaluated, so the engine must NOT auto-apply it.
-    scopes = [("area", "a", {"rules": [{"when": {"nonexistent": "x"}, "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"nonexistent": "x"}, "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {},
@@ -670,12 +670,12 @@ async def test_initial_sync_skips_rule_with_unregistered_condition(hass) -> None
 
 
 async def test_rebuild_prunes_stale_predicate_state(hass) -> None:
-    engine = _engine_with_state(hass)  # area a, rule0 {tod: evening}
+    engine = _engine_with_state(hass)  # area a, scene0 {tod: evening}
     key = ("area", "a", 0, "tod")
     engine._recompute({key}, {"tod": "evening"})  # seed flip-state for the key
     assert key in engine._predicate_state
-    # Rebuild over a store where that scope now has no rules.
-    hass.data[DOMAIN][DATA_STORE] = FakeStore([("area", "a", {"rules": []})])
+    # Rebuild over a store where that scope now has no scenes.
+    hass.data[DOMAIN][DATA_STORE] = FakeStore([("area", "a", {"scenes": []})])
     engine.async_rebuild()
     assert key not in engine._predicate_state  # stale key pruned
 
@@ -683,7 +683,7 @@ async def test_rebuild_prunes_stale_predicate_state(hass) -> None:
 async def test_config_refresh_is_debounced(hass) -> None:
     # Two rapid refresh requests coalesce into a single rebuild+sync.
     spy = SpyCondition(TriggerSpec(entities=frozenset({"sensor.y"})))
-    scopes = [("area", "a", {"rules": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"x": spy},
@@ -707,7 +707,7 @@ def _exposed_store_with(*service_ids):
     )
 
 
-async def test_reapply_fires_due_action_for_winning_rule(hass):
+async def test_reapply_fires_due_action_for_winning_scene(hass):
     calls = []
     hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
     action = {
@@ -716,9 +716,9 @@ async def test_reapply_fires_due_action_for_winning_rule(hass):
         "params": {"brightness": 7},
         "reapply_seconds": 10,
     }
-    rule = {"when": {}, "category": "g", "actions": [action]}
+    scene = {"when": {}, "category": "g", "actions": [action]}
     hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
         DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
@@ -748,9 +748,9 @@ async def test_reapply_attributes_to_ambience(hass):
         "params": {},
         "reapply_seconds": 10,
     }
-    rule = {"when": {}, "category": "g", "name": "Evening", "actions": [action]}
+    scene = {"when": {}, "category": "g", "name": "Evening", "actions": [action]}
     hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
         DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
@@ -787,9 +787,9 @@ async def test_reapply_emits_trace_event(hass):
         "params": {"brightness": 7},
         "reapply_seconds": 10,
     }
-    rule = {"when": {}, "category": "g", "name": "evening", "actions": [action]}
+    scene = {"when": {}, "category": "g", "name": "evening", "actions": [action]}
     hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
         DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
@@ -819,7 +819,7 @@ async def test_reapply_emits_trace_event(hass):
 async def test_reapply_skips_when_switch_off(hass):
     calls = []
     hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
-    rule = {
+    scene = {
         "when": {},
         "category": "g",
         "actions": [
@@ -832,7 +832,7 @@ async def test_reapply_skips_when_switch_off(hass):
         ],
     }
     hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
         DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
@@ -849,11 +849,11 @@ async def test_reapply_skips_when_switch_off(hass):
     eng._teardown()
 
 
-async def test_reapply_skips_when_rule_is_not_the_winner(hass):
+async def test_reapply_skips_when_scene_is_not_the_winner(hass):
     calls = []
     hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
-    rule0 = {"when": {}, "category": "g", "actions": []}
-    rule1 = {
+    scene0 = {"when": {}, "category": "g", "actions": []}
+    scene1 = {
         "when": {},
         "category": "g",
         "actions": [
@@ -866,10 +866,10 @@ async def test_reapply_skips_when_rule_is_not_the_winner(hass):
         ],
     }
     hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"rules": [rule0, rule1]})]),
+        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene0, scene1]})]),
         DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
-        # winner is rule 0; the re-applying action lives in rule 1
+        # winner is scene 0; the re-applying action lives in scene 1
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
         DATA_SWITCHES: {},
     }
@@ -882,10 +882,10 @@ async def test_reapply_skips_when_rule_is_not_the_winner(hass):
     eng._teardown()
 
 
-async def test_reapply_skips_when_no_rule_active(hass):
+async def test_reapply_skips_when_no_scene_active(hass):
     calls = []
     hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
-    rule = {
+    scene = {
         "when": {},
         "category": "g",
         "actions": [
@@ -898,7 +898,7 @@ async def test_reapply_skips_when_no_rule_active(hass):
         ],
     }
     hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
         DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
         DATA_LAST_APPLIED: {},  # nothing applied
@@ -921,7 +921,7 @@ async def test_state_change_emits_trace_event_to_sink(hass) -> None:
             captured.append(event)
 
     # Use the same setup as _live_engine / test_state_change_fires_and_applies:
-    # area 'a', rule0 fires when binary_sensor.x == 'on', switch on.
+    # area 'a', scene0 fires when binary_sensor.x == 'on', switch on.
     hass.states.async_set("binary_sensor.x", "off")
     engine = _live_engine(hass)
     # Install the capture sink BEFORE subscribing so it is present at emit time.
@@ -932,7 +932,7 @@ async def test_state_change_emits_trace_event_to_sink(hass) -> None:
     trace_logger = logging.getLogger("custom_components.ambience.trace")
     trace_logger.setLevel(logging.DEBUG)
     try:
-        # Flip the sensor so rule0 wins and the engine ACTs.
+        # Flip the sensor so scene0 wins and the engine ACTs.
         hass.states.async_set("binary_sensor.x", "on")
         await hass.async_block_till_done()
 
@@ -948,7 +948,7 @@ async def test_reapply_distinct_intervals_fire_independently(hass):
     calls = []
     hass.services.async_register("light", "turn_on", lambda c: calls.append(("on", c.data)))
     hass.services.async_register("light", "turn_off", lambda c: calls.append(("off", c.data)))
-    rule = {
+    scene = {
         "when": {},
         "category": "g",
         "actions": [
@@ -967,7 +967,7 @@ async def test_reapply_distinct_intervals_fire_independently(hass):
         ],
     }
     hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"rules": [rule]})]),
+        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
         DATA_CONDITIONS: {},
         DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on", "light.turn_off"),
         DATA_LAST_APPLIED: {("area", "k", "g"): 0},
@@ -985,7 +985,7 @@ async def test_reapply_distinct_intervals_fire_independently(hass):
 
 
 # ---------------------------------------------------------------------------
-# Lines 159, 163 — _category_for: None-scope and out-of-range rule_index
+# Lines 159, 163 — _category_for: None-scope and out-of-range scene_index
 # ---------------------------------------------------------------------------
 
 
@@ -996,9 +996,9 @@ async def test_category_for_returns_none_for_unknown_scope(hass) -> None:
     assert result is None
 
 
-async def test_category_for_returns_none_for_out_of_range_rule(hass) -> None:
-    """Line 163: _category_for returns None when rule_index >= len(rules)."""
-    engine = _engine_with_state(hass)  # area "a" has exactly 1 rule (index 0)
+async def test_category_for_returns_none_for_out_of_range_scene(hass) -> None:
+    """Line 163: _category_for returns None when scene_index >= len(scenes)."""
+    engine = _engine_with_state(hass)  # area "a" has exactly 1 scene (index 0)
     result = engine._category_for("area", "a", 99)
     assert result is None
 
@@ -1047,7 +1047,7 @@ async def test_refresh_snapshots_stores_none_on_snapshot_exception(hass) -> None
         def matches(self, predicate: Any, snapshot: Any) -> bool:
             return False
 
-    scopes = [("area", "a", {"rules": [{"when": {"bad": "p"}, "category": "g"}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"bad": "p"}, "category": "g"}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"bad": BrokenCondition()},
@@ -1087,18 +1087,18 @@ async def test_resolve_and_apply_returns_unit_trace_when_switch_off_and_tracing(
 # ---------------------------------------------------------------------------
 
 
-async def test_resolve_and_apply_returns_no_match_trace_when_no_rule_matches(hass) -> None:
-    """Line 239: no rule matches (index is None) and tracing active → NO_MATCH UnitTrace."""
+async def test_resolve_and_apply_returns_no_match_trace_when_no_scene_matches(hass) -> None:
+    """Line 239: no scene matches (index is None) and tracing active → NO_MATCH UnitTrace."""
     from custom_components.ambience.trace import Outcome
 
-    # tod condition returns "afternoon"; neither rule matches (they need "evening"/"morning").
+    # tod condition returns "afternoon"; neither scene matches (they need "evening"/"morning").
     tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "afternoon")
     scopes = [
         (
             "area",
             "a",
             {
-                "rules": [
+                "scenes": [
                     {"when": {"tod": "evening"}, "category": "g", "actions": []},
                     {"when": {"tod": "morning"}, "category": "g", "actions": []},
                 ]
@@ -1134,7 +1134,7 @@ async def test_resolve_and_apply_returns_no_op_trace_when_winner_unchanged(hass)
     from custom_components.ambience.trace import Outcome
 
     engine, _tod = _apply_engine(hass)
-    # tod="evening" → rule 0 wins; mark rule 0 as already applied.
+    # tod="evening" → scene 0 wins; mark scene 0 as already applied.
     engine._snapshots = {"tod": "evening"}
     hass.data[DOMAIN].setdefault(DATA_LAST_APPLIED, {})[("area", "a", "g")] = 0
     logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
@@ -1151,7 +1151,7 @@ async def test_resolve_and_apply_returns_none_when_winner_unchanged_and_tracing_
 ) -> None:
     """Line 254: winner == last-applied, not forced, tracing inactive → returns None."""
     engine, _tod = _apply_engine(hass)
-    # tod="evening" → rule 0 wins; mark rule 0 as already applied.
+    # tod="evening" → scene 0 wins; mark scene 0 as already applied.
     engine._snapshots = {"tod": "evening"}
     hass.data[DOMAIN].setdefault(DATA_LAST_APPLIED, {})[("area", "a", "g")] = 0
     # Force tracing OFF. We can't rely on the default logger level: under the HA
@@ -1218,7 +1218,7 @@ async def test_initial_sync_emits_startup_trace_when_tracing_active(hass) -> Non
             captured.append(event)
 
     engine, _tod = _apply_engine(hass)
-    # tod="evening" → rule 0 wins; engine hasn't applied anything yet.
+    # tod="evening" → scene 0 wins; engine hasn't applied anything yet.
     hass.data[DOMAIN][DATA_TRACE_SINKS] = [CaptureSink()]
     logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
     try:

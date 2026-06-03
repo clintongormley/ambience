@@ -29,7 +29,7 @@ from .service import (
     async_apply_scene,
     async_resolve_categories_only,
     async_resolve_only,
-    async_run_rule_actions,
+    async_run_scene_actions,
 )
 from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import condition_priority
@@ -38,7 +38,7 @@ from .store import CategoryInUseError, LastCategoryError
 from .trace import buffered_unit_to_dict
 from .websocket_helpers import (
     canonicalise,
-    coerce_rule_categories,
+    coerce_scene_categories,
     dangling_day_entity_warnings,
     dangling_weather_warnings,
     missing_period_refs,
@@ -71,7 +71,7 @@ _WS_COMMANDS = (
     "ambience/validate",
     "ambience/dry_run",
     "ambience/apply",
-    "ambience/rule/run_actions",
+    "ambience/scene/run_actions",
     "ambience/time_of_day_periods/list",
     "ambience/time_of_day_periods/save",
     "ambience/time_of_day_periods/reset",
@@ -110,7 +110,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_validate)
     websocket_api.async_register_command(hass, _ws_dry_run)
     websocket_api.async_register_command(hass, _ws_apply)
-    websocket_api.async_register_command(hass, _ws_run_rule_actions)
+    websocket_api.async_register_command(hass, _ws_run_scene_actions)
     websocket_api.async_register_command(hass, _ws_periods_list)
     websocket_api.async_register_command(hass, _ws_periods_save)
     websocket_api.async_register_command(hass, _ws_periods_reset)
@@ -264,14 +264,14 @@ async def _ws_exposed_actions_save(
 
     await exposed_store.save(actions)
 
-    # Dangling-rule warnings: walk every scope and flag any rule whose
+    # Dangling-scene warnings: walk every scope and flag any scene whose
     # action references a removed service or sets a param for a field
     # that is no longer visible.
     store = hass.data[DOMAIN][DATA_STORE]
     warnings: list[dict[str, Any]] = []
     for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for rule in scope_cfg.get("rules", []):
-            for action_spec in rule.get("actions", []):
+        for scene in scope_cfg.get("scenes", []):
+            for action_spec in scene.get("actions", []):
                 sid = action_spec.get("service")
                 if not isinstance(sid, str):
                     continue
@@ -282,8 +282,8 @@ async def _ws_exposed_actions_save(
                         {
                             "scope_kind": scope_kind,
                             "scope_id": scope_id,
-                            "rule_name": rule.get("name", ""),
-                            "reason": f"rule references {sid!r} which is no longer exposed",
+                            "scene_name": scene.get("name", ""),
+                            "reason": f"scene references {sid!r} which is no longer exposed",
                         }
                     )
                     continue
@@ -298,10 +298,10 @@ async def _ws_exposed_actions_save(
                         {
                             "scope_kind": scope_kind,
                             "scope_id": scope_id,
-                            "rule_name": rule.get("name", ""),
+                            "scene_name": scene.get("name", ""),
                             "reason": (
-                                f"rule sets {sorted(extra)!r} on {sid!r} but those "
-                                f"fields are not currently exposed (the rule will "
+                                f"scene sets {sorted(extra)!r} on {sid!r} but those "
+                                f"fields are not currently exposed (the scene will "
                                 f"still send them at execution)"
                             ),
                         }
@@ -328,7 +328,7 @@ async def _ws_area_get(
         connection.send_error(msg["id"], "unknown_area", "area not found")
         return
     store = hass.data[DOMAIN][DATA_STORE]
-    area = store.get_area(area_id) or {"rules": []}
+    area = store.get_area(area_id) or {"scenes": []}
     connection.send_result(msg["id"], with_shadows(hass, area))
 
 
@@ -359,10 +359,10 @@ async def _ws_area_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    # Coerce categories BEFORE canonicalising so each rule is ordered in its final
+    # Coerce categories BEFORE canonicalising so each scene is ordered in its final
     # (post-coercion) category bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    coerce_rule_categories(store, msg["config"])
+    coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
     await store.async_save_area(area_id, config)
     connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
@@ -386,7 +386,7 @@ async def _ws_floor_get(
         connection.send_error(msg["id"], "unknown_floor", "floor not found")
         return
     store = hass.data[DOMAIN][DATA_STORE]
-    cfg = store.get_floor(floor_id) or {"rules": []}
+    cfg = store.get_floor(floor_id) or {"scenes": []}
     connection.send_result(msg["id"], with_shadows(hass, cfg))
 
 
@@ -417,10 +417,10 @@ async def _ws_floor_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    # Coerce categories BEFORE canonicalising so each rule is ordered in its final
+    # Coerce categories BEFORE canonicalising so each scene is ordered in its final
     # (post-coercion) category bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    coerce_rule_categories(store, msg["config"])
+    coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
     await store.async_save_floor(floor_id, config)
     connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
@@ -435,7 +435,7 @@ async def _ws_house_get(
     msg: dict[str, Any],
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    house = store.get_house() or {"rules": []}
+    house = store.get_house() or {"scenes": []}
     connection.send_result(msg["id"], with_shadows(hass, house))
 
 
@@ -457,10 +457,10 @@ async def _ws_house_save(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
-    # Coerce categories BEFORE canonicalising so each rule is ordered in its final
+    # Coerce categories BEFORE canonicalising so each scene is ordered in its final
     # (post-coercion) category bucket, not a transient unknown/empty one.
     store = hass.data[DOMAIN][DATA_STORE]
-    coerce_rule_categories(store, msg["config"])
+    coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
     await store.async_save_house(config)
     connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
@@ -566,22 +566,22 @@ async def _ws_apply(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): "ambience/rule/run_actions",
+        vol.Required("type"): "ambience/scene/run_actions",
         vol.Optional("area_id"): str,
         vol.Optional("floor_id"): str,
         vol.Optional("house"): _house_must_be_true,
-        vol.Required("rule_index"): int,
+        vol.Required("scene_index"): int,
     }
 )
 @websocket_api.async_response
-async def _ws_run_rule_actions(
+async def _ws_run_scene_actions(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     try:
         scope_kind, scope_id = _parse_scope(msg, "run_actions")
-        result = await async_run_rule_actions(hass, scope_kind, scope_id, msg["rule_index"])
+        result = await async_run_scene_actions(hass, scope_kind, scope_id, msg["scene_index"])
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
@@ -621,19 +621,19 @@ async def _ws_periods_save(
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
 
-    # Walk every persisted rule and collect dangling-period warnings.
+    # Walk every persisted scene and collect dangling-period warnings.
     store = hass.data[DOMAIN][DATA_STORE]
     effective_ids = set(period_store.effective())
     warnings: list[dict[str, Any]] = []
     for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for rule in scope_cfg.get("rules", []):
-            pred = rule.get("when", {}).get("time_of_day")
+        for scene in scope_cfg.get("scenes", []):
+            pred = scene.get("when", {}).get("time_of_day")
             for missing in missing_period_refs(pred, effective_ids):
                 warnings.append(
                     {
                         "scope_kind": scope_kind,
                         "scope_id": scope_id,
-                        "rule_name": rule.get("name", ""),
+                        "scene_name": scene.get("name", ""),
                         "missing_period": missing,
                     }
                 )

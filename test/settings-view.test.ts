@@ -13,9 +13,9 @@ vi.mock("../frontend/src/api.js", () => ({
   listFloors: vi.fn(async () => []),
   getSwitchDefaults: vi.fn(async () => ({ name: "Ambience", auto_on_delay_seconds: 7200 })),
   saveSwitchDefaults: vi.fn(async () => ({ ok: true })),
-  getArea: vi.fn(async () => ({ rules: [] })),
-  getFloor: vi.fn(async () => ({ rules: [] })),
-  getHouse: vi.fn(async () => ({ rules: [] })),
+  getArea: vi.fn(async () => ({ scenes: [] })),
+  getFloor: vi.fn(async () => ({ scenes: [] })),
+  getHouse: vi.fn(async () => ({ scenes: [] })),
 }));
 
 import "../frontend/src/views/settings-view";

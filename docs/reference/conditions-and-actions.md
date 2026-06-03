@@ -7,8 +7,8 @@ To regenerate: `python -m scripts.gen_reference_docs --write`
 
 ## Conditions
 
-Built-in conditions that can be used in Ambience rules.
-Each condition is referenced by its **kind** key in the `when` clause of a rule.
+Built-in conditions that can be used in Ambience scenes.
+Each condition is referenced by its **kind** key in the `when` clause of a scene.
 
 ### day
 
@@ -66,10 +66,10 @@ Services registered by the Ambience integration.
 
 **Name:** Apply scene
 
-Resolve the area's rules and apply the matching scene's actions.
+Resolve the area's scenes and apply the matching scene's actions.
 
 **Fields:**
 
 - `area` *(required)*: The HA area id to apply the scene in.
-- `scene` *(optional)*: Optional scene name. When omitted, scene predicates in rules are treated as wildcards.
+- `scene` *(optional)*: Optional scene name. When omitted, scene predicates in scenes are treated as wildcards.
 

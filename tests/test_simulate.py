@@ -117,12 +117,12 @@ async def test_build_simulated_snapshots_injects_synthetic_sun():
 
 
 class _Store:
-    def __init__(self, rules, weather_entity=None):
-        self._rules = rules
+    def __init__(self, scenes, weather_entity=None):
+        self._scenes = scenes
         self._weather_entity = weather_entity
 
     def scope_config(self, scope_kind, scope_id):
-        return {"rules": self._rules}
+        return {"scenes": self._scenes}
 
     def get_condition_config(self, name):
         if name == "weather":
@@ -130,7 +130,7 @@ class _Store:
         return {}
 
 
-def _inputs_hass(rules, states, weather_entity=None):
+def _inputs_hass(scenes, states, weather_entity=None):
     from custom_components.ambience.conditions.state import StateCondition
     from custom_components.ambience.conditions.weather import WeatherCondition
 
@@ -138,14 +138,14 @@ def _inputs_hass(rules, states, weather_entity=None):
     conditions = {"state": StateCondition(hass), "weather": WeatherCondition(hass)}
     hass.data[DOMAIN] = {
         DATA_CONDITIONS: conditions,
-        DATA_STORE: _Store(rules, weather_entity),
+        DATA_STORE: _Store(scenes, weather_entity),
     }
     return hass
 
 
 @pytest.mark.asyncio
 async def test_simulate_inputs_lists_entity_knobs_for_the_category():
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "when": {
@@ -157,7 +157,7 @@ async def test_simulate_inputs_lists_entity_knobs_for_the_category():
             "when": {"state": {"kind": "is", "entity_id": "binary_sensor.other", "states": ["on"]}},
         },
     ]
-    hass = _inputs_hass(rules, [_State("binary_sensor.motion", "off")])
+    hass = _inputs_hass(scenes, [_State("binary_sensor.motion", "off")])
     result = await simulate_inputs(hass, "area", "kitchen", "g1")
     ids = [k["entity_id"] for k in result["knobs"] if k["kind"] == "entity"]
     assert ids == ["binary_sensor.motion"]  # only g1's dependency
@@ -167,7 +167,7 @@ async def test_simulate_inputs_lists_entity_knobs_for_the_category():
 
 @pytest.mark.asyncio
 async def test_simulate_inputs_surfaces_weather_threshold_attributes():
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "when": {
@@ -176,7 +176,7 @@ async def test_simulate_inputs_surfaces_weather_threshold_attributes():
         }
     ]
     hass = _inputs_hass(
-        rules,
+        scenes,
         [_State("weather.home", "rainy", {"temperature": 9.0, "humidity": 80})],
         weather_entity="weather.home",
     )
@@ -200,13 +200,13 @@ async def test_simulate_inputs_emits_script_verdict_knob():
         async def snapshot(self, hass, *, now=None):
             return ScriptSnapshot(results={_cache_key("script.holiday", {}): True})
 
-    rules = [
+    scenes = [
         {"category": "g1", "name": "Holiday", "when": {"script": {"script": "script.holiday"}}}
     ]
 
     class _Store4:
         def scope_config(self, sk, si):
-            return {"rules": rules}
+            return {"scenes": scenes}
 
         def get_condition_config(self, name):
             return {"entity": None, "groups": []} if name == "weather" else {}
@@ -230,20 +230,20 @@ async def test_simulate_inputs_emits_script_verdict_knob():
 # ---------------------------------------------------------------------------
 
 
-def _resolve_hass(rules, states):
+def _resolve_hass(scenes, states):
     from custom_components.ambience.conditions.state import StateCondition
 
     hass = _Hass(states)
     hass.data[DOMAIN] = {
         DATA_CONDITIONS: {"state": StateCondition(hass)},
-        DATA_STORE: _Store(rules),
+        DATA_STORE: _Store(scenes),
     }
     return hass
 
 
 @pytest.mark.asyncio
 async def test_run_simulation_returns_winner_as_buffered_unit():
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "name": "Motion on",
@@ -253,7 +253,7 @@ async def test_run_simulation_returns_winner_as_buffered_unit():
             "actions": [{"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}],
         }
     ]
-    hass = _resolve_hass(rules, [_State("binary_sensor.motion", "off")])
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
     result = await run_simulation(hass, "area", "kitchen", "g1", world)
 
@@ -261,12 +261,12 @@ async def test_run_simulation_returns_winner_as_buffered_unit():
     assert result["winner_name"] == "Motion on"
     assert result["cause"]["kind"] == "simulated"
     assert result["category"] == "g1"
-    assert result["explanation"]["rules"][0]["matched"] is True
+    assert result["explanation"]["scenes"][0]["matched"] is True
 
 
 @pytest.mark.asyncio
 async def test_run_simulation_reports_no_match():
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "name": "Motion on",
@@ -275,7 +275,7 @@ async def test_run_simulation_reports_no_match():
             },
         }
     ]
-    hass = _resolve_hass(rules, [_State("binary_sensor.motion", "off")])
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(now=FIXED, overrides={})  # motion stays off
     result = await run_simulation(hass, "area", "kitchen", "g1", world)
     assert result["outcome"] == "no_match"
@@ -312,7 +312,7 @@ async def test_build_simulated_snapshots_uses_verdicts_for_script():
 
 
 def test_simulate_inputs_excludes_time_derived_entities():
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "when": {
@@ -328,7 +328,7 @@ def test_simulate_inputs_excludes_time_derived_entities():
 
     class _Store2:
         def scope_config(self, sk, si):
-            return {"rules": rules}
+            return {"scenes": scenes}
 
         def get_condition_config(self, name):
             if name == "day":
@@ -347,7 +347,7 @@ def test_simulate_inputs_excludes_time_derived_entities():
 
 
 def test_simulate_inputs_control_kinds():
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "when": {
@@ -365,7 +365,7 @@ def test_simulate_inputs_control_kinds():
 
     class _Store3:
         def scope_config(self, sk, si):
-            return {"rules": rules}
+            return {"scenes": scenes}
 
         def get_condition_config(self, name):
             return {"entity": None, "groups": []} if name == "weather" else {}
@@ -383,7 +383,7 @@ def test_simulate_inputs_surfaces_state_referenced_attributes():
     >/< ops) become editable sub-rows with the right control."""
     from custom_components.ambience.conditions.state import StateCondition
 
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "when": {
@@ -416,7 +416,7 @@ def test_simulate_inputs_surfaces_state_referenced_attributes():
 
     class _Store6:
         def scope_config(self, sk, si):
-            return {"rules": rules}
+            return {"scenes": scenes}
 
         def get_condition_config(self, name):
             return {"entity": None, "groups": []} if name == "weather" else {}
@@ -601,7 +601,7 @@ def test_collect_state_attributes_not_node():
 def test_referenced_attributes_skips_threshold_without_attribute():
     """A weather threshold dict lacking an 'attribute' key produces no attribute entry."""
 
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "when": {
@@ -610,7 +610,7 @@ def test_referenced_attributes_skips_threshold_without_attribute():
             },
         }
     ]
-    hass = _inputs_hass(rules, [_State("weather.home", "sunny")], weather_entity="weather.home")
+    hass = _inputs_hass(scenes, [_State("weather.home", "sunny")], weather_entity="weather.home")
     result = simulate_inputs_entities(hass, "area", "kitchen", "g1")
     weather_knob = next(k for k in result if k.get("entity_id") == "weather.home")
     # No attributes emitted because the threshold had no 'attribute' key.
@@ -631,7 +631,7 @@ def test_is_number_none_returns_false():
 def test_entity_knob_falls_back_to_text_when_no_state_and_no_options():
     """Entity with no live state and no known options (known_states_for returns []) uses 'text'."""
 
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "when": {
@@ -645,7 +645,7 @@ def test_entity_knob_falls_back_to_text_when_no_state_and_no_options():
     ]
     # No live state → known_states_for returns [] → no categorical, live_state=None
     # → _is_number(None) is False → falls through to "text" branch (line 269).
-    hass = _inputs_hass(rules, [])  # entity not in live states at all
+    hass = _inputs_hass(scenes, [])  # entity not in live states at all
     knobs = simulate_inputs_entities(hass, "area", "kitchen", "g1")
     knob = next(k for k in knobs if k["entity_id"] == "sensor.mystery")
     assert knob["control"] == "text"
@@ -657,14 +657,14 @@ def test_entity_knob_falls_back_to_text_when_no_state_and_no_options():
 
 @pytest.mark.asyncio
 async def test_verdict_knobs_template_has_no_entity_id():
-    """A template verdict knob uses the rule name as its label and has no entity_id."""
+    """A template verdict knob uses the scene name as its label and has no entity_id."""
     from custom_components.ambience.conditions.template import TemplateCondition, TemplateSnapshot
 
     class _TemplateStub(TemplateCondition):
         async def snapshot(self, hass, *, now=None):
             return TemplateSnapshot(results={})
 
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "name": "Is daytime",
@@ -674,7 +674,7 @@ async def test_verdict_knobs_template_has_no_entity_id():
 
     class _StoreT:
         def scope_config(self, sk, si):
-            return {"rules": rules}
+            return {"scenes": scenes}
 
         def get_condition_config(self, name):
             return {"entity": None, "groups": []} if name == "weather" else {}
@@ -707,7 +707,7 @@ async def test_verdict_knobs_live_snapshot_failure_defaults_to_false():
         async def snapshot(self, hass, *, now=None):
             raise RuntimeError("verdict snapshot failed")
 
-    rules = [
+    scenes = [
         {
             "category": "g1",
             "name": "Holiday",
@@ -717,7 +717,7 @@ async def test_verdict_knobs_live_snapshot_failure_defaults_to_false():
 
     class _StoreV:
         def scope_config(self, sk, si):
-            return {"rules": rules}
+            return {"scenes": scenes}
 
         def get_condition_config(self, name):
             return {"entity": None, "groups": []} if name == "weather" else {}
@@ -737,8 +737,8 @@ async def test_verdict_knobs_live_snapshot_failure_defaults_to_false():
 
 
 @pytest.mark.asyncio
-async def test_verdict_knobs_deduplicates_same_predicate_across_rules():
-    """The same opaque predicate appearing in two rules produces only one verdict knob."""
+async def test_verdict_knobs_deduplicates_same_predicate_across_scenes():
+    """The same opaque predicate appearing in two scenes produces only one verdict knob."""
     from custom_components.ambience.conditions.script import (
         ScriptCondition,
         ScriptSnapshot,
@@ -750,14 +750,14 @@ async def test_verdict_knobs_deduplicates_same_predicate_across_rules():
             return ScriptSnapshot(results={_cache_key("script.holiday", {}): True})
 
     shared_key = _cache_key("script.holiday", {})
-    rules = [
-        {"category": "g1", "name": "Rule A", "when": {"script": {"script": "script.holiday"}}},
-        {"category": "g1", "name": "Rule B", "when": {"script": {"script": "script.holiday"}}},
+    scenes = [
+        {"category": "g1", "name": "Scene A", "when": {"script": {"script": "script.holiday"}}},
+        {"category": "g1", "name": "Scene B", "when": {"script": {"script": "script.holiday"}}},
     ]
 
     class _StoreD:
         def scope_config(self, sk, si):
-            return {"rules": rules}
+            return {"scenes": scenes}
 
         def get_condition_config(self, name):
             return {"entity": None, "groups": []} if name == "weather" else {}
@@ -769,7 +769,7 @@ async def test_verdict_knobs_deduplicates_same_predicate_across_rules():
     }
     result = await simulate_inputs(hass, "area", "kitchen", "g1")
     verdicts = [k for k in result["knobs"] if k["kind"] == "verdict"]
-    # Both rules reference the same script → only one knob.
+    # Both scenes reference the same script → only one knob.
     assert len(verdicts) == 1
     assert verdicts[0]["key"] == shared_key
 

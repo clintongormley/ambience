@@ -12,7 +12,7 @@ from custom_components.ambience.const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
-from custom_components.ambience.store import AmbienceStore, reassign_orphan_rules
+from custom_components.ambience.store import AmbienceStore, reassign_orphan_scenes
 
 
 async def test_load_empty_returns_empty_areas(hass: HomeAssistant) -> None:
@@ -27,7 +27,7 @@ async def test_save_and_read_area(hass: HomeAssistant) -> None:
     config = {
         "extra": ["movie"],
         "conditions": ["time_of_day"],
-        "rules": [],
+        "scenes": [],
     }
     await store.async_save_area("living_room", config)
     assert store.areas() == {"living_room": config}
@@ -43,7 +43,7 @@ async def test_get_area_unknown_returns_none(hass: HomeAssistant) -> None:
 async def test_delete_area(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_area("a", {"extra": [], "conditions": [], "rules": []})
+    await store.async_save_area("a", {"extra": [], "conditions": [], "scenes": []})
     await store.async_delete_area("a")
     assert store.get_area("a") is None
 
@@ -74,7 +74,7 @@ async def test_persisted_data_survives_new_store_instance(hass: HomeAssistant) -
     """Save with one AmbienceStore, then load with a fresh one — data must survive."""
     s1 = AmbienceStore(hass)
     await s1.async_load()
-    config = {"extra": ["welcome"], "rules": []}
+    config = {"extra": ["welcome"], "scenes": []}
     await s1.async_save_area("hall", config)
 
     s2 = AmbienceStore(hass)
@@ -221,13 +221,13 @@ async def test_load_empty_returns_empty_floors(hass: HomeAssistant) -> None:
 async def test_load_empty_returns_default_house(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    assert store.get_house() == {"rules": []}
+    assert store.get_house() == {"scenes": []}
 
 
 async def test_save_and_read_floor(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    config = {"rules": [{"name": "x", "when": {}, "actions": []}]}
+    config = {"scenes": [{"name": "x", "when": {}, "actions": []}]}
     await store.async_save_floor("upstairs", config)
     assert store.get_floor("upstairs") == config
     assert store.floors() == {"upstairs": config}
@@ -236,7 +236,7 @@ async def test_save_and_read_floor(hass: HomeAssistant) -> None:
 async def test_delete_floor(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_floor("a", {"rules": []})
+    await store.async_save_floor("a", {"scenes": []})
     await store.async_delete_floor("a")
     assert store.get_floor("a") is None
 
@@ -250,7 +250,7 @@ async def test_delete_unknown_floor_is_noop(hass: HomeAssistant) -> None:
 async def test_save_and_read_house(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    config = {"rules": [{"name": "away", "when": {}, "actions": []}]}
+    config = {"scenes": [{"name": "away", "when": {}, "actions": []}]}
     await store.async_save_house(config)
     assert store.get_house() == config
 
@@ -258,21 +258,21 @@ async def test_save_and_read_house(hass: HomeAssistant) -> None:
 async def test_persisted_floor_and_house_survive_new_store(hass: HomeAssistant) -> None:
     s1 = AmbienceStore(hass)
     await s1.async_load()
-    await s1.async_save_floor("upstairs", {"rules": []})
-    await s1.async_save_house({"rules": [{"name": "h", "when": {}, "actions": []}]})
+    await s1.async_save_floor("upstairs", {"scenes": []})
+    await s1.async_save_house({"scenes": [{"name": "h", "when": {}, "actions": []}]})
 
     s2 = AmbienceStore(hass)
     await s2.async_load()
-    assert s2.get_floor("upstairs") == {"rules": []}
-    assert s2.get_house()["rules"][0]["name"] == "h"
+    assert s2.get_floor("upstairs") == {"scenes": []}
+    assert s2.get_house()["scenes"][0]["name"] == "h"
 
 
 async def test_all_scope_configs_yields_every_scope(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_area("kitchen", {"rules": [{"name": "k", "when": {}, "actions": []}]})
-    await store.async_save_floor("upstairs", {"rules": [{"name": "u", "when": {}, "actions": []}]})
-    await store.async_save_house({"rules": [{"name": "h", "when": {}, "actions": []}]})
+    await store.async_save_area("kitchen", {"scenes": [{"name": "k", "when": {}, "actions": []}]})
+    await store.async_save_floor("upstairs", {"scenes": [{"name": "u", "when": {}, "actions": []}]})
+    await store.async_save_house({"scenes": [{"name": "h", "when": {}, "actions": []}]})
 
     triples = list(store.all_scope_configs())
     by_kind = {(k, sid): cfg for (k, sid, cfg) in triples}
@@ -280,8 +280,8 @@ async def test_all_scope_configs_yields_every_scope(hass: HomeAssistant) -> None
     assert ("area", "kitchen") in by_kind
     assert ("floor", "upstairs") in by_kind
     assert ("house", None) in by_kind
-    assert by_kind[("area", "kitchen")]["rules"][0]["name"] == "k"
-    assert by_kind[("house", None)]["rules"][0]["name"] == "h"
+    assert by_kind[("area", "kitchen")]["scenes"][0]["name"] == "k"
+    assert by_kind[("house", None)]["scenes"][0]["name"] == "h"
 
 
 async def test_save_area_fires_config_changed(hass: HomeAssistant) -> None:
@@ -289,7 +289,7 @@ async def test_save_area_fires_config_changed(hass: HomeAssistant) -> None:
     await store.async_load()
     calls: list = []
     unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
-    await store.async_save_area("a", {"rules": []})
+    await store.async_save_area("a", {"scenes": []})
     await hass.async_block_till_done()
     unsub()
     assert len(calls) == 1
@@ -324,7 +324,7 @@ async def test_save_exposed_actions_fires_config_changed(hass: HomeAssistant) ->
 async def test_delete_area_fires_config_changed(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    await store.async_save_area("a", {"rules": []})
+    await store.async_save_area("a", {"scenes": []})
     calls: list = []
     unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
     await store.async_delete_area("a")
@@ -376,17 +376,17 @@ async def test_save_categories_fires_config_changed(hass: HomeAssistant) -> None
 
 
 async def test_load_leaves_explicit_category_untouched(hass: HomeAssistant) -> None:
-    """A rule referencing an existing category keeps it across a save/reload round-trip."""
+    """A scene referencing an existing category keeps it across a save/reload round-trip."""
     store = AmbienceStore(hass)
     await store.async_load()
     await store.async_save_categories([{"id": "blinds", "name": "Blinds"}])
     await store.async_save_area(
         "lr",
-        {"rules": [{"when": {}, "actions": [], "category": "blinds"}]},
+        {"scenes": [{"when": {}, "actions": [], "category": "blinds"}]},
     )
     store2 = AmbienceStore(hass)
     await store2.async_load()
-    assert store2.get_area("lr")["rules"][0]["category"] == "blinds"
+    assert store2.get_area("lr")["scenes"][0]["category"] == "blinds"
 
 
 async def test_fresh_store_seeds_general_category(hass: HomeAssistant) -> None:
@@ -407,14 +407,14 @@ async def test_delete_category_blocked_when_it_has_members(
         "data": {
             "version": STORAGE_VERSION,
             "categories": [{"id": "blinds", "name": "Blinds"}, {"id": "lights", "name": "Lights"}],
-            "areas": {"a1": {"rules": [{"when": {}, "actions": [], "category": "blinds"}]}},
+            "areas": {"a1": {"scenes": [{"when": {}, "actions": [], "category": "blinds"}]}},
             "floors": {},
-            "house": {"rules": []},
+            "house": {"scenes": []},
         },
     }
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError, match="still has rules"):
+    with pytest.raises(ValueError, match="still has scenes"):
         await store.async_delete_category("blinds")
     assert any(g["id"] == "blinds" for g in store.categories())
 
@@ -427,7 +427,7 @@ async def test_delete_category_blocked_when_last(hass: HomeAssistant, hass_stora
             "categories": [{"id": "only", "name": "Only"}],
             "areas": {},
             "floors": {},
-            "house": {"rules": []},
+            "house": {"scenes": []},
         },
     }
     store = AmbienceStore(hass)
@@ -444,7 +444,7 @@ async def test_delete_empty_non_last_category_succeeds(hass: HomeAssistant, hass
             "categories": [{"id": "a", "name": "A"}, {"id": "b", "name": "B"}],
             "areas": {},
             "floors": {},
-            "house": {"rules": []},
+            "house": {"scenes": []},
         },
     }
     store = AmbienceStore(hass)
@@ -453,38 +453,38 @@ async def test_delete_empty_non_last_category_succeeds(hass: HomeAssistant, hass
     assert [g["id"] for g in store.categories()] == ["b"]
 
 
-# --- reassign_orphan_rules ---------------------------------------------------
+# --- reassign_orphan_scenes ---------------------------------------------------
 
 
-def test_reassign_orphan_rules_reassigns_none_category() -> None:
-    """Rules with category=None are pointed at the target; returns True."""
-    rules = [{"category": None, "actions": []}, {"category": "known", "actions": []}]
-    changed = reassign_orphan_rules(rules, {"known"}, "general")
+def test_reassign_orphan_scenes_reassigns_none_category() -> None:
+    """Scenes with category=None are pointed at the target; returns True."""
+    scenes = [{"category": None, "actions": []}, {"category": "known", "actions": []}]
+    changed = reassign_orphan_scenes(scenes, {"known"}, "general")
     assert changed is True
-    assert rules[0]["category"] == "general"
-    assert rules[1]["category"] == "known"  # untouched
+    assert scenes[0]["category"] == "general"
+    assert scenes[1]["category"] == "known"  # untouched
 
 
-def test_reassign_orphan_rules_reassigns_unknown_category() -> None:
-    """Rules with an unknown category id are pointed at the target; returns True."""
-    rules = [{"category": "deleted", "actions": []}]
-    changed = reassign_orphan_rules(rules, {"general"}, "general")
+def test_reassign_orphan_scenes_reassigns_unknown_category() -> None:
+    """Scenes with an unknown category id are pointed at the target; returns True."""
+    scenes = [{"category": "deleted", "actions": []}]
+    changed = reassign_orphan_scenes(scenes, {"general"}, "general")
     assert changed is True
-    assert rules[0]["category"] == "general"
+    assert scenes[0]["category"] == "general"
 
 
-def test_reassign_orphan_rules_no_change_when_all_known() -> None:
-    """When every rule already has a known category, returns False and nothing mutates."""
-    rules = [{"category": "lights", "actions": []}, {"category": "blinds", "actions": []}]
-    changed = reassign_orphan_rules(rules, {"lights", "blinds"}, "general")
+def test_reassign_orphan_scenes_no_change_when_all_known() -> None:
+    """When every scene already has a known category, returns False and nothing mutates."""
+    scenes = [{"category": "lights", "actions": []}, {"category": "blinds", "actions": []}]
+    changed = reassign_orphan_scenes(scenes, {"lights", "blinds"}, "general")
     assert changed is False
-    assert rules[0]["category"] == "lights"
-    assert rules[1]["category"] == "blinds"
+    assert scenes[0]["category"] == "lights"
+    assert scenes[1]["category"] == "blinds"
 
 
-def test_reassign_orphan_rules_empty_list_returns_false() -> None:
-    """An empty rule list is a no-op that returns False."""
-    changed = reassign_orphan_rules([], {"general"}, "general")
+def test_reassign_orphan_scenes_empty_list_returns_false() -> None:
+    """An empty scene list is a no-op that returns False."""
+    changed = reassign_orphan_scenes([], {"general"}, "general")
     assert changed is False
 
 
@@ -498,7 +498,7 @@ async def test_as_dict_returns_deep_copy(hass: HomeAssistant) -> None:
     snapshot = store.as_dict()
     assert "areas" in snapshot
     # Mutate the copy; the store's internal state must be unaffected.
-    snapshot["areas"]["injected"] = {"rules": []}
+    snapshot["areas"]["injected"] = {"scenes": []}
     assert store.get_area("injected") is None
 
 

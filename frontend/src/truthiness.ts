@@ -3,7 +3,7 @@
  * (homeassistant.helpers.template.result_as_boolean), which the backend
  * `TemplateCondition` uses to turn a rendered template into a match/no-match.
  *
- * Keep this in sync with the backend rule:
+ * Keep this in sync with the backend scene:
  *   true / non-zero number / "1" / "true" / "yes" / "on" / "enable"  => true
  *   everything else (incl. unknown/none/empty/other strings)         => false
  *

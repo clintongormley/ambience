@@ -138,16 +138,21 @@ describe("ambience-day-config", () => {
         {
           scope_kind: "area",
           scope_id: "kitchen",
-          rule_name: "Area rule",
+          scene_name: "Area scene",
           reason: "missing sensor",
         },
         {
           scope_kind: "floor",
           scope_id: "upstairs",
-          rule_name: "Floor rule",
+          scene_name: "Floor scene",
           reason: "missing sensor",
         },
-        { scope_kind: "house", scope_id: null, rule_name: "House rule", reason: "missing sensor" },
+        {
+          scope_kind: "house",
+          scope_id: null,
+          scene_name: "House scene",
+          reason: "missing sensor",
+        },
       ],
     });
     el = await mount();

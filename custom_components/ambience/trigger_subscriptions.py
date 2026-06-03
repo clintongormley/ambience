@@ -186,11 +186,11 @@ class TriggerSubscriptionsMixin:
         await asyncio.gather(*(self._reapply_scope(scope, interval) for scope in scopes))
 
     async def _reapply_scope(self, scope: tuple[str, str | None], interval: int) -> None:
-        """Re-fire each category's current winning rule's actions due at `interval`.
+        """Re-fire each category's current winning scene's actions due at `interval`.
 
         Uses last-applied per (scope, category) (kept current by the watch system)
         rather than re-resolving, and never mutates last-applied. Skips when the
-        switch is off, a category has no active rule, or its stored index is out of
+        switch is off, a category has no active scene, or its stored index is out of
         range.
         """
         scope_kind, scope_id = scope
@@ -200,26 +200,26 @@ class TriggerSubscriptionsMixin:
         cfg = self._scope_cfgs.get(scope)
         if cfg is None:
             return
-        rules = cfg.get("rules", [])
+        scenes = cfg.get("scenes", [])
         exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
         active = tracing_active(self._hass)
         traces: list[UnitTrace] = []
         for category_id in category_ids(cfg):
             index = get_last_applied(self._hass, scope_kind, scope_id, category_id)
-            if index is None or not 0 <= index < len(rules):
+            if index is None or not 0 <= index < len(scenes):
                 continue
             due = [
                 action
-                for action in rules[index].get("actions", [])
+                for action in scenes[index].get("actions", [])
                 if effective_reapply_seconds(action, exposed) == interval
             ]
             if due:
-                rule_name = rules[index].get("name")
+                scene_name = scenes[index].get("name")
                 context = log_apply(
-                    self._hass, scope_kind, scope_id, category_id, rule_name, index, reapplied=True
+                    self._hass, scope_kind, scope_id, category_id, scene_name, index, reapplied=True
                 )
                 await async_execute_actions(
-                    self._hass, scope_kind, scope_id, due, rule_index=index, context=context
+                    self._hass, scope_kind, scope_id, due, scene_index=index, context=context
                 )
                 if active:
                     traces.append(
@@ -230,7 +230,7 @@ class TriggerSubscriptionsMixin:
                             switch_state,
                             Outcome.REAPPLIED,
                             None,  # re-apply does not re-resolve, so no explanation
-                            winner_name=rule_name,
+                            winner_name=scene_name,
                             actions=due,
                         )
                     )

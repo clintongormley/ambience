@@ -8,7 +8,7 @@ renders fresh.
 
 Each template is rendered via ``Template.async_render_to_info()``, which returns
 both the result AND the set of entities/flags the render touched. We coerce the
-result to a bool with ``result_as_boolean`` (HA's own truthiness rule) and stash
+result to a bool with ``result_as_boolean`` (HA's own truthiness scene) and stash
 the dependency info — the trigger engine can later read it for free.
 """
 

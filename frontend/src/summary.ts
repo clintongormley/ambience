@@ -16,7 +16,7 @@ import type {
   ExposedAction,
   PeoplePredicate,
   PeriodStoreView,
-  Rule,
+  Scene,
   ScriptPredicate,
   ServiceSchema,
   StateExpr,
@@ -71,10 +71,10 @@ export function paramLabel(
 }
 
 /**
- * Display name for a rule: explicit `name`, or a default placeholder.
+ * Display name for a scene: explicit `name`, or a default placeholder.
  */
-export function ruleDisplayName(rule: Rule, defaultPlaceholder = "New rule"): string {
-  if (rule.name?.trim()) return rule.name;
+export function sceneDisplayName(scene: Scene, defaultPlaceholder = "New scene"): string {
+  if (scene.name?.trim()) return scene.name;
   return defaultPlaceholder;
 }
 

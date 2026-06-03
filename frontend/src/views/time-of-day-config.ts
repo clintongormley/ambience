@@ -77,7 +77,7 @@ export class AmbienceTimeOfDayConfig extends LitElement {
   @state() private _warnings: Array<{
     scope_kind: string;
     scope_id: string | null;
-    rule_name: string;
+    scene_name: string;
     missing_period: string;
   }> = [];
 
@@ -172,10 +172,10 @@ export class AmbienceTimeOfDayConfig extends LitElement {
       ${
         this._warnings.length
           ? html`<div class="warnings">
-            <strong>${localize(this.hass, "ui.period_warning_prefix", "Warning:")}</strong> ${localize(this.hass, "ui.period_warning_text", "some rules now reference missing periods:")}
+            <strong>${localize(this.hass, "ui.period_warning_prefix", "Warning:")}</strong> ${localize(this.hass, "ui.period_warning_text", "some scenes now reference missing periods:")}
             <ul>
               ${this._warnings.map(
-                (w) => html`<li>${scopeLabel(w)} / "${w.rule_name}" → ${w.missing_period}</li>`,
+                (w) => html`<li>${scopeLabel(w)} / "${w.scene_name}" → ${w.missing_period}</li>`,
               )}
             </ul>
           </div>`

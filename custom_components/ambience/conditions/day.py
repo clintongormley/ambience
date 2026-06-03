@@ -84,7 +84,7 @@ class DayCondition:
     )
     input = "day_predicate"
     # Higher than time_of_day: day sorts first as a linearisation tiebreaker
-    # (which date the rule's about disambiguates before which hour).
+    # (which date the scene's about disambiguates before which hour).
     priority = 900
 
     def __init__(self, hass: HomeAssistant | None = None) -> None:

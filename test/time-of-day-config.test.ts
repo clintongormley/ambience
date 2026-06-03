@@ -223,7 +223,7 @@ describe("ambience-time-of-day-config", () => {
         {
           scope_kind: "area",
           scope_id: "abc",
-          rule_name: "Evening rule",
+          scene_name: "Evening scene",
           missing_period: "evening",
         },
       ],
@@ -234,7 +234,7 @@ describe("ambience-time-of-day-config", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".warnings")).toBeTruthy();
     const txt = el.shadowRoot.querySelector(".warnings").textContent;
-    expect(txt).toContain("Evening rule");
+    expect(txt).toContain("Evening scene");
     expect(txt).toContain("abc"); // area scope renders the id
   });
 
@@ -256,10 +256,15 @@ describe("ambience-time-of-day-config", () => {
         {
           scope_kind: "floor",
           scope_id: "ground",
-          rule_name: "Floor rule",
+          scene_name: "Floor scene",
           missing_period: "evening",
         },
-        { scope_kind: "house", scope_id: null, rule_name: "House rule", missing_period: "evening" },
+        {
+          scope_kind: "house",
+          scope_id: null,
+          scene_name: "House scene",
+          missing_period: "evening",
+        },
       ],
     });
     const customRow = Array.from(el.shadowRoot.querySelectorAll(".row.custom"))[0] as HTMLElement;

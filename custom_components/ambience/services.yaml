@@ -1,6 +1,6 @@
 apply_scene:
   name: Apply scene
-  description: Resolve the area's rules and apply the matching scene's actions.
+  description: Resolve the area's scenes and apply the matching scene's actions.
   fields:
     area:
       name: Area
@@ -10,7 +10,7 @@ apply_scene:
         area: {}
     scene:
       name: Scene
-      description: Optional scene name. When omitted, scene predicates in rules are treated as wildcards.
+      description: Optional scene name. When omitted, scene predicates in scenes are treated as wildcards.
       required: false
       selector:
         text: {}

@@ -1,4 +1,4 @@
-"""What-if rule simulator: synthesize a hypothetical world and resolve it.
+"""What-if scene simulator: synthesize a hypothetical world and resolve it.
 
 A `SimulatedWorld` (a `now` plus per-entity full-state overrides) is turned into
 the `{condition_name: snapshot}` dict the engine consumes, so `evaluate_explained`
@@ -158,10 +158,10 @@ async def build_simulated_snapshots(hass: HomeAssistant, world: SimulatedWorld) 
 def _category_config(
     hass: HomeAssistant, scope_kind: str, scope_id: str | None, category: str
 ) -> dict[str, Any]:
-    """The scope config narrowed to one category's rules: {"rules": [...]}."""
+    """The scope config narrowed to one category's scenes: {"scenes": [...]}."""
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = store.scope_config(scope_kind, scope_id)
-    return {"rules": [r for r in cfg.get("rules", []) if r.get("category") == category]}
+    return {"scenes": [r for r in cfg.get("scenes", []) if r.get("category") == category]}
 
 
 # state-predicate atom kinds that compare numerically (so the attribute is a
@@ -206,8 +206,8 @@ def _referenced_attributes(
     out: dict[str, dict[str, str]] = {}
     store = hass.data[DOMAIN][DATA_STORE]
     weather_entity = store.get_condition_config("weather").get("entity")
-    for rule in category_cfg["rules"]:
-        when = rule.get("when") or {}
+    for scene in category_cfg["scenes"]:
+        when = scene.get("when") or {}
         weather = when.get("weather")
         if weather_entity and isinstance(weather, dict):
             for threshold in weather.get("thresholds") or []:
@@ -305,7 +305,7 @@ def simulate_inputs_entities(
 
 
 def _verdict_identity(
-    condition: Any, condition_key: str, predicate: dict[str, Any], rule: dict[str, Any]
+    condition: Any, condition_key: str, predicate: dict[str, Any], scene: dict[str, Any]
 ) -> tuple[str, str | None, str]:
     """(result_key, entity_id|None, label) for an opaque predicate's verdict knob.
 
@@ -316,7 +316,7 @@ def _verdict_identity(
         script = predicate.get("script")
         label = script if isinstance(script, str) else "script"
         return key, (script if isinstance(script, str) else None), label
-    return key, None, (rule.get("name") or "Template")
+    return key, None, (scene.get("name") or "Template")
 
 
 async def _verdict_knobs(
@@ -335,14 +335,14 @@ async def _verdict_knobs(
                 live_snaps[name] = None
     knobs: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    for rule in category_cfg["rules"]:
-        when = rule.get("when") or {}
+    for scene in category_cfg["scenes"]:
+        when = scene.get("when") or {}
         for name in _OPAQUE_CONDITIONS:
             predicate = when.get(name)
             if not isinstance(predicate, dict):
                 continue
             condition = conditions.get(name)
-            key, entity_id, label = _verdict_identity(condition, name, predicate, rule)
+            key, entity_id, label = _verdict_identity(condition, name, predicate, scene)
             if (name, key) in seen:
                 continue
             seen.add((name, key))
@@ -408,7 +408,7 @@ async def run_simulation(
     """Resolve one category against the simulated world and return a BufferedUnit
     dict (the shape `renderEvaluation()` consumes), with a `simulated` cause."""
     conditions: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
-    candidates = _category_config(hass, scope_kind, scope_id, category)["rules"]
+    candidates = _category_config(hass, scope_kind, scope_id, category)["scenes"]
     snapshots = await build_simulated_snapshots(hass, world)
     explanation = evaluate_explained(candidates, snapshots, conditions, describe=True)
 
@@ -429,7 +429,7 @@ async def run_simulation(
             scope_name=scope_name,
         )
     else:
-        rule = candidates[winner]
+        scene = candidates[winner]
         unit = UnitTrace(
             scope_kind,
             scope_id,
@@ -437,8 +437,8 @@ async def run_simulation(
             switch_state,
             Outcome.ACTED,
             explanation,
-            winner_name=rule.get("name"),
-            actions=rule.get("actions", []),
+            winner_name=scene.get("name"),
+            actions=scene.get("actions", []),
             category_name=category_name,
             scope_name=scope_name,
         )

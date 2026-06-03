@@ -3,9 +3,9 @@
  * Keep in sync with custom_components/ambience/store.py and websocket.py.
  */
 
-export type Rule = {
+export type Scene = {
   name?: string;
-  // The category this rule belongs to (RuleCategory.id). Required — every rule is
+  // The category this scene belongs to (SceneCategory.id). Required — every scene is
   // categorised; a fresh install seeds a "General" category.
   category: string;
   // Uniform {condition_name: predicate} map.
@@ -14,26 +14,26 @@ export type Rule = {
   actions: ActionSpec[];
   // Sole sort key; higher = more important. Maintained by the backend.
   priority?: number;
-  // True when the user fixed this rule's position by dragging it.
+  // True when the user fixed this scene's position by dragging it.
   pinned?: boolean;
-  // Absent or true = enabled; false = disabled. A disabled rule is retained
+  // Absent or true = enabled; false = disabled. A disabled scene is retained
   // and keeps its position but is ignored by automatic evaluation.
   enabled?: boolean;
-  // Transient (response-only): index of an earlier rule that shadows this one,
+  // Transient (response-only): index of an earlier scene that shadows this one,
   // or null/absent. Never persisted.
   shadowed_by?: number | null;
 };
 
-// A user-defined grouping of rules. Stored separately; rules reference it by id.
-// Every rule belongs to exactly one category; at least one category always exists.
+// A user-defined grouping of scenes. Stored separately; scenes reference it by id.
+// Every scene belongs to exactly one category; at least one category always exists.
 // `icon` is an mdi name (e.g. "mdi:lightbulb"); `color` is a CATEGORY_COLORS id.
-export type RuleCategory = { id: string; name: string; icon?: string; color?: string };
+export type SceneCategory = { id: string; name: string; icon?: string; color?: string };
 
 export type ActionSpec = {
   service: string; // "domain.service"
   entity_ids: string[];
   params: Record<string, unknown>;
-  // Per-rule override: absent = inherit exposed default; 0 = explicitly off;
+  // Per-scene override: absent = inherit exposed default; 0 = explicitly off;
   // >= 10 = re-apply every N seconds (frontend shows minutes, stores seconds).
   reapply_seconds?: number;
 };
@@ -41,7 +41,7 @@ export type ActionSpec = {
 // One entry in the user's exposed-actions list (Configuration → Actions).
 //
 // `visible_fields` and `defaults` are orthogonal:
-//   - in visible_fields only       → field shown in the rule editor, empty
+//   - in visible_fields only       → field shown in the scene editor, empty
 //   - in defaults only             → field hidden, default sent at execution
 //                                    (= old "locked" mode)
 //   - in both                      → field shown pre-filled with the default
@@ -49,10 +49,10 @@ export type ActionSpec = {
 export type ExposedAction = {
   id: string; // "domain.service"; primary key
   label: string; // user-friendly display name; "" allowed
-  visible_fields: string[]; // shown in the rule editor
-  defaults: Record<string, unknown>; // applied at execution; rule params override
+  visible_fields: string[]; // shown in the scene editor
+  defaults: Record<string, unknown>; // applied at execution; scene params override
   // Default re-apply interval in seconds. 0/absent = off; >= 10 = enabled.
-  // Rules may override this per-use via ActionSpec.reapply_seconds.
+  // Scenes may override this per-use via ActionSpec.reapply_seconds.
   reapply_seconds?: number;
 };
 
@@ -83,7 +83,7 @@ export type ServiceField = {
 export type ExposedActionWarning = {
   scope_kind: string;
   scope_id: string | null;
-  rule_name: string;
+  scene_name: string;
   reason: string;
 };
 
@@ -102,7 +102,7 @@ export type ScopeSwitch = {
 
 export type AreaConfig = {
   // Ordered list — array order is authoritative for the engine.
-  rules: Rule[];
+  scenes: Scene[];
 };
 
 // `name` is resolved by the backend from HA's area registry, not stored.
@@ -115,15 +115,15 @@ export type ConditionInfo = {
   name: string;
   description: string;
   predicate_help: string;
-  // Widget hint for the rule editor: "time_of_day" | "state_predicate" | "text" | ...
+  // Widget hint for the scene editor: "time_of_day" | "state_predicate" | "text" | ...
   input: string;
   // Linearisation-slot order; higher sorts earlier. Default 0.
   priority: number;
 };
 
 export type DryRunResult = {
-  matched_rule_index: number | null;
-  rule_name: string | null;
+  matched_scene_index: number | null;
+  scene_name: string | null;
   actions: ActionSpec[];
   snapshots_described: Record<string, string | null>;
   switch_state: "on" | "off" | "unknown";
@@ -224,7 +224,7 @@ export type StatePredicate = StateExpr | null;
 
 export type PeopleQuant = "any" | "everyone" | "nobody";
 
-/** Per-rule predicate. `null` = wildcard (no presence constraint). */
+/** Per-scene predicate. `null` = wildcard (no presence constraint). */
 export interface PeoplePredicate {
   who?: string[]; // person.* entity_ids; empty/absent = all persons
   quant?: PeopleQuant; // default "any"
@@ -235,7 +235,7 @@ export interface PeoplePredicate {
 
 // --- script condition -------------------------------------------------------
 
-/** Per-rule predicate. `null` = wildcard. */
+/** Per-scene predicate. `null` = wildcard. */
 export type ScriptPredicate = null | {
   script: string;
   args?: Record<string, unknown>;
@@ -244,19 +244,19 @@ export type ScriptPredicate = null | {
 
 // --- template condition -----------------------------------------------------
 
-/** Per-rule predicate: a Jinja template rendered to a bool. `null` = wildcard. */
+/** Per-scene predicate: a Jinja template rendered to a bool. `null` = wildcard. */
 export type TemplatePredicate = null | { template: string };
 
 // --- scope ---------------------------------------------------------------
 
-// Scope = the activation surface for a rule list. Area: HA area. Floor:
+// Scope = the activation surface for a scene list. Area: HA area. Floor:
 // HA floor. House: singleton — id is omitted.
 export type Scope =
   | { kind: "area"; id: string }
   | { kind: "floor"; id: string }
   | { kind: "house" };
 
-// A selectable destination for a rule in the editor: a scope plus a display label.
+// A selectable destination for a scene in the editor: a scope plus a display label.
 export type ScopeOption = { scope: Scope; label: string };
 
 export type FloorListItem = {
@@ -287,7 +287,7 @@ export type TraceCause = {
   detail: string | null;
 };
 export type TracePredicate = { condition_key: string; passed: boolean; detail: string | null };
-export type TraceRuleEval = {
+export type TraceSceneEval = {
   index: number;
   name: string | null;
   matched: boolean;
@@ -295,7 +295,7 @@ export type TraceRuleEval = {
   disabled?: boolean;
   predicates: TracePredicate[];
 };
-export type TraceExplanation = { winner_index: number | null; rules: TraceRuleEval[] };
+export type TraceExplanation = { winner_index: number | null; scenes: TraceSceneEval[] };
 export type TraceOutcome = "acted" | "no_op" | "no_match" | "skipped_switch_off" | "reapplied";
 export type BufferedUnit = {
   event_id: string | null;

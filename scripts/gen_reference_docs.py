@@ -61,8 +61,8 @@ def render_reference() -> str:
         "",
         "## Conditions",
         "",
-        "Built-in conditions that can be used in Ambience rules.",
-        "Each condition is referenced by its **kind** key in the `when` clause of a rule.",
+        "Built-in conditions that can be used in Ambience scenes.",
+        "Each condition is referenced by its **kind** key in the `when` clause of a scene.",
         "",
     ]
 

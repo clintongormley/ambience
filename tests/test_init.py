@@ -144,7 +144,7 @@ async def test_area_registry_removal_deletes_ambience_config(
     await hass.async_block_till_done()
 
     store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(area.id, {"extra": [], "conditions": [], "rules": []})
+    await store.async_save_area(area.id, {"extra": [], "conditions": [], "scenes": []})
     assert store.get_area(area.id) is not None
 
     ar.async_get(hass).async_delete(area.id)
@@ -168,7 +168,7 @@ async def test_floor_remove_event_deletes_floor_config(
     reg = fr.async_get(hass)
     entry = reg.async_create("Upstairs")
     store = hass.data["ambience"][DATA_STORE]
-    await store.async_save_floor(entry.floor_id, {"rules": []})
+    await store.async_save_floor(entry.floor_id, {"scenes": []})
     assert store.get_floor(entry.floor_id) is not None
 
     reg.async_delete(entry.floor_id)
@@ -189,9 +189,9 @@ async def test_startup_reconciliation_drops_orphan_area(
     await raw.async_save(
         {
             "version": 1,
-            "areas": {"ghost_area": {"rules": []}},
+            "areas": {"ghost_area": {"scenes": []}},
             "floors": {},
-            "house": {"rules": []},
+            "house": {"scenes": []},
             "conditions": {},
         }
     )
@@ -219,8 +219,8 @@ async def test_startup_reconciliation_drops_orphan_floor(
         {
             "version": 1,
             "areas": {},
-            "floors": {"ghost_floor": {"rules": []}},
-            "house": {"rules": []},
+            "floors": {"ghost_floor": {"scenes": []}},
+            "house": {"scenes": []},
             "conditions": {},
         }
     )

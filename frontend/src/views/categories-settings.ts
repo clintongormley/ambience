@@ -4,7 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { deleteCategory, type HassConnection, listCategories, saveCategories } from "../api.js";
 import { CATEGORY_COLORS, colorHex } from "../category-colors.js";
 import { localize } from "../i18n.js";
-import type { RuleCategory } from "../types.js";
+import type { SceneCategory } from "../types.js";
 
 @customElement("ambience-categories-settings")
 export class AmbienceCategoriesSettings extends LitElement {
@@ -40,7 +40,7 @@ export class AmbienceCategoriesSettings extends LitElement {
     }
     .error { color: var(--error-color, #d32f2f); }
 
-    /* Modal overlay (mirrors ambience-rule-editor) */
+    /* Modal overlay (mirrors ambience-scene-editor) */
     .overlay {
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.4); z-index: 100;
@@ -115,11 +115,11 @@ export class AmbienceCategoriesSettings extends LitElement {
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
-  @state() private _categories: RuleCategory[] = [];
+  @state() private _categories: SceneCategory[] = [];
   @state() private _error = "";
   // The draft being edited; null = modal closed. When the draft's id matches an
   // existing category it's an edit, otherwise it's a new category.
-  @state() private _editing: RuleCategory | null = null;
+  @state() private _editing: SceneCategory | null = null;
   // Validation error shown inside the open modal.
   @state() private _modalError = "";
 
@@ -133,13 +133,13 @@ export class AmbienceCategoriesSettings extends LitElement {
   }
 
   /** Categories shown alphabetically by name. */
-  private _sorted(): RuleCategory[] {
+  private _sorted(): SceneCategory[] {
     return [...this._categories].sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /** Validate the draft against the OTHER categories; returns a localized error
    *  message, or "" if OK. */
-  private _validate(draft: RuleCategory): string {
+  private _validate(draft: SceneCategory): string {
     const name = draft.name.trim();
     if (name === "") {
       return localize(this.hass, "ui.category_name_blank_error", "Category names can't be empty.");
@@ -160,7 +160,7 @@ export class AmbienceCategoriesSettings extends LitElement {
 
   // --- modal open/close ---
 
-  _openEditor(category: RuleCategory) {
+  _openEditor(category: SceneCategory) {
     // Edit an existing category: work on a copy so cancelling discards changes.
     this._editing = { ...category };
     this._modalError = "";
@@ -180,7 +180,7 @@ export class AmbienceCategoriesSettings extends LitElement {
 
   // --- draft mutation ---
 
-  private _patchDraft(patch: Partial<RuleCategory>) {
+  private _patchDraft(patch: Partial<SceneCategory>) {
     if (!this._editing) return;
     this._editing = { ...this._editing, ...patch };
   }
@@ -229,7 +229,7 @@ export class AmbienceCategoriesSettings extends LitElement {
       return;
     }
     // Optimistic local removal, but keep the modal open until the server
-    // confirms. If the server refuses (category still has rules), restore and
+    // confirms. If the server refuses (category still has scenes), restore and
     // show the reason — do not close.
     const previous = this._categories;
     this._categories = this._categories.filter((g) => g.id !== id);
@@ -246,7 +246,7 @@ export class AmbienceCategoriesSettings extends LitElement {
           this._modalError = localize(
             this.hass,
             "ui.category_delete_blocked_in_use",
-            "This category still has rules — move or delete them first.",
+            "This category still has scenes — move or delete them first.",
           );
         } else if (code === "category_last") {
           this._modalError = localize(

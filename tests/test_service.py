@@ -27,7 +27,7 @@ from custom_components.ambience.service import (
     async_resolve_categories_only,
     async_resolve_only,
     async_resolve_with_snapshots,
-    async_run_rule_actions,
+    async_run_scene_actions,
     category_ids,
     clear_last_applied,
     effective_reapply_seconds,
@@ -37,7 +37,7 @@ from custom_components.ambience.trace import TraceEvent
 
 
 def test_category_ids_returns_only_real_ids():
-    assert category_ids({"rules": [{"category": "a"}, {"category": "b"}, {"category": "a"}]}) == {
+    assert category_ids({"scenes": [{"category": "a"}, {"category": "b"}, {"category": "a"}]}) == {
         "a",
         "b",
     }
@@ -135,12 +135,12 @@ async def test_unknown_area_raises(hass: HomeAssistant) -> None:
         await async_apply_scene(hass, "area", "missing")
 
 
-async def test_happy_path_calls_service_for_matching_rule(hass: HomeAssistant) -> None:
+async def test_happy_path_calls_service_for_matching_scene(hass: HomeAssistant) -> None:
     calls = async_mock_service(hass, "light", "turn_on")
     conditions = {"tod": FixedCondition("evening")}
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {"tod": "morning"},
@@ -180,12 +180,12 @@ async def test_happy_path_calls_service_for_matching_rule(hass: HomeAssistant) -
     assert calls[0].data["brightness_pct"] == 30
 
 
-async def test_defaults_merged_with_rule_params(hass: HomeAssistant) -> None:
-    """Settings defaults are applied even when the rule doesn't set them."""
+async def test_defaults_merged_with_scene_params(hass: HomeAssistant) -> None:
+    """Settings defaults are applied even when the scene doesn't set them."""
     calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {},
@@ -219,12 +219,12 @@ async def test_defaults_merged_with_rule_params(hass: HomeAssistant) -> None:
     assert calls[0].data["transition"] == 1.5
 
 
-async def test_rule_params_override_defaults(hass: HomeAssistant) -> None:
-    """If both defaults + rule params set a key, the rule wins (later-wins via spread)."""
+async def test_scene_params_override_defaults(hass: HomeAssistant) -> None:
+    """If both defaults + scene params set a key, the scene wins (later-wins via spread)."""
     calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {},
@@ -261,7 +261,7 @@ async def test_no_match_is_silent_noop(hass: HomeAssistant) -> None:
     conditions = {"tod": FixedCondition("evening")}
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {"when": {"tod": "morning"}, "actions": []},
             ],
         }
@@ -278,7 +278,7 @@ async def test_snapshot_failure_treats_condition_as_unresolved(
     conditions = {"tod": FixedCondition("evening"), "weather": FailingCondition()}
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {"weather": "rainy"},
@@ -324,7 +324,7 @@ async def test_malformed_action_skipped_other_actions_run(
     calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {},
@@ -360,11 +360,11 @@ async def test_malformed_action_skipped_other_actions_run(
 async def test_unexposed_service_skipped_with_warning(
     hass: HomeAssistant, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A rule referencing a not-exposed service should be skipped and warned."""
+    """A scene referencing a not-exposed service should be skipped and warned."""
     calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {},
@@ -404,7 +404,7 @@ async def test_action_failure_does_not_block_other_actions(
 
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {},
@@ -465,7 +465,7 @@ async def test_cancellation_treated_as_failure_isolation(
     calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "category": "lighting",
                     "when": {},
@@ -489,7 +489,7 @@ async def test_cancellation_treated_as_failure_isolation(
 
     await async_apply_scene(hass, "area", "lr")
 
-    # Wildcard rule should still match (cancelled snapshot becomes None).
+    # Wildcard scene should still match (cancelled snapshot becomes None).
     assert len(calls) == 1
     assert calls[0].data["entity_id"] == ["light.a"]
 
@@ -501,7 +501,7 @@ async def test_apply_scene_with_no_entity_ids_omits_target(
     calls = async_mock_service(hass, "script", "foo")
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "category": "scripts",
                     "when": {},
@@ -541,7 +541,7 @@ class FakeScopeStore:
     ) -> None:
         self._areas = areas or {}
         self._floors = floors or {}
-        self._house = house or {"rules": []}
+        self._house = house or {"scenes": []}
 
     def get_area(self, area_id):
         return self._areas.get(area_id)
@@ -557,10 +557,10 @@ class FakeScopeStore:
 
 
 async def test_async_resolve_only_floor_routes_to_floor_store(hass: HomeAssistant) -> None:
-    """Calling with scope_kind='floor' resolves against the floor's rules."""
+    """Calling with scope_kind='floor' resolves against the floor's scenes."""
     floors = {
         "upstairs": {
-            "rules": [
+            "scenes": [
                 {
                     "name": "movie",
                     "when": {},
@@ -572,17 +572,17 @@ async def test_async_resolve_only_floor_routes_to_floor_store(hass: HomeAssistan
     _install(hass, store=FakeScopeStore(floors=floors))
 
     plan = await async_resolve_only(hass, "floor", "upstairs")
-    assert plan["rule_name"] == "movie"
+    assert plan["scene_name"] == "movie"
 
 
 async def test_async_resolve_only_house_routes_to_house_store(hass: HomeAssistant) -> None:
     house = {
-        "rules": [{"name": "away", "when": {}, "actions": []}],
+        "scenes": [{"name": "away", "when": {}, "actions": []}],
     }
     _install(hass, store=FakeScopeStore(house=house))
 
     plan = await async_resolve_only(hass, "house", None)
-    assert plan["rule_name"] == "away"
+    assert plan["scene_name"] == "away"
 
 
 async def test_async_resolve_only_unknown_floor_raises(hass: HomeAssistant) -> None:
@@ -593,11 +593,11 @@ async def test_async_resolve_only_unknown_floor_raises(hass: HomeAssistant) -> N
 
 
 async def test_async_apply_scene_floor_runs_floor_actions(hass: HomeAssistant) -> None:
-    """apply_scene with scope_kind='floor' executes the matched floor rule's actions."""
+    """apply_scene with scope_kind='floor' executes the matched floor scene's actions."""
     calls = async_mock_service(hass, "light", "turn_on")
     floors = {
         "upstairs": {
-            "rules": [
+            "scenes": [
                 {
                     "name": "movie",
                     "category": "lighting",
@@ -642,15 +642,15 @@ async def test_resolve_with_snapshots_does_not_call_snapshot(hass: HomeAssistant
         def validate_predicate(self, predicate):
             return
 
-    areas = {"a": {"rules": [{"name": "r", "when": {"tod": "evening"}, "actions": []}]}}
+    areas = {"a": {"scenes": [{"name": "r", "when": {"tod": "evening"}, "actions": []}]}}
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(areas),
         DATA_CONDITIONS: {"tod": ExplodingSnapshot()},
         DATA_SWITCHES: {},
     }
     plan = await async_resolve_with_snapshots(hass, "area", "a", {"tod": "evening"})
-    assert plan["matched_rule_index"] == 0
-    assert plan["rule_name"] == "r"
+    assert plan["matched_scene_index"] == 0
+    assert plan["scene_name"] == "r"
     assert plan["switch_state"] == "unknown"
 
 
@@ -667,14 +667,14 @@ async def test_resolve_with_snapshots_no_match(hass: HomeAssistant) -> None:
         def validate_predicate(self, predicate):
             return
 
-    areas = {"a": {"rules": [{"name": "r", "when": {"tod": "morning"}, "actions": []}]}}
+    areas = {"a": {"scenes": [{"name": "r", "when": {"tod": "morning"}, "actions": []}]}}
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(areas),
         DATA_CONDITIONS: {"tod": T()},
         DATA_SWITCHES: {},
     }
     plan = await async_resolve_with_snapshots(hass, "area", "a", {"tod": "evening"})
-    assert plan["matched_rule_index"] is None
+    assert plan["matched_scene_index"] is None
     assert plan["actions"] == []
 
 
@@ -682,10 +682,10 @@ def _switch(on: bool) -> SimpleNamespace:
     return SimpleNamespace(is_on=on)
 
 
-async def test_apply_scene_records_last_applied_rule(hass: HomeAssistant) -> None:
+async def test_apply_scene_records_last_applied_scene(hass: HomeAssistant) -> None:
     areas = {
         "a": {
-            "rules": [
+            "scenes": [
                 {"name": "r", "category": "lighting", "when": {"tod": "evening"}, "actions": []}
             ]
         }
@@ -701,7 +701,7 @@ async def test_apply_scene_records_last_applied_rule(hass: HomeAssistant) -> Non
 
 
 async def test_apply_scene_switch_off_does_not_record(hass: HomeAssistant) -> None:
-    areas = {"a": {"rules": [{"name": "r", "when": {"tod": "evening"}, "actions": []}]}}
+    areas = {"a": {"scenes": [{"name": "r", "when": {"tod": "evening"}, "actions": []}]}}
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(areas),
         DATA_CONDITIONS: {"tod": FixedCondition("evening")},
@@ -713,7 +713,7 @@ async def test_apply_scene_switch_off_does_not_record(hass: HomeAssistant) -> No
 
 
 async def test_apply_scene_no_match_does_not_record(hass: HomeAssistant) -> None:
-    areas = {"a": {"rules": [{"name": "r", "when": {"tod": "morning"}, "actions": []}]}}
+    areas = {"a": {"scenes": [{"name": "r", "when": {"tod": "morning"}, "actions": []}]}}
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(areas),
         DATA_CONDITIONS: {"tod": FixedCondition("evening")},
@@ -731,8 +731,8 @@ async def test_execute_plan_dispatches_actions_and_records_last_applied(
     exposed = ExposedActionsStore(_FakeExposedStorage([_exposed("light.turn_on")]))
     hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: exposed, DATA_STORE: FakeStore({})}
     plan = {
-        "matched_rule_index": 3,
-        "rule_name": None,
+        "matched_scene_index": 3,
+        "scene_name": None,
         "actions": [
             {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 50}}
         ],
@@ -744,22 +744,22 @@ async def test_execute_plan_dispatches_actions_and_records_last_applied(
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 3
 
 
-async def test_resolve_with_snapshots_category_filters_to_category_rules(
+async def test_resolve_with_snapshots_category_filters_to_category_scenes(
     hass: HomeAssistant,
 ) -> None:
     """Resolving with category= returns the first match within that category only,
-    and matched_rule_index is the GLOBAL index in the scope's rules list."""
+    and matched_scene_index is the GLOBAL index in the scope's scenes list."""
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
-                    "name": "lighting-rule",
+                    "name": "lighting-scene",
                     "category": "lighting",
                     "when": {},
                     "actions": [],
                 },
                 {
-                    "name": "blinds-rule",
+                    "name": "blinds-scene",
                     "category": "blinds",
                     "when": {},
                     "actions": [],
@@ -774,12 +774,12 @@ async def test_resolve_with_snapshots_category_filters_to_category_rules(
     }
 
     plan_blinds = await async_resolve_with_snapshots(hass, "area", "lr", {}, category="blinds")
-    assert plan_blinds["matched_rule_index"] == 1
-    assert plan_blinds["rule_name"] == "blinds-rule"
+    assert plan_blinds["matched_scene_index"] == 1
+    assert plan_blinds["scene_name"] == "blinds-scene"
 
     plan_lighting = await async_resolve_with_snapshots(hass, "area", "lr", {}, category="lighting")
-    assert plan_lighting["matched_rule_index"] == 0
-    assert plan_lighting["rule_name"] == "lighting-rule"
+    assert plan_lighting["matched_scene_index"] == 0
+    assert plan_lighting["scene_name"] == "lighting-scene"
 
 
 async def test_resolve_with_snapshots_no_category_returns_first_overall_match(
@@ -788,15 +788,15 @@ async def test_resolve_with_snapshots_no_category_returns_first_overall_match(
     """Without a category argument, the first overall match wins (existing behavior)."""
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
-                    "name": "lighting-rule",
+                    "name": "lighting-scene",
                     "category": "lighting",
                     "when": {},
                     "actions": [],
                 },
                 {
-                    "name": "blinds-rule",
+                    "name": "blinds-scene",
                     "category": "blinds",
                     "when": {},
                     "actions": [],
@@ -811,8 +811,8 @@ async def test_resolve_with_snapshots_no_category_returns_first_overall_match(
     }
 
     plan = await async_resolve_with_snapshots(hass, "area", "lr", {})
-    assert plan["matched_rule_index"] == 0
-    assert plan["rule_name"] == "lighting-rule"
+    assert plan["matched_scene_index"] == 0
+    assert plan["scene_name"] == "lighting-scene"
 
 
 async def test_last_applied_is_keyed_by_category(hass: HomeAssistant) -> None:
@@ -828,14 +828,14 @@ async def test_last_applied_is_keyed_by_category(hass: HomeAssistant) -> None:
 async def test_execute_plan_records_last_applied_even_when_all_actions_skip(
     hass: HomeAssistant,
 ) -> None:
-    # No actions exposed → every action is skipped, but the rule was still the
+    # No actions exposed → every action is skipped, but the scene was still the
     # winner, so last_applied must record it (the guard tracks selection).
     calls = async_mock_service(hass, "light", "turn_on")
     exposed = ExposedActionsStore(_FakeExposedStorage([]))  # nothing exposed
     hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: exposed, DATA_STORE: FakeStore({})}
     plan = {
-        "matched_rule_index": 2,
-        "rule_name": None,
+        "matched_scene_index": 2,
+        "scene_name": None,
         "actions": [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}],
     }
     await async_execute_plan(hass, "area", "a", plan, "lighting")
@@ -896,7 +896,7 @@ def test_effective_reapply_handles_missing_exposed_store():
 
 def test_scope_reapply_intervals_returns_sorted_distinct():
     cfg = {
-        "rules": [
+        "scenes": [
             {"actions": [{"service": "x.y", "reapply_seconds": 600}]},
             {"actions": [{"service": "x.y", "reapply_seconds": 300}]},
             {"actions": [{"service": "x.y", "reapply_seconds": 600}]},  # duplicate
@@ -907,20 +907,20 @@ def test_scope_reapply_intervals_returns_sorted_distinct():
 
 def test_scope_reapply_intervals_empty_when_none():
     cfg = {
-        "rules": [
+        "scenes": [
             {"actions": [{"service": "x.y"}]},
         ]
     }
     assert scope_reapply_intervals(cfg, None) == []
 
 
-def test_scope_reapply_intervals_empty_when_no_rules():
+def test_scope_reapply_intervals_empty_when_no_scenes():
     assert scope_reapply_intervals({}, None) == []
 
 
 def test_scope_reapply_intervals_skips_zero_and_below_floor():
     cfg = {
-        "rules": [
+        "scenes": [
             {"actions": [{"service": "x.y", "reapply_seconds": 0}]},
             {"actions": [{"service": "x.y", "reapply_seconds": 9}]},  # below floor
             {"actions": [{"service": "x.y", "reapply_seconds": 300}]},
@@ -932,7 +932,7 @@ def test_scope_reapply_intervals_skips_zero_and_below_floor():
 def test_scope_reapply_intervals_uses_exposed_default():
     exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
     cfg = {
-        "rules": [
+        "scenes": [
             {"actions": [{"service": "light.turn_on"}]},  # inherits exposed default
         ]
     }
@@ -942,7 +942,7 @@ def test_scope_reapply_intervals_uses_exposed_default():
 def test_scope_reapply_intervals_action_zero_suppresses_exposed():
     exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
     cfg = {
-        "rules": [
+        "scenes": [
             {"actions": [{"service": "light.turn_on", "reapply_seconds": 0}]},
         ]
     }
@@ -951,11 +951,11 @@ def test_scope_reapply_intervals_action_zero_suppresses_exposed():
 
 async def test_apply_scene_emits_manual_trace_event(hass: HomeAssistant) -> None:
     """apply_scene must emit a manual-cause TraceEvent with at least one acted unit."""
-    # Mirror setup from test_apply_scene_records_last_applied_rule: area 'a',
-    # one lighting rule that matches tod=evening, switch on.
+    # Mirror setup from test_apply_scene_records_last_applied_scene: area 'a',
+    # one lighting scene that matches tod=evening, switch on.
     areas = {
         "a": {
-            "rules": [
+            "scenes": [
                 {
                     "name": "evening-lights",
                     "category": "lighting",
@@ -991,12 +991,12 @@ async def test_apply_scene_emits_manual_trace_event(hass: HomeAssistant) -> None
 
 
 async def test_apply_scene_manual_trace_includes_no_match_category(hass: HomeAssistant) -> None:
-    """apply_scene must emit a manual TraceEvent with a no_match unit when no rule wins."""
-    # Area 'b' has one lighting rule that requires tod=morning, but the condition
+    """apply_scene must emit a manual TraceEvent with a no_match unit when no scene wins."""
+    # Area 'b' has one lighting scene that requires tod=morning, but the condition
     # returns 'evening', so resolution yields no winner → no_match unit.
     areas = {
         "b": {
-            "rules": [
+            "scenes": [
                 {
                     "name": "morning-lights",
                     "category": "lighting",
@@ -1034,10 +1034,10 @@ async def test_apply_scene_manual_trace_includes_no_match_category(hass: HomeAss
 async def test_resolve_with_snapshots_includes_explanation_when_explain(
     hass: HomeAssistant,
 ) -> None:
-    """When explain=True, plan['explanation'] is an Explanation with at least one rule eval."""
+    """When explain=True, plan['explanation'] is an Explanation with at least one scene eval."""
     areas = {
         "a": {
-            "rules": [
+            "scenes": [
                 {
                     "name": "r",
                     "when": {"tod": "evening"},
@@ -1055,8 +1055,8 @@ async def test_resolve_with_snapshots_includes_explanation_when_explain(
         hass, "area", "a", {"tod": "evening"}, category=None, describe=False, explain=True
     )
     assert plan["explanation"] is not None
-    assert len(plan["explanation"].rules) >= 1
-    assert plan["explanation"].winner_index == plan["matched_rule_index"]
+    assert len(plan["explanation"].scenes) >= 1
+    assert plan["explanation"].winner_index == plan["matched_scene_index"]
 
 
 async def test_resolve_with_snapshots_omits_explanation_by_default(
@@ -1065,7 +1065,7 @@ async def test_resolve_with_snapshots_omits_explanation_by_default(
     """When explain is not passed (default False), plan['explanation'] is None."""
     areas = {
         "a": {
-            "rules": [
+            "scenes": [
                 {
                     "name": "r",
                     "when": {"tod": "evening"},
@@ -1127,9 +1127,9 @@ async def test_resolve_categories_only_returns_plan_per_category(hass: HomeAssis
     """async_resolve_categories_only returns one entry per category, keyed by category id."""
     areas = {
         "lr": {
-            "rules": [
-                {"name": "lighting-rule", "category": "lighting", "when": {}, "actions": []},
-                {"name": "blinds-rule", "category": "blinds", "when": {}, "actions": []},
+            "scenes": [
+                {"name": "lighting-scene", "category": "lighting", "when": {}, "actions": []},
+                {"name": "blinds-scene", "category": "blinds", "when": {}, "actions": []},
             ]
         }
     }
@@ -1142,15 +1142,15 @@ async def test_resolve_categories_only_returns_plan_per_category(hass: HomeAssis
     result = await async_resolve_categories_only(hass, "area", "lr")
 
     assert set(result.keys()) == {"lighting", "blinds"}
-    assert result["lighting"]["matched_rule_index"] == 0
-    assert result["lighting"]["rule_name"] == "lighting-rule"
-    assert result["blinds"]["matched_rule_index"] == 1
-    assert result["blinds"]["rule_name"] == "blinds-rule"
+    assert result["lighting"]["matched_scene_index"] == 0
+    assert result["lighting"]["scene_name"] == "lighting-scene"
+    assert result["blinds"]["matched_scene_index"] == 1
+    assert result["blinds"]["scene_name"] == "blinds-scene"
 
 
 async def test_resolve_categories_only_empty_scope_returns_empty(hass: HomeAssistant) -> None:
-    """A scope with no rules produces an empty dict."""
-    areas = {"lr": {"rules": []}}
+    """A scope with no scenes produces an empty dict."""
+    areas = {"lr": {"scenes": []}}
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(areas),
         DATA_CONDITIONS: {},
@@ -1168,7 +1168,7 @@ async def test_resolve_categories_only_empty_scope_returns_empty(hass: HomeAssis
 
 
 async def test_apply_scene_no_match_no_trace_emits_no_event(hass: HomeAssistant) -> None:
-    """When tracing is off and no rule matches, _apply_category returns None so no
+    """When tracing is off and no scene matches, _apply_category returns None so no
     TraceEvent is emitted. Covers the `return None` branch at line 274.
 
     Tracing is inactive: no DATA_TRACE_BUFFER, trace logger clamped to WARNING.
@@ -1176,7 +1176,7 @@ async def test_apply_scene_no_match_no_trace_emits_no_event(hass: HomeAssistant)
     """
     areas = {
         "a": {
-            "rules": [
+            "scenes": [
                 {
                     "name": "morning",
                     "category": "lighting",
@@ -1243,7 +1243,7 @@ async def test_apply_scene_category_exception_logged_not_raised(
 
     areas = {
         "a": {
-            "rules": [
+            "scenes": [
                 {
                     "name": "always",
                     "category": "lighting",
@@ -1267,16 +1267,16 @@ async def test_apply_scene_category_exception_logged_not_raised(
 
 
 # ---------------------------------------------------------------------------
-# async_run_rule_actions (lines 371-385)
+# async_run_scene_actions (lines 371-385)
 # ---------------------------------------------------------------------------
 
 
-async def test_run_rule_actions_executes_matched_rule_by_index(hass: HomeAssistant) -> None:
-    """async_run_rule_actions runs the actions of the named rule index unconditionally."""
+async def test_run_scene_actions_executes_matched_scene_by_index(hass: HomeAssistant) -> None:
+    """async_run_scene_actions runs the actions of the named scene index unconditionally."""
     calls = async_mock_service(hass, "light", "turn_on")
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "name": "evening",
                     "category": "lighting",
@@ -1298,64 +1298,64 @@ async def test_run_rule_actions_executes_matched_rule_by_index(hass: HomeAssista
         exposed=[_exposed("light.turn_on", visible=["brightness_pct"])],
     )
 
-    result = await async_run_rule_actions(hass, "area", "lr", 0)
+    result = await async_run_scene_actions(hass, "area", "lr", 0)
 
-    assert result == {"ran": 1, "rule_name": "evening"}
+    assert result == {"ran": 1, "scene_name": "evening"}
     assert len(calls) == 1
     assert calls[0].data["brightness_pct"] == 80
 
 
-async def test_run_rule_actions_out_of_range_raises(hass: HomeAssistant) -> None:
-    """A rule_index that is out of range raises ServiceValidationError."""
+async def test_run_scene_actions_out_of_range_raises(hass: HomeAssistant) -> None:
+    """A scene_index that is out of range raises ServiceValidationError."""
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {"name": "only", "when": {}, "actions": []},
             ]
         }
     }
     _install(hass, areas=areas)
 
-    with pytest.raises(ServiceValidationError, match="rule_index out of range"):
-        await async_run_rule_actions(hass, "area", "lr", 5)
+    with pytest.raises(ServiceValidationError, match="scene_index out of range"):
+        await async_run_scene_actions(hass, "area", "lr", 5)
 
 
-async def test_run_rule_actions_negative_index_raises(hass: HomeAssistant) -> None:
-    """A negative rule_index also raises ServiceValidationError."""
+async def test_run_scene_actions_negative_index_raises(hass: HomeAssistant) -> None:
+    """A negative scene_index also raises ServiceValidationError."""
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {"name": "only", "when": {}, "actions": []},
             ]
         }
     }
     _install(hass, areas=areas)
 
-    with pytest.raises(ServiceValidationError, match="rule_index out of range"):
-        await async_run_rule_actions(hass, "area", "lr", -1)
+    with pytest.raises(ServiceValidationError, match="scene_index out of range"):
+        await async_run_scene_actions(hass, "area", "lr", -1)
 
 
-async def test_run_rule_actions_no_actions_returns_zero_ran(hass: HomeAssistant) -> None:
-    """A rule with no actions returns ran=0; context is None so no logbook call."""
+async def test_run_scene_actions_no_actions_returns_zero_ran(hass: HomeAssistant) -> None:
+    """A scene with no actions returns ran=0; context is None so no logbook call."""
     areas = {
         "lr": {
-            "rules": [
-                {"name": "empty-rule", "when": {}, "actions": []},
+            "scenes": [
+                {"name": "empty-scene", "when": {}, "actions": []},
             ]
         }
     }
     _install(hass, areas=areas)
 
-    result = await async_run_rule_actions(hass, "area", "lr", 0)
+    result = await async_run_scene_actions(hass, "area", "lr", 0)
 
-    assert result == {"ran": 0, "rule_name": "empty-rule"}
+    assert result == {"ran": 0, "scene_name": "empty-scene"}
 
 
-async def test_run_rule_actions_does_not_record_last_applied(hass: HomeAssistant) -> None:
-    """async_run_rule_actions must NOT touch DATA_LAST_APPLIED (it is not a resolution)."""
+async def test_run_scene_actions_does_not_record_last_applied(hass: HomeAssistant) -> None:
+    """async_run_scene_actions must NOT touch DATA_LAST_APPLIED (it is not a resolution)."""
     areas = {
         "lr": {
-            "rules": [
+            "scenes": [
                 {
                     "name": "r",
                     "when": {},
@@ -1373,7 +1373,7 @@ async def test_run_rule_actions_does_not_record_last_applied(hass: HomeAssistant
     _install(hass, areas=areas, exposed=[_exposed("light.turn_on")])
     async_mock_service(hass, "light", "turn_on")
 
-    await async_run_rule_actions(hass, "area", "lr", 0)
+    await async_run_scene_actions(hass, "area", "lr", 0)
 
     assert DATA_LAST_APPLIED not in hass.data[DOMAIN]
 

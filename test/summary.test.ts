@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
-  ruleDisplayName,
+  sceneDisplayName,
   summariseAction,
   summariseCondition,
   summariseDay,
@@ -31,25 +31,25 @@ const periods: PeriodStoreView = {
   hidden: [],
 };
 
-describe("ruleDisplayName", () => {
+describe("sceneDisplayName", () => {
   test("returns the name when set", () => {
-    expect(ruleDisplayName({ name: "My rule", when: {}, actions: [] })).toBe("My rule");
+    expect(sceneDisplayName({ name: "My scene", when: {}, actions: [] })).toBe("My scene");
   });
 
   test("falls back to the default when name is empty", () => {
-    expect(ruleDisplayName({ name: "", when: {}, actions: [] })).toBe("New rule");
+    expect(sceneDisplayName({ name: "", when: {}, actions: [] })).toBe("New scene");
   });
 
   test("uses custom default placeholder", () => {
-    expect(ruleDisplayName({ name: "", when: {}, actions: [] }, "Rule 3")).toBe("Rule 3");
+    expect(sceneDisplayName({ name: "", when: {}, actions: [] }, "Scene 3")).toBe("Scene 3");
   });
 
   test("treats whitespace-only name as empty", () => {
-    expect(ruleDisplayName({ name: "   ", when: {}, actions: [] })).toBe("New rule");
+    expect(sceneDisplayName({ name: "   ", when: {}, actions: [] })).toBe("New scene");
   });
 
   test("ignores a mode predicate — name is the only identifier", () => {
-    expect(ruleDisplayName({ name: "", when: { mode: "movie" }, actions: [] })).toBe("New rule");
+    expect(sceneDisplayName({ name: "", when: { mode: "movie" }, actions: [] })).toBe("New scene");
   });
 });
 
@@ -543,7 +543,7 @@ test("summariseCondition dispatches the sun condition", () => {
 
 test("summariseWeather renders dangling group ids title-cased (no '?' suffix)", () => {
   // `stormy` and `cold_snap` aren't in the configured groups — simulates a
-  // rule whose referenced group was renamed or deleted in the condition config.
+  // scene whose referenced group was renamed or deleted in the condition config.
   const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
   expect(summariseWeather({ groups: ["wet", "stormy"], thresholds: [] }, ctx)).toBe("Wet/Stormy");
   // Multi-word ids: split on underscore/dash/whitespace, capitalize each word.

@@ -1,12 +1,12 @@
 /**
  * Tests for the remaining api.ts functions not covered by api.test.ts
  * (listAreas, getArea, saveArea, listConditions, listActions, validateConfig, dryRun,
- *  applyRules, runRuleActions, getDayConfig, saveDayConfig,
+ *  applyScenes, runSceneActions, getDayConfig, saveDayConfig,
  *  getWeatherConfig, saveWeatherConfig, getKnownStates)
  */
 import { describe, expect, test, vi } from "vitest";
 import {
-  applyRules,
+  applyScenes,
   dryRun,
   getArea,
   getDayConfig,
@@ -20,7 +20,7 @@ import {
   listExposedActions,
   listFloors,
   listServices,
-  runRuleActions,
+  runSceneActions,
   saveArea,
   saveDayConfig,
   saveExposedActions,
@@ -39,7 +39,7 @@ function makeFakeHass() {
       return [{ area_id: "living_room", name: "Living Room" }];
     }
     if (msg.type === "ambience/area/get") {
-      return { rules: [] };
+      return { scenes: [] };
     }
     if (msg.type === "ambience/area/save") {
       return { ok: true, config: msg.config };
@@ -63,7 +63,7 @@ function makeFakeHass() {
       return { ok: true };
     }
     if (msg.type === "ambience/dry_run") {
-      return { matched_rule_index: null, rule_name: null, actions: [] };
+      return { matched_scene_index: null, scene_name: null, actions: [] };
     }
     if (msg.type === "ambience/apply") {
       return { ok: true };
@@ -86,14 +86,14 @@ describe("API: getArea", () => {
     const { callWS, sent } = makeFakeHass();
     const res = await getArea({ callWS } as any, "living_room");
     expect(sent[0]).toEqual({ type: "ambience/area/get", area_id: "living_room" });
-    expect(res).toEqual({ rules: [] });
+    expect(res).toEqual({ scenes: [] });
   });
 });
 
 describe("API: saveArea", () => {
   test("sends area config via WS and returns result", async () => {
     const { callWS, sent } = makeFakeHass();
-    const config: AreaConfig = { rules: [] };
+    const config: AreaConfig = { scenes: [] };
     const res = await saveArea({ callWS } as any, "living_room", config);
     expect(sent[0]).toMatchObject({
       type: "ambience/area/save",
@@ -161,7 +161,7 @@ describe("API: getServiceSchema", () => {
 describe("API: validateConfig", () => {
   test("sends config to validate endpoint", async () => {
     const { callWS, sent } = makeFakeHass();
-    const config: AreaConfig = { rules: [] };
+    const config: AreaConfig = { scenes: [] };
     const res = await validateConfig({ callWS } as any, config);
     expect(sent[0]).toEqual({ type: "ambience/validate", config });
     expect(res.ok).toBe(true);
@@ -176,7 +176,7 @@ describe("API: dryRun", () => {
       type: "ambience/dry_run",
       area_id: "living_room",
     });
-    expect(res).toEqual({ matched_rule_index: null, rule_name: null, actions: [] });
+    expect(res).toEqual({ matched_scene_index: null, scene_name: null, actions: [] });
   });
 
   test("dryRun area sends area_id", async () => {
@@ -240,7 +240,7 @@ test("getFloor passes floor_id", async () => {
   const hass = {
     callWS: async (msg: any) => {
       calls.push(msg);
-      return { rules: [] };
+      return { scenes: [] };
     },
     connection: {} as any,
   };
@@ -257,11 +257,11 @@ test("saveFloor sends config", async () => {
     },
     connection: {} as any,
   };
-  await saveFloor(hass as any, "upstairs", { rules: [] });
+  await saveFloor(hass as any, "upstairs", { scenes: [] });
   expect(calls[0]).toEqual({
     type: "ambience/floor/save",
     floor_id: "upstairs",
-    config: { rules: [] },
+    config: { scenes: [] },
   });
 });
 
@@ -270,7 +270,7 @@ test("getHouse calls ambience/house/get", async () => {
   const hass = {
     callWS: async (msg: any) => {
       calls.push(msg);
-      return { rules: [] };
+      return { scenes: [] };
     },
     connection: {} as any,
   };
@@ -287,29 +287,29 @@ test("saveHouse calls ambience/house/save", async () => {
     },
     connection: {} as any,
   };
-  await saveHouse(hass as any, { rules: [] });
+  await saveHouse(hass as any, { scenes: [] });
   expect(calls[0]).toEqual({
     type: "ambience/house/save",
-    config: { rules: [] },
+    config: { scenes: [] },
   });
 });
 
 // ---------------------------------------------------------------------------
-// applyRules
+// applyScenes
 // ---------------------------------------------------------------------------
 
-describe("API: applyRules", () => {
-  test("applyRules without categoryId sends no category_id field", async () => {
+describe("API: applyScenes", () => {
+  test("applyScenes without categoryId sends no category_id field", async () => {
     const { callWS, sent } = makeFakeHass();
-    const res = await applyRules({ callWS } as any, { kind: "area", id: "living_room" });
+    const res = await applyScenes({ callWS } as any, { kind: "area", id: "living_room" });
     expect(sent[0]).toEqual({ type: "ambience/apply", area_id: "living_room" });
     expect(sent[0]).not.toHaveProperty("category_id");
     expect(res).toEqual({ ok: true });
   });
 
-  test("applyRules with categoryId includes category_id in message", async () => {
+  test("applyScenes with categoryId includes category_id in message", async () => {
     const { callWS, sent } = makeFakeHass();
-    await applyRules({ callWS } as any, { kind: "area", id: "living_room" }, "evening");
+    await applyScenes({ callWS } as any, { kind: "area", id: "living_room" }, "evening");
     expect(sent[0]).toEqual({
       type: "ambience/apply",
       area_id: "living_room",
@@ -317,51 +317,51 @@ describe("API: applyRules", () => {
     });
   });
 
-  test("applyRules floor scope sends floor_id", async () => {
+  test("applyScenes floor scope sends floor_id", async () => {
     const { callWS, sent } = makeFakeHass();
-    await applyRules({ callWS } as any, { kind: "floor", id: "upstairs" });
+    await applyScenes({ callWS } as any, { kind: "floor", id: "upstairs" });
     expect(sent[0]).toEqual({ type: "ambience/apply", floor_id: "upstairs" });
   });
 
-  test("applyRules house scope sends house: true", async () => {
+  test("applyScenes house scope sends house: true", async () => {
     const { callWS, sent } = makeFakeHass();
-    await applyRules({ callWS } as any, { kind: "house" });
+    await applyScenes({ callWS } as any, { kind: "house" });
     expect(sent[0]).toEqual({ type: "ambience/apply", house: true });
   });
 });
 
 // ---------------------------------------------------------------------------
-// runRuleActions
+// runSceneActions
 // ---------------------------------------------------------------------------
 
-describe("API: runRuleActions", () => {
-  test("runRuleActions area scope sends rule_index and area_id", async () => {
-    const callWS = vi.fn().mockResolvedValue({ ran: 1, rule_name: "Bright" });
-    const res = await runRuleActions({ callWS } as any, { kind: "area", id: "kitchen" }, 2);
+describe("API: runSceneActions", () => {
+  test("runSceneActions area scope sends scene_index and area_id", async () => {
+    const callWS = vi.fn().mockResolvedValue({ ran: 1, scene_name: "Bright" });
+    const res = await runSceneActions({ callWS } as any, { kind: "area", id: "kitchen" }, 2);
     expect(callWS).toHaveBeenCalledWith({
-      type: "ambience/rule/run_actions",
-      rule_index: 2,
+      type: "ambience/scene/run_actions",
+      scene_index: 2,
       area_id: "kitchen",
     });
-    expect(res).toEqual({ ran: 1, rule_name: "Bright" });
+    expect(res).toEqual({ ran: 1, scene_name: "Bright" });
   });
 
-  test("runRuleActions floor scope sends floor_id", async () => {
-    const callWS = vi.fn().mockResolvedValue({ ran: 0, rule_name: null });
-    await runRuleActions({ callWS } as any, { kind: "floor", id: "upstairs" }, 0);
+  test("runSceneActions floor scope sends floor_id", async () => {
+    const callWS = vi.fn().mockResolvedValue({ ran: 0, scene_name: null });
+    await runSceneActions({ callWS } as any, { kind: "floor", id: "upstairs" }, 0);
     expect(callWS).toHaveBeenCalledWith({
-      type: "ambience/rule/run_actions",
-      rule_index: 0,
+      type: "ambience/scene/run_actions",
+      scene_index: 0,
       floor_id: "upstairs",
     });
   });
 
-  test("runRuleActions house scope sends house: true", async () => {
-    const callWS = vi.fn().mockResolvedValue({ ran: 3, rule_name: "All On" });
-    await runRuleActions({ callWS } as any, { kind: "house" }, 1);
+  test("runSceneActions house scope sends house: true", async () => {
+    const callWS = vi.fn().mockResolvedValue({ ran: 3, scene_name: "All On" });
+    await runSceneActions({ callWS } as any, { kind: "house" }, 1);
     expect(callWS).toHaveBeenCalledWith({
-      type: "ambience/rule/run_actions",
-      rule_index: 1,
+      type: "ambience/scene/run_actions",
+      scene_index: 1,
       house: true,
     });
   });
@@ -406,7 +406,7 @@ describe("API: saveDayConfig", () => {
         {
           scope_kind: "area",
           scope_id: "living_room",
-          rule_name: "Workday rule",
+          scene_name: "Workday scene",
           reason: "no workday sensor",
         },
       ],
@@ -472,7 +472,7 @@ describe("API: saveWeatherConfig", () => {
         {
           scope_kind: "area",
           scope_id: "bedroom",
-          rule_name: "Rainy rule",
+          scene_name: "Rainy scene",
           reason: "unknown group",
         },
       ],

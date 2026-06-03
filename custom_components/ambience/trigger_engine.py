@@ -1,6 +1,6 @@
 """The Ambience auto-trigger engine.
 
-Watches each scope's rule dependencies and re-applies the winning rule when it
+Watches each scope's scene dependencies and re-applies the winning scene when it
 changes. This module holds the evaluation core: building the trigger index from
 the store, and detecting which scopes had a predicate *flip* on a given fire.
 The subscription / snapshot-cache / resolve-apply / lifecycle layer is added on
@@ -106,7 +106,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             (scope_kind, scope_id): cfg for scope_kind, scope_id, cfg in store.all_scope_configs()
         }
         self._index = build_index(self._build_entries())
-        # Drop flip-state for predicates that no longer exist (rules removed /
+        # Drop flip-state for predicates that no longer exist (scenes removed /
         # reordered), so it can't grow unbounded across config edits.
         live = self._index.all_predicates()
         self._predicate_state = {
@@ -117,16 +117,16 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
     def _build_entries(self) -> list[tuple[PredKey, TriggerSpec]]:
         """Return (PredKey, TriggerSpec) for every non-wildcard predicate with deps.
 
-        Every watch a scope's rules imply is registered — auto-triggers are
+        Every watch a scope's scenes imply is registered — auto-triggers are
         always on.
         """
         conditions = self._conditions()
         entries: list[tuple[PredKey, TriggerSpec]] = []
         for (scope_kind, scope_id), cfg in self._scope_cfgs.items():
-            for rule_index, condition_key, spec in iter_predicate_specs(conditions, cfg):
+            for scene_index, condition_key, spec in iter_predicate_specs(conditions, cfg):
                 if spec == EMPTY:
                     continue
-                entries.append(((scope_kind, scope_id, rule_index, condition_key), spec))
+                entries.append(((scope_kind, scope_id, scene_index, condition_key), spec))
         return entries
 
     def _build_reapply_intervals(self) -> dict[int, set[tuple[str, str | None]]]:
@@ -141,25 +141,25 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
 
     def _predicate_for(self, key: PredKey) -> Any:
         """The stored predicate for a PredKey, or None if it no longer exists."""
-        scope_kind, scope_id, rule_index, condition_key = key
+        scope_kind, scope_id, scene_index, condition_key = key
         cfg = self._scope_cfgs.get((scope_kind, scope_id))
         if cfg is None:
             return None
-        rules = cfg.get("rules", [])
-        if not 0 <= rule_index < len(rules):
+        scenes = cfg.get("scenes", [])
+        if not 0 <= scene_index < len(scenes):
             return None
-        return rules[rule_index].get("when", {}).get(condition_key)
+        return scenes[scene_index].get("when", {}).get(condition_key)
 
-    def _category_for(self, scope_kind: str, scope_id: str | None, rule_index: int) -> str | None:
-        """The category id a rule belongs to (always a real id for a live rule);
-        None only when the scope/rule no longer exists, in which case the caller
+    def _category_for(self, scope_kind: str, scope_id: str | None, scene_index: int) -> str | None:
+        """The category id a scene belongs to (always a real id for a live scene);
+        None only when the scope/scene no longer exists, in which case the caller
         must drop the unit (a None category must never reach the apply path)."""
         cfg = self._scope_cfgs.get((scope_kind, scope_id))
         if cfg is None:
             return None
-        rules = cfg.get("rules", [])
-        if 0 <= rule_index < len(rules):
-            return rules[rule_index].get("category")
+        scenes = cfg.get("scenes", [])
+        if 0 <= scene_index < len(scenes):
+            return scenes[scene_index].get("category")
         return None
 
     def _recompute(
@@ -232,7 +232,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             describe=False,
             explain=active,
         )
-        index = plan["matched_rule_index"]
+        index = plan["matched_scene_index"]
         explanation = plan.get("explanation")
         if index is None:
             if active:
@@ -249,7 +249,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     switch_state,
                     Outcome.NO_OP,
                     explanation,
-                    winner_name=plan["rule_name"],
+                    winner_name=plan["scene_name"],
                 )
             return None
         await async_execute_plan(self._hass, scope_kind, scope_id, plan, category_id)
@@ -261,7 +261,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                 switch_state,
                 Outcome.ACTED,
                 explanation,
-                winner_name=plan["rule_name"],
+                winner_name=plan["scene_name"],
                 actions=plan["actions"],
             )
         return None
@@ -290,7 +290,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
 
     async def async_evaluate(self, fired: set[PredKey], cause: TriggerCause | None = None) -> None:
         """Recompute the fired predicates (refreshing only their conditions) and
-        resolve+apply every (scope, category) whose winning rule changed. Emits a
+        resolve+apply every (scope, category) whose winning scene changed. Emits a
         TraceEvent for the batch when tracing produced any unit traces."""
         if not fired:
             return

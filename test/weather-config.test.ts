@@ -170,16 +170,21 @@ describe("ambience-weather-config", () => {
         {
           scope_kind: "area",
           scope_id: "lounge",
-          rule_name: "Area rule",
+          scene_name: "Area scene",
           reason: "missing entity",
         },
         {
           scope_kind: "floor",
           scope_id: "ground",
-          rule_name: "Floor rule",
+          scene_name: "Floor scene",
           reason: "missing entity",
         },
-        { scope_kind: "house", scope_id: null, rule_name: "House rule", reason: "missing entity" },
+        {
+          scope_kind: "house",
+          scope_id: null,
+          scene_name: "House scene",
+          reason: "missing entity",
+        },
       ],
     });
     el = await mount();

@@ -28,18 +28,18 @@ class LastCategoryError(ValueError):
 
 
 class CategoryInUseError(ValueError):
-    """Raised when deleting a category that still has rules in some scope."""
+    """Raised when deleting a category that still has scenes in some scope."""
 
 
-def reassign_orphan_rules(rules: list[dict[str, Any]], known: set[str], target: str) -> bool:
-    """Point any rule with no category or an unknown category at `target`. Mutates the
-    rules in place; returns True if anything was changed. Used by the websocket's
-    save-time coercion to keep every persisted rule pointed at a real category."""
+def reassign_orphan_scenes(scenes: list[dict[str, Any]], known: set[str], target: str) -> bool:
+    """Point any scene with no category or an unknown category at `target`. Mutates the
+    scenes in place; returns True if anything was changed. Used by the websocket's
+    save-time coercion to keep every persisted scene pointed at a real category."""
     changed = False
-    for rule in rules:
-        cid = rule.get("category")
+    for scene in scenes:
+        cid = scene.get("category")
         if cid is None or cid not in known:
-            rule["category"] = target
+            scene["category"] = target
             changed = True
     return changed
 
@@ -63,7 +63,7 @@ class AmbienceStore:
             "categories": [dict(GENERAL_CATEGORY)],
             "areas": {},
             "floors": {},
-            "house": {"rules": []},
+            "house": {"scenes": []},
             "conditions": {
                 "time_of_day": {"custom": {}, "hidden": []},
                 "day": {"workday_sensor": None, "workday_calendar": None},
@@ -88,7 +88,7 @@ class AmbienceStore:
     def _ensure_scope_buckets(self) -> None:
         """Floors and house keys are additive — make sure they exist."""
         self._data.setdefault("floors", {})
-        self._data.setdefault("house", {"rules": []})
+        self._data.setdefault("house", {"scenes": []})
 
     def _ensure_categories(self) -> None:
         """Seed the General category when no categories exist. Categories are
@@ -169,14 +169,14 @@ class AmbienceStore:
         """Yield (kind, scope_id, config) for every configured scope.
 
         `scope_id` is None for the house. Used by handlers that walk every
-        rule list to gather dangling-reference warnings.
+        scene list to gather dangling-reference warnings.
         """
         triples: list[tuple[str, str | None, dict[str, Any]]] = []
         for area_id, cfg in self._data.get("areas", {}).items():
             triples.append(("area", area_id, cfg))
         for floor_id, cfg in self._data.get("floors", {}).items():
             triples.append(("floor", floor_id, cfg))
-        triples.append(("house", None, self._data.get("house", {"rules": []})))
+        triples.append(("house", None, self._data.get("house", {"scenes": []})))
         return triples
 
     def categories(self) -> list[dict[str, Any]]:
@@ -190,19 +190,19 @@ class AmbienceStore:
         self._notify_config_changed()
 
     async def async_delete_category(self, category_id: str) -> None:
-        """Remove a category. Refused when the category still has rules in any
-        scope, or when it is the last remaining category (a rule must always have
+        """Remove a category. Refused when the category still has scenes in any
+        scope, or when it is the last remaining category (a scene must always have
         a category and at least one category must always exist)."""
         categories = self._data.get("categories", [])
         if len(categories) <= 1:
             raise LastCategoryError("cannot delete the last category")
         in_use = any(
-            rule.get("category") == category_id
+            scene.get("category") == category_id
             for _kind, _id, cfg in self.all_scope_configs()
-            for rule in cfg.get("rules", [])
+            for scene in cfg.get("scenes", [])
         )
         if in_use:
-            raise CategoryInUseError(f"category {category_id!r} still has rules")
+            raise CategoryInUseError(f"category {category_id!r} still has scenes")
         self._data["categories"] = [c for c in categories if c.get("id") != category_id]
         await self._store.async_save(self._data)
         self._notify_config_changed()
@@ -248,15 +248,15 @@ class AmbienceStore:
         """Return the per-scope config dict (creating a bare shell if needed).
 
         Used internally by switch helpers so they can read/write the `switch`
-        sub-dict regardless of whether rules have been saved for the scope.
+        sub-dict regardless of whether scenes have been saved for the scope.
         """
         if scope_kind == "house":
-            self._data.setdefault("house", {"rules": []})
+            self._data.setdefault("house", {"scenes": []})
             return self._data["house"]
         if scope_kind == "floor":
-            return self._data["floors"].setdefault(scope_id, {"rules": []})
+            return self._data["floors"].setdefault(scope_id, {"scenes": []})
         if scope_kind == "area":
-            return self._data["areas"].setdefault(scope_id, {"rules": []})
+            return self._data["areas"].setdefault(scope_id, {"scenes": []})
         raise ValueError(f"unknown scope_kind: {scope_kind!r}")
 
     @staticmethod

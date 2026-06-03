@@ -31,7 +31,7 @@ function unit(over: Partial<BufferedUnit> = {}): BufferedUnit {
     ],
     explanation: {
       winner_index: 1,
-      rules: [
+      scenes: [
         {
           index: 0,
           name: "Night",
@@ -139,14 +139,14 @@ describe("trace-detail", () => {
     expect(host.textContent).not.toContain("1 entities");
   });
 
-  test("expansion has 'Rule evaluation' and 'Actions taken' sections", () => {
+  test("expansion has 'Scene evaluation' and 'Actions taken' sections", () => {
     const host = renderToHost({}, true);
     const titles = [...host.querySelectorAll(".section-title")].map((e) => e.textContent?.trim());
-    expect(titles).toContain("Rule evaluation");
+    expect(titles).toContain("Scene evaluation");
     expect(titles).toContain("Actions taken");
   });
 
-  test("expanded rule evaluation shows per-predicate pass/fail and the losing rule", () => {
+  test("expanded scene evaluation shows per-predicate pass/fail and the losing scene", () => {
     const host = renderToHost({}, true);
     expect(host.querySelector(".why")).toBeTruthy();
     expect(host.textContent).toContain("Tod"); // condition key humanized
@@ -190,12 +190,12 @@ describe("trace-detail", () => {
     expect(host.textContent).not.toContain("light.master_bedroom_ceiling_light");
   });
 
-  test("not-evaluated rule is marked", () => {
+  test("not-evaluated scene is marked", () => {
     const host = renderToHost(
       {
         explanation: {
           winner_index: 0,
-          rules: [
+          scenes: [
             { index: 0, name: "A", matched: true, evaluated: true, predicates: [] },
             { index: 1, name: "B", matched: false, evaluated: false, predicates: [] },
           ],
@@ -215,20 +215,20 @@ describe("trace-detail", () => {
     const host = renderToHost({ outcome: "reapplied", explanation: null }, true);
     const titles = [...host.querySelectorAll(".section-title")].map((e) => e.textContent?.trim());
     expect(titles).toContain("Actions taken");
-    expect(titles).not.toContain("Rule evaluation");
+    expect(titles).not.toContain("Scene evaluation");
     expect(host.querySelector(".why-toggle")).toBeTruthy();
   });
 
-  test("rule numbers are displayed 1-based (index 0 → 'Rule #1')", () => {
+  test("scene numbers are displayed 1-based (index 0 → 'Scene #1')", () => {
     const host = renderToHost({}, true);
-    expect(host.textContent).toContain("Rule #1 Night"); // index 0 displays as #1
-    expect(host.textContent).toContain("Rule #2 Evening"); // index 1 displays as #2
+    expect(host.textContent).toContain("Scene #1 Night"); // index 0 displays as #1
+    expect(host.textContent).toContain("Scene #2 Evening"); // index 1 displays as #2
     expect(host.textContent).not.toContain("#0");
   });
 
-  test("rule lines use the human label 'Rule', not the raw 'rule'", () => {
+  test("scene lines use the human label 'Scene', not the raw 'scene'", () => {
     const host = renderToHost({}, true);
-    expect(host.textContent).not.toContain("rule #");
+    expect(host.textContent).not.toContain("scene #");
   });
 
   test("condition keys are shown as human labels (time_of_day → 'Time of day')", () => {
@@ -236,7 +236,7 @@ describe("trace-detail", () => {
       {
         explanation: {
           winner_index: 0,
-          rules: [
+          scenes: [
             {
               index: 0,
               name: "Afternoon",
@@ -260,7 +260,7 @@ describe("trace-detail", () => {
       {
         explanation: {
           winner_index: 0,
-          rules: [
+          scenes: [
             {
               index: 0,
               name: "Cloudy",
@@ -282,7 +282,7 @@ describe("trace-detail", () => {
       {
         explanation: {
           winner_index: 0,
-          rules: [
+          scenes: [
             {
               index: 0,
               name: "Home",
@@ -300,12 +300,12 @@ describe("trace-detail", () => {
     expect(host.textContent).toContain("3 of 5 home (Alice, Bob)");
   });
 
-  test("disabled rule is marked 'disabled', not 'not evaluated'", () => {
+  test("disabled scene is marked 'disabled', not 'not evaluated'", () => {
     const host = renderToHost(
       {
         explanation: {
           winner_index: 1,
-          rules: [
+          scenes: [
             {
               index: 0,
               name: "Off",
@@ -363,14 +363,14 @@ describe("trace-detail", () => {
     expect(result).toBe("Turn on scene");
   });
 
-  // renderRule — line 91: rule name is null → fallback "—"
-  // Branch 20: r.name ?? "—" uses "—" (disabled rule with null name)
-  test("disabled rule with null name shows '—' placeholder", () => {
+  // renderScene — line 91: scene name is null → fallback "—"
+  // Branch 20: r.name ?? "—" uses "—" (disabled scene with null name)
+  test("disabled scene with null name shows '—' placeholder", () => {
     const host = renderToHost(
       {
         explanation: {
           winner_index: 0,
-          rules: [
+          scenes: [
             {
               index: 0,
               name: null,
@@ -388,14 +388,14 @@ describe("trace-detail", () => {
     expect(host.textContent).toContain("disabled");
   });
 
-  // renderRule — line 94: not-evaluated rule with null name → fallback "—"
+  // renderScene — line 94: not-evaluated scene with null name → fallback "—"
   // Branch 23: r.name ?? "—" in the skipped path
-  test("not-evaluated rule with null name shows '—' placeholder", () => {
+  test("not-evaluated scene with null name shows '—' placeholder", () => {
     const host = renderToHost(
       {
         explanation: {
           winner_index: 0,
-          rules: [
+          scenes: [
             { index: 0, name: null, matched: false, evaluated: false, predicates: [] },
             { index: 1, name: "Win", matched: true, evaluated: true, predicates: [] },
           ],
@@ -407,31 +407,31 @@ describe("trace-detail", () => {
     expect(host.textContent).toContain("—");
   });
 
-  // renderRule — line 97: r.name null in matched rule ("no" branch) + null-name
-  // Branch 27: r.name ?? "—" in the normal evaluated rule path
-  test("evaluated rule with null name shows '—' placeholder", () => {
+  // renderScene — line 97: r.name null in matched scene ("no" branch) + null-name
+  // Branch 27: r.name ?? "—" in the normal evaluated scene path
+  test("evaluated scene with null name shows '—' placeholder", () => {
     const host = renderToHost(
       {
         explanation: {
           winner_index: null,
-          rules: [{ index: 0, name: null, matched: false, evaluated: true, predicates: [] }],
+          scenes: [{ index: 0, name: null, matched: false, evaluated: true, predicates: [] }],
         },
       },
       true,
     );
-    expect(host.textContent).toContain("Rule #1");
+    expect(host.textContent).toContain("Scene #1");
     expect(host.textContent).toContain("—");
     expect(host.textContent).toContain("no");
   });
 
-  // renderRule — line 103: predicate with no detail → `nothing` branch
+  // renderScene — line 103: predicate with no detail → `nothing` branch
   // Branch 35: p.detail is null → no dim span rendered
   test("predicate with null detail renders no dim bracket text", () => {
     const host = renderToHost(
       {
         explanation: {
           winner_index: 0,
-          rules: [
+          scenes: [
             {
               index: 0,
               name: "R",
@@ -477,11 +477,11 @@ describe("trace-detail", () => {
   });
 
   // renderEvaluation — line 144-145: collapsed toggle, has explanation AND winner_name
-  // Branch 49: `▸ Why this rule won (N rules)` label
-  test("collapsed toggle reads 'Why this rule won' when explanation and winner_name are present", () => {
+  // Branch 49: `▸ Why this scene won (N scenes)` label
+  test("collapsed toggle reads 'Why this scene won' when explanation and winner_name are present", () => {
     const host = renderToHost({}, false); // winner_name set, explanation present
-    expect(host.textContent).toContain("Why this rule won");
-    expect(host.textContent).toContain("2 rules");
+    expect(host.textContent).toContain("Why this scene won");
+    expect(host.textContent).toContain("2 scenes");
     expect(host.textContent).not.toContain("Hide details");
   });
 
@@ -514,8 +514,8 @@ describe("trace-detail", () => {
     const host = renderToHost({ actions: [] }, true);
     const titles = [...host.querySelectorAll(".section-title")].map((e) => e.textContent?.trim());
     expect(titles).not.toContain("Actions taken");
-    // Rule evaluation section still present.
-    expect(titles).toContain("Rule evaluation");
+    // Scene evaluation section still present.
+    expect(titles).toContain("Scene evaluation");
   });
 
   // renderEvaluation — expanded button shows "▾ Hide details"

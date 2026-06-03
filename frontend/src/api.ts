@@ -14,7 +14,7 @@ import type {
   FloorListItem,
   PeriodDef,
   PeriodStoreView,
-  RuleCategory,
+  SceneCategory,
   Scope,
   ScopeConfig,
   ScopeSwitch,
@@ -158,7 +158,7 @@ export async function dryRun(hass: HassConnection, scope: Scope): Promise<DryRun
   return hass.callWS({ type: "ambience/dry_run", ...scopeFields(scope) });
 }
 
-export async function applyRules(
+export async function applyScenes(
   hass: HassConnection,
   scope: Scope,
   categoryId?: string,
@@ -171,14 +171,14 @@ export async function applyRules(
   return hass.callWS(msg);
 }
 
-export async function runRuleActions(
+export async function runSceneActions(
   hass: HassConnection,
   scope: Scope,
-  ruleIndex: number,
-): Promise<{ ran: number; rule_name: string | null }> {
+  sceneIndex: number,
+): Promise<{ ran: number; scene_name: string | null }> {
   return hass.callWS({
-    type: "ambience/rule/run_actions",
-    rule_index: ruleIndex,
+    type: "ambience/scene/run_actions",
+    scene_index: sceneIndex,
     ...scopeFields(scope),
   });
 }
@@ -196,7 +196,7 @@ export async function savePeriods(
   warnings: Array<{
     scope_kind: string;
     scope_id: string | null;
-    rule_name: string;
+    scene_name: string;
     missing_period: string;
   }>;
 }> {
@@ -224,7 +224,7 @@ export async function saveDayConfig(
   warnings: Array<{
     scope_kind: string;
     scope_id: string | null;
-    rule_name: string;
+    scene_name: string;
     reason: string;
   }>;
 }> {
@@ -248,7 +248,7 @@ export async function saveWeatherConfig(
   warnings: Array<{
     scope_kind: string;
     scope_id: string | null;
-    rule_name: string;
+    scene_name: string;
     reason: string;
   }>;
 }> {
@@ -289,8 +289,8 @@ export async function saveSwitchDefaults(
   });
 }
 
-export async function listCategories(hass: HassConnection): Promise<RuleCategory[]> {
-  const res = await hass.callWS<{ categories: RuleCategory[] }>({
+export async function listCategories(hass: HassConnection): Promise<SceneCategory[]> {
+  const res = await hass.callWS<{ categories: SceneCategory[] }>({
     type: "ambience/categories/list",
   });
   return res.categories;
@@ -298,7 +298,7 @@ export async function listCategories(hass: HassConnection): Promise<RuleCategory
 
 export async function saveCategories(
   hass: HassConnection,
-  categories: RuleCategory[],
+  categories: SceneCategory[],
 ): Promise<{ ok: true }> {
   return hass.callWS({ type: "ambience/categories/save", categories });
 }

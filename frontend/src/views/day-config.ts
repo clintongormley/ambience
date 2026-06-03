@@ -6,7 +6,7 @@ import { localize } from "../i18n.js";
 import { scopeLabel } from "../scope-label.js";
 import type { DayConfig } from "../types.js";
 
-type Warning = { scope_kind: string; scope_id: string | null; rule_name: string; reason: string };
+type Warning = { scope_kind: string; scope_id: string | null; scene_name: string; reason: string };
 
 @customElement("ambience-day-config")
 export class AmbienceDayConfig extends LitElement {
@@ -95,9 +95,9 @@ export class AmbienceDayConfig extends LitElement {
         this._warnings.length
           ? html`
         <div class="warnings">
-          <strong>${localize(this.hass, "ui.day_warning_prefix", "Warning:")}</strong> ${localize(this.hass, "ui.day_warning_text", "rules now reference unconfigured entities:")}
+          <strong>${localize(this.hass, "ui.day_warning_prefix", "Warning:")}</strong> ${localize(this.hass, "ui.day_warning_text", "scenes now reference unconfigured entities:")}
           <ul>
-            ${this._warnings.map((w) => html`<li>${scopeLabel(w)} / "${w.rule_name}" → ${w.reason}</li>`)}
+            ${this._warnings.map((w) => html`<li>${scopeLabel(w)} / "${w.scene_name}" → ${w.reason}</li>`)}
           </ul>
         </div>
       `

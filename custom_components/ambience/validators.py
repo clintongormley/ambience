@@ -1,7 +1,7 @@
 """Shared validation for the per-action `reapply_seconds` setting.
 
 `reapply_seconds` appears on both exposed-action catalog entries (the default)
-and per-rule actions (the override), and the resolver in `service.py` reads it
+and per-scene actions (the override), and the resolver in `service.py` reads it
 back. Centralising the bound here keeps the three sites from drifting.
 """
 

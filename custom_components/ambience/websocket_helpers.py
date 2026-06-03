@@ -22,7 +22,7 @@ from .const import (
     GENERAL_CATEGORY_ID,
 )
 from .sorting import resolve_order, shadowed_by
-from .store import reassign_orphan_rules
+from .store import reassign_orphan_scenes
 from .validators import validate_reapply_seconds
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,83 +39,85 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
         raise ValueError("config must be an object")
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
-    for rule_idx, rule in enumerate(config.get("rules", [])):
-        when = rule.get("when", {})
+    for scene_idx, scene in enumerate(config.get("scenes", [])):
+        when = scene.get("when", {})
         for key, predicate in when.items():
             if predicate is None:
                 continue
             if key not in conditions_registry:
-                raise ValueError(f"rule {rule_idx}: unknown condition {key}")
+                raise ValueError(f"scene {scene_idx}: unknown condition {key}")
             conditions_registry[key].validate_predicate(predicate)
-        for action_idx, action_spec in enumerate(rule.get("actions", [])):
+        for action_idx, action_spec in enumerate(scene.get("actions", [])):
             service_id = action_spec.get("service")
             if not isinstance(service_id, str) or "." not in service_id:
                 raise ValueError(
-                    f"rule {rule_idx} action {action_idx}: missing or malformed `service`"
+                    f"scene {scene_idx} action {action_idx}: missing or malformed `service`"
                 )
             exposed = exposed_store.get(service_id)
             if exposed is None:
                 raise ValueError(
-                    f"rule {rule_idx} action {action_idx}: service {service_id!r} not exposed"
+                    f"scene {scene_idx} action {action_idx}: service {service_id!r} not exposed"
                 )
             entity_ids = action_spec.get("entity_ids", [])
             if not isinstance(entity_ids, list):
-                raise ValueError(f"rule {rule_idx} action {action_idx}: entity_ids must be a list")
+                raise ValueError(
+                    f"scene {scene_idx} action {action_idx}: entity_ids must be a list"
+                )
             if not all(isinstance(eid, str) and eid for eid in entity_ids):
                 raise ValueError(
-                    f"rule {rule_idx} action {action_idx}: entity_ids must be non-empty strings"
+                    f"scene {scene_idx} action {action_idx}: entity_ids must be non-empty strings"
                 )
             params = action_spec.get("params", {})
             if not isinstance(params, dict):
-                raise ValueError(f"rule {rule_idx} action {action_idx}: params must be an object")
+                raise ValueError(f"scene {scene_idx} action {action_idx}: params must be an object")
             # Note: params keys are NOT whitelisted against visible_fields.
-            # A rule may carry extra params for fields that have since been
+            # A scene may carry extra params for fields that have since been
             # hidden in settings (or were never exposed); they're still sent
-            # at execution. The save-time dangling-rule warnings surface this
+            # at execution. The save-time dangling-scene warnings surface this
             # to the user; the engine treats them as overrides.
             # `exposed` is used here only for the existence check above.
             _ = exposed
             if "reapply_seconds" in action_spec:
                 validate_reapply_seconds(
-                    f"rule {rule_idx} action {action_idx}", action_spec["reapply_seconds"]
+                    f"scene {scene_idx} action {action_idx}", action_spec["reapply_seconds"]
                 )
 
 
 def canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
-    """Resolve rule order + numbers for storage. Strips the transient per-rule
+    """Resolve scene order + numbers for storage. Strips the transient per-scene
     `shadowed_by` hint so it isn't persisted."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     out = dict(config)
-    rules = [{k: v for k, v in r.items() if k != "shadowed_by"} for r in config.get("rules", [])]
-    out["rules"] = resolve_order(rules, conditions_registry)
+    scenes = [{k: v for k, v in r.items() if k != "shadowed_by"} for r in config.get("scenes", [])]
+    out["scenes"] = resolve_order(scenes, conditions_registry)
     return out
 
 
 def with_shadows(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy whose rules carry a transient `shadowed_by` index (or None).
+    """Return a copy whose scenes carry a transient `shadowed_by` index (or None).
     Not persisted — only sent to the frontend."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
-    rules = config.get("rules", [])
-    shadows = shadowed_by(rules, conditions_registry)
+    scenes = config.get("scenes", [])
+    shadows = shadowed_by(scenes, conditions_registry)
     return {
         **config,
-        "rules": [{**r, "shadowed_by": shadows.get(idx)} for idx, r in enumerate(rules)],
+        "scenes": [{**r, "shadowed_by": shadows.get(idx)} for idx, r in enumerate(scenes)],
     }
 
 
-def coerce_rule_categories(store, config: dict) -> None:
-    """Point any rule with no category / an unknown category at General (or, if General
+def coerce_scene_categories(store, config: dict) -> None:
+    """Point any scene with no category / an unknown category at General (or, if General
     was deleted, the first existing category), logging once. Mutates `config`. This is
-    the single place that enforces the every-rule-has-a-real-category invariant."""
+    the single place that enforces the every-scene-has-a-real-category invariant."""
     known = {c["id"] for c in store.categories()}
     target = (
         GENERAL_CATEGORY_ID
         if GENERAL_CATEGORY_ID in known
         else next(iter(known), GENERAL_CATEGORY_ID)
     )
-    if reassign_orphan_rules(config.get("rules", []), known, target):
+    if reassign_orphan_scenes(config.get("scenes", []), known, target):
         _LOGGER.warning(
-            "ambience: scope save had uncategorised/unknown-category rule(s); set to General"
+            "ambience: scope save had uncategorised/unknown-category scene(s); set to General"
         )
 
 
@@ -144,8 +146,8 @@ def dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> li
     calendar_ok = bool(cfg.get("workday_calendar"))
     warnings: list[dict[str, Any]] = []
     for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for rule in scope_cfg.get("rules", []):
-            pred = rule.get("when", {}).get("day")
+        for scene in scope_cfg.get("scenes", []):
+            pred = scene.get("when", {}).get("day")
             if not isinstance(pred, dict):
                 continue
             for slot in (pred.get("include") or []) + (pred.get("exclude") or []):
@@ -155,7 +157,7 @@ def dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> li
                         {
                             "scope_kind": scope_kind,
                             "scope_id": scope_id,
-                            "rule_name": rule.get("name", ""),
+                            "scene_name": scene.get("name", ""),
                             "reason": f"uses `{kind}` item but `workday_sensor` is unset",
                         }
                     )
@@ -164,7 +166,7 @@ def dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> li
                         {
                             "scope_kind": scope_kind,
                             "scope_id": scope_id,
-                            "rule_name": rule.get("name", ""),
+                            "scene_name": scene.get("name", ""),
                             "reason": f"uses `{kind}` item but `workday_calendar` is unset",
                         }
                     )
@@ -217,8 +219,8 @@ def dangling_weather_warnings(
 
     warnings: list[dict[str, Any]] = []
     for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for rule in scope_cfg.get("rules", []):
-            pred = rule.get("when", {}).get("weather")
+        for scene in scope_cfg.get("scenes", []):
+            pred = scene.get("when", {}).get("weather")
             if not weather_predicate_active(pred):
                 continue
             if entity_cleared:
@@ -226,7 +228,7 @@ def dangling_weather_warnings(
                     {
                         "scope_kind": scope_kind,
                         "scope_id": scope_id,
-                        "rule_name": rule.get("name", ""),
+                        "scene_name": scene.get("name", ""),
                         "reason": "uses a weather predicate but the weather entity is unset",
                     }
                 )
@@ -236,7 +238,7 @@ def dangling_weather_warnings(
                         {
                             "scope_kind": scope_kind,
                             "scope_id": scope_id,
-                            "rule_name": rule.get("name", ""),
+                            "scene_name": scene.get("name", ""),
                             "reason": f"references deleted weather group {gid!r}",
                         }
                     )

@@ -1,6 +1,6 @@
 /**
  * Render a short, user-facing label for a (scope_kind, scope_id) pair as it
- * arrives in dangling-rule warning payloads from the backend (Configuration
+ * arrives in dangling-scene warning payloads from the backend (Configuration
  * tab views). House has no id; floor's id is shown with a prefix so it can't
  * be mistaken for an area; areas are shown by id (a registry lookup is a
  * follow-up).

@@ -33,13 +33,13 @@ pytest
 
 ## Usage
 
-Configure Ambience via the **Ambience** panel (sidebar, admin-only). Add an area, define scene names, pick which conditions participate, then author rules. Activating a scene picks the first matching rule from an ordered list (based on time of day, weather, etc.) and runs its actions.
+Configure Ambience via the **Ambience** panel (sidebar, admin-only). Add an area, define scene names, pick which conditions participate, then author scenes. Activating a scene picks the first matching scene from an ordered list (based on time of day, weather, etc.) and runs its actions.
 
 ### Per-scope switches
 
 Each scope (the house, every HA floor, and every HA area) gets its own
 `switch.*_ambience` entity. Each switch independently gates only its own
-scope's rules — `ambience.apply_scene` for an area is a no-op iff *that
+scope's scenes — `ambience.apply_scene` for an area is a no-op iff *that
 area's* switch is off; same for floor and house. There is no cascade, so
 turning a floor off does not affect rooms on that floor. Switches
 auto-turn-on after a configurable delay (default 2h; 0 disables). Defaults
@@ -82,7 +82,7 @@ All commands are admin-only.
 | `ambience/exposed_actions/list` | – | configured action definitions (id, label, service, …) |
 | `ambience/exposed_actions/save` | `{actions}` | `{ok: true}` |
 | `ambience/validate` | `{config}` | `{ok: true}` or error |
-| `ambience/dry_run` | `{area_id, scene}` | resolved-rule preview |
+| `ambience/dry_run` | `{area_id, scene}` | resolved-scene preview |
 | `ambience/switch_defaults/list` | – | `{name, auto_on_delay_seconds}` |
 | `ambience/switch_defaults/save` | `{name, auto_on_delay_seconds}` | `{ok: true}` |
 | `ambience/house/switch/save` | `{name\|null, auto_on_delay_seconds\|null}` | `{ok: true}` |

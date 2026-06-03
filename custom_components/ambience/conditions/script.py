@@ -1,7 +1,7 @@
-"""ScriptCondition — evaluate a rule by calling a HA script that returns {match: bool}.
+"""ScriptCondition — evaluate a scene by calling a HA script that returns {match: bool}.
 
-Per-rule predicate carries `(script, args)`. `snapshot()` collects every
-distinct pair across all areas' rules, calls each script in parallel with a
+Per-scene predicate carries `(script, args)`. `snapshot()` collects every
+distinct pair across all areas' scenes, calls each script in parallel with a
 per-call timeout, and memoises results by `(script, sorted-args-json)` with
 a short TTL. `matches()` is a pure dict lookup.
 
@@ -133,7 +133,7 @@ class ScriptCondition:
     # --- snapshot orchestration -------------------------------------------
 
     def _collect_pairs(self) -> list[tuple[str, str]]:
-        """Walk every scope's rules (areas, floors, house) and return distinct
+        """Walk every scope's scenes (areas, floors, house) and return distinct
         (script, args-json) pairs carried by `when.script` predicates. Malformed
         predicates are skipped. Order is insertion order; duplicates are removed."""
         if self._hass is None:

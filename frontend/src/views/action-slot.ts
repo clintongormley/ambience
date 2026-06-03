@@ -187,7 +187,7 @@ export class AmbienceActionSlot extends LitElement {
    * Intersection of `exposed.visible_fields` and `serviceSchema.fields`,
    * mapped to ha-form's schema-entry shape. Iteration order follows the HA
    * service schema (services.yaml declaration order), filtered by
-   * `visible_fields` membership — so the rule editor renders fields in the
+   * `visible_fields` membership — so the scene editor renders fields in the
    * same order as HA's own service UI, regardless of the order the user
    * toggled them in settings.
    */
@@ -357,7 +357,7 @@ export class AmbienceActionSlot extends LitElement {
 
   /** Whether to show the per-field ✕ clear button.
    *
-   * Only when the user has set a distinct value on the rule (something to
+   * Only when the user has set a distinct value on the scene (something to
    * clear back to the default). Pure-default rows have nothing to clear. */
   private _hasUserOverride(name: string): boolean {
     return name in this.params;

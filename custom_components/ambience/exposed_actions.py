@@ -1,12 +1,12 @@
-"""User-owned list of HA services exposed to Ambience's rule editor.
+"""User-owned list of HA services exposed to Ambience's scene editor.
 
 Each entry pins a service ("light.turn_on") plus two orthogonal per-field
 settings:
 
-  * `visible_fields`  — fields shown in the rule editor (user-editable per
-    rule).
+  * `visible_fields`  — fields shown in the scene editor (user-editable per
+    scene).
   * `defaults`        — pre-fill values applied at execution time when the
-    rule doesn't override them. A field may appear in both buckets (shown
+    scene doesn't override them. A field may appear in both buckets (shown
     AND pre-filled), only in defaults (hidden but always sent — the old
     "locked" mode), only in visible_fields (shown empty), or in neither
     (unused).
@@ -48,7 +48,7 @@ class ExposedActionsStore:
         """Self-consistency checks. Does not consult the HA service catalog.
 
         Note: a field may appear in BOTH `visible_fields` and `defaults`.
-        That means "shown in the rule editor pre-filled with this value".
+        That means "shown in the scene editor pre-filled with this value".
         """
         if not isinstance(actions, list):
             raise ValueError("exposed actions must be a list")

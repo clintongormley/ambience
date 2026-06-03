@@ -77,11 +77,11 @@ describe("parseReapplyOverrideSeconds", () => {
     expect(parseReapplyOverrideSeconds("--")).toBeNull();
   });
 
-  test("returns 0 for '0' (disable for this rule)", () => {
+  test("returns 0 for '0' (disable for this scene)", () => {
     expect(parseReapplyOverrideSeconds("0")).toBe(0);
   });
 
-  test("returns 0 for negative values (disable for this rule)", () => {
+  test("returns 0 for negative values (disable for this scene)", () => {
     expect(parseReapplyOverrideSeconds("-5")).toBe(0);
     expect(parseReapplyOverrideSeconds("-0.1")).toBe(0);
   });

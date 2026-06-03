@@ -49,7 +49,7 @@ export class AmbienceStatePredicateInput extends LitElement {
    *  editor, others render as summary + X. */
   @state() private _openPath: number[] | null = null;
   /** Set to true when the user tried to navigate away from an invalid atom.
-   *  Mirrors the rule-editor pattern: errors only surface after a switch
+   *  Mirrors the scene-editor pattern: errors only surface after a switch
    *  attempt, not from the start. Reset when the open atom becomes valid. */
   @state() private _showError = false;
 

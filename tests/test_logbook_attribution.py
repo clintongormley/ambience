@@ -33,11 +33,11 @@ class _FakeExposedStorage:
 # --- Pure message composition -------------------------------------------------
 
 
-def test_message_named_rule_single_category() -> None:
+def test_message_named_scene_single_category() -> None:
     msg = compose_apply_message(
         reapplied=False,
-        rule_name="Evening",
-        rule_index=0,
+        scene_name="Evening",
+        scene_index=0,
         scope_label="Master Bedroom",
         category_label="Lights",
         category_count=1,
@@ -48,8 +48,8 @@ def test_message_named_rule_single_category() -> None:
 def test_message_multiple_categories_includes_category() -> None:
     msg = compose_apply_message(
         reapplied=False,
-        rule_name="Evening",
-        rule_index=0,
+        scene_name="Evening",
+        scene_index=0,
         scope_label="Master Bedroom",
         category_label="Lights",
         category_count=2,
@@ -57,23 +57,23 @@ def test_message_multiple_categories_includes_category() -> None:
     assert msg == "applied 'Evening' in Master Bedroom (Lights)"
 
 
-def test_message_unnamed_rule_falls_back_to_index() -> None:
+def test_message_unnamed_scene_falls_back_to_index() -> None:
     msg = compose_apply_message(
         reapplied=False,
-        rule_name=None,
-        rule_index=2,
+        scene_name=None,
+        scene_index=2,
         scope_label="Kitchen",
         category_label=None,
         category_count=1,
     )
-    assert msg == "applied 'rule 3' in Kitchen"
+    assert msg == "applied 'scene 3' in Kitchen"
 
 
 def test_message_reapplied_verb() -> None:
     msg = compose_apply_message(
         reapplied=True,
-        rule_name="Evening",
-        rule_index=0,
+        scene_name="Evening",
+        scene_index=0,
         scope_label="Master Bedroom",
         category_label="Lights",
         category_count=2,
@@ -85,8 +85,8 @@ def test_message_multiple_categories_but_no_label_omits_category() -> None:
     # category_count > 1 with an unknown/labelless category: suffix is omitted.
     msg = compose_apply_message(
         reapplied=False,
-        rule_name="Evening",
-        rule_index=0,
+        scene_name="Evening",
+        scene_index=0,
         scope_label="Master Bedroom",
         category_label=None,
         category_count=2,
@@ -97,8 +97,8 @@ def test_message_multiple_categories_but_no_label_omits_category() -> None:
 def test_message_reapplied_single_category() -> None:
     msg = compose_apply_message(
         reapplied=True,
-        rule_name="Evening",
-        rule_index=0,
+        scene_name="Evening",
+        scene_index=0,
         scope_label="Master Bedroom",
         category_label="Lights",
         category_count=1,
@@ -132,7 +132,7 @@ async def test_execute_actions_passes_context_to_service_calls(
         "area",
         "lr",
         [{"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}],
-        rule_index=0,
+        scene_index=0,
         context=ctx,
     )
 
@@ -181,7 +181,7 @@ async def test_apply_fires_ambience_entry_and_shares_context(
     await store.async_save_area(
         "lr",
         {
-            "rules": [
+            "scenes": [
                 {
                     "name": "Evening",
                     "category": "general",
@@ -219,7 +219,7 @@ async def test_apply_with_empty_actions_logs_nothing(
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_area(
         "lr",
-        {"rules": [{"name": "Empty", "category": "general", "when": {}, "actions": []}]},
+        {"scenes": [{"name": "Empty", "category": "general", "when": {}, "actions": []}]},
     )
 
     await hass.services.async_call(DOMAIN, "apply_scene", {"area": "lr"}, blocking=True)
@@ -253,7 +253,7 @@ async def test_multiple_categories_include_category_name_and_own_context(
     await store.async_save_area(
         "lr",
         {
-            "rules": [
+            "scenes": [
                 {
                     "name": "Evening",
                     "category": "lighting",
@@ -296,7 +296,7 @@ async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockC
     )
     await store.async_save_house(
         {
-            "rules": [
+            "scenes": [
                 {
                     "name": "Movie",
                     "category": "general",
@@ -316,13 +316,13 @@ async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockC
     assert "applied 'Movie' in Global" in msgs
 
 
-# --- run_rule_actions: own "ran ..." wording + shared context -----------------
+# --- run_scene_actions: own "ran ..." wording + shared context -----------------
 
 
-async def test_run_rule_actions_fires_ambience_entry_and_shares_context(
+async def test_run_scene_actions_fires_ambience_entry_and_shares_context(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    from custom_components.ambience.service import async_run_rule_actions
+    from custom_components.ambience.service import async_run_scene_actions
 
     entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
     light_calls = async_mock_service(hass, "light", "turn_on")
@@ -334,7 +334,7 @@ async def test_run_rule_actions_fires_ambience_entry_and_shares_context(
     await store.async_save_area(
         "lr",
         {
-            "rules": [
+            "scenes": [
                 {
                     "name": "Movie",
                     "category": "general",
@@ -347,7 +347,7 @@ async def test_run_rule_actions_fires_ambience_entry_and_shares_context(
         },
     )
 
-    await async_run_rule_actions(hass, "area", "lr", 0)
+    await async_run_scene_actions(hass, "area", "lr", 0)
     await hass.async_block_till_done()
 
     ambience_entries = [e for e in entries if e.data.get("name") == "Ambience"]
@@ -360,19 +360,19 @@ async def test_run_rule_actions_fires_ambience_entry_and_shares_context(
     assert light_calls[0].context.id == entry.context.id
 
 
-async def test_run_rule_actions_with_empty_actions_logs_nothing(
+async def test_run_scene_actions_with_empty_actions_logs_nothing(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    from custom_components.ambience.service import async_run_rule_actions
+    from custom_components.ambience.service import async_run_scene_actions
 
     entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_area(
         "lr",
-        {"rules": [{"name": "Empty", "category": "general", "when": {}, "actions": []}]},
+        {"scenes": [{"name": "Empty", "category": "general", "when": {}, "actions": []}]},
     )
 
-    await async_run_rule_actions(hass, "area", "lr", 0)
+    await async_run_scene_actions(hass, "area", "lr", 0)
     await hass.async_block_till_done()
 
     assert [e for e in entries if e.data.get("name") == "Ambience"] == []

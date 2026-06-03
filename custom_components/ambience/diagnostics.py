@@ -21,7 +21,7 @@ from .const import DATA_STORE, DOMAIN
 # Keys whose values can reveal where people live or go: the workday/calendar
 # sensors a household keys off, the configured weather entity, and the
 # person/zone references and free-form templates carried by `people`/`template`
-# rule predicates. Redacting by key keeps the rule structure intact.
+# scene predicates. Redacting by key keeps the scene structure intact.
 TO_REDACT = {
     "workday_sensor",
     "workday_calendar",

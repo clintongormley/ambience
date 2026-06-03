@@ -21,7 +21,7 @@ import { emitValueChanged } from "../dom.js";
  *   "text" / unknown -> free-text input + the condition's predicate_help
  *
  * Emits `value-changed` with `{ value: unknown }`. A `null` value means the
- * condition is unconstrained (wildcard) for this rule.
+ * condition is unconstrained (wildcard) for this scene.
  */
 @customElement("ambience-condition-input")
 export class AmbienceConditionInput extends LitElement {

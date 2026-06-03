@@ -122,6 +122,8 @@
     "target": "Target",
     "remove_action": "Remove action",
     "add_action": "+ Add action…",
+    "remove_condition": "Remove condition",
+    "add_condition": "+ Add condition…",
     "add_action_button": "Add action",
     "cancel": "Cancel",
     "save": "Save",

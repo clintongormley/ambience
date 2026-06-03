@@ -99,9 +99,9 @@ class WeatherCondition:
     name = "weather"
     description = "Matches the current weather condition and attribute thresholds."
     predicate_help = (
-        "Object {conditions: [...], thresholds: [{attribute, op, value}]}. "
-        "Matches when the condition is in `conditions` (empty = any) and every "
-        "threshold holds. Operators: < <= > >=."
+        "Object {groups: [group_id, ...], thresholds: [{attribute, op, value}]}. "
+        "Matches when the current weather condition belongs to one of the selected "
+        "`groups` (empty = any) and every threshold holds. Operators: < <= > >=."
     )
     input = "weather_predicate"
     priority = 700

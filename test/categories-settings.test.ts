@@ -136,6 +136,22 @@ describe("ambience-categories-settings", () => {
     expect(el._categories.some((g: any) => g.id === "blinds")).toBe(true); // restored
   });
 
+  test("a server delete rejection (last category, concurrent-delete race) shows the localized reason and restores", async () => {
+    // Local count > 1 so the client guard doesn't fire, but the server has only
+    // one left (another client deleted concurrently) and refuses with code=category_last.
+    (deleteCategory as any).mockRejectedValueOnce({ code: "category_last", message: "cannot delete the last category" });
+    el = await mount();
+    el._categories = [{ id: "blinds", name: "Blinds" }, { id: "lights", name: "Lights" }];
+    el._openEditor({ id: "blinds", name: "Blinds" });
+    await el.updateComplete;
+    (el.shadowRoot.querySelector("button.delete") as HTMLButtonElement).click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // The localized message (not the raw server string) must be shown.
+    expect(el.shadowRoot.querySelector(".modal-error")?.textContent).toContain("You can't delete");
+    expect(el._categories.some((g: any) => g.id === "blinds")).toBe(true); // restored
+  });
+
   test("a new (unsaved) category's modal has no Delete button", async () => {
     el = await mount();
     el._addCategory();

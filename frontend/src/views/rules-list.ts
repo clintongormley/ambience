@@ -319,11 +319,28 @@ export class AmbienceRulesList extends LitElement {
     );
   }
 
+  // Memoised name→priority map, rebuilt only when the `conditions` array
+  // identity changes (not on every _whenKeys call — it runs twice per rule
+  // per render).
+  private _priorityOfCache?: {
+    src: ConditionInfo[] | undefined;
+    map: Map<string, number>;
+  };
+
+  private _priorityMap(): Map<string, number> {
+    const src = this.conditions;
+    if (!this._priorityOfCache || this._priorityOfCache.src !== src) {
+      this._priorityOfCache = {
+        src,
+        map: new Map((src ?? []).map((m) => [m.name, m.priority])),
+      };
+    }
+    return this._priorityOfCache.map;
+  }
+
   /** Sorted list of active `when` keys (higher priority first). */
   private _whenKeys(rule: Rule): string[] {
-    const priorityOf = new Map(
-      (this.conditions ?? []).map((m) => [m.name, m.priority]),
-    );
+    const priorityOf = this._priorityMap();
     return Object.keys(rule.when)
       .filter((k) => rule.when[k] != null)
       .sort(

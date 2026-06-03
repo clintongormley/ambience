@@ -235,16 +235,26 @@ export class AmbienceCategoriesSettings extends LitElement {
       .then(() => this._closeModal())
       .catch((e) => {
         this._categories = previous;
-        // The backend tags an in-use refusal with a stable error code; show the
-        // localized reason for it, and the raw message for anything unexpected.
+        // The backend tags its refusals with stable error codes; localize the
+        // known ones, and fall back to the raw message for anything unexpected.
+        // `category_last` can still arrive despite the client-side guard above
+        // when another client deletes a category concurrently (a delete race).
         const code = (e as { code?: string }).code;
-        this._modalError = code === "category_in_use"
-          ? localize(
-              this.hass,
-              "ui.category_delete_blocked_in_use",
-              "This category still has rules — move or delete them first.",
-            )
-          : (e as Error).message || String(e);
+        if (code === "category_in_use") {
+          this._modalError = localize(
+            this.hass,
+            "ui.category_delete_blocked_in_use",
+            "This category still has rules — move or delete them first.",
+          );
+        } else if (code === "category_last") {
+          this._modalError = localize(
+            this.hass,
+            "ui.category_delete_blocked_last",
+            "You can't delete the last category.",
+          );
+        } else {
+          this._modalError = (e as Error).message || String(e);
+        }
       });
   }
 

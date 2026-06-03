@@ -35,6 +35,8 @@ jobs:
           fi
 
       - name: Run tests with coverage
+        # The coverage floor (fail_under) and branch=true are read from
+        # [tool.coverage.*] in pyproject.toml, so this fails if coverage drops.
         run: |
           pytest tests/ \
             --cov=custom_components.ambience \
@@ -60,7 +62,7 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
 
-  frontend-build:
+  frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,8 +75,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint + format check (Biome)
+        run: npm run ci
+
       - name: Type check
         run: npm run check
+
+      - name: Test with coverage
+        # Coverage thresholds are enforced in vitest.config.ts.
+        run: npm run coverage
 
       - name: Build bundle
         run: npm run build
@@ -86,3 +95,19 @@ jobs:
             echo "::error::Run 'npm run build' locally and commit the result."
             exit 1
           fi
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        # pyyaml for the docs generator; HA (via the test harness) so the
+        # condition classes the docs generator imports are available.
+        run: pip install pyyaml pytest-homeassistant-custom-component
+      - name: Translation key parity
+        run: python -m scripts.check_translations
+      - name: Generated docs drift
+        run: python -m scripts.gen_reference_docs

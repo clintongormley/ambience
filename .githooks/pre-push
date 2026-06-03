@@ -1,0 +1,59 @@
+#!/bin/sh
+# Local pre-push gate. Strategy: fast lint/format first (the usual CI culprit),
+# then run ONLY the changed language's tests + always-cheap drift checks, so
+# pushing stays lightweight but CI rarely fails.
+#
+# Install once per clone:  sh scripts/install-hooks.sh
+# Bypass in an emergency:  git push --no-verify
+set -eu
+
+ZERO=0000000000000000000000000000000000000000
+
+# Pick a base ref to diff "what we're pushing" against, most-specific first.
+default_base() {
+  for ref in origin/main main origin/HEAD; do
+    if git rev-parse --verify --quiet "$ref" >/dev/null 2>&1; then
+      echo "$ref"
+      return 0
+    fi
+  done
+  echo "HEAD~1"  # last resort: just the tip commit
+}
+
+# Read the ref updates git feeds us on stdin to compute a precise diff range.
+range=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$ZERO" ] && continue          # branch deletion: nothing to test
+  if [ "$remote_sha" = "$ZERO" ]; then            # new branch on the remote
+    base="$(git merge-base "$(default_base)" "$local_sha" 2>/dev/null || default_base)"
+    range="${base}..${local_sha}"
+  else
+    range="${remote_sha}..${local_sha}"
+  fi
+done
+
+# Fallback when stdin gave us nothing (e.g. a manual invocation).
+[ -n "$range" ] || range="$(default_base)...HEAD"
+
+changed="$(git diff --name-only "$range" 2>/dev/null || git diff --name-only HEAD~1)"
+echo "pre-push: inspecting $(printf '%s\n' "$changed" | grep -c . || true) changed file(s) in range $range"
+
+py_changed=$(printf '%s\n' "$changed" | grep -E '\.py$' || true)
+js_changed=$(printf '%s\n' "$changed" | grep -E '^(frontend/src|test)/.*\.ts$' || true)
+bundle_src_changed=$(printf '%s\n' "$changed" | grep -E '^frontend/src/' || true)
+trans_changed=$(printf '%s\n' "$changed" | grep -E 'strings\.json$|/translations/' || true)
+
+# --- Step 1: fast lint/format (fail fast — this is usually what breaks CI) ---
+if [ -n "$py_changed" ]; then echo "› ruff";       make lint-py; fi
+if [ -n "$js_changed" ]; then echo "› biome+tsc";   make lint-js; fi
+
+# --- Step 2: always-cheap drift checks ---
+if [ -n "$py_changed$trans_changed" ]; then echo "› translations"; make translations; fi
+if [ -n "$py_changed" ];               then echo "› docs drift";   make docs-check; fi
+
+# --- Step 3: changed-language tests + coverage ---
+if [ -n "$py_changed" ];          then echo "› backend tests+coverage";  make coverage-py; fi
+if [ -n "$js_changed" ];          then echo "› frontend tests+coverage"; make coverage-js; fi
+if [ -n "$bundle_src_changed" ];  then echo "› bundle freshness";        make build-check; fi
+
+echo "pre-push: all gates passed ✓"

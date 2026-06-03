@@ -2,7 +2,7 @@
 name = "ambience"
 version = "0.1.0"
 description = "Home Assistant custom integration: Ambience"
-requires-python = ">=3.12"
+requires-python = ">=3.13.2"
 
 [project.optional-dependencies]
 test = [
@@ -19,7 +19,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]

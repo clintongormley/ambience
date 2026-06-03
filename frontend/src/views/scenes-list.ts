@@ -35,7 +35,11 @@ export class AmbienceScenesList extends LitElement {
     }
     li {
       display: flex;
-      align-items: center;
+      /* Top-align so the drag handle, number, toggle and kebab stay in line
+         with the scene name when the card is expanded (the body grows tall with
+         the condition summary + action detail); centering would float them down
+         beside the action row. */
+      align-items: flex-start;
       gap: 0.25rem;
       padding: 0.75rem 1rem;
       border: 1px solid var(--divider-color, #e0e0e0);

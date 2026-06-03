@@ -7,10 +7,10 @@ on:
   pull_request:
     paths: ["docs/**", "mkdocs.yml", ".github/workflows/docs.yml"]
 
+# Least privilege at the top: the PR-triggered build runs untrusted code, so it
+# gets read-only. Pages/OIDC write capabilities live only on the main-only deploy job.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -19,6 +19,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,6 +37,9 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

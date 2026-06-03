@@ -1,26 +1,35 @@
 /**
  * Tests for the remaining api.ts functions not covered by api.test.ts
- * (listAreas, getArea, saveArea, listConditions, listActions, validateConfig, dryRun)
+ * (listAreas, getArea, saveArea, listConditions, listActions, validateConfig, dryRun,
+ *  applyRules, runRuleActions, getDayConfig, saveDayConfig,
+ *  getWeatherConfig, saveWeatherConfig, getKnownStates)
  */
 import { describe, expect, test, vi } from "vitest";
 import {
+  applyRules,
   dryRun,
   getArea,
+  getDayConfig,
   getFloor,
   getHouse,
+  getKnownStates,
   getServiceSchema,
+  getWeatherConfig,
   listAreas,
   listConditions,
   listExposedActions,
   listFloors,
   listServices,
+  runRuleActions,
   saveArea,
+  saveDayConfig,
   saveExposedActions,
   saveFloor,
   saveHouse,
+  saveWeatherConfig,
   validateConfig,
 } from "../frontend/src/api";
-import type { AreaConfig } from "../frontend/src/types";
+import type { AreaConfig, WeatherGroup } from "../frontend/src/types";
 
 function makeFakeHass() {
   const sent: any[] = [];
@@ -55,6 +64,9 @@ function makeFakeHass() {
     }
     if (msg.type === "ambience/dry_run") {
       return { matched_rule_index: null, rule_name: null, actions: [] };
+    }
+    if (msg.type === "ambience/apply") {
+      return { ok: true };
     }
   });
   return { callWS, sent };
@@ -279,5 +291,216 @@ test("saveHouse calls ambience/house/save", async () => {
   expect(calls[0]).toEqual({
     type: "ambience/house/save",
     config: { rules: [] },
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyRules
+// ---------------------------------------------------------------------------
+
+describe("API: applyRules", () => {
+  test("applyRules without categoryId sends no category_id field", async () => {
+    const { callWS, sent } = makeFakeHass();
+    const res = await applyRules({ callWS } as any, { kind: "area", id: "living_room" });
+    expect(sent[0]).toEqual({ type: "ambience/apply", area_id: "living_room" });
+    expect(sent[0]).not.toHaveProperty("category_id");
+    expect(res).toEqual({ ok: true });
+  });
+
+  test("applyRules with categoryId includes category_id in message", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await applyRules({ callWS } as any, { kind: "area", id: "living_room" }, "evening");
+    expect(sent[0]).toEqual({
+      type: "ambience/apply",
+      area_id: "living_room",
+      category_id: "evening",
+    });
+  });
+
+  test("applyRules floor scope sends floor_id", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await applyRules({ callWS } as any, { kind: "floor", id: "upstairs" });
+    expect(sent[0]).toEqual({ type: "ambience/apply", floor_id: "upstairs" });
+  });
+
+  test("applyRules house scope sends house: true", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await applyRules({ callWS } as any, { kind: "house" });
+    expect(sent[0]).toEqual({ type: "ambience/apply", house: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRuleActions
+// ---------------------------------------------------------------------------
+
+describe("API: runRuleActions", () => {
+  test("runRuleActions area scope sends rule_index and area_id", async () => {
+    const callWS = vi.fn().mockResolvedValue({ ran: 1, rule_name: "Bright" });
+    const res = await runRuleActions({ callWS } as any, { kind: "area", id: "kitchen" }, 2);
+    expect(callWS).toHaveBeenCalledWith({
+      type: "ambience/rule/run_actions",
+      rule_index: 2,
+      area_id: "kitchen",
+    });
+    expect(res).toEqual({ ran: 1, rule_name: "Bright" });
+  });
+
+  test("runRuleActions floor scope sends floor_id", async () => {
+    const callWS = vi.fn().mockResolvedValue({ ran: 0, rule_name: null });
+    await runRuleActions({ callWS } as any, { kind: "floor", id: "upstairs" }, 0);
+    expect(callWS).toHaveBeenCalledWith({
+      type: "ambience/rule/run_actions",
+      rule_index: 0,
+      floor_id: "upstairs",
+    });
+  });
+
+  test("runRuleActions house scope sends house: true", async () => {
+    const callWS = vi.fn().mockResolvedValue({ ran: 3, rule_name: "All On" });
+    await runRuleActions({ callWS } as any, { kind: "house" }, 1);
+    expect(callWS).toHaveBeenCalledWith({
+      type: "ambience/rule/run_actions",
+      rule_index: 1,
+      house: true,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getDayConfig / saveDayConfig
+// ---------------------------------------------------------------------------
+
+describe("API: getDayConfig", () => {
+  test("sends correct WS message and returns config", async () => {
+    const callWS = vi
+      .fn()
+      .mockResolvedValue({ workday_sensor: "binary_sensor.workday", workday_calendar: null });
+    const res = await getDayConfig({ callWS } as any);
+    expect(callWS).toHaveBeenCalledWith({ type: "ambience/conditions/day/config/list" });
+    expect(res).toEqual({ workday_sensor: "binary_sensor.workday", workday_calendar: null });
+  });
+});
+
+describe("API: saveDayConfig", () => {
+  test("sends workday_sensor and workday_calendar and returns ok + warnings", async () => {
+    const callWS = vi.fn().mockResolvedValue({ ok: true, warnings: [] });
+    const res = await saveDayConfig(
+      { callWS } as any,
+      "binary_sensor.workday",
+      "calendar.holidays",
+    );
+    expect(callWS).toHaveBeenCalledWith({
+      type: "ambience/conditions/day/config/save",
+      workday_sensor: "binary_sensor.workday",
+      workday_calendar: "calendar.holidays",
+    });
+    expect(res.ok).toBe(true);
+    expect(res.warnings).toEqual([]);
+  });
+
+  test("saveDayConfig accepts null values for both sensor and calendar", async () => {
+    const callWS = vi.fn().mockResolvedValue({
+      ok: true,
+      warnings: [
+        {
+          scope_kind: "area",
+          scope_id: "living_room",
+          rule_name: "Workday rule",
+          reason: "no workday sensor",
+        },
+      ],
+    });
+    const res = await saveDayConfig({ callWS } as any, null, null);
+    expect(callWS).toHaveBeenCalledWith({
+      type: "ambience/conditions/day/config/save",
+      workday_sensor: null,
+      workday_calendar: null,
+    });
+    expect(res.warnings).toHaveLength(1);
+    expect(res.warnings[0].reason).toBe("no workday sensor");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getWeatherConfig / saveWeatherConfig
+// ---------------------------------------------------------------------------
+
+describe("API: getWeatherConfig", () => {
+  test("sends correct WS message and returns weather config", async () => {
+    const callWS = vi.fn().mockResolvedValue({
+      entity: "weather.home",
+      groups: [{ id: "sunny", label: "Sunny", conditions: ["sunny", "clear-night"] }],
+    });
+    const res = await getWeatherConfig({ callWS } as any);
+    expect(callWS).toHaveBeenCalledWith({ type: "ambience/conditions/weather/config/list" });
+    expect(res.entity).toBe("weather.home");
+    expect(res.groups).toHaveLength(1);
+  });
+});
+
+describe("API: saveWeatherConfig", () => {
+  test("sends entity and groups and returns ok + warnings", async () => {
+    const groups: WeatherGroup[] = [
+      { id: "rainy", label: "Rainy", conditions: ["rainy", "pouring"] },
+    ];
+    const callWS = vi.fn().mockResolvedValue({ ok: true, warnings: [] });
+    const res = await saveWeatherConfig({ callWS } as any, "weather.home", groups);
+    expect(callWS).toHaveBeenCalledWith({
+      type: "ambience/conditions/weather/config/save",
+      entity: "weather.home",
+      groups,
+    });
+    expect(res.ok).toBe(true);
+    expect(res.warnings).toEqual([]);
+  });
+
+  test("saveWeatherConfig accepts null entity", async () => {
+    const callWS = vi.fn().mockResolvedValue({ ok: true, warnings: [] });
+    await saveWeatherConfig({ callWS } as any, null, []);
+    expect(callWS).toHaveBeenCalledWith({
+      type: "ambience/conditions/weather/config/save",
+      entity: null,
+      groups: [],
+    });
+  });
+
+  test("saveWeatherConfig propagates warnings from backend", async () => {
+    const callWS = vi.fn().mockResolvedValue({
+      ok: true,
+      warnings: [
+        {
+          scope_kind: "area",
+          scope_id: "bedroom",
+          rule_name: "Rainy rule",
+          reason: "unknown group",
+        },
+      ],
+    });
+    const res = await saveWeatherConfig({ callWS } as any, null, []);
+    expect(res.warnings).toHaveLength(1);
+    expect(res.warnings[0].scope_id).toBe("bedroom");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getKnownStates
+// ---------------------------------------------------------------------------
+
+describe("API: getKnownStates", () => {
+  test("sends entity_id and returns states array", async () => {
+    const callWS = vi.fn().mockResolvedValue({ states: ["on", "off"] });
+    const res = await getKnownStates({ callWS } as any, "light.kitchen");
+    expect(callWS).toHaveBeenCalledWith({
+      type: "ambience/state/known_states",
+      entity_id: "light.kitchen",
+    });
+    expect(res).toEqual({ states: ["on", "off"] });
+  });
+
+  test("getKnownStates returns empty states array when no states known", async () => {
+    const callWS = vi.fn().mockResolvedValue({ states: [] });
+    const res = await getKnownStates({ callWS } as any, "sensor.unknown");
+    expect(res).toEqual({ states: [] });
   });
 });

@@ -37,6 +37,100 @@ describe("ambience-day-config", () => {
     expect(saveDayConfig).toHaveBeenCalledWith(expect.anything(), "binary_sensor.workday", null);
   });
 
+  test("changing the calendar value calls saveDayConfig with the new calendar", async () => {
+    el = await mount();
+    el._onCalendarChange({ detail: { value: "calendar.workday" } });
+    expect(saveDayConfig).toHaveBeenCalledWith(expect.anything(), null, "calendar.workday");
+  });
+
+  test("clearing the calendar sends null to saveDayConfig", async () => {
+    el = await mount();
+    // An empty string value should be coerced to null via `|| null`.
+    el._onCalendarChange({ detail: { value: "" } });
+    expect(saveDayConfig).toHaveBeenCalledWith(expect.anything(), null, null);
+  });
+
+  test("saveDayConfig response with no warnings field defaults to empty array", async () => {
+    // When `res.warnings` is undefined the `?? []` branch fires.
+    vi.mocked(saveDayConfig).mockResolvedValueOnce({ ok: true } as any);
+    el = await mount();
+    el._onSensorChange({ detail: { value: "binary_sensor.workday" } });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // No warnings div rendered — confirms _warnings stayed []
+    expect(el.shadowRoot.querySelector(".warnings")).toBeNull();
+  });
+
+  test("ha-form value-changed for sensor triggers _onSensorChange via DOM event", async () => {
+    el = await mount();
+    vi.clearAllMocks(); // reset spy from mount's connectedCallback
+    const haForms = el.shadowRoot.querySelectorAll("ha-form");
+    // First ha-form is the sensor picker.
+    const sensorForm = haForms[0];
+    sensorForm.dispatchEvent(
+      new CustomEvent("value-changed", {
+        bubbles: true,
+        composed: true,
+        detail: { value: { workday_sensor: "binary_sensor.workday_sensor" } },
+      }),
+    );
+    expect(saveDayConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      "binary_sensor.workday_sensor",
+      null,
+    );
+  });
+
+  test("ha-form value-changed for sensor with empty value coerces to null", async () => {
+    el = await mount();
+    vi.clearAllMocks();
+    const sensorForm = el.shadowRoot.querySelectorAll("ha-form")[0];
+    // Sending an empty string fires the `|| null` fallback branch.
+    sensorForm.dispatchEvent(
+      new CustomEvent("value-changed", {
+        bubbles: true,
+        composed: true,
+        detail: { value: { workday_sensor: "" } },
+      }),
+    );
+    expect(saveDayConfig).toHaveBeenCalledWith(expect.anything(), null, null);
+  });
+
+  test("ha-form value-changed for calendar triggers _onCalendarChange via DOM event", async () => {
+    el = await mount();
+    vi.clearAllMocks();
+    const haForms = el.shadowRoot.querySelectorAll("ha-form");
+    // Second ha-form is the calendar picker.
+    const calendarForm = haForms[1];
+    calendarForm.dispatchEvent(
+      new CustomEvent("value-changed", {
+        bubbles: true,
+        composed: true,
+        detail: { value: { workday_calendar: "calendar.workday_calendar" } },
+      }),
+    );
+    expect(saveDayConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      null,
+      "calendar.workday_calendar",
+    );
+  });
+
+  test("ha-form value-changed for calendar with empty value coerces to null", async () => {
+    el = await mount();
+    vi.clearAllMocks();
+    const calendarForm = el.shadowRoot.querySelectorAll("ha-form")[1];
+    // Sending an empty string fires the `|| null` fallback branch.
+    calendarForm.dispatchEvent(
+      new CustomEvent("value-changed", {
+        bubbles: true,
+        composed: true,
+        detail: { value: { workday_calendar: "" } },
+      }),
+    );
+    expect(saveDayConfig).toHaveBeenCalledWith(expect.anything(), null, null);
+  });
+
   test("renders dangling warnings with scope labels for area, floor and house", async () => {
     vi.mocked(saveDayConfig).mockResolvedValueOnce({
       ok: true,

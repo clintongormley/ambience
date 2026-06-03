@@ -37,7 +37,6 @@ from .const import (
 )
 from .scope_triggers import iter_predicate_specs
 from .service import (
-    _log_apply,
     _switch_state,
     async_execute_actions,
     async_execute_plan,
@@ -47,6 +46,7 @@ from .service import (
     get_last_applied,
     scope_reapply_intervals,
 )
+from .service_logbook import log_apply
 from .trace import (
     CauseKind,
     Outcome,
@@ -507,7 +507,7 @@ class AutoTriggerEngine:
             ]
             if due:
                 rule_name = rules[index].get("name")
-                context = _log_apply(
+                context = log_apply(
                     self._hass, scope_kind, scope_id, category_id, rule_name, index, reapplied=True
                 )
                 await async_execute_actions(

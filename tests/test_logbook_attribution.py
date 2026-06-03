@@ -14,7 +14,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
-from custom_components.ambience.service import _compose_apply_message
+from custom_components.ambience.service_logbook import compose_apply_message
 
 
 class _FakeExposedStorage:
@@ -34,7 +34,7 @@ class _FakeExposedStorage:
 
 
 def test_message_named_rule_single_category() -> None:
-    msg = _compose_apply_message(
+    msg = compose_apply_message(
         reapplied=False,
         rule_name="Evening",
         rule_index=0,
@@ -46,7 +46,7 @@ def test_message_named_rule_single_category() -> None:
 
 
 def test_message_multiple_categories_includes_category() -> None:
-    msg = _compose_apply_message(
+    msg = compose_apply_message(
         reapplied=False,
         rule_name="Evening",
         rule_index=0,
@@ -58,7 +58,7 @@ def test_message_multiple_categories_includes_category() -> None:
 
 
 def test_message_unnamed_rule_falls_back_to_index() -> None:
-    msg = _compose_apply_message(
+    msg = compose_apply_message(
         reapplied=False,
         rule_name=None,
         rule_index=2,
@@ -70,7 +70,7 @@ def test_message_unnamed_rule_falls_back_to_index() -> None:
 
 
 def test_message_reapplied_verb() -> None:
-    msg = _compose_apply_message(
+    msg = compose_apply_message(
         reapplied=True,
         rule_name="Evening",
         rule_index=0,
@@ -83,7 +83,7 @@ def test_message_reapplied_verb() -> None:
 
 def test_message_multiple_categories_but_no_label_omits_category() -> None:
     # category_count > 1 with an unknown/labelless category: suffix is omitted.
-    msg = _compose_apply_message(
+    msg = compose_apply_message(
         reapplied=False,
         rule_name="Evening",
         rule_index=0,
@@ -95,7 +95,7 @@ def test_message_multiple_categories_but_no_label_omits_category() -> None:
 
 
 def test_message_reapplied_single_category() -> None:
-    msg = _compose_apply_message(
+    msg = compose_apply_message(
         reapplied=True,
         rule_name="Evening",
         rule_index=0,

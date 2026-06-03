@@ -22,7 +22,7 @@ from .const import (
     DOMAIN,
 )
 from .engine import evaluate_explained, resolve
-from .naming import category_names, scope_display_name
+from .service_logbook import log_apply, log_run_actions
 from .trace import (
     CauseKind,
     Outcome,
@@ -301,81 +301,6 @@ async def async_apply_scene(
         emit_trace(hass, TraceEvent(TriggerCause(kind=CauseKind.MANUAL), traces))
 
 
-def _compose_apply_message(
-    *,
-    reapplied: bool,
-    rule_name: str | None,
-    rule_index: int,
-    scope_label: str,
-    category_label: str | None,
-    category_count: int,
-) -> str:
-    """Compose the logbook message for an apply.
-
-    Names the matched rule ("scene") and scope. Appends the category name only when
-    more than one category exists and a label is known (an unknown category id yields
-    no suffix). Unnamed rules fall back to "rule <N>" (1-based).
-    """
-    verb = "re-applied" if reapplied else "applied"
-    scene = rule_name or f"rule {rule_index + 1}"
-    message = f"{verb} '{scene}' in {scope_label}"
-    if category_count > 1 and category_label:
-        message += f" ({category_label})"
-    return message
-
-
-def _log_entry(hass: HomeAssistant, message: str) -> Context:
-    """Fire an "Ambience" logbook entry and return a fresh Context.
-
-    Callers MUST pass the returned Context to async_execute_actions so the
-    resulting device state changes share it and trace back to this entry in the
-    logbook. Imported lazily so service.py does not depend on logbook at import
-    time; the entry is a harmless no-op if the logbook integration is unloaded.
-    """
-    from homeassistant.components.logbook import async_log_entry
-
-    context = Context()
-    async_log_entry(hass, "Ambience", message, domain=DOMAIN, context=context)
-    return context
-
-
-def _log_apply(
-    hass: HomeAssistant,
-    scope_kind: str,
-    scope_id: str | None,
-    category_id: str,
-    rule_name: str | None,
-    rule_index: int,
-    *,
-    reapplied: bool,
-) -> Context:
-    """Fire the logbook entry for an apply and return its Context."""
-    categories = category_names(hass)
-    return _log_entry(
-        hass,
-        _compose_apply_message(
-            reapplied=reapplied,
-            rule_name=rule_name,
-            rule_index=rule_index,
-            scope_label=scope_display_name(hass, scope_kind, scope_id),
-            category_label=categories.get(category_id),
-            category_count=len(categories),
-        ),
-    )
-
-
-def _log_run_actions(
-    hass: HomeAssistant,
-    scope_kind: str,
-    scope_id: str | None,
-    rule_name: str | None,
-    rule_index: int,
-) -> Context:
-    """Fire the logbook entry for a manual run-actions and return its Context."""
-    scene = rule_name or f"rule {rule_index + 1}"
-    return _log_entry(hass, f"ran '{scene}' in {scope_display_name(hass, scope_kind, scope_id)}")
-
-
 async def async_execute_actions(
     hass: HomeAssistant,
     scope_kind: str,
@@ -452,7 +377,7 @@ async def async_run_rule_actions(
     actions = rule.get("actions", [])
     rule_name = rule.get("name")
     context = (
-        _log_run_actions(hass, scope_kind, scope_id, rule_name, rule_index) if actions else None
+        log_run_actions(hass, scope_kind, scope_id, rule_name, rule_index) if actions else None
     )
     await async_execute_actions(
         hass, scope_kind, scope_id, actions, rule_index=rule_index, context=context
@@ -477,7 +402,7 @@ async def async_execute_plan(
     index = plan["matched_rule_index"]
     actions = plan["actions"]
     context = (
-        _log_apply(
+        log_apply(
             hass, scope_kind, scope_id, category_id, plan["rule_name"], index, reapplied=False
         )
         if actions

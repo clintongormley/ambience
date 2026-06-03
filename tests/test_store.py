@@ -12,7 +12,7 @@ from custom_components.ambience.const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
-from custom_components.ambience.store import AmbienceStore
+from custom_components.ambience.store import AmbienceStore, reassign_orphan_rules
 
 
 async def test_load_empty_returns_empty_areas(hass: HomeAssistant) -> None:
@@ -451,3 +451,100 @@ async def test_delete_empty_non_last_category_succeeds(hass: HomeAssistant, hass
     await store.async_load()
     await store.async_delete_category("a")
     assert [g["id"] for g in store.categories()] == ["b"]
+
+
+# --- reassign_orphan_rules ---------------------------------------------------
+
+
+def test_reassign_orphan_rules_reassigns_none_category() -> None:
+    """Rules with category=None are pointed at the target; returns True."""
+    rules = [{"category": None, "actions": []}, {"category": "known", "actions": []}]
+    changed = reassign_orphan_rules(rules, {"known"}, "general")
+    assert changed is True
+    assert rules[0]["category"] == "general"
+    assert rules[1]["category"] == "known"  # untouched
+
+
+def test_reassign_orphan_rules_reassigns_unknown_category() -> None:
+    """Rules with an unknown category id are pointed at the target; returns True."""
+    rules = [{"category": "deleted", "actions": []}]
+    changed = reassign_orphan_rules(rules, {"general"}, "general")
+    assert changed is True
+    assert rules[0]["category"] == "general"
+
+
+def test_reassign_orphan_rules_no_change_when_all_known() -> None:
+    """When every rule already has a known category, returns False and nothing mutates."""
+    rules = [{"category": "lights", "actions": []}, {"category": "blinds", "actions": []}]
+    changed = reassign_orphan_rules(rules, {"lights", "blinds"}, "general")
+    assert changed is False
+    assert rules[0]["category"] == "lights"
+    assert rules[1]["category"] == "blinds"
+
+
+def test_reassign_orphan_rules_empty_list_returns_false() -> None:
+    """An empty rule list is a no-op that returns False."""
+    changed = reassign_orphan_rules([], {"general"}, "general")
+    assert changed is False
+
+
+# --- as_dict -----------------------------------------------------------------
+
+
+async def test_as_dict_returns_deep_copy(hass: HomeAssistant) -> None:
+    """as_dict() returns a deep copy — mutating the result must not affect the store."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    snapshot = store.as_dict()
+    assert "areas" in snapshot
+    # Mutate the copy; the store's internal state must be unaffected.
+    snapshot["areas"]["injected"] = {"rules": []}
+    assert store.get_area("injected") is None
+
+
+# --- get_condition_config fallback branch ------------------------------------
+
+
+async def test_get_condition_config_unknown_name_returns_raw_dict(
+    hass: HomeAssistant,
+) -> None:
+    """Requesting an unknown condition name returns whatever dict is stored (or {})."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_condition_config("custom_thing", {"foo": "bar"})
+    result = store.get_condition_config("custom_thing")
+    assert result == {"foo": "bar"}
+
+
+async def test_get_condition_config_unknown_name_absent_returns_empty(
+    hass: HomeAssistant,
+) -> None:
+    """Requesting an unknown condition name that was never saved returns {}."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    result = store.get_condition_config("nonexistent")
+    assert result == {}
+
+
+# --- get_exposed_actions non-list fallback -----------------------------------
+
+
+async def test_get_exposed_actions_with_non_list_payload_returns_empty(
+    hass: HomeAssistant,
+) -> None:
+    """If exposed_actions is somehow not a list, get_exposed_actions() returns []."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    # Directly corrupt the internal state to simulate a malformed payload.
+    store._data["exposed_actions"] = "not-a-list"
+    assert store.get_exposed_actions() == []
+
+
+async def test_get_exposed_actions_with_missing_key_returns_empty(
+    hass: HomeAssistant,
+) -> None:
+    """If exposed_actions key is entirely absent, get_exposed_actions() returns []."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    del store._data["exposed_actions"]
+    assert store.get_exposed_actions() == []

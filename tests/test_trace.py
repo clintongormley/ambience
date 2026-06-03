@@ -14,7 +14,9 @@ from custom_components.ambience.engine import (
 )
 from custom_components.ambience.trace import (
     BufferedUnit,
+    CauseKind,
     LogSink,
+    Outcome,
     TraceEvent,
     TriggerCause,
     UnitTrace,
@@ -482,3 +484,87 @@ def test_explanation_to_dict_includes_disabled():
     )
     result = _explanation_to_dict(explanation)
     assert result["rules"][0]["disabled"] is True
+
+
+# ---------------------------------------------------------------------------
+# TriggerCause.describe() — uncovered branches
+# ---------------------------------------------------------------------------
+
+
+def test_cause_describe_sun():
+    cause = TriggerCause(kind=CauseKind.SUN, detail="below_horizon")
+    assert cause.describe() == "sun below_horizon"
+
+
+def test_cause_describe_has_time_with_detail():
+    cause = TriggerCause(kind=CauseKind.HAS_TIME, detail="5m")
+    assert cause.describe() == "duration recheck (5m)"
+
+
+def test_cause_describe_has_time_without_detail():
+    cause = TriggerCause(kind=CauseKind.HAS_TIME)
+    assert cause.describe() == "duration recheck"
+
+
+def test_cause_describe_switch():
+    cause = TriggerCause(kind=CauseKind.SWITCH, entity_id="switch.ambience_living_room")
+    assert cause.describe() == "switch switch.ambience_living_room on"
+
+
+def test_cause_describe_simulated_with_detail():
+    cause = TriggerCause(kind=CauseKind.SIMULATED, detail="evening")
+    assert cause.describe() == "simulated evening"
+
+
+def test_cause_describe_simulated_without_detail():
+    cause = TriggerCause(kind=CauseKind.SIMULATED)
+    assert cause.describe() == "simulated"
+
+
+def test_cause_describe_unknown_falls_back_to_string():
+    # CauseKind.UNKNOWN has no dedicated branch — it falls through to str(self.kind).
+    cause = TriggerCause(kind=CauseKind.UNKNOWN)
+    assert cause.describe() == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# LogSink — empty-list guard branches (304->308, 310->exit)
+# ---------------------------------------------------------------------------
+
+
+def test_logsink_no_changes_units_does_not_log_on_changes_stream(caplog):
+    # All units are no_op, so the changes-stream filter produces an empty list.
+    # The LogSink must NOT call _LOGGER.debug (branch 304->308 false path).
+    unit = UnitTrace("area", "kitchen", "General", "on", Outcome.NO_OP, None)
+    event = TraceEvent(TriggerCause(kind=CauseKind.CLOCK, detail="08:00"), [unit])
+    with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
+        LogSink().emit(event)
+    records = [r for r in caplog.records if r.name == "custom_components.ambience.trace"]
+    assert len(records) == 0
+
+
+def test_logsink_no_noop_units_does_not_log_on_noop_stream(caplog):
+    # All units are acted, so the noop-stream filter produces an empty list.
+    # The LogSink must NOT call _NOOP_LOGGER.debug (branch 310->exit false path).
+    unit = UnitTrace("area", "kitchen", "General", "on", Outcome.ACTED, None, winner_name="r")
+    event = TraceEvent(TriggerCause(kind=CauseKind.CLOCK, detail="08:00"), [unit])
+    with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace.noop"):
+        LogSink().emit(event)
+    records = [r for r in caplog.records if r.name == "custom_components.ambience.trace.noop"]
+    assert len(records) == 0
+
+
+def test_logsink_changes_logger_disabled_skips_changes_block(caplog):
+    # When the changes logger is below DEBUG, the entire changes block (304->308)
+    # is bypassed.  Only the noop stream is at DEBUG so that side runs,
+    # but changes must produce zero records on the changes logger.
+    unit = UnitTrace("area", "kitchen", "General", "on", Outcome.ACTED, None, winner_name="r")
+    event = TraceEvent(TriggerCause(kind=CauseKind.CLOCK, detail="08:00"), [unit])
+    # noop logger at DEBUG, changes logger explicitly at WARNING — exercises 304->308.
+    with (
+        caplog.at_level(logging.WARNING, logger="custom_components.ambience.trace"),
+        caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace.noop"),
+    ):
+        LogSink().emit(event)
+    changes_records = [r for r in caplog.records if r.name == "custom_components.ambience.trace"]
+    assert len(changes_records) == 0

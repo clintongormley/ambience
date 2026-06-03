@@ -501,3 +501,15 @@ async def test_trigger_deps_empty_who_watches_all_persons(hass: HomeAssistant) -
     spec = m.trigger_deps({"quant": "everyone"})  # who absent → all current persons
     assert spec.entities == frozenset({"person.alice", "person.bob"})
     assert spec.entity_durations == frozenset()
+
+
+def test_all_person_ids_returns_empty_without_hass() -> None:
+    # Line 146: _all_person_ids() early-exits with [] when hass is None.
+    m = PeopleCondition(hass=None)
+    assert m._all_person_ids() == []
+
+
+def test_subset_all_is_not_subset_of_explicit() -> None:
+    # Line 274: _subset(None, explicit_set) → False (ALL ⊈ any finite set).
+    result = PeopleCondition._subset(None, frozenset({"person.a"}))
+    assert result is False

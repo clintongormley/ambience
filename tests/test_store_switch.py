@@ -126,3 +126,63 @@ async def test_save_rules_preserves_off_at(hass: HomeAssistant) -> None:
     await store.async_set_scope_switch_off_at("area", "a1", "2026-05-27T12:00:00+00:00")
     await store.async_save_area("a1", {"rules": [{"name": "r", "when": {}, "actions": []}]})
     assert store.get_scope_switch_off_at("area", "a1") == "2026-05-27T12:00:00+00:00"
+
+
+# --- _scope_container floor branch (line 257) --------------------------------
+
+
+async def test_set_off_at_floor_lazy_create(hass: HomeAssistant) -> None:
+    """set_scope_switch_off_at on a floor creates a bare floor shell if absent."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_set_scope_switch_off_at("floor", "f1", "2026-03-01T00:00:00+00:00")
+    assert store.get_scope_switch_off_at("floor", "f1") == "2026-03-01T00:00:00+00:00"
+
+
+# --- _scope_container unknown kind (line 260) --------------------------------
+
+
+async def test_scope_container_unknown_kind_raises(hass: HomeAssistant) -> None:
+    """_scope_container raises ValueError for an unknown scope_kind."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with pytest.raises(ValueError, match="unknown scope_kind"):
+        store._scope_container("galaxy", "x")  # noqa: SLF001
+
+
+# --- async_set_scope_switch_off_at unknown kind (line 304) ------------------
+
+
+async def test_set_off_at_unknown_kind_raises(hass: HomeAssistant) -> None:
+    """async_set_scope_switch_off_at raises ValueError for an unknown scope_kind."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with pytest.raises(ValueError, match="unknown scope_kind"):
+        await store.async_set_scope_switch_off_at("bogus", "x", "ts")
+
+
+# --- scope_config floor branch (line 315) + unknown kind (line 318) ----------
+
+
+async def test_scope_config_floor_returns_config(hass: HomeAssistant) -> None:
+    """scope_config returns the floor dict when it exists."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_floor("f2", {"rules": [{"name": "r", "when": {}, "actions": []}]})
+    cfg = store.scope_config("floor", "f2")
+    assert cfg["rules"][0]["name"] == "r"
+
+
+async def test_scope_config_floor_absent_returns_empty(hass: HomeAssistant) -> None:
+    """scope_config returns {} for a floor that was never saved."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.scope_config("floor", "missing") == {}
+
+
+async def test_scope_config_unknown_kind_raises(hass: HomeAssistant) -> None:
+    """scope_config raises ValueError for an unknown scope_kind."""
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with pytest.raises(ValueError, match="unknown scope_kind"):
+        store.scope_config("planet", "x")

@@ -24,9 +24,12 @@ from custom_components.ambience.service import (
     async_apply_scene,
     async_execute_actions,
     async_execute_plan,
+    async_resolve_categories_only,
     async_resolve_only,
     async_resolve_with_snapshots,
+    async_run_rule_actions,
     category_ids,
+    clear_last_applied,
     effective_reapply_seconds,
     scope_reapply_intervals,
 )
@@ -1101,3 +1104,307 @@ async def test_execute_actions_dispatches_and_leaves_last_applied_untouched(hass
     assert calls[0]["brightness"] == 5
     # Re-apply must NOT change the dedup state.
     assert hass.data[DOMAIN][DATA_LAST_APPLIED] == {("area", "kitchen", None): 2}
+
+
+# ---------------------------------------------------------------------------
+# _scope_config — unknown scope kind (line 58)
+# ---------------------------------------------------------------------------
+
+
+async def test_unknown_scope_kind_raises(hass: HomeAssistant) -> None:
+    """A scope_kind that is neither 'area', 'floor', nor 'house' raises ServiceValidationError."""
+    _install(hass)
+    with pytest.raises(ServiceValidationError, match="unknown_scope_kind"):
+        await async_resolve_only(hass, "room", "x")
+
+
+# ---------------------------------------------------------------------------
+# async_resolve_categories_only (lines 205-207, 219-220)
+# ---------------------------------------------------------------------------
+
+
+async def test_resolve_categories_only_returns_plan_per_category(hass: HomeAssistant) -> None:
+    """async_resolve_categories_only returns one entry per category, keyed by category id."""
+    areas = {
+        "lr": {
+            "rules": [
+                {"name": "lighting-rule", "category": "lighting", "when": {}, "actions": []},
+                {"name": "blinds-rule", "category": "blinds", "when": {}, "actions": []},
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {},
+        DATA_SWITCHES: {},
+    }
+
+    result = await async_resolve_categories_only(hass, "area", "lr")
+
+    assert set(result.keys()) == {"lighting", "blinds"}
+    assert result["lighting"]["matched_rule_index"] == 0
+    assert result["lighting"]["rule_name"] == "lighting-rule"
+    assert result["blinds"]["matched_rule_index"] == 1
+    assert result["blinds"]["rule_name"] == "blinds-rule"
+
+
+async def test_resolve_categories_only_empty_scope_returns_empty(hass: HomeAssistant) -> None:
+    """A scope with no rules produces an empty dict."""
+    areas = {"lr": {"rules": []}}
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {},
+        DATA_SWITCHES: {},
+    }
+
+    result = await async_resolve_categories_only(hass, "area", "lr")
+
+    assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# async_apply_scene — no-match with tracing inactive (line 274)
+# ---------------------------------------------------------------------------
+
+
+async def test_apply_scene_no_match_no_trace_emits_no_event(hass: HomeAssistant) -> None:
+    """When tracing is off and no rule matches, _apply_category returns None so no
+    TraceEvent is emitted. Covers the `return None` branch at line 274.
+
+    Tracing is inactive: no DATA_TRACE_BUFFER, trace logger clamped to WARNING.
+    A CaptureSink installed but not reachable via emit_trace verifies no event fires.
+    """
+    areas = {
+        "a": {
+            "rules": [
+                {
+                    "name": "morning",
+                    "category": "lighting",
+                    "when": {"tod": "morning"},
+                    "actions": [],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    # Ensure tracing is inactive: no DATA_TRACE_BUFFER, trace logger NOT at DEBUG.
+    import logging as _logging
+
+    trace_logger = _logging.getLogger("custom_components.ambience.trace")
+    original_level = trace_logger.level
+    trace_logger.setLevel(_logging.WARNING)
+
+    captured: list[TraceEvent] = []
+
+    class CaptureSink:
+        def emit(self, event: TraceEvent) -> None:
+            captured.append(event)
+
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [CaptureSink()]
+    try:
+        await async_apply_scene(hass, "area", "a")
+    finally:
+        trace_logger.setLevel(original_level)
+
+    # No match + tracing inactive → _apply_category returned None → no trace emitted.
+    assert captured == []
+
+
+# ---------------------------------------------------------------------------
+# async_apply_scene — category exception in gather (line 297)
+# ---------------------------------------------------------------------------
+
+
+async def test_apply_scene_category_exception_logged_not_raised(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An exception inside _apply_category is caught by asyncio.gather and warned,
+    not re-raised. The remaining categories are unaffected (line 297)."""
+
+    class BoomCondition:
+        name = "boom"
+
+        async def snapshot(self, hass):
+            return "x"
+
+        def matches(self, predicate, snapshot):
+            raise RuntimeError("boom in matches")
+
+        def describe(self, snapshot):
+            return None
+
+        def validate_predicate(self, predicate):
+            return
+
+    areas = {
+        "a": {
+            "rules": [
+                {
+                    "name": "always",
+                    "category": "lighting",
+                    "when": {"boom": "x"},
+                    "actions": [],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"boom": BoomCondition()},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+
+    caplog.set_level(logging.WARNING)
+    # Must not raise even though _apply_category raises internally.
+    await async_apply_scene(hass, "area", "a")
+    assert "category apply failed" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# async_run_rule_actions (lines 371-385)
+# ---------------------------------------------------------------------------
+
+
+async def test_run_rule_actions_executes_matched_rule_by_index(hass: HomeAssistant) -> None:
+    """async_run_rule_actions runs the actions of the named rule index unconditionally."""
+    calls = async_mock_service(hass, "light", "turn_on")
+    areas = {
+        "lr": {
+            "rules": [
+                {
+                    "name": "evening",
+                    "category": "lighting",
+                    "when": {"tod": "morning"},  # would normally not match
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.a"],
+                            "params": {"brightness_pct": 80},
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    _install(
+        hass,
+        areas=areas,
+        exposed=[_exposed("light.turn_on", visible=["brightness_pct"])],
+    )
+
+    result = await async_run_rule_actions(hass, "area", "lr", 0)
+
+    assert result == {"ran": 1, "rule_name": "evening"}
+    assert len(calls) == 1
+    assert calls[0].data["brightness_pct"] == 80
+
+
+async def test_run_rule_actions_out_of_range_raises(hass: HomeAssistant) -> None:
+    """A rule_index that is out of range raises ServiceValidationError."""
+    areas = {
+        "lr": {
+            "rules": [
+                {"name": "only", "when": {}, "actions": []},
+            ]
+        }
+    }
+    _install(hass, areas=areas)
+
+    with pytest.raises(ServiceValidationError, match="rule_index out of range"):
+        await async_run_rule_actions(hass, "area", "lr", 5)
+
+
+async def test_run_rule_actions_negative_index_raises(hass: HomeAssistant) -> None:
+    """A negative rule_index also raises ServiceValidationError."""
+    areas = {
+        "lr": {
+            "rules": [
+                {"name": "only", "when": {}, "actions": []},
+            ]
+        }
+    }
+    _install(hass, areas=areas)
+
+    with pytest.raises(ServiceValidationError, match="rule_index out of range"):
+        await async_run_rule_actions(hass, "area", "lr", -1)
+
+
+async def test_run_rule_actions_no_actions_returns_zero_ran(hass: HomeAssistant) -> None:
+    """A rule with no actions returns ran=0; context is None so no logbook call."""
+    areas = {
+        "lr": {
+            "rules": [
+                {"name": "empty-rule", "when": {}, "actions": []},
+            ]
+        }
+    }
+    _install(hass, areas=areas)
+
+    result = await async_run_rule_actions(hass, "area", "lr", 0)
+
+    assert result == {"ran": 0, "rule_name": "empty-rule"}
+
+
+async def test_run_rule_actions_does_not_record_last_applied(hass: HomeAssistant) -> None:
+    """async_run_rule_actions must NOT touch DATA_LAST_APPLIED (it is not a resolution)."""
+    areas = {
+        "lr": {
+            "rules": [
+                {
+                    "name": "r",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": ["light.a"],
+                            "params": {},
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    _install(hass, areas=areas, exposed=[_exposed("light.turn_on")])
+    async_mock_service(hass, "light", "turn_on")
+
+    await async_run_rule_actions(hass, "area", "lr", 0)
+
+    assert DATA_LAST_APPLIED not in hass.data[DOMAIN]
+
+
+# ---------------------------------------------------------------------------
+# clear_last_applied (lines 427-429)
+# ---------------------------------------------------------------------------
+
+
+def test_clear_last_applied_removes_all_entries_for_scope(hass: HomeAssistant) -> None:
+    """clear_last_applied drops every (scope_kind, scope_id, *) entry, leaving others."""
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][DATA_LAST_APPLIED] = {
+        ("area", "lr", "lighting"): 0,
+        ("area", "lr", "blinds"): 1,
+        ("area", "kitchen", "lighting"): 2,  # different scope — must survive
+    }
+
+    clear_last_applied(hass, "area", "lr")
+
+    remaining = hass.data[DOMAIN][DATA_LAST_APPLIED]
+    assert ("area", "lr", "lighting") not in remaining
+    assert ("area", "lr", "blinds") not in remaining
+    assert remaining[("area", "kitchen", "lighting")] == 2
+
+
+def test_clear_last_applied_is_noop_when_key_absent(hass: HomeAssistant) -> None:
+    """clear_last_applied is a safe no-op when DATA_LAST_APPLIED has no matching entries."""
+    hass.data.setdefault(DOMAIN, {})
+    # No DATA_LAST_APPLIED key at all.
+    clear_last_applied(hass, "area", "lr")  # must not raise
+
+    hass.data[DOMAIN][DATA_LAST_APPLIED] = {}
+    clear_last_applied(hass, "area", "lr")  # must not raise

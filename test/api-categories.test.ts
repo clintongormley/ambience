@@ -1,5 +1,5 @@
-import { describe, test, expect, vi } from "vitest";
-import { listCategories, saveCategories, deleteCategory } from "../frontend/src/api";
+import { describe, expect, test, vi } from "vitest";
+import { deleteCategory, listCategories, saveCategories } from "../frontend/src/api";
 import type { RuleCategory } from "../frontend/src/types";
 
 function makeFakeHass(): { callWS: ReturnType<typeof vi.fn>; sent: any[] } {

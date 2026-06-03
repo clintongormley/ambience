@@ -1,13 +1,13 @@
-import { describe, test, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import { entitiesForScope, filterEntities } from "../frontend/src/entities-for-scope";
 
 const hass = {
   entities: {
-    "light.up_lamp":   { entity_id: "light.up_lamp",   area_id: "bedroom" },
-    "light.up_other":  { entity_id: "light.up_other",  area_id: null, device_id: "dev_up" },
+    "light.up_lamp": { entity_id: "light.up_lamp", area_id: "bedroom" },
+    "light.up_other": { entity_id: "light.up_other", area_id: null, device_id: "dev_up" },
     "light.down_lamp": { entity_id: "light.down_lamp", area_id: "kitchen" },
-    "switch.fan":      { entity_id: "switch.fan",      area_id: "bedroom" },
-    "light.orphan":    { entity_id: "light.orphan",    area_id: null, device_id: null },
+    "switch.fan": { entity_id: "switch.fan", area_id: "bedroom" },
+    "light.orphan": { entity_id: "light.orphan", area_id: null, device_id: null },
   },
   devices: {
     dev_up: { id: "dev_up", area_id: "bedroom" },
@@ -107,28 +107,34 @@ describe("filterEntities", () => {
   });
 
   test("single-domain string filter", () => {
-    expect(filterEntities(entities, { entity: { domain: "light" } }))
-      .toEqual(["light.a", "light.b"]);
+    expect(filterEntities(entities, { entity: { domain: "light" } })).toEqual([
+      "light.a",
+      "light.b",
+    ]);
   });
 
   test("multi-domain array filter (single entry)", () => {
-    expect(filterEntities(entities, { entity: { domain: ["light", "switch"] } }))
-      .toEqual(["light.a", "light.b", "switch.fan"]);
+    expect(filterEntities(entities, { entity: { domain: ["light", "switch"] } })).toEqual([
+      "light.a",
+      "light.b",
+      "switch.fan",
+    ]);
   });
 
   test("union across multiple entry objects", () => {
-    expect(filterEntities(entities, {
-      entity: [
-        { domain: "light" },
-        { domain: "media_player" },
-      ],
-    })).toEqual(["light.a", "light.b", "media_player.tv"]);
+    expect(
+      filterEntities(entities, {
+        entity: [{ domain: "light" }, { domain: "media_player" }],
+      }),
+    ).toEqual(["light.a", "light.b", "media_player.tv"]);
   });
 
   test("entry without a domain disables the filter (accepts any)", () => {
-    expect(filterEntities(entities, {
-      entity: [{ domain: "light" }, { integration: "spotify" }],
-    })).toEqual(entities);
+    expect(
+      filterEntities(entities, {
+        entity: [{ domain: "light" }, { integration: "spotify" }],
+      }),
+    ).toEqual(entities);
   });
 
   test("empty entity array returns input unchanged", () => {
@@ -136,7 +142,8 @@ describe("filterEntities", () => {
   });
 
   test("entity_id without a domain is dropped", () => {
-    expect(filterEntities(["broken", "light.a"], { entity: { domain: "light" } }))
-      .toEqual(["light.a"]);
+    expect(filterEntities(["broken", "light.a"], { entity: { domain: "light" } })).toEqual([
+      "light.a",
+    ]);
   });
 });

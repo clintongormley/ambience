@@ -1,10 +1,10 @@
-import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import "../frontend/src/views/scopes-view";
 import type {
   AreaListItem,
+  ConditionInfo,
   ExposedAction,
   FloorListItem,
-  ConditionInfo,
   PeriodStoreView,
   Rule,
   RuleCategory,
@@ -89,12 +89,12 @@ async function mount(opts: MountOpts = {}): Promise<any> {
   const houseConfig = opts.houseConfig ?? structuredClone(baseConfig);
 
   vi.mocked(api.listAreas).mockResolvedValue(areas);
-  vi.mocked(api.getArea).mockImplementation(async (_hass, areaId) =>
-    areaConfigs[areaId] ?? structuredClone(baseConfig),
+  vi.mocked(api.getArea).mockImplementation(
+    async (_hass, areaId) => areaConfigs[areaId] ?? structuredClone(baseConfig),
   );
   vi.mocked(api.listFloors).mockResolvedValue(floors);
-  vi.mocked(api.getFloor).mockImplementation(async (_hass, floorId) =>
-    floorConfigs[floorId] ?? structuredClone(baseConfig),
+  vi.mocked(api.getFloor).mockImplementation(
+    async (_hass, floorId) => floorConfigs[floorId] ?? structuredClone(baseConfig),
   );
   vi.mocked(api.getHouse).mockResolvedValue(houseConfig);
   vi.mocked(api.listSwitches).mockResolvedValue(opts.switches ?? []);
@@ -159,9 +159,7 @@ describe("ambience-scopes-view", () => {
 
   test("flat list order: Global first, then floors, then areas", async () => {
     el = await mount();
-    const rows = Array.from(
-      el.shadowRoot.querySelectorAll(".scope-row"),
-    ) as HTMLElement[];
+    const rows = Array.from(el.shadowRoot.querySelectorAll(".scope-row")) as HTMLElement[];
     const kinds = rows.map((r) => {
       if (r.classList.contains("house")) return "house";
       if (r.classList.contains("floor")) return "floor";
@@ -186,10 +184,7 @@ describe("ambience-scopes-view", () => {
 
   // --- mutation routing ---------------------------------------------------
 
-  async function expandAndAddRuleToScope(
-    scopeRowSelector: string,
-    scope: Scope,
-  ): Promise<void> {
+  async function expandAndAddRuleToScope(scopeRowSelector: string, scope: Scope): Promise<void> {
     const row = el.shadowRoot.querySelector(scopeRowSelector) as HTMLElement;
     const header = row.querySelector(".scope-header") as HTMLElement;
     header.click();
@@ -212,7 +207,10 @@ describe("ambience-scopes-view", () => {
 
   test("save-rule on an area routes to saveArea", async () => {
     el = await mount();
-    await expandAndAddRuleToScope(".scope-row.area[data-id='living_room']", { kind: "area", id: "living_room" });
+    await expandAndAddRuleToScope(".scope-row.area[data-id='living_room']", {
+      kind: "area",
+      id: "living_room",
+    });
     expect(api.saveArea).toHaveBeenCalledWith(
       expect.anything(),
       "living_room",
@@ -226,7 +224,10 @@ describe("ambience-scopes-view", () => {
 
   test("save-rule on a floor routes to saveFloor", async () => {
     el = await mount();
-    await expandAndAddRuleToScope(".scope-row.floor[data-id='ground']", { kind: "floor", id: "ground" });
+    await expandAndAddRuleToScope(".scope-row.floor[data-id='ground']", {
+      kind: "floor",
+      id: "ground",
+    });
     expect(api.saveFloor).toHaveBeenCalledWith(
       expect.anything(),
       "ground",
@@ -267,20 +268,17 @@ describe("ambience-scopes-view", () => {
     );
     await el.updateComplete;
     const editor = el.shadowRoot.querySelector("ambience-rule-editor")!;
-    editor.dispatchEvent(
-      new CustomEvent("save-rule", { detail, bubbles: true, composed: true }),
-    );
+    editor.dispatchEvent(new CustomEvent("save-rule", { detail, bubbles: true, composed: true }));
     await new Promise((r) => setTimeout(r, 0));
   }
 
   test("editing a rule to a different scope adds to the new and removes from the old", async () => {
     const rule: Rule = { name: "R", when: {}, actions: [] };
     el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
-    await editRuleViaEditor(
-      ".scope-row.area[data-id='living_room']",
-      0,
-      { rule, scope: { kind: "area", id: "bedroom" } },
-    );
+    await editRuleViaEditor(".scope-row.area[data-id='living_room']", 0, {
+      rule,
+      scope: { kind: "area", id: "bedroom" },
+    });
     // Added to bedroom...
     expect(api.saveArea).toHaveBeenCalledWith(
       expect.anything(),
@@ -300,11 +298,10 @@ describe("ambience-scopes-view", () => {
     el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
     // Target (house) save fails.
     vi.mocked(api.saveHouse).mockRejectedValueOnce(new Error("boom"));
-    await editRuleViaEditor(
-      ".scope-row.area[data-id='living_room']",
-      0,
-      { rule, scope: { kind: "house" } },
-    );
+    await editRuleViaEditor(".scope-row.area[data-id='living_room']", 0, {
+      rule,
+      scope: { kind: "house" },
+    });
     // Target add was attempted...
     expect(api.saveHouse).toHaveBeenCalledTimes(1);
     // ...but since it failed, the source rule was NOT removed (no saveArea call).
@@ -313,14 +310,18 @@ describe("ambience-scopes-view", () => {
 
   test("a rule moved to a new scope has its ordering metadata stripped", async () => {
     const rule: Rule = {
-      name: "R", when: {}, actions: [], priority: 50, pinned: true, shadowed_by: 1,
+      name: "R",
+      when: {},
+      actions: [],
+      priority: 50,
+      pinned: true,
+      shadowed_by: 1,
     };
     el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
-    await editRuleViaEditor(
-      ".scope-row.area[data-id='living_room']",
-      0,
-      { rule, scope: { kind: "house" } },
-    );
+    await editRuleViaEditor(".scope-row.area[data-id='living_room']", 0, {
+      rule,
+      scope: { kind: "house" },
+    });
     const houseCall = vi.mocked(api.saveHouse).mock.calls.at(-1)!;
     const landed = (houseCall[1] as ScopeConfig).rules[0] as Rule;
     expect(landed.priority).toBeUndefined();
@@ -351,9 +352,7 @@ describe("ambience-scopes-view", () => {
   test("area_registry_updated remove clears that area's expanded/editing state", async () => {
     el = await mount();
     const subCall = vi.mocked(el.hass.connection.subscribeEvents);
-    const areaCallback = subCall.mock.calls.find(
-      (c: any) => c[1] === "area_registry_updated",
-    )?.[0];
+    const areaCallback = subCall.mock.calls.find((c: any) => c[1] === "area_registry_updated")?.[0];
     if (!areaCallback) throw new Error("no area_registry_updated subscription");
 
     // Areas section is expanded by default — just expand the living_room row
@@ -382,9 +381,7 @@ describe("ambience-scopes-view", () => {
     if (!floorCallback) throw new Error("no floor_registry_updated subscription");
 
     // Floors section is expanded by default — just expand the ground row
-    const row = el.shadowRoot.querySelector(
-      ".scope-row.floor[data-id='ground']",
-    ) as HTMLElement;
+    const row = el.shadowRoot.querySelector(".scope-row.floor[data-id='ground']") as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();
     await el.updateComplete;
 
@@ -450,14 +447,19 @@ describe("ambience-scopes-view", () => {
 
     const editor: any = el.shadowRoot.querySelector("ambience-rule-editor");
     expect(editor.open).toBe(true);
-    expect(editor.rule).toEqual(rule);   // equal-by-value clone
-    expect(editor.rule).not.toBe(rule);  // but not the same object
+    expect(editor.rule).toEqual(rule); // equal-by-value clone
+    expect(editor.rule).not.toBe(rule); // but not the same object
     expect(api.saveArea).not.toHaveBeenCalled();
   });
 
   test("duplicating a pinned rule drops the pin and its fixed priority", async () => {
     const rule: Rule = {
-      name: "Pinned", when: {}, actions: [], category: "a", pinned: true, priority: 4096,
+      name: "Pinned",
+      when: {},
+      actions: [],
+      category: "a",
+      pinned: true,
+      priority: 4096,
     };
     el = await mount({ areaConfigs: { living_room: { rules: [rule] } } });
     const row = el.shadowRoot.querySelector(
@@ -705,9 +707,7 @@ describe("ambience-scopes-view", () => {
 
   test("editor receives a Scope object for a floor", async () => {
     el = await mount();
-    const row = el.shadowRoot.querySelector(
-      ".scope-row.floor[data-id='ground']",
-    ) as HTMLElement;
+    const row = el.shadowRoot.querySelector(".scope-row.floor[data-id='ground']") as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();
     await el.updateComplete;
 
@@ -779,13 +779,15 @@ describe("ambience-scopes-view", () => {
     // Open the menu.
     (el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
     await el.updateComplete;
-    const options = Array.from(el.shadowRoot.querySelectorAll(".category-filter-option")) as HTMLElement[];
+    const options = Array.from(
+      el.shadowRoot.querySelectorAll(".category-filter-option"),
+    ) as HTMLElement[];
     // All categories + 2 categories.
     expect(options.length).toBe(3);
     // The "Awn" option carries a coloured swatch with its icon.
     const awn = options.find((o) => o.textContent!.includes("Awn"))!;
     const swatch = awn.querySelector(".category-swatch") as HTMLElement;
-    expect((swatch.getAttribute("style") || "")).toContain("#4caf50");
+    expect(swatch.getAttribute("style") || "").toContain("#4caf50");
     expect(swatch.querySelector('ha-icon[icon="mdi:blinds"]')).toBeTruthy();
     // Selecting it sets the filter and closes the menu.
     awn.click();
@@ -863,7 +865,7 @@ describe("ambience-scopes-view", () => {
   test("disconnectedCallback unsubscribes from both registries", async () => {
     const unsubArea = vi.fn();
     const unsubFloor = vi.fn();
-    let i = 0;
+    let _i = 0;
     vi.mocked(api.listAreas).mockResolvedValue(baseAreas);
     vi.mocked(api.getArea).mockResolvedValue(baseConfig);
     vi.mocked(api.listFloors).mockResolvedValue(baseFloors);
@@ -876,7 +878,7 @@ describe("ambience-scopes-view", () => {
     const hass = {
       connection: {
         subscribeEvents: vi.fn().mockImplementation(async (_cb, type) => {
-          i++;
+          _i++;
           return type === "area_registry_updated" ? unsubArea : unsubFloor;
         }),
       },
@@ -1075,7 +1077,9 @@ describe("ambience-scopes-view", () => {
   }
 
   test("disabling a rule saves enabled:false on that rule", async () => {
-    el = await mount({ areaConfigs: { living_room: { rules: [{ name: "R", when: {}, actions: [] }] } } });
+    el = await mount({
+      areaConfigs: { living_room: { rules: [{ name: "R", when: {}, actions: [] }] } },
+    });
     await toggleRuleInArea("living_room", { index: 0, enabled: false });
     expect(api.saveArea).toHaveBeenCalledWith(
       expect.anything(),
@@ -1085,7 +1089,11 @@ describe("ambience-scopes-view", () => {
   });
 
   test("re-enabling a rule removes the enabled key", async () => {
-    el = await mount({ areaConfigs: { living_room: { rules: [{ name: "R", when: {}, actions: [], enabled: false }] } } });
+    el = await mount({
+      areaConfigs: {
+        living_room: { rules: [{ name: "R", when: {}, actions: [], enabled: false }] },
+      },
+    });
     await toggleRuleInArea("living_room", { index: 0, enabled: true });
     const call = vi.mocked(api.saveArea).mock.calls.at(-1)!;
     const savedRule = (call[2] as ScopeConfig).rules[0];
@@ -1100,9 +1108,7 @@ describe("ambience-scopes-view", () => {
       customElements.define("ha-switch", class extends HTMLElement {});
     }
     el = await mount({
-      switches: [
-        { scope_kind: "area", scope_id: "bedroom", entity_id: "switch.bedroom_ambience" },
-      ],
+      switches: [{ scope_kind: "area", scope_id: "bedroom", entity_id: "switch.bedroom_ambience" }],
       states: { "switch.bedroom_ambience": { state: "off" } },
     });
     const toggle = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));

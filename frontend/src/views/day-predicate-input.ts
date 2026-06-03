@@ -1,16 +1,23 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
 import { isValidDaySpec } from "../day-spec.js";
+import { emitValueChanged } from "../dom.js";
+import type { HaFormSchema } from "../ha-form.js";
 import { dayItemKindLabel, localize, monthLabel, weekdayLabel } from "../i18n.js";
 import type { DayConfig, DayItem, DayPredicate } from "../types.js";
-import type { HaFormSchema } from "../ha-form.js";
-import { emitValueChanged } from "../dom.js";
 
 const KINDS: DayItem["kind"][] = [
-  "weekday", "day_of_month", "date", "date_range",
-  "last_day", "workday", "holiday", "first_workday", "last_workday",
+  "weekday",
+  "day_of_month",
+  "date",
+  "date_range",
+  "last_day",
+  "workday",
+  "holiday",
+  "first_workday",
+  "last_workday",
 ];
 
 const SENSOR_DEPENDENT = new Set<DayItem["kind"]>(["workday", "holiday"]);
@@ -29,11 +36,16 @@ type DatePart = "month" | "day" | "from_month" | "from_day" | "to_month" | "to_d
 
 function _defaultItem(kind: DayItem["kind"]): DayItem {
   switch (kind) {
-    case "weekday": return { kind, days: [] };
-    case "day_of_month": return { kind, days: "" };
-    case "date": return { kind, month: 1, day: 1 };
-    case "date_range": return { kind, from: { month: 1, day: 1 }, to: { month: 12, day: 31 } };
-    default: return { kind } as DayItem;
+    case "weekday":
+      return { kind, days: [] };
+    case "day_of_month":
+      return { kind, days: "" };
+    case "date":
+      return { kind, month: 1, day: 1 };
+    case "date_range":
+      return { kind, from: { month: 1, day: 1 }, to: { month: 12, day: 31 } };
+    default:
+      return { kind } as DayItem;
   }
 }
 
@@ -74,7 +86,10 @@ export class AmbienceDayPredicateInput extends LitElement {
 
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) value: DayPredicate = null;
-  @property({ attribute: false }) dayConfig: DayConfig = { workday_sensor: null, workday_calendar: null };
+  @property({ attribute: false }) dayConfig: DayConfig = {
+    workday_sensor: null,
+    workday_calendar: null,
+  };
 
   private _current(): { include: DayItem[]; exclude: DayItem[] } {
     if (this.value === null) return { include: [], exclude: [] };
@@ -252,23 +267,37 @@ export class AmbienceDayPredicateInput extends LitElement {
   /* v8 ignore start -- ha-form is eagerly registered in HA 2026.05+, not in jsdom */
   private _computeFieldLabel = (schema: { name: string }): string => {
     switch (schema.name) {
-      case "kind": return localize(this.hass, "ui.field_kind", "Kind");
-      case "days": return localize(this.hass, "ui.field_days_of_month", "Days of month");
-      case "month": return localize(this.hass, "ui.field_month", "Month");
-      case "day": return localize(this.hass, "ui.field_day", "Day");
-      case "from_month": return localize(this.hass, "ui.field_from_month", "From month");
-      case "from_day": return localize(this.hass, "ui.field_from_day", "From day");
-      case "to_month": return localize(this.hass, "ui.field_to_month", "To month");
-      case "to_day": return localize(this.hass, "ui.field_to_day", "To day");
-      default: return schema.name;
+      case "kind":
+        return localize(this.hass, "ui.field_kind", "Kind");
+      case "days":
+        return localize(this.hass, "ui.field_days_of_month", "Days of month");
+      case "month":
+        return localize(this.hass, "ui.field_month", "Month");
+      case "day":
+        return localize(this.hass, "ui.field_day", "Day");
+      case "from_month":
+        return localize(this.hass, "ui.field_from_month", "From month");
+      case "from_day":
+        return localize(this.hass, "ui.field_from_day", "From day");
+      case "to_month":
+        return localize(this.hass, "ui.field_to_month", "To month");
+      case "to_day":
+        return localize(this.hass, "ui.field_to_day", "To day");
+      default:
+        return schema.name;
     }
   };
   /* v8 ignore stop */
 
   // --- weekday body (native checkboxes, unchanged) ------------------------
 
-  private _renderWeekday(section: "include" | "exclude", idx: number, item: DayItem & { kind: "weekday" }) {
-    return html`${[0, 1, 2, 3, 4, 5, 6].map((dayIdx) => html`
+  private _renderWeekday(
+    section: "include" | "exclude",
+    idx: number,
+    item: DayItem & { kind: "weekday" },
+  ) {
+    return html`${[0, 1, 2, 3, 4, 5, 6].map(
+      (dayIdx) => html`
       <label class="day-pill">
         <input
           type="checkbox"
@@ -282,7 +311,8 @@ export class AmbienceDayPredicateInput extends LitElement {
           }}
         />${weekdayLabel(this.hass, dayIdx)}
       </label>
-    `)}`;
+    `,
+    )}`;
   }
 
   // --- kind picker --------------------------------------------------------
@@ -326,7 +356,8 @@ export class AmbienceDayPredicateInput extends LitElement {
     if (customElements.get("ha-form")) {
       // date / date_range use one ha-form per field so a month change can resize
       // the day field without re-initialising (and resetting) the month dropdown.
-      if (item.kind === "date") return this._renderDateRow(section, idx, item, "month", "day", item.month, item.day);
+      if (item.kind === "date")
+        return this._renderDateRow(section, idx, item, "month", "day", item.month, item.day);
       if (item.kind === "date_range") {
         return html`
           ${this._renderDateRow(section, idx, item, "from_month", "from_day", item.from.month, item.from.day)}
@@ -400,18 +431,30 @@ export class AmbienceDayPredicateInput extends LitElement {
         type="text" placeholder=${localize(this.hass, "ui.day_of_month_placeholder", "e.g. 1-10, 15")}
         .value=${item.days}
         @change=${(e: Event) =>
-          this._updateItem(section, idx, this._bodyPatch(item, { days: (e.target as HTMLInputElement).value }))}
+          this._updateItem(
+            section,
+            idx,
+            this._bodyPatch(item, { days: (e.target as HTMLInputElement).value }),
+          )}
       />${err ? html`<div class="field-error">${err}</div>` : ""}`;
     }
     const monthInput = (part: DatePart, month: number) => html`
       <input type="number" min="1" max="12" .value=${String(month)}
-        @change=${(e: Event) => this._updateItem(section, idx,
-          this._setDatePart(item, part, (e.target as HTMLInputElement).value))} />
+        @change=${(e: Event) =>
+          this._updateItem(
+            section,
+            idx,
+            this._setDatePart(item, part, (e.target as HTMLInputElement).value),
+          )} />
     `;
     const dayInput = (part: DatePart, month: number, day: number) => html`
       <input type="number" min="1" max=${String(_daysInMonth(month))} .value=${String(day)}
-        @change=${(e: Event) => this._updateItem(section, idx,
-          this._setDatePart(item, part, (e.target as HTMLInputElement).value))} />
+        @change=${(e: Event) =>
+          this._updateItem(
+            section,
+            idx,
+            this._setDatePart(item, part, (e.target as HTMLInputElement).value),
+          )} />
     `;
     if (item.kind === "date") {
       return html`${monthInput("month", item.month)} / ${dayInput("day", item.month, item.day)}`;
@@ -430,9 +473,10 @@ export class AmbienceDayPredicateInput extends LitElement {
   // --- add-item picker ----------------------------------------------------
 
   private _renderAddPicker(name: "include" | "exclude") {
-    const addLabel = name === "include"
-      ? localize(this.hass, "ui.add_include_item", "+ Add include item")
-      : localize(this.hass, "ui.add_exclude_item", "+ Add exclude item");
+    const addLabel =
+      name === "include"
+        ? localize(this.hass, "ui.add_include_item", "+ Add include item")
+        : localize(this.hass, "ui.add_exclude_item", "+ Add exclude item");
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
       const compute = () => addLabel;
@@ -478,12 +522,16 @@ export class AmbienceDayPredicateInput extends LitElement {
   private _renderSection(name: "include" | "exclude", items: DayItem[]) {
     return html`
       <div class="section">
-        <h4>${name === "include"
-          ? localize(this.hass, "ui.include", "Include")
-          : localize(this.hass, "ui.exclude", "Exclude")}</h4>
-        ${items.length === 0 && name === "include"
-          ? html`<div class="hint">${localize(this.hass, "ui.empty_all_days", "(empty → all days)")}</div>`
-          : ""}
+        <h4>${
+          name === "include"
+            ? localize(this.hass, "ui.include", "Include")
+            : localize(this.hass, "ui.exclude", "Exclude")
+        }</h4>
+        ${
+          items.length === 0 && name === "include"
+            ? html`<div class="hint">${localize(this.hass, "ui.empty_all_days", "(empty → all days)")}</div>`
+            : ""
+        }
         ${items.map((it, i) => this._renderItem(name, i, it))}
         ${this._renderAddPicker(name)}
       </div>

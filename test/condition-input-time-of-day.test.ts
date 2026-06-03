@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/condition-input";
 import type { ConditionInfo, PeriodStoreView } from "../frontend/src/types";
 
@@ -24,7 +24,9 @@ const baseCondition = {
 
 describe("condition-input dispatcher", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   test("renders ambience-time-of-day-input when condition.input is 'time_of_day'", async () => {
     el = await mount(baseCondition);
@@ -45,12 +47,17 @@ describe("condition-input dispatcher", () => {
   test("re-emits value-changed from the widget", async () => {
     el = await mount(baseCondition);
     let received: any;
-    el.addEventListener("value-changed", (e: CustomEvent) => { received = e.detail; });
+    el.addEventListener("value-changed", (e: CustomEvent) => {
+      received = e.detail;
+    });
     const widget = el.shadowRoot.querySelector("ambience-time-of-day-input")!;
-    widget.dispatchEvent(new CustomEvent("value-changed", {
-      detail: { value: { period: "afternoon" } },
-      bubbles: true, composed: true,
-    }));
+    widget.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: { period: "afternoon" } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
     expect(received).toEqual({ value: { period: "afternoon" } });
   });
 
@@ -62,7 +69,9 @@ describe("condition-input dispatcher", () => {
   test("text input emits value-changed with null when empty", async () => {
     el = await mount({ ...baseCondition, input: "text", name: "custom" });
     let received: any;
-    el.addEventListener("value-changed", (e: CustomEvent) => { received = e.detail; });
+    el.addEventListener("value-changed", (e: CustomEvent) => {
+      received = e.detail;
+    });
     const input = el.shadowRoot.querySelector("input[type='text']") as HTMLInputElement;
     input.value = "  ";
     input.dispatchEvent(new InputEvent("input", { bubbles: true }));
@@ -72,7 +81,9 @@ describe("condition-input dispatcher", () => {
   test("text input emits value-changed with non-empty value", async () => {
     el = await mount({ ...baseCondition, input: "text", name: "custom" });
     let received: any;
-    el.addEventListener("value-changed", (e: CustomEvent) => { received = e.detail; });
+    el.addEventListener("value-changed", (e: CustomEvent) => {
+      received = e.detail;
+    });
     const input = el.shadowRoot.querySelector("input[type='text']") as HTMLInputElement;
     input.value = "hello";
     input.dispatchEvent(new InputEvent("input", { bubbles: true }));

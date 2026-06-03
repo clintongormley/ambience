@@ -1,16 +1,16 @@
-import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
-  listCategories: vi.fn(async () => ([
+  listCategories: vi.fn(async () => [
     { id: "morning", name: "Morning" },
     { id: "blinds", name: "Blinds" },
-  ])),
+  ]),
   saveCategories: vi.fn(async () => ({ ok: true })),
   deleteCategory: vi.fn(async () => ({ ok: true })),
 }));
 
 import "../frontend/src/views/categories-settings";
-import { saveCategories, deleteCategory } from "../frontend/src/api.js";
+import { deleteCategory, saveCategories } from "../frontend/src/api.js";
 
 describe("ambience-categories-settings", () => {
   let el: any;
@@ -123,10 +123,16 @@ describe("ambience-categories-settings", () => {
 
   test("a server delete rejection (category in use) shows the reason and restores the category", async () => {
     // The backend rejects with a stable code; the UI localizes the in-use message.
-    (deleteCategory as any).mockRejectedValueOnce({ code: "category_in_use", message: "category 'blinds' still has rules" });
+    (deleteCategory as any).mockRejectedValueOnce({
+      code: "category_in_use",
+      message: "category 'blinds' still has rules",
+    });
     el = await mount();
     // ensure >1 category so the last-category guard doesn't fire
-    el._categories = [{ id: "blinds", name: "Blinds" }, { id: "lights", name: "Lights" }];
+    el._categories = [
+      { id: "blinds", name: "Blinds" },
+      { id: "lights", name: "Lights" },
+    ];
     el._openEditor({ id: "blinds", name: "Blinds" });
     await el.updateComplete;
     (el.shadowRoot.querySelector("button.delete") as HTMLButtonElement).click();
@@ -139,9 +145,15 @@ describe("ambience-categories-settings", () => {
   test("a server delete rejection (last category, concurrent-delete race) shows the localized reason and restores", async () => {
     // Local count > 1 so the client guard doesn't fire, but the server has only
     // one left (another client deleted concurrently) and refuses with code=category_last.
-    (deleteCategory as any).mockRejectedValueOnce({ code: "category_last", message: "cannot delete the last category" });
+    (deleteCategory as any).mockRejectedValueOnce({
+      code: "category_last",
+      message: "cannot delete the last category",
+    });
     el = await mount();
-    el._categories = [{ id: "blinds", name: "Blinds" }, { id: "lights", name: "Lights" }];
+    el._categories = [
+      { id: "blinds", name: "Blinds" },
+      { id: "lights", name: "Lights" },
+    ];
     el._openEditor({ id: "blinds", name: "Blinds" });
     await el.updateComplete;
     (el.shadowRoot.querySelector("button.delete") as HTMLButtonElement).click();

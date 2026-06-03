@@ -54,8 +54,7 @@ export function deriveActionLabel(serviceId: string): string {
   const mentionsDomain =
     domainTokens.length > 0 && domainTokens.every((t) => serviceTokens.includes(t));
 
-  const result =
-    !domainWords || mentionsDomain ? serviceWords : `${serviceWords} ${domainWords}`;
+  const result = !domainWords || mentionsDomain ? serviceWords : `${serviceWords} ${domainWords}`;
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
@@ -91,11 +90,7 @@ export function periodLabel(
 }
 
 /** Generic localizer: resolves `component.ambience.<subKey>` with an English fallback. */
-export function localize(
-  hass: HassLike | undefined,
-  subKey: string,
-  fallback: string,
-): string {
+export function localize(hass: HassLike | undefined, subKey: string, fallback: string): string {
   return _resolve(hass, `component.ambience.${subKey}`, fallback);
 }
 
@@ -124,16 +119,22 @@ const _DAY_ITEM_FALLBACKS: Record<string, string> = {
 };
 
 export function dayItemKindLabel(hass: HassLike | undefined, kind: string): string {
-  return _resolve(
-    hass,
-    `component.ambience.day_item.${kind}`,
-    _DAY_ITEM_FALLBACKS[kind] ?? kind,
-  );
+  return _resolve(hass, `component.ambience.day_item.${kind}`, _DAY_ITEM_FALLBACKS[kind] ?? kind);
 }
 
 const _MONTH_FALLBACKS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 /** month: 1=January … 12=December. */
@@ -243,8 +244,8 @@ export function weatherAttrUnit(
     if (typeof value === "string" && value) return value;
   }
   const sysKey = _UNIT_SYSTEM_KEY[attr];
-  const sys = (hass as { config?: { unit_system?: Record<string, unknown> } } | undefined)
-    ?.config?.unit_system;
+  const sys = (hass as { config?: { unit_system?: Record<string, unknown> } } | undefined)?.config
+    ?.unit_system;
   if (sysKey && sys && typeof sys[sysKey] === "string") return sys[sysKey] as string;
   return _DEFAULT_WEATHER_UNITS[attr] ?? "";
 }
@@ -267,9 +268,5 @@ const _STATE_OP_FALLBACKS: Record<string, string> = {
 
 /** Label for a state-condition operator (`is`, `is_not`, `and`, `or`, `not`). */
 export function stateOpLabel(hass: HassLike | undefined, op: string): string {
-  return _resolve(
-    hass,
-    `component.ambience.state_op.${op}`,
-    _STATE_OP_FALLBACKS[op] ?? op,
-  );
+  return _resolve(hass, `component.ambience.state_op.${op}`, _STATE_OP_FALLBACKS[op] ?? op);
 }

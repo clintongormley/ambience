@@ -1,7 +1,7 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { getDayConfig, saveDayConfig, type HassConnection } from "../api.js";
+import { getDayConfig, type HassConnection, saveDayConfig } from "../api.js";
 import { localize } from "../i18n.js";
 import { scopeLabel } from "../scope-label.js";
 import type { DayConfig } from "../types.js";
@@ -48,14 +48,18 @@ export class AmbienceDayConfig extends LitElement {
   override render() {
     // Filter both pickers to entities provided by the Workday integration so
     // the lists stay short (not every binary_sensor / calendar).
-    const sensorSchema = [{
-      name: "workday_sensor",
-      selector: { entity: { integration: "workday", domain: "binary_sensor" } },
-    }];
-    const calendarSchema = [{
-      name: "workday_calendar",
-      selector: { entity: { integration: "workday", domain: "calendar" } },
-    }];
+    const sensorSchema = [
+      {
+        name: "workday_sensor",
+        selector: { entity: { integration: "workday", domain: "binary_sensor" } },
+      },
+    ];
+    const calendarSchema = [
+      {
+        name: "workday_calendar",
+        selector: { entity: { integration: "workday", domain: "calendar" } },
+      },
+    ];
     return html`
       <div class="row">
         <label>${localize(this.hass, "ui.workday_sensor", "Workday sensor")}</label>
@@ -87,14 +91,18 @@ export class AmbienceDayConfig extends LitElement {
           }}
         ></ha-form>
       </div>
-      ${this._warnings.length ? html`
+      ${
+        this._warnings.length
+          ? html`
         <div class="warnings">
           <strong>${localize(this.hass, "ui.day_warning_prefix", "Warning:")}</strong> ${localize(this.hass, "ui.day_warning_text", "rules now reference unconfigured entities:")}
           <ul>
-            ${this._warnings.map(w => html`<li>${scopeLabel(w)} / "${w.rule_name}" → ${w.reason}</li>`)}
+            ${this._warnings.map((w) => html`<li>${scopeLabel(w)} / "${w.rule_name}" → ${w.reason}</li>`)}
           </ul>
         </div>
-      ` : ""}
+      `
+          : ""
+      }
     `;
   }
 }

@@ -1,14 +1,14 @@
-import { LitElement, html, css } from "lit";
+import { dump as yamlDump, load as yamlLoad } from "js-yaml";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { load as yamlLoad, dump as yamlDump } from "js-yaml";
 
 import type { HassConnection } from "../api.js";
-import { localize } from "../i18n.js";
-import type { ScriptPredicate } from "../types.js";
-import type { HaFormSchema } from "../ha-form.js";
-import { scriptFieldLabel } from "../summary.js";
-import { entityName } from "./entity-row.js";
 import { emitValueChanged } from "../dom.js";
+import type { HaFormSchema } from "../ha-form.js";
+import { localize } from "../i18n.js";
+import { scriptFieldLabel } from "../summary.js";
+import type { ScriptPredicate } from "../types.js";
+import { entityName } from "./entity-row.js";
 
 type ScriptField = {
   name?: string;
@@ -82,7 +82,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
   }
 
   _setMode(mode: "form" | "yaml") {
-    if (mode === "form" && this._yamlError !== null) return;   // blocked while invalid
+    if (mode === "form" && this._yamlError !== null) return; // blocked while invalid
     if (mode === "yaml") this._yamlText = yamlDump(this.value ?? {});
     this._mode = mode;
   }
@@ -139,7 +139,9 @@ export class AmbienceScriptPredicateInput extends LitElement {
 
   /** All registered `script.*` services, sorted alphabetically by entity_id. */
   private _scriptIds(): string[] {
-    const services = (this.hass as { services?: Record<string, Record<string, unknown>> } | undefined)?.services;
+    const services = (
+      this.hass as { services?: Record<string, Record<string, unknown>> } | undefined
+    )?.services;
     const names = Object.keys(services?.script ?? {});
     return names.sort().map((n) => `script.${n}`);
   }
@@ -150,10 +152,14 @@ export class AmbienceScriptPredicateInput extends LitElement {
   }
 
   /** Look up the fields:{} block of the picked script, or undefined. */
-  private _fieldsFor(scriptEntityId: string | null | undefined): Record<string, ScriptField> | undefined {
+  private _fieldsFor(
+    scriptEntityId: string | null | undefined,
+  ): Record<string, ScriptField> | undefined {
     if (!scriptEntityId) return undefined;
     const name = scriptEntityId.replace(/^script\./, "");
-    const services = (this.hass as { services?: Record<string, Record<string, ScriptDef>> } | undefined)?.services;
+    const services = (
+      this.hass as { services?: Record<string, Record<string, ScriptDef>> } | undefined
+    )?.services;
     return services?.script?.[name]?.fields;
   }
 
@@ -172,7 +178,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
     const fields = this._fieldsFor(scriptEntityId) ?? {};
     const out: Record<string, unknown> = {};
     for (const [name, f] of Object.entries(fields)) {
-      if (f && Object.prototype.hasOwnProperty.call(f, "default")) {
+      if (f && Object.hasOwn(f, "default")) {
         out[name] = (f as ScriptField).default;
       }
     }
@@ -180,15 +186,17 @@ export class AmbienceScriptPredicateInput extends LitElement {
   }
 
   _pickerSchema(): HaFormSchema[] {
-    return [{
-      name: "script",
-      selector: {
-        select: {
-          mode: "dropdown",
-          options: this._scriptIds().map((id) => ({ value: id, label: this._label(id) })),
+    return [
+      {
+        name: "script",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: this._scriptIds().map((id) => ({ value: id, label: this._label(id) })),
+          },
         },
       },
-    }];
+    ];
   }
 
   _pickScript(scriptEntityId: string | null) {
@@ -215,11 +223,14 @@ export class AmbienceScriptPredicateInput extends LitElement {
   _argsSchema(): HaFormSchema[] {
     const fields = this._currentFields();
     if (!fields) return [];
-    return Object.entries(fields).map(([name, f]) => ({
-      name,
-      required: f.required,
-      selector: f.selector ?? { text: {} },
-    } as HaFormSchema));
+    return Object.entries(fields).map(
+      ([name, f]) =>
+        ({
+          name,
+          required: f.required,
+          selector: f.selector ?? { text: {} },
+        }) as HaFormSchema,
+    );
   }
 
   /** Merge edited args into the predicate and emit. */
@@ -256,7 +267,9 @@ export class AmbienceScriptPredicateInput extends LitElement {
         <h4>${localize(this.hass, "ui.script", "Script")}</h4>
         ${this._renderPicker(picked)}
       </div>
-      ${picked ? html`
+      ${
+        picked
+          ? html`
         <div class="tabs">
           <button
             type="button"
@@ -271,13 +284,19 @@ export class AmbienceScriptPredicateInput extends LitElement {
             @click=${() => this._setMode("yaml")}
           >${localize(this.hass, "ui.yaml", "YAML")}</button>
         </div>
-      ` : ""}
-      ${picked && this._mode === "form" && hasFields ? html`
+      `
+          : ""
+      }
+      ${
+        picked && this._mode === "form" && hasFields
+          ? html`
         <div class="section args">
           <h4>${localize(this.hass, "ui.arguments", "Arguments")}</h4>
           ${this._renderArgs(schema, args)}
         </div>
-      ` : ""}
+      `
+          : ""
+      }
       ${picked && this._mode === "form" ? this._renderTriggers() : ""}
       ${picked && this._mode === "yaml" ? this._renderYaml() : ""}
     `;
@@ -319,14 +338,16 @@ export class AmbienceScriptPredicateInput extends LitElement {
     // jsdom fallback: chips with remove + a text input to add by entity_id.
     return html`
       <div class="chips">
-        ${current.length === 0
-          ? html`<span class="muted">${localize(this.hass, "ui.script_triggers_none", "No triggers")}</span>`
-          : current.map(
-              (eid) => html`<span class="chip" data-test=${`trigger-${eid}`}>
+        ${
+          current.length === 0
+            ? html`<span class="muted">${localize(this.hass, "ui.script_triggers_none", "No triggers")}</span>`
+            : current.map(
+                (eid) => html`<span class="chip" data-test=${`trigger-${eid}`}>
                 ${eid}
                 <button type="button" class="x" title="Remove" @click=${() => this._removeTrigger(eid)}>×</button>
               </span>`,
-            )}
+              )
+        }
       </div>
       <input
         data-test="trigger-add-input"
@@ -344,7 +365,9 @@ export class AmbienceScriptPredicateInput extends LitElement {
   /* v8 ignore start -- ha-code-editor path (real HA only) */
   private _renderYaml() {
     const onInput = (e: Event) => {
-      const raw = ((e.target as HTMLTextAreaElement).value ?? (e as unknown as CustomEvent<{ value: string }>).detail?.value ?? "") as string;
+      const raw = ((e.target as HTMLTextAreaElement).value ??
+        (e as unknown as CustomEvent<{ value: string }>).detail?.value ??
+        "") as string;
       this._onYamlInput(raw);
     };
     if (customElements.get("ha-code-editor")) {

@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, beforeEach, beforeAll, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 // jsdom doesn't include DragEvent — polyfill it with a minimal MouseEvent subclass.
 beforeAll(() => {
@@ -41,12 +41,8 @@ vi.mock("../frontend/src/api.js", () => ({
 }));
 
 import "../frontend/src/views/actions-settings";
+import { getServiceSchema, listExposedActions, saveExposedActions } from "../frontend/src/api.js";
 import { deriveActionLabel } from "../frontend/src/views/actions-settings";
-import {
-  listExposedActions,
-  saveExposedActions,
-  getServiceSchema,
-} from "../frontend/src/api.js";
 
 describe("deriveActionLabel", () => {
   test.each([
@@ -143,13 +139,9 @@ describe("ambience-actions-settings", () => {
     el = await mount();
     // No label set: no .header-label-display is rendered; the service id
     // shows in <strong> alone.
-    const labelDisplay = el.shadowRoot.querySelector(
-      "[data-card] .header-label-display",
-    );
+    const labelDisplay = el.shadowRoot.querySelector("[data-card] .header-label-display");
     expect(labelDisplay).toBeNull();
-    const strong = el.shadowRoot.querySelector(
-      "[data-card] .card-header strong",
-    ) as HTMLElement;
+    const strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
     expect(strong).not.toBeNull();
     expect(strong.textContent).toContain("light.turn_on");
   });
@@ -163,9 +155,7 @@ describe("ambience-actions-settings", () => {
       "[data-card] .header-label-display",
     ) as HTMLElement;
     expect(labelDisplay?.textContent).toBe("Morning lights");
-    const serviceId = el.shadowRoot.querySelector(
-      "[data-card] .header-service-id",
-    ) as HTMLElement;
+    const serviceId = el.shadowRoot.querySelector("[data-card] .header-service-id") as HTMLElement;
     expect(serviceId?.textContent).toBe("(light.turn_on)");
   });
 
@@ -376,9 +366,7 @@ describe("ambience-actions-settings", () => {
     expect(cards.length).toBe(2);
     expect(saveExposedActions).toHaveBeenCalledWith(
       expect.anything(),
-      expect.arrayContaining([
-        expect.objectContaining({ id: "light.turn_off" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ id: "light.turn_off" })]),
     );
   });
 
@@ -421,9 +409,7 @@ describe("ambience-actions-settings", () => {
     // "weird.svc" has name: "" → derived "Svc weird".
     expect(saveExposedActions).toHaveBeenCalledWith(
       expect.anything(),
-      expect.arrayContaining([
-        expect.objectContaining({ id: "weird.svc", label: "Svc weird" }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ id: "weird.svc", label: "Svc weird" })]),
     );
   });
 
@@ -499,8 +485,8 @@ describe("ambience-actions-settings", () => {
 
     expect(el._drag.from).toBeNull();
     expect(el._drag.over).toBeNull();
-    const idsAfter = Array.from(el.shadowRoot.querySelectorAll("[data-card]")).map(
-      (c: any) => c.getAttribute("data-service"),
+    const idsAfter = Array.from(el.shadowRoot.querySelectorAll("[data-card]")).map((c: any) =>
+      c.getAttribute("data-service"),
     );
     expect(idsAfter).toEqual(["light.turn_on", "light.turn_off"]);
     expect(saveExposedActions).not.toHaveBeenCalled();
@@ -518,8 +504,8 @@ describe("ambience-actions-settings", () => {
     cards[0].dispatchEvent(new DragEvent("drop", { bubbles: true }));
     await flush(el);
 
-    const idsAfter = Array.from(el.shadowRoot.querySelectorAll("[data-card]")).map(
-      (c: any) => c.getAttribute("data-service"),
+    const idsAfter = Array.from(el.shadowRoot.querySelectorAll("[data-card]")).map((c: any) =>
+      c.getAttribute("data-service"),
     );
     expect(idsAfter).toEqual(["light.turn_on", "light.turn_off"]);
     expect(saveExposedActions).not.toHaveBeenCalled();
@@ -548,9 +534,7 @@ describe("ambience-actions-settings", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("[data-add-service]")).not.toBeNull();
 
-    document.body.dispatchEvent(
-      new PointerEvent("pointerdown", { bubbles: true, composed: true }),
-    );
+    document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
     await el.updateComplete;
 
     expect(el._adding).toBe(false);
@@ -591,7 +575,9 @@ describe("ambience-actions-settings", () => {
 
   test("auto-saves after remove service", async () => {
     el = await mount();
-    const removeBtn = el.shadowRoot.querySelector("[data-card] button[data-remove]") as HTMLButtonElement;
+    const removeBtn = el.shadowRoot.querySelector(
+      "[data-card] button[data-remove]",
+    ) as HTMLButtonElement;
     expect(removeBtn).not.toBeNull();
     removeBtn.click();
     await flush(el);
@@ -778,7 +764,9 @@ describe("ambience-actions-settings", () => {
     await el.updateComplete;
 
     // Row 2 should be present.
-    expect(el.shadowRoot.querySelector("input[data-default-value='brightness_pct']")).not.toBeNull();
+    expect(
+      el.shadowRoot.querySelector("input[data-default-value='brightness_pct']"),
+    ).not.toBeNull();
 
     // Change the value in the editor.
     const editorInput = el.shadowRoot.querySelector(
@@ -1218,9 +1206,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const cb = el.shadowRoot.querySelector(
-      "input[data-reapply-enable]",
-    ) as HTMLInputElement;
+    const cb = el.shadowRoot.querySelector("input[data-reapply-enable]") as HTMLInputElement;
     expect(cb).not.toBeNull();
   });
 
@@ -1229,9 +1215,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const cb = el.shadowRoot.querySelector(
-      "input[data-reapply-enable]",
-    ) as HTMLInputElement;
+    const cb = el.shadowRoot.querySelector("input[data-reapply-enable]") as HTMLInputElement;
     expect(cb.checked).toBe(false);
   });
 
@@ -1249,14 +1233,10 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const cb = el.shadowRoot.querySelector(
-      "input[data-reapply-enable]",
-    ) as HTMLInputElement;
+    const cb = el.shadowRoot.querySelector("input[data-reapply-enable]") as HTMLInputElement;
     expect(cb.checked).toBe(true);
 
-    const input = el.shadowRoot.querySelector(
-      "input[data-reapply-input]",
-    ) as HTMLInputElement;
+    const input = el.shadowRoot.querySelector("input[data-reapply-input]") as HTMLInputElement;
     expect(input).not.toBeNull();
     expect(input.value).toBe("120");
   });
@@ -1273,9 +1253,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const cb = el.shadowRoot.querySelector(
-      "input[data-reapply-enable]",
-    ) as HTMLInputElement;
+    const cb = el.shadowRoot.querySelector("input[data-reapply-enable]") as HTMLInputElement;
     expect(cb).not.toBeNull();
   });
 
@@ -1289,9 +1267,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    expect(
-      el.shadowRoot.querySelector("input[data-reapply-enable]"),
-    ).not.toBeNull();
+    expect(el.shadowRoot.querySelector("input[data-reapply-enable]")).not.toBeNull();
   });
 
   test("checking the checkbox seeds reapply_seconds = 300 and reveals the seconds field", async () => {
@@ -1299,9 +1275,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const cb = el.shadowRoot.querySelector(
-      "input[data-reapply-enable]",
-    ) as HTMLInputElement;
+    const cb = el.shadowRoot.querySelector("input[data-reapply-enable]") as HTMLInputElement;
     cb.checked = true;
     cb.dispatchEvent(new Event("change", { bubbles: true }));
     await flush(el);
@@ -1317,9 +1291,7 @@ describe("ambience-actions-settings", () => {
     );
 
     // Seconds field should now be visible showing 300
-    const input = el.shadowRoot.querySelector(
-      "input[data-reapply-input]",
-    ) as HTMLInputElement;
+    const input = el.shadowRoot.querySelector("input[data-reapply-input]") as HTMLInputElement;
     expect(input).not.toBeNull();
     expect(input.value).toBe("300");
   });
@@ -1338,9 +1310,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const cb = el.shadowRoot.querySelector(
-      "input[data-reapply-enable]",
-    ) as HTMLInputElement;
+    const cb = el.shadowRoot.querySelector("input[data-reapply-enable]") as HTMLInputElement;
     expect(cb.checked).toBe(true);
 
     cb.checked = false;
@@ -1369,9 +1339,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const input = el.shadowRoot.querySelector(
-      "input[data-reapply-input]",
-    ) as HTMLInputElement;
+    const input = el.shadowRoot.querySelector("input[data-reapply-input]") as HTMLInputElement;
     input.value = "60";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await flush(el);
@@ -1401,9 +1369,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const input = el.shadowRoot.querySelector(
-      "input[data-reapply-input]",
-    ) as HTMLInputElement;
+    const input = el.shadowRoot.querySelector("input[data-reapply-input]") as HTMLInputElement;
     input.value = "5";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await flush(el);
@@ -1430,9 +1396,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const input = el.shadowRoot.querySelector(
-      "input[data-reapply-input]",
-    ) as HTMLInputElement;
+    const input = el.shadowRoot.querySelector("input[data-reapply-input]") as HTMLInputElement;
     input.value = "";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     await flush(el);
@@ -1446,9 +1410,7 @@ describe("ambience-actions-settings", () => {
     clickToggle(el.shadowRoot);
     await el.updateComplete;
 
-    const cb = el.shadowRoot.querySelector(
-      "input[data-reapply-enable]",
-    ) as HTMLInputElement;
+    const cb = el.shadowRoot.querySelector("input[data-reapply-enable]") as HTMLInputElement;
 
     // Enable
     cb.checked = true;
@@ -1457,9 +1419,7 @@ describe("ambience-actions-settings", () => {
     expect(saveExposedActions).toHaveBeenCalledTimes(1);
 
     // Disable
-    const cb2 = el.shadowRoot.querySelector(
-      "input[data-reapply-enable]",
-    ) as HTMLInputElement;
+    const cb2 = el.shadowRoot.querySelector("input[data-reapply-enable]") as HTMLInputElement;
     cb2.checked = false;
     cb2.dispatchEvent(new Event("change", { bubbles: true }));
     await flush(el);

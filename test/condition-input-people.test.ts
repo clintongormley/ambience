@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/people-predicate-input";
 import "../frontend/src/views/condition-input";
 import type { PeoplePredicate } from "../frontend/src/types";
@@ -6,8 +6,16 @@ import type { PeoplePredicate } from "../frontend/src/types";
 // Minimal hass stub exposing two persons and one (non-home) zone.
 const hass = {
   states: {
-    "person.alice": { entity_id: "person.alice", state: "home", attributes: { friendly_name: "Alice" } },
-    "person.bob": { entity_id: "person.bob", state: "not_home", attributes: { friendly_name: "Bob" } },
+    "person.alice": {
+      entity_id: "person.alice",
+      state: "home",
+      attributes: { friendly_name: "Alice" },
+    },
+    "person.bob": {
+      entity_id: "person.bob",
+      state: "not_home",
+      attributes: { friendly_name: "Bob" },
+    },
     "zone.work": { entity_id: "zone.work", state: "0", attributes: { friendly_name: "Work" } },
     "zone.home": { entity_id: "zone.home", state: "1", attributes: { friendly_name: "Home" } },
     "light.kitchen": { entity_id: "light.kitchen", state: "on", attributes: {} },
@@ -62,17 +70,17 @@ describe("ambience-people-predicate-input", () => {
 
   test("mode dropdown offers exactly the 6 modes in order", async () => {
     el = await mount();
-    const opts = Array.from(
-      modeSelect(el).querySelectorAll<HTMLOptionElement>("option"),
-    ).map((o) => o.value);
+    const opts = Array.from(modeSelect(el).querySelectorAll<HTMLOptionElement>("option")).map(
+      (o) => o.value,
+    );
     expect(opts).toEqual(["everybody", "anybody", "nobody", "any", "all", "none"]);
   });
 
   test("mode dropdown shows the shortened 'X of:' labels", async () => {
     el = await mount();
-    const labels = Array.from(
-      modeSelect(el).querySelectorAll<HTMLOptionElement>("option"),
-    ).map((o) => o.textContent?.trim());
+    const labels = Array.from(modeSelect(el).querySelectorAll<HTMLOptionElement>("option")).map(
+      (o) => o.textContent?.trim(),
+    );
     expect(labels).toEqual(["Everybody", "Anybody", "Nobody", "Any of:", "All of:", "None of:"]);
   });
 
@@ -276,7 +284,7 @@ describe("ambience-people-predicate-input", () => {
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
     });
-    let boxes = Array.from(
+    const boxes = Array.from(
       el.shadowRoot.querySelectorAll<HTMLInputElement>("input[type=checkbox]:checked"),
     );
     for (const cb of boxes) {
@@ -399,9 +407,9 @@ describe("ambience-people-predicate-input", () => {
 
   test("location options include home/zones but not away nor zone.home", async () => {
     el = await mount();
-    const options = Array.from(
-      whereSelect(el).querySelectorAll<HTMLOptionElement>("option"),
-    ).map((o: HTMLOptionElement) => o.value);
+    const options = Array.from(whereSelect(el).querySelectorAll<HTMLOptionElement>("option")).map(
+      (o: HTMLOptionElement) => o.value,
+    );
     expect(options).toContain("home");
     expect(options).toContain("zone.work");
     expect(options).not.toContain("away");
@@ -412,9 +420,7 @@ describe("ambience-people-predicate-input", () => {
 
   test("negate toggle offers 'Is at' (false) and 'Is not at' (true)", async () => {
     el = await mount();
-    const opts = Array.from(
-      negateSelect(el).querySelectorAll<HTMLOptionElement>("option"),
-    );
+    const opts = Array.from(negateSelect(el).querySelectorAll<HTMLOptionElement>("option"));
     expect(opts.map((o) => o.value)).toEqual(["false", "true"]);
     expect(opts.map((o) => o.textContent?.trim())).toEqual(["Is at", "Is not at"]);
   });
@@ -558,7 +564,7 @@ describe("ambience-people-predicate-input", () => {
     expect(m.value).toBe("10");
     expect(s.value).toBe("0");
 
-    let emitted: PeoplePredicate | null | undefined = undefined;
+    let emitted: PeoplePredicate | null | undefined;
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate | null }>).detail.value;
     });
@@ -574,7 +580,13 @@ describe("ambience-people-predicate-input", () => {
 
   test("condition-input dispatches to the people widget for input=people_predicate", async () => {
     const di: any = document.createElement("ambience-condition-input");
-    di.condition = { name: "people", description: "", predicate_help: "", input: "people_predicate", priority: 75 };
+    di.condition = {
+      name: "people",
+      description: "",
+      predicate_help: "",
+      input: "people_predicate",
+      priority: 75,
+    };
     di.value = null;
     di.hass = hass;
     document.body.appendChild(di);

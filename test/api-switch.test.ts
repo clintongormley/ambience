@@ -1,9 +1,5 @@
-import { describe, test, expect, vi } from "vitest";
-import {
-  getSwitchDefaults,
-  listSwitches,
-  saveSwitchDefaults,
-} from "../frontend/src/api.js";
+import { describe, expect, test, vi } from "vitest";
+import { getSwitchDefaults, listSwitches, saveSwitchDefaults } from "../frontend/src/api.js";
 
 function mockHass(impl: (msg: any) => any) {
   return { callWS: vi.fn(impl) } as any;

@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import "../frontend/src/ambience-frontend";
 
 type SettingsModal = HTMLElement & { open: boolean };

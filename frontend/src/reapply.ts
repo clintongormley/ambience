@@ -24,7 +24,7 @@ function parseReapplySeconds(raw: string, zeroMeansDisable: boolean): number | n
   const trimmed = raw.trim();
   if (trimmed === "") return null;
   const n = Number(trimmed);
-  if (isNaN(n)) return null;
+  if (Number.isNaN(n)) return null;
   if (n <= 0) return zeroMeansDisable ? 0 : null;
   return Math.max(MIN_REAPPLY_SECONDS, Math.round(n));
 }

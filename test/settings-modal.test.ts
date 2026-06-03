@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, beforeEach, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 // The modal hosts <ambience-settings-view>, whose children fetch on mount.
 // Stub the API so those background calls resolve harmlessly.
@@ -56,7 +56,9 @@ describe("ambience-settings-modal", () => {
   test("emits close when the ✕ button is clicked", async () => {
     el = await mount(true);
     let closed = false;
-    el.addEventListener("close", () => { closed = true; });
+    el.addEventListener("close", () => {
+      closed = true;
+    });
     el.shadowRoot.querySelector(".close").click();
     expect(closed).toBe(true);
   });
@@ -64,7 +66,9 @@ describe("ambience-settings-modal", () => {
   test("emits close when the backdrop is clicked", async () => {
     el = await mount(true);
     let closed = false;
-    el.addEventListener("close", () => { closed = true; });
+    el.addEventListener("close", () => {
+      closed = true;
+    });
     // A click on the host itself (outside .modal) is a backdrop click.
     el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(closed).toBe(true);
@@ -73,7 +77,9 @@ describe("ambience-settings-modal", () => {
   test("does not emit close when the modal body is clicked", async () => {
     el = await mount(true);
     let closed = false;
-    el.addEventListener("close", () => { closed = true; });
+    el.addEventListener("close", () => {
+      closed = true;
+    });
     el.shadowRoot.querySelector(".modal").click();
     expect(closed).toBe(false);
   });
@@ -81,7 +87,9 @@ describe("ambience-settings-modal", () => {
   test("emits close on Escape keydown while open", async () => {
     el = await mount(true);
     let closed = false;
-    el.addEventListener("close", () => { closed = true; });
+    el.addEventListener("close", () => {
+      closed = true;
+    });
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(closed).toBe(true);
   });

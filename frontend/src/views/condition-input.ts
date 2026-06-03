@@ -1,9 +1,9 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
-import type { DayConfig, ConditionInfo, PeriodStoreView } from "../types.js";
+import type { ConditionInfo, DayConfig, PeriodStoreView } from "../types.js";
 import "./script-predicate-input.js";
 import "./time-of-day-input.js";
 import "./day-predicate-input.js";

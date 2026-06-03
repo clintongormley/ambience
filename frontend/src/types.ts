@@ -30,7 +30,7 @@ export type Rule = {
 export type RuleCategory = { id: string; name: string; icon?: string; color?: string };
 
 export type ActionSpec = {
-  service: string;            // "domain.service"
+  service: string; // "domain.service"
   entity_ids: string[];
   params: Record<string, unknown>;
   // Per-rule override: absent = inherit exposed default; 0 = explicitly off;
@@ -47,9 +47,9 @@ export type ActionSpec = {
 //   - in both                      → field shown pre-filled with the default
 //   - in neither                   → field not used
 export type ExposedAction = {
-  id: string;                 // "domain.service"; primary key
-  label: string;              // user-friendly display name; "" allowed
-  visible_fields: string[];   // shown in the rule editor
+  id: string; // "domain.service"; primary key
+  label: string; // user-friendly display name; "" allowed
+  visible_fields: string[]; // shown in the rule editor
   defaults: Record<string, unknown>; // applied at execution; rule params override
   // Default re-apply interval in seconds. 0/absent = off; >= 10 = enabled.
   // Rules may override this per-use via ActionSpec.reapply_seconds.
@@ -58,10 +58,10 @@ export type ExposedAction = {
 
 // HA service listing for the settings UI's service picker.
 export type ServiceInfo = {
-  id: string;                 // "domain.service"
-  name: string;               // HA's predefined human label (from services.yaml); "" if none
+  id: string; // "domain.service"
+  name: string; // HA's predefined human label (from services.yaml); "" if none
   description: string;
-  target: unknown;            // HA's target metadata; passed through unchanged
+  target: unknown; // HA's target metadata; passed through unchanged
 };
 
 // One service's field schema, as returned by ambience/services/get_schema.
@@ -71,8 +71,8 @@ export type ServiceSchema = {
 };
 
 export type ServiceField = {
-  name?: string;              // human-readable label (e.g. "Brightness"); from services.yaml
-  selector?: unknown;         // HA selector dict; ha-form consumes verbatim
+  name?: string; // human-readable label (e.g. "Brightness"); from services.yaml
+  selector?: unknown; // HA selector dict; ha-form consumes verbatim
   description?: string;
   required?: boolean;
   default?: unknown;
@@ -129,13 +129,7 @@ export type DryRunResult = {
   switch_state: "on" | "off" | "unknown";
 };
 
-export type SunAnchor =
-  | "sunrise"
-  | "sunset"
-  | "noon"
-  | "midnight"
-  | "dawn"
-  | "dusk";
+export type SunAnchor = "sunrise" | "sunset" | "noon" | "midnight" | "dawn" | "dusk";
 
 export type TimeEndpoint =
   | { kind: "time"; hh: number; mm: number }
@@ -145,11 +139,7 @@ export type TimeRange = { from: TimeEndpoint; to: TimeEndpoint };
 
 export type PeriodRef = { period: string };
 
-export type TimeOfDayPredicate =
-  | null
-  | PeriodRef
-  | TimeRange
-  | Array<PeriodRef | TimeRange>;
+export type TimeOfDayPredicate = null | PeriodRef | TimeRange | Array<PeriodRef | TimeRange>;
 
 export type PeriodDef = TimeRange & { label?: string | null };
 
@@ -175,9 +165,7 @@ export type DayItem =
   | { kind: "first_workday" }
   | { kind: "last_workday" };
 
-export type DayPredicate =
-  | null
-  | { include: DayItem[]; exclude: DayItem[] };
+export type DayPredicate = null | { include: DayItem[]; exclude: DayItem[] };
 
 export type WeatherGroup = {
   id: string;
@@ -196,9 +184,7 @@ export type WeatherThreshold = {
   value: number;
 };
 
-export type WeatherPredicate =
-  | null
-  | { groups: string[]; thresholds: WeatherThreshold[] };
+export type WeatherPredicate = null | { groups: string[]; thresholds: WeatherThreshold[] };
 
 // --- sun condition ----------------------------------------------------------
 
@@ -208,9 +194,7 @@ export type SunAzimuth = { sectors?: string[]; ranges?: SunRange[] };
 
 /** Top-level sun predicate. `null` = no constraint (wildcard). At least one of
  *  `elevation`/`azimuth` is present when non-null. */
-export type SunPredicate =
-  | null
-  | { elevation?: SunElevation; azimuth?: SunAzimuth };
+export type SunPredicate = null | { elevation?: SunElevation; azimuth?: SunAzimuth };
 
 // --- state condition --------------------------------------------------------
 
@@ -242,19 +226,21 @@ export type PeopleQuant = "any" | "everyone" | "nobody";
 
 /** Per-rule predicate. `null` = wildcard (no presence constraint). */
 export interface PeoplePredicate {
-  who?: string[];                 // person.* entity_ids; empty/absent = all persons
-  quant?: PeopleQuant;            // default "any"
-  where?: string;                 // positive location: "home" | "zone.*"; default "home"
-  negate?: boolean;               // default false; true = NOT at `where`
+  who?: string[]; // person.* entity_ids; empty/absent = all persons
+  quant?: PeopleQuant; // default "any"
+  where?: string; // positive location: "home" | "zone.*"; default "home"
+  negate?: boolean; // default false; true = NOT at `where`
   for?: { h: number; m: number; s: number } | null;
 }
 
 // --- script condition -------------------------------------------------------
 
 /** Per-rule predicate. `null` = wildcard. */
-export type ScriptPredicate =
-  | null
-  | { script: string; args?: Record<string, unknown>; triggers?: string[] };
+export type ScriptPredicate = null | {
+  script: string;
+  args?: Record<string, unknown>;
+  triggers?: string[];
+};
 
 // --- template condition -----------------------------------------------------
 

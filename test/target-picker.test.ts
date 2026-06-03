@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/target-picker";
 
 async function mount(opts: {
@@ -17,13 +17,17 @@ async function mount(opts: {
 
 function captureEmit(el: HTMLElement): () => string[] | undefined {
   let detail: { value: string[] } | undefined;
-  el.addEventListener("value-changed", ((e: CustomEvent) => { detail = e.detail; }) as any);
+  el.addEventListener("value-changed", ((e: CustomEvent) => {
+    detail = e.detail;
+  }) as any);
   return () => detail?.value;
 }
 
 describe("ambience-target-picker (Lit fallback)", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   test("renders a checkbox for each available entity", async () => {
     el = await mount({ entities: ["light.a", "light.b", "light.c"] });
@@ -35,7 +39,9 @@ describe("ambience-target-picker (Lit fallback)", () => {
       entities: ["light.a", "light.b", "light.c"],
       value: ["light.a", "light.c"],
     });
-    const boxes = el.shadowRoot.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const boxes = el.shadowRoot.querySelectorAll(
+      'input[type="checkbox"]',
+    ) as NodeListOf<HTMLInputElement>;
     expect(boxes[0].checked).toBe(true);
     expect(boxes[1].checked).toBe(false);
     expect(boxes[2].checked).toBe(true);
@@ -47,7 +53,9 @@ describe("ambience-target-picker (Lit fallback)", () => {
       value: ["light.a"],
     });
     const get = captureEmit(el);
-    const boxes = el.shadowRoot.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const boxes = el.shadowRoot.querySelectorAll(
+      'input[type="checkbox"]',
+    ) as NodeListOf<HTMLInputElement>;
     boxes[1].checked = true;
     boxes[1].dispatchEvent(new Event("change"));
     expect(get()).toEqual(["light.a", "light.b"]);
@@ -59,7 +67,9 @@ describe("ambience-target-picker (Lit fallback)", () => {
       value: ["light.a", "light.b"],
     });
     const get = captureEmit(el);
-    const boxes = el.shadowRoot.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const boxes = el.shadowRoot.querySelectorAll(
+      'input[type="checkbox"]',
+    ) as NodeListOf<HTMLInputElement>;
     boxes[0].checked = false;
     boxes[0].dispatchEvent(new Event("change"));
     expect(get()).toEqual(["light.b"]);
@@ -75,11 +85,14 @@ describe("ambience-target-picker (Lit fallback)", () => {
       entities: ["light.a", "switch.fan", "light.b"],
       target: { entity: { domain: "light" } },
     });
-    const boxes = el.shadowRoot.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const boxes = el.shadowRoot.querySelectorAll(
+      'input[type="checkbox"]',
+    ) as NodeListOf<HTMLInputElement>;
     // switch.fan filtered out by HA target metadata
     expect(boxes.length).toBe(2);
-    const labels = Array.from(el.shadowRoot.querySelectorAll("label"))
-      .map((l: any) => l.textContent.trim());
+    const labels = Array.from(el.shadowRoot.querySelectorAll("label")).map((l: any) =>
+      l.textContent.trim(),
+    );
     expect(labels).toContain("light.a");
     expect(labels).toContain("light.b");
     expect(labels).not.toContain("switch.fan");
@@ -100,7 +113,9 @@ describe("ambience-target-picker (Lit fallback)", () => {
       value: ["light.a"],
     });
     const get = captureEmit(el);
-    const boxes = el.shadowRoot.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const boxes = el.shadowRoot.querySelectorAll(
+      'input[type="checkbox"]',
+    ) as NodeListOf<HTMLInputElement>;
     // Second box (light.b) — switch.fan was filtered out
     boxes[1].checked = true;
     boxes[1].dispatchEvent(new Event("change"));

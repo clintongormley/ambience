@@ -7,7 +7,7 @@
  * jsdom doesn't register ha-form, so these tests exercise the fallback
  * rendering paths.
  */
-import { describe, test, expect, afterEach, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import "../frontend/src/views/action-slot";
 
 vi.mock("../frontend/src/api", () => ({
@@ -30,14 +30,16 @@ function makeHass() {
   } as any;
 }
 
-async function mount(opts: {
-  hass?: any;
-  scope?: { kind: "area"; id: string } | { kind: "floor"; id: string } | { kind: "house" };
-  exposed?: ExposedAction;
-  schema?: ServiceSchema | null;
-  entityIds?: string[];
-  params?: Record<string, unknown>;
-} = {}): Promise<any> {
+async function mount(
+  opts: {
+    hass?: any;
+    scope?: { kind: "area"; id: string } | { kind: "floor"; id: string } | { kind: "house" };
+    exposed?: ExposedAction;
+    schema?: ServiceSchema | null;
+    entityIds?: string[];
+    params?: Record<string, unknown>;
+  } = {},
+): Promise<any> {
   if (opts.schema !== undefined) {
     vi.mocked(api.getServiceSchema).mockResolvedValueOnce(opts.schema as ServiceSchema);
   }
@@ -58,7 +60,9 @@ async function mount(opts: {
 
 function captureEvent(el: HTMLElement, name: string) {
   let detail: any;
-  el.addEventListener(name, (e: Event) => { detail = (e as CustomEvent).detail; });
+  el.addEventListener(name, (e: Event) => {
+    detail = (e as CustomEvent).detail;
+  });
   return () => detail;
 }
 
@@ -74,7 +78,10 @@ describe("ambience-action-slot", () => {
     // its `_schema === undefined` (Loading…) state.
     vi.mocked(api.getServiceSchema).mockReturnValue(new Promise(() => {}));
     const exposed: ExposedAction = {
-      id: "light.turn_on", label: "", visible_fields: [], defaults: {},
+      id: "light.turn_on",
+      label: "",
+      visible_fields: [],
+      defaults: {},
     };
     el = document.createElement("ambience-action-slot");
     el.hass = makeHass();
@@ -185,8 +192,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "notify.email", label: "",
-        visible_fields: ["msg"], defaults: {},
+        id: "notify.email",
+        label: "",
+        visible_fields: ["msg"],
+        defaults: {},
       },
       schema,
     });
@@ -206,18 +215,22 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: [], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: [],
+        defaults: {},
       },
       schema,
     });
     const get = captureEvent(el, "entity-ids-changed");
     const picker = el.shadowRoot.querySelector("ambience-target-picker") as HTMLElement;
-    picker.dispatchEvent(new CustomEvent("value-changed", {
-      detail: { value: ["light.lamp_a"] },
-      bubbles: true,
-      composed: true,
-    }));
+    picker.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: ["light.lamp_a"] },
+        bubbles: true,
+        composed: true,
+      }),
+    );
     await el.updateComplete;
     expect(get()?.entityIds).toEqual(["light.lamp_a"]);
   });
@@ -229,8 +242,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: [], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: [],
+        defaults: {},
       },
       schema,
     });
@@ -249,8 +264,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "notify.email", label: "",
-        visible_fields: ["msg"], defaults: {},
+        id: "notify.email",
+        label: "",
+        visible_fields: ["msg"],
+        defaults: {},
       },
       schema,
     });
@@ -264,8 +281,10 @@ describe("ambience-action-slot", () => {
     el2.hass = makeHass();
     el2.scope = { kind: "area", id: "living_room" };
     el2.exposed = {
-      id: "missing.service", label: "",
-      visible_fields: [], defaults: {},
+      id: "missing.service",
+      label: "",
+      visible_fields: [],
+      defaults: {},
     };
     el2.entityIds = [];
     el2.params = {};
@@ -285,8 +304,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "notify.email", label: "",
-        visible_fields: ["msg"], defaults: {},
+        id: "notify.email",
+        label: "",
+        visible_fields: ["msg"],
+        defaults: {},
       },
       schema,
       params: { msg: "already typed" },
@@ -378,8 +399,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct"], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: {},
       },
       schema,
     });
@@ -398,8 +421,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct"], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: {},
       },
       schema,
     });
@@ -429,7 +454,8 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["rgb_color", "brightness_pct"],
         defaults: {},
       },
@@ -443,14 +469,14 @@ describe("ambience-action-slot", () => {
 
     // rgb_color form: field is unset → data should be empty (no pre-fill).
     const rgbForm = Array.from(haForms).find((f: any) =>
-      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "rgb_color")
+      ((f.schema as Array<{ name: string }>) ?? []).some((e) => e.name === "rgb_color"),
     ) as any;
     expect(rgbForm).toBeTruthy();
     expect(rgbForm.data).not.toHaveProperty("rgb_color");
 
     // brightness_pct form: field is also unset → data should be empty.
     const brightnessForm = Array.from(haForms).find((f: any) =>
-      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "brightness_pct")
+      ((f.schema as Array<{ name: string }>) ?? []).some((e) => e.name === "brightness_pct"),
     ) as any;
     expect(brightnessForm).toBeTruthy();
     expect(brightnessForm.data).not.toHaveProperty("brightness_pct");
@@ -467,7 +493,8 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["brightness_pct", "transition"],
         defaults: {},
       },
@@ -480,14 +507,14 @@ describe("ambience-action-slot", () => {
 
     // Find the brightness_pct form and check its data.
     const brightnessForm = Array.from(haForms).find((f: any) =>
-      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "brightness_pct")
+      ((f.schema as Array<{ name: string }>) ?? []).some((e) => e.name === "brightness_pct"),
     ) as any;
     expect(brightnessForm).toBeTruthy();
     expect(brightnessForm.data).toEqual({ brightness_pct: 50 });
 
     // Find the transition form and check data is empty.
     const transitionForm = Array.from(haForms).find((f: any) =>
-      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "transition")
+      ((f.schema as Array<{ name: string }>) ?? []).some((e) => e.name === "transition"),
     ) as any;
     expect(transitionForm).toBeTruthy();
     expect(transitionForm.data).not.toHaveProperty("transition");
@@ -504,8 +531,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct"], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: {},
       },
       schema,
       params: {},
@@ -522,7 +551,9 @@ describe("ambience-action-slot", () => {
     // Simulate: slot mounts with light.turn_on, then exposed changes to
     // light.turn_off before the first fetch resolves.
     let resolveTurnOn!: (s: ServiceSchema) => void;
-    const turnOnPromise = new Promise<ServiceSchema>((res) => { resolveTurnOn = res; });
+    const turnOnPromise = new Promise<ServiceSchema>((res) => {
+      resolveTurnOn = res;
+    });
     const turnOffSchema: ServiceSchema = {
       target: { entity: { domain: "light" } },
       fields: { transition: { selector: { number: {} } } },
@@ -563,7 +594,7 @@ describe("ambience-action-slot", () => {
     // otherwise fall back to checking .field-row labels.
     const haForm = el.shadowRoot.querySelector("ha-form") as any;
     if (haForm) {
-      const schemaNames = (haForm.schema as Array<{ name: string }> ?? []).map((e) => e.name);
+      const schemaNames = ((haForm.schema as Array<{ name: string }>) ?? []).map((e) => e.name);
       expect(schemaNames).toContain("transition");
       expect(schemaNames).not.toContain("brightness");
     } else {
@@ -585,8 +616,10 @@ describe("ambience-action-slot", () => {
     // No params set — no clear button expected.
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct"], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: {},
       },
       schema,
       params: {},
@@ -606,8 +639,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct"], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct"],
+        defaults: {},
       },
       schema,
       params: { brightness_pct: 80 },
@@ -631,8 +666,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: [], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: [],
+        defaults: {},
       },
       schema,
     });
@@ -656,8 +693,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct", "transition"], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct", "transition"],
+        defaults: {},
       },
       schema,
       params: {},
@@ -681,8 +720,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: ["brightness_pct", "transition"], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["brightness_pct", "transition"],
+        defaults: {},
       },
       schema,
       params: { brightness_pct: 75 },
@@ -692,12 +733,12 @@ describe("ambience-action-slot", () => {
     expect(haForms.length).toBe(2);
 
     const brightnessForm = Array.from(haForms).find((f: any) =>
-      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "brightness_pct")
+      ((f.schema as Array<{ name: string }>) ?? []).some((e) => e.name === "brightness_pct"),
     ) as any;
     expect(brightnessForm.data).toEqual({ brightness_pct: 75 });
 
     const transitionForm = Array.from(haForms).find((f: any) =>
-      (f.schema as Array<{ name: string }> ?? []).some((e) => e.name === "transition")
+      ((f.schema as Array<{ name: string }>) ?? []).some((e) => e.name === "transition"),
     ) as any;
     expect(transitionForm.data).toEqual({});
   });
@@ -716,8 +757,10 @@ describe("ambience-action-slot", () => {
     el = await mount({
       // visible_fields stores them in the opposite order — should not matter.
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: ["transition", "brightness_pct"], defaults: {},
+        id: "light.turn_on",
+        label: "",
+        visible_fields: ["transition", "brightness_pct"],
+        defaults: {},
       },
       schema,
       params: {},
@@ -725,8 +768,8 @@ describe("ambience-action-slot", () => {
 
     const haForms = el.shadowRoot.querySelectorAll("ha-form") as NodeListOf<any>;
     expect(haForms.length).toBe(2);
-    const orderedNames = Array.from(haForms).map((f: any) =>
-      ((f.schema as Array<{ name: string }> ?? [])[0] ?? {}).name,
+    const orderedNames = Array.from(haForms).map(
+      (f: any) => ((f.schema as Array<{ name: string }>) ?? [])[0]?.name,
     );
     expect(orderedNames).toEqual(["brightness_pct", "transition"]);
   });
@@ -740,7 +783,8 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["brightness_pct"],
         defaults: { brightness_pct: 42 },
       },
@@ -755,7 +799,9 @@ describe("ambience-action-slot", () => {
     }
 
     // jsdom fallback: input value must be empty
-    const input = el.shadowRoot.querySelector("input[data-field='brightness_pct']") as HTMLInputElement | null;
+    const input = el.shadowRoot.querySelector(
+      "input[data-field='brightness_pct']",
+    ) as HTMLInputElement | null;
     if (input) {
       expect(input.value).toBe("");
     }
@@ -773,7 +819,8 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["brightness_pct"],
         defaults: { brightness_pct: 42 },
       },
@@ -792,7 +839,8 @@ describe("ambience-action-slot", () => {
     // Default-only: no clear button.
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["brightness_pct"],
         defaults: { brightness_pct: 30 },
       },
@@ -817,12 +865,13 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["brightness_pct"],
         defaults: {},
       },
       schema,
-      params: { rgb_color: [255, 0, 0] },  // not exposed
+      params: { rgb_color: [255, 0, 0] }, // not exposed
     });
     const notice = el.shadowRoot.querySelector("[data-extra-params]");
     expect(notice).toBeTruthy();
@@ -836,9 +885,10 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
-        visible_fields: [],  // not shown in the editor
-        defaults: { rgb_color: [0, 0, 0] },  // but defaults expose it
+        id: "light.turn_on",
+        label: "",
+        visible_fields: [], // not shown in the editor
+        defaults: { rgb_color: [0, 0, 0] }, // but defaults expose it
       },
       schema,
       params: { rgb_color: [255, 0, 0] },
@@ -856,7 +906,8 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["brightness_pct"],
         defaults: {},
       },
@@ -884,7 +935,8 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["transition"],
         defaults: { transition: 3 },
       },
@@ -909,7 +961,8 @@ describe("ambience-action-slot", () => {
     el = await mount({
       hass,
       exposed: {
-        id: "script.dim", label: "",
+        id: "script.dim",
+        label: "",
         visible_fields: ["target"],
         defaults: { target: { entity_id: ["light.kitchen"] } },
       },
@@ -928,7 +981,8 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["transition"],
         defaults: {},
       },
@@ -945,7 +999,8 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["transition"],
         defaults: { transition: 3 },
       },
@@ -979,11 +1034,13 @@ describe("ambience-action-slot", () => {
       // ha-form branch: simulate ha-form value-changed
       const haForm = el.shadowRoot.querySelector("ha-form") as HTMLElement | null;
       if (haForm) {
-        haForm.dispatchEvent(new CustomEvent("value-changed", {
-          detail: { value: { transition: 3 } },
-          bubbles: true,
-          composed: true,
-        }));
+        haForm.dispatchEvent(
+          new CustomEvent("value-changed", {
+            detail: { value: { transition: 3 } },
+            bubbles: true,
+            composed: true,
+          }),
+        );
         await el.updateComplete;
 
         const emitted = get();
@@ -1004,7 +1061,8 @@ describe("ambience-action-slot", () => {
     };
     el = await mount({
       exposed: {
-        id: "light.turn_on", label: "",
+        id: "light.turn_on",
+        label: "",
         visible_fields: ["transition"],
         defaults: { transition: 3 },
       },
@@ -1037,7 +1095,9 @@ describe("ambience-action-slot", () => {
     expect(hint!.textContent).toContain("3");
 
     // Input is empty (jsdom fallback)
-    const input = el.shadowRoot.querySelector("input[data-field='transition']") as HTMLInputElement | null;
+    const input = el.shadowRoot.querySelector(
+      "input[data-field='transition']",
+    ) as HTMLInputElement | null;
     if (input) {
       expect(input.value).toBe("");
     }

@@ -24,9 +24,7 @@ function asset(name: string): string {
   return DIR + name;
 }
 
-export function renderLogo(
-  opts: { dark?: boolean; title?: string } = {},
-): TemplateResult {
+export function renderLogo(opts: { dark?: boolean; title?: string } = {}): TemplateResult {
   const title = opts.title ?? "Ambience";
   const base = opts.dark ? "dark_logo" : "logo";
   const src1x = asset(`${base}.png`);

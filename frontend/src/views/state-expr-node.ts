@@ -1,4 +1,4 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import "./state-expr-atom.js";
@@ -171,10 +171,13 @@ export class AmbienceStateExprNode extends LitElement {
   @property({ attribute: false }) errorMessage: string | null = null;
 
   private _emit(name: string, detail: Record<string, unknown> = {}) {
-    this.dispatchEvent(new CustomEvent(name, {
-      detail: { path: this.path, ...detail },
-      bubbles: true, composed: true,
-    }));
+    this.dispatchEvent(
+      new CustomEvent(name, {
+        detail: { path: this.path, ...detail },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _atomIsComplete(atom: StateAtom): boolean {
@@ -196,7 +199,7 @@ export class AmbienceStateExprNode extends LitElement {
       return;
     }
     const target = e.target as HTMLElement | null;
-    if (target && target.closest("button, select, input, textarea, ha-form")) {
+    if (target?.closest("button, select, input, textarea, ha-form")) {
       e.preventDefault();
       return;
     }
@@ -208,7 +211,7 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   private _onDragOver(e: DragEvent) {
-    if (this.path.length === 0) return;            // root not a drop target
+    if (this.path.length === 0) return; // root not a drop target
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
@@ -229,13 +232,20 @@ export class AmbienceStateExprNode extends LitElement {
     const raw = e.dataTransfer.getData("application/x-ambience-path");
     if (!raw) return;
     let from: number[];
-    try { from = JSON.parse(raw); } catch { return; }
+    try {
+      from = JSON.parse(raw);
+    } catch {
+      return;
+    }
     if (!Array.isArray(from) || from.every((v) => typeof v === "number") === false) return;
-    if (_samePath(from, this.path)) return;        // no-op drop on self
-    this.dispatchEvent(new CustomEvent("node-move", {
-      detail: { from, to: this.path },
-      bubbles: true, composed: true,
-    }));
+    if (_samePath(from, this.path)) return; // no-op drop on self
+    this.dispatchEvent(
+      new CustomEvent("node-move", {
+        detail: { from, to: this.path },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _renderAtomCard(atom: StateAtom, isNot: boolean) {
@@ -273,7 +283,9 @@ export class AmbienceStateExprNode extends LitElement {
               this._emit("node-remove");
             }}>✕</button>
         </div>
-        ${expanded ? html`
+        ${
+          expanded
+            ? html`
           <div class="atom-body">
             <ambience-state-expr-atom
               .hass=${this.hass}
@@ -283,11 +295,15 @@ export class AmbienceStateExprNode extends LitElement {
                 this._emit("node-change", { value: e.detail.value });
               }}
             ></ambience-state-expr-atom>
-            ${this._isErrorTarget() && this.errorMessage
-              ? html`<div class="atom-error">${this.errorMessage}</div>`
-              : ""}
+            ${
+              this._isErrorTarget() && this.errorMessage
+                ? html`<div class="atom-error">${this.errorMessage}</div>`
+                : ""
+            }
           </div>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     `;
   }
@@ -326,9 +342,10 @@ export class AmbienceStateExprNode extends LitElement {
           draggable=${this.path.length > 0}
           @dragstart=${this._onDragStart}>
           <select class="group-op"
-            @change=${(e: Event) => this._emit("node-set-op", {
-              op: (e.target as HTMLSelectElement).value,
-            })}>
+            @change=${(e: Event) =>
+              this._emit("node-set-op", {
+                op: (e.target as HTMLSelectElement).value,
+              })}>
             <option value="and" ?selected=${group.kind === "and"}>${stateOpLabel(this.hass, "and")}</option>
             <option value="or"  ?selected=${group.kind === "or"} >${stateOpLabel(this.hass, "or")}</option>
           </select>
@@ -365,9 +382,13 @@ export class AmbienceStateExprNode extends LitElement {
     const isRoot = this.path.length === 0;
     return html`
       <div class="group-wrap">
-        ${isRoot ? "" : html`<button class="not-toggle external ${isNot ? "on" : ""}"
+        ${
+          isRoot
+            ? ""
+            : html`<button class="not-toggle external ${isNot ? "on" : ""}"
           title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
-          @click=${() => this._emit("node-toggle-not")}>${stateOpLabel(this.hass, "not")}</button>`}
+          @click=${() => this._emit("node-toggle-not")}>${stateOpLabel(this.hass, "not")}</button>`
+        }
         ${this._renderGroup(group)}
       </div>
     `;

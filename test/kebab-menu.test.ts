@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/kebab-menu";
 import type { KebabItem } from "../frontend/src/views/kebab-menu";
 
@@ -20,13 +20,17 @@ async function mount(props: Record<string, unknown> = {}): Promise<any> {
 
 function captureEvent(el: HTMLElement, name: string) {
   let detail: any;
-  el.addEventListener(name, (e: Event) => { detail = (e as CustomEvent).detail; });
+  el.addEventListener(name, (e: Event) => {
+    detail = (e as CustomEvent).detail;
+  });
   return () => detail;
 }
 
 describe("ambience-kebab-menu", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   test("renders a trigger with the default aria-label", async () => {
     el = await mount();
@@ -138,6 +142,8 @@ describe("ambience-kebab-menu", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     trigger.click();
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".kebab-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    expect(el.shadowRoot.querySelector(".kebab-trigger")?.getAttribute("aria-expanded")).toBe(
+      "true",
+    );
   });
 });

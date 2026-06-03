@@ -1,11 +1,11 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/weather-predicate-input";
 import type { WeatherGroup, WeatherPredicate } from "../frontend/src/types";
 
 const TEST_GROUPS: WeatherGroup[] = [
   { id: "sunny", label: "Sunny", conditions: ["sunny"] },
-  { id: "dim",   label: "Dim",   conditions: ["cloudy", "partlycloudy"] },
-  { id: "wet",   label: "Wet",   conditions: ["rainy"] },
+  { id: "dim", label: "Dim", conditions: ["cloudy", "partlycloudy"] },
+  { id: "wet", label: "Wet", conditions: ["rainy"] },
 ];
 
 async function mount(value: WeatherPredicate = null, groups = TEST_GROUPS): Promise<any> {
@@ -34,15 +34,17 @@ describe("ambience-weather-predicate-input", () => {
     expect(schema[0].selector.select.multiple).toBe(true);
     expect(schema[0].selector.select.options).toEqual([
       { value: "sunny", label: "Sunny" },
-      { value: "dim",   label: "Dim" },
-      { value: "wet",   label: "Wet" },
+      { value: "dim", label: "Dim" },
+      { value: "wet", label: "Wet" },
     ]);
   });
 
   test("setting groups emits value-changed", async () => {
     el = await mount();
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     el._setGroups(["wet", "dim"]);
     expect(detail.value).toEqual({ groups: ["wet", "dim"], thresholds: [] });
   });
@@ -50,7 +52,9 @@ describe("ambience-weather-predicate-input", () => {
   test("adding a threshold appends a default row", async () => {
     el = await mount();
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     el._addThreshold();
     expect(detail.value).toEqual({
       groups: [],
@@ -61,7 +65,10 @@ describe("ambience-weather-predicate-input", () => {
   test("updating and removing a threshold", async () => {
     el = await mount({ groups: [], thresholds: [{ attribute: "temperature", op: "<", value: 5 }] });
     el._updateThreshold(0, { attribute: "humidity", op: ">=", value: 80 });
-    expect(el.value).toEqual({ groups: [], thresholds: [{ attribute: "humidity", op: ">=", value: 80 }] });
+    expect(el.value).toEqual({
+      groups: [],
+      thresholds: [{ attribute: "humidity", op: ">=", value: 80 }],
+    });
     el._removeThreshold(0);
     expect(el.value).toBeNull();
   });
@@ -82,7 +89,11 @@ describe("ambience-weather-predicate-input", () => {
     expect(sel.mode).toBe("dropdown");
     expect(sel.multiple).toBeFalsy();
     expect(sel.options.map((o: { value: string }) => o.value)).toEqual([
-      "temperature", "apparent_temperature", "humidity", "wind_speed", "pressure",
+      "temperature",
+      "apparent_temperature",
+      "humidity",
+      "wind_speed",
+      "pressure",
     ]);
     // Labels resolved via i18n fallback (no hass set on this mount).
     expect(sel.options[0]).toEqual({ value: "temperature", label: "Temperature" });
@@ -100,9 +111,9 @@ describe("ambience-weather-predicate-input", () => {
     // Symbols themselves are the values; labels use the same ≤/≥ pretty-form
     // we use elsewhere in the summary.
     expect(sel.options).toEqual([
-      { value: "<",  label: "<"  },
+      { value: "<", label: "<" },
       { value: "<=", label: "≤" },
-      { value: ">",  label: ">"  },
+      { value: ">", label: ">" },
       { value: ">=", label: "≥" },
     ]);
   });
@@ -155,8 +166,9 @@ describe("ambience-weather-predicate-input", () => {
         { attribute: "humidity", op: ">=", value: 80 },
       ],
     });
-    const units = Array.from(el.shadowRoot.querySelectorAll(".threshold .unit"))
-      .map((n: Element) => n.textContent?.trim() ?? "");
+    const units = Array.from(el.shadowRoot.querySelectorAll(".threshold .unit")).map(
+      (n: Element) => n.textContent?.trim() ?? "",
+    );
     // No hass.config → temperature default "°C", humidity always "%".
     expect(units).toEqual(["°C", "%"]);
   });

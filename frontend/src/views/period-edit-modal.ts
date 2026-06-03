@@ -1,8 +1,7 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-
-import type { PeriodDef, TimeEndpoint } from "../types.js";
 import { localize } from "../i18n.js";
+import type { PeriodDef, TimeEndpoint } from "../types.js";
 import "./time-endpoint.js";
 
 const ID_RE = /^[a-z][a-z0-9_]*$/;
@@ -11,8 +10,8 @@ function _labelToId(label: string): string {
   return label
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, "_")   // any run of non-[a-z0-9] → single underscore
-    .replace(/^_+|_+$/g, "");      // trim leading/trailing underscores
+    .replace(/[^a-z0-9]+/g, "_") // any run of non-[a-z0-9] → single underscore
+    .replace(/^_+|_+$/g, ""); // trim leading/trailing underscores
 }
 
 /**
@@ -49,11 +48,14 @@ export class AmbiencePeriodEditModal extends LitElement {
     button { padding: 0.5rem 1rem; cursor: pointer; }
   `;
 
-  @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
+  @property({ attribute: false }) hass?: {
+    localize?: (k: string) => string | undefined;
+    [key: string]: unknown;
+  };
   @property({ attribute: false }) existingId?: string;
   @property({ attribute: false }) initial: PeriodDef = {
     from: { kind: "time", hh: 9, mm: 0 },
-    to:   { kind: "time", hh: 17, mm: 0 },
+    to: { kind: "time", hh: 17, mm: 0 },
     label: null,
   };
   @property({ attribute: false }) takenIds: Set<string> = new Set();
@@ -82,10 +84,18 @@ export class AmbiencePeriodEditModal extends LitElement {
 
   private _validate(id: string): string {
     if (!this.existingId) {
-      if (!this._label.trim()) return localize(this.hass, "ui.error_enter_name", "Please enter a name.");
-      if (!id) return localize(this.hass, "ui.error_start_letter", "Name must start with a letter.");
-      if (!ID_RE.test(id)) return localize(this.hass, "ui.error_start_letter", "Name must start with a letter.");
-      if (this.takenIds.has(id)) return localize(this.hass, "ui.error_name_exists", "A period with this name already exists. Choose a different name.");
+      if (!this._label.trim())
+        return localize(this.hass, "ui.error_enter_name", "Please enter a name.");
+      if (!id)
+        return localize(this.hass, "ui.error_start_letter", "Name must start with a letter.");
+      if (!ID_RE.test(id))
+        return localize(this.hass, "ui.error_start_letter", "Name must start with a letter.");
+      if (this.takenIds.has(id))
+        return localize(
+          this.hass,
+          "ui.error_name_exists",
+          "A period with this name already exists. Choose a different name.",
+        );
     }
     return "";
   }
@@ -102,24 +112,33 @@ export class AmbiencePeriodEditModal extends LitElement {
     }
     const definition: PeriodDef = {
       from: this._def.from,
-      to:   this._def.to,
+      to: this._def.to,
       label: this._label.trim() || null,
     };
-    this.dispatchEvent(new CustomEvent("period-save", {
-      detail: { id, definition },
-      bubbles: true, composed: true,
-    }));
+    this.dispatchEvent(
+      new CustomEvent("period-save", {
+        detail: { id, definition },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _onCancel() {
-    this.dispatchEvent(new CustomEvent("period-cancel", {
-      bubbles: true, composed: true,
-    }));
+    this.dispatchEvent(
+      new CustomEvent("period-cancel", {
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   override render() {
     const heading = this.existingId
-      ? localize(this.hass, "ui.period_modal_edit_title", 'Edit "{name}"').replace("{name}", this.initial?.label ?? this.existingId)
+      ? localize(this.hass, "ui.period_modal_edit_title", 'Edit "{name}"').replace(
+          "{name}",
+          this.initial?.label ?? this.existingId,
+        )
       : localize(this.hass, "ui.period_modal_add_title", "Add custom period");
     return html`
       <div class="modal" role="dialog" aria-modal="true">

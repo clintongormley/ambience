@@ -1,9 +1,8 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
-
-import type { SunAnchor, TimeEndpoint } from "../types.js";
-import { anchorLabel, localize } from "../i18n.js";
 import { emitValueChanged } from "../dom.js";
+import { anchorLabel, localize } from "../i18n.js";
+import type { SunAnchor, TimeEndpoint } from "../types.js";
 
 const ANCHORS: SunAnchor[] = ["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"];
 
@@ -36,7 +35,10 @@ export class AmbienceTimeEndpoint extends LitElement {
     }
   `;
 
-  @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
+  @property({ attribute: false }) hass?: {
+    localize?: (k: string) => string | undefined;
+    [key: string]: unknown;
+  };
   @property({ attribute: false }) value: TimeEndpoint = { kind: "time", hh: 12, mm: 0 };
 
   private _emit(value: TimeEndpoint) {
@@ -81,7 +83,8 @@ export class AmbienceTimeEndpoint extends LitElement {
     return html`
       <select @change=${this._onAnchorChange}>
         ${ANCHORS.map(
-          (a) => html`<option value=${a} ?selected=${a === v.anchor}>${anchorLabel(this.hass, a)}</option>`,
+          (a) =>
+            html`<option value=${a} ?selected=${a === v.anchor}>${anchorLabel(this.hass, a)}</option>`,
         )}
       </select>
       <input
@@ -104,7 +107,6 @@ export class AmbienceTimeEndpoint extends LitElement {
       ${this.value.kind === "time" ? this._renderTime(this.value) : this._renderSun(this.value)}
     `;
   }
-
 }
 
 function _formatOffsetHint(
@@ -116,7 +118,10 @@ function _formatOffsetHint(
   const sign = offset_min < 0 ? "−" : "+"; // U+2212 minus, ASCII +
   if (abs % 60 === 0) {
     const hours = abs / 60;
-    const unit = hours === 1 ? localize(hass, "ui.unit_hour", "hour") : localize(hass, "ui.unit_hours", "hours");
+    const unit =
+      hours === 1
+        ? localize(hass, "ui.unit_hour", "hour")
+        : localize(hass, "ui.unit_hours", "hours");
     return `${sign}${hours} ${unit}`;
   }
   return `${sign}${abs} ${localize(hass, "ui.unit_min", "min")}`;

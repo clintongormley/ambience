@@ -6,11 +6,7 @@ import type { ReactiveControllerHost } from "lit";
 // In HA 2026.05+, `ha-input`, `ha-form`, `ha-select` are eagerly registered.
 // `ha-textfield` is the legacy variant that may still be registered on older
 // installs. `ha-combo-box` is gone in 2026.05+ — we don't watch for it.
-const HA_COMPONENTS = [
-  "ha-input",
-  "ha-textfield",
-  "ha-form",
-] as const;
+const HA_COMPONENTS = ["ha-input", "ha-textfield", "ha-form"] as const;
 
 const TEXT_INPUT_VARIANTS = ["ha-input", "ha-textfield"] as const;
 
@@ -38,10 +34,7 @@ export function pickHaTextInput(): HaTextInputTag | null {
  * longer used — we no longer attempt to drive HA's `loadCardHelpers`
  * machinery (it was removed in 2026.05).
  */
-export function watchHaComponents(
-  host: ReactiveControllerHost,
-  _hass?: unknown,
-): void {
+export function watchHaComponents(host: ReactiveControllerHost, _hass?: unknown): void {
   for (const name of HA_COMPONENTS) {
     if (!customElements.get(name)) {
       void customElements.whenDefined(name).then(() => host.requestUpdate());

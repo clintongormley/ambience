@@ -1,11 +1,11 @@
-import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
   getWeatherConfig: vi.fn(async () => ({
     entity: null,
     groups: [
       { id: "sunny", label: "Sunny", conditions: ["sunny"] },
-      { id: "wet",   label: "Wet",   conditions: ["rainy"] },
+      { id: "wet", label: "Wet", conditions: ["rainy"] },
     ],
   })),
   saveWeatherConfig: vi.fn(async () => ({ ok: true, warnings: [] })),
@@ -108,9 +108,9 @@ describe("ambience-weather-config", () => {
     // The "wet" group has conditions: ["rainy"] → only "Rainy" should appear in
     // its body; the other 14 HA condition labels must NOT appear (no checkbox grid).
     const txt = el.shadowRoot.textContent ?? "";
-    expect(txt).toContain("Rainy");          // selected condition rendered
-    expect(txt).not.toContain("Lightning");  // unselected condition not rendered
-    expect(txt).not.toContain("Hail");       // unselected condition not rendered
+    expect(txt).toContain("Rainy"); // selected condition rendered
+    expect(txt).not.toContain("Lightning"); // unselected condition not rendered
+    expect(txt).not.toContain("Hail"); // unselected condition not rendered
   });
 
   test("groups are collapsed by default (no edit body rendered)", async () => {
@@ -133,7 +133,9 @@ describe("ambience-weather-config", () => {
   test("clicking the delete button does not toggle expand", async () => {
     el = await mount();
     // Trigger removal via the click handler; the bubbling click must not expand.
-    const btn = el.shadowRoot.querySelector(".group .group-header button.icon") as HTMLButtonElement;
+    const btn = el.shadowRoot.querySelector(
+      ".group .group-header button.icon",
+    ) as HTMLButtonElement;
     btn.click();
     await el.updateComplete;
     // The deletion handler ran, AND no group is left expanded.
@@ -157,17 +159,27 @@ describe("ambience-weather-config", () => {
     const headers = el.shadowRoot.querySelectorAll(".group .group-header");
     const wetHeader = headers[1] as HTMLElement;
     const text = wetHeader.textContent ?? "";
-    expect(text).toContain("Wet");    // group label
-    expect(text).toContain("Rainy");  // selected condition label
+    expect(text).toContain("Wet"); // group label
+    expect(text).toContain("Rainy"); // selected condition label
   });
 
   test("renders dangling warnings with scope labels for area, floor and house", async () => {
     vi.mocked(saveWeatherConfig).mockResolvedValueOnce({
       ok: true,
       warnings: [
-        { scope_kind: "area",  scope_id: "lounge",  rule_name: "Area rule",  reason: "missing entity" },
-        { scope_kind: "floor", scope_id: "ground",  rule_name: "Floor rule", reason: "missing entity" },
-        { scope_kind: "house", scope_id: null,      rule_name: "House rule", reason: "missing entity" },
+        {
+          scope_kind: "area",
+          scope_id: "lounge",
+          rule_name: "Area rule",
+          reason: "missing entity",
+        },
+        {
+          scope_kind: "floor",
+          scope_id: "ground",
+          rule_name: "Floor rule",
+          reason: "missing entity",
+        },
+        { scope_kind: "house", scope_id: null, rule_name: "House rule", reason: "missing entity" },
       ],
     });
     el = await mount();
@@ -175,9 +187,9 @@ describe("ambience-weather-config", () => {
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
     const txt = el.shadowRoot.querySelector(".warnings").textContent;
-    expect(txt).toContain("lounge");        // area scope renders the id
+    expect(txt).toContain("lounge"); // area scope renders the id
     expect(txt).toContain("Floor: ground"); // floor scope renders with prefix
-    expect(txt).toContain("House");          // house scope renders the literal label
+    expect(txt).toContain("House"); // house scope renders the literal label
     expect(txt).not.toContain("undefined");
   });
 });

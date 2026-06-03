@@ -1,7 +1,7 @@
 /**
  * Tests for ha-components.ts — pickHaTextInput and watchHaComponents.
  */
-import { describe, test, expect, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { pickHaTextInput, watchHaComponents } from "../frontend/src/ha-components";
 
 describe("pickHaTextInput", () => {
@@ -36,8 +36,8 @@ describe("watchHaComponents", () => {
   });
 
   test("triggers requestUpdate when a watched component is defined after the call", async () => {
-    const uniqueName = "ha-textfield-watch-test-" + Date.now();
-    const mockHost = { requestUpdate: vi.fn() };
+    const uniqueName = `ha-textfield-watch-test-${Date.now()}`;
+    const _mockHost = { requestUpdate: vi.fn() };
 
     // Temporarily override customElements.whenDefined to simulate a late registration
     const original = customElements.whenDefined.bind(customElements);

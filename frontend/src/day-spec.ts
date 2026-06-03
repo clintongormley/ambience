@@ -9,7 +9,10 @@
  */
 export function isValidDaySpec(spec: string): boolean {
   if (typeof spec !== "string") return false;
-  const tokens = spec.split(",").map((t) => t.trim()).filter((t) => t !== "");
+  const tokens = spec
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t !== "");
   if (tokens.length === 0) return false;
   for (const tok of tokens) {
     if (tok.includes("-")) {

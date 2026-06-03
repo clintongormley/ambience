@@ -1,25 +1,24 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-
+import type { HassConnection } from "../api.js";
+import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
+import { entitiesForScope, scopeKey } from "../entities-for-scope.js";
+import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
+import { conditionLabel, localize } from "../i18n.js";
+import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
+import { stripPositionMetadata } from "../rule.js";
+import { ruleDisplayName, summariseAction, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
+  ConditionInfo,
   DayConfig,
   ExposedAction,
-  ConditionInfo,
   PeriodStoreView,
   Rule,
   RuleCategory,
   Scope,
   ScopeOption,
 } from "../types.js";
-import type { HassConnection } from "../api.js";
-import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
-import { localize, conditionLabel } from "../i18n.js";
-import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
-import { ruleDisplayName, summariseCondition, summariseAction } from "../summary.js";
-import { entitiesForScope, scopeKey } from "../entities-for-scope.js";
-import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
-import { stripPositionMetadata } from "../rule.js";
 import "./action-slot.js";
 import "./condition-input.js";
 
@@ -63,7 +62,9 @@ function sameScope(a?: Scope, b?: Scope): boolean {
 
 @customElement("ambience-rule-editor")
 export class AmbienceRuleEditor extends LitElement {
-  static override styles = [categorySwatchStyles, css`
+  static override styles = [
+    categorySwatchStyles,
+    css`
     :host {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.4); z-index: 100;
@@ -220,7 +221,8 @@ export class AmbienceRuleEditor extends LitElement {
     .category-option[aria-selected="true"] {
       background: var(--secondary-background-color, #eee); font-weight: 600;
     }
-  `];
+  `,
+  ];
 
   @property({ type: Boolean, reflect: true }) open = false;
   @property({ attribute: false }) rule: Rule | null = null;
@@ -282,8 +284,7 @@ export class AmbienceRuleEditor extends LitElement {
       this._scope = this.scope;
       // Everything collapsed by default; on a duplicate, open the destination
       // slot so the user can retarget the area straight away.
-      this._open =
-        this.autoEditScope && this.scopes.length > 0 ? { kind: "destination" } : null;
+      this._open = this.autoEditScope && this.scopes.length > 0 ? { kind: "destination" } : null;
       this._showError = false;
     }
   }
@@ -346,8 +347,7 @@ export class AmbienceRuleEditor extends LitElement {
           @change=${this._onDestinationChange}
         >
           ${this.scopes.map(
-            (o, i) =>
-              html`<option value=${i} ?selected=${i === currentIdx}>${o.label}</option>`,
+            (o, i) => html`<option value=${i} ?selected=${i === currentIdx}>${o.label}</option>`,
           )}
         </select>
       </div>
@@ -356,18 +356,20 @@ export class AmbienceRuleEditor extends LitElement {
 
   /* v8 ignore start -- ha-form path (real HA only) */
   private _renderDestinationHaForm(currentIdx: number) {
-    const schema = [{
-      name: "destination",
-      // Required so the dropdown offers no clear/empty affordance — a rule
-      // always has a destination scope.
-      required: true,
-      selector: {
-        select: {
-          mode: "dropdown",
-          options: this.scopes.map((o, i) => ({ value: String(i), label: o.label })),
+    const schema = [
+      {
+        name: "destination",
+        // Required so the dropdown offers no clear/empty affordance — a rule
+        // always has a destination scope.
+        required: true,
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: this.scopes.map((o, i) => ({ value: String(i), label: o.label })),
+          },
         },
       },
-    }];
+    ];
     return html`
       <div class="destination">
         <ha-form
@@ -395,8 +397,7 @@ export class AmbienceRuleEditor extends LitElement {
         </div>
       `;
     }
-    const current =
-      this.scopes.find((o) => sameScope(o.scope, this._scope)) ?? this.scopes[0];
+    const current = this.scopes.find((o) => sameScope(o.scope, this._scope)) ?? this.scopes[0];
     return html`
       <div class="slot collapsed" data-slot-id="destination">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "destination" })}>
@@ -420,7 +421,10 @@ export class AmbienceRuleEditor extends LitElement {
         </div>
       `;
     }
-    const summaryText = ruleDisplayName(this._draft!, localize(this.hass, "ui.new_rule", "New rule"));
+    const summaryText = ruleDisplayName(
+      this._draft!,
+      localize(this.hass, "ui.new_rule", "New rule"),
+    );
     return html`
       <div class="slot collapsed" data-slot-id="name">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "name" })}>
@@ -481,7 +485,10 @@ export class AmbienceRuleEditor extends LitElement {
                 class="category-option"
                 role="option"
                 aria-selected=${g.id === currentId}
-                @click=${() => { this._setCategory(g.id); this._open = null; }}
+                @click=${() => {
+                  this._setCategory(g.id);
+                  this._open = null;
+                }}
               >
                 ${categorySwatch(g.color, g.icon)}
                 <span class="category-name">${g.name}</span>
@@ -529,7 +536,8 @@ export class AmbienceRuleEditor extends LitElement {
   private _validationError(slot: OpenSlot): string | null {
     if (slot === null) return null;
     // Name is optional; category and destination always carry a valid value.
-    if (slot.kind === "name" || slot.kind === "category" || slot.kind === "destination") return null;
+    if (slot.kind === "name" || slot.kind === "category" || slot.kind === "destination")
+      return null;
     if (slot.kind === "condition") {
       // People empty-selection case: an "X of:" mode (who key present) with
       // zero people ticked. Other conditions are valid by construction.
@@ -631,18 +639,26 @@ export class AmbienceRuleEditor extends LitElement {
     const value = this._draft!.when[m.name] ?? null;
     const open = this._isOpen({ kind: "condition", id: m.name });
 
-    const summary = summariseCondition(m.name, value, { hass: this.hass as any, periods: this.periods });
+    const summary = summariseCondition(m.name, value, {
+      hass: this.hass as any,
+      periods: this.periods,
+    });
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id=${m.name}>
         <div class="summary" @click=${() => this._toggleSlot({ kind: "condition", id: m.name })}>
           <span class="summary-label"><strong>${conditionLabel(this.hass as any, m.name)}:</strong> ${summary}</span>
           <button
             class="remove"
-            @click=${(e: Event) => { e.stopPropagation(); this._removeCondition(m.name); }}
+            @click=${(e: Event) => {
+              e.stopPropagation();
+              this._removeCondition(m.name);
+            }}
             title=${localize(this.hass, "ui.remove_condition", "Remove condition")}
           >✕</button>
         </div>
-        ${open ? html`
+        ${
+          open
+            ? html`
           <div class="body">
             <ambience-condition-input
               .hass=${this.hass}
@@ -655,11 +671,17 @@ export class AmbienceRuleEditor extends LitElement {
               @render-invalid-changed=${(e: CustomEvent<{ error: string | null }>) => this._onConditionInvalid(m.name, e.detail.error)}
             ></ambience-condition-input>
 
-            ${this._showError && this._validationError({ kind: "condition", id: m.name }) ? html`
+            ${
+              this._showError && this._validationError({ kind: "condition", id: m.name })
+                ? html`
               <div class="error">${this._validationError({ kind: "condition", id: m.name })}</div>
-            ` : ""}
+            `
+                : ""
+            }
           </div>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     `;
   }
@@ -675,9 +697,10 @@ export class AmbienceRuleEditor extends LitElement {
   private _visibleConditions(): ConditionInfo[] {
     if (!this._draft) return [];
     const when = this._draft.when;
-    return this.conditions.filter((m) =>
-      (m.name in when && when[m.name] != null) ||
-      (this._open?.kind === "condition" && this._open.id === m.name),
+    return this.conditions.filter(
+      (m) =>
+        (m.name in when && when[m.name] != null) ||
+        (this._open?.kind === "condition" && this._open.id === m.name),
     );
   }
 
@@ -695,7 +718,7 @@ export class AmbienceRuleEditor extends LitElement {
   private _onAddCondition = (e: Event) => {
     const select = e.target as HTMLSelectElement;
     const name = select.value;
-    select.value = "";  // reset placeholder regardless of branch
+    select.value = ""; // reset placeholder regardless of branch
     this._addCondition(name);
   };
 
@@ -761,18 +784,23 @@ export class AmbienceRuleEditor extends LitElement {
   /* v8 ignore start -- ha-form path (real HA only) */
   private _renderAddConditionHaForm(unused: ConditionInfo[]) {
     const placeholderLabel = localize(this.hass, "ui.add_condition", "+ Add condition…");
-    const schema = [{
-      name: "add",
-      selector: {
-        select: {
-          mode: "dropdown",
-          options: [
-            { value: AmbienceRuleEditor._ADD_CONDITION_PLACEHOLDER, label: placeholderLabel },
-            ...unused.map((m) => ({ value: m.name, label: conditionLabel(this.hass as any, m.name) })),
-          ],
+    const schema = [
+      {
+        name: "add",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: AmbienceRuleEditor._ADD_CONDITION_PLACEHOLDER, label: placeholderLabel },
+              ...unused.map((m) => ({
+                value: m.name,
+                label: conditionLabel(this.hass as any, m.name),
+              })),
+            ],
+          },
         },
       },
-    }];
+    ];
     return html`
       <div class="add-condition">
         <ha-form
@@ -819,7 +847,7 @@ export class AmbienceRuleEditor extends LitElement {
 
   /** Friendly label for an ExposedAction in the add-action dropdown. */
   private _actionOptionLabel(a: ExposedAction): string {
-    if (a.label && a.label.trim()) return a.label;
+    if (a.label?.trim()) return a.label;
     return a.id;
   }
 
@@ -827,11 +855,7 @@ export class AmbienceRuleEditor extends LitElement {
     if (this.availableActions.length === 0) {
       return html`
         <p class="add-action-empty">
-          ${localize(
-            this.hass,
-            "ui.no_exposed_actions",
-            "Add services in Settings → Actions.",
-          )}
+          ${localize(this.hass, "ui.no_exposed_actions", "Add services in Settings → Actions.")}
         </p>
       `;
     }
@@ -843,9 +867,11 @@ export class AmbienceRuleEditor extends LitElement {
       <div class="add-action">
         <select class="add-action" @change=${this._onAddAction}>
           <option value="">${localize(this.hass, "ui.add_action", "+ Add action…")}</option>
-          ${this.availableActions.map((a) => html`
+          ${this.availableActions.map(
+            (a) => html`
             <option value=${a.id}>${this._actionOptionLabel(a)}</option>
-          `)}
+          `,
+          )}
         </select>
       </div>
     `;
@@ -854,18 +880,23 @@ export class AmbienceRuleEditor extends LitElement {
   /* v8 ignore start -- ha-form path (real HA only) */
   private _renderAddActionHaForm() {
     const placeholderLabel = localize(this.hass, "ui.add_action", "+ Add action…");
-    const schema = [{
-      name: "add",
-      selector: {
-        select: {
-          mode: "dropdown",
-          options: [
-            { value: AmbienceRuleEditor._ADD_ACTION_PLACEHOLDER, label: placeholderLabel },
-            ...this.availableActions.map((a) => ({ value: a.id, label: this._actionOptionLabel(a) })),
-          ],
+    const schema = [
+      {
+        name: "add",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: AmbienceRuleEditor._ADD_ACTION_PLACEHOLDER, label: placeholderLabel },
+              ...this.availableActions.map((a) => ({
+                value: a.id,
+                label: this._actionOptionLabel(a),
+              })),
+            ],
+          },
         },
       },
-    }];
+    ];
     return html`
       <div class="add-action">
         <ha-form
@@ -923,9 +954,7 @@ export class AmbienceRuleEditor extends LitElement {
     if (exposedSeconds <= 0) return html``;
 
     // Empty field (key absent) → inheriting; explicit value (incl. 0) → shown.
-    const fieldValue = "reapply_seconds" in action
-      ? String(action.reapply_seconds)
-      : "";
+    const fieldValue = "reapply_seconds" in action ? String(action.reapply_seconds) : "";
 
     return html`
       <div class="reapply-override">
@@ -965,9 +994,14 @@ export class AmbienceRuleEditor extends LitElement {
         <div class="summary" @click=${() => this._toggleSlot({ kind: "action", idx })}>
           <span class="summary-label">${summary}</span>
           ${showBadge ? html`<span class="reapply-badge" data-reapply-badge>↺ ${effectiveSeconds}s</span>` : ""}
-          <button class="remove" @click=${(e: Event) => { e.stopPropagation(); this._deleteAction(idx); }} title=${localize(this.hass, "ui.remove_action", "Remove action")}>✕</button>
+          <button class="remove" @click=${(e: Event) => {
+            e.stopPropagation();
+            this._deleteAction(idx);
+          }} title=${localize(this.hass, "ui.remove_action", "Remove action")}>✕</button>
         </div>
-        ${open ? html`
+        ${
+          open
+            ? html`
           <div class="body">
             <ambience-action-slot
               .hass=${this.hass}
@@ -991,11 +1025,17 @@ export class AmbienceRuleEditor extends LitElement {
 
             ${this._renderReapplyOverride(action, idx, exposedSeconds)}
 
-            ${this._showError && this._validationError({ kind: "action", idx }) ? html`
+            ${
+              this._showError && this._validationError({ kind: "action", idx })
+                ? html`
               <div class="error">${this._validationError({ kind: "action", idx })}</div>
-            ` : ""}
+            `
+                : ""
+            }
           </div>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     `;
   }
@@ -1009,7 +1049,10 @@ export class AmbienceRuleEditor extends LitElement {
     // only place they're checked — block on the first error and re-open the
     // offending slot with its message shown.
     for (const id of Object.keys(this._draft.when)) {
-      if (this._draft.when[id] != null && this._validationError({ kind: "condition", id }) !== null) {
+      if (
+        this._draft.when[id] != null &&
+        this._validationError({ kind: "condition", id }) !== null
+      ) {
         this._showError = true;
         this._open = { kind: "condition", id };
         return;
@@ -1025,14 +1068,14 @@ export class AmbienceRuleEditor extends LitElement {
     // Defense in depth: a condition set to "any" should not persist as a null
     // predicate in storage. _setPredicate already deletes on null for live
     // user input, but older storage / hand-edited JSON might still carry one.
-    const when = Object.fromEntries(
-      Object.entries(this._draft.when).filter(([, v]) => v != null),
+    const when = Object.fromEntries(Object.entries(this._draft.when).filter(([, v]) => v != null));
+    this.dispatchEvent(
+      new CustomEvent("save-rule", {
+        detail: { rule: { ...this._draft, when }, scope: this._scope },
+        bubbles: true,
+        composed: true,
+      }),
     );
-    this.dispatchEvent(new CustomEvent("save-rule", {
-      detail: { rule: { ...this._draft, when }, scope: this._scope },
-      bubbles: true,
-      composed: true,
-    }));
   }
 
   private _cancel() {

@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
   getKnownStates: vi.fn(async () => ({ states: ["on", "off"] })),
@@ -70,7 +70,9 @@ describe("ambience-state-expr-atom", () => {
     expect(sel.options[0].value).not.toBe("");
     // Then the entity's known attributes, sorted.
     expect(sel.options.slice(1).map((o: { value: string }) => o.value)).toEqual([
-      "friendly_name", "source", "volume_level",
+      "friendly_name",
+      "source",
+      "volume_level",
     ]);
     el2.remove();
   });
@@ -90,7 +92,9 @@ describe("ambience-state-expr-atom", () => {
   test("selecting the State sentinel via _setAttributeFromHaForm clears the attribute (null)", async () => {
     el = await mount({ kind: "is", entity_id: "x", attribute: "source", states: ["Spotify"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     const sentinel = el._attributeSchema()[0].selector.select.options[0].value;
     el._setAttributeFromHaForm(sentinel);
     expect(captured.attribute).toBeNull();
@@ -99,7 +103,9 @@ describe("ambience-state-expr-atom", () => {
   test("selecting a real attribute value via _setAttributeFromHaForm stores it as-is", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: [] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setAttributeFromHaForm("brightness");
     expect(captured.attribute).toBe("brightness");
   });
@@ -199,11 +205,13 @@ describe("ambience-state-expr-atom", () => {
       { kind: ">", entity_id: "sensor.temp", states: ["10"] },
       {
         "sensor.temp": { state: "21.4", attributes: {} },
-        "person.bob":  { state: "home",  attributes: {} },
+        "person.bob": { state: "home", attributes: {} },
       },
     );
     let captured: any;
-    el2.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el2._setEntity("person.bob");
     expect(captured.entity_id).toBe("person.bob");
     expect(captured.kind).toBe("is");
@@ -214,12 +222,14 @@ describe("ambience-state-expr-atom", () => {
     const el2 = await mountWithHass(
       { kind: "is", entity_id: "person.bob", states: ["home"] },
       {
-        "person.bob":  { state: "home",  attributes: {} },
+        "person.bob": { state: "home", attributes: {} },
         "sensor.temp": { state: "21.4", attributes: {} },
       },
     );
     let captured: any;
-    el2.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el2._setEntity("sensor.temp");
     expect(captured.kind).toBe(">");
     el2.remove();
@@ -231,7 +241,9 @@ describe("ambience-state-expr-atom", () => {
       { "light.x": { state: "on", attributes: { brightness: 200, friendly_name: "Lamp" } } },
     );
     let captured: any;
-    el2.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el2._setAttribute("friendly_name");
     expect(captured.kind).toBe("is");
     el2.remove();
@@ -243,7 +255,9 @@ describe("ambience-state-expr-atom", () => {
       { "light.x": { state: "on", attributes: { source: "Spotify", brightness: 200 } } },
     );
     let captured: any;
-    el2.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el2._setAttribute("brightness");
     expect(captured.kind).toBe(">");
     el2.remove();
@@ -280,7 +294,7 @@ describe("ambience-state-expr-atom", () => {
   test("attribute mode: value options are empty if the attribute has no current value", async () => {
     const el2: any = document.createElement("ambience-state-expr-atom");
     el2.value = { kind: "is", entity_id: "x", attribute: "missing_attr", states: [] };
-    el2.hass = { states: { "x": { attributes: {} } } };
+    el2.hass = { states: { x: { attributes: {} } } };
     document.body.appendChild(el2);
     await el2.updateComplete;
     expect(el2._valueSchema()[0].selector.select.options).toEqual([]);
@@ -307,7 +321,9 @@ describe("ambience-state-expr-atom", () => {
   test("setting the value to empty for a numeric op keeps the row (states=[''])", async () => {
     el = await mount({ kind: ">", entity_id: "sensor.temp", states: ["10"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setValueAt(0, "");
     expect(captured.states).toEqual([""]);
   });
@@ -315,7 +331,9 @@ describe("ambience-state-expr-atom", () => {
   test("emits value-changed when op flips", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setOp("is_not");
     expect(captured.kind).toBe("is_not");
   });
@@ -333,7 +351,9 @@ describe("ambience-state-expr-atom", () => {
   test("_addValue appends to the states list", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._addValue("off");
     expect(captured.states).toEqual(["on", "off"]);
   });
@@ -341,7 +361,9 @@ describe("ambience-state-expr-atom", () => {
   test("_addValue ignores an empty string (don't add blank values)", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let fired = false;
-    el.addEventListener("value-changed", () => { fired = true; });
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
     el._addValue("");
     expect(fired).toBe(false);
   });
@@ -349,7 +371,9 @@ describe("ambience-state-expr-atom", () => {
   test("_setValueAt replaces a value at an index", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on", "off"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setValueAt(1, "unavailable");
     expect(captured.states).toEqual(["on", "unavailable"]);
   });
@@ -357,7 +381,9 @@ describe("ambience-state-expr-atom", () => {
   test("_setValueAt with an empty string removes that row", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on", "off"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setValueAt(0, "");
     expect(captured.states).toEqual(["off"]);
   });
@@ -365,17 +391,24 @@ describe("ambience-state-expr-atom", () => {
   test("_removeValueAt deletes the row", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on", "off", "unavailable"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._removeValueAt(1);
     expect(captured.states).toEqual(["on", "unavailable"]);
   });
 
   test("setting an entity_id clears both states and attribute", async () => {
     el = await mount({
-      kind: "is", entity_id: "media_player.a", attribute: "source", states: ["Spotify"],
+      kind: "is",
+      entity_id: "media_player.a",
+      attribute: "source",
+      states: ["Spotify"],
     });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setEntity("light.kitchen");
     expect(captured.entity_id).toBe("light.kitchen");
     expect(captured.states).toEqual([]);
@@ -384,10 +417,15 @@ describe("ambience-state-expr-atom", () => {
 
   test("_setAttribute('') normalises empty string to null on emit", async () => {
     el = await mount({
-      kind: "is", entity_id: "x", attribute: "source", states: ["Spotify"],
+      kind: "is",
+      entity_id: "x",
+      attribute: "source",
+      states: ["Spotify"],
     });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setAttribute("");
     expect(captured.attribute).toBeNull();
   });
@@ -395,7 +433,9 @@ describe("ambience-state-expr-atom", () => {
   test("_setAttribute('source') stores the attribute name", async () => {
     el = await mount({ kind: "is", entity_id: "media_player.x", states: [] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setAttribute("source");
     expect(captured.attribute).toBe("source");
   });
@@ -411,7 +451,10 @@ describe("ambience-state-expr-atom", () => {
 
   test("_forData maps storage {h,m,s} to ha-form {hours,minutes,seconds}", async () => {
     el = await mount({
-      kind: "is", entity_id: "x", states: ["on"], for: { h: 1, m: 30, s: 15 },
+      kind: "is",
+      entity_id: "x",
+      states: ["on"],
+      for: { h: 1, m: 30, s: 15 },
     });
     expect(el._forData()).toEqual({ duration: { hours: 1, minutes: 30, seconds: 15 } });
   });
@@ -423,10 +466,15 @@ describe("ambience-state-expr-atom", () => {
 
   test("setting duration to {0,0,0} normalises to null on emit", async () => {
     el = await mount({
-      kind: "is", entity_id: "x", states: ["on"], for: { h: 0, m: 5, s: 0 },
+      kind: "is",
+      entity_id: "x",
+      states: ["on"],
+      for: { h: 0, m: 5, s: 0 },
     });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setForFromHaForm({ hours: 0, minutes: 0, seconds: 0 });
     expect(captured.for).toBeNull();
   });
@@ -434,7 +482,9 @@ describe("ambience-state-expr-atom", () => {
   test("setting a non-zero duration stores it as {h,m,s}", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setForFromHaForm({ hours: 0, minutes: 5, seconds: 0 });
     expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
   });

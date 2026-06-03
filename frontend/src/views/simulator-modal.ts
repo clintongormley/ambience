@@ -1,7 +1,9 @@
-import { LitElement, html, css, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { simulate, simulateInputs, type HassConnection } from "../api.js";
+import { type HassConnection, simulate, simulateInputs } from "../api.js";
+import { humanizeId } from "../i18n.js";
+import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import type {
   BufferedUnit,
   SimulateEntityKnob,
@@ -10,9 +12,7 @@ import type {
   SimulateVerdictKnob,
   SimulateVerdicts,
 } from "../types.js";
-import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
-import { entityName, renderEntityIcon, entityRowStyles } from "./entity-row.js";
-import { humanizeId } from "../i18n.js";
+import { entityName, entityRowStyles, renderEntityIcon } from "./entity-row.js";
 
 // Display label for a raw option value (the sent value stays raw).
 const _OPTION_LABEL: Record<string, string> = { not_home: "Away", home: "Home" };
@@ -22,7 +22,10 @@ function optionLabel(value: string): string {
 
 // The editable values for an entity knob, pre-filled from its live state +
 // attributes. Shared by the initial load and the per-row reset.
-function entityDefaults(k: SimulateEntityKnob): { state: string; attributes: Record<string, string> } {
+function entityDefaults(k: SimulateEntityKnob): {
+  state: string;
+  attributes: Record<string, string>;
+} {
   return {
     state: k.live_state ?? "",
     attributes: Object.fromEntries(
@@ -31,9 +34,15 @@ function entityDefaults(k: SimulateEntityKnob): { state: string; attributes: Rec
   };
 }
 
-function pad(n: number): string { return String(n).padStart(2, "0"); }
-function localDate(d: Date): string { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
-function localTime(d: Date): string { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
+function localDate(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function localTime(d: Date): string {
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 /**
  * Per-category what-if simulator. Loads the category's editable inputs (pre-filled
@@ -98,7 +107,8 @@ export class AmbienceSimulatorModal extends LitElement {
   @state() private _hasTime = false;
   @state() private _loading = true;
   @state() private _error = "";
-  @state() private _values: Record<string, { state: string; attributes: Record<string, string> }> = {};
+  @state() private _values: Record<string, { state: string; attributes: Record<string, string> }> =
+    {};
   @state() private _verdicts: Record<string, boolean> = {};
   @state() private _date = "";
   @state() private _time = "";
@@ -111,12 +121,18 @@ export class AmbienceSimulatorModal extends LitElement {
     }
   }
 
-  private _vkey(k: SimulateVerdictKnob): string { return `${k.condition}:${k.key}`; }
+  private _vkey(k: SimulateVerdictKnob): string {
+    return `${k.condition}:${k.key}`;
+  }
 
   private async _load(): Promise<void> {
-    this._error = ""; this._loading = true; this._result = null; this._expanded = false;
+    this._error = "";
+    this._loading = true;
+    this._result = null;
+    this._expanded = false;
     const now = new Date();
-    this._date = localDate(now); this._time = localTime(now);
+    this._date = localDate(now);
+    this._time = localTime(now);
     try {
       const inputs = await simulateInputs(this.hass, this.scope, this.category);
       if (!this.isConnected) return;
@@ -131,10 +147,12 @@ export class AmbienceSimulatorModal extends LitElement {
           verdicts[this._vkey(k)] = k.live_value;
         }
       }
-      this._values = values; this._verdicts = verdicts;
+      this._values = values;
+      this._verdicts = verdicts;
       this._loading = false;
     } catch (e) {
-      this._error = (e as Error).message || String(e); this._loading = false;
+      this._error = (e as Error).message || String(e);
+      this._loading = false;
     }
   }
 
@@ -143,7 +161,10 @@ export class AmbienceSimulatorModal extends LitElement {
   }
   private _setAttr(id: string, name: string, value: string): void {
     const cur = this._values[id];
-    this._values = { ...this._values, [id]: { ...cur, attributes: { ...cur.attributes, [name]: value } } };
+    this._values = {
+      ...this._values,
+      [id]: { ...cur, attributes: { ...cur.attributes, [name]: value } },
+    };
   }
   private _setVerdict(vkey: string, value: boolean): void {
     this._verdicts = { ...this._verdicts, [vkey]: value };
@@ -189,7 +210,8 @@ export class AmbienceSimulatorModal extends LitElement {
     const out: SimulateVerdicts = {};
     for (const k of this._knobs) {
       if (k.kind !== "verdict") continue;
-      (out[k.condition] ??= {})[k.key] = this._verdicts[this._vkey(k)] ?? k.live_value;
+      if (!out[k.condition]) out[k.condition] = {};
+      out[k.condition][k.key] = this._verdicts[this._vkey(k)] ?? k.live_value;
     }
     return out;
   }
@@ -198,7 +220,14 @@ export class AmbienceSimulatorModal extends LitElement {
     this._error = "";
     const now = new Date(`${this._date}T${this._time}`).toISOString();
     try {
-      this._result = await simulate(this.hass, this.scope, this.category, now, this._buildOverrides(), this._buildVerdicts());
+      this._result = await simulate(
+        this.hass,
+        this.scope,
+        this.category,
+        now,
+        this._buildOverrides(),
+        this._buildVerdicts(),
+      );
       this._expanded = false;
     } catch (e) {
       this._error = (e as Error).message || String(e);
@@ -219,8 +248,13 @@ export class AmbienceSimulatorModal extends LitElement {
         </div>
         <div class="body">
           ${this._error ? html`<p class="error">${this._error}</p>` : nothing}
-          ${this._loading ? html`<p>Loading…</p>` : html`
-            ${this._hasTime ? html`
+          ${
+            this._loading
+              ? html`<p>Loading…</p>`
+              : html`
+            ${
+              this._hasTime
+                ? html`
               <p class="sec-title">When</p>
               <div class="when">
                 <input type="date" .value=${this._date}
@@ -228,13 +262,20 @@ export class AmbienceSimulatorModal extends LitElement {
                 <input type="time" .value=${this._time}
                   @change=${(e: Event) => (this._time = (e.target as HTMLInputElement).value)} />
                 <span class="hint">drives sun, time-of-day, weekday &amp; workday</span>
-              </div>` : nothing}
-            ${this._knobs.length ? html`
+              </div>`
+                : nothing
+            }
+            ${
+              this._knobs.length
+                ? html`
               <p class="sec-title">Inputs this category depends on</p>
-              ${this._knobs.map((k) => k.kind === "entity" ? this._renderEntity(k) : this._renderVerdict(k))}` : nothing}
+              ${this._knobs.map((k) => (k.kind === "entity" ? this._renderEntity(k) : this._renderVerdict(k)))}`
+                : nothing
+            }
             <div class="run-row"><button class="runbtn" @click=${() => void this._run()}>Simulate ▸</button></div>
             ${this._result ? html`<div class="result">${renderEvaluation(this._result, this._expanded, () => (this._expanded = !this._expanded))}</div>` : nothing}
-          `}
+          `
+          }
         </div>
       </div>`;
   }
@@ -255,7 +296,8 @@ export class AmbienceSimulatorModal extends LitElement {
             @click=${() => this._resetEntity(k)}>↺</button>
         </div>
       </div>
-      ${k.attributes.map((a, i) => html`
+      ${k.attributes.map(
+        (a, i) => html`
         <div class="row attr ${i === k.attributes.length - 1 ? "last-attr" : ""}">
           <div class="row-text"><div class="row-title">${optionLabel(a.name)}</div></div>
           <div class="row-ctrl">
@@ -267,7 +309,8 @@ export class AmbienceSimulatorModal extends LitElement {
             <button class="reset" title="Reset to live"
               @click=${() => this._resetEntity(k)}>↺</button>
           </div>
-        </div>`)}
+        </div>`,
+      )}
     `;
   }
 
@@ -288,7 +331,8 @@ export class AmbienceSimulatorModal extends LitElement {
     const vkey = this._vkey(k);
     const cur = this._verdicts[vkey] ?? k.live_value;
     const label = k.entity_id ? entityName(this.hass, k.entity_id) : k.label;
-    const icon = k.entity_id ? renderEntityIcon(this.hass, k.entity_id)
+    const icon = k.entity_id
+      ? renderEntityIcon(this.hass, k.entity_id)
       : html`<ha-icon class="row-icon" icon="mdi:code-braces"></ha-icon>`;
     return html`
       <div class="row">

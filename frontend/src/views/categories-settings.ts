@@ -1,7 +1,7 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { listCategories, saveCategories, deleteCategory, type HassConnection } from "../api.js";
+import { deleteCategory, type HassConnection, listCategories, saveCategories } from "../api.js";
 import { CATEGORY_COLORS, colorHex } from "../category-colors.js";
 import { localize } from "../i18n.js";
 import type { RuleCategory } from "../types.js";
@@ -145,7 +145,9 @@ export class AmbienceCategoriesSettings extends LitElement {
       return localize(this.hass, "ui.category_name_blank_error", "Category names can't be empty.");
     }
     const key = name.toLocaleLowerCase();
-    const clash = this._categories.some((g) => g.id !== draft.id && g.name.trim().toLocaleLowerCase() === key);
+    const clash = this._categories.some(
+      (g) => g.id !== draft.id && g.name.trim().toLocaleLowerCase() === key,
+    );
     if (clash) {
       return localize(
         this.hass,
@@ -349,11 +351,13 @@ export class AmbienceCategoriesSettings extends LitElement {
             ${this._modalError ? html`<p class="modal-error">${this._modalError}</p>` : ""}
           </div>
           <div class="modal-footer">
-            ${isEdit
-              ? html`<button class="delete" @click=${() => this._deleteCategory()}>
+            ${
+              isEdit
+                ? html`<button class="delete" @click=${() => this._deleteCategory()}>
                   ${localize(this.hass, "ui.title_delete", "Delete")}
                 </button>`
-              : html`<span></span>`}
+                : html`<span></span>`
+            }
             <div class="right">
               <button class="primary" @click=${() => this._save()}>
                 ${localize(this.hass, "ui.category_save", "Save")}

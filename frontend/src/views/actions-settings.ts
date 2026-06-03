@@ -1,4 +1,4 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { deriveActionLabel, localize } from "../i18n.js";
@@ -6,16 +6,18 @@ import { deriveActionLabel, localize } from "../i18n.js";
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
 // existing importers of this view keep working.
 export { deriveActionLabel };
-import { DEFAULT_REAPPLY_SECONDS, parseReapplyConfigSeconds } from "../reapply.js";
+
 import {
   getServiceSchema,
+  type HassConnection,
   listExposedActions,
   listServices,
   saveExposedActions,
-  type HassConnection,
 } from "../api.js";
-import { humanizeFieldId, selectorUnit } from "../summary.js";
 import { DragReorderController } from "../drag-reorder.js";
+import type { HaFormSchemaEntry } from "../ha-form.js";
+import { DEFAULT_REAPPLY_SECONDS, parseReapplyConfigSeconds } from "../reapply.js";
+import { humanizeFieldId, selectorUnit } from "../summary.js";
 import type {
   ExposedAction,
   ExposedActionWarning,
@@ -23,7 +25,6 @@ import type {
   ServiceInfo,
   ServiceSchema,
 } from "../types.js";
-import type { HaFormSchemaEntry } from "../ha-form.js";
 
 @customElement("ambience-actions-settings")
 export class AmbienceActionsSettings extends LitElement {
@@ -379,9 +380,7 @@ export class AmbienceActionsSettings extends LitElement {
     const addRow = this.shadowRoot?.querySelector(".add-row");
     const insideAddRow = !!addRow && path.includes(addRow);
     const inOverlay = path.some(
-      (n) =>
-        n instanceof Element &&
-        AmbienceActionsSettings._OVERLAY_TAG_RE.test(n.localName),
+      (n) => n instanceof Element && AmbienceActionsSettings._OVERLAY_TAG_RE.test(n.localName),
     );
     if (!insideAddRow && !inOverlay) {
       this._adding = false;
@@ -702,8 +701,9 @@ export class AmbienceActionsSettings extends LitElement {
             @click=${(e: Event) => e.stopPropagation()}
           >⠿</span>
           <span class="toggle-arrow">${isExpanded ? "▾" : "▸"}</span>
-          ${isExpanded
-            ? html`
+          ${
+            isExpanded
+              ? html`
                 <strong>${action.id}</strong>
                 <ha-input
                   class="header-label-input"
@@ -718,12 +718,13 @@ export class AmbienceActionsSettings extends LitElement {
                   @click=${(e: Event) => e.stopPropagation()}
                 ></ha-input>
               `
-            : action.label
-              ? html`
+              : action.label
+                ? html`
                   <span class="header-label-display">${action.label}</span>
                   <span class="header-service-id">(${action.id})</span>
                 `
-              : html`<strong class="standalone">${action.id}</strong>`}
+                : html`<strong class="standalone">${action.id}</strong>`
+          }
           <button
             class="remove"
             data-remove
@@ -753,10 +754,7 @@ export class AmbienceActionsSettings extends LitElement {
     `;
   }
 
-  private _renderFieldsSection(
-    action: ExposedAction,
-    schema: ServiceSchema | null | undefined,
-  ) {
+  private _renderFieldsSection(action: ExposedAction, schema: ServiceSchema | null | undefined) {
     if (schema === null) {
       return html`<p class="body-help warning">
         ${localize(this.hass, "ui.service_unavailable", "Service not available in this HA instance.")}
@@ -767,9 +765,9 @@ export class AmbienceActionsSettings extends LitElement {
     }
     // Sort fields alphabetically by field id (stable, predictable for users
     // scanning a long service like light.turn_on).
-    const fields = Object.entries(schema.fields).slice().sort(([a], [b]) =>
-      a.localeCompare(b),
-    );
+    const fields = Object.entries(schema.fields)
+      .slice()
+      .sort(([a], [b]) => a.localeCompare(b));
     if (fields.length === 0) {
       return html`<p class="body-help">
         ${localize(this.hass, "ui.service_has_no_fields", "This service has no fields.")}
@@ -803,11 +801,7 @@ export class AmbienceActionsSettings extends LitElement {
     return unit ? ` ${unit}` : "";
   }
 
-  private _renderFieldRow(
-    action: ExposedAction,
-    name: string,
-    field: ServiceField,
-  ) {
+  private _renderFieldRow(action: ExposedAction, name: string, field: ServiceField) {
     const shown = (action.visible_fields ?? []).includes(name);
     const hasDefault = name in (action.defaults ?? {});
     const editKey = `${action.id}:${name}`;
@@ -824,11 +818,7 @@ export class AmbienceActionsSettings extends LitElement {
               title="Show in rule editor"
               .checked=${shown}
               @change=${(e: Event) =>
-                this._setShowInEditor(
-                  action.id,
-                  name,
-                  (e.target as HTMLInputElement).checked,
-                )}
+                this._setShowInEditor(action.id, name, (e.target as HTMLInputElement).checked)}
             />
           </div>
           <span class="name">
@@ -837,30 +827,33 @@ export class AmbienceActionsSettings extends LitElement {
             ${field.description ? html` <small>— ${field.description}</small>` : ""}
           </span>
           <div class="summary-cell">
-            ${isEditing
-              ? html`<span class="summary-cell-editing">Editing…</span>`
-              : hasDefault
-                ? html`<button
+            ${
+              isEditing
+                ? html`<span class="summary-cell-editing">Editing…</span>`
+                : hasDefault
+                  ? html`<button
                     class="default-summary"
                     data-default-summary=${name}
                     @click=${(e: Event) => {
                       e.stopPropagation();
                       this._startEditingDefault(action.id, name);
                     }}
-                  >Default: ${this._formatDefaultSummary((action.defaults ?? {})[name])}${this._defaultUnitSuffix(action.id, name)}</button>`
-                : html`<button
+                  >Default: ${this._formatDefaultSummary(action.defaults?.[name])}${this._defaultUnitSuffix(action.id, name)}</button>`
+                  : html`<button
                     class="set-default-btn"
                     data-set-default=${name}
                     @click=${(e: Event) => {
                       e.stopPropagation();
                       this._startEditingDefault(action.id, name);
                     }}
-                  >+ ${localize(this.hass, "ui.set_default", "Set default")}</button>`}
+                  >+ ${localize(this.hass, "ui.set_default", "Set default")}</button>`
+            }
           </div>
         </div>
         <!-- Row 2: full editor (only when editing) -->
-        ${isEditing
-          ? html`<div
+        ${
+          isEditing
+            ? html`<div
               class="field-row-editor"
               data-editing-key=${editKey}
             >
@@ -896,16 +889,13 @@ export class AmbienceActionsSettings extends LitElement {
                 >${localize(this.hass, "ui.save", "Save")}</button>
               </div>
             </div>`
-          : ""}
+            : ""
+        }
       </div>
     `;
   }
 
-  private _renderDefaultEditor(
-    action: ExposedAction,
-    fieldName: string,
-    _field: ServiceField,
-  ) {
+  private _renderDefaultEditor(action: ExposedAction, fieldName: string, _field: ServiceField) {
     const value = action.defaults?.[fieldName];
     const schema = this._fieldSchemas[`${action.id}:${fieldName}`] ?? [];
     /* v8 ignore start -- ha-form path (real HA only) */
@@ -947,7 +937,9 @@ export class AmbienceActionsSettings extends LitElement {
         <label for="reapply-enable-${action.id}">
           ${localize(this.hass, "ui.reapply_enable_label", "Re-apply periodically")}
         </label>
-        ${enabled ? html`
+        ${
+          enabled
+            ? html`
           <input
             id="reapply-${action.id}"
             type="number"
@@ -962,7 +954,9 @@ export class AmbienceActionsSettings extends LitElement {
           <span class="reapply-unit">
             ${localize(this.hass, "ui.reapply_seconds_unit", "s")}
           </span>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     `;
   }
@@ -970,14 +964,18 @@ export class AmbienceActionsSettings extends LitElement {
   private _renderAdd() {
     if (!this._adding) {
       return html`<div class="add-row">
-        <button class="add" data-action="add" @click=${() => { this._adding = true; }}>
+        <button class="add" data-action="add" @click=${() => {
+          this._adding = true;
+        }}>
           + ${localize(this.hass, "ui.add_action_button", "Add action")}
         </button>
       </div>`;
     }
     return html`<div class="add-row">
       ${this._renderAddPicker()}
-      <button data-action="cancel-add" @click=${() => { this._adding = false; }}>
+      <button data-action="cancel-add" @click=${() => {
+        this._adding = false;
+      }}>
         ${localize(this.hass, "ui.cancel", "Cancel")}
       </button>
     </div>`;

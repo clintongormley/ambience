@@ -1,5 +1,5 @@
-import { describe, test, expect, vi } from "vitest";
 import type { ReactiveControllerHost } from "lit";
+import { describe, expect, test, vi } from "vitest";
 import { DragReorderController } from "../frontend/src/drag-reorder";
 
 /** Minimal ReactiveControllerHost that counts requestUpdate() calls. */

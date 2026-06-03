@@ -1,9 +1,9 @@
-import { LitElement, html, css, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { getServiceSchema, listTraces, type HassConnection } from "../api.js";
-import type { BufferedUnit, ServiceSchema } from "../types.js";
+import { getServiceSchema, type HassConnection, listTraces } from "../api.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
+import type { BufferedUnit, ServiceSchema } from "../types.js";
 
 /**
  * Modal showing recent trace evaluations for one (scope, category) bucket.
@@ -169,7 +169,8 @@ export class AmbienceTracesModal extends LitElement {
 
   private _toggle(key: string): void {
     const next = new Set(this._expanded);
-    if (next.has(key)) next.delete(key); else next.add(key);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     this._expanded = next;
   }
 
@@ -190,22 +191,24 @@ export class AmbienceTracesModal extends LitElement {
           <button class="close" @click=${this._onClose} aria-label="Close">✕</button>
         </div>
         <div class="body">
-          ${this._error
-            ? html`<p class="error">${this._error}</p>`
-            : this._loading
-              ? html`<p class="empty">Loading…</p>`
-              : this._records.length === 0
-                ? html`<p class="empty">No traces for this category yet.</p>`
-                : html`<div class="list">${this._records.map((u, i) => {
-                    const key = `${u.event_id ?? i}|${u.timestamp ?? ""}`;
-                    return renderEvaluation(
-                      u,
-                      this._expanded.has(key),
-                      () => this._toggle(key),
-                      this.hass,
-                      this._schemas,
-                    );
-                  })}</div>`}
+          ${
+            this._error
+              ? html`<p class="error">${this._error}</p>`
+              : this._loading
+                ? html`<p class="empty">Loading…</p>`
+                : this._records.length === 0
+                  ? html`<p class="empty">No traces for this category yet.</p>`
+                  : html`<div class="list">${this._records.map((u, i) => {
+                      const key = `${u.event_id ?? i}|${u.timestamp ?? ""}`;
+                      return renderEvaluation(
+                        u,
+                        this._expanded.has(key),
+                        () => this._toggle(key),
+                        this.hass,
+                        this._schemas,
+                      );
+                    })}</div>`
+          }
         </div>
       </div>
     `;

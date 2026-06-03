@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
   getKnownStates: vi.fn(async () => ({ states: ["on", "off"] })),
@@ -31,7 +31,9 @@ describe("ambience-state-predicate-input", () => {
   test("clicking Add creates an empty atom and emits value-changed", async () => {
     el = await mount(null);
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._addFirstAtom();
     expect(captured?.kind).toBe("is");
     expect(captured?.entity_id).toBe("");
@@ -41,7 +43,9 @@ describe("ambience-state-predicate-input", () => {
   test("_replaceAt at the root swaps the whole predicate", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._replaceAt([], { kind: "is", entity_id: "y", states: ["off"] });
     expect(captured.entity_id).toBe("y");
   });
@@ -49,11 +53,11 @@ describe("ambience-state-predicate-input", () => {
   test("wrapping the only child of a group still creates a sub-group (no collapse)", async () => {
     // Regression: _patch's collapse-when-single-child fired even on
     // replacements (like wrap), making the wrap appear as just an op flip.
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-    ]});
+    el = await mount({ kind: "and", items: [{ kind: "is", entity_id: "a", states: ["on"] }] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._wrapAt([0]);
     // Outer AND survives; new inner OR (flipped from AND) wraps `a`.
     expect(captured.kind).toBe("and");
@@ -63,24 +67,34 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("_wrapAt on a child of an AND group creates an OR sub-group (flip parent's op)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._wrapAt([1]);
     expect(captured.items[1].kind).toBe("or");
     expect(captured.items[1].items[0].entity_id).toBe("b");
   });
 
   test("_wrapAt on a child of an OR group creates an AND sub-group (flip parent's op)", async () => {
-    el = await mount({ kind: "or", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "or",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._wrapAt([0]);
     expect(captured.items[0].kind).toBe("and");
     expect(captured.items[0].items[0].entity_id).toBe("a");
@@ -89,7 +103,9 @@ describe("ambience-state-predicate-input", () => {
   test("_wrapAt at root has no parent → defaults to AND", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._wrapAt([]);
     expect(captured.kind).toBe("and");
     expect(captured.items).toHaveLength(1);
@@ -97,11 +113,11 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("_addChildAt appends an empty atom to a group", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "x", states: ["on"] },
-    ]});
+    el = await mount({ kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._addChildAt([], "is");
     expect(captured.items).toHaveLength(2);
     expect(captured.items[1].kind).toBe("is");
@@ -122,12 +138,17 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("_removeAt removes one child from a 2-child group", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "x", states: ["on"] },
-      { kind: "is", entity_id: "y", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "x", states: ["on"] },
+        { kind: "is", entity_id: "y", states: ["off"] },
+      ],
+    });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._removeAt([1]);
     // 2 → 1 child: collapses to that single child.
     expect(captured.kind).toBe("is");
@@ -135,61 +156,84 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("_removeAt on the last child of a group collapses to null", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "x", states: ["on"] },
-    ]});
+    el = await mount({ kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._removeAt([0]);
     expect(captured).toBeNull();
   });
 
   test("_toggleNotAt wraps an atom in not", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "x", states: ["on"] },
-      { kind: "is", entity_id: "y", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "x", states: ["on"] },
+        { kind: "is", entity_id: "y", states: ["off"] },
+      ],
+    });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._toggleNotAt([0]);
     expect(captured.items[0].kind).toBe("not");
     expect(captured.items[0].item.entity_id).toBe("x");
   });
 
   test("_toggleNotAt unwraps when toggled again", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "not", item: { kind: "is", entity_id: "x", states: ["on"] } },
-      { kind: "is", entity_id: "y", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "not", item: { kind: "is", entity_id: "x", states: ["on"] } },
+        { kind: "is", entity_id: "y", states: ["off"] },
+      ],
+    });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._toggleNotAt([0]);
     expect(captured.items[0].kind).toBe("is");
     expect(captured.items[0].entity_id).toBe("x");
   });
 
   test("_setGroupOpAt switches and/or at a path", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "x", states: ["on"] },
-      { kind: "is", entity_id: "y", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "x", states: ["on"] },
+        { kind: "is", entity_id: "y", states: ["off"] },
+      ],
+    });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._setGroupOpAt([], "or");
     expect(captured.kind).toBe("or");
     expect(captured.items).toHaveLength(2);
   });
 
   test("nested replace via path [0,1]", async () => {
-    el = await mount({ kind: "or", items: [
-      { kind: "and", items: [
-        { kind: "is", entity_id: "a", states: ["on"] },
-        { kind: "is", entity_id: "b", states: ["off"] },
-      ]},
-      { kind: "is", entity_id: "c", states: ["open"] },
-    ]});
+    el = await mount({
+      kind: "or",
+      items: [
+        {
+          kind: "and",
+          items: [
+            { kind: "is", entity_id: "a", states: ["on"] },
+            { kind: "is", entity_id: "b", states: ["off"] },
+          ],
+        },
+        { kind: "is", entity_id: "c", states: ["open"] },
+      ],
+    });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._replaceAt([0, 1], { kind: "is_not", entity_id: "b", states: ["off"] });
     expect(captured.items[0].items[1].kind).toBe("is_not");
   });
@@ -207,10 +251,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("group root hides the section-level '+ Add condition' (the group already has one inside)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     expect(el.shadowRoot.querySelector(".root-add")).toBeNull();
   });
 
@@ -223,7 +270,9 @@ describe("ambience-state-predicate-input", () => {
   test("_addAtRoot on a lone atom wraps in AND with the atom + an empty sibling", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._addAtRoot();
     expect(captured.kind).toBe("and");
     expect(captured.items).toHaveLength(2);
@@ -233,11 +282,11 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("_addAtRoot on a group appends a child (no re-wrap)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "x", states: ["on"] },
-    ]});
+    el = await mount({ kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._addAtRoot();
     expect(captured.kind).toBe("and");
     expect(captured.items).toHaveLength(2);
@@ -250,7 +299,9 @@ describe("ambience-state-predicate-input", () => {
       item: { kind: "is", entity_id: "x", states: ["on"] },
     });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._addAtRoot();
     expect(captured.kind).toBe("and");
     expect(captured.items[0].kind).toBe("not");
@@ -264,10 +315,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("group dropdown has only AND and OR options (no AND_NOT / OR_NOT)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     await flush(el);
     const visit = (sr: ShadowRoot | null): HTMLSelectElement | null => {
       if (!sr) return null;
@@ -285,28 +339,38 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("atom card header contains the NOT toggle (reflecting {kind:'not'} wrap state)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "not", item: { kind: "is", entity_id: "a", states: ["on"] } },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "not", item: { kind: "is", entity_id: "a", states: ["on"] } },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     await flush(el);
     // Each atom card now owns its own NOT toggle in the header.
     const cards = _atomCards(el);
     expect(cards[0].querySelector(".atom-header .not-toggle")?.classList.contains("on")).toBe(true);
-    expect(cards[1].querySelector(".atom-header .not-toggle")?.classList.contains("on")).toBe(false);
+    expect(cards[1].querySelector(".atom-header .not-toggle")?.classList.contains("on")).toBe(
+      false,
+    );
     // The external child-actions toolbar is gone.
     const childActions = el.shadowRoot.querySelectorAll(".child-actions");
     expect(childActions.length).toBe(0);
   });
 
   test("clicking a child atom's NOT toggle (inside the header) wraps it in {kind:'not'}", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     await flush(el);
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     const cards = _atomCards(el);
     const toggle = cards[0].querySelector(".atom-header .not-toggle") as HTMLButtonElement;
     toggle.click();
@@ -316,10 +380,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("clicking the NOT toggle does NOT also expand/collapse the atom (click is consumed)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     el._setOpen([1]);
     await flush(el);
     let cards = _atomCards(el);
@@ -335,7 +402,9 @@ describe("ambience-state-predicate-input", () => {
   test("clearing the predicate happens via the atom card's X (root toolbar is gone)", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     const cards = _atomCards(el);
     (cards[0].querySelector(".atom-header .remove") as HTMLButtonElement).click();
     await flush(el);
@@ -350,7 +419,9 @@ describe("ambience-state-predicate-input", () => {
     const out: HTMLElement[] = [];
     const visit = (sr: ShadowRoot | null) => {
       if (!sr) return;
-      sr.querySelectorAll(".atom-card").forEach((c) => out.push(c as HTMLElement));
+      sr.querySelectorAll(".atom-card").forEach((c) => {
+        out.push(c as HTMLElement);
+      });
       sr.querySelectorAll("ambience-state-expr-node").forEach((n: Element) => {
         visit((n as any).shadowRoot);
       });
@@ -387,10 +458,13 @@ describe("ambience-state-predicate-input", () => {
     // force-expanded, so opening one didn't collapse the other. The fix
     // respects _openPath strictly — incomplete atoms collapse when they're
     // not the open one.
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "",        states: [] },  // incomplete
-      { kind: "is", entity_id: "person.b", states: ["home"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "", states: [] }, // incomplete
+        { kind: "is", entity_id: "person.b", states: ["home"] },
+      ],
+    });
     el._setOpen([1]);
     await flush(el);
     const cards = _atomCards(el);
@@ -406,10 +480,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("in a group, only the open atom is expanded; others render as summary only", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     el._setOpen([1]);
     await flush(el);
     const cards = _atomCards(el);
@@ -422,10 +499,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("clicking a collapsed atom's summary opens it (collapsing the previously-open one)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     el._setOpen([1]);
     await flush(el);
     const cardA = _atomCards(el)[0];
@@ -437,14 +517,19 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("clicking the X on a collapsed atom removes it (without opening)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     el._setOpen([1]);
     await flush(el);
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     const cardA = _atomCards(el)[0];
     (cardA.querySelector(".remove") as HTMLButtonElement).click();
     await flush(el);
@@ -454,10 +539,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("clicking the open atom's header collapses it (toggle)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     el._setOpen([0]);
     await flush(el);
 
@@ -474,10 +562,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("clicking an INVALID open atom's header refuses to collapse and surfaces the error", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "",       states: [] },   // invalid
-      { kind: "is", entity_id: "b",      states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "", states: [] }, // invalid
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     el._setOpen([0]);
     await flush(el);
 
@@ -492,10 +583,13 @@ describe("ambience-state-predicate-input", () => {
 
   test("clicking another atom while the open one is invalid keeps the open one expanded and shows an error", async () => {
     // The first atom is incomplete (no entity_id). The second is valid.
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "",     states: [] },   // invalid (open)
-      { kind: "is", entity_id: "person.b", states: ["home"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "", states: [] }, // invalid (open)
+        { kind: "is", entity_id: "person.b", states: ["home"] },
+      ],
+    });
     el._setOpen([0]);
     await flush(el);
 
@@ -514,10 +608,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("once the invalid atom becomes valid, the user CAN switch to another", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "",     states: [] },
-      { kind: "is", entity_id: "person.b", states: ["home"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "", states: [] },
+        { kind: "is", entity_id: "person.b", states: ["home"] },
+      ],
+    });
     el._setOpen([0]);
     await flush(el);
 
@@ -533,10 +630,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("error is cleared once the open atom is valid (no longer shows after fixing)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "",     states: [] },
-      { kind: "is", entity_id: "person.b", states: ["home"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "", states: [] },
+        { kind: "is", entity_id: "person.b", states: ["home"] },
+      ],
+    });
     el._setOpen([0]);
     await flush(el);
 
@@ -555,10 +655,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("group child-rows have no external toolbar — each child is rendered directly", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     await flush(el);
     // child-actions div is removed entirely.
     const childActions = el.shadowRoot.querySelectorAll(".child-actions");
@@ -566,29 +669,41 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("the X on a NESTED group header unwraps (promotes children to parent), it doesn't delete them", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "or", items: [
-        { kind: "is", entity_id: "b", states: ["off"] },
-        { kind: "is", entity_id: "c", states: ["open"] },
-      ]},
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        {
+          kind: "or",
+          items: [
+            { kind: "is", entity_id: "b", states: ["off"] },
+            { kind: "is", entity_id: "c", states: ["open"] },
+          ],
+        },
+      ],
+    });
     await flush(el);
 
     // Collect every .group-header in the tree (root first, then nested).
     const allHeaders: HTMLElement[] = [];
     const visit = (sr: ShadowRoot | null) => {
       if (!sr) return;
-      sr.querySelectorAll(".group-header").forEach((h) => allHeaders.push(h as HTMLElement));
-      sr.querySelectorAll("ambience-state-expr-node").forEach((n) => visit((n as any).shadowRoot));
+      sr.querySelectorAll(".group-header").forEach((h) => {
+        allHeaders.push(h as HTMLElement);
+      });
+      sr.querySelectorAll("ambience-state-expr-node").forEach((n) => {
+        visit((n as any).shadowRoot);
+      });
     };
     visit(el.shadowRoot);
-    const innerHeader = allHeaders[1];  // [0] = root group, [1] = nested OR
+    const innerHeader = allHeaders[1]; // [0] = root group, [1] = nested OR
     expect(innerHeader).toBeTruthy();
     const x = innerHeader!.querySelector("button.unwrap") as HTMLButtonElement;
     expect(x).toBeTruthy();
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     x.click();
     await flush(el);
     // After unwrap: outer AND group has 3 items (a, b, c). Note that the
@@ -603,9 +718,7 @@ describe("ambience-state-predicate-input", () => {
     // After the root toolbar was dropped, the group's header X is the only
     // way to clear a root group. Semantics: 1 child → promote to root;
     // 2+ children → clear (set to null).
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-    ]});
+    el = await mount({ kind: "and", items: [{ kind: "is", entity_id: "a", states: ["on"] }] });
     await flush(el);
     const visit = (sr: ShadowRoot | null): HTMLElement | null => {
       if (!sr) return null;
@@ -615,7 +728,9 @@ describe("ambience-state-predicate-input", () => {
     const x = rootHeader!.querySelector("button.unwrap") as HTMLButtonElement;
     expect(x).toBeTruthy();
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     x.click();
     await flush(el);
     // Single child → the root becomes that child (undoes the wrap).
@@ -624,10 +739,13 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("the root group header X clears the predicate when the group has 2+ items", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    });
     await flush(el);
     const visit = (sr: ShadowRoot | null): HTMLElement | null => {
       if (!sr) return null;
@@ -636,7 +754,9 @@ describe("ambience-state-predicate-input", () => {
     const rootHeader = visit(el.shadowRoot.querySelector("ambience-state-expr-node")?.shadowRoot);
     const x = rootHeader!.querySelector("button.unwrap") as HTMLButtonElement;
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     x.click();
     await flush(el);
     expect(captured).toBeNull();
@@ -645,28 +765,41 @@ describe("ambience-state-predicate-input", () => {
   // --- drag-to-regroup --------------------------------------------------
 
   test("_moveAt reorders within the same group (move [0] to position 1)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-      { kind: "is", entity_id: "c", states: ["open"] },
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+        { kind: "is", entity_id: "c", states: ["open"] },
+      ],
+    });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._moveAt([0], [1]);
     // a moved to where b was → [b, a, c]
     expect(captured.items.map((i: any) => i.entity_id)).toEqual(["b", "a", "c"]);
   });
 
   test("_moveAt across groups: source removed from one, inserted into the other", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "or", items: [
-        { kind: "is", entity_id: "b", states: ["off"] },
-        { kind: "is", entity_id: "c", states: ["open"] },
-      ]},
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        {
+          kind: "or",
+          items: [
+            { kind: "is", entity_id: "b", states: ["off"] },
+            { kind: "is", entity_id: "c", states: ["open"] },
+          ],
+        },
+      ],
+    });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     // Move b (path [1, 0]) onto a (path [0]).
     el._moveAt([1, 0], [0]);
     // b lands at index 0 of the AND group; the OR group keeps c.
@@ -678,14 +811,17 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("_moveAt where source's parent becomes empty: parent group is removed", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "or", items: [
-        { kind: "is", entity_id: "b", states: ["off"] },
-      ]},
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "or", items: [{ kind: "is", entity_id: "b", states: ["off"] }] },
+      ],
+    });
     let captured: any;
-    el.addEventListener("value-changed", (e: Event) => { captured = (e as CustomEvent).detail.value; });
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
     el._moveAt([1, 0], [0]);
     // After move: a's group keeps b; the OR group, now empty, is gone.
     expect(captured.kind).toBe("and");
@@ -695,11 +831,10 @@ describe("ambience-state-predicate-input", () => {
   });
 
   test("_moveAt rejects a move into the source's own descendants (can't drop into yourself)", async () => {
-    el = await mount({ kind: "and", items: [
-      { kind: "or", items: [
-        { kind: "is", entity_id: "a", states: ["on"] },
-      ]},
-    ]});
+    el = await mount({
+      kind: "and",
+      items: [{ kind: "or", items: [{ kind: "is", entity_id: "a", states: ["on"] }] }],
+    });
     let captured: any;
     let fired = false;
     el.addEventListener("value-changed", (e: Event) => {

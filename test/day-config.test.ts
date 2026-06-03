@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
@@ -10,7 +10,9 @@ import { saveDayConfig } from "../frontend/src/api.js";
 
 describe("ambience-day-config", () => {
   let el: any;
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
   afterEach(() => el?.remove());
 
   async function mount() {
@@ -39,9 +41,19 @@ describe("ambience-day-config", () => {
     vi.mocked(saveDayConfig).mockResolvedValueOnce({
       ok: true,
       warnings: [
-        { scope_kind: "area",  scope_id: "kitchen", rule_name: "Area rule",  reason: "missing sensor" },
-        { scope_kind: "floor", scope_id: "upstairs", rule_name: "Floor rule", reason: "missing sensor" },
-        { scope_kind: "house", scope_id: null,      rule_name: "House rule", reason: "missing sensor" },
+        {
+          scope_kind: "area",
+          scope_id: "kitchen",
+          rule_name: "Area rule",
+          reason: "missing sensor",
+        },
+        {
+          scope_kind: "floor",
+          scope_id: "upstairs",
+          rule_name: "Floor rule",
+          reason: "missing sensor",
+        },
+        { scope_kind: "house", scope_id: null, rule_name: "House rule", reason: "missing sensor" },
       ],
     });
     el = await mount();
@@ -49,9 +61,9 @@ describe("ambience-day-config", () => {
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
     const txt = el.shadowRoot.querySelector(".warnings").textContent;
-    expect(txt).toContain("kitchen");        // area scope renders the id
+    expect(txt).toContain("kitchen"); // area scope renders the id
     expect(txt).toContain("Floor: upstairs"); // floor scope renders with prefix
-    expect(txt).toContain("House");           // house scope renders the literal label
+    expect(txt).toContain("House"); // house scope renders the literal label
     expect(txt).not.toContain("undefined");
   });
 });

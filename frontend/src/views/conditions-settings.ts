@@ -1,7 +1,7 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { listConditions, type HassConnection } from "../api.js";
+import { type HassConnection, listConditions } from "../api.js";
 import type { ConditionInfo } from "../types.js";
 import "./condition-card.js";
 import "./time-of-day-config.js";
@@ -37,17 +37,21 @@ export class AmbienceConditionsSettings extends LitElement {
       .sort((a, b) => b.priority - a.priority);
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
-      ${configurable.map((m) => html`
+      ${configurable.map(
+        (m) => html`
         <ambience-condition-card .hass=${this.hass} .conditionName=${m.name} .conditionDescription=${m.description}>
-          ${m.name === "time_of_day"
-            ? html`<ambience-time-of-day-config .hass=${this.hass}></ambience-time-of-day-config>`
-            : m.name === "day"
-              ? html`<ambience-day-config .hass=${this.hass}></ambience-day-config>`
-              : m.name === "weather"
-                ? html`<ambience-weather-config .hass=${this.hass}></ambience-weather-config>`
-                : html``}
+          ${
+            m.name === "time_of_day"
+              ? html`<ambience-time-of-day-config .hass=${this.hass}></ambience-time-of-day-config>`
+              : m.name === "day"
+                ? html`<ambience-day-config .hass=${this.hass}></ambience-day-config>`
+                : m.name === "weather"
+                  ? html`<ambience-weather-config .hass=${this.hass}></ambience-weather-config>`
+                  : html``
+          }
         </ambience-condition-card>
-      `)}
+      `,
+      )}
     `;
   }
 }

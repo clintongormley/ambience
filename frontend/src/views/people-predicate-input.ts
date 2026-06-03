@@ -1,12 +1,12 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
+import { emitValueChanged } from "../dom.js";
+import type { HaFormSchema } from "../ha-form.js";
 import { localize } from "../i18n.js";
 import type { PeoplePredicate, PeopleQuant } from "../types.js";
-import type { HaFormSchema } from "../ha-form.js";
 import { entitiesOfDomain } from "./hass-states.js";
-import { emitValueChanged } from "../dom.js";
 
 /** The six user-facing modes. The first three ("base") emit no `who`; the last
  *  three ("…these people") carry the selected person ids. Each maps to a
@@ -137,16 +137,22 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     // fresh/`{}` value lands on Everybody rather than Anybody.
     if (this._hasWhoKey()) {
       switch (this._cur().quant ?? "any") {
-        case "any": return "any";
-        case "everyone": return "all";
-        case "nobody": return "none";
+        case "any":
+          return "any";
+        case "everyone":
+          return "all";
+        case "nobody":
+          return "none";
       }
     }
     // Base modes: everyone→Everybody, any→Anybody, nobody→Nobody.
     switch (this._cur().quant ?? "everyone") {
-      case "nobody": return "nobody";
-      case "any": return "anybody";
-      default: return "everybody";
+      case "nobody":
+        return "nobody";
+      case "any":
+        return "anybody";
+      default:
+        return "everybody";
     }
   }
 
@@ -269,28 +275,36 @@ export class AmbiencePeoplePredicateInput extends LitElement {
 
   private _modeLabel(m: Mode): string {
     switch (m) {
-      case "everybody": return localize(this.hass, "ui.people_mode_everybody", "Everybody");
-      case "anybody": return localize(this.hass, "ui.people_mode_anybody", "Anybody");
-      case "nobody": return localize(this.hass, "ui.people_mode_nobody", "Nobody");
-      case "any": return localize(this.hass, "ui.people_mode_any", "Any of:");
-      case "all": return localize(this.hass, "ui.people_mode_all", "All of:");
-      case "none": return localize(this.hass, "ui.people_mode_none", "None of:");
+      case "everybody":
+        return localize(this.hass, "ui.people_mode_everybody", "Everybody");
+      case "anybody":
+        return localize(this.hass, "ui.people_mode_anybody", "Anybody");
+      case "nobody":
+        return localize(this.hass, "ui.people_mode_nobody", "Nobody");
+      case "any":
+        return localize(this.hass, "ui.people_mode_any", "Any of:");
+      case "all":
+        return localize(this.hass, "ui.people_mode_all", "All of:");
+      case "none":
+        return localize(this.hass, "ui.people_mode_none", "None of:");
     }
   }
 
   private _renderMode(mode: Mode) {
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
-      const schema: HaFormSchema[] = [{
-        name: "mode",
-        required: true,
-        selector: {
-          select: {
-            mode: "dropdown",
-            options: MODES.map((m) => ({ value: m, label: this._modeLabel(m) })),
+      const schema: HaFormSchema[] = [
+        {
+          name: "mode",
+          required: true,
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: MODES.map((m) => ({ value: m, label: this._modeLabel(m) })),
+            },
           },
         },
-      }];
+      ];
       return html`<ha-form
         class="mode"
         .hass=${this.hass}
@@ -319,17 +333,21 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     }
     const who = this._who();
     return html`<div class="people-list">
-      ${persons.map((p) => html`<label class="person-pill">
+      ${persons.map(
+        (p) => html`<label class="person-pill">
         <input
           type="checkbox"
           .checked=${who.includes(p.id)}
           @change=${(e: Event) => this._togglePerson(p.id, (e.target as HTMLInputElement).checked)}
         />${p.name}
-      </label>`)}
+      </label>`,
+      )}
     </div>
-    <div class="field-error">${who.length === 0
-      ? localize(this.hass, "ui.people_select_one", "Select at least one person")
-      : ""}</div>`;
+    <div class="field-error">${
+      who.length === 0
+        ? localize(this.hass, "ui.people_select_one", "Select at least one person")
+        : ""
+    }</div>`;
   }
 
   private _renderNegate(negate: boolean) {
@@ -340,11 +358,13 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     const onChange = (v: string) => this._setNegate(v === "true");
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
-      const schema: HaFormSchema[] = [{
-        name: "negate",
-        required: true,
-        selector: { select: { mode: "dropdown", options } },
-      }];
+      const schema: HaFormSchema[] = [
+        {
+          name: "negate",
+          required: true,
+          selector: { select: { mode: "dropdown", options } },
+        },
+      ];
       return html`<ha-form
         class="negate"
         .hass=${this.hass}
@@ -374,11 +394,13 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     ];
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
-      const schema: HaFormSchema[] = [{
-        name: "where",
-        required: true,
-        selector: { select: { mode: "dropdown", options } },
-      }];
+      const schema: HaFormSchema[] = [
+        {
+          name: "where",
+          required: true,
+          selector: { select: { mode: "dropdown", options } },
+        },
+      ];
       return html`<ha-form
         class="where"
         .hass=${this.hass}
@@ -409,7 +431,11 @@ export class AmbiencePeoplePredicateInput extends LitElement {
         .schema=${this._forSchema()}
         .data=${this._forData()}
         .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { duration?: { hours?: number; minutes?: number; seconds?: number } } }>) => {
+        @value-changed=${(
+          e: CustomEvent<{
+            value: { duration?: { hours?: number; minutes?: number; seconds?: number } };
+          }>,
+        ) => {
           e.stopPropagation();
           this._setForFromHaForm(e.detail.value.duration);
         }}
@@ -441,9 +467,11 @@ export class AmbiencePeoplePredicateInput extends LitElement {
       <div class="row">${this._renderMode(mode)}</div>
       ${PEOPLE_MODES.has(mode) ? this._renderPeople() : ""}
       <div class="row">
-        ${showNegate
-          ? this._renderNegate(negate)
-          : html`<span class="label negate-static">${localize(this.hass, "ui.people_is_at_static", "is at")}</span>`}
+        ${
+          showNegate
+            ? this._renderNegate(negate)
+            : html`<span class="label negate-static">${localize(this.hass, "ui.people_is_at_static", "is at")}</span>`
+        }
         ${this._renderWhere(where)}
       </div>
       <div class="row">

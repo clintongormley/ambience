@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/condition-input";
 import type { ConditionInfo } from "../frontend/src/types";
 

@@ -10,9 +10,15 @@
     "check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "lint": "biome lint frontend/src test",
+    "lint:fix": "biome lint --write frontend/src test",
+    "format": "biome format --write frontend/src test",
+    "format:check": "biome format frontend/src test",
+    "ci": "biome ci frontend/src test"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.16",
     "@types/js-yaml": "^4.0.9",
     "@types/jsdom": "^28.0.3",
     "@vitest/coverage-v8": "^2.1.9",

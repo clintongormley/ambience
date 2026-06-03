@@ -1,4 +1,4 @@
-import { html, css, type TemplateResult } from "lit";
+import { css, html, type TemplateResult } from "lit";
 
 import type { HassConnection } from "../api.js";
 

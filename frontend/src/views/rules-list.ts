@@ -1,18 +1,11 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import "./kebab-menu";
-import type { KebabItem } from "./kebab-menu";
 import { categorySwatchStyle } from "../category-colors.js";
-import { entityName, type HassWithStates } from "./entity-row.js";
-import { actionLabel, localize, conditionLabel } from "../i18n.js";
-import {
-  formatArgValue,
-  paramLabel,
-  ruleDisplayName,
-  summariseCondition,
-} from "../summary.js";
 import { DragReorderController } from "../drag-reorder.js";
+import { actionLabel, conditionLabel, localize } from "../i18n.js";
+import { formatArgValue, paramLabel, ruleDisplayName, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
   ConditionInfo,
@@ -21,6 +14,8 @@ import type {
   Rule,
   RuleCategory,
 } from "../types.js";
+import { entityName, type HassWithStates } from "./entity-row.js";
+import type { KebabItem } from "./kebab-menu";
 
 @customElement("ambience-rules-list")
 export class AmbienceRulesList extends LitElement {
@@ -221,10 +216,7 @@ export class AmbienceRulesList extends LitElement {
   // Per-service schemas — used to look up HA's `field.name` attribute
   // for each param key in the expanded action detail. Optional; when
   // missing, the param key is humanized (snake_case → "Title case").
-  @property({ attribute: false }) schemas: Record<
-    string,
-    import("../types.js").ServiceSchema
-  > = {};
+  @property({ attribute: false }) schemas: Record<string, import("../types.js").ServiceSchema> = {};
   // Available rule categories, used to render the section header bars. Empty ⇒ no
   // category sections (every rule rendered as one flat list).
   @property({ attribute: false }) categories: RuleCategory[] = [];
@@ -254,23 +246,25 @@ export class AmbienceRulesList extends LitElement {
       <ambience-kebab-menu
         class="category-kebab"
         .hass=${this.hass}
-        .items=${[
-          {
-            id: "run",
-            label: localize(this.hass, "ui.run", "Run"),
-            icon: "mdi:play",
-          },
-          {
-            id: "traces",
-            label: localize(this.hass, "ui.view_traces", "View traces"),
-            icon: "mdi:transit-connection-variant",
-          },
-          {
-            id: "simulate",
-            label: localize(this.hass, "ui.simulate", "Simulate"),
-            icon: "mdi:flask-outline",
-          },
-        ] satisfies KebabItem[]}
+        .items=${
+          [
+            {
+              id: "run",
+              label: localize(this.hass, "ui.run", "Run"),
+              icon: "mdi:play",
+            },
+            {
+              id: "traces",
+              label: localize(this.hass, "ui.view_traces", "View traces"),
+              icon: "mdi:transit-connection-variant",
+            },
+            {
+              id: "simulate",
+              label: localize(this.hass, "ui.simulate", "Simulate"),
+              icon: "mdi:flask-outline",
+            },
+          ] satisfies KebabItem[]
+        }
         @menu-action=${(e: CustomEvent<{ id: string }>) =>
           this._onCategoryMenu(category, e.detail.id)}
       ></ambience-kebab-menu>
@@ -308,15 +302,11 @@ export class AmbienceRulesList extends LitElement {
         category: this.categories.find((g) => g.id === gid),
         rows,
       }))
-      .sort((a, b) =>
-        (a.category?.name ?? "").localeCompare(b.category?.name ?? ""),
-      );
+      .sort((a, b) => (a.category?.name ?? "").localeCompare(b.category?.name ?? ""));
   }
 
   private _emit(name: string, detail: unknown) {
-    this.dispatchEvent(
-      new CustomEvent(name, { detail, bubbles: true, composed: true }),
-    );
+    this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 
   // Memoised name→priority map, rebuilt only when the `conditions` array
@@ -343,10 +333,7 @@ export class AmbienceRulesList extends LitElement {
     const priorityOf = this._priorityMap();
     return Object.keys(rule.when)
       .filter((k) => rule.when[k] != null)
-      .sort(
-        (a, b) =>
-          (priorityOf.get(b) ?? -Infinity) - (priorityOf.get(a) ?? -Infinity),
-      );
+      .sort((a, b) => (priorityOf.get(b) ?? -Infinity) - (priorityOf.get(a) ?? -Infinity));
   }
 
   /** Inline (collapsed) "when" summary: condition entries joined by `, ` with
@@ -429,16 +416,14 @@ export class AmbienceRulesList extends LitElement {
    *  snake-case → title-case for unknown ids). */
   private _actionLabel(action: ActionSpec): string {
     const exposed = this.availableActions.find((e) => e.id === action.service);
-    if (exposed?.label && exposed.label.trim()) return exposed.label;
+    if (exposed?.label?.trim()) return exposed.label;
     return actionLabel(this.hass as any, action.service);
   }
 
   private _onCategoryMenu(category: RuleCategory, id: string) {
     if (id === "run") this._emit("apply-category", { categoryId: category.id });
-    else if (id === "traces")
-      this._emit("show-traces", { category: category.id });
-    else if (id === "simulate")
-      this._emit("show-simulator", { category: category.id });
+    else if (id === "traces") this._emit("show-traces", { category: category.id });
+    else if (id === "simulate") this._emit("show-simulator", { category: category.id });
   }
 
   private _onRuleMenu(i: number, id: string) {
@@ -452,20 +437,14 @@ export class AmbienceRulesList extends LitElement {
    *  (used for every emitted event and drag handler); `displayNum` is the
    *  1-based position WITHIN its render section. */
   private _renderRow(i: number, rule: Rule, displayNum: number) {
-    const unpinLabel = localize(
-      this.hass,
-      "ui.unpin",
-      "Unpin (return to automatic order)",
-    );
+    const unpinLabel = localize(this.hass, "ui.unpin", "Unpin (return to automatic order)");
     const isDisabled = rule.enabled === false;
     const toggleLabel = isDisabled
       ? localize(this.hass, "ui.enable_rule", "Enable rule")
       : localize(this.hass, "ui.disable_rule", "Disable rule");
     return html`
       <li
-        class="${this._drag.over === i ? "drag-over " : ""}${isDisabled
-          ? "disabled"
-          : ""}"
+        class="${this._drag.over === i ? "drag-over " : ""}${isDisabled ? "disabled" : ""}"
         draggable="true"
         @dragstart=${() => this._drag.start(i)}
         @dragover=${(e: DragEvent) => this._drag.dragOver(e, i)}
@@ -473,8 +452,9 @@ export class AmbienceRulesList extends LitElement {
         @dragend=${() => this._drag.end()}
       >
         <span class="lead">
-          ${rule.pinned
-            ? html`<button
+          ${
+            rule.pinned
+              ? html`<button
                 class="pin"
                 title=${unpinLabel}
                 aria-label=${unpinLabel}
@@ -485,20 +465,18 @@ export class AmbienceRulesList extends LitElement {
               >
                 📌
               </button>`
-            : html`<span
+              : html`<span
                 class="handle"
-                title=${localize(
-                  this.hass,
-                  "ui.drag_to_reorder",
-                  "Drag to reorder",
-                )}
+                title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}
                 >⠿</span
-              >`}
+              >`
+          }
         </span>
         <span class="idx">${displayNum}</span>
         <span class="warn-slot">
-          ${rule.shadowed_by != null && !isDisabled
-            ? html`<span
+          ${
+            rule.shadowed_by != null && !isDisabled
+              ? html`<span
                 class="shadow-warning"
                 title=${localize(
                   this.hass,
@@ -507,63 +485,62 @@ export class AmbienceRulesList extends LitElement {
                 )}
                 >⚠️</span
               >`
-            : ""}
+              : ""
+          }
         </span>
         <div class="body" @click=${() => this._toggleRule(i)}>
           <div class="name">
             ${ruleDisplayName(
               rule,
-              localize(this.hass, "ui.rule_n", "Rule {n}").replace(
-                "{n}",
-                String(displayNum),
-              ),
+              localize(this.hass, "ui.rule_n", "Rule {n}").replace("{n}", String(displayNum)),
             )}
           </div>
           <div class="summary">
-            ${this._expanded.has(i)
-              ? ""
-              : html`${this._whenSummary(rule)} ·
+            ${
+              this._expanded.has(i)
+                ? ""
+                : html`${this._whenSummary(rule)} ·
                   <span class="action-count"
                     >${this._actionCountLabel(rule)}</span
-                  >`}
+                  >`
+            }
           </div>
-          ${this._expanded.has(i)
-            ? html`
+          ${
+            this._expanded.has(i)
+              ? html`
                 <div class="rule-detail">
                   ${this._whenStacked(rule)}
-                  ${rule.actions.length === 0
-                    ? ""
-                    : html`<div class="actions-detail">
+                  ${
+                    rule.actions.length === 0
+                      ? ""
+                      : html`<div class="actions-detail">
                         ${rule.actions.map((a) => {
                           const params = this._actionParamsString(a);
                           const label = this._actionLabel(a);
-                          const header = params
-                            ? `${label} · ${params}`
-                            : label;
+                          const header = params ? `${label} · ${params}` : label;
                           return html`
                             <div class="actions-detail-item">
                               <div class="action-header">${header}</div>
-                              ${a.entity_ids.length === 0
-                                ? html`<div class="no-targets">
-                                    ${localize(
-                                      this.hass,
-                                      "ui.no_targets",
-                                      "(no targets)",
-                                    )}
+                              ${
+                                a.entity_ids.length === 0
+                                  ? html`<div class="no-targets">
+                                    ${localize(this.hass, "ui.no_targets", "(no targets)")}
                                   </div>`
-                                : html`<ul class="entity-list">
+                                  : html`<ul class="entity-list">
                                     ${a.entity_ids.map(
-                                      (eid) =>
-                                        html`<li>${this._entityName(eid)}</li>`,
+                                      (eid) => html`<li>${this._entityName(eid)}</li>`,
                                     )}
-                                  </ul>`}
+                                  </ul>`
+                              }
                             </div>
                           `;
                         })}
-                      </div>`}
+                      </div>`
+                  }
                 </div>
               `
-            : ""}
+              : ""
+          }
         </div>
         <button
           class="toggle"
@@ -578,41 +555,40 @@ export class AmbienceRulesList extends LitElement {
           aria-label=${toggleLabel}
         >
           <ha-icon
-            icon=${isDisabled
-              ? "mdi:toggle-switch-off-outline"
-              : "mdi:toggle-switch"}
+            icon=${isDisabled ? "mdi:toggle-switch-off-outline" : "mdi:toggle-switch"}
           ></ha-icon>
         </button>
         <ambience-kebab-menu
           class="row-kebab"
           .hass=${this.hass}
           .label=${localize(this.hass, "ui.rule_actions", "Rule actions")}
-          .items=${[
-            {
-              id: "edit",
-              label: localize(this.hass, "ui.edit", "Edit"),
-              icon: "mdi:pencil",
-            },
-            {
-              id: "duplicate",
-              label: localize(this.hass, "ui.duplicate", "Duplicate"),
-              icon: "mdi:content-duplicate",
-            },
-            {
-              id: "run",
-              label: localize(this.hass, "ui.run_actions", "Run actions"),
-              icon: "mdi:play",
-            },
-            {
-              id: "delete",
-              label: localize(this.hass, "ui.title_delete", "Delete"),
-              icon: "mdi:delete",
-              danger: true,
-              dividerBefore: true,
-            },
-          ] satisfies KebabItem[]}
-          @menu-action=${(e: CustomEvent<{ id: string }>) =>
-            this._onRuleMenu(i, e.detail.id)}
+          .items=${
+            [
+              {
+                id: "edit",
+                label: localize(this.hass, "ui.edit", "Edit"),
+                icon: "mdi:pencil",
+              },
+              {
+                id: "duplicate",
+                label: localize(this.hass, "ui.duplicate", "Duplicate"),
+                icon: "mdi:content-duplicate",
+              },
+              {
+                id: "run",
+                label: localize(this.hass, "ui.run_actions", "Run actions"),
+                icon: "mdi:play",
+              },
+              {
+                id: "delete",
+                label: localize(this.hass, "ui.title_delete", "Delete"),
+                icon: "mdi:delete",
+                danger: true,
+                dividerBefore: true,
+              },
+            ] satisfies KebabItem[]
+          }
+          @menu-action=${(e: CustomEvent<{ id: string }>) => this._onRuleMenu(i, e.detail.id)}
         ></ambience-kebab-menu>
       </li>
     `;
@@ -632,9 +608,7 @@ export class AmbienceRulesList extends LitElement {
     // Only render sections that actually have rules — when filtering to a
     // single category, a scope with no rules in that category shows nothing (no
     // empty header bar).
-    const sections = this._sections().filter(
-      (section) => section.rows.length > 0,
-    );
+    const sections = this._sections().filter((section) => section.rows.length > 0);
     // Show the coloured category header for every section, including when a single
     // category is filtered — the bar labels which category these rules belong to.
     const showHeaders = this.categories.length > 0;
@@ -642,13 +616,9 @@ export class AmbienceRulesList extends LitElement {
       ${sections.map(
         (section) => html`
           <div class="category-section">
-            ${showHeaders && section.category
-              ? this._renderSectionHeader(section.category)
-              : ""}
+            ${showHeaders && section.category ? this._renderSectionHeader(section.category) : ""}
             <ul>
-              ${section.rows.map(([i, rule], n) =>
-                this._renderRow(i, rule, n + 1),
-              )}
+              ${section.rows.map(([i, rule], n) => this._renderRow(i, rule, n + 1))}
             </ul>
           </div>
         `,

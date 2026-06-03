@@ -1,4 +1,4 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import "./state-expr-node.js";
@@ -11,9 +11,8 @@ function _samePath(a: number[] | null, b: number[] | null): boolean {
   if (a.length !== b.length) return false;
   return a.every((v, i) => v === b[i]);
 }
-import type {
-  StateAtom, StateExpr, StateGroup, StateNot, StatePredicate,
-} from "../types.js";
+
+import type { StateAtom, StateExpr, StateGroup, StateNot, StatePredicate } from "../types.js";
 
 /**
  * Root component for editing a state predicate. Holds the full expression
@@ -137,8 +136,8 @@ export class AmbienceStatePredicateInput extends LitElement {
    *  group inside itself). */
   _moveAt(fromPath: number[], toPath: number[]) {
     if (this._isPrefix(fromPath, toPath)) return;
-    if (fromPath.length === 0) return;            // can't drag the root
-    if (toPath.length === 0) return;              // can't drop on the root
+    if (fromPath.length === 0) return; // can't drag the root
+    if (toPath.length === 0) return; // can't drop on the root
     const source = this._nodeAt(fromPath);
     if (!source) return;
     const next = this._rewriteForMove(this.value, [], fromPath, toPath, source);
@@ -164,7 +163,11 @@ export class AmbienceStatePredicateInput extends LitElement {
     if (!node) return node;
     if (node.kind === "not") {
       const inner = this._rewriteForMove(
-        (node as StateNot).item, nodePath, fromPath, toPath, source,
+        (node as StateNot).item,
+        nodePath,
+        fromPath,
+        toPath,
+        source,
       );
       if (inner == null) return null;
       return { kind: "not", item: inner as StateExpr };
@@ -184,9 +187,7 @@ export class AmbienceStatePredicateInput extends LitElement {
     node.items.forEach((child, i) => {
       const childPath = [...nodePath, i];
       if (isFromParent && i === fromPath[fromPath.length - 1]) return;
-      const rewritten = this._rewriteForMove(
-        child, childPath, fromPath, toPath, source,
-      );
+      const rewritten = this._rewriteForMove(child, childPath, fromPath, toPath, source);
       if (rewritten !== null) out.push(rewritten as StateExpr);
     });
 
@@ -334,9 +335,7 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._toggleNotAt(e.detail.path);
   };
 
-  private _onNodeSetOp = (
-    e: CustomEvent<{ path: number[]; op: "and" | "or" }>,
-  ) => {
+  private _onNodeSetOp = (e: CustomEvent<{ path: number[]; op: "and" | "or" }>) => {
     e.stopPropagation();
     this._setGroupOpAt(e.detail.path, e.detail.op);
   };
@@ -366,8 +365,7 @@ export class AmbienceStatePredicateInput extends LitElement {
     if (!atom.entity_id) {
       return localize(this.hass, "ui.state_err_entity", "Entity is required");
     }
-    const isNumeric =
-      atom.kind !== "is" && atom.kind !== "is_not";
+    const isNumeric = atom.kind !== "is" && atom.kind !== "is_not";
     if (isNumeric) {
       const v = atom.states[0];
       if (!v) return localize(this.hass, "ui.state_err_value", "Value is required");
@@ -450,8 +448,7 @@ export class AmbienceStatePredicateInput extends LitElement {
   override willUpdate(changed: Map<string, unknown>) {
     if (changed.has("value")) {
       const v = this.value;
-      if (v && this._openPath === null
-          && v.kind !== "and" && v.kind !== "or") {
+      if (v && this._openPath === null && v.kind !== "and" && v.kind !== "or") {
         this._openPath = [];
       }
       // If we're showing an error and the open atom became valid, drop it.
@@ -502,18 +499,17 @@ export class AmbienceStatePredicateInput extends LitElement {
     }
     // Error message for the currently-open atom, only visible after the user
     // tried to navigate away while it was invalid.
-    const errorMessage = this._showError && this._openPath !== null
-      ? (() => {
-          const atom = this._atomAt(this._openPath!);
-          return atom ? this._atomError(atom) : null;
-        })()
-      : null;
+    const errorMessage =
+      this._showError && this._openPath !== null
+        ? (() => {
+            const atom = this._atomAt(this._openPath!);
+            return atom ? this._atomError(atom) : null;
+          })()
+        : null;
     // Section-level + Add condition is needed only when the root doesn't
     // already provide one. A group root has its own + Add inside the card.
     // An atom root (or NOT-wrapped atom) doesn't, so we show it here.
-    const inner = this.value.kind === "not"
-      ? (this.value as StateNot).item
-      : this.value;
+    const inner = this.value.kind === "not" ? (this.value as StateNot).item : this.value;
     const showSectionAdd = inner.kind !== "and" && inner.kind !== "or";
     return html`
       <ambience-state-expr-node
@@ -524,12 +520,15 @@ export class AmbienceStatePredicateInput extends LitElement {
         .errorPath=${errorMessage ? this._openPath : null}
         .errorMessage=${errorMessage}
       ></ambience-state-expr-node>
-      ${showSectionAdd ? html`
+      ${
+        showSectionAdd
+          ? html`
         <button class="root-add" @click=${() => this._addAtRoot()}>
           + ${localize(this.hass, "ui.state_add_condition", "Add condition")}
         </button>
-      ` : ""}
+      `
+          : ""
+      }
     `;
   }
-
 }

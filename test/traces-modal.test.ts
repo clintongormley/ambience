@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api", () => ({ listTraces: vi.fn(), getServiceSchema: vi.fn() }));
 
@@ -8,13 +8,26 @@ import type { BufferedUnit } from "../frontend/src/types";
 
 function unit(over: Partial<BufferedUnit> = {}): BufferedUnit {
   return {
-    event_id: "e1", timestamp: "2026-06-01T10:00:00+00:00",
-    cause: { kind: "entity", entity_id: "binary_sensor.motion", old: "off", new: "on", detail: null },
-    scope_kind: "area", scope_id: "kitchen", scope_name: "Kitchen",
-    category: "g1", category_name: "Evening", switch_state: "on",
-    outcome: "acted", winner_name: "Evening",
+    event_id: "e1",
+    timestamp: "2026-06-01T10:00:00+00:00",
+    cause: {
+      kind: "entity",
+      entity_id: "binary_sensor.motion",
+      old: "off",
+      new: "on",
+      detail: null,
+    },
+    scope_kind: "area",
+    scope_id: "kitchen",
+    scope_name: "Kitchen",
+    category: "g1",
+    category_name: "Evening",
+    switch_state: "on",
+    outcome: "acted",
+    winner_name: "Evening",
     actions: [{ service: "light.turn_on", entity_ids: ["light.k"], params: {} }],
-    explanation: null, ...over,
+    explanation: null,
+    ...over,
   };
 }
 
@@ -41,19 +54,19 @@ describe("ambience-traces-modal", () => {
   test("shows only this scope+category's records", async () => {
     el = await mount([
       unit({ event_id: "a" }),
-      unit({ event_id: "b", scope_id: "hall" }),          // other scope_id — filtered out
-      unit({ event_id: "c", category: "g2" }),                // other category — filtered out
+      unit({ event_id: "b", scope_id: "hall" }), // other scope_id — filtered out
+      unit({ event_id: "c", category: "g2" }), // other category — filtered out
       unit({ event_id: "d" }),
-      unit({ event_id: "e", scope_kind: "floor" }),        // other scope_kind — filtered out
+      unit({ event_id: "e", scope_kind: "floor" }), // other scope_kind — filtered out
     ]);
     const evals = el.shadowRoot.querySelectorAll(".eval");
-    expect(evals.length).toBe(2);                           // a + d only
+    expect(evals.length).toBe(2); // a + d only
     // initial mount must trigger exactly one fetch
     expect(vi.mocked(api.listTraces).mock.calls.length).toBe(1);
   });
 
   test("empty state when the category has no traces", async () => {
-    el = await mount([unit({ scope_id: "hall" })]);  // nothing for kitchen/g1
+    el = await mount([unit({ scope_id: "hall" })]); // nothing for kitchen/g1
     expect(el.shadowRoot.textContent).toContain("No traces");
   });
 
@@ -143,10 +156,15 @@ describe("ambience-traces-modal", () => {
   test("error state when listTraces rejects", async () => {
     vi.mocked(api.listTraces).mockRejectedValue(new Error("boom"));
     const e: any = document.createElement("ambience-traces-modal");
-    e.hass = { callWS: vi.fn() }; e.scope = { scope_kind: "area", scope_id: "kitchen" };
-    e.category = "g1"; e.categoryName = "Evening"; e.open = true;
+    e.hass = { callWS: vi.fn() };
+    e.scope = { scope_kind: "area", scope_id: "kitchen" };
+    e.category = "g1";
+    e.categoryName = "Evening";
+    e.open = true;
     document.body.appendChild(e);
-    await e.updateComplete; await new Promise((r) => setTimeout(r, 0)); await e.updateComplete;
+    await e.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await e.updateComplete;
     expect(e.shadowRoot.textContent).toContain("boom");
     e.remove();
   });

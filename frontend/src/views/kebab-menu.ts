@@ -1,4 +1,4 @@
-import { LitElement, html, css, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { localize } from "../i18n";
 
@@ -26,7 +26,10 @@ export interface KebabItem {
 @customElement("ambience-kebab-menu")
 export class AmbienceKebabMenu extends LitElement {
   @property({ attribute: false }) items: KebabItem[] = [];
-  @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
+  @property({ attribute: false }) hass?: {
+    localize?: (k: string) => string | undefined;
+    [key: string]: unknown;
+  };
   /** Overrides the trigger aria-label (default "More actions"). */
   @property() label?: string;
 
@@ -82,9 +85,7 @@ export class AmbienceKebabMenu extends LitElement {
   private _renderItems() {
     return this.items.map(
       (item) => html`
-        ${item.dividerBefore
-          ? html`<div class="kebab-divider" role="separator"></div>`
-          : nothing}
+        ${item.dividerBefore ? html`<div class="kebab-divider" role="separator"></div>` : nothing}
         <button
           class="kebab-item ${item.danger ? "danger" : ""}"
           role="menuitem"
@@ -105,7 +106,10 @@ export class AmbienceKebabMenu extends LitElement {
         aria-label=${this._triggerLabel()}
         aria-haspopup="menu"
         aria-expanded=${expanded}
-        @click=${(e: Event) => { e.stopPropagation(); this._open = !this._open; }}
+        @click=${(e: Event) => {
+          e.stopPropagation();
+          this._open = !this._open;
+        }}
       >
         <ha-icon icon="mdi:dots-vertical"></ha-icon>
       </button>
@@ -115,15 +119,20 @@ export class AmbienceKebabMenu extends LitElement {
   private _renderMenu() {
     return html`
       ${this._renderTrigger(this._open)}
-      ${this._open
-        ? html`
+      ${
+        this._open
+          ? html`
             <div
               class="kebab-backdrop"
-              @click=${(e: Event) => { e.stopPropagation(); this._open = false; }}
+              @click=${(e: Event) => {
+                e.stopPropagation();
+                this._open = false;
+              }}
             ></div>
             <div class="kebab-menu" role="menu">${this._renderItems()}</div>
           `
-        : nothing}
+          : nothing
+      }
     `;
   }
 

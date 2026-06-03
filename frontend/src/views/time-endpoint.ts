@@ -18,7 +18,9 @@ export class AmbienceTimeEndpoint extends LitElement {
     :host {
       display: inline-flex;
       gap: 0.5rem;
-      align-items: center;
+      /* Top-align so the kind dropdown (e.g. "Sun") lines up with the first
+         input row, not the vertical centre of the two-row sun editor. */
+      align-items: flex-start;
     }
     select, input {
       padding: 0.4rem;
@@ -79,7 +81,10 @@ export class AmbienceTimeEndpoint extends LitElement {
 
   private _onOffsetChange(e: Event) {
     if (this.value.kind !== "sun") return;
-    const offset_min = parseInt((e.target as HTMLInputElement).value, 10);
+    // A blank field means "no offset" → 0, so the placeholder can show through
+    // for the common zero case.
+    const raw = (e.target as HTMLInputElement).value.trim();
+    const offset_min = raw === "" ? 0 : parseInt(raw, 10);
     if (Number.isNaN(offset_min)) return;
     this._emit({ ...this.value, offset_min });
   }
@@ -128,7 +133,7 @@ export class AmbienceTimeEndpoint extends LitElement {
             type="number"
             step="1"
             placeholder=${localize(this.hass, "ui.offset_placeholder", "Offset")}
-            .value=${String(v.offset_min)}
+            .value=${v.offset_min === 0 ? "" : String(v.offset_min)}
             @input=${this._onOffsetChange}
           />
           <span class="offset-hint">${hint}</span>

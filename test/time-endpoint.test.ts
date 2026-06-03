@@ -198,13 +198,30 @@ describe("ambience-time-endpoint", () => {
     expect(get()).toBeUndefined();
   });
 
-  test("_onOffsetChange does not emit when offset is NaN", async () => {
-    el = await mount({ kind: "sun", anchor: "sunset", offset_min: 0 });
+  test("a non-numeric offset entry (blanked by the number input) resolves to 0", async () => {
+    // A type=number input rejects "abc" and reports value "" — which we treat
+    // as "no offset" → 0, rather than corrupting state.
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: -30 });
     const get = captureEmit(el);
     const offsetInput = el.shadowRoot.querySelector('input[type="number"]') as HTMLInputElement;
     offsetInput.value = "abc";
     offsetInput.dispatchEvent(new Event("input"));
-    expect(get()).toBeUndefined();
+    expect(get()).toEqual({ kind: "sun", anchor: "sunset", offset_min: 0 });
+  });
+
+  test("offset input is blank when offset is 0 so the placeholder shows", async () => {
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: 0 });
+    const offset = el.shadowRoot.querySelector('input[type="number"]') as HTMLInputElement;
+    expect(offset.value).toBe("");
+  });
+
+  test("clearing the offset input emits offset_min 0", async () => {
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: -30 });
+    const get = captureEmit(el);
+    const offset = el.shadowRoot.querySelector('input[type="number"]') as HTMLInputElement;
+    offset.value = "";
+    offset.dispatchEvent(new Event("input"));
+    expect(get()).toEqual({ kind: "sun", anchor: "sunset", offset_min: 0 });
   });
 
   test("sun endpoint renders a clamp direction dropdown defaulting to none", async () => {

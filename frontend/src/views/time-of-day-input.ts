@@ -43,7 +43,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
       background: none; border: none; color: var(--secondary-text-color, #888);
       cursor: pointer; font-size: 1.1em;
     }
-    .range-row { display: flex; align-items: center; gap: 0.5rem; }
+    .range-row { display: flex; align-items: flex-start; gap: 0.5rem; }
     .range-row label { min-width: 3em; font-size: 0.9em; color: var(--secondary-text-color); }
     .add-btn {
       background: none; border: 1px dashed var(--divider-color, #ccc);

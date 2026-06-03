@@ -7,6 +7,7 @@ import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { conditionLabel, localize } from "../i18n.js";
 import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
 import { stripPositionMetadata } from "../scene.js";
+import { scopeIcon } from "../scope-icon.js";
 import { sceneDisplayName, summariseAction, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
@@ -68,7 +69,9 @@ export class AmbienceSceneEditor extends LitElement {
     :host {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.4); z-index: 100;
-      align-items: stretch; justify-content: center;
+      /* Centre the fixed-height modal so it leaves a little space above and
+         below the viewport edges, matching the config (settings) modal. */
+      align-items: center; justify-content: center;
       --category-swatch-size: 1.75rem;
       --category-swatch-icon-size: 18px;
     }
@@ -76,7 +79,7 @@ export class AmbienceSceneEditor extends LitElement {
     .modal {
       background: var(--card-background-color, #fff); color: inherit;
       width: 90%; max-width: 40rem;
-      height: 100vh; max-height: 100vh;
+      height: calc(100vh - 24px);
       display: flex; flex-direction: column;
     }
     .content {
@@ -198,13 +201,29 @@ export class AmbienceSceneEditor extends LitElement {
       margin-top: 0.5rem;
       padding: 0.3rem 0;
     }
-    .destination {
-      margin-bottom: 0.75rem;
-    }
-    .destination label {
-      display: block;
+    /* Scope icon in the destination summary + option list — matches the
+       scope-header icon (HA's area/floor icon, or a per-kind default). */
+    .scope-icon {
+      flex: 0 0 auto;
+      --mdc-icon-size: 18px;
       color: var(--secondary-text-color, #888);
-      font-size: 0.9em;
+      vertical-align: middle;
+    }
+    .scope-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    /* Scope picker: the option list shown directly when expanded, each with its
+       scope icon. Mirrors the category menu (native/ha-form selects can't carry
+       per-option icons, and HA's icon-capable lists churn across versions). */
+    .scope-menu { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.35rem; }
+    .scope-option {
+      display: flex; align-items: center; gap: 0.6rem; width: 100%;
+      min-height: 40px; box-sizing: border-box;
+      padding: 0.3rem 0.5rem; border: 0; border-radius: 6px;
+      background: none; color: var(--primary-text-color, inherit);
+      cursor: pointer; font: inherit; font-size: 1rem; text-align: left;
+    }
+    .scope-option:hover { background: var(--secondary-background-color, #f5f5f5); }
+    .scope-option[aria-selected="true"] {
+      background: var(--secondary-background-color, #eee); font-weight: 600;
     }
     /* Category field: colour-coded swatch + icon (shell from categorySwatchStyles),
        matching the scenes-list filter. */
@@ -318,71 +337,31 @@ export class AmbienceSceneEditor extends LitElement {
     };
   }
 
-  private _onDestinationChange = (e: Event) => {
-    this._setDestination(Number((e.target as HTMLSelectElement).value));
-  };
-
-  /* v8 ignore start -- ha-form not registered in jsdom; jsdom hits the native fallback */
-  private _onDestinationChangeHaForm = (e: CustomEvent<{ value: { destination: string } }>) => {
-    e.stopPropagation();
-    this._setDestination(Number(e.detail.value.destination));
-  };
-  /* v8 ignore stop */
-
+  // Expanded scope picker: the option list shown directly (like the category
+  // field), so one click on the summary opens it. Each option carries its scope
+  // icon — native/ha-form selects render text-only options, and HA's
+  // icon-capable list components churn across versions (mwc → webawesome).
+  // Picking an option closes the slot, mirroring the category menu.
   private _renderDestination() {
-    if (this.scopes.length === 0) return "";
-    const currentIdx = Math.max(
-      0,
-      this.scopes.findIndex((o) => sameScope(o.scope, this._scope)),
-    );
-    /* v8 ignore next 3 -- ha-form not registered in jsdom; jsdom hits the native fallback below */
-    if (customElements.get("ha-form")) {
-      return this._renderDestinationHaForm(currentIdx);
-    }
     return html`
-      <div class="destination">
-        <label>${localize(this.hass, "ui.destination", "Destination")}</label>
-        <select
-          .value=${String(currentIdx)}
-          @change=${this._onDestinationChange}
-        >
-          ${this.scopes.map(
-            (o, i) => html`<option value=${i} ?selected=${i === currentIdx}>${o.label}</option>`,
-          )}
-        </select>
+      <div class="scope-menu" role="listbox">
+        ${this.scopes.map(
+          (o, i) => html`<button
+            class="scope-option"
+            role="option"
+            aria-selected=${sameScope(o.scope, this._scope)}
+            @click=${() => {
+              this._setDestination(i);
+              this._open = null;
+            }}
+          >
+            <ha-icon class="scope-icon" icon=${scopeIcon(o.scope, this.hass as any)}></ha-icon>
+            <span class="scope-name">${o.label}</span>
+          </button>`,
+        )}
       </div>
     `;
   }
-
-  /* v8 ignore start -- ha-form path (real HA only) */
-  private _renderDestinationHaForm(currentIdx: number) {
-    const schema = [
-      {
-        name: "destination",
-        // Required so the dropdown offers no clear/empty affordance — a scene
-        // always has a destination scope.
-        required: true,
-        selector: {
-          select: {
-            mode: "dropdown",
-            options: this.scopes.map((o, i) => ({ value: String(i), label: o.label })),
-          },
-        },
-      },
-    ];
-    return html`
-      <div class="destination">
-        <ha-form
-          .hass=${this.hass}
-          .schema=${schema}
-          .data=${{ destination: String(currentIdx) }}
-          .computeLabel=${() => localize(this.hass, "ui.destination", "Destination")}
-          @value-changed=${this._onDestinationChangeHaForm}
-        ></ha-form>
-      </div>
-    `;
-  }
-  /* v8 ignore stop */
 
   /**
    * The destination scope as a collapse/expand slot (like the name field): a
@@ -401,7 +380,9 @@ export class AmbienceSceneEditor extends LitElement {
     return html`
       <div class="slot collapsed" data-slot-id="destination">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "destination" })}>
-          <span class="summary-label"><strong>${localize(this.hass, "ui.destination", "Destination")}:</strong> ${current?.label ?? ""}</span>
+          <strong>${localize(this.hass, "ui.scope", "Scope")}:</strong>
+          <ha-icon class="scope-icon" icon=${scopeIcon(current.scope, this.hass as any)}></ha-icon>
+          <span class="scope-name">${current.label}</span>
         </div>
       </div>
     `;
@@ -764,6 +745,14 @@ export class AmbienceSceneEditor extends LitElement {
     }
   }
 
+  // A condition that depends on extra configuration is greyed out in the
+  // add-condition dropdown until that configuration exists — selecting it would
+  // only fail validation on save. Currently only `weather`, which needs a
+  // weather entity to be configured (see weather.py validate_predicate).
+  private _conditionDisabled(name: string): boolean {
+    return name === "weather" && !this.weatherConfig?.entity;
+  }
+
   private _renderAddCondition() {
     const unused = this._unusedConditions();
     if (unused.length === 0) return "";
@@ -775,7 +764,7 @@ export class AmbienceSceneEditor extends LitElement {
       <div class="add-condition">
         <select class="add-condition" @change=${this._onAddCondition}>
           <option value="">${localize(this.hass, "ui.add_condition", "+ Add condition…")}</option>
-          ${unused.map((m) => html`<option value=${m.name}>${conditionLabel(this.hass as any, m.name)}</option>`)}
+          ${unused.map((m) => html`<option value=${m.name} ?disabled=${this._conditionDisabled(m.name)}>${conditionLabel(this.hass as any, m.name)}</option>`)}
         </select>
       </div>
     `;
@@ -795,6 +784,7 @@ export class AmbienceSceneEditor extends LitElement {
               ...unused.map((m) => ({
                 value: m.name,
                 label: conditionLabel(this.hass as any, m.name),
+                disabled: this._conditionDisabled(m.name),
               })),
             ],
           },

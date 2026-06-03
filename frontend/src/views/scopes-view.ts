@@ -26,6 +26,7 @@ import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
 import { scopeKey } from "../entities-for-scope.js";
 import { localize } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
+import { scopeIcon } from "../scope-icon.js";
 import type {
   AreaListItem,
   ConditionInfo,
@@ -129,6 +130,13 @@ export class AmbienceScopesView extends LitElement {
       }
       .chevron.open {
         transform: rotate(90deg);
+      }
+      /* Scope icon (HA's area/floor icon, or a per-kind default) sits between the
+         chevron and the name, sized + coloured like the other header glyphs. */
+      .scope-icon {
+        flex: 0 0 auto;
+        --mdc-icon-size: 20px;
+        color: var(--secondary-text-color, #888);
       }
       .scope-name {
         flex: 1;
@@ -298,6 +306,17 @@ export class AmbienceScopesView extends LitElement {
     }
   };
 
+  private _onCategoriesChanged = async () => {
+    try {
+      const categories = await listCategories(this.hass);
+      if (!this.isConnected) return;
+      this._categories = categories;
+    } catch {
+      // Silent — same rationale as exposed-actions: a transient refetch failure
+      // after a successful save isn't worth surfacing; next reload re-fetches.
+    }
+  };
+
   /** Fetch the service schema for each exposed action. Failures per-service
    *  are silently skipped (the summary just falls back to humanized ids). */
   private async _refreshSchemas(actions: ExposedAction[]): Promise<void> {
@@ -322,6 +341,7 @@ export class AmbienceScopesView extends LitElement {
   override async connectedCallback() {
     super.connectedCallback();
     window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
+    window.addEventListener("ambience-categories-changed", this._onCategoriesChanged);
     await this._loadStatic();
     await Promise.all([
       this._refreshAreas(),
@@ -335,6 +355,7 @@ export class AmbienceScopesView extends LitElement {
   override disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
+    window.removeEventListener("ambience-categories-changed", this._onCategoriesChanged);
     this._unsubArea?.();
     this._unsubArea = undefined;
     this._unsubFloor?.();
@@ -979,6 +1000,7 @@ export class AmbienceScopesView extends LitElement {
           @click=${() => this._toggleExpand(scope)}
         >
           <span class="chevron ${open ? "open" : ""}">▶</span>
+          <ha-icon class="scope-icon" icon=${scopeIcon(scope, this.hass as any)}></ha-icon>
           <span class="scope-name">${name}</span>
           <span class="scope-summary">${this._summary(cfg)}</span>
           ${this._renderScopeSwitch(scope)}

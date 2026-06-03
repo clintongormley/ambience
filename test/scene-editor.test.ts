@@ -226,6 +226,60 @@ describe("ambience-scene-editor — collapse + friendly labels", () => {
     el2.remove();
   });
 
+  async function mountWeatherDropdown(weatherConfig: unknown): Promise<any> {
+    const el2: any = document.createElement("ambience-scene-editor");
+    el2.conditions = [
+      {
+        name: "weather",
+        description: "",
+        predicate_help: "",
+        input: "weather_predicate",
+        priority: 300,
+      },
+      { name: "mode", description: "", predicate_help: "", input: "text", priority: 0 },
+    ];
+    el2.availableActions = [];
+    el2.periods = periods;
+    el2.hass = {};
+    el2.scope = { kind: "area", id: "living_room" };
+    el2.scene = { name: "", when: {}, actions: [] };
+    el2.weatherConfig = weatherConfig;
+    el2.open = true;
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    return el2;
+  }
+
+  function weatherOption(el2: any): HTMLOptionElement {
+    return Array.from(el2.shadowRoot.querySelectorAll("select.add-condition option")).find(
+      (o: any) => o.textContent?.trim() === "Weather",
+    ) as HTMLOptionElement;
+  }
+
+  test("weather condition is disabled in the add-condition dropdown when no weather entity is configured", async () => {
+    const el2 = await mountWeatherDropdown({ entity: null, groups: [] });
+    const opt = weatherOption(el2);
+    expect(opt).toBeTruthy();
+    expect(opt.disabled).toBe(true);
+    el2.remove();
+  });
+
+  test("weather condition is disabled when weatherConfig is absent entirely", async () => {
+    const el2 = await mountWeatherDropdown(undefined);
+    const opt = weatherOption(el2);
+    expect(opt).toBeTruthy();
+    expect(opt.disabled).toBe(true);
+    el2.remove();
+  });
+
+  test("weather condition is enabled once a weather entity is configured", async () => {
+    const el2 = await mountWeatherDropdown({ entity: "weather.home", groups: [] });
+    const opt = weatherOption(el2);
+    expect(opt).toBeTruthy();
+    expect(opt.disabled).toBe(false);
+    el2.remove();
+  });
+
   test("adding a new action auto-opens it", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     const addSelect = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
@@ -1947,13 +2001,31 @@ describe("ambience-scene-editor — destination selector", () => {
     return e;
   }
 
+  // Expanding the scope slot shows the option list directly (like the category
+  // field) — one click, no trigger.
+  async function openScopeMenu(e: any): Promise<NodeListOf<HTMLElement>> {
+    await openSlot(e, "destination");
+    return e.shadowRoot.querySelectorAll(".scope-option");
+  }
+
   test("renders a destination option per scope, defaulting to the scene's scope", async () => {
     el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "bedroom" });
-    await openSlot(el, "destination");
-    const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
-    expect(select).toBeTruthy();
-    expect(select.options.length).toBe(3);
-    expect(select.options[select.selectedIndex].textContent.trim()).toBe("Area: Bedroom");
+    const options = await openScopeMenu(el);
+    expect(options.length).toBe(3);
+    const selected = el.shadowRoot.querySelector(
+      '.scope-option[aria-selected="true"]',
+    ) as HTMLElement;
+    expect(selected.textContent).toContain("Area: Bedroom");
+  });
+
+  test("the expanded scope dropdown shows an icon per option", async () => {
+    el = await mountWithScopes({ when: {}, actions: [] }, { kind: "house" });
+    const options = await openScopeMenu(el);
+    const icons = Array.from(options).map((o) =>
+      o.querySelector("ha-icon.scope-icon")?.getAttribute("icon"),
+    );
+    // scopes = [house, area living_room, area bedroom]
+    expect(icons).toEqual(["mdi:home", "mdi:texture-box", "mdi:texture-box"]);
   });
 
   test("the collapsed destination summary shows the current scope label", async () => {
@@ -1961,8 +2033,32 @@ describe("ambience-scene-editor — destination selector", () => {
     const summary = el.shadowRoot.querySelector('[data-slot-id="destination"] .summary');
     expect(summary).toBeTruthy();
     expect(summary.textContent).toContain("Area: Bedroom");
-    // collapsed by default: the selector is not in the DOM until clicked open.
-    expect(el.shadowRoot.querySelector(".destination select")).toBeNull();
+    // collapsed by default: the picker is not in the DOM until clicked open.
+    expect(el.shadowRoot.querySelector(".scope-option")).toBeNull();
+  });
+
+  test("the destination summary label reads 'Scope' (not 'Destination')", async () => {
+    el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "bedroom" });
+    const summary = el.shadowRoot.querySelector('[data-slot-id="destination"] .summary') as Element;
+    expect(summary.textContent).toContain("Scope");
+    expect(summary.textContent).not.toContain("Destination");
+  });
+
+  test("the destination summary shows the current scope's icon", async () => {
+    el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "living_room" });
+    const icon = el.shadowRoot.querySelector(
+      '[data-slot-id="destination"] .summary ha-icon.scope-icon',
+    ) as Element;
+    expect(icon).toBeTruthy();
+    expect(icon.getAttribute("icon")).toBe("mdi:texture-box");
+  });
+
+  test("the destination summary icon reflects the scope kind (house)", async () => {
+    el = await mountWithScopes({ when: {}, actions: [] }, { kind: "house" });
+    const icon = el.shadowRoot.querySelector(
+      '[data-slot-id="destination"] .summary ha-icon.scope-icon',
+    ) as Element;
+    expect(icon.getAttribute("icon")).toBe("mdi:home");
   });
 
   test("the destination slot is rendered after the category slot", async () => {
@@ -2006,10 +2102,8 @@ describe("ambience-scene-editor — destination selector", () => {
     await e.updateComplete;
     el = e;
 
-    await openSlot(el, "destination");
-    const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
-    select.value = "2"; // Area: Bedroom
-    select.dispatchEvent(new Event("change"));
+    const options = await openScopeMenu(el);
+    (options[2] as HTMLElement).click(); // Area: Bedroom
     await el.updateComplete;
 
     // light.lamp_a is in living_room, not bedroom → action target cleared.
@@ -2020,10 +2114,8 @@ describe("ambience-scene-editor — destination selector", () => {
 
   test("save-scene carries the scene and the selected destination scope", async () => {
     el = await mountWithScopes({ when: {}, actions: [] }, { kind: "area", id: "living_room" });
-    await openSlot(el, "destination");
-    const select = el.shadowRoot.querySelector(".destination select") as HTMLSelectElement;
-    select.value = "2"; // Area: Bedroom
-    select.dispatchEvent(new Event("change"));
+    const options = await openScopeMenu(el);
+    (options[2] as HTMLElement).click(); // Area: Bedroom
     await el.updateComplete;
 
     let saved: any;
@@ -2053,7 +2145,7 @@ describe("ambience-scene-editor — destination selector", () => {
     await new Promise((r) => setTimeout(r, 0));
     await e.updateComplete;
     el = e;
-    // Expanded straight away: the selector is in the DOM without a click.
-    expect(el.shadowRoot.querySelector(".destination select")).toBeTruthy();
+    // Expanded straight away: the picker trigger is in the DOM without a click.
+    expect(el.shadowRoot.querySelector(".scope-option")).toBeTruthy();
   });
 });

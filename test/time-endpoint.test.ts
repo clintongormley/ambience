@@ -111,7 +111,7 @@ describe("ambience-time-endpoint", () => {
     el = await mount({ kind: "sun", anchor: "sunset", offset_min: 0 });
     await el.updateComplete;
     const offset = el.shadowRoot.querySelector('input[type="number"]') as HTMLInputElement;
-    expect(offset.placeholder).toContain("min");
+    expect(offset.placeholder).toBe("Offset");
   });
 
   test("hint pluralises 'hour' correctly", async () => {
@@ -198,12 +198,109 @@ describe("ambience-time-endpoint", () => {
     expect(get()).toBeUndefined();
   });
 
-  test("_onOffsetChange does not emit when offset is NaN", async () => {
-    el = await mount({ kind: "sun", anchor: "sunset", offset_min: 0 });
+  test("a non-numeric offset entry (blanked by the number input) resolves to 0", async () => {
+    // A type=number input rejects "abc" and reports value "" — which we treat
+    // as "no offset" → 0, rather than corrupting state.
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: -30 });
     const get = captureEmit(el);
     const offsetInput = el.shadowRoot.querySelector('input[type="number"]') as HTMLInputElement;
     offsetInput.value = "abc";
     offsetInput.dispatchEvent(new Event("input"));
-    expect(get()).toBeUndefined();
+    expect(get()).toEqual({ kind: "sun", anchor: "sunset", offset_min: 0 });
+  });
+
+  test("offset input is blank when offset is 0 so the placeholder shows", async () => {
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: 0 });
+    const offset = el.shadowRoot.querySelector('input[type="number"]') as HTMLInputElement;
+    expect(offset.value).toBe("");
+  });
+
+  test("clearing the offset input emits offset_min 0", async () => {
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: -30 });
+    const get = captureEmit(el);
+    const offset = el.shadowRoot.querySelector('input[type="number"]') as HTMLInputElement;
+    offset.value = "";
+    offset.dispatchEvent(new Event("input"));
+    expect(get()).toEqual({ kind: "sun", anchor: "sunset", offset_min: 0 });
+  });
+
+  test("sun endpoint renders a clamp direction dropdown defaulting to none", async () => {
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: 0 });
+    const selects = el.shadowRoot.querySelectorAll("select");
+    expect(selects.length).toBe(3); // kind, anchor, clamp-direction
+    expect((selects[2] as HTMLSelectElement).value).toBe("");
+    expect(el.shadowRoot.querySelector('input[type="time"]')).toBeFalsy();
+  });
+
+  test("choosing a clamp direction emits a clamp seeded with a clock time", async () => {
+    el = await mount({ kind: "sun", anchor: "sunrise", offset_min: 0 });
+    const get = captureEmit(el);
+    const dir = el.shadowRoot.querySelectorAll("select")[2] as HTMLSelectElement;
+    dir.value = "not_before";
+    dir.dispatchEvent(new Event("change"));
+    const v = get();
+    expect(v.kind).toBe("sun");
+    expect(v.clamp.dir).toBe("not_before");
+    expect(typeof v.clamp.hh).toBe("number");
+    expect(typeof v.clamp.mm).toBe("number");
+  });
+
+  test("switching clamp direction back to none drops the clamp", async () => {
+    el = await mount({
+      kind: "sun",
+      anchor: "sunrise",
+      offset_min: 0,
+      clamp: { dir: "not_before", hh: 8, mm: 30 },
+    });
+    const get = captureEmit(el);
+    const dir = el.shadowRoot.querySelectorAll("select")[2] as HTMLSelectElement;
+    dir.value = "";
+    dir.dispatchEvent(new Event("change"));
+    expect(get()).toEqual({ kind: "sun", anchor: "sunrise", offset_min: 0 });
+  });
+
+  test("editing the clamp time emits the new hh/mm", async () => {
+    el = await mount({
+      kind: "sun",
+      anchor: "sunrise",
+      offset_min: 0,
+      clamp: { dir: "not_before", hh: 8, mm: 30 },
+    });
+    const get = captureEmit(el);
+    const timeInput = el.shadowRoot.querySelector('input[type="time"]') as HTMLInputElement;
+    expect(timeInput.value).toBe("08:30");
+    timeInput.value = "09:15";
+    timeInput.dispatchEvent(new Event("input"));
+    expect(get()).toEqual({
+      kind: "sun",
+      anchor: "sunrise",
+      offset_min: 0,
+      clamp: { dir: "not_before", hh: 9, mm: 15 },
+    });
+  });
+
+  test("changing anchor preserves an existing clamp", async () => {
+    el = await mount({
+      kind: "sun",
+      anchor: "sunrise",
+      offset_min: 0,
+      clamp: { dir: "not_before", hh: 8, mm: 30 },
+    });
+    const get = captureEmit(el);
+    const anchor = el.shadowRoot.querySelectorAll("select")[1] as HTMLSelectElement;
+    anchor.value = "dusk";
+    anchor.dispatchEvent(new Event("change"));
+    expect(get()).toEqual({
+      kind: "sun",
+      anchor: "dusk",
+      offset_min: 0,
+      clamp: { dir: "not_before", hh: 8, mm: 30 },
+    });
+  });
+
+  test("offset input uses the Offset placeholder", async () => {
+    el = await mount({ kind: "sun", anchor: "sunset", offset_min: 0 });
+    const offset = el.shadowRoot.querySelector('input[type="number"]') as HTMLInputElement;
+    expect(offset.placeholder).toBe("Offset");
   });
 });

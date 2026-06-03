@@ -232,6 +232,30 @@ describe("ambience-time-of-day-input", () => {
     expect(v).toHaveProperty("to", { kind: "time", hh: 17, mm: 0 });
   });
 
+  test("sun endpoint clamp survives time-of-day-input round-trip", async () => {
+    // Mount with a range whose 'from' carries a clamp
+    const clampedFrom = {
+      kind: "sun" as const,
+      anchor: "sunrise" as const,
+      offset_min: 0,
+      clamp: { dir: "not_before" as const, hh: 8, mm: 30 },
+    };
+    el = await mount({ from: clampedFrom, to: { kind: "sun", anchor: "dusk", offset_min: 0 } });
+    const get = captureEmit(el);
+    // Trigger a change on the 'to' endpoint (leaves 'from' and its clamp untouched)
+    (el as any)._onRangeChange(
+      0,
+      "to",
+      new CustomEvent("value-changed", {
+        detail: { value: { kind: "sun", anchor: "dusk", offset_min: 5 } },
+      }),
+    );
+    const v = get() as any;
+    expect(v).toHaveProperty("from");
+    expect(v.from).toEqual(clampedFrom);
+    expect(v.from.clamp).toEqual({ dir: "not_before", hh: 8, mm: 30 });
+  });
+
   test("_onRangeChange guard: does not emit when entry is not a range", async () => {
     // Mount with a period entry so the first entry is kind:"period", not kind:"range"
     el = await mount({ period: "afternoon" });

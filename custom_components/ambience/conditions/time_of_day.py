@@ -90,7 +90,27 @@ class TimeOfDayCondition:
 
     def _match_one(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
         start, end = self._resolve_range(item, snapshot)
+        if start >= end and self._clamp_emptied(item, snapshot):
+            return False
         return _in_range(snapshot.now, start, end)
+
+    def _clamp_emptied(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
+        """True if a clamp turned an otherwise-forward range into an empty one.
+
+        Resolve the range with the clamps stripped: if that ran forward
+        (start < end) the range had no genuine overnight wrap, so a clamped
+        start >= end is a degenerate empty range (never matches) rather than a
+        real wrap. Works for named periods too, since `_dep_endpoints` resolves
+        the period definition's endpoints."""
+        endpoints = self._dep_endpoints(item)
+        if len(endpoints) != 2:
+            return False
+        from_ep, to_ep = endpoints
+        if not _endpoint_has_clamp(from_ep) and not _endpoint_has_clamp(to_ep):
+            return False
+        raw_start = self._resolve_endpoint(_strip_clamp(from_ep), snapshot)
+        raw_end = self._resolve_endpoint(_strip_clamp(to_ep), snapshot)
+        return raw_start < raw_end
 
     def _resolve_range(
         self, predicate: Any, snapshot: TimeOfDaySnapshot
@@ -135,15 +155,38 @@ class TimeOfDayCondition:
             if anchor not in ANCHOR_ATTR:
                 raise ValueError(f"invalid anchor: {anchor!r}")
             offset = ep.get("offset_min", 0)
-            if not isinstance(offset, int):
+            if not isinstance(offset, int) or isinstance(offset, bool):
                 raise ValueError(f"offset_min must be int: {offset!r}")
             anchor_dt: datetime = getattr(snapshot, anchor)
             if snapshot.now - anchor_dt > _HALF_DAY:
                 anchor_dt += _DAY
             elif anchor_dt - snapshot.now > _HALF_DAY:
                 anchor_dt -= _DAY
-            return anchor_dt + timedelta(minutes=offset)
+            anchor_dt = anchor_dt + timedelta(minutes=offset)
+            clamp = ep.get("clamp")
+            if clamp is not None:
+                anchor_dt = self._apply_clamp(anchor_dt, clamp)
+            return anchor_dt
         raise ValueError(f"invalid endpoint kind: {kind!r}")
+
+    def _apply_clamp(self, anchor_dt: datetime, clamp: Any) -> datetime:
+        """Clamp a resolved sun datetime by a local clock time.
+
+        not_before → max(anchor, clock); not_after → min(anchor, clock). The
+        clock time is interpreted as HA-local on the anchor's local date, so a
+        clamp commutes with DST the same way a `time` endpoint does."""
+        if not isinstance(clamp, dict):
+            raise ValueError(f"clamp must be an object: {clamp!r}")
+        direction = clamp.get("dir")
+        if direction not in ("not_before", "not_after"):
+            raise ValueError(f"invalid clamp dir: {direction!r}")
+        hh, mm = clamp.get("hh"), clamp.get("mm")
+        if not _valid_clock(hh, mm):
+            raise ValueError(f"invalid clamp time: {hh!r}:{mm!r}")
+        clamp_dt = dt_util.as_local(anchor_dt).replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if direction == "not_before":
+            return max(anchor_dt, clamp_dt)
+        return min(anchor_dt, clamp_dt)
 
     def validate_predicate(self, predicate: Any) -> None:
         if predicate is None:
@@ -178,6 +221,8 @@ class TimeOfDayCondition:
             start_min = _minute_of_day(start)
             end_min = _minute_of_day(end)
             if end_min <= start_min:
+                if self._clamp_emptied(item, snapshot):
+                    continue
                 result.append((start_min, 1440.0))
                 result.append((0.0, end_min))
             else:
@@ -253,6 +298,34 @@ class TimeOfDayCondition:
             offset = endpoint.get("offset_min", 0)
             if anchor in ANCHOR_ATTR and isinstance(offset, int) and not isinstance(offset, bool):
                 sun_events.add((anchor, offset))
+            clamp = endpoint.get("clamp")
+            if isinstance(clamp, dict) and _valid_clock(clamp.get("hh"), clamp.get("mm")):
+                clock_times.add((clamp["hh"], clamp["mm"]))
+
+
+def _valid_clock(hh: Any, mm: Any) -> bool:
+    """True if hh/mm are in-range clock ints (rejecting bool, an int subclass)."""
+    return (
+        isinstance(hh, int)
+        and not isinstance(hh, bool)
+        and 0 <= hh <= 23
+        and isinstance(mm, int)
+        and not isinstance(mm, bool)
+        and 0 <= mm <= 59
+    )
+
+
+def _strip_clamp(ep: Any) -> Any:
+    """Return the endpoint without its clamp (used to resolve the pre-clamp range)."""
+    if isinstance(ep, dict) and "clamp" in ep:
+        bare = dict(ep)
+        bare.pop("clamp")
+        return bare
+    return ep
+
+
+def _endpoint_has_clamp(ep: Any) -> bool:
+    return isinstance(ep, dict) and ep.get("clamp") is not None
 
 
 def _in_range(now: datetime, start: datetime, end: datetime) -> bool:

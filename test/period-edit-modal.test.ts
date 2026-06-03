@@ -129,6 +129,30 @@ describe("ambience-period-edit-modal", () => {
     expect(get()?.definition.label).toBeNull();
   });
 
+  test("sun endpoint clamp survives period-modal save round-trip", async () => {
+    el = await mount({
+      existingId: "morning",
+      initial: {
+        from: {
+          kind: "sun",
+          anchor: "sunrise",
+          offset_min: 0,
+          clamp: { dir: "not_before", hh: 8, mm: 30 },
+        },
+        to: { kind: "sun", anchor: "dusk", offset_min: 0 },
+        label: "Morning",
+      },
+    });
+    const get = captureSave(el);
+    clickSave(el);
+    expect(get()?.definition.from).toEqual({
+      kind: "sun",
+      anchor: "sunrise",
+      offset_min: 0,
+      clamp: { dir: "not_before", hh: 8, mm: 30 },
+    });
+  });
+
   test("id field is not present (always absent)", async () => {
     el = await mount();
     expect(el.shadowRoot.querySelector('input[id="id"]')).toBeNull();

@@ -64,6 +64,22 @@ describe("ambience-categories-settings", () => {
     expect(el.shadowRoot.querySelector(".modal")).toBeFalsy();
   });
 
+  test("a successful save fires ambience-categories-changed so views refetch", async () => {
+    el = await mount();
+    const seen = vi.fn();
+    window.addEventListener("ambience-categories-changed", seen);
+    el._addCategory();
+    await el.updateComplete;
+    const input = el.shadowRoot.querySelector("input.name") as HTMLInputElement;
+    input.value = "Evening";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    el._save();
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    expect(seen).toHaveBeenCalledTimes(1);
+    window.removeEventListener("ambience-categories-changed", seen);
+  });
+
   test("saving a blank name shows an error in the modal and does NOT save", async () => {
     el = await mount();
     el._addCategory();

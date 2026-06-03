@@ -483,13 +483,24 @@ function _fmtEndpoint(ep: TimeEndpoint, ctx: ConditionContext): string {
     return `${String(ep.hh).padStart(2, "0")}:${String(ep.mm).padStart(2, "0")}`;
   }
   const anchor = anchorLabel(ctx.hass, ep.anchor);
-  if (ep.offset_min === 0) return anchor;
-  const abs = Math.abs(ep.offset_min);
-  const unit =
-    abs % 60 === 0
-      ? `${abs / 60}${localize(ctx.hass, "ui.unit_hour_abbr", "h")}`
-      : `${abs}${localize(ctx.hass, "ui.unit_min_abbr", "m")}`;
-  return `${anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
+  let base = anchor;
+  if (ep.offset_min !== 0) {
+    const abs = Math.abs(ep.offset_min);
+    const unit =
+      abs % 60 === 0
+        ? `${abs / 60}${localize(ctx.hass, "ui.unit_hour_abbr", "h")}`
+        : `${abs}${localize(ctx.hass, "ui.unit_min_abbr", "m")}`;
+    base = `${anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
+  }
+  if (ep.clamp) {
+    const word =
+      ep.clamp.dir === "not_before"
+        ? localize(ctx.hass, "ui.clamp_not_before", "not before")
+        : localize(ctx.hass, "ui.clamp_not_after", "not after");
+    const t = `${String(ep.clamp.hh).padStart(2, "0")}:${String(ep.clamp.mm).padStart(2, "0")}`;
+    base = `${base} (${word} ${t})`;
+  }
+  return base;
 }
 
 /**

@@ -12,7 +12,8 @@ from typing import Any, Protocol
 # Endpoint shape:
 #   {"kind": "time", "hh": int, "mm": int}
 #   {"kind": "sun", "anchor": "sunrise"|"sunset"|"noon"|"midnight"|"dawn"|"dusk",
-#    "offset_min": int}
+#    "offset_min": int,
+#    "clamp"?: {"dir": "not_before"|"not_after", "hh": int, "mm": int}}
 
 _PERIOD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _VALID_ANCHORS = {"sunrise", "sunset", "noon", "midnight", "dawn", "dusk"}
@@ -41,6 +42,18 @@ BUILTIN_PERIODS: dict[str, dict[str, Any]] = {
 }
 
 
+def _validate_clamp(clamp: Any) -> None:
+    if not isinstance(clamp, dict):
+        raise ValueError(f"clamp must be an object: {clamp!r}")
+    if clamp.get("dir") not in ("not_before", "not_after"):
+        raise ValueError(f"invalid clamp dir: {clamp.get('dir')!r}")
+    hh, mm = clamp.get("hh"), clamp.get("mm")
+    if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
+        raise ValueError(f"invalid clamp hh: {hh!r}")
+    if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
+        raise ValueError(f"invalid clamp mm: {mm!r}")
+
+
 def _validate_endpoint(ep: Any) -> None:
     if not isinstance(ep, dict) or "kind" not in ep:
         raise ValueError(f"endpoint must be an object with 'kind': {ep!r}")
@@ -54,8 +67,12 @@ def _validate_endpoint(ep: Any) -> None:
     elif kind == "sun":
         if ep.get("anchor") not in _VALID_ANCHORS:
             raise ValueError(f"invalid anchor: {ep.get('anchor')!r}")
-        if not isinstance(ep.get("offset_min"), int):
-            raise ValueError(f"offset_min must be int: {ep.get('offset_min')!r}")
+        offset = ep.get("offset_min")
+        if not isinstance(offset, int) or isinstance(offset, bool):
+            raise ValueError(f"offset_min must be int: {offset!r}")
+        clamp = ep.get("clamp")
+        if clamp is not None:
+            _validate_clamp(clamp)
     else:
         raise ValueError(f"invalid endpoint kind: {kind!r}")
 

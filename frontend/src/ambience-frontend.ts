@@ -6,14 +6,14 @@
  * on demand by ./lazy-frontend.ts.
  */
 
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { property, state } from "lit/decorators.js";
 
 import type { HassConnection } from "./api.js";
 import { defineElement } from "./define-element.js";
+import { watchHaComponents } from "./ha-components.js";
 import { localize } from "./i18n.js";
 import { renderLogo } from "./logo.js";
-import { watchHaComponents } from "./ha-components.js";
 import "./views/scopes-view.js";
 import "./views/settings-modal.js";
 
@@ -78,16 +78,15 @@ export class AmbienceFrontend extends LitElement {
       <header>
         <h1>
           ${renderLogo({
-            dark: Boolean(
-              (this.hass as { themes?: { darkMode?: boolean } }).themes
-                ?.darkMode,
-            ),
+            dark: Boolean((this.hass as { themes?: { darkMode?: boolean } }).themes?.darkMode),
             title: localize(this.hass, "ui.panel_title", "Ambience"),
           })}
         </h1>
         <button
           class="settings-btn"
-          @click=${() => { this._settingsOpen = true; }}
+          @click=${() => {
+            this._settingsOpen = true;
+          }}
           aria-label=${localize(this.hass, "ui.tab_settings", "Settings")}
           title=${localize(this.hass, "ui.tab_settings", "Settings")}
         ><ha-icon icon="mdi:cog"></ha-icon></button>
@@ -96,7 +95,9 @@ export class AmbienceFrontend extends LitElement {
       <ambience-settings-modal
         .hass=${this.hass}
         ?open=${this._settingsOpen}
-        @close=${() => { this._settingsOpen = false; }}
+        @close=${() => {
+          this._settingsOpen = false;
+        }}
       ></ambience-settings-modal>
     `;
   }

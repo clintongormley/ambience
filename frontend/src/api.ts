@@ -46,21 +46,11 @@ export type FloorRegistryEvent = {
 export type HassConnection = {
   callWS<T = unknown>(message: Record<string, unknown>): Promise<T>;
   // Live entity states, keyed by entity_id. Optional — simpler mocks omit it.
-  states?: Record<
-    string,
-    { state?: string; attributes?: Record<string, unknown> }
-  >;
+  states?: Record<string, { state?: string; attributes?: Record<string, unknown> }>;
   // HA's service-call entry point, used to toggle switch entities.
-  callService?(
-    domain: string,
-    service: string,
-    data?: Record<string, unknown>,
-  ): Promise<unknown>;
+  callService?(domain: string, service: string, data?: Record<string, unknown>): Promise<unknown>;
   connection: {
-    subscribeEvents<T>(
-      callback: (event: T) => void,
-      eventType: string,
-    ): Promise<() => void>;
+    subscribeEvents<T>(callback: (event: T) => void, eventType: string): Promise<() => void>;
     // Generic subscription (HA's `subscribeMessage`). Used for the
     // `render_template` live preview — the same command Dev Tools → Template
     // drives. Optional so simpler connection mocks remain valid.
@@ -76,10 +66,7 @@ export async function listAreas(hass: HassConnection): Promise<AreaListItem[]> {
   return hass.callWS({ type: "ambience/areas/list" });
 }
 
-export async function getArea(
-  hass: HassConnection,
-  areaId: string,
-): Promise<AreaConfig> {
+export async function getArea(hass: HassConnection, areaId: string): Promise<AreaConfig> {
   return hass.callWS({ type: "ambience/area/get", area_id: areaId });
 }
 
@@ -95,16 +82,11 @@ export async function saveArea(
   });
 }
 
-export async function listFloors(
-  hass: HassConnection,
-): Promise<FloorListItem[]> {
+export async function listFloors(hass: HassConnection): Promise<FloorListItem[]> {
   return hass.callWS({ type: "ambience/floors/list" });
 }
 
-export async function getFloor(
-  hass: HassConnection,
-  floorId: string,
-): Promise<ScopeConfig> {
+export async function getFloor(hass: HassConnection, floorId: string): Promise<ScopeConfig> {
   return hass.callWS({ type: "ambience/floor/get", floor_id: floorId });
 }
 
@@ -131,15 +113,11 @@ export async function saveHouse(
   return hass.callWS({ type: "ambience/house/save", config });
 }
 
-export async function listConditions(
-  hass: HassConnection,
-): Promise<ConditionInfo[]> {
+export async function listConditions(hass: HassConnection): Promise<ConditionInfo[]> {
   return hass.callWS({ type: "ambience/conditions/list" });
 }
 
-export async function listExposedActions(
-  hass: HassConnection,
-): Promise<ExposedAction[]> {
+export async function listExposedActions(hass: HassConnection): Promise<ExposedAction[]> {
   return hass.callWS({ type: "ambience/exposed_actions/list" });
 }
 
@@ -150,9 +128,7 @@ export async function saveExposedActions(
   return hass.callWS({ type: "ambience/exposed_actions/save", actions });
 }
 
-export async function listServices(
-  hass: HassConnection,
-): Promise<ServiceInfo[]> {
+export async function listServices(hass: HassConnection): Promise<ServiceInfo[]> {
   return hass.callWS({ type: "ambience/services/list" });
 }
 
@@ -178,10 +154,7 @@ function scopeFields(scope: Scope): Record<string, unknown> {
   return { house: true };
 }
 
-export async function dryRun(
-  hass: HassConnection,
-  scope: Scope,
-): Promise<DryRunResult> {
+export async function dryRun(hass: HassConnection, scope: Scope): Promise<DryRunResult> {
   return hass.callWS({ type: "ambience/dry_run", ...scopeFields(scope) });
 }
 
@@ -210,9 +183,7 @@ export async function runRuleActions(
   });
 }
 
-export async function listPeriods(
-  hass: HassConnection,
-): Promise<PeriodStoreView> {
+export async function listPeriods(hass: HassConnection): Promise<PeriodStoreView> {
   return hass.callWS({ type: "ambience/time_of_day_periods/list" });
 }
 
@@ -236,9 +207,7 @@ export async function savePeriods(
   });
 }
 
-export async function resetPeriods(
-  hass: HassConnection,
-): Promise<{ ok: true }> {
+export async function resetPeriods(hass: HassConnection): Promise<{ ok: true }> {
   return hass.callWS({ type: "ambience/time_of_day_periods/reset" });
 }
 
@@ -266,9 +235,7 @@ export async function saveDayConfig(
   });
 }
 
-export async function getWeatherConfig(
-  hass: HassConnection,
-): Promise<WeatherConfig> {
+export async function getWeatherConfig(hass: HassConnection): Promise<WeatherConfig> {
   return hass.callWS({ type: "ambience/conditions/weather/config/list" });
 }
 
@@ -301,16 +268,12 @@ export async function getKnownStates(
   return hass.callWS({ type: "ambience/state/known_states", entity_id });
 }
 
-export async function getSwitchDefaults(
-  hass: HassConnection,
-): Promise<SwitchDefaults> {
+export async function getSwitchDefaults(hass: HassConnection): Promise<SwitchDefaults> {
   return hass.callWS({ type: "ambience/switch_defaults/list" });
 }
 
 /** Map each scope to its (possibly renamed) Ambience switch entity_id. */
-export async function listSwitches(
-  hass: HassConnection,
-): Promise<ScopeSwitch[]> {
+export async function listSwitches(hass: HassConnection): Promise<ScopeSwitch[]> {
   return hass.callWS({ type: "ambience/switches/list" });
 }
 
@@ -326,9 +289,7 @@ export async function saveSwitchDefaults(
   });
 }
 
-export async function listCategories(
-  hass: HassConnection,
-): Promise<RuleCategory[]> {
+export async function listCategories(hass: HassConnection): Promise<RuleCategory[]> {
   const res = await hass.callWS<{ categories: RuleCategory[] }>({
     type: "ambience/categories/list",
   });
@@ -349,9 +310,7 @@ export async function deleteCategory(
   return hass.callWS({ type: "ambience/categories/delete", category_id });
 }
 
-export async function listTraces(
-  hass: HassConnection,
-): Promise<BufferedUnit[]> {
+export async function listTraces(hass: HassConnection): Promise<BufferedUnit[]> {
   const res = await hass.callWS<{ traces: BufferedUnit[] }>({
     type: "ambience/traces/list",
   });

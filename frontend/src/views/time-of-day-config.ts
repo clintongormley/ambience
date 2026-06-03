@@ -1,21 +1,22 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-
-import { listPeriods, savePeriods } from "../api.js";
 import type { HassConnection } from "../api.js";
+import { listPeriods, savePeriods } from "../api.js";
 import { anchorLabel, localize, periodLabel } from "../i18n.js";
 import { scopeLabel } from "../scope-label.js";
 import type { PeriodDef, PeriodStoreView, TimeEndpoint } from "../types.js";
 import "./period-edit-modal.js";
 
 function formatEndpoint(ep: TimeEndpoint, hass?: HassConnection): string {
-  if (ep.kind === "time") return `${String(ep.hh).padStart(2, "0")}:${String(ep.mm).padStart(2, "0")}`;
+  if (ep.kind === "time")
+    return `${String(ep.hh).padStart(2, "0")}:${String(ep.mm).padStart(2, "0")}`;
   const anchor = anchorLabel(hass, ep.anchor);
   if (ep.offset_min === 0) return anchor;
   const abs = Math.abs(ep.offset_min);
-  const unit = abs % 60 === 0
-    ? `${abs / 60}${localize(hass, "ui.unit_hour_abbr", "h")}`
-    : `${abs}${localize(hass, "ui.unit_min_abbr", "m")}`;
+  const unit =
+    abs % 60 === 0
+      ? `${abs / 60}${localize(hass, "ui.unit_hour_abbr", "h")}`
+      : `${abs}${localize(hass, "ui.unit_min_abbr", "m")}`;
   return `${anchor}${ep.offset_min < 0 ? "-" : "+"}${unit}`;
 }
 
@@ -73,7 +74,12 @@ export class AmbienceTimeOfDayConfig extends LitElement {
 
   @state() private _view: PeriodStoreView = { builtins: {}, custom: {}, hidden: [] };
   @state() private _modal: ModalState = { mode: "closed" };
-  @state() private _warnings: Array<{ scope_kind: string; scope_id: string | null; rule_name: string; missing_period: string }> = [];
+  @state() private _warnings: Array<{
+    scope_kind: string;
+    scope_id: string | null;
+    rule_name: string;
+    missing_period: string;
+  }> = [];
 
   override async connectedCallback(): Promise<void> {
     super.connectedCallback();
@@ -105,7 +111,9 @@ export class AmbienceTimeOfDayConfig extends LitElement {
     await this._saveState(newCustom);
   }
 
-  private _onAdd() { this._modal = { mode: "add" }; }
+  private _onAdd() {
+    this._modal = { mode: "add" };
+  }
 
   private async _onModalSave(e: CustomEvent<{ id: string; definition: PeriodDef }>) {
     e.stopPropagation();
@@ -115,7 +123,9 @@ export class AmbienceTimeOfDayConfig extends LitElement {
     await this._saveState(newCustom);
   }
 
-  private _onModalCancel() { this._modal = { mode: "closed" }; }
+  private _onModalCancel() {
+    this._modal = { mode: "closed" };
+  }
 
   /** A built-in row. Read-only; offers an "Override" action unless an override
    * already exists, in which case the row is struck through (the custom
@@ -127,9 +137,11 @@ export class AmbienceTimeOfDayConfig extends LitElement {
         <span class="def">${formatDef(defn, this.hass)}</span>
         <span class="badge">${localize(this.hass, "ui.badge_builtin", "builtin")}</span>
         <span class="actions">
-          ${overridden
-            ? ""
-            : html`<button class="icon" title=${localize(this.hass, "ui.title_override", "Override")} @click=${() => this._onEdit(id, defn)}>✎</button>`}
+          ${
+            overridden
+              ? ""
+              : html`<button class="icon" title=${localize(this.hass, "ui.title_override", "Override")} @click=${() => this._onEdit(id, defn)}>✎</button>`
+          }
         </span>
       </div>
     `;
@@ -157,8 +169,9 @@ export class AmbienceTimeOfDayConfig extends LitElement {
       <header>
         <h2>${localize(this.hass, "ui.periods_heading", "Periods")}</h2>
       </header>
-      ${this._warnings.length
-        ? html`<div class="warnings">
+      ${
+        this._warnings.length
+          ? html`<div class="warnings">
             <strong>${localize(this.hass, "ui.period_warning_prefix", "Warning:")}</strong> ${localize(this.hass, "ui.period_warning_text", "some rules now reference missing periods:")}
             <ul>
               ${this._warnings.map(
@@ -166,7 +179,8 @@ export class AmbienceTimeOfDayConfig extends LitElement {
               )}
             </ul>
           </div>`
-        : ""}
+          : ""
+      }
       ${Object.entries(this._view.builtins).map(([id, defn]) => {
         const override = custom[id];
         return html`
@@ -178,8 +192,9 @@ export class AmbienceTimeOfDayConfig extends LitElement {
         .filter(([id]) => !(id in this._view.builtins))
         .map(([id, defn]) => this._renderCustomRow(id, defn))}
       <button class="add" @click=${this._onAdd}>${localize(this.hass, "ui.add_custom_period", "+ Add custom period")}</button>
-      ${this._modal.mode === "edit"
-        ? html`<ambience-period-edit-modal
+      ${
+        this._modal.mode === "edit"
+          ? html`<ambience-period-edit-modal
             .hass=${this.hass}
             .existingId=${this._modal.id}
             .initial=${this._modal.initial}
@@ -187,14 +202,15 @@ export class AmbienceTimeOfDayConfig extends LitElement {
             @period-save=${this._onModalSave}
             @period-cancel=${this._onModalCancel}
           ></ambience-period-edit-modal>`
-        : this._modal.mode === "add"
-        ? html`<ambience-period-edit-modal
+          : this._modal.mode === "add"
+            ? html`<ambience-period-edit-modal
             .hass=${this.hass}
             .takenIds=${new Set([...Object.keys(this._view.builtins), ...Object.keys(this._view.custom)])}
             @period-save=${this._onModalSave}
             @period-cancel=${this._onModalCancel}
           ></ambience-period-edit-modal>`
-        : ""}
+            : ""
+      }
     `;
   }
 }

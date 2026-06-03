@@ -9,7 +9,6 @@ import {
   weatherAttrLabel,
   weekdayLabel,
 } from "./i18n.js";
-import { entityName, type HassWithStates } from "./views/entity-row.js";
 import type {
   ActionSpec,
   DayItem,
@@ -29,6 +28,7 @@ import type {
   WeatherGroup,
   WeatherPredicate,
 } from "./types.js";
+import { entityName, type HassWithStates } from "./views/entity-row.js";
 
 interface HassLike {
   localize?: (k: string) => string | undefined;
@@ -73,11 +73,8 @@ export function paramLabel(
 /**
  * Display name for a rule: explicit `name`, or a default placeholder.
  */
-export function ruleDisplayName(
-  rule: Rule,
-  defaultPlaceholder = "New rule",
-): string {
-  if (rule.name && rule.name.trim()) return rule.name;
+export function ruleDisplayName(rule: Rule, defaultPlaceholder = "New rule"): string {
+  if (rule.name?.trim()) return rule.name;
   return defaultPlaceholder;
 }
 
@@ -86,8 +83,7 @@ export function summariseCondition(
   predicate: unknown,
   ctx: ConditionContext,
 ): string {
-  if (predicate == null)
-    return localize(ctx.hass, "ui.summary_any_paren", "(any)");
+  if (predicate == null) return localize(ctx.hass, "ui.summary_any_paren", "(any)");
   if (conditionName === "time_of_day") {
     return summariseTimeOfDay(predicate as TimeOfDayPredicate, ctx);
   }
@@ -115,30 +111,18 @@ export function summariseCondition(
   return String(predicate);
 }
 
-export function summariseTemplate(
-  pred: TemplatePredicate,
-  ctx: ConditionContext = {},
-): string {
+export function summariseTemplate(pred: TemplatePredicate, ctx: ConditionContext = {}): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any_paren", "(any)");
-  if (
-    typeof pred !== "object" ||
-    typeof (pred as { template?: unknown }).template !== "string"
-  ) {
+  if (typeof pred !== "object" || typeof (pred as { template?: unknown }).template !== "string") {
     return String(pred);
   }
   return pred.template;
 }
 
-export function summariseScript(
-  pred: ScriptPredicate,
-  ctx: ConditionContext = {},
-): string {
+export function summariseScript(pred: ScriptPredicate, ctx: ConditionContext = {}): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any_paren", "(any)");
   // Defensive: malformed predicate (non-object or missing/non-string script).
-  if (
-    typeof pred !== "object" ||
-    typeof (pred as { script?: unknown }).script !== "string"
-  ) {
+  if (typeof pred !== "object" || typeof (pred as { script?: unknown }).script !== "string") {
     return String(pred);
   }
   const name = _domainEntityName(ctx, pred.script);
@@ -147,8 +131,7 @@ export function summariseScript(
   if (keys.length === 0) return name;
   const argStr = keys
     .map(
-      (k) =>
-        `${scriptFieldLabel(ctx.hass, pred.script, k)}: ${formatArgValue(ctx.hass, args[k])}`,
+      (k) => `${scriptFieldLabel(ctx.hass, pred.script, k)}: ${formatArgValue(ctx.hass, args[k])}`,
     )
     .join(", ");
   return `${name} (${argStr})`;
@@ -183,9 +166,7 @@ export function scriptFieldLabel(
  *  friendly_name is set. */
 function _domainEntityName(ctx: ConditionContext, entity_id: string): string {
   const states = (
-    ctx.hass as
-      | { states?: Record<string, { attributes?: Record<string, unknown> }> }
-      | undefined
+    ctx.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined
   )?.states;
   const name = states?.[entity_id]?.attributes?.friendly_name;
   if (typeof name === "string" && name) return name;
@@ -197,8 +178,7 @@ function _domainEntityName(ctx: ConditionContext, entity_id: string): string {
 /** The location NAME only (no "at" prefix): "Home" or the zone's friendly name
  *  (capitalised) — the "at"/"not at" connector is built from `negate`. */
 function _whereLabel(where: string, ctx: ConditionContext): string {
-  if (where === "home")
-    return localize(ctx.hass, "people_summary.home", "Home");
+  if (where === "home") return localize(ctx.hass, "people_summary.home", "Home");
   return _domainEntityName(ctx, where);
 }
 
@@ -211,10 +191,7 @@ function _whereLabel(where: string, ctx: ConditionContext): string {
  * absent → a base mode (everyone→Everybody, nobody→Nobody); present → an
  * "X of:" mode chosen by `quant`.
  */
-export function summarisePeople(
-  pred: PeoplePredicate,
-  ctx: ConditionContext = {},
-): string {
+export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
   const where = pred.where ?? "home";
 
@@ -269,10 +246,7 @@ export function summarisePeople(
   return head;
 }
 
-export function summariseDay(
-  pred: DayPredicate,
-  ctx: ConditionContext = {},
-): string {
+export function summariseDay(pred: DayPredicate, ctx: ConditionContext = {}): string {
   if (pred === null) return localize(ctx.hass, "day_summary.any", "any");
   const include = pred.include ?? [];
   const exclude = pred.exclude ?? [];
@@ -326,18 +300,11 @@ export function humanizeFieldId(fieldId: string): string {
  *  [210, 81, 81] → "[210,81,81]". */
 export function formatParamValue(value: unknown): string {
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean")
-    return String(value);
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
   return JSON.stringify(value);
 }
 
-const _TARGET_KEYS = [
-  "entity_id",
-  "device_id",
-  "area_id",
-  "label_id",
-  "floor_id",
-];
+const _TARGET_KEYS = ["entity_id", "device_id", "area_id", "label_id", "floor_id"];
 const _TARGET_ENTITY_CAP = 2;
 
 /** If `value` is an HA target object (only target keys) carrying one or more
@@ -362,18 +329,12 @@ function _targetEntityIds(value: unknown): string[] | null {
  *  `_TARGET_ENTITY_CAP`, then "+N more" for longer lists — so a summary reads
  *  "Target: [Kitchen, Hallway +2 more]" rather than a raw JSON dump. Everything
  *  else falls back to {@link formatParamValue}. */
-export function formatArgValue(
-  hass: HassLike | undefined,
-  value: unknown,
-): string {
+export function formatArgValue(hass: HassLike | undefined, value: unknown): string {
   const ids = _targetEntityIds(value);
   if (!ids) return formatParamValue(value);
-  const names = ids
-    .slice(0, _TARGET_ENTITY_CAP)
-    .map((id) => _domainEntityName({ hass }, id));
+  const names = ids.slice(0, _TARGET_ENTITY_CAP).map((id) => _domainEntityName({ hass }, id));
   const rest = ids.length - _TARGET_ENTITY_CAP;
-  const body =
-    rest > 0 ? `${names.join(", ")} +${rest} more` : names.join(", ");
+  const body = rest > 0 ? `${names.join(", ")} +${rest} more` : names.join(", ");
   return `[${body}]`;
 }
 
@@ -401,33 +362,20 @@ function _humaniseGroupId(id: string): string {
     .join(" ");
 }
 
-export function summariseWeather(
-  pred: WeatherPredicate,
-  ctx: ConditionContext = {},
-): string {
+export function summariseWeather(pred: WeatherPredicate, ctx: ConditionContext = {}): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
-  const groupMap = new Map(
-    (ctx.weatherGroups ?? []).map((g) => [g.id, g.label]),
-  );
+  const groupMap = new Map((ctx.weatherGroups ?? []).map((g) => [g.id, g.label]));
   const groups = (pred.groups ?? [])
     .map((id) => groupMap.get(id) ?? _humaniseGroupId(id))
     .join("/");
   const thr = (pred.thresholds ?? [])
-    .map(
-      (t) =>
-        `${weatherAttrLabel(ctx.hass, t.attribute)} ${_OP_LABEL[t.op] ?? t.op} ${t.value}`,
-    )
+    .map((t) => `${weatherAttrLabel(ctx.hass, t.attribute)} ${_OP_LABEL[t.op] ?? t.op} ${t.value}`)
     .join(", ");
   const parts = [groups, thr].filter((s) => s !== "");
-  return parts.length === 0
-    ? localize(ctx.hass, "ui.summary_any", "any")
-    : parts.join(", ");
+  return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
 }
 
-export function summariseSun(
-  pred: SunPredicate,
-  ctx: ConditionContext = {},
-): string {
+export function summariseSun(pred: SunPredicate, ctx: ConditionContext = {}): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
   const parts: string[] = [];
   const e = pred.elevation;
@@ -441,9 +389,7 @@ export function summariseSun(
     if (az.sectors?.length) parts.push(az.sectors.join("/"));
     for (const r of az.ranges ?? []) parts.push(`${r.from}°–${r.to}°`);
   }
-  return parts.length === 0
-    ? localize(ctx.hass, "ui.summary_any", "any")
-    : parts.join(", ");
+  return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
 }
 
 /** Best-effort display name for an entity: friendly_name attribute when set,
@@ -454,17 +400,11 @@ function _entityDisplayName(ctx: ConditionContext, entity_id: string): string {
 
 /** Public, hass-first wrapper around {@link _entityDisplayName}: an entity's
  *  friendly_name when set, else the raw entity_id. */
-export function entityDisplayName(
-  hass: HassLike | undefined,
-  entity_id: string,
-): string {
+export function entityDisplayName(hass: HassLike | undefined, entity_id: string): string {
   return _entityDisplayName({ hass }, entity_id);
 }
 
-export function summariseState(
-  pred: StatePredicate,
-  ctx: ConditionContext = {},
-): string {
+export function summariseState(pred: StatePredicate, ctx: ConditionContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
   return _renderStateExpr(pred, ctx);
 }
@@ -524,10 +464,7 @@ function _fmtStateDur(d: { h: number; m: number; s: number }): string {
   return parts.length ? parts.join(" ") : "0s";
 }
 
-export function summariseTimeOfDay(
-  pred: TimeOfDayPredicate,
-  ctx: ConditionContext,
-): string {
+export function summariseTimeOfDay(pred: TimeOfDayPredicate, ctx: ConditionContext): string {
   if (pred === null) return localize(ctx.hass, "ui.summary_any", "any");
   const list = Array.isArray(pred) ? pred : [pred];
   const customMap = ctx.periods?.custom ?? {};
@@ -562,7 +499,7 @@ function _fmtEndpoint(ep: TimeEndpoint, ctx: ConditionContext): string {
  */
 function _actionDisplayName(action: ActionSpec, ctx: ActionContext): string {
   const exposed = ctx.exposedActions?.find((e) => e.id === action.service);
-  if (exposed?.label && exposed.label.trim()) return exposed.label;
+  if (exposed?.label?.trim()) return exposed.label;
   return actionLabel(ctx.hass, action.service);
 }
 
@@ -577,10 +514,7 @@ function _targetNoun(action: ActionSpec, ctx: ActionContext): string {
   return localize(ctx.hass, "ui.target_noun", "target");
 }
 
-export function summariseAction(
-  action: ActionSpec,
-  ctx: ActionContext,
-): string {
+export function summariseAction(action: ActionSpec, ctx: ActionContext): string {
   const name = _actionDisplayName(action, ctx);
   const noun = _targetNoun(action, ctx);
   const n = action.entity_ids.length;
@@ -591,8 +525,7 @@ export function summariseAction(
   const params = Object.entries(action.params)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(
-      ([k, v]) =>
-        `${paramLabel(k, action.service, ctx.schemas)}: ${formatArgValue(ctx.hass, v)}`,
+      ([k, v]) => `${paramLabel(k, action.service, ctx.schemas)}: ${formatArgValue(ctx.hass, v)}`,
     )
     .join(", ");
   return params ? `${name}: ${targets}, ${params}` : `${name}: ${targets}`;

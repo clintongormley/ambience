@@ -1,13 +1,19 @@
-import { describe, test, expect } from "vitest";
 import { render } from "lit";
-import { renderEvaluation, formatCause, formatActionHeader } from "../frontend/src/trace-detail";
+import { describe, expect, test } from "vitest";
+import { formatActionHeader, formatCause, renderEvaluation } from "../frontend/src/trace-detail";
 import type { BufferedUnit } from "../frontend/src/types";
 
 function unit(over: Partial<BufferedUnit> = {}): BufferedUnit {
   return {
     event_id: "e1",
     timestamp: "2026-06-01T10:00:00+00:00",
-    cause: { kind: "entity", entity_id: "binary_sensor.motion", old: "off", new: "on", detail: null },
+    cause: {
+      kind: "entity",
+      entity_id: "binary_sensor.motion",
+      old: "off",
+      new: "on",
+      detail: null,
+    },
     scope_kind: "area",
     scope_id: "kitchen",
     scope_name: "Kitchen",
@@ -17,13 +23,29 @@ function unit(over: Partial<BufferedUnit> = {}): BufferedUnit {
     outcome: "acted",
     winner_name: "Evening",
     actions: [
-      { service: "light.turn_on", entity_ids: ["light.k", "light.counter"], params: { brightness_pct: 60 } },
+      {
+        service: "light.turn_on",
+        entity_ids: ["light.k", "light.counter"],
+        params: { brightness_pct: 60 },
+      },
     ],
     explanation: {
       winner_index: 1,
       rules: [
-        { index: 0, name: "Night", matched: false, evaluated: true, predicates: [{ condition_key: "tod", passed: false, detail: "evening" }] },
-        { index: 1, name: "Evening", matched: true, evaluated: true, predicates: [{ condition_key: "tod", passed: true, detail: "evening" }] },
+        {
+          index: 0,
+          name: "Night",
+          matched: false,
+          evaluated: true,
+          predicates: [{ condition_key: "tod", passed: false, detail: "evening" }],
+        },
+        {
+          index: 1,
+          name: "Evening",
+          matched: true,
+          evaluated: true,
+          predicates: [{ condition_key: "tod", passed: true, detail: "evening" }],
+        },
       ],
     },
     ...over,
@@ -37,24 +59,36 @@ function renderToHost(
   schemas?: Record<string, unknown>,
 ): HTMLElement {
   const host = document.createElement("div");
-  render(renderEvaluation(unit(over), expanded, () => {}, hass, schemas as never), host);
+  render(
+    renderEvaluation(unit(over), expanded, () => {}, hass, schemas as never),
+    host,
+  );
   return host;
 }
 
 describe("trace-detail", () => {
   test("formatCause renders entity old→new and humanizes other kinds", () => {
-    expect(formatCause({ kind: "entity", entity_id: "x", old: "off", new: "on", detail: null })).toContain("off");
-    expect(formatCause({ kind: "clock", entity_id: null, old: null, new: null, detail: "20:00" })).toContain("20:00");
+    expect(
+      formatCause({ kind: "entity", entity_id: "x", old: "off", new: "on", detail: null }),
+    ).toContain("off");
+    expect(
+      formatCause({ kind: "clock", entity_id: null, old: null, new: null, detail: "20:00" }),
+    ).toContain("20:00");
   });
 
   test("formatActionHeader humanizes the service and its params (no entities)", () => {
-    expect(formatActionHeader({ service: "light.turn_on", entity_ids: ["light.k"], params: { x: 1 } }))
-      .toBe("Turn on light · X: 1");
-    expect(formatActionHeader({ service: "light.turn_off", entity_ids: ["light.k"] })).toBe("Turn off light");
+    expect(
+      formatActionHeader({ service: "light.turn_on", entity_ids: ["light.k"], params: { x: 1 } }),
+    ).toBe("Turn on light · X: 1");
+    expect(formatActionHeader({ service: "light.turn_off", entity_ids: ["light.k"] })).toBe(
+      "Turn off light",
+    );
   });
 
   test("formatActionHeader prefers the service schema's field name for param labels", () => {
-    const schemas = { "light.turn_on": { fields: { brightness_pct: { name: "Brightness" } }, target: null } };
+    const schemas = {
+      "light.turn_on": { fields: { brightness_pct: { name: "Brightness" } }, target: null },
+    };
     expect(
       formatActionHeader(
         { service: "light.turn_on", entity_ids: [], params: { brightness_pct: 60 } },
@@ -65,9 +99,15 @@ describe("trace-detail", () => {
   });
 
   test("action param labels use the threaded service schema (brightness_pct → 'Brightness')", () => {
-    const schemas = { "light.turn_on": { fields: { brightness_pct: { name: "Brightness" } }, target: null } };
+    const schemas = {
+      "light.turn_on": { fields: { brightness_pct: { name: "Brightness" } }, target: null },
+    };
     const host = renderToHost(
-      { actions: [{ service: "light.turn_on", entity_ids: ["light.k"], params: { brightness_pct: 60 } }] },
+      {
+        actions: [
+          { service: "light.turn_on", entity_ids: ["light.k"], params: { brightness_pct: 60 } },
+        ],
+      },
       true,
       undefined,
       schemas,
@@ -89,9 +129,12 @@ describe("trace-detail", () => {
   });
 
   test("singular entity count reads '1 entity'", () => {
-    const host = renderToHost({
-      actions: [{ service: "light.turn_on", entity_ids: ["light.k"], params: {} }],
-    }, false);
+    const host = renderToHost(
+      {
+        actions: [{ service: "light.turn_on", entity_ids: ["light.k"], params: {} }],
+      },
+      false,
+    );
     expect(host.textContent).toContain("1 entity");
     expect(host.textContent).not.toContain("1 entities");
   });
@@ -148,10 +191,18 @@ describe("trace-detail", () => {
   });
 
   test("not-evaluated rule is marked", () => {
-    const host = renderToHost({ explanation: { winner_index: 0, rules: [
-      { index: 0, name: "A", matched: true, evaluated: true, predicates: [] },
-      { index: 1, name: "B", matched: false, evaluated: false, predicates: [] },
-    ] } }, true);
+    const host = renderToHost(
+      {
+        explanation: {
+          winner_index: 0,
+          rules: [
+            { index: 0, name: "A", matched: true, evaluated: true, predicates: [] },
+            { index: 1, name: "B", matched: false, evaluated: false, predicates: [] },
+          ],
+        },
+      },
+      true,
+    );
     expect(host.textContent).toContain("not evaluated");
   });
 
@@ -181,10 +232,23 @@ describe("trace-detail", () => {
   });
 
   test("condition keys are shown as human labels (time_of_day → 'Time of day')", () => {
-    const host = renderToHost({ explanation: { winner_index: 0, rules: [
-      { index: 0, name: "Afternoon", matched: true, evaluated: true,
-        predicates: [{ condition_key: "time_of_day", passed: true, detail: "afternoon" }] },
-    ] } }, true);
+    const host = renderToHost(
+      {
+        explanation: {
+          winner_index: 0,
+          rules: [
+            {
+              index: 0,
+              name: "Afternoon",
+              matched: true,
+              evaluated: true,
+              predicates: [{ condition_key: "time_of_day", passed: true, detail: "afternoon" }],
+            },
+          ],
+        },
+      },
+      true,
+    );
     expect(host.textContent).toContain("Time of day"); // humanized condition key
     expect(host.textContent).not.toContain("time_of_day");
     expect(host.textContent).toContain("Afternoon"); // humanized period detail
@@ -192,27 +256,70 @@ describe("trace-detail", () => {
   });
 
   test("weather condition detail is humanized (partlycloudy → 'Partly cloudy')", () => {
-    const host = renderToHost({ explanation: { winner_index: 0, rules: [
-      { index: 0, name: "Cloudy", matched: true, evaluated: true,
-        predicates: [{ condition_key: "weather", passed: true, detail: "partlycloudy" }] },
-    ] } }, true);
+    const host = renderToHost(
+      {
+        explanation: {
+          winner_index: 0,
+          rules: [
+            {
+              index: 0,
+              name: "Cloudy",
+              matched: true,
+              evaluated: true,
+              predicates: [{ condition_key: "weather", passed: true, detail: "partlycloudy" }],
+            },
+          ],
+        },
+      },
+      true,
+    );
     expect(host.textContent).toContain("Partly cloudy");
     expect(host.textContent).not.toContain("partlycloudy");
   });
 
   test("already-human detail phrases are shown verbatim, not lower-cased", () => {
-    const host = renderToHost({ explanation: { winner_index: 0, rules: [
-      { index: 0, name: "Home", matched: true, evaluated: true,
-        predicates: [{ condition_key: "people", passed: true, detail: "3 of 5 home (Alice, Bob)" }] },
-    ] } }, true);
+    const host = renderToHost(
+      {
+        explanation: {
+          winner_index: 0,
+          rules: [
+            {
+              index: 0,
+              name: "Home",
+              matched: true,
+              evaluated: true,
+              predicates: [
+                { condition_key: "people", passed: true, detail: "3 of 5 home (Alice, Bob)" },
+              ],
+            },
+          ],
+        },
+      },
+      true,
+    );
     expect(host.textContent).toContain("3 of 5 home (Alice, Bob)");
   });
 
   test("disabled rule is marked 'disabled', not 'not evaluated'", () => {
-    const host = renderToHost({ explanation: { winner_index: 1, rules: [
-      { index: 0, name: "Off", matched: false, evaluated: false, disabled: true, predicates: [] },
-      { index: 1, name: "Win", matched: true, evaluated: true, predicates: [] },
-    ] } }, true);
+    const host = renderToHost(
+      {
+        explanation: {
+          winner_index: 1,
+          rules: [
+            {
+              index: 0,
+              name: "Off",
+              matched: false,
+              evaluated: false,
+              disabled: true,
+              predicates: [],
+            },
+            { index: 1, name: "Win", matched: true, evaluated: true, predicates: [] },
+          ],
+        },
+      },
+      true,
+    );
     expect(host.textContent).toContain("disabled");
     expect(host.textContent).not.toContain("not evaluated");
   });

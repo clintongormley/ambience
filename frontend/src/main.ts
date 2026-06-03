@@ -5,7 +5,7 @@
  * lazy-loads the shared <ambience-frontend> chunk and renders it full-height.
  */
 
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { property } from "lit/decorators.js";
 
 import { defineElement } from "./define-element.js";

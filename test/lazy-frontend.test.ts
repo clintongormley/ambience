@@ -1,6 +1,6 @@
 // test/lazy-frontend.test.ts
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import { loadFrontend, _internals, _resetForTests } from "../frontend/src/lazy-frontend";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { _internals, _resetForTests, loadFrontend } from "../frontend/src/lazy-frontend";
 
 describe("loadFrontend", () => {
   beforeEach(() => {

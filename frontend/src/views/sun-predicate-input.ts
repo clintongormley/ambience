@@ -1,19 +1,15 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
+import { emitValueChanged } from "../dom.js";
 import { localize } from "../i18n.js";
 import type { SunAzimuth, SunElevation, SunPredicate, SunRange } from "../types.js";
-import { emitValueChanged } from "../dom.js";
 
 // 3×3 compass grid laid out as the sky looks from below — North at the top,
 // `null` is the empty centre cell. Row-major order drives both the DOM and the
 // visual layout:  NW N NE / W · E / SW S SE.
-const COMPASS_LAYOUT: (string | null)[] = [
-  "NW", "N", "NE",
-  "W", null, "E",
-  "SW", "S", "SE",
-];
+const COMPASS_LAYOUT: (string | null)[] = ["NW", "N", "NE", "W", null, "E", "SW", "S", "SE"];
 
 type ElevationMode = "any" | "above" | "below" | "between";
 
@@ -53,7 +49,11 @@ export class AmbienceSunPredicateInput extends LitElement {
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) value: SunPredicate = null;
 
-  private _current(): { elevation: SunElevation | null; sectors: string[]; range: SunRange | null } {
+  private _current(): {
+    elevation: SunElevation | null;
+    sectors: string[];
+    range: SunRange | null;
+  } {
     const ranges = this.value?.azimuth?.ranges ?? [];
     return {
       elevation: this.value?.elevation ?? null,
@@ -139,20 +139,26 @@ export class AmbienceSunPredicateInput extends LitElement {
           this._onModeChange((e.target as HTMLSelectElement).value as ElevationMode, elevation)}>
           ${modes.map((m) => html`<option value=${m} ?selected=${m === mode}>${labels[m]}</option>`)}
         </select>
-        ${mode === "above" || mode === "between"
-          ? html`<input type="number" class="min" .value=${String(elevation?.min ?? 0)}
-              @change=${(e: Event) => this._setElevation({
-                ...(mode === "between" ? { max: elevation?.max ?? 0 } : {}),
-                min: Number((e.target as HTMLInputElement).value),
-              })} /><span class="deg">°</span>`
-          : ""}
-        ${mode === "below" || mode === "between"
-          ? html`<input type="number" class="max" .value=${String(elevation?.max ?? 0)}
-              @change=${(e: Event) => this._setElevation({
-                ...(mode === "between" ? { min: elevation?.min ?? 0 } : {}),
-                max: Number((e.target as HTMLInputElement).value),
-              })} /><span class="deg">°</span>`
-          : ""}
+        ${
+          mode === "above" || mode === "between"
+            ? html`<input type="number" class="min" .value=${String(elevation?.min ?? 0)}
+              @change=${(e: Event) =>
+                this._setElevation({
+                  ...(mode === "between" ? { max: elevation?.max ?? 0 } : {}),
+                  min: Number((e.target as HTMLInputElement).value),
+                })} /><span class="deg">°</span>`
+            : ""
+        }
+        ${
+          mode === "below" || mode === "between"
+            ? html`<input type="number" class="max" .value=${String(elevation?.max ?? 0)}
+              @change=${(e: Event) =>
+                this._setElevation({
+                  ...(mode === "between" ? { min: elevation?.min ?? 0 } : {}),
+                  max: Number((e.target as HTMLInputElement).value),
+                })} /><span class="deg">°</span>`
+            : ""
+        }
       </div>
     `;
   }
@@ -165,9 +171,10 @@ export class AmbienceSunPredicateInput extends LitElement {
             this._setRange((e.target as HTMLInputElement).checked ? { from: 0, to: 0 } : null)} />
         ${localize(this.hass, "ui.sun.custom_range", "Custom range")}
       </label>
-      ${range === null
-        ? ""
-        : html`<div class="row range-row">
+      ${
+        range === null
+          ? ""
+          : html`<div class="row range-row">
             <input type="number" class="from" .value=${String(range.from)}
               @change=${(e: Event) =>
                 this._setRange({ ...range, from: Number((e.target as HTMLInputElement).value) })} />
@@ -176,7 +183,8 @@ export class AmbienceSunPredicateInput extends LitElement {
               @change=${(e: Event) =>
                 this._setRange({ ...range, to: Number((e.target as HTMLInputElement).value) })} />
             <span class="deg">°</span>
-          </div>`}
+          </div>`
+      }
     `;
   }
 

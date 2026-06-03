@@ -1,11 +1,8 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { getServiceSchema, type HassConnection } from "../api.js";
-import {
-  entitiesForScope,
-  type HaTarget,
-} from "../entities-for-scope.js";
+import { entitiesForScope, type HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
 import { formatArgValue, humanizeFieldId, selectorUnit } from "../summary.js";
@@ -293,9 +290,7 @@ export class AmbienceActionSlot extends LitElement {
   };
 
   /* v8 ignore start -- ha-form path (real HA only) */
-  private _onHaFormChanged = (
-    e: CustomEvent<{ value: Record<string, unknown> }>,
-  ) => {
+  private _onHaFormChanged = (e: CustomEvent<{ value: Record<string, unknown> }>) => {
     e.stopPropagation();
     this._emit("params-changed", { params: { ...this.params, ...e.detail.value } });
   };
@@ -409,18 +404,20 @@ export class AmbienceActionSlot extends LitElement {
               <div class="field-row">
                 <div class="field-header">
                   <span class="field-label-group">
-                    <span class="field-label">${this._humanizeFieldLabel(entry.name)}${entry.required ? " *" : ""}</span>${hint
-                      ? html`<span class="field-default-hint">${hint}</span>`
-                      : ""}
+                    <span class="field-label">${this._humanizeFieldLabel(entry.name)}${entry.required ? " *" : ""}</span>${
+                      hint ? html`<span class="field-default-hint">${hint}</span>` : ""
+                    }
                   </span>
-                  ${this._hasUserOverride(entry.name)
-                    ? html`<button
+                  ${
+                    this._hasUserOverride(entry.name)
+                      ? html`<button
                         class="field-clear"
                         data-clear=${entry.name}
                         @click=${() => this._clearField(entry.name)}
                         title="Clear"
                       >✕</button>`
-                    : ""}
+                      : ""
+                  }
                 </div>
                 <ha-form
                   .hass=${this.hass}
@@ -441,27 +438,28 @@ export class AmbienceActionSlot extends LitElement {
     // can still drive the slot.
     return html`
       <div class="fields-form">
-        ${schema.map(
-          (entry) => {
-            const fieldData = this._fieldData(entry.name);
-            const displayValue = entry.name in fieldData ? String(fieldData[entry.name] ?? "") : "";
-            const hint = this._defaultHintSuffix(entry);
-            return html`
+        ${schema.map((entry) => {
+          const fieldData = this._fieldData(entry.name);
+          const displayValue = entry.name in fieldData ? String(fieldData[entry.name] ?? "") : "";
+          const hint = this._defaultHintSuffix(entry);
+          return html`
               <div class="field-row">
                 <div class="field-header">
                   <span class="field-label-group">
-                    <label class="field-label">${this._humanizeFieldLabel(entry.name)}${entry.required ? " *" : ""}</label>${hint
-                      ? html`<span class="field-default-hint">${hint}</span>`
-                      : ""}
+                    <label class="field-label">${this._humanizeFieldLabel(entry.name)}${entry.required ? " *" : ""}</label>${
+                      hint ? html`<span class="field-default-hint">${hint}</span>` : ""
+                    }
                   </span>
-                  ${this._hasUserOverride(entry.name)
-                    ? html`<button
+                  ${
+                    this._hasUserOverride(entry.name)
+                      ? html`<button
                         class="field-clear"
                         data-clear=${entry.name}
                         @click=${() => this._clearField(entry.name)}
                         title="Clear"
                       >✕</button>`
-                    : ""}
+                      : ""
+                  }
                 </div>
                 <input
                   type="text"
@@ -471,8 +469,7 @@ export class AmbienceActionSlot extends LitElement {
                 />
               </div>
             `;
-          },
-        )}
+        })}
         ${extrasNotice}
       </div>
     `;
@@ -499,12 +496,14 @@ export class AmbienceActionSlot extends LitElement {
       }
       return html`
         <div class="schema-error">
-          ${this._schemaError ??
+          ${
+            this._schemaError ??
             localize(
               this.hass,
               "ui.service_unavailable",
               "Service not available in this HA instance.",
-            )}
+            )
+          }
         </div>
       `;
     }

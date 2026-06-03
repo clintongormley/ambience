@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, beforeEach, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getSwitchDefaults: vi.fn(async () => ({ name: "Ambience", auto_on_delay_seconds: 7200 })),
@@ -26,8 +26,12 @@ describe("ambience-ambience-settings", () => {
 
   test("shows defaults from the backend", async () => {
     el = await mount();
-    expect((el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement).value).toBe("Ambience");
-    expect((el.shadowRoot.querySelector("[data-test=defaults-delay-seconds]") as HTMLInputElement).value).toBe("7200");
+    expect(
+      (el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement).value,
+    ).toBe("Ambience");
+    expect(
+      (el.shadowRoot.querySelector("[data-test=defaults-delay-seconds]") as HTMLInputElement).value,
+    ).toBe("7200");
   });
 
   test("editing the default name calls saveSwitchDefaults", async () => {
@@ -41,7 +45,9 @@ describe("ambience-ambience-settings", () => {
 
   test("editing the default delay calls saveSwitchDefaults", async () => {
     el = await mount();
-    const input = el.shadowRoot.querySelector("[data-test=defaults-delay-seconds]") as HTMLInputElement;
+    const input = el.shadowRoot.querySelector(
+      "[data-test=defaults-delay-seconds]",
+    ) as HTMLInputElement;
     input.value = "300";
     input.dispatchEvent(new Event("change", { bubbles: true }));
     await el.updateComplete;

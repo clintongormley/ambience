@@ -1,14 +1,9 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { localize, periodLabel } from "../i18n.js";
 import { summariseTimeOfDay } from "../summary.js";
-import type {
-  PeriodStoreView,
-  TimeEndpoint,
-  TimeOfDayPredicate,
-  TimeRange,
-} from "../types.js";
+import type { PeriodStoreView, TimeEndpoint, TimeOfDayPredicate, TimeRange } from "../types.js";
 import "./time-endpoint.js";
 import { emitValueChanged } from "../dom.js";
 
@@ -69,7 +64,10 @@ export class AmbienceTimeOfDayInput extends LitElement {
 
   @property({ attribute: false }) value: TimeOfDayPredicate = null;
   @property({ attribute: false }) periods?: PeriodStoreView;
-  @property({ attribute: false }) hass?: { localize?: (k: string) => string | undefined; [key: string]: unknown };
+  @property({ attribute: false }) hass?: {
+    localize?: (k: string) => string | undefined;
+    [key: string]: unknown;
+  };
 
   @state() private _entries: Entry[] = [ANY];
   @state() private _openIdx: number = 0;
@@ -97,9 +95,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
       const entry = this._entries[this._openIdx];
       if (!entry) return;
       const target =
-        entry.kind === "any" ? "__any__"
-        : entry.kind === "range" ? "__custom__"
-        : entry.period;
+        entry.kind === "any" ? "__any__" : entry.kind === "range" ? "__custom__" : entry.period;
       if (sel.value !== target) sel.value = target;
     });
   }
@@ -116,11 +112,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
   private _emit(entries: Entry[]) {
     const items = entries
       .filter((e) => e.kind !== "any")
-      .map((e) =>
-        e.kind === "period"
-          ? { period: e.period }
-          : { from: e.from, to: e.to },
-      );
+      .map((e) => (e.kind === "period" ? { period: e.period } : { from: e.from, to: e.to }));
     const value: TimeOfDayPredicate =
       items.length === 0 ? null : items.length === 1 ? items[0]! : items;
     emitValueChanged(this, value);
@@ -146,10 +138,14 @@ export class AmbienceTimeOfDayInput extends LitElement {
     this._emit(entries);
   }
 
-  private _onRangeChange(idx: number, which: "from" | "to", e: CustomEvent<{ value: TimeEndpoint }>) {
+  private _onRangeChange(
+    idx: number,
+    which: "from" | "to",
+    e: CustomEvent<{ value: TimeEndpoint }>,
+  ) {
     e.stopPropagation();
     const entry = this._entries[idx];
-    if (!entry || entry.kind !== "range") return;
+    if (entry?.kind !== "range") return;
     const entries = [...this._entries];
     entries[idx] = { ...entry, [which]: e.detail.value } as Entry;
     this._entries = entries;
@@ -183,16 +179,27 @@ export class AmbienceTimeOfDayInput extends LitElement {
     if (entry.kind === "any") {
       label = localize(this.hass, "ui.any_placeholder", "(any)");
     } else if (entry.kind === "period") {
-      label = summariseTimeOfDay({ period: entry.period }, { hass: this.hass, periods: this.periods });
+      label = summariseTimeOfDay(
+        { period: entry.period },
+        { hass: this.hass, periods: this.periods },
+      );
     } else {
-      label = summariseTimeOfDay({ from: entry.from, to: entry.to }, { hass: this.hass, periods: this.periods });
+      label = summariseTimeOfDay(
+        { from: entry.from, to: entry.to },
+        { hass: this.hass, periods: this.periods },
+      );
     }
     return html`
       <div class="summary-chip" @click=${() => this._onChipClick(idx)}>
         <span class="chip-label">${label}</span>
-        ${this._entries.length > 1
-          ? html`<button class="remove" @click=${(e: Event) => { e.stopPropagation(); this._onRemove(idx); }} title=${localize(this.hass, "ui.remove", "Remove")}>✕</button>`
-          : ""}
+        ${
+          this._entries.length > 1
+            ? html`<button class="remove" @click=${(e: Event) => {
+                e.stopPropagation();
+                this._onRemove(idx);
+              }} title=${localize(this.hass, "ui.remove", "Remove")}>✕</button>`
+            : ""
+        }
       </div>
     `;
   }
@@ -213,12 +220,15 @@ export class AmbienceTimeOfDayInput extends LitElement {
               </option>`,
             )}
           </select>
-          ${this._entries.length > 1
-            ? html`<button class="remove" @click=${() => this._onRemove(idx)} title=${localize(this.hass, "ui.remove", "Remove")}>✕</button>`
-            : ""}
+          ${
+            this._entries.length > 1
+              ? html`<button class="remove" @click=${() => this._onRemove(idx)} title=${localize(this.hass, "ui.remove", "Remove")}>✕</button>`
+              : ""
+          }
         </div>
-        ${entry.kind === "range"
-          ? html`
+        ${
+          entry.kind === "range"
+            ? html`
               <div class="range-row">
                 <label>${localize(this.hass, "ui.from_label", "From")}</label>
                 <ambience-time-endpoint
@@ -237,7 +247,8 @@ export class AmbienceTimeOfDayInput extends LitElement {
                     this._onRangeChange(idx, "to", e)}
                 ></ambience-time-endpoint>
               </div>`
-          : ""}
+            : ""
+        }
       </div>
     `;
   }

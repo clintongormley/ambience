@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import { isValidDaySpec } from "../frontend/src/day-spec";
 
 describe("isValidDaySpec", () => {

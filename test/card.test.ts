@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 // Mock the lazy loader so importing the card never pulls in the heavy chunk.
 vi.mock("../frontend/src/lazy-frontend", () => ({
@@ -56,7 +56,7 @@ describe("<ambience-card>", () => {
       hass: unknown;
     };
     const fake = { foo: 2 };
-    el.hass = fake;                     // set BEFORE setConfig
+    el.hass = fake; // set BEFORE setConfig
     document.body.appendChild(el);
     el.setConfig({ type: "custom:ambience-card" });
     await Promise.resolve();
@@ -92,7 +92,9 @@ describe("<ambience-card>", () => {
       getStubConfig: () => object;
     };
     expect(Ctor.getStubConfig()).toEqual({});
-    const el = document.createElement("ambience-card") as HTMLElement & { getCardSize: () => number };
+    const el = document.createElement("ambience-card") as HTMLElement & {
+      getCardSize: () => number;
+    };
     expect(el.getCardSize()).toBe(12);
   });
 });

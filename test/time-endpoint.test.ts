@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/time-endpoint";
 import type { TimeEndpoint } from "../frontend/src/types";
 
@@ -12,13 +12,17 @@ async function mount(value: TimeEndpoint): Promise<any> {
 
 function captureEmit(el: HTMLElement): () => TimeEndpoint | undefined {
   let detail: { value: TimeEndpoint } | undefined;
-  el.addEventListener("value-changed", ((e: CustomEvent) => { detail = e.detail; }) as any);
+  el.addEventListener("value-changed", ((e: CustomEvent) => {
+    detail = e.detail;
+  }) as any);
   return () => detail?.value;
 }
 
 describe("ambience-time-endpoint", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   test("renders time input for time kind", async () => {
     el = await mount({ kind: "time", hh: 9, mm: 30 });
@@ -132,7 +136,7 @@ describe("ambience-time-endpoint", () => {
     await el.updateComplete;
     const selects = el.shadowRoot.querySelectorAll("select");
     const anchorSelect = selects[1] as HTMLSelectElement;
-    const values = Array.from(anchorSelect.options).map(o => o.value);
+    const values = Array.from(anchorSelect.options).map((o) => o.value);
     expect(values).toEqual(["dawn", "sunrise", "noon", "sunset", "dusk", "midnight"]);
   });
 
@@ -141,7 +145,7 @@ describe("ambience-time-endpoint", () => {
     await el.updateComplete;
     const selects = el.shadowRoot.querySelectorAll("select");
     const anchorSelect = selects[1] as HTMLSelectElement;
-    const labels = Array.from(anchorSelect.options).map(o => o.textContent?.trim());
+    const labels = Array.from(anchorSelect.options).map((o) => o.textContent?.trim());
     expect(labels).toEqual(["Dawn", "Sunrise", "Noon", "Sunset", "Dusk", "Midnight"]);
   });
 });

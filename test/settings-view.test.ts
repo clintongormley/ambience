@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, beforeEach, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
   listConditions: vi.fn(async () => []),

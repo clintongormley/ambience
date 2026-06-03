@@ -1,5 +1,5 @@
-import { describe, test, expect, vi } from "vitest";
-import { listPeriods, savePeriods, resetPeriods } from "../frontend/src/api";
+import { describe, expect, test, vi } from "vitest";
+import { listPeriods, resetPeriods, savePeriods } from "../frontend/src/api";
 import type { PeriodDef } from "../frontend/src/types";
 
 function makeFakeHass(): { callWS: ReturnType<typeof vi.fn>; sent: any[] } {

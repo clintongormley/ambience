@@ -1,14 +1,13 @@
-import { html, css, nothing, type TemplateResult } from "lit";
-
-import type { BufferedUnit, ServiceSchema, TraceCause, TraceRuleEval } from "./types.js";
+import { css, html, nothing, type TemplateResult } from "lit";
 import {
+  conditionLabel,
   deriveActionLabel,
   humanizeId,
-  conditionLabel,
   periodLabel,
   weatherConditionLabel,
 } from "./i18n.js";
 import { entityDisplayName, formatArgValue, paramLabel } from "./summary.js";
+import type { BufferedUnit, ServiceSchema, TraceCause, TraceRuleEval } from "./types.js";
 
 type Action = { service: string; entity_ids?: string[]; params?: Record<string, unknown> };
 
@@ -99,9 +98,11 @@ function renderRule(r: TraceRuleEval, hass: HassLike | undefined): TemplateResul
     ${r.predicates.map(
       (p) => html`
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
-          ${p.passed ? "✓" : "✗"} ${conditionLabel(hass, p.condition_key)}${p.detail
-            ? html` <span class="dim">[${formatDetail(hass, p.condition_key, p.detail)}]</span>`
-            : nothing}
+          ${p.passed ? "✓" : "✗"} ${conditionLabel(hass, p.condition_key)}${
+            p.detail
+              ? html` <span class="dim">[${formatDetail(hass, p.condition_key, p.detail)}]</span>`
+              : nothing
+          }
         </div>`,
     )}
   `;
@@ -126,21 +127,27 @@ export function renderEvaluation(
         <span class="ts">${u.timestamp ? new Date(u.timestamp).toLocaleTimeString() : ""}</span>
       </div>
       ${u.winner_name ? html`<div class="won">Won: <span class="name">${u.winner_name}</span></div>` : nothing}
-      ${u.actions.length
-        ? html`<div class="action-summary">→ ${services}
+      ${
+        u.actions.length
+          ? html`<div class="action-summary">→ ${services}
             ${n ? html`<span class="n">· ${n} ${n === 1 ? "entity" : "entities"}</span>` : nothing}</div>`
-        : nothing}
-      ${canExpand
-        ? html`<button class="why-toggle" @click=${onToggle}>
-            ${expanded
-              ? "▾ Hide details"
-              : u.explanation
-                ? u.winner_name
-                  ? `▸ Why this rule won (${u.explanation.rules.length} rules)`
-                  : `▸ Why nothing matched (${u.explanation.rules.length} rules)`
-                : "▸ Details"}
+          : nothing
+      }
+      ${
+        canExpand
+          ? html`<button class="why-toggle" @click=${onToggle}>
+            ${
+              expanded
+                ? "▾ Hide details"
+                : u.explanation
+                  ? u.winner_name
+                    ? `▸ Why this rule won (${u.explanation.rules.length} rules)`
+                    : `▸ Why nothing matched (${u.explanation.rules.length} rules)`
+                  : "▸ Details"
+            }
           </button>`
-        : nothing}
+          : nothing
+      }
       ${expanded ? renderExpansion(u, hass, schemas) : nothing}
     </div>
   `;
@@ -153,14 +160,17 @@ function renderExpansion(
 ): TemplateResult {
   return html`
     <div class="why">
-      ${u.explanation
-        ? html`<div class="section">
+      ${
+        u.explanation
+          ? html`<div class="section">
             <div class="section-title">Rule evaluation</div>
             <div class="rules">${u.explanation.rules.map((r) => renderRule(r, hass))}</div>
           </div>`
-        : nothing}
-      ${u.actions.length
-        ? html`<div class="section">
+          : nothing
+      }
+      ${
+        u.actions.length
+          ? html`<div class="section">
             <div class="section-title">Actions taken</div>
             ${u.actions.map(
               (a) => html`<div class="action-block">
@@ -171,7 +181,8 @@ function renderExpansion(
               </div>`,
             )}
           </div>`
-        : nothing}
+          : nothing
+      }
     </div>
   `;
 }

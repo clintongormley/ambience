@@ -1,9 +1,15 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/condition-input";
 
 async function mount(conditionInput: string): Promise<any> {
   const el: any = document.createElement("ambience-condition-input");
-  el.condition = { name: "day", description: "", predicate_help: "", input: conditionInput, priority: 100 };
+  el.condition = {
+    name: "day",
+    description: "",
+    predicate_help: "",
+    input: conditionInput,
+    priority: 100,
+  };
   el.value = null;
   el.dayConfig = { workday_sensor: null, workday_calendar: null };
   document.body.appendChild(el);

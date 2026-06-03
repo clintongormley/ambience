@@ -1,6 +1,6 @@
-import { describe, test, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 
-import { entityName, entityIcon } from "../frontend/src/views/entity-row";
+import { entityIcon, entityName } from "../frontend/src/views/entity-row";
 
 const hass: any = {
   states: {

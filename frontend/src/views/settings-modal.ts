@@ -1,8 +1,7 @@
-import { LitElement, html, css, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
-
-import { localize } from "../i18n.js";
 import type { HassConnection } from "../api.js";
+import { localize } from "../i18n.js";
 import "./settings-view.js";
 
 /**

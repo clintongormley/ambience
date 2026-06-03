@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import "../frontend/src/views/template-predicate-input";
 import type { TemplatePredicate } from "../frontend/src/types";

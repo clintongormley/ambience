@@ -1,8 +1,7 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-
-import { localize } from "../i18n.js";
 import type { HassConnection } from "../api.js";
+import { localize } from "../i18n.js";
 import "./ambience-settings.js";
 import "./conditions-settings.js";
 import "./actions-settings.js";
@@ -69,22 +68,30 @@ export class AmbienceSettingsView extends LitElement {
   override render() {
     return html`
       <nav>
-        <button class=${this._tab === "ambience" ? "active" : ""} @click=${() => { this._tab = "ambience"; }}>
+        <button class=${this._tab === "ambience" ? "active" : ""} @click=${() => {
+          this._tab = "ambience";
+        }}>
           <ha-icon icon="mdi:home-lightbulb"></ha-icon>${localize(this.hass, "ui.settings_tab_ambience", "Ambience")}
         </button>
-        <button class=${this._tab === "conditions" ? "active" : ""} @click=${() => { this._tab = "conditions"; }}>
+        <button class=${this._tab === "conditions" ? "active" : ""} @click=${() => {
+          this._tab = "conditions";
+        }}>
           <ha-icon icon="mdi:filter-variant"></ha-icon>${localize(this.hass, "ui.settings_tab_conditions", "Conditions")}
         </button>
-        <button class=${this._tab === "actions" ? "active" : ""} @click=${() => { this._tab = "actions"; }}>
+        <button class=${this._tab === "actions" ? "active" : ""} @click=${() => {
+          this._tab = "actions";
+        }}>
           <ha-icon icon="mdi:flash"></ha-icon>${localize(this.hass, "ui.settings_tab_actions", "Actions")}
         </button>
       </nav>
       <div class="content">
-        ${this._tab === "ambience"
-          ? html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
-          : this._tab === "conditions"
-            ? html`<ambience-conditions-settings .hass=${this.hass}></ambience-conditions-settings>`
-            : html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`}
+        ${
+          this._tab === "ambience"
+            ? html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
+            : this._tab === "conditions"
+              ? html`<ambience-conditions-settings .hass=${this.hass}></ambience-conditions-settings>`
+              : html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`
+        }
       </div>
     `;
   }

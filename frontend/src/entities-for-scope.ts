@@ -46,10 +46,7 @@ export type HaTarget =
  * can compose scope-filtering with target-filtering, or skip target
  * filtering entirely (e.g. for services with no target metadata).
  */
-export function filterEntities(
-  entityIds: readonly string[],
-  target: HaTarget,
-): string[] {
+export function filterEntities(entityIds: readonly string[], target: HaTarget): string[] {
   if (!target || target.entity == null) return [...entityIds];
   const entries = Array.isArray(target.entity) ? target.entity : [target.entity];
   if (entries.length === 0) return [...entityIds];
@@ -98,35 +95,43 @@ export function entitiesForScope(
   const anyHass = hass as any;
   if (!anyHass?.entities) return [];
 
-  const entities = anyHass.entities as Record<string, {
-    entity_id: string;
-    area_id?: string | null;
-    device_id?: string | null;
-  }>;
-  const devices = (anyHass.devices ?? {}) as Record<string, {
-    id: string;
-    area_id?: string | null;
-  }>;
-  const areas = (anyHass.areas ?? {}) as Record<string, {
-    area_id: string;
-    floor_id?: string | null;
-  }>;
+  const entities = anyHass.entities as Record<
+    string,
+    {
+      entity_id: string;
+      area_id?: string | null;
+      device_id?: string | null;
+    }
+  >;
+  const devices = (anyHass.devices ?? {}) as Record<
+    string,
+    {
+      id: string;
+      area_id?: string | null;
+    }
+  >;
+  const areas = (anyHass.areas ?? {}) as Record<
+    string,
+    {
+      area_id: string;
+      floor_id?: string | null;
+    }
+  >;
 
   // Resolve scope to a predicate over an entity's effective area_id (own or via device).
   const targetAreaIds: Set<string> | null =
     scope.kind === "area"
       ? new Set([scope.id])
       : scope.kind === "floor"
-      ? new Set(
-          Object.values(areas)
-            .filter((a) => a.floor_id === scope.id)
-            .map((a) => a.area_id),
-        )
-      : null; // house: any non-empty effective area
+        ? new Set(
+            Object.values(areas)
+              .filter((a) => a.floor_id === scope.id)
+              .map((a) => a.area_id),
+          )
+        : null; // house: any non-empty effective area
 
   const inScope = (e: { area_id?: string | null; device_id?: string | null }): boolean => {
-    const effAreaId =
-      e.area_id ?? (e.device_id ? devices[e.device_id]?.area_id ?? null : null);
+    const effAreaId = e.area_id ?? (e.device_id ? (devices[e.device_id]?.area_id ?? null) : null);
     if (effAreaId == null) return false;
     if (targetAreaIds === null) return true; // house
     return targetAreaIds.has(effAreaId);

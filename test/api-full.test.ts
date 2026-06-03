@@ -2,23 +2,23 @@
  * Tests for the remaining api.ts functions not covered by api.test.ts
  * (listAreas, getArea, saveArea, listConditions, listActions, validateConfig, dryRun)
  */
-import { describe, test, expect, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
-  listAreas,
+  dryRun,
   getArea,
-  saveArea,
+  getFloor,
+  getHouse,
+  getServiceSchema,
+  listAreas,
   listConditions,
   listExposedActions,
-  listServices,
-  getServiceSchema,
-  saveExposedActions,
-  validateConfig,
-  dryRun,
   listFloors,
-  getFloor,
+  listServices,
+  saveArea,
+  saveExposedActions,
   saveFloor,
-  getHouse,
   saveHouse,
+  validateConfig,
 } from "../frontend/src/api";
 import type { AreaConfig } from "../frontend/src/types";
 
@@ -39,9 +39,7 @@ function makeFakeHass() {
       return [{ name: "time_of_day" }];
     }
     if (msg.type === "ambience/exposed_actions/list") {
-      return [
-        { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
-      ];
+      return [{ id: "light.turn_on", label: "", visible_fields: [], defaults: {} }];
     }
     if (msg.type === "ambience/exposed_actions/save") {
       return { ok: true, warnings: [] };
@@ -108,9 +106,7 @@ describe("API: listExposedActions", () => {
     const { callWS, sent } = makeFakeHass();
     const res = await listExposedActions({ callWS } as any);
     expect(sent[0]).toEqual({ type: "ambience/exposed_actions/list" });
-    expect(res).toEqual([
-      { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
-    ]);
+    expect(res).toEqual([{ id: "light.turn_on", label: "", visible_fields: [], defaults: {} }]);
   });
 });
 
@@ -163,10 +159,7 @@ describe("API: validateConfig", () => {
 describe("API: dryRun", () => {
   test("sends area_id to dry_run endpoint", async () => {
     const { callWS, sent } = makeFakeHass();
-    const res = await dryRun(
-      { callWS } as any,
-      { kind: "area", id: "living_room" },
-    );
+    const res = await dryRun({ callWS } as any, { kind: "area", id: "living_room" });
     expect(sent[0]).toEqual({
       type: "ambience/dry_run",
       area_id: "living_room",
@@ -177,7 +170,10 @@ describe("API: dryRun", () => {
   test("dryRun area sends area_id", async () => {
     const calls: any[] = [];
     const hass = {
-      callWS: async (msg: any) => { calls.push(msg); return {}; },
+      callWS: async (msg: any) => {
+        calls.push(msg);
+        return {};
+      },
       connection: {} as any,
     };
     await dryRun(hass as any, { kind: "area", id: "kitchen" });
@@ -187,7 +183,10 @@ describe("API: dryRun", () => {
   test("dryRun floor sends floor_id", async () => {
     const calls: any[] = [];
     const hass = {
-      callWS: async (msg: any) => { calls.push(msg); return {}; },
+      callWS: async (msg: any) => {
+        calls.push(msg);
+        return {};
+      },
       connection: {} as any,
     };
     await dryRun(hass as any, { kind: "floor", id: "upstairs" });
@@ -200,7 +199,10 @@ describe("API: dryRun", () => {
   test("dryRun house sends house:true", async () => {
     const calls: any[] = [];
     const hass = {
-      callWS: async (msg: any) => { calls.push(msg); return {}; },
+      callWS: async (msg: any) => {
+        calls.push(msg);
+        return {};
+      },
       connection: {} as any,
     };
     await dryRun(hass as any, { kind: "house" });
@@ -211,7 +213,10 @@ describe("API: dryRun", () => {
 test("listFloors calls ambience/floors/list", async () => {
   const calls: any[] = [];
   const hass = {
-    callWS: async (msg: any) => { calls.push(msg); return []; },
+    callWS: async (msg: any) => {
+      calls.push(msg);
+      return [];
+    },
     connection: {} as any,
   };
   await listFloors(hass as any);
@@ -221,7 +226,10 @@ test("listFloors calls ambience/floors/list", async () => {
 test("getFloor passes floor_id", async () => {
   const calls: any[] = [];
   const hass = {
-    callWS: async (msg: any) => { calls.push(msg); return { rules: [] }; },
+    callWS: async (msg: any) => {
+      calls.push(msg);
+      return { rules: [] };
+    },
     connection: {} as any,
   };
   await getFloor(hass as any, "upstairs");
@@ -231,7 +239,10 @@ test("getFloor passes floor_id", async () => {
 test("saveFloor sends config", async () => {
   const calls: any[] = [];
   const hass = {
-    callWS: async (msg: any) => { calls.push(msg); return { ok: true, config: msg.config }; },
+    callWS: async (msg: any) => {
+      calls.push(msg);
+      return { ok: true, config: msg.config };
+    },
     connection: {} as any,
   };
   await saveFloor(hass as any, "upstairs", { rules: [] });
@@ -245,7 +256,10 @@ test("saveFloor sends config", async () => {
 test("getHouse calls ambience/house/get", async () => {
   const calls: any[] = [];
   const hass = {
-    callWS: async (msg: any) => { calls.push(msg); return { rules: [] }; },
+    callWS: async (msg: any) => {
+      calls.push(msg);
+      return { rules: [] };
+    },
     connection: {} as any,
   };
   await getHouse(hass as any);
@@ -255,7 +269,10 @@ test("getHouse calls ambience/house/get", async () => {
 test("saveHouse calls ambience/house/save", async () => {
   const calls: any[] = [];
   const hass = {
-    callWS: async (msg: any) => { calls.push(msg); return { ok: true, config: msg.config }; },
+    callWS: async (msg: any) => {
+      calls.push(msg);
+      return { ok: true, config: msg.config };
+    },
     connection: {} as any,
   };
   await saveHouse(hass as any, { rules: [] });

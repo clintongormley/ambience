@@ -1,10 +1,10 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
+import { emitValueChanged } from "../dom.js";
 import { resultAsBoolean } from "../truthiness.js";
 import type { TemplatePredicate } from "../types.js";
-import { emitValueChanged } from "../dom.js";
 
 type RenderEvent = { result?: unknown; error?: string };
 type Preview = { value: string; truthy: boolean } | { error: string };

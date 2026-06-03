@@ -1,15 +1,15 @@
-import { describe, test, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   ruleDisplayName,
-  summariseCondition,
-  summariseTimeOfDay,
-  summariseDay,
   summariseAction,
-  summariseWeather,
-  summariseSun,
-  summariseState,
-  summariseScript,
+  summariseCondition,
+  summariseDay,
   summarisePeople,
+  summariseScript,
+  summariseState,
+  summariseSun,
+  summariseTimeOfDay,
+  summariseWeather,
 } from "../frontend/src/summary";
 import type {
   ActionSpec,
@@ -41,8 +41,7 @@ describe("ruleDisplayName", () => {
   });
 
   test("uses custom default placeholder", () => {
-    expect(ruleDisplayName({ name: "", when: {}, actions: [] }, "Rule 3"))
-      .toBe("Rule 3");
+    expect(ruleDisplayName({ name: "", when: {}, actions: [] }, "Rule 3")).toBe("Rule 3");
   });
 
   test("treats whitespace-only name as empty", () => {
@@ -50,8 +49,7 @@ describe("ruleDisplayName", () => {
   });
 
   test("ignores a mode predicate — name is the only identifier", () => {
-    expect(ruleDisplayName({ name: "", when: { mode: "movie" }, actions: [] }))
-      .toBe("New rule");
+    expect(ruleDisplayName({ name: "", when: { mode: "movie" }, actions: [] })).toBe("New rule");
   });
 });
 
@@ -72,13 +70,21 @@ describe("summariseCondition", () => {
 
   test("people predicate delegates to summarisePeople (not [object Object])", () => {
     expect(
-      summariseCondition("people", { quant: "nobody", where: "home" }, { hass: noLocalize, periods }),
+      summariseCondition(
+        "people",
+        { quant: "nobody", where: "home" },
+        { hass: noLocalize, periods },
+      ),
     ).toBe("Nobody is at Home");
   });
 
   test("template predicate renders the template string (not [object Object])", () => {
     expect(
-      summariseCondition("template", { template: "{{ is_state('x','on') }}" }, { hass: noLocalize, periods }),
+      summariseCondition(
+        "template",
+        { template: "{{ is_state('x','on') }}" },
+        { hass: noLocalize, periods },
+      ),
     ).toBe("{{ is_state('x','on') }}");
   });
 
@@ -117,7 +123,10 @@ describe("summarisePeople", () => {
       "Everybody is not at Home",
     );
     expect(
-      summarisePeople({ who: ["person.alice", "person.bob"], quant: "any", where: "zone.work", negate: true }, { hass: hassPeople }),
+      summarisePeople(
+        { who: ["person.alice", "person.bob"], quant: "any", where: "zone.work", negate: true },
+        { hass: hassPeople },
+      ),
     ).toBe("Any of: (Alice, Bob) is not at Work");
   });
 
@@ -145,47 +154,68 @@ describe("summarisePeople", () => {
   test("single-person list drops the wrapper: '<Name> is [not] at <Location>'", () => {
     // any: positive.
     expect(
-      summarisePeople({ who: ["person.clinton"], quant: "any", where: "home" }, { hass: hassPeople }),
+      summarisePeople(
+        { who: ["person.clinton"], quant: "any", where: "home" },
+        { hass: hassPeople },
+      ),
     ).toBe("Clinton is at Home");
     // nobody: effectiveNot true → "is not at".
     expect(
-      summarisePeople({ who: ["person.clinton"], quant: "nobody", where: "home" }, { hass: hassPeople }),
+      summarisePeople(
+        { who: ["person.clinton"], quant: "nobody", where: "home" },
+        { hass: hassPeople },
+      ),
     ).toBe("Clinton is not at Home");
     // everyone + negate:true → effectiveNot true → "is not at".
     expect(
-      summarisePeople({ who: ["person.alice"], quant: "everyone", where: "zone.work", negate: true }, { hass: hassPeople }),
+      summarisePeople(
+        { who: ["person.alice"], quant: "everyone", where: "zone.work", negate: true },
+        { hass: hassPeople },
+      ),
     ).toBe("Alice is not at Work");
     // nobody + negate:true → XOR resolves to false → "is at".
     expect(
-      summarisePeople({ who: ["person.clinton"], quant: "nobody", where: "home", negate: true }, { hass: hassPeople }),
+      summarisePeople(
+        { who: ["person.clinton"], quant: "nobody", where: "home", negate: true },
+        { hass: hassPeople },
+      ),
     ).toBe("Clinton is at Home");
   });
 
   test("single-person list keeps the 'for' suffix", () => {
     expect(
-      summarisePeople({ who: ["person.clinton"], quant: "any", where: "home", for: { h: 0, m: 10, s: 0 } }, { hass: hassPeople }),
+      summarisePeople(
+        { who: ["person.clinton"], quant: "any", where: "home", for: { h: 0, m: 10, s: 0 } },
+        { hass: hassPeople },
+      ),
     ).toBe("Clinton is at Home for ≥10m");
   });
 
   test("zone location renders as 'is at <Zone>' (multi-person keeps wrapper)", () => {
     expect(
-      summarisePeople({ who: ["person.alice", "person.bob"], quant: "any", where: "zone.work" }, { hass: hassPeople }),
+      summarisePeople(
+        { who: ["person.alice", "person.bob"], quant: "any", where: "zone.work" },
+        { hass: hassPeople },
+      ),
     ).toBe("Any of: (Alice, Bob) is at Work");
   });
 
   test("duration suffix", () => {
-    expect(summarisePeople({ quant: "everyone", where: "home", for: { h: 0, m: 10, s: 0 } }))
-      .toBe("Everybody is at Home for ≥10m");
+    expect(summarisePeople({ quant: "everyone", where: "home", for: { h: 0, m: 10, s: 0 } })).toBe(
+      "Everybody is at Home for ≥10m",
+    );
   });
 
   test("falls back to humanised ids when no friendly names (multi-person keeps wrapper)", () => {
-    expect(summarisePeople({ who: ["person.carol", "person.dave"], quant: "any", where: "zone.gym" }))
-      .toBe("Any of: (Carol, Dave) is at Gym");
+    expect(
+      summarisePeople({ who: ["person.carol", "person.dave"], quant: "any", where: "zone.gym" }),
+    ).toBe("Any of: (Carol, Dave) is at Gym");
   });
 
   test("falls back to humanised ids for a single-person list too", () => {
-    expect(summarisePeople({ who: ["person.carol"], quant: "any", where: "zone.gym" }))
-      .toBe("Carol is at Gym");
+    expect(summarisePeople({ who: ["person.carol"], quant: "any", where: "zone.gym" })).toBe(
+      "Carol is at Gym",
+    );
   });
 });
 
@@ -195,32 +225,42 @@ describe("summariseTimeOfDay", () => {
   });
 
   test("period reference uses periodLabel", () => {
-    expect(summariseTimeOfDay({ period: "afternoon" }, { hass: noLocalize, periods }))
-      .toBe("Afternoon");
+    expect(summariseTimeOfDay({ period: "afternoon" }, { hass: noLocalize, periods })).toBe(
+      "Afternoon",
+    );
   });
 
   test("time range renders as HH:MM → HH:MM", () => {
-    expect(summariseTimeOfDay(
-      { from: { kind: "time", hh: 16, mm: 0 }, to: { kind: "time", hh: 18, mm: 30 } },
-      { hass: noLocalize, periods },
-    )).toBe("16:00 → 18:30");
+    expect(
+      summariseTimeOfDay(
+        { from: { kind: "time", hh: 16, mm: 0 }, to: { kind: "time", hh: 18, mm: 30 } },
+        { hass: noLocalize, periods },
+      ),
+    ).toBe("16:00 → 18:30");
   });
 
   test("sun-relative range uses anchor + offset", () => {
-    expect(summariseTimeOfDay(
-      {
-        from: { kind: "sun", anchor: "sunset", offset_min: -30 },
-        to: { kind: "time", hh: 22, mm: 0 },
-      },
-      { hass: noLocalize, periods },
-    )).toBe("Sunset-30m → 22:00");
+    expect(
+      summariseTimeOfDay(
+        {
+          from: { kind: "sun", anchor: "sunset", offset_min: -30 },
+          to: { kind: "time", hh: 22, mm: 0 },
+        },
+        { hass: noLocalize, periods },
+      ),
+    ).toBe("Sunset-30m → 22:00");
   });
 
   test("OR-list joins with comma", () => {
-    expect(summariseTimeOfDay(
-      [{ period: "afternoon" }, { from: { kind: "time", hh: 22, mm: 0 }, to: { kind: "time", hh: 23, mm: 0 } }],
-      { hass: noLocalize, periods },
-    )).toBe("Afternoon, 22:00 → 23:00");
+    expect(
+      summariseTimeOfDay(
+        [
+          { period: "afternoon" },
+          { from: { kind: "time", hh: 22, mm: 0 }, to: { kind: "time", hh: 23, mm: 0 } },
+        ],
+        { hass: noLocalize, periods },
+      ),
+    ).toBe("Afternoon, 22:00 → 23:00");
   });
 });
 
@@ -234,8 +274,9 @@ describe("summariseDay", () => {
   });
 
   test("weekday include lists day names", () => {
-    expect(summariseDay({ include: [{ kind: "weekday", days: [5, 6] }], exclude: [] }))
-      .toBe("Sat/Sun");
+    expect(summariseDay({ include: [{ kind: "weekday", days: [5, 6] }], exclude: [] })).toBe(
+      "Sat/Sun",
+    );
   });
 
   test("include with exclude shows except clause", () => {
@@ -247,17 +288,23 @@ describe("summariseDay", () => {
   });
 
   test("formats date, date_range, day_of_month, and month-position kinds", () => {
-    expect(summariseDay({ include: [{ kind: "date", month: 12, day: 25 }], exclude: [] }))
-      .toBe("December 25");
-    expect(summariseDay({
-      include: [{ kind: "date_range", from: { month: 7, day: 15 }, to: { month: 8, day: 31 } }],
-      exclude: [],
-    })).toBe("July 15 → August 31");
-    expect(summariseDay({ include: [{ kind: "day_of_month", days: "1-10, 15" }], exclude: [] }))
-      .toBe("Day 1-10, 15");
+    expect(summariseDay({ include: [{ kind: "date", month: 12, day: 25 }], exclude: [] })).toBe(
+      "December 25",
+    );
+    expect(
+      summariseDay({
+        include: [{ kind: "date_range", from: { month: 7, day: 15 }, to: { month: 8, day: 31 } }],
+        exclude: [],
+      }),
+    ).toBe("July 15 → August 31");
+    expect(
+      summariseDay({ include: [{ kind: "day_of_month", days: "1-10, 15" }], exclude: [] }),
+    ).toBe("Day 1-10, 15");
     expect(summariseDay({ include: [{ kind: "last_day" }], exclude: [] })).toBe("Last day");
     expect(summariseDay({ include: [{ kind: "workday" }], exclude: [] })).toBe("Workday");
-    expect(summariseDay({ include: [{ kind: "first_workday" }], exclude: [] })).toBe("First workday");
+    expect(summariseDay({ include: [{ kind: "first_workday" }], exclude: [] })).toBe(
+      "First workday",
+    );
     expect(summariseDay({ include: [{ kind: "last_workday" }], exclude: [] })).toBe("Last workday");
   });
 
@@ -284,8 +331,9 @@ describe("summariseAction", () => {
       entity_ids: ["light.a", "light.b"],
       params: { brightness: 80 },
     };
-    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
-      .toBe("Set light: 2 lights, Brightness: 80");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions })).toBe(
+      "Set light: 2 lights, Brightness: 80",
+    );
   });
 
   test("action with one entity uses singular", () => {
@@ -294,8 +342,9 @@ describe("summariseAction", () => {
       entity_ids: ["light.a"],
       params: { brightness: 80 },
     };
-    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
-      .toBe("Set light: 1 light, Brightness: 80");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions })).toBe(
+      "Set light: 1 light, Brightness: 80",
+    );
   });
 
   test("action with no entities", () => {
@@ -304,8 +353,9 @@ describe("summariseAction", () => {
       entity_ids: [],
       params: { brightness: 80 },
     };
-    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
-      .toBe("Set light: (no targets), Brightness: 80");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions })).toBe(
+      "Set light: (no targets), Brightness: 80",
+    );
   });
 
   test("action with no params omits the params clause", () => {
@@ -314,32 +364,37 @@ describe("summariseAction", () => {
       entity_ids: ["light.a"],
       params: {},
     };
-    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
-      .toBe("Set light: 1 light");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions })).toBe(
+      "Set light: 1 light",
+    );
   });
 
   test("ExposedAction.label takes precedence over hass.localize", () => {
-    const hass = { localize: (k: string) =>
-      k === "component.ambience.action.light.turn_on" ? "Localised" : undefined };
+    const hass = {
+      localize: (k: string) =>
+        k === "component.ambience.action.light.turn_on" ? "Localised" : undefined,
+    };
     const action: ActionSpec = {
       service: "light.turn_on",
       entity_ids: ["light.a"],
       params: { brightness: 50 },
     };
-    expect(summariseAction(action, { hass, exposedActions }))
-      .toBe("Set light: 1 light, Brightness: 50");
+    expect(summariseAction(action, { hass, exposedActions })).toBe(
+      "Set light: 1 light, Brightness: 50",
+    );
   });
 
   test("falls back to hass.localize when exposed list omits the service", () => {
-    const hass = { localize: (k: string) =>
-      k === "component.ambience.action.light.turn_on" ? "Set light" : undefined };
+    const hass = {
+      localize: (k: string) =>
+        k === "component.ambience.action.light.turn_on" ? "Set light" : undefined,
+    };
     const action: ActionSpec = {
       service: "light.turn_on",
       entity_ids: ["light.a"],
       params: { brightness: 50 },
     };
-    expect(summariseAction(action, { hass }))
-      .toBe("Set light: 1 light, Brightness: 50");
+    expect(summariseAction(action, { hass })).toBe("Set light: 1 light, Brightness: 50");
   });
 
   test("multiple params render comma-separated", () => {
@@ -348,8 +403,9 @@ describe("summariseAction", () => {
       entity_ids: ["light.a"],
       params: { brightness: 80, transition: 1.5 },
     };
-    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
-      .toBe("Set light: 1 light, Brightness: 80, Transition: 1.5");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions })).toBe(
+      "Set light: 1 light, Brightness: 80, Transition: 1.5",
+    );
   });
 
   test("array param values render with [ ] brackets", () => {
@@ -358,8 +414,9 @@ describe("summariseAction", () => {
       entity_ids: ["light.a"],
       params: { rgb_color: [210, 81, 81], brightness_pct: 31 },
     };
-    expect(summariseAction(action, { hass: noLocalize, exposedActions }))
-      .toBe("Set light: 1 light, Rgb color: [210,81,81], Brightness pct: 31");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions })).toBe(
+      "Set light: 1 light, Rgb color: [210,81,81], Brightness pct: 31",
+    );
   });
 
   test("uses HA's field.name from schema when available", () => {
@@ -377,8 +434,9 @@ describe("summariseAction", () => {
         target: null,
       },
     };
-    expect(summariseAction(action, { hass: noLocalize, exposedActions, schemas }))
-      .toBe("Set light: 1 light, Brightness: 31, RGB Color: [210,81,81]");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions, schemas })).toBe(
+      "Set light: 1 light, Brightness: 31, RGB Color: [210,81,81]",
+    );
   });
 
   test("falls back to humanized id when schema lacks field.name for a field", () => {
@@ -391,13 +449,14 @@ describe("summariseAction", () => {
       "light.turn_on": {
         fields: {
           brightness_pct: { name: "Brightness", selector: {} },
-          transition: { selector: {} },  // no name attribute
+          transition: { selector: {} }, // no name attribute
         },
         target: null,
       },
     };
-    expect(summariseAction(action, { hass: noLocalize, exposedActions, schemas }))
-      .toBe("Set light: 1 light, Brightness: 31, Transition: 2");
+    expect(summariseAction(action, { hass: noLocalize, exposedActions, schemas })).toBe(
+      "Set light: 1 light, Brightness: 31, Transition: 2",
+    );
   });
 
   test("uses domain prefix as fallback target noun (no exposed entry)", () => {
@@ -407,8 +466,7 @@ describe("summariseAction", () => {
       params: {},
     };
     // Domain "x" is the noun; service id ("X.unknown") is the fallback label.
-    expect(summariseAction(action, { hass: noLocalize }))
-      .toBe("X.unknown: 2 xs");
+    expect(summariseAction(action, { hass: noLocalize })).toBe("X.unknown: 2 xs");
   });
 
   test("script.<id> service is just another action", () => {
@@ -434,8 +492,7 @@ describe("summariseAction", () => {
       entity_ids: [],
       params: { target: { entity_id: ["light.kitchen"] } },
     };
-    expect(summariseAction(action, { hass }))
-      .toBe("Script.dim: (no targets), Target: [Kitchen]");
+    expect(summariseAction(action, { hass })).toBe("Script.dim: (no targets), Target: [Kitchen]");
   });
 });
 
@@ -446,16 +503,25 @@ test("summariseWeather formats group labels + thresholds", () => {
       { id: "sunny", label: "Sunny", conditions: ["sunny"] },
     ],
   };
-  expect(summariseWeather({ groups: ["wet", "sunny"], thresholds: [] }, ctx))
-    .toBe("Wet/Sunny");
-  expect(summariseWeather({
-    groups: [],
-    thresholds: [{ attribute: "temperature", op: "<", value: 5 }],
-  }, ctx)).toBe("Temperature < 5");
-  expect(summariseWeather({
-    groups: ["wet"],
-    thresholds: [{ attribute: "humidity", op: ">=", value: 80 }],
-  }, ctx)).toBe("Wet, Humidity ≥ 80");
+  expect(summariseWeather({ groups: ["wet", "sunny"], thresholds: [] }, ctx)).toBe("Wet/Sunny");
+  expect(
+    summariseWeather(
+      {
+        groups: [],
+        thresholds: [{ attribute: "temperature", op: "<", value: 5 }],
+      },
+      ctx,
+    ),
+  ).toBe("Temperature < 5");
+  expect(
+    summariseWeather(
+      {
+        groups: ["wet"],
+        thresholds: [{ attribute: "humidity", op: ">=", value: 80 }],
+      },
+      ctx,
+    ),
+  ).toBe("Wet, Humidity ≥ 80");
   expect(summariseWeather(null, ctx)).toBe("any");
 });
 
@@ -477,83 +543,151 @@ test("summariseWeather renders dangling group ids title-cased (no '?' suffix)", 
   // `stormy` and `cold_snap` aren't in the configured groups — simulates a
   // rule whose referenced group was renamed or deleted in the condition config.
   const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
-  expect(summariseWeather({ groups: ["wet", "stormy"], thresholds: [] }, ctx))
-    .toBe("Wet/Stormy");
+  expect(summariseWeather({ groups: ["wet", "stormy"], thresholds: [] }, ctx)).toBe("Wet/Stormy");
   // Multi-word ids: split on underscore/dash/whitespace, capitalize each word.
-  expect(summariseWeather({ groups: ["cold_snap", "heat-wave"], thresholds: [] }, ctx))
-    .toBe("Cold Snap/Heat Wave");
+  expect(summariseWeather({ groups: ["cold_snap", "heat-wave"], thresholds: [] }, ctx)).toBe(
+    "Cold Snap/Heat Wave",
+  );
 });
 
 test("summariseCondition delegates weather", () => {
   const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
-  expect(summariseCondition("weather", { groups: ["wet"], thresholds: [] }, ctx))
-    .toBe("Wet");
+  expect(summariseCondition("weather", { groups: ["wet"], thresholds: [] }, ctx)).toBe("Wet");
 });
 
 test("summariseState renders a single atom", () => {
-  expect(summariseState({
-    kind: "is", entity_id: "person.bob", states: ["home", "work"],
-  }, {})).toBe("person.bob is home/work");
+  expect(
+    summariseState(
+      {
+        kind: "is",
+        entity_id: "person.bob",
+        states: ["home", "work"],
+      },
+      {},
+    ),
+  ).toBe("person.bob is home/work");
 });
 
 test("summariseState renders is_not", () => {
-  expect(summariseState({
-    kind: "is_not", entity_id: "binary_sensor.door", states: ["on"],
-  }, {})).toBe("binary_sensor.door is not on");
+  expect(
+    summariseState(
+      {
+        kind: "is_not",
+        entity_id: "binary_sensor.door",
+        states: ["on"],
+      },
+      {},
+    ),
+  ).toBe("binary_sensor.door is not on");
 });
 
 test("summariseState renders 'for' duration", () => {
-  expect(summariseState({
-    kind: "is", entity_id: "binary_sensor.door", states: ["on"],
-    for: { h: 0, m: 5, s: 0 },
-  }, {})).toBe("binary_sensor.door is on for ≥5m");
+  expect(
+    summariseState(
+      {
+        kind: "is",
+        entity_id: "binary_sensor.door",
+        states: ["on"],
+        for: { h: 0, m: 5, s: 0 },
+      },
+      {},
+    ),
+  ).toBe("binary_sensor.door is on for ≥5m");
 });
 
 test("summariseState renders 'for' with multiple units", () => {
-  expect(summariseState({
-    kind: "is", entity_id: "x", states: ["on"], for: { h: 1, m: 30, s: 15 },
-  }, {})).toBe("x is on for ≥1h 30m 15s");
+  expect(
+    summariseState(
+      {
+        kind: "is",
+        entity_id: "x",
+        states: ["on"],
+        for: { h: 1, m: 30, s: 15 },
+      },
+      {},
+    ),
+  ).toBe("x is on for ≥1h 30m 15s");
 });
 
 test("summariseState renders AND group", () => {
-  expect(summariseState({ kind: "and", items: [
-    { kind: "is", entity_id: "a", states: ["on"] },
-    { kind: "is", entity_id: "b", states: ["off"] },
-  ]}, {})).toBe("a is on AND b is off");
+  expect(
+    summariseState(
+      {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+      {},
+    ),
+  ).toBe("a is on AND b is off");
 });
 
 test("summariseState renders OR group", () => {
-  expect(summariseState({ kind: "or", items: [
-    { kind: "is", entity_id: "a", states: ["on"] },
-    { kind: "is", entity_id: "b", states: ["off"] },
-  ]}, {})).toBe("a is on OR b is off");
+  expect(
+    summariseState(
+      {
+        kind: "or",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+      {},
+    ),
+  ).toBe("a is on OR b is off");
 });
 
 test("summariseState renders NOT", () => {
-  expect(summariseState({
-    kind: "not",
-    item: { kind: "is", entity_id: "a", states: ["on"] },
-  }, {})).toBe("NOT a is on");
+  expect(
+    summariseState(
+      {
+        kind: "not",
+        item: { kind: "is", entity_id: "a", states: ["on"] },
+      },
+      {},
+    ),
+  ).toBe("NOT a is on");
 });
 
 test("summariseState still parenthesises NOT around a group (so the scope is unambiguous)", () => {
-  expect(summariseState({
-    kind: "not",
-    item: { kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]},
-  }, {})).toBe("NOT (a is on AND b is off)");
+  expect(
+    summariseState(
+      {
+        kind: "not",
+        item: {
+          kind: "and",
+          items: [
+            { kind: "is", entity_id: "a", states: ["on"] },
+            { kind: "is", entity_id: "b", states: ["off"] },
+          ],
+        },
+      },
+      {},
+    ),
+  ).toBe("NOT (a is on AND b is off)");
 });
 
 test("summariseState renders nested groups with parens around inner groups", () => {
-  expect(summariseState({ kind: "or", items: [
-    { kind: "and", items: [
-      { kind: "is", entity_id: "a", states: ["on"] },
-      { kind: "is", entity_id: "b", states: ["off"] },
-    ]},
-    { kind: "is_not", entity_id: "c", states: ["open"] },
-  ]}, {})).toBe("(a is on AND b is off) OR c is not open");
+  expect(
+    summariseState(
+      {
+        kind: "or",
+        items: [
+          {
+            kind: "and",
+            items: [
+              { kind: "is", entity_id: "a", states: ["on"] },
+              { kind: "is", entity_id: "b", states: ["off"] },
+            ],
+          },
+          { kind: "is_not", entity_id: "c", states: ["open"] },
+        ],
+      },
+      {},
+    ),
+  ).toBe("(a is on AND b is off) OR c is not open");
 });
 
 test("summariseState null is 'any'", () => {
@@ -561,59 +695,141 @@ test("summariseState null is 'any'", () => {
 });
 
 test("summariseCondition dispatches state", () => {
-  expect(summariseCondition("state", {
-    kind: "is", entity_id: "a", states: ["on"],
-  }, {})).toBe("a is on");
+  expect(
+    summariseCondition(
+      "state",
+      {
+        kind: "is",
+        entity_id: "a",
+        states: ["on"],
+      },
+      {},
+    ),
+  ).toBe("a is on");
 });
 
 test("summariseState renders an atom with an attribute as entity.attr", () => {
-  expect(summariseState({
-    kind: "is", entity_id: "media_player.x", attribute: "source",
-    states: ["Spotify", "Tidal"],
-  }, {})).toBe("media_player.x.source is Spotify/Tidal");
+  expect(
+    summariseState(
+      {
+        kind: "is",
+        entity_id: "media_player.x",
+        attribute: "source",
+        states: ["Spotify", "Tidal"],
+      },
+      {},
+    ),
+  ).toBe("media_player.x.source is Spotify/Tidal");
 });
 
 test("summariseState renders attribute-mode is_not", () => {
-  expect(summariseState({
-    kind: "is_not", entity_id: "light.x", attribute: "brightness",
-    states: ["255"],
-  }, {})).toBe("light.x.brightness is not 255");
+  expect(
+    summariseState(
+      {
+        kind: "is_not",
+        entity_id: "light.x",
+        attribute: "brightness",
+        states: ["255"],
+      },
+      {},
+    ),
+  ).toBe("light.x.brightness is not 255");
 });
 
 test("summariseState falls back to entity-state when attribute is null/empty", () => {
-  expect(summariseState({
-    kind: "is", entity_id: "a", attribute: null, states: ["on"],
-  }, {})).toBe("a is on");
-  expect(summariseState({
-    kind: "is", entity_id: "a", attribute: "", states: ["on"],
-  }, {})).toBe("a is on");
+  expect(
+    summariseState(
+      {
+        kind: "is",
+        entity_id: "a",
+        attribute: null,
+        states: ["on"],
+      },
+      {},
+    ),
+  ).toBe("a is on");
+  expect(
+    summariseState(
+      {
+        kind: "is",
+        entity_id: "a",
+        attribute: "",
+        states: ["on"],
+      },
+      {},
+    ),
+  ).toBe("a is on");
 });
 
 test("summariseState renders numeric ops without slashes", () => {
-  expect(summariseState({
-    kind: ">", entity_id: "sensor.temp", states: ["21"],
-  }, {})).toBe("sensor.temp > 21");
-  expect(summariseState({
-    kind: ">=", entity_id: "sensor.temp", states: ["21"],
-  }, {})).toBe("sensor.temp ≥ 21");
-  expect(summariseState({
-    kind: "<", entity_id: "sensor.temp", states: ["5"],
-  }, {})).toBe("sensor.temp < 5");
-  expect(summariseState({
-    kind: "<=", entity_id: "sensor.temp", states: ["5"],
-  }, {})).toBe("sensor.temp ≤ 5");
+  expect(
+    summariseState(
+      {
+        kind: ">",
+        entity_id: "sensor.temp",
+        states: ["21"],
+      },
+      {},
+    ),
+  ).toBe("sensor.temp > 21");
+  expect(
+    summariseState(
+      {
+        kind: ">=",
+        entity_id: "sensor.temp",
+        states: ["21"],
+      },
+      {},
+    ),
+  ).toBe("sensor.temp ≥ 21");
+  expect(
+    summariseState(
+      {
+        kind: "<",
+        entity_id: "sensor.temp",
+        states: ["5"],
+      },
+      {},
+    ),
+  ).toBe("sensor.temp < 5");
+  expect(
+    summariseState(
+      {
+        kind: "<=",
+        entity_id: "sensor.temp",
+        states: ["5"],
+      },
+      {},
+    ),
+  ).toBe("sensor.temp ≤ 5");
 });
 
 test("summariseState renders numeric ops on attributes as 'entity.attr op N'", () => {
-  expect(summariseState({
-    kind: ">", entity_id: "light.x", attribute: "brightness", states: ["100"],
-  }, {})).toBe("light.x.brightness > 100");
+  expect(
+    summariseState(
+      {
+        kind: ">",
+        entity_id: "light.x",
+        attribute: "brightness",
+        states: ["100"],
+      },
+      {},
+    ),
+  ).toBe("light.x.brightness > 100");
 });
 
 test("summariseState appends 'for' clause to a numeric atom", () => {
-  expect(summariseState({
-    kind: ">", entity_id: "sensor.x", states: ["10"], for: { h: 0, m: 5, s: 0 },
-  }, {})).toBe("sensor.x > 10 for ≥5m");
+  expect(
+    summariseState(
+      {
+        kind: ">",
+        entity_id: "sensor.x",
+        states: ["10"],
+        for: { h: 0, m: 5, s: 0 },
+      },
+      {},
+    ),
+  ).toBe("sensor.x > 10 for ≥5m");
 });
 
 test("summariseState uses the entity's friendly_name when one is available", () => {
@@ -622,9 +838,16 @@ test("summariseState uses the entity's friendly_name when one is available", () 
       "binary_sensor.front_door": { attributes: { friendly_name: "Front door" } },
     },
   } as any;
-  expect(summariseState({
-    kind: "is", entity_id: "binary_sensor.front_door", states: ["on"],
-  }, { hass })).toBe("Front door is on");
+  expect(
+    summariseState(
+      {
+        kind: "is",
+        entity_id: "binary_sensor.front_door",
+        states: ["on"],
+      },
+      { hass },
+    ),
+  ).toBe("Front door is on");
 });
 
 test("summariseState combines friendly_name with the attribute name", () => {
@@ -633,18 +856,33 @@ test("summariseState combines friendly_name with the attribute name", () => {
       "light.kitchen": { attributes: { friendly_name: "Kitchen light", brightness: 200 } },
     },
   } as any;
-  expect(summariseState({
-    kind: ">", entity_id: "light.kitchen", attribute: "brightness", states: ["100"],
-  }, { hass })).toBe("Kitchen light.brightness > 100");
+  expect(
+    summariseState(
+      {
+        kind: ">",
+        entity_id: "light.kitchen",
+        attribute: "brightness",
+        states: ["100"],
+      },
+      { hass },
+    ),
+  ).toBe("Kitchen light.brightness > 100");
 });
 
 test("summariseState falls back to entity_id when no friendly_name is set", () => {
   const hass = {
     states: { "sensor.x": { attributes: {} } },
   } as any;
-  expect(summariseState({
-    kind: "is", entity_id: "sensor.x", states: ["on"],
-  }, { hass })).toBe("sensor.x is on");
+  expect(
+    summariseState(
+      {
+        kind: "is",
+        entity_id: "sensor.x",
+        states: ["on"],
+      },
+      { hass },
+    ),
+  ).toBe("sensor.x is on");
 });
 
 describe("summariseScript", () => {
@@ -657,37 +895,33 @@ describe("summariseScript", () => {
       localize: () => undefined,
       states: { "script.foobar": { attributes: { friendly_name: "Evening Scene" } } },
     };
-    expect(summariseScript({ script: "script.foobar", args: {} }, { hass }))
-      .toBe("Evening Scene");
+    expect(summariseScript({ script: "script.foobar", args: {} }, { hass })).toBe("Evening Scene");
   });
 
   test("no args renders the humanised script name", () => {
-    expect(summariseScript({ script: "script.foobar" }, { hass: noLocalize }))
-      .toBe("Foobar");
+    expect(summariseScript({ script: "script.foobar" }, { hass: noLocalize })).toBe("Foobar");
   });
 
   test("empty args object is treated as no args", () => {
-    expect(summariseScript({ script: "script.foo", args: {} }, { hass: noLocalize }))
-      .toBe("Foo");
+    expect(summariseScript({ script: "script.foo", args: {} }, { hass: noLocalize })).toBe("Foo");
   });
 
   test("single arg renders with a humanised key when no alias is known", () => {
-    expect(summariseScript({ script: "script.foo", args: { k: 7 } }, { hass: noLocalize }))
-      .toBe("Foo (K: 7)");
+    expect(summariseScript({ script: "script.foo", args: { k: 7 } }, { hass: noLocalize })).toBe(
+      "Foo (K: 7)",
+    );
   });
 
   test("multiple args render alphabetically by key", () => {
-    expect(summariseScript(
-      { script: "script.foo", args: { z: "down", k: 7 } },
-      { hass: noLocalize },
-    )).toBe("Foo (K: 7, Z: down)");
+    expect(
+      summariseScript({ script: "script.foo", args: { z: "down", k: 7 } }, { hass: noLocalize }),
+    ).toBe("Foo (K: 7, Z: down)");
   });
 
   test("object-valued arg renders via formatParamValue, not [object Object]", () => {
-    expect(summariseScript(
-      { script: "script.foo", args: { rgb: [210, 81, 81] } },
-      { hass: noLocalize },
-    )).toBe("Foo (Rgb: [210,81,81])");
+    expect(
+      summariseScript({ script: "script.foo", args: { rgb: [210, 81, 81] } }, { hass: noLocalize }),
+    ).toBe("Foo (Rgb: [210,81,81])");
   });
 
   test("arg key resolves to the script field's friendly name alias", () => {
@@ -695,10 +929,9 @@ describe("summariseScript", () => {
       localize: () => undefined,
       services: { script: { foo: { fields: { target: { name: "Target brightness" } } } } },
     };
-    expect(summariseScript(
-      { script: "script.foo", args: { target: 5 } },
-      { hass },
-    )).toBe("Foo (Target brightness: 5)");
+    expect(summariseScript({ script: "script.foo", args: { target: 5 } }, { hass })).toBe(
+      "Foo (Target brightness: 5)",
+    );
   });
 
   test("target-shaped arg renders a bracketed list of friendly entity names", () => {
@@ -709,13 +942,17 @@ describe("summariseScript", () => {
         "sensor.cph2653_battery_state": { attributes: { friendly_name: "Battery State" } },
       },
     };
-    expect(summariseScript(
-      {
-        script: "script.foo",
-        args: { target: { entity_id: ["sensor.cph2653_battery_level", "sensor.cph2653_battery_state"] } },
-      },
-      { hass },
-    )).toBe("Foo (Target: [Battery Level, Battery State])");
+    expect(
+      summariseScript(
+        {
+          script: "script.foo",
+          args: {
+            target: { entity_id: ["sensor.cph2653_battery_level", "sensor.cph2653_battery_state"] },
+          },
+        },
+        { hass },
+      ),
+    ).toBe("Foo (Target: [Battery Level, Battery State])");
   });
 
   test("target with many entities is capped with '+N more'", () => {
@@ -723,10 +960,12 @@ describe("summariseScript", () => {
     const states = Object.fromEntries(
       ids.map((id, i) => [id, { attributes: { friendly_name: `E${i + 1}` } }]),
     );
-    expect(summariseScript(
-      { script: "script.foo", args: { target: { entity_id: ids } } },
-      { hass: { localize: () => undefined, states } },
-    )).toBe("Foo (Target: [E1, E2 +3 more])");
+    expect(
+      summariseScript(
+        { script: "script.foo", args: { target: { entity_id: ids } } },
+        { hass: { localize: () => undefined, states } },
+      ),
+    ).toBe("Foo (Target: [E1, E2 +3 more])");
   });
 
   test("single-string entity_id target renders one friendly name", () => {
@@ -734,17 +973,21 @@ describe("summariseScript", () => {
       localize: () => undefined,
       states: { "light.kitchen": { attributes: { friendly_name: "Kitchen" } } },
     };
-    expect(summariseScript(
-      { script: "script.foo", args: { target: { entity_id: "light.kitchen" } } },
-      { hass },
-    )).toBe("Foo (Target: [Kitchen])");
+    expect(
+      summariseScript(
+        { script: "script.foo", args: { target: { entity_id: "light.kitchen" } } },
+        { hass },
+      ),
+    ).toBe("Foo (Target: [Kitchen])");
   });
 
   test("non-target object arg still renders as JSON", () => {
-    expect(summariseScript(
-      { script: "script.foo", args: { opts: { mode: "auto" } } },
-      { hass: noLocalize },
-    )).toBe('Foo (Opts: {"mode":"auto"})');
+    expect(
+      summariseScript(
+        { script: "script.foo", args: { opts: { mode: "auto" } } },
+        { hass: noLocalize },
+      ),
+    ).toBe('Foo (Opts: {"mode":"auto"})');
   });
 
   test("malformed predicate (non-string script) falls back to String(pred)", () => {
@@ -761,19 +1004,17 @@ describe("summariseScript", () => {
 });
 
 test("summariseCondition dispatches script with no args", () => {
-  expect(summariseCondition(
-    "script",
-    { script: "script.foo" },
-    { hass: noLocalize },
-  )).toBe("Foo");
+  expect(summariseCondition("script", { script: "script.foo" }, { hass: noLocalize })).toBe("Foo");
 });
 
 test("summariseCondition dispatches script with args (sorted)", () => {
-  expect(summariseCondition(
-    "script",
-    { script: "script.foo", args: { z: "down", k: 7 } },
-    { hass: noLocalize },
-  )).toBe("Foo (K: 7, Z: down)");
+  expect(
+    summariseCondition(
+      "script",
+      { script: "script.foo", args: { z: "down", k: 7 } },
+      { hass: noLocalize },
+    ),
+  ).toBe("Foo (K: 7, Z: down)");
 });
 
 test("summariseCondition script with null predicate yields '(any)'", () => {

@@ -1,39 +1,39 @@
-import { describe, test, expect } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
-  periodLabel,
-  conditionLabel,
   actionLabel,
   anchorLabel,
-  localize,
-  weekdayLabel,
+  conditionLabel,
   dayItemKindLabel,
+  localize,
   monthLabel,
-  weatherConditionLabel,
+  periodLabel,
   weatherAttrLabel,
   weatherAttrUnit,
+  weatherConditionLabel,
+  weekdayLabel,
 } from "../frontend/src/i18n";
 import type { PeriodDef } from "../frontend/src/types";
 
 const def = (label: string | null = null): PeriodDef => ({
   from: { kind: "time", hh: 20, mm: 0 },
-  to:   { kind: "time", hh: 22, mm: 0 },
+  to: { kind: "time", hh: 22, mm: 0 },
   label,
 });
 
 describe("periodLabel", () => {
   test("returns custom label when present", () => {
-    expect(periodLabel(undefined, "wind_down", { wind_down: def("Wind down") }))
-      .toBe("Wind down");
+    expect(periodLabel(undefined, "wind_down", { wind_down: def("Wind down") })).toBe("Wind down");
   });
 
   test("ignores empty/null custom label", () => {
-    expect(periodLabel(undefined, "wind_down", { wind_down: def(null) }))
-      .toBe("Wind_down");
+    expect(periodLabel(undefined, "wind_down", { wind_down: def(null) })).toBe("Wind_down");
   });
 
   test("uses hass.localize when available and key resolves", () => {
-    const hass = { localize: (k: string) =>
-      k === "component.ambience.time_of_day_period.afternoon" ? "Nachmittag" : undefined };
+    const hass = {
+      localize: (k: string) =>
+        k === "component.ambience.time_of_day_period.afternoon" ? "Nachmittag" : undefined,
+    };
     expect(periodLabel(hass, "afternoon", {})).toBe("Nachmittag");
   });
 
@@ -48,15 +48,15 @@ describe("periodLabel", () => {
 
   test("custom label takes precedence over hass.localize", () => {
     const hass = { localize: () => "From i18n" };
-    expect(periodLabel(hass, "afternoon", { afternoon: def("From custom") }))
-      .toBe("From custom");
+    expect(periodLabel(hass, "afternoon", { afternoon: def("From custom") })).toBe("From custom");
   });
 });
 
 describe("conditionLabel", () => {
   test("returns translated label when hass.localize hits", () => {
-    const hass = { localize: (k: string) =>
-      k === "component.ambience.condition.mode" ? "Mode" : undefined };
+    const hass = {
+      localize: (k: string) => (k === "component.ambience.condition.mode" ? "Mode" : undefined),
+    };
     expect(conditionLabel(hass, "mode")).toBe("Mode");
   });
 
@@ -81,8 +81,10 @@ describe("conditionLabel", () => {
 
 describe("actionLabel", () => {
   test("returns translated label when hass.localize hits", () => {
-    const hass = { localize: (k: string) =>
-      k === "component.ambience.action.light.turn_on" ? "Turn on lights" : undefined };
+    const hass = {
+      localize: (k: string) =>
+        k === "component.ambience.action.light.turn_on" ? "Turn on lights" : undefined,
+    };
     expect(actionLabel(hass, "light.turn_on")).toBe("Turn on lights");
   });
 
@@ -93,8 +95,10 @@ describe("actionLabel", () => {
 
 describe("anchorLabel", () => {
   test("returns translated label when hass.localize hits", () => {
-    const hass = { localize: (k: string) =>
-      k === "component.ambience.anchor.dawn" ? "Morgendämmerung" : undefined };
+    const hass = {
+      localize: (k: string) =>
+        k === "component.ambience.anchor.dawn" ? "Morgendämmerung" : undefined,
+    };
     expect(anchorLabel(hass, "dawn")).toBe("Morgendämmerung");
   });
 
@@ -112,7 +116,9 @@ describe("localize", () => {
     expect(localize(hass, "ui.include", "Include")).toBe("Include");
   });
   test("returns localized value on hit", () => {
-    const hass = { localize: (k: string) => (k === "component.ambience.ui.include" ? "Inclure" : undefined) };
+    const hass = {
+      localize: (k: string) => (k === "component.ambience.ui.include" ? "Inclure" : undefined),
+    };
     expect(localize(hass, "ui.include", "Include")).toBe("Inclure");
   });
 });
@@ -124,7 +130,9 @@ describe("weekdayLabel", () => {
     expect(weekdayLabel(undefined, 6)).toBe("Sun");
   });
   test("localizes via component.ambience.weekday.<id>", () => {
-    const hass = { localize: (k: string) => (k === "component.ambience.weekday.mon" ? "Lun" : undefined) };
+    const hass = {
+      localize: (k: string) => (k === "component.ambience.weekday.mon" ? "Lun" : undefined),
+    };
     expect(weekdayLabel(hass, 0)).toBe("Lun");
   });
 });
@@ -135,7 +143,10 @@ describe("dayItemKindLabel", () => {
     expect(dayItemKindLabel(undefined, "first_workday")).toBe("First workday of month");
   });
   test("localizes via component.ambience.day_item.<kind>", () => {
-    const hass = { localize: (k: string) => (k === "component.ambience.day_item.workday" ? "Jour ouvré" : undefined) };
+    const hass = {
+      localize: (k: string) =>
+        k === "component.ambience.day_item.workday" ? "Jour ouvré" : undefined,
+    };
     expect(dayItemKindLabel(hass, "workday")).toBe("Jour ouvré");
   });
 });
@@ -147,7 +158,9 @@ describe("monthLabel", () => {
     expect(monthLabel(undefined, 12)).toBe("December");
   });
   test("localizes via component.ambience.month.<n>", () => {
-    const hass = { localize: (k: string) => (k === "component.ambience.month.1" ? "Janvier" : undefined) };
+    const hass = {
+      localize: (k: string) => (k === "component.ambience.month.1" ? "Janvier" : undefined),
+    };
     expect(monthLabel(hass, 1)).toBe("Janvier");
   });
 });
@@ -159,7 +172,10 @@ describe("weatherConditionLabel", () => {
     expect(weatherConditionLabel(undefined, "clear-night")).toBe("Clear (night)");
   });
   test("localizes via component.ambience.weather_condition.<cond>", () => {
-    const hass = { localize: (k: string) => (k === "component.ambience.weather_condition.rainy" ? "Pluvieux" : undefined) };
+    const hass = {
+      localize: (k: string) =>
+        k === "component.ambience.weather_condition.rainy" ? "Pluvieux" : undefined,
+    };
     expect(weatherConditionLabel(hass, "rainy")).toBe("Pluvieux");
   });
 });
@@ -174,8 +190,9 @@ describe("weatherAttrLabel", () => {
 describe("weatherAttrUnit", () => {
   test("humidity is always '%' regardless of hass", () => {
     expect(weatherAttrUnit(undefined, "humidity")).toBe("%");
-    expect(weatherAttrUnit({ config: { unit_system: { temperature: "°F" } } } as any, "humidity"))
-      .toBe("%");
+    expect(
+      weatherAttrUnit({ config: { unit_system: { temperature: "°F" } } } as any, "humidity"),
+    ).toBe("%");
   });
   test("temperature & apparent_temperature follow hass.config.unit_system.temperature", () => {
     const hass = { config: { unit_system: { temperature: "°F" } } } as any;
@@ -231,7 +248,9 @@ describe("weatherAttrUnit", () => {
   test("falls through to unit_system when the entity attribute is missing or non-string", () => {
     const hass = { config: { unit_system: { pressure: "Pa" } } } as any;
     expect(weatherAttrUnit(hass, "pressure", { attributes: {} })).toBe("Pa");
-    expect(weatherAttrUnit(hass, "pressure", { attributes: { pressure_unit: 42 } as any })).toBe("Pa");
+    expect(weatherAttrUnit(hass, "pressure", { attributes: { pressure_unit: 42 } as any })).toBe(
+      "Pa",
+    );
     expect(weatherAttrUnit(hass, "pressure", undefined)).toBe("Pa");
   });
 });

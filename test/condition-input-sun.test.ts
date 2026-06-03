@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/sun-predicate-input";
 import type { SunPredicate } from "../frontend/src/types";
 
@@ -23,8 +23,9 @@ describe("ambience-sun-predicate-input", () => {
 
   test("renders sectors as a compass grid (NW N NE / W E / SW S SE order)", async () => {
     el = await mount();
-    const labels = Array.from(el.shadowRoot.querySelectorAll(".sectors label"))
-      .map((n: Element) => n.textContent?.trim());
+    const labels = Array.from(el.shadowRoot.querySelectorAll(".sectors label")).map((n: Element) =>
+      n.textContent?.trim(),
+    );
     expect(labels).toEqual(["NW", "N", "NE", "W", "E", "SW", "S", "SE"]);
   });
 
@@ -39,11 +40,14 @@ describe("ambience-sun-predicate-input", () => {
   test("ticking a compass checkbox emits that sector; unticking removes it", async () => {
     el = await mount({ azimuth: { sectors: ["N"] } });
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
 
     const box = (label: string): HTMLInputElement => {
-      const lbl = Array.from(el.shadowRoot.querySelectorAll(".sectors label"))
-        .find((l: Element) => l.textContent?.trim() === label) as Element;
+      const lbl = Array.from(el.shadowRoot.querySelectorAll(".sectors label")).find(
+        (l: Element) => l.textContent?.trim() === label,
+      ) as Element;
       return lbl.querySelector("input") as HTMLInputElement;
     };
 
@@ -62,7 +66,9 @@ describe("ambience-sun-predicate-input", () => {
   test("selecting sectors emits an azimuth predicate", async () => {
     el = await mount();
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     el._setSectors(["W", "SW"]);
     expect(detail.value).toEqual({ azimuth: { sectors: ["W", "SW"] } });
   });
@@ -70,7 +76,9 @@ describe("ambience-sun-predicate-input", () => {
   test("setting an elevation band emits an elevation predicate", async () => {
     el = await mount();
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     el._setElevation({ min: 0, max: 30 });
     expect(detail.value).toEqual({ elevation: { min: 0, max: 30 } });
   });
@@ -94,7 +102,9 @@ describe("ambience-sun-predicate-input", () => {
   test("ticking 'Custom range' reveals from/to inputs and emits a default range", async () => {
     el = await mount();
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     const toggle = el.shadowRoot.querySelector(".custom-range-toggle") as HTMLInputElement;
     toggle.checked = true;
     toggle.dispatchEvent(new Event("change"));
@@ -106,7 +116,9 @@ describe("ambience-sun-predicate-input", () => {
   test("editing the custom range emits the updated from/to", async () => {
     el = await mount({ azimuth: { ranges: [{ from: 200, to: 250 }] } });
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     const from = el.shadowRoot.querySelector(".range-row .from") as HTMLInputElement;
     from.value = "210";
     from.dispatchEvent(new Event("change"));

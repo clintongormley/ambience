@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, vi, beforeAll } from "vitest";
+import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 // jsdom doesn't include DragEvent — polyfill it with a minimal MouseEvent subclass.
 beforeAll(() => {
@@ -13,13 +13,25 @@ beforeAll(() => {
 });
 import "../frontend/src/views/rules-list";
 import { colorHex } from "../frontend/src/category-colors";
-import type { ExposedAction, ConditionInfo, Rule, RuleCategory, PeriodStoreView } from "../frontend/src/types";
+import type {
+  ConditionInfo,
+  ExposedAction,
+  PeriodStoreView,
+  Rule,
+  RuleCategory,
+} from "../frontend/src/types";
 
 const conditions: ConditionInfo[] = [
-  { name: "mode",       description: "", predicate_help: "", input: "text",    priority: 1000 },
-  { name: "day",         description: "", predicate_help: "", input: "day_predicate",     priority: 900 },
-  { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day",       priority: 800 },
-  { name: "weather",     description: "", predicate_help: "", input: "weather_predicate", priority: 700 },
+  { name: "mode", description: "", predicate_help: "", input: "text", priority: 1000 },
+  { name: "day", description: "", predicate_help: "", input: "day_predicate", priority: 900 },
+  { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day", priority: 800 },
+  {
+    name: "weather",
+    description: "",
+    predicate_help: "",
+    input: "weather_predicate",
+    priority: 700,
+  },
 ];
 
 const periods: PeriodStoreView = {
@@ -76,7 +88,9 @@ async function mount(
 
 function captureEvent(el: HTMLElement, name: string) {
   let detail: any;
-  el.addEventListener(name, (e: Event) => { detail = (e as CustomEvent).detail; });
+  el.addEventListener(name, (e: Event) => {
+    detail = (e as CustomEvent).detail;
+  });
   return () => detail;
 }
 
@@ -99,7 +113,9 @@ async function pickCategoryKebab(el: any, action: string) {
 
 describe("ambience-rules-list", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   test("renders 'No rules yet' when empty", async () => {
     el = await mount([]);
@@ -268,7 +284,6 @@ describe("ambience-rules-list", () => {
     expect(summary.toLowerCase()).toContain("morning");
   });
 
-
   test("drag start sets _dragFrom index", async () => {
     el = await mount([movieRule, eveningRule]);
     const items = el.shadowRoot.querySelectorAll("li");
@@ -367,35 +382,33 @@ describe("ambience-rules-list", () => {
   });
 
   test("rules-list shows 'Rule 1' when rule name is empty, even if mode is set", async () => {
-    el = await mount([
-      { name: "", when: { mode: "Cozy evening" }, actions: [] },
-    ]);
+    el = await mount([{ name: "", when: { mode: "Cozy evening" }, actions: [] }]);
     const name = el.shadowRoot.querySelector(".name")?.textContent?.trim();
     expect(name).toBe("Rule 1");
   });
 
   test("rules-list shows default Rule N when both name and mode are empty", async () => {
-    el = await mount([
-      { name: "", when: {}, actions: [] },
-    ]);
+    el = await mount([{ name: "", when: {}, actions: [] }]);
     const name = el.shadowRoot.querySelector(".name")?.textContent?.trim();
     expect(name).toBe("Rule 1");
   });
 
   test("rules-list prefers explicit name over mode", async () => {
-    el = await mount([
-      { name: "My rule", when: { mode: "Cozy evening" }, actions: [] },
-    ]);
+    el = await mount([{ name: "My rule", when: { mode: "Cozy evening" }, actions: [] }]);
     const name = el.shadowRoot.querySelector(".name")?.textContent?.trim();
     expect(name).toBe("My rule");
   });
 
   test("summary uses friendly condition labels", async () => {
-    const rules: Rule[] = [{
-      name: "test",
-      when: { time_of_day: { period: "afternoon" }, mode: "movie" },
-      actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: { brightness: 80 } }],
-    }];
+    const rules: Rule[] = [
+      {
+        name: "test",
+        when: { time_of_day: { period: "afternoon" }, mode: "movie" },
+        actions: [
+          { service: "light.turn_on", entity_ids: ["light.a"], params: { brightness: 80 } },
+        ],
+      },
+    ];
     el = await mount(rules);
     const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
     expect(summary).toContain("Time of day:");
@@ -405,25 +418,29 @@ describe("ambience-rules-list", () => {
   });
 
   test("condition labels in the summary are wrapped in <strong>", async () => {
-    const rules: Rule[] = [{
-      name: "test",
-      when: { time_of_day: { period: "afternoon" }, mode: "movie" },
-      actions: [],
-    }];
+    const rules: Rule[] = [
+      {
+        name: "test",
+        when: { time_of_day: { period: "afternoon" }, mode: "movie" },
+        actions: [],
+      },
+    ];
     el = await mount(rules);
-    const strongs = Array.from(
-      el.shadowRoot.querySelectorAll(".summary strong"),
-    ).map((s: any) => s.textContent?.trim());
+    const strongs = Array.from(el.shadowRoot.querySelectorAll(".summary strong")).map((s: any) =>
+      s.textContent?.trim(),
+    );
     expect(strongs).toContain("Time of day:");
     expect(strongs).toContain("Mode:");
   });
 
   test("clicking the summary expands the whole rule", async () => {
-    const rules: Rule[] = [{
-      name: "r",
-      when: { time_of_day: { period: "afternoon" }, mode: "movie" },
-      actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: {} }],
-    }];
+    const rules: Rule[] = [
+      {
+        name: "r",
+        when: { time_of_day: { period: "afternoon" }, mode: "movie" },
+        actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: {} }],
+      },
+    ];
     el = await mount(rules);
     expect(el.shadowRoot.querySelector(".rule-detail")).toBeFalsy();
     const summary = el.shadowRoot.querySelector(".summary") as HTMLElement;
@@ -433,17 +450,17 @@ describe("ambience-rules-list", () => {
   });
 
   test("expanded rule renders each condition on its own line", async () => {
-    const rules: Rule[] = [{
-      name: "r",
-      when: { time_of_day: { period: "afternoon" }, mode: "movie" },
-      actions: [],
-    }];
+    const rules: Rule[] = [
+      {
+        name: "r",
+        when: { time_of_day: { period: "afternoon" }, mode: "movie" },
+        actions: [],
+      },
+    ];
     el = await mount(rules);
     (el.shadowRoot.querySelector(".summary") as HTMLElement).click();
     await el.updateComplete;
-    const lines = Array.from(
-      el.shadowRoot.querySelectorAll(".rule-detail .condition-line"),
-    );
+    const lines = Array.from(el.shadowRoot.querySelectorAll(".rule-detail .condition-line"));
     expect(lines.length).toBe(2);
     const texts = lines.map((n: any) => n.textContent?.trim() ?? "");
     expect(texts.some((t: string) => t.startsWith("Mode:"))).toBe(true);
@@ -451,15 +468,19 @@ describe("ambience-rules-list", () => {
   });
 
   test("expanded rule still shows the per-action detail", async () => {
-    const rules: Rule[] = [{
-      name: "r",
-      when: {},
-      actions: [{
-        service: "light.turn_on",
-        entity_ids: ["light.a"],
-        params: { brightness: 80 },
-      }],
-    }];
+    const rules: Rule[] = [
+      {
+        name: "r",
+        when: {},
+        actions: [
+          {
+            service: "light.turn_on",
+            entity_ids: ["light.a"],
+            params: { brightness: 80 },
+          },
+        ],
+      },
+    ];
     const availableActions: ExposedAction[] = [
       { id: "light.turn_on", label: "Set light", visible_fields: ["brightness"], defaults: {} },
     ];
@@ -566,7 +587,9 @@ describe("ambience-rules-list", () => {
     const rule: Rule = {
       name: "multi",
       when: {},
-      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp", "light.kitchen"], params: {} }],
+      actions: [
+        { service: "light.turn_on", entity_ids: ["light.lamp", "light.kitchen"], params: {} },
+      ],
     };
     el = await mount([rule]);
     (el.shadowRoot.querySelector(".action-count") as HTMLElement).click();
@@ -581,7 +604,9 @@ describe("ambience-rules-list", () => {
     const rule: Rule = {
       name: "named",
       when: {},
-      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp", "light.kitchen"], params: {} }],
+      actions: [
+        { service: "light.turn_on", entity_ids: ["light.lamp", "light.kitchen"], params: {} },
+      ],
     };
     const el2: any = document.createElement("ambience-rules-list");
     el2.rules = [rule];
@@ -652,18 +677,20 @@ describe("ambience-rules-list", () => {
   });
 
   test("summary lists conditions in priority order (mode, day, time_of_day, weather)", async () => {
-    const rules: Rule[] = [{
-      name: "test",
-      // Deliberately interleave the `when` keys to confirm the summary does
-      // NOT follow insertion order. Higher priority number = more important = shown first.
-      when: {
-        weather: { groups: [], thresholds: [{ attribute: "temperature", op: "<", value: 5 }] },
-        time_of_day: { period: "afternoon" },
-        mode: "movie",
-        day: [{ kind: "weekday", days: [0] }],
+    const rules: Rule[] = [
+      {
+        name: "test",
+        // Deliberately interleave the `when` keys to confirm the summary does
+        // NOT follow insertion order. Higher priority number = more important = shown first.
+        when: {
+          weather: { groups: [], thresholds: [{ attribute: "temperature", op: "<", value: 5 }] },
+          time_of_day: { period: "afternoon" },
+          mode: "movie",
+          day: [{ kind: "weekday", days: [0] }],
+        },
+        actions: [],
       },
-      actions: [],
-    }];
+    ];
     el = await mount(rules);
     await el.updateComplete;
     const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
@@ -681,29 +708,39 @@ describe("ambience-rules-list", () => {
   // --- category sections ------------------------------------------------------
 
   test("All view groups rules into categories, sorted by category name, numbered per category", async () => {
-    const groups = [{ id: "b", name: "Blinds" }, { id: "a", name: "Awnings" }];
-    const rules = [
-      { when: {}, actions: [], category: "b" },   // Blinds 1
-      { when: {}, actions: [], category: "a" },   // Awnings 1
-      { when: {}, actions: [], category: "b" },   // Blinds 2
+    const groups = [
+      { id: "b", name: "Blinds" },
+      { id: "a", name: "Awnings" },
     ];
-    el = await mount(rules, [], {}, groups);   // filterCategory defaults to "" (All)
-    const headers = Array.from(el.shadowRoot.querySelectorAll(".category-section-header"))
-      .map((h: any) => h.textContent!.trim());
+    const rules = [
+      { when: {}, actions: [], category: "b" }, // Blinds 1
+      { when: {}, actions: [], category: "a" }, // Awnings 1
+      { when: {}, actions: [], category: "b" }, // Blinds 2
+    ];
+    el = await mount(rules, [], {}, groups); // filterCategory defaults to "" (All)
+    const headers = Array.from(el.shadowRoot.querySelectorAll(".category-section-header")).map(
+      (h: any) => h.textContent!.trim(),
+    );
     // alphabetical by NAME: Awnings before Blinds
     expect(headers.some((h: string) => h.includes("Awnings"))).toBe(true);
     expect(headers.findIndex((h: string) => h.includes("Awnings"))).toBeLessThan(
       headers.findIndex((h: string) => h.includes("Blinds")),
     );
     // Within the Blinds section the rows are numbered 1, 2.
-    const blindsSection = Array.from(el.shadowRoot.querySelectorAll(".category-section"))
-      .find((s: any) => s.querySelector(".category-section-header")!.textContent!.includes("Blinds"))! as Element;
-    const nums = Array.from(blindsSection.querySelectorAll(".idx")).map((n: any) => n.textContent!.trim());
+    const blindsSection = Array.from(el.shadowRoot.querySelectorAll(".category-section")).find(
+      (s: any) => s.querySelector(".category-section-header")!.textContent!.includes("Blinds"),
+    )! as Element;
+    const nums = Array.from(blindsSection.querySelectorAll(".idx")).map((n: any) =>
+      n.textContent!.trim(),
+    );
     expect(nums).toEqual(["1", "2"]);
   });
 
   test("single-category filter shows only that category, with its header, numbered 1..N", async () => {
-    const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
+    const groups = [
+      { id: "a", name: "A" },
+      { id: "b", name: "B" },
+    ];
     const rules = [
       { when: {}, actions: [], category: "a" },
       { when: {}, actions: [], category: "b" },
@@ -719,7 +756,10 @@ describe("ambience-rules-list", () => {
   });
 
   test("filtering to a category with no rules in this scope shows no header bar", async () => {
-    const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
+    const groups = [
+      { id: "a", name: "A" },
+      { id: "b", name: "B" },
+    ];
     const rules = [{ when: {}, actions: [], category: "a" }];
     el = await mount(rules, [], {}, groups);
     el.filterCategory = "b"; // scope has no category-b rules
@@ -729,16 +769,20 @@ describe("ambience-rules-list", () => {
   });
 
   test("editing a row in a section emits the rule's ORIGINAL index", async () => {
-    const groups = [{ id: "a", name: "A" }, { id: "b", name: "B" }];
+    const groups = [
+      { id: "a", name: "A" },
+      { id: "b", name: "B" },
+    ];
     const rules = [
-      { when: {}, actions: [], category: "b" },   // original index 0
-      { when: {}, actions: [], category: "a" },   // original index 1
+      { when: {}, actions: [], category: "b" }, // original index 0
+      { when: {}, actions: [], category: "a" }, // original index 1
     ];
     el = await mount(rules, [], {}, groups);
     const events: number[] = [];
     el.addEventListener("edit-rule", (e: any) => events.push(e.detail.index));
-    const aSection = Array.from(el.shadowRoot.querySelectorAll(".category-section"))
-      .find((s: any) => s.querySelector(".category-section-header")!.textContent!.includes("A"))! as Element;
+    const aSection = Array.from(el.shadowRoot.querySelectorAll(".category-section")).find(
+      (s: any) => s.querySelector(".category-section-header")!.textContent!.includes("A"),
+    )! as Element;
     const kebab: any = aSection.querySelector("li ambience-kebab-menu");
     (kebab.shadowRoot.querySelector(".kebab-trigger") as HTMLButtonElement).click();
     await kebab.updateComplete;
@@ -749,7 +793,9 @@ describe("ambience-rules-list", () => {
 
   test("rules no longer render a per-row category lozenge", async () => {
     const rule: Rule = { name: "R", category: "g1", when: {}, actions: [] };
-    el = await mount([rule], [], {}, [{ id: "g1", name: "Lights", color: "green", icon: "mdi:lightbulb" }]);
+    el = await mount([rule], [], {}, [
+      { id: "g1", name: "Lights", color: "green", icon: "mdi:lightbulb" },
+    ]);
     expect(el.shadowRoot.querySelector("ambience-category-chip")).toBeNull();
     const nameEl = el.shadowRoot.querySelector(".name") as HTMLElement;
     expect(nameEl.querySelector("ambience-category-chip")).toBeNull();
@@ -757,7 +803,12 @@ describe("ambience-rules-list", () => {
   });
 
   test("the category section header is a full-width coloured bar with the category's colour, icon and name", async () => {
-    const category: RuleCategory = { id: "g1", name: "Lights", color: "green", icon: "mdi:lightbulb" };
+    const category: RuleCategory = {
+      id: "g1",
+      name: "Lights",
+      color: "green",
+      icon: "mdi:lightbulb",
+    };
     el = await mount([{ name: "R", category: "g1", when: {}, actions: [] }], [], {}, [category]);
     const header = el.shadowRoot.querySelector(".category-section-header") as HTMLElement;
     expect(header).toBeTruthy();

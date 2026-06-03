@@ -1,5 +1,5 @@
-import { describe, test, expect, afterEach } from "vitest";
 import { render } from "lit";
+import { afterEach, describe, expect, test } from "vitest";
 
 import { renderLogo } from "../frontend/src/logo";
 

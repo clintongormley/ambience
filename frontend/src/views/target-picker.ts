@@ -1,11 +1,10 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
-
+import type { HassConnection } from "../api.js";
+import { emitValueChanged } from "../dom.js";
 import { filterEntities, type HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
-import type { HassConnection } from "../api.js";
-import { emitValueChanged } from "../dom.js";
 
 /**
  * Target picker: ha-form's entity selector when ha-form is registered,

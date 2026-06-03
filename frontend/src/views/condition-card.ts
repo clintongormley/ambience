@@ -1,8 +1,7 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-
-import { conditionLabel } from "../i18n.js";
 import type { HassConnection } from "../api.js";
+import { conditionLabel } from "../i18n.js";
 
 @customElement("ambience-condition-card")
 export class AmbienceConditionCard extends LitElement {

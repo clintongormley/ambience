@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 // The rule editor's per-action body lazily fetches the service schema via
 // `api.getServiceSchema`. Mock the api module so the tests don't depend on
@@ -14,14 +14,27 @@ vi.mock("../frontend/src/api", () => ({
 }));
 
 import "../frontend/src/views/rule-editor";
-import type { ExposedAction, ConditionInfo, Rule, RuleCategory, Scope, ScopeOption } from "../frontend/src/types";
 import * as api from "../frontend/src/api";
+import type {
+  ConditionInfo,
+  ExposedAction,
+  Rule,
+  RuleCategory,
+  Scope,
+  ScopeOption,
+} from "../frontend/src/types";
 
 const conditions: ConditionInfo[] = [
   { name: "mode", description: "", predicate_help: "", input: "text", priority: 0 },
   { name: "time_of_day", description: "", predicate_help: "", input: "time_of_day", priority: 200 },
   { name: "people", description: "", predicate_help: "", input: "people_predicate", priority: 75 },
-  { name: "template", description: "", predicate_help: "", input: "template_predicate", priority: 30 },
+  {
+    name: "template",
+    description: "",
+    predicate_help: "",
+    input: "template_predicate",
+    priority: 30,
+  },
 ];
 
 const availableActions: ExposedAction[] = [
@@ -80,16 +93,16 @@ async function mount(
 // Category and destination render as collapse/expand slots (like the name field):
 // the selector only exists in the DOM once its slot summary is clicked open.
 async function openSlot(el: any, slotId: string): Promise<void> {
-  const summary = el.shadowRoot.querySelector(
-    `[data-slot-id="${slotId}"] .summary`,
-  ) as HTMLElement;
+  const summary = el.shadowRoot.querySelector(`[data-slot-id="${slotId}"] .summary`) as HTMLElement;
   summary.click();
   await el.updateComplete;
 }
 
 describe("ambience-rule-editor — collapse + friendly labels", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   test("condition rows render as collapsed summaries by default", async () => {
     // Seed both conditions in `when` so both are rendered as rows (toggleable
@@ -100,7 +113,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
       actions: [],
     });
     const rows = el.shadowRoot.querySelectorAll(".slot.collapsed");
-    expect(rows.length).toBe(3);  // name + mode + time_of_day
+    expect(rows.length).toBe(3); // name + mode + time_of_day
   });
 
   test("clicking a collapsed condition summary expands it", async () => {
@@ -116,7 +129,7 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   test("opening a second condition collapses the first", async () => {
     el = await mount({
       name: "test",
-      when: { mode: "movie", time_of_day: { period: "afternoon" } },  // seed so both rows exist
+      when: { mode: "movie", time_of_day: { period: "afternoon" } }, // seed so both rows exist
       actions: [],
     });
     const mode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
@@ -128,7 +141,9 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
     // Re-query both after renders settle
     const modeAfter = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
-    const todAfter = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    const todAfter = el.shadowRoot.querySelector(
+      '.slot[data-slot-id="time_of_day"]',
+    ) as HTMLElement;
     expect(modeAfter.classList.contains("collapsed")).toBe(true);
     expect(todAfter.classList.contains("expanded")).toBe(true);
   });
@@ -147,10 +162,16 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     tod.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
     // Re-query: Lit replaces the collapsed element with a new expanded element
-    const todExpanded = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
-    todExpanded.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const todExpanded = el.shadowRoot.querySelector(
+      '.slot[data-slot-id="time_of_day"]',
+    ) as HTMLElement;
+    todExpanded
+      .querySelector(".summary")!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    const todCollapsed = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    const todCollapsed = el.shadowRoot.querySelector(
+      '.slot[data-slot-id="time_of_day"]',
+    ) as HTMLElement;
     expect(todCollapsed.classList.contains("collapsed")).toBe(true);
   });
 
@@ -163,8 +184,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("action rows render as collapsed summaries", async () => {
     el = await mount({
-      name: "test", when: {},
-      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: { brightness: 80 } }],
+      name: "test",
+      when: {},
+      actions: [
+        { service: "light.turn_on", entity_ids: ["light.lamp_a"], params: { brightness: 80 } },
+      ],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
     expect(action.classList.contains("collapsed")).toBe(true);
@@ -175,21 +199,28 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     const el2: any = document.createElement("ambience-rule-editor");
     // Deliberately unsorted, and not in priority order either.
     el2.conditions = [
-      { name: "weather", description: "", predicate_help: "", input: "weather_predicate", priority: 300 },
+      {
+        name: "weather",
+        description: "",
+        predicate_help: "",
+        input: "weather_predicate",
+        priority: 300,
+      },
       { name: "day", description: "", predicate_help: "", input: "day_predicate", priority: 100 },
       { name: "sun", description: "", predicate_help: "", input: "sun_predicate", priority: 250 },
       { name: "mode", description: "", predicate_help: "", input: "text", priority: 0 },
     ];
     el2.availableActions = [];
     el2.periods = periods;
-    el2.hass = {};  // no localize → friendly fallback labels
+    el2.hass = {}; // no localize → friendly fallback labels
     el2.scope = { kind: "area", id: "living_room" };
     el2.rule = { name: "", when: {}, actions: [] };
     el2.open = true;
     document.body.appendChild(el2);
     await el2.updateComplete;
-    const opts = Array.from(el2.shadowRoot.querySelectorAll("select.add-condition option"))
-      .map((o: Element) => o.textContent?.trim());
+    const opts = Array.from(el2.shadowRoot.querySelectorAll("select.add-condition option")).map(
+      (o: Element) => o.textContent?.trim(),
+    );
     // [0] is the "+ Add condition…" placeholder.
     expect(opts.slice(1)).toEqual(["Day", "Mode", "Sun", "Weather"]);
     el2.remove();
@@ -218,8 +249,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("expanded action editor uses the action-slot component", async () => {
     el = await mount({
-      name: "test", when: {},
-      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: { brightness: 80 } }],
+      name: "test",
+      when: {},
+      actions: [
+        { service: "light.turn_on", entity_ids: ["light.lamp_a"], params: { brightness: 80 } },
+      ],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
     action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -231,8 +265,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("expanded action body does not include an action type dropdown", async () => {
     el = await mount({
-      name: "test", when: {},
-      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: { brightness: 80 } }],
+      name: "test",
+      when: {},
+      actions: [
+        { service: "light.turn_on", entity_ids: ["light.lamp_a"], params: { brightness: 80 } },
+      ],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
     action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -243,9 +280,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   test("emits save-rule with the draft", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
-      (b: any) => b.textContent.trim() === "Save rule"
+      (b: any) => b.textContent.trim() === "Save rule",
     ) as HTMLButtonElement;
     saveBtn.click();
     expect(saved?.name).toBe("test");
@@ -254,9 +293,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   test("emits cancel-rule", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     let cancelled = false;
-    el.addEventListener("cancel-rule", () => { cancelled = true; });
+    el.addEventListener("cancel-rule", () => {
+      cancelled = true;
+    });
     const cancelBtn = Array.from(el.shadowRoot.querySelectorAll("button.secondary")).find(
-      (b: any) => b.textContent.trim() === "Cancel"
+      (b: any) => b.textContent.trim() === "Cancel",
     ) as HTMLButtonElement;
     cancelBtn.click();
     expect(cancelled).toBe(true);
@@ -264,7 +305,8 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("deleting an action removes it from the draft", async () => {
     el = await mount({
-      name: "test", when: {},
+      name: "test",
+      when: {},
       actions: [
         { service: "light.turn_on", entity_ids: ["light.lamp_a"], params: { brightness: 80 } },
         { service: "light.turn_on", entity_ids: ["light.lamp_b"], params: { brightness: 40 } },
@@ -279,7 +321,8 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("entity-ids-changed event from the action slot updates the draft", async () => {
     el = await mount({
-      name: "test", when: {},
+      name: "test",
+      when: {},
       actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
@@ -288,18 +331,21 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
     const slot = action.querySelector("ambience-action-slot")!;
-    slot.dispatchEvent(new CustomEvent("entity-ids-changed", {
-      detail: { entityIds: ["light.lamp_a", "light.lamp_b"] },
-      bubbles: true,
-      composed: true,
-    }));
+    slot.dispatchEvent(
+      new CustomEvent("entity-ids-changed", {
+        detail: { entityIds: ["light.lamp_a", "light.lamp_b"] },
+        bubbles: true,
+        composed: true,
+      }),
+    );
     await el.updateComplete;
     expect(el._draft.actions[0].entity_ids).toEqual(["light.lamp_a", "light.lamp_b"]);
   });
 
   test("params-changed event from the action slot updates the draft", async () => {
     el = await mount({
-      name: "test", when: {},
+      name: "test",
+      when: {},
       actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {} }],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
@@ -308,18 +354,21 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
     const slot = action.querySelector("ambience-action-slot")!;
-    slot.dispatchEvent(new CustomEvent("params-changed", {
-      detail: { params: { brightness: 75 } },
-      bubbles: true,
-      composed: true,
-    }));
+    slot.dispatchEvent(
+      new CustomEvent("params-changed", {
+        detail: { params: { brightness: 75 } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
     await el.updateComplete;
     expect(el._draft.actions[0].params).toEqual({ brightness: 75 });
   });
 
   test("deleting the open action clears _open state", async () => {
     el = await mount({
-      name: "test", when: {},
+      name: "test",
+      when: {},
       actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
     });
     // Open the action
@@ -343,14 +392,18 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     nameRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
     // Re-query: Lit replaces the collapsed element with a new expanded element
-    const expandedNameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    const expandedNameRow = el.shadowRoot.querySelector(
+      '.slot[data-slot-id="name"]',
+    ) as HTMLElement;
     const nameInput = expandedNameRow.querySelector('input[type="text"]') as HTMLInputElement;
     nameInput.value = "renamed";
     nameInput.dispatchEvent(new InputEvent("input", { bubbles: true }));
     await el.updateComplete;
 
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     expect(saved?.name).toBe("renamed");
   });
@@ -406,7 +459,9 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     const modeCollapsed = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
     expect(modeCollapsed.classList.contains("collapsed")).toBe(true);
     // Re-query: Lit replaces the collapsed element with a new expanded element
-    const expandedNameRow = el.shadowRoot.querySelector('.slot[data-slot-id="name"]') as HTMLElement;
+    const expandedNameRow = el.shadowRoot.querySelector(
+      '.slot[data-slot-id="name"]',
+    ) as HTMLElement;
     expect(expandedNameRow.classList.contains("expanded")).toBe(true);
   });
 
@@ -421,15 +476,19 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     const expandedMode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
     // Fire value-changed from ambience-condition-input
     const conditionInput = expandedMode.querySelector("ambience-condition-input")!;
-    conditionInput.dispatchEvent(new CustomEvent("value-changed", {
-      detail: { value: "relaxed" },
-      bubbles: true,
-      composed: true,
-    }));
+    conditionInput.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: "relaxed" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
     await el.updateComplete;
 
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     expect(saved?.when?.mode).toBe("relaxed");
   });
@@ -454,7 +513,8 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("clicking outside an action slot with no targets keeps it open and shows an error", async () => {
     el = await mount({
-      name: "test", when: {},
+      name: "test",
+      when: {},
       actions: [{ service: "light.turn_on", entity_ids: [], params: { brightness: 80 } }],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
@@ -466,11 +526,13 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     // In real HA, ambience-action-slot emits this once the schema loads; the test
     // must fire it explicitly because jsdom doesn't run the action-slot schema fetch.
     const slot = action.querySelector("ambience-action-slot")!;
-    slot.dispatchEvent(new CustomEvent("target-mode-changed", {
-      detail: { hasTarget: true },
-      bubbles: true,
-      composed: true,
-    }));
+    slot.dispatchEvent(
+      new CustomEvent("target-mode-changed", {
+        detail: { hasTarget: true },
+        bubbles: true,
+        composed: true,
+      }),
+    );
     await el.updateComplete;
     // Click on a non-slot region
     const h3 = el.shadowRoot.querySelector("h3") as HTMLElement;
@@ -483,7 +545,8 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("clicking another slot's summary while current is invalid keeps current open", async () => {
     el = await mount({
-      name: "test", when: { mode: "movie" },
+      name: "test",
+      when: { mode: "movie" },
       actions: [{ service: "light.turn_on", entity_ids: [], params: { brightness: 80 } }],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
@@ -491,11 +554,13 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
     // Simulate target-mode-changed so the editor KNOWS this service has a target.
     const slot = action.querySelector("ambience-action-slot")!;
-    slot.dispatchEvent(new CustomEvent("target-mode-changed", {
-      detail: { hasTarget: true },
-      bubbles: true,
-      composed: true,
-    }));
+    slot.dispatchEvent(
+      new CustomEvent("target-mode-changed", {
+        detail: { hasTarget: true },
+        bubbles: true,
+        composed: true,
+      }),
+    );
     await el.updateComplete;
     const mode = el.shadowRoot.querySelector('.slot[data-slot-id="mode"]') as HTMLElement;
     mode.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -506,7 +571,8 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("picking from the +Add action dropdown while current is invalid keeps current open with error", async () => {
     el = await mount({
-      name: "test", when: {},
+      name: "test",
+      when: {},
       actions: [{ service: "light.turn_on", entity_ids: [], params: { brightness: 80 } }],
     });
     const action0 = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
@@ -514,11 +580,13 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     await el.updateComplete;
     // Simulate target-mode-changed so the editor KNOWS this service has a target.
     const slot = action0.querySelector("ambience-action-slot")!;
-    slot.dispatchEvent(new CustomEvent("target-mode-changed", {
-      detail: { hasTarget: true },
-      bubbles: true,
-      composed: true,
-    }));
+    slot.dispatchEvent(
+      new CustomEvent("target-mode-changed", {
+        detail: { hasTarget: true },
+        bubbles: true,
+        composed: true,
+      }),
+    );
     await el.updateComplete;
     const select = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
     select.value = "script.foo";
@@ -531,7 +599,8 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
   test("clicking the +Add action dropdown without picking an option does NOT trigger close-validation", async () => {
     el = await mount({
-      name: "test", when: {},
+      name: "test",
+      when: {},
       actions: [{ service: "light.turn_on", entity_ids: [], params: { brightness: 80 } }],
     });
     const action0 = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
@@ -573,7 +642,8 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     // in error. Here the action's target requirement is unknown (schema not
     // loaded in jsdom), so there's no error to block on.
     el = await mount({
-      name: "test", when: {},
+      name: "test",
+      when: {},
       actions: [{ service: "light.turn_on", entity_ids: [], params: { brightness: 80 } }],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
@@ -608,7 +678,9 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
     const todRow = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
     todRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
-    const expanded = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    const expanded = el.shadowRoot.querySelector(
+      '.slot[data-slot-id="time_of_day"]',
+    ) as HTMLElement;
     // Summary stays — user said they like it there
     expect(expanded.querySelector(".summary")).toBeTruthy();
     expect(expanded.querySelector(".body")).toBeTruthy();
@@ -617,17 +689,21 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
   test("clicking inside a nested shadow element (Time/Sun kind dropdown) does not collapse the slot", async () => {
     el = await mount({
       name: "test",
-      when: { time_of_day: { from: { kind: "time", hh: 9, mm: 0 }, to: { kind: "time", hh: 17, mm: 0 } } },
+      when: {
+        time_of_day: { from: { kind: "time", hh: 9, mm: 0 }, to: { kind: "time", hh: 17, mm: 0 } },
+      },
       actions: [],
     });
     const todRow = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
     todRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
     // Allow nested custom elements to render
-    await new Promise(r => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
     // Re-query after expansion
-    const todExpanded = el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]') as HTMLElement;
+    const todExpanded = el.shadowRoot.querySelector(
+      '.slot[data-slot-id="time_of_day"]',
+    ) as HTMLElement;
     expect(todExpanded.classList.contains("expanded")).toBe(true);
     // Simulate a click event on a nested element (ambience-condition-input inside the slot).
     // Dispatching on the condition-input host with composed: true mimics a real click that
@@ -663,9 +739,11 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
     // Sanity: saving should emit the edited name, not the refetched one.
     let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
-      (b: any) => b.textContent.trim() === "Save rule"
+      (b: any) => b.textContent.trim() === "Save rule",
     ) as HTMLButtonElement;
     saveBtn.click();
     expect(saved?.name).toBe("user-edited name");
@@ -692,7 +770,9 @@ describe("ambience-rule-editor — collapse + friendly labels", () => {
 
 describe("ambience-rule-editor — action picker from exposed-actions list", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   test("Add-action picker exposes the placeholder + every exposed action", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
@@ -732,8 +812,9 @@ describe("ambience-rule-editor — action picker from exposed-actions list", () 
     await new Promise((r) => setTimeout(r, 0));
     await el2.updateComplete;
     const select = el2.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
-    const labels = Array.from(select.querySelectorAll("option"))
-      .map((o: any) => o.textContent.trim());
+    const labels = Array.from(select.querySelectorAll("option")).map((o: any) =>
+      o.textContent.trim(),
+    );
     expect(labels).toContain("homeassistant.reload_config");
     el2.remove();
   });
@@ -770,7 +851,9 @@ describe("ambience-rule-editor — action picker from exposed-actions list", () 
 
 describe("ambience-rule-editor — template render-error gate", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   const validAction = { service: "script.foo", entity_ids: [], params: {} };
 
@@ -804,13 +887,16 @@ describe("ambience-rule-editor — template render-error gate", () => {
     await el.updateComplete;
 
     // Click outside the slot → attempt to close.
-    (el.shadowRoot.querySelector("h3") as HTMLElement)
-      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    (el.shadowRoot.querySelector("h3") as HTMLElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
     await el.updateComplete;
 
     const after = el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
     expect(after.classList.contains("expanded")).toBe(true); // still open — blocked
-    expect(after.querySelector(".error")?.textContent?.toLowerCase()).toContain("error in this condition");
+    expect(after.querySelector(".error")?.textContent?.toLowerCase()).toContain(
+      "error in this condition",
+    );
   });
 
   test("cannot collapse a template slot via its own summary while it has a render error", async () => {
@@ -830,7 +916,9 @@ describe("ambience-rule-editor — template render-error gate", () => {
 
     const after = el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
     expect(after.classList.contains("expanded")).toBe(true); // still open — blocked
-    expect(after.querySelector(".error")?.textContent?.toLowerCase()).toContain("error in this condition");
+    expect(after.querySelector(".error")?.textContent?.toLowerCase()).toContain(
+      "error in this condition",
+    );
   });
 
   test("can close a template slot once the render error clears", async () => {
@@ -844,8 +932,9 @@ describe("ambience-rule-editor — template render-error gate", () => {
     reportRenderError(slot, null); // fixed
     await el.updateComplete;
 
-    (el.shadowRoot.querySelector("h3") as HTMLElement)
-      .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    (el.shadowRoot.querySelector("h3") as HTMLElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true }),
+    );
     await el.updateComplete;
 
     const after = el.shadowRoot.querySelector('.slot[data-slot-id="template"]') as HTMLElement;
@@ -859,14 +948,17 @@ describe("ambience-rule-editor — template render-error gate", () => {
       actions: [validAction],
     });
     let saved = false;
-    el.addEventListener("save-rule", () => { saved = true; });
+    el.addEventListener("save-rule", () => {
+      saved = true;
+    });
 
     const slot = await openTemplate();
     reportRenderError(slot, "boom");
     await el.updateComplete;
 
-    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button"))
-      .find((b: any) => /save/i.test(b.textContent ?? "")) as HTMLButtonElement;
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button")).find((b: any) =>
+      /save/i.test(b.textContent ?? ""),
+    ) as HTMLButtonElement;
     saveBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
 
@@ -882,19 +974,26 @@ describe("ambience-rule-editor — template render-error gate", () => {
       actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
     });
     let saved = false;
-    el.addEventListener("save-rule", () => { saved = true; });
+    el.addEventListener("save-rule", () => {
+      saved = true;
+    });
 
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
     action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
     // Tell the editor this service requires a target (schema loaded).
     action.querySelector("ambience-action-slot")!.dispatchEvent(
-      new CustomEvent("target-mode-changed", { detail: { hasTarget: true }, bubbles: true, composed: true }),
+      new CustomEvent("target-mode-changed", {
+        detail: { hasTarget: true },
+        bubbles: true,
+        composed: true,
+      }),
     );
     await el.updateComplete;
 
-    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button"))
-      .find((b: any) => /save/i.test(b.textContent ?? "")) as HTMLButtonElement;
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button")).find((b: any) =>
+      /save/i.test(b.textContent ?? ""),
+    ) as HTMLButtonElement;
     saveBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await el.updateComplete;
 
@@ -907,7 +1006,9 @@ describe("ambience-rule-editor — template render-error gate", () => {
 
 describe("ambience-rule-editor — condition dropdown + full-height layout", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   test("does not render a row for a toggleable condition that is not used in the rule", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
@@ -1027,7 +1128,9 @@ describe("ambience-rule-editor — condition dropdown + full-height layout", () 
     (tod.querySelector(".remove") as HTMLButtonElement).click();
     await el.updateComplete;
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     (Array.from(el.shadowRoot.querySelectorAll("button.primary")) as HTMLButtonElement[])
       .find((b) => b.textContent?.trim() === "Save rule")!
       .click();
@@ -1038,7 +1141,7 @@ describe("ambience-rule-editor — condition dropdown + full-height layout", () 
     el = await mount({ name: "test", when: {}, actions: [] });
     const select = el.shadowRoot.querySelector("select.add-condition") as HTMLSelectElement;
     const values = Array.from(select.querySelectorAll("option")).map((o: any) => o.value);
-    expect(values).toContain("mode");   // mode is now toggleable like the others
+    expect(values).toContain("mode"); // mode is now toggleable like the others
     expect(values).toContain("time_of_day");
   });
 
@@ -1062,9 +1165,11 @@ describe("ambience-rule-editor — condition dropdown + full-height layout", () 
   test("save strips null predicates from `when`", async () => {
     el = await mount({ name: "test", when: { time_of_day: null, mode: "movie" }, actions: [] });
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
-      (b: any) => b.textContent.trim() === "Save rule"
+      (b: any) => b.textContent.trim() === "Save rule",
     ) as HTMLButtonElement;
     saveBtn.click();
     expect("time_of_day" in saved.when).toBe(false);
@@ -1180,7 +1285,9 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
 
     // Save should succeed (no validation error)
     let saved: Rule | undefined;
-    el2.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el2.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     el2.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
 
     // Rule was saved
@@ -1260,7 +1367,9 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
 
     // Even with empty entity_ids and unknown hasTarget, validation must NOT block save.
     let saved: Rule | undefined;
-    el2.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el2.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     el2.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
 
     expect(saved).toBeDefined();
@@ -1271,13 +1380,19 @@ describe("ambience-rule-editor — no-target services (Fix 1)", () => {
 
 describe("ambience-rule-editor — people condition empty-selection validation", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   // hass with one person so the people widget renders a checklist.
   const peopleHass = {
     ...hass,
     states: {
-      "person.alice": { entity_id: "person.alice", state: "home", attributes: { friendly_name: "Alice" } },
+      "person.alice": {
+        entity_id: "person.alice",
+        state: "home",
+        attributes: { friendly_name: "Alice" },
+      },
     },
   } as any;
 
@@ -1293,14 +1408,20 @@ describe("ambience-rule-editor — people condition empty-selection validation",
       { name: "t", when: { people: { quant: "any", who: [], where: "home" } }, actions: [] },
       { hass: peopleHass },
     );
-    expect(el._validationError({ kind: "condition", id: "people" })).toBe("Select at least one person");
+    expect(el._validationError({ kind: "condition", id: "people" })).toBe(
+      "Select at least one person",
+    );
     // A non-empty who is valid.
     expect(el._validationError({ kind: "condition", id: "mode" })).toBeNull();
   });
 
   test("a non-empty (or who-less) people predicate is valid", async () => {
     el = await mount(
-      { name: "t", when: { people: { quant: "any", who: ["person.alice"], where: "home" } }, actions: [] },
+      {
+        name: "t",
+        when: { people: { quant: "any", who: ["person.alice"], where: "home" } },
+        actions: [],
+      },
       { hass: peopleHass },
     );
     expect(el._validationError({ kind: "condition", id: "people" })).toBeNull();
@@ -1328,7 +1449,11 @@ describe("ambience-rule-editor — people condition empty-selection validation",
 
   test("an empty people selection blocks switching to another slot", async () => {
     el = await mount(
-      { name: "t", when: { people: { quant: "any", who: [], where: "home" }, mode: "movie" }, actions: [] },
+      {
+        name: "t",
+        when: { people: { quant: "any", who: [], where: "home" }, mode: "movie" },
+        actions: [],
+      },
       { hass: peopleHass },
     );
     const people = await openPeople();
@@ -1346,7 +1471,9 @@ describe("ambience-rule-editor — people condition empty-selection validation",
       { hass: peopleHass },
     );
     let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
       (b: any) => b.textContent.trim() === "Save rule",
     ) as HTMLButtonElement;
@@ -1375,7 +1502,9 @@ describe("ambience-rule-editor — people condition empty-selection validation",
     expect(el._validationError({ kind: "condition", id: "people" })).toBeNull();
 
     let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
       (b: any) => b.textContent.trim() === "Save rule",
     ) as HTMLButtonElement;
@@ -1392,7 +1521,10 @@ describe("ambience-rule-editor — people condition empty-selection validation",
 
 describe("ambience-rule-editor — reapply interval override", () => {
   let el: any;
-  afterEach(() => { el?.remove(); vi.mocked(api.getServiceSchema).mockReset(); });
+  afterEach(() => {
+    el?.remove();
+    vi.mocked(api.getServiceSchema).mockReset();
+  });
 
   const reapplyActions: ExposedAction[] = [
     {
@@ -1600,7 +1732,9 @@ describe("ambience-rule-editor — reapply interval override", () => {
       actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {} }],
     });
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     await el.updateComplete;
     expect(saved).toBeDefined();
@@ -1611,10 +1745,14 @@ describe("ambience-rule-editor — reapply interval override", () => {
     el = await mountWithReapply({
       name: "t",
       when: {},
-      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {}, reapply_seconds: 0 }],
+      actions: [
+        { service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {}, reapply_seconds: 0 },
+      ],
     });
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     await el.updateComplete;
     expect(saved).toBeDefined();
@@ -1624,7 +1762,9 @@ describe("ambience-rule-editor — reapply interval override", () => {
 
 describe("ambience-rule-editor — category selector", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   const categories: RuleCategory[] = [
     { id: "morning", name: "Morning" },
@@ -1634,20 +1774,24 @@ describe("ambience-rule-editor — category selector", () => {
   // Category option rows after opening the category slot: their names and which is
   // marked selected (aria-selected="true").
   function categoryOptions(el: any): { names: string[]; selected: string | undefined } {
-    const opts = Array.from(
-      el.shadowRoot.querySelectorAll(".category-option"),
-    ) as HTMLElement[];
+    const opts = Array.from(el.shadowRoot.querySelectorAll(".category-option")) as HTMLElement[];
     const names = opts.map((o) => o.querySelector(".category-name")!.textContent!.trim());
     const selected = opts
       .find((o) => o.getAttribute("aria-selected") === "true")
-      ?.querySelector(".category-name")!.textContent!.trim();
+      ?.querySelector(".category-name")
+      ?.textContent?.trim();
     return { names, selected };
   }
 
   test("category selector has no empty option and preselects the rule's category", async () => {
     el = await mount(
       { name: "t", when: {}, actions: [], category: "b" },
-      { categories: [{ id: "a", name: "A" }, { id: "b", name: "B" }] },
+      {
+        categories: [
+          { id: "a", name: "A" },
+          { id: "b", name: "B" },
+        ],
+      },
     );
     await openSlot(el, "category");
     const { names, selected } = categoryOptions(el);
@@ -1667,7 +1811,12 @@ describe("ambience-rule-editor — category selector", () => {
   test("changing the category resets the rule's pinned priority", async () => {
     el = await mount(
       { name: "t", when: {}, actions: [], category: "a", pinned: true, priority: 4096 },
-      { categories: [{ id: "a", name: "A" }, { id: "b", name: "B" }] },
+      {
+        categories: [
+          { id: "a", name: "A" },
+          { id: "b", name: "B" },
+        ],
+      },
     );
     el._setCategory("b");
     expect(el._draft.category).toBe("b");
@@ -1678,7 +1827,12 @@ describe("ambience-rule-editor — category selector", () => {
   test("re-selecting the same category keeps the pin", async () => {
     el = await mount(
       { name: "t", when: {}, actions: [], category: "a", pinned: true, priority: 4096 },
-      { categories: [{ id: "a", name: "A" }, { id: "b", name: "B" }] },
+      {
+        categories: [
+          { id: "a", name: "A" },
+          { id: "b", name: "B" },
+        ],
+      },
     );
     el._setCategory("a");
     expect(el._draft.pinned).toBe(true);
@@ -1713,7 +1867,9 @@ describe("ambience-rule-editor — category selector", () => {
     expect(el.shadowRoot.querySelector(".category-option")).toBeNull();
 
     let saved: Rule | undefined;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail.rule; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail.rule;
+    });
     const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
       (b: any) => b.textContent.trim() === "Save rule",
     ) as HTMLButtonElement;
@@ -1764,7 +1920,9 @@ describe("ambience-rule-editor — category selector", () => {
 
 describe("ambience-rule-editor — destination selector", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   const scopes = [
     { scope: { kind: "house" }, label: "Global" },
@@ -1869,7 +2027,9 @@ describe("ambience-rule-editor — destination selector", () => {
     await el.updateComplete;
 
     let saved: any;
-    el.addEventListener("save-rule", (e: CustomEvent) => { saved = e.detail; });
+    el.addEventListener("save-rule", (e: CustomEvent) => {
+      saved = e.detail;
+    });
     (el.shadowRoot.querySelector("button.primary") as HTMLElement).click();
     await el.updateComplete;
 

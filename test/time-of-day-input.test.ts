@@ -1,15 +1,28 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/time-of-day-input";
 import type { PeriodStoreView, TimeOfDayPredicate } from "../frontend/src/types";
 
 const periods: PeriodStoreView = {
   builtins: {
-    morning:   { from: {kind:"sun",anchor:"sunrise",offset_min:30}, to: {kind:"sun",anchor:"noon",offset_min:-60} },
-    afternoon: { from: {kind:"sun",anchor:"noon",offset_min:60}, to: {kind:"sun",anchor:"sunset",offset_min:-30} },
-    evening:   { from: {kind:"sun",anchor:"sunset",offset_min:0}, to: {kind:"sun",anchor:"dusk",offset_min:0} },
+    morning: {
+      from: { kind: "sun", anchor: "sunrise", offset_min: 30 },
+      to: { kind: "sun", anchor: "noon", offset_min: -60 },
+    },
+    afternoon: {
+      from: { kind: "sun", anchor: "noon", offset_min: 60 },
+      to: { kind: "sun", anchor: "sunset", offset_min: -30 },
+    },
+    evening: {
+      from: { kind: "sun", anchor: "sunset", offset_min: 0 },
+      to: { kind: "sun", anchor: "dusk", offset_min: 0 },
+    },
   },
   custom: {
-    wind_down: { from: {kind:"time",hh:20,mm:0}, to: {kind:"time",hh:22,mm:0}, label: "Wind down" },
+    wind_down: {
+      from: { kind: "time", hh: 20, mm: 0 },
+      to: { kind: "time", hh: 22, mm: 0 },
+      label: "Wind down",
+    },
   },
   hidden: ["morning"],
 };
@@ -25,7 +38,9 @@ async function mount(value: TimeOfDayPredicate = null): Promise<any> {
 
 function captureEmit(el: HTMLElement): () => TimeOfDayPredicate | undefined {
   let detail: { value: TimeOfDayPredicate } | undefined;
-  el.addEventListener("value-changed", ((e: CustomEvent) => { detail = e.detail; }) as any);
+  el.addEventListener("value-changed", ((e: CustomEvent) => {
+    detail = e.detail;
+  }) as any);
   return () => detail?.value;
 }
 
@@ -37,7 +52,9 @@ function pickPeriod(el: any, idx: number, value: string) {
 
 describe("ambience-time-of-day-input", () => {
   let el: any;
-  afterEach(() => { el?.remove(); });
+  afterEach(() => {
+    el?.remove();
+  });
 
   test("renders Any time option as first entry initial state", async () => {
     el = await mount(null);
@@ -47,8 +64,9 @@ describe("ambience-time-of-day-input", () => {
 
   test("dropdown lists effective periods (excludes hidden, includes custom)", async () => {
     el = await mount(null);
-    const options = Array.from(el.shadowRoot.querySelectorAll(".entry option"))
-      .map((o: any) => o.value);
+    const options = Array.from(el.shadowRoot.querySelectorAll(".entry option")).map(
+      (o: any) => o.value,
+    );
     expect(options).toContain("afternoon");
     expect(options).toContain("evening");
     expect(options).toContain("wind_down");
@@ -80,7 +98,7 @@ describe("ambience-time-of-day-input", () => {
   });
 
   test("custom range editors render when Custom range selected", async () => {
-    el = await mount({ from: {kind:"time",hh:9,mm:0}, to: {kind:"time",hh:17,mm:0} });
+    el = await mount({ from: { kind: "time", hh: 9, mm: 0 }, to: { kind: "time", hh: 17, mm: 0 } });
     expect(el.shadowRoot.querySelectorAll("ambience-time-endpoint").length).toBe(2);
   });
 
@@ -163,7 +181,11 @@ describe("ambience-time-of-day-input", () => {
 
   test("removing an entry before openIdx shifts openIdx down by one", async () => {
     // Start with 3 entries; openIdx = last (2)
-    el = await mount([{ period: "afternoon" }, { period: "evening" }, { from: {kind:"time",hh:9,mm:0}, to: {kind:"time",hh:10,mm:0} }]);
+    el = await mount([
+      { period: "afternoon" },
+      { period: "evening" },
+      { from: { kind: "time", hh: 9, mm: 0 }, to: { kind: "time", hh: 10, mm: 0 } },
+    ]);
     await el.updateComplete;
     // Chips are rendered for all non-open entries; remove the chip for index 0
     const chips = el.shadowRoot.querySelectorAll(".summary-chip") as NodeListOf<HTMLElement>;

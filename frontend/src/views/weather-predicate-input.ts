@@ -1,17 +1,20 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
+import { emitValueChanged } from "../dom.js";
+import type { HaFormSchema } from "../ha-form.js";
 import { localize, weatherAttrLabel, weatherAttrUnit } from "../i18n.js";
 import type { WeatherGroup, WeatherPredicate, WeatherThreshold } from "../types.js";
-import type { HaFormSchema } from "../ha-form.js";
-import { emitValueChanged } from "../dom.js";
 
 const ATTRIBUTES = ["temperature", "apparent_temperature", "humidity", "wind_speed", "pressure"];
 const OPS: WeatherThreshold["op"][] = ["<", "<=", ">", ">="];
 // Pretty form of each operator — used as the dropdown label and in summaries.
 const OP_LABEL: Record<WeatherThreshold["op"], string> = {
-  "<": "<", "<=": "≤", ">": ">", ">=": "≥",
+  "<": "<",
+  "<=": "≤",
+  ">": ">",
+  ">=": "≥",
 };
 
 @customElement("ambience-weather-predicate-input")
@@ -107,33 +110,37 @@ export class AmbienceWeatherPredicateInput extends LitElement {
    *  attribute can't validate, so there's nothing useful for the user to
    *  clear it to. */
   _attributeSchema(_idx: number): HaFormSchema[] {
-    return [{
-      name: "attribute",
-      required: true,
-      selector: {
-        select: {
-          mode: "dropdown",
-          options: ATTRIBUTES.map((a) => ({
-            value: a,
-            label: weatherAttrLabel(this.hass, a),
-          })),
+    return [
+      {
+        name: "attribute",
+        required: true,
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: ATTRIBUTES.map((a) => ({
+              value: a,
+              label: weatherAttrLabel(this.hass, a),
+            })),
+          },
         },
       },
-    }];
+    ];
   }
 
   /** ha-form schema for a single threshold's comparator dropdown. */
   _opSchema(_idx: number): HaFormSchema[] {
-    return [{
-      name: "op",
-      required: true,
-      selector: {
-        select: {
-          mode: "dropdown",
-          options: OPS.map((o) => ({ value: o, label: OP_LABEL[o] })),
+    return [
+      {
+        name: "op",
+        required: true,
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: OPS.map((o) => ({ value: o, label: OP_LABEL[o] })),
+          },
         },
       },
-    }];
+    ];
   }
 
   /** Resolve the configured weather entity's state, if available. */
@@ -147,29 +154,33 @@ export class AmbienceWeatherPredicateInput extends LitElement {
   /** ha-form schema for a single threshold's numeric value. The unit is
    *  carried as `unit_of_measurement` so HA renders it inside the box. */
   _valueSchema(_idx: number, attribute: string): HaFormSchema[] {
-    return [{
-      name: "value",
-      required: true,
-      selector: {
-        number: {
-          mode: "box",
-          unit_of_measurement: weatherAttrUnit(this.hass, attribute, this._entityState()),
+    return [
+      {
+        name: "value",
+        required: true,
+        selector: {
+          number: {
+            mode: "box",
+            unit_of_measurement: weatherAttrUnit(this.hass, attribute, this._entityState()),
+          },
         },
       },
-    }];
+    ];
   }
 
   _groupsSchema(): HaFormSchema[] {
-    return [{
-      name: "groups",
-      selector: {
-        select: {
-          multiple: true,
-          mode: "list",
-          options: this.groups.map((g) => ({ value: g.id, label: g.label })),
+    return [
+      {
+        name: "groups",
+        selector: {
+          select: {
+            multiple: true,
+            mode: "list",
+            options: this.groups.map((g) => ({ value: g.id, label: g.label })),
+          },
         },
       },
-    }];
+    ];
   }
 
   /* v8 ignore start -- ha-form path (real HA only) */
@@ -186,14 +197,16 @@ export class AmbienceWeatherPredicateInput extends LitElement {
         }}
       ></ha-form>`;
     }
-    return html`${this.groups.map((g) => html`
+    return html`${this.groups.map(
+      (g) => html`
       <label style="display:inline-flex;gap:0.25rem;margin:0 0.5rem 0.25rem 0;">
         <input type="checkbox" .checked=${groups.includes(g.id)}
           @change=${(e: Event) => {
             const on = (e.target as HTMLInputElement).checked;
             this._setGroups(on ? [...groups, g.id] : groups.filter((x) => x !== g.id));
           }} />${g.label}
-      </label>`)}`;
+      </label>`,
+    )}`;
   }
   /* v8 ignore stop */
 

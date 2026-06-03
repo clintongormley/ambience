@@ -1,11 +1,7 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import {
-  getSwitchDefaults,
-  saveSwitchDefaults,
-  type HassConnection,
-} from "../api.js";
+import { getSwitchDefaults, type HassConnection, saveSwitchDefaults } from "../api.js";
 import { localize } from "../i18n.js";
 import "./categories-settings.js";
 import type { SwitchDefaults } from "../types.js";
@@ -81,11 +77,7 @@ export class AmbienceAmbienceSettings extends LitElement {
     if (!value) return;
     this._defaults = { ...this._defaults, name: value };
     void this._safeSave(() =>
-      saveSwitchDefaults(
-        this.hass,
-        this._defaults.name,
-        this._defaults.auto_on_delay_seconds,
-      ),
+      saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds),
     );
   }
 
@@ -97,35 +89,21 @@ export class AmbienceAmbienceSettings extends LitElement {
       auto_on_delay_seconds: Math.floor(Number(raw)),
     };
     void this._safeSave(() =>
-      saveSwitchDefaults(
-        this.hass,
-        this._defaults.name,
-        this._defaults.auto_on_delay_seconds,
-      ),
+      saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds),
     );
   }
 
   override render() {
     return html`
-      ${this._error
-        ? html`<p style="color: var(--error-color, #d32f2f)">${this._error}</p>`
-        : ""}
+      ${this._error ? html`<p style="color: var(--error-color, #d32f2f)">${this._error}</p>` : ""}
 
       <div class="card">
         <h3>
-          ${localize(
-            this.hass,
-            "ui.settings_ambience_defaults_card",
-            "Defaults",
-          )}
+          ${localize(this.hass, "ui.settings_ambience_defaults_card", "Defaults")}
         </h3>
         <div class="row">
           <label
-            >${localize(
-              this.hass,
-              "ui.settings_ambience_field_name",
-              "Switch name",
-            )}</label
+            >${localize(this.hass, "ui.settings_ambience_field_name", "Switch name")}</label
           >
           <input
             data-test="defaults-name"
@@ -150,22 +128,14 @@ export class AmbienceAmbienceSettings extends LitElement {
             @change=${(e: Event) => this._onDefaultDelay(e)}
           />
           <div class="help">
-            ${localize(
-              this.hass,
-              "ui.settings_ambience_delay_help",
-              "0 = never auto-on",
-            )}
+            ${localize(this.hass, "ui.settings_ambience_delay_help", "0 = never auto-on")}
           </div>
         </div>
       </div>
 
       <div class="card">
         <h3>
-          ${localize(
-            this.hass,
-            "ui.settings_tab_categories",
-            "Rule categories",
-          )}
+          ${localize(this.hass, "ui.settings_tab_categories", "Rule categories")}
         </h3>
         <ambience-categories-settings
           .hass=${this.hass}

@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import "../frontend/src/views/script-predicate-input";
 import type { ScriptPredicate } from "../frontend/src/types";
 
@@ -52,7 +52,9 @@ describe("ambience-script-predicate-input — picker", () => {
   test("_pickScript emits value-changed with {script, args: {}}", async () => {
     el = await mount(null, { services: { script: { foo: {} } } });
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     el._pickScript("script.foo");
     expect(detail.value).toEqual({ script: "script.foo", args: {} });
   });
@@ -63,7 +65,9 @@ describe("ambience-script-predicate-input — picker", () => {
       { services: { script: { old: {}, foo: {} } } },
     );
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     el._pickScript("script.foo");
     expect(detail.value).toEqual({ script: "script.foo", args: {} });
     expect(detail.value.triggers).toBeUndefined();
@@ -75,24 +79,31 @@ describe("ambience-script-predicate-input — picker", () => {
         script: {
           withdefaults: {
             fields: {
-              temp:   { default: 18, selector: { number: {} } },
-              zone:   { default: "down", selector: { text: {} } },
-              nodef:  { selector: { text: {} } },
+              temp: { default: 18, selector: { number: {} } },
+              zone: { default: "down", selector: { text: {} } },
+              nodef: { selector: { text: {} } },
             },
           },
         },
       },
     });
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     el._pickScript("script.withdefaults");
-    expect(detail.value).toEqual({ script: "script.withdefaults", args: { temp: 18, zone: "down" } });
+    expect(detail.value).toEqual({
+      script: "script.withdefaults",
+      args: { temp: 18, zone: "down" },
+    });
   });
 
   test("clearing the picker emits null", async () => {
     el = await mount({ script: "script.foo", args: {} }, { services: { script: { foo: {} } } });
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     el._pickScript(null);
     expect(detail.value).toBeNull();
   });
@@ -157,7 +168,9 @@ describe("ambience-script-predicate-input — auto-form", () => {
       },
     );
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     el._updateArgs({ temp: 25, zone: "down" });
     expect(detail.value).toEqual({ script: "script.foo", args: { temp: 25, zone: "down" } });
   });
@@ -165,7 +178,7 @@ describe("ambience-script-predicate-input — auto-form", () => {
   test("arguments section hidden when script declares no fields", async () => {
     el = await mount(
       { script: "script.bare", args: {} },
-      { services: { script: { bare: {} } } },          // no fields
+      { services: { script: { bare: {} } } }, // no fields
     );
     expect(el._argsSchema()).toEqual([]);
     // The args section should not render an empty <ha-form> block — implementer
@@ -206,14 +219,13 @@ describe("ambience-script-predicate-input — YAML mode", () => {
   });
 
   test("editing YAML emits value-changed when parseable + valid", async () => {
-    el = await mount(
-      { script: "script.foo", args: {} },
-      { services: { script: { foo: {} } } },
-    );
+    el = await mount({ script: "script.foo", args: {} }, { services: { script: { foo: {} } } });
     el._setMode("yaml");
     await el.updateComplete;
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     el._onYamlInput("script: script.foo\nargs:\n  k: 7\n");
     expect(detail.value).toEqual({ script: "script.foo", args: { k: 7 } });
     expect(el._yamlError).toBeNull();
@@ -224,7 +236,9 @@ describe("ambience-script-predicate-input — YAML mode", () => {
     el._setMode("yaml");
     await el.updateComplete;
     let emitted = false;
-    el.addEventListener("value-changed", () => { emitted = true; });
+    el.addEventListener("value-changed", () => {
+      emitted = true;
+    });
     el._onYamlInput("script: [unclosed");
     expect(emitted).toBe(false);
     expect(el._yamlError).not.toBeNull();
@@ -235,7 +249,9 @@ describe("ambience-script-predicate-input — YAML mode", () => {
     el._setMode("yaml");
     await el.updateComplete;
     let emitted = false;
-    el.addEventListener("value-changed", () => { emitted = true; });
+    el.addEventListener("value-changed", () => {
+      emitted = true;
+    });
     el._onYamlInput("script: foo\n");
     expect(emitted).toBe(false);
     expect(el._yamlError).toMatch(/script\./);
@@ -254,8 +270,8 @@ describe("ambience-script-predicate-input — YAML mode", () => {
     el._setMode("yaml");
     await el.updateComplete;
     el._onYamlInput("not: a script");
-    el._setMode("form");                    // attempt
-    expect(el._mode).toBe("yaml");          // refused
+    el._setMode("form"); // attempt
+    expect(el._mode).toBe("yaml"); // refused
   });
 
   test("Form tab button disabled attribute reflects yaml error", async () => {
@@ -268,10 +284,12 @@ describe("ambience-script-predicate-input — YAML mode", () => {
     await el.updateComplete;
     el._onYamlInput("script: [unclosed");
     await el.updateComplete;
-    const buttons = Array.from(el.shadowRoot.querySelectorAll(".tabs button")) as HTMLButtonElement[];
+    const buttons = Array.from(
+      el.shadowRoot.querySelectorAll(".tabs button"),
+    ) as HTMLButtonElement[];
     const formBtn = buttons.find((b) => b.textContent?.trim() === "Form");
     expect(formBtn?.disabled).toBe(true);
-    expect(formBtn?.title).toContain("unclosed");  // error message preview
+    expect(formBtn?.title).toContain("unclosed"); // error message preview
   });
 });
 
@@ -282,9 +300,17 @@ describe("ambience-script-predicate-input — field labels", () => {
   test("_computeFieldLabel prefers the field's friendly name alias", async () => {
     el = await mount(
       { script: "script.foo", args: {} },
-      { services: { script: { foo: { fields: {
-        target_brightness: { name: "Target brightness", selector: { number: {} } },
-      } } } } },
+      {
+        services: {
+          script: {
+            foo: {
+              fields: {
+                target_brightness: { name: "Target brightness", selector: { number: {} } },
+              },
+            },
+          },
+        },
+      },
     );
     expect(el._computeFieldLabel({ name: "target_brightness" })).toBe("Target brightness");
   });
@@ -292,9 +318,17 @@ describe("ambience-script-predicate-input — field labels", () => {
   test("_computeFieldLabel falls back to a humanized raw key when no alias", async () => {
     el = await mount(
       { script: "script.foo", args: {} },
-      { services: { script: { foo: { fields: {
-        target_brightness: { selector: { number: {} } },
-      } } } } },
+      {
+        services: {
+          script: {
+            foo: {
+              fields: {
+                target_brightness: { selector: { number: {} } },
+              },
+            },
+          },
+        },
+      },
     );
     expect(el._computeFieldLabel({ name: "target_brightness" })).toBe("Target brightness");
   });
@@ -312,9 +346,17 @@ describe("ambience-script-predicate-input — field labels", () => {
   test("_computeFieldHelper returns the field description", async () => {
     el = await mount(
       { script: "script.foo", args: {} },
-      { services: { script: { foo: { fields: {
-        temp: { description: "Target temperature in °C", selector: { number: {} } },
-      } } } } },
+      {
+        services: {
+          script: {
+            foo: {
+              fields: {
+                temp: { description: "Target temperature in °C", selector: { number: {} } },
+              },
+            },
+          },
+        },
+      },
     );
     expect(el._computeFieldHelper({ name: "temp" })).toBe("Target temperature in °C");
   });
@@ -322,9 +364,17 @@ describe("ambience-script-predicate-input — field labels", () => {
   test("_argsSchema no longer carries a description suffix", async () => {
     el = await mount(
       { script: "script.foo", args: {} },
-      { services: { script: { foo: { fields: {
-        temp: { description: "Target temperature", selector: { number: {} } },
-      } } } } },
+      {
+        services: {
+          script: {
+            foo: {
+              fields: {
+                temp: { description: "Target temperature", selector: { number: {} } },
+              },
+            },
+          },
+        },
+      },
     );
     expect(el._argsSchema()[0].description).toBeUndefined();
   });
@@ -359,7 +409,9 @@ describe("ambience-script-predicate-input — triggers picker", () => {
   test("removing a trigger chip emits the shortened list", async () => {
     el = await mount(withScript, hass);
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     const removeBtn = el.shadowRoot.querySelector('[data-test="trigger-light.kitchen"] .x');
     removeBtn.click();
     expect(detail.value.triggers).toEqual([]);
@@ -368,7 +420,9 @@ describe("ambience-script-predicate-input — triggers picker", () => {
   test("typing an entity_id in the fallback input adds it", async () => {
     el = await mount({ script: "script.foo", args: {}, triggers: [] }, hass);
     let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
     const input = el.shadowRoot.querySelector('[data-test="trigger-add-input"]');
     input.value = "binary_sensor.front_door";
     input.dispatchEvent(new Event("change"));
@@ -384,8 +438,10 @@ describe("ambience-script-predicate-input — triggers picker", () => {
 
   test("adding an entity already present does not duplicate it", async () => {
     el = await mount({ script: "script.foo", args: {}, triggers: ["light.kitchen"] }, hass);
-    let detail: any;
-    el.addEventListener("value-changed", (e: Event) => { detail = (e as CustomEvent).detail; });
+    let _detail: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      _detail = (e as CustomEvent).detail;
+    });
     const input = el.shadowRoot.querySelector('[data-test="trigger-add-input"]');
     input.value = "light.kitchen";
     input.dispatchEvent(new Event("change"));
@@ -399,28 +455,19 @@ describe("ambience-script-predicate-input — form tab reachable", () => {
   afterEach(() => el?.remove());
 
   test("no-fields script defaults to form mode", async () => {
-    el = await mount(
-      { script: "script.bare", args: {} },
-      { services: { script: { bare: {} } } },
-    );
+    el = await mount({ script: "script.bare", args: {} }, { services: { script: { bare: {} } } });
     expect(el._mode).toBe("form");
   });
 
   test("Form button is enabled for a no-fields script with valid yaml", async () => {
-    el = await mount(
-      { script: "script.bare", args: {} },
-      { services: { script: { bare: {} } } },
-    );
+    el = await mount({ script: "script.bare", args: {} }, { services: { script: { bare: {} } } });
     const buttons = [...el.shadowRoot.querySelectorAll(".tabs button")];
     const formBtn = buttons.find((b: any) => b.textContent?.trim() === "Form");
     expect(formBtn.disabled).toBe(false);
   });
 
   test("can switch back to form after going to YAML (no fields)", async () => {
-    el = await mount(
-      { script: "script.bare", args: {} },
-      { services: { script: { bare: {} } } },
-    );
+    el = await mount({ script: "script.bare", args: {} }, { services: { script: { bare: {} } } });
     el._setMode("yaml");
     expect(el._mode).toBe("yaml");
     el._setMode("form");

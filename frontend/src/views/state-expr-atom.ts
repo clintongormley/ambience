@@ -1,11 +1,11 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { getKnownStates, type HassConnection } from "../api.js";
+import { emitValueChanged } from "../dom.js";
+import type { HaFormSchema } from "../ha-form.js";
 import { localize, stateOpLabel } from "../i18n.js";
 import type { StateAtom, StateForDuration } from "../types.js";
-import type { HaFormSchema } from "../ha-form.js";
-import { emitValueChanged } from "../dom.js";
 import { statesMap } from "./hass-states.js";
 
 /**
@@ -57,7 +57,9 @@ export class AmbienceStateExprAtom extends LitElement {
 
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) value: StateAtom = {
-    kind: "is", entity_id: "", states: [],
+    kind: "is",
+    entity_id: "",
+    states: [],
   };
 
   @state() private _knownStates: string[] = [];
@@ -185,26 +187,28 @@ export class AmbienceStateExprAtom extends LitElement {
    *  user can still type an attribute name we don't know about. */
   _attributeSchema(): HaFormSchema[] {
     const attrs = this._knownAttributesFor(this.value.entity_id);
-    return [{
-      name: "attribute",
-      selector: {
-        select: {
-          mode: "dropdown",
-          custom_value: true,
-          // Sentinel value and label are both the literal word 'State' so
-          // ha-form's custom_value combobox displays "State" rather than an
-          // internal key. Localizing the label would diverge value-from-text
-          // when custom_value is on, so we leave it untranslated here.
-          options: [
-            {
-              value: AmbienceStateExprAtom._STATE_SENTINEL,
-              label: AmbienceStateExprAtom._STATE_SENTINEL,
-            },
-            ...attrs.map((a) => ({ value: a, label: a })),
-          ],
+    return [
+      {
+        name: "attribute",
+        selector: {
+          select: {
+            mode: "dropdown",
+            custom_value: true,
+            // Sentinel value and label are both the literal word 'State' so
+            // ha-form's custom_value combobox displays "State" rather than an
+            // internal key. Localizing the label would diverge value-from-text
+            // when custom_value is on, so we leave it untranslated here.
+            options: [
+              {
+                value: AmbienceStateExprAtom._STATE_SENTINEL,
+                label: AmbienceStateExprAtom._STATE_SENTINEL,
+              },
+              ...attrs.map((a) => ({ value: a, label: a })),
+            ],
+          },
         },
       },
-    }];
+    ];
   }
 
   /** Translate storage (`attribute: null | ""` or string) to the ha-form
@@ -256,19 +260,21 @@ export class AmbienceStateExprAtom extends LitElement {
     // never shows a blank value (e.g. the entity is briefly unavailable
     // and the inferred set excludes the current kind).
     if (!ops.includes(this.value.kind)) ops.push(this.value.kind);
-    return [{
-      name: "op",
-      required: true,
-      selector: {
-        select: {
-          mode: "dropdown",
-          options: ops.map((op) => ({
-            value: op,
-            label: stateOpLabel(this.hass, op),
-          })),
+    return [
+      {
+        name: "op",
+        required: true,
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: ops.map((op) => ({
+              value: op,
+              label: stateOpLabel(this.hass, op),
+            })),
+          },
         },
       },
-    }];
+    ];
   }
 
   /** Current value of the configured target — entity.attributes[attribute]
@@ -288,10 +294,12 @@ export class AmbienceStateExprAtom extends LitElement {
    *    State mode       → combobox seeded with the entity's known states. */
   _valueSchema(): HaFormSchema[] {
     if (this._isNumericOp(this.value.kind)) {
-      return [{
-        name: "value",
-        selector: { number: { mode: "box", step: "any" } },
-      }];
+      return [
+        {
+          name: "value",
+          selector: { number: { mode: "box", step: "any" } },
+        },
+      ];
     }
     let options: string[];
     if (this.value.attribute) {
@@ -300,25 +308,29 @@ export class AmbienceStateExprAtom extends LitElement {
     } else {
       options = this._knownStates;
     }
-    return [{
-      name: "value",
-      selector: {
-        select: {
-          mode: "dropdown",
-          custom_value: true,
-          options: options.map((s) => ({ value: s, label: s })),
+    return [
+      {
+        name: "value",
+        selector: {
+          select: {
+            mode: "dropdown",
+            custom_value: true,
+            options: options.map((s) => ({ value: s, label: s })),
+          },
         },
       },
-    }];
+    ];
   }
 
   /** ha-form schema for the optional "for" duration. Blank by default; we
    *  treat `{h:0,m:0,s:0}` as null on the way out via _normalize. */
   _forSchema(): HaFormSchema[] {
-    return [{
-      name: "duration",
-      selector: { duration: { enable_day: false } },
-    }];
+    return [
+      {
+        name: "duration",
+        selector: { duration: { enable_day: false } },
+      },
+    ];
   }
 
   /** Storage `{h,m,s}` → ha-form `{hours,minutes,seconds}`. */
@@ -465,7 +477,11 @@ export class AmbienceStateExprAtom extends LitElement {
         .schema=${this._forSchema()}
         .data=${this._forData()}
         .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { duration?: { hours?: number; minutes?: number; seconds?: number } } }>) => {
+        @value-changed=${(
+          e: CustomEvent<{
+            value: { duration?: { hours?: number; minutes?: number; seconds?: number } };
+          }>,
+        ) => {
           e.stopPropagation();
           this._setForFromHaForm(e.detail.value.duration);
         }}
@@ -508,12 +524,14 @@ export class AmbienceStateExprAtom extends LitElement {
           ${localize(this.hass, "ui.state_value_label", "Value")}
         </label>
         <div class="value-list">
-          ${this._isNumericOp(this.value.kind)
-            ? this._renderValueRow(this.value.states[0] ?? "", 0)
-            : html`
+          ${
+            this._isNumericOp(this.value.kind)
+              ? this._renderValueRow(this.value.states[0] ?? "", 0)
+              : html`
                 ${this.value.states.map((v, i) => this._renderValueRow(v, i))}
                 ${this._renderValueRow("", -1)}
-              `}
+              `
+          }
         </div>
       </section>
       <section class="field">

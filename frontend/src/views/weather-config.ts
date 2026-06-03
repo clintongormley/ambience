@@ -1,15 +1,27 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { getWeatherConfig, saveWeatherConfig, type HassConnection } from "../api.js";
+import { getWeatherConfig, type HassConnection, saveWeatherConfig } from "../api.js";
 import { localize, weatherConditionLabel } from "../i18n.js";
 import { scopeLabel } from "../scope-label.js";
 import type { WeatherConfig, WeatherGroup } from "../types.js";
 
 const ALL_CONDITIONS = [
-  "clear-night", "cloudy", "fog", "hail", "lightning", "lightning-rainy",
-  "partlycloudy", "pouring", "rainy", "snowy", "snowy-rainy", "sunny",
-  "windy", "windy-variant", "exceptional",
+  "clear-night",
+  "cloudy",
+  "fog",
+  "hail",
+  "lightning",
+  "lightning-rainy",
+  "partlycloudy",
+  "pouring",
+  "rainy",
+  "snowy",
+  "snowy-rainy",
+  "sunny",
+  "windy",
+  "windy-variant",
+  "exceptional",
 ];
 
 type Warning = { scope_kind: string; scope_id: string | null; rule_name: string; reason: string };
@@ -193,11 +205,15 @@ export class AmbienceWeatherConfig extends LitElement {
           <button
             class="icon"
             title=${localize(this.hass, "ui.title_delete", "Delete")}
-            @click=${(e: Event) => { e.stopPropagation(); this._removeGroup(idx); }}
+            @click=${(e: Event) => {
+              e.stopPropagation();
+              this._removeGroup(idx);
+            }}
           >✕</button>
         </div>
-        ${expanded
-          ? html`<div class="body" @click=${(e: Event) => e.stopPropagation()}>
+        ${
+          expanded
+            ? html`<div class="body" @click=${(e: Event) => e.stopPropagation()}>
               <input
                 .value=${g.label}
                 aria-label=${g.label}
@@ -205,7 +221,8 @@ export class AmbienceWeatherConfig extends LitElement {
               />
               ${this._renderConditions(idx, g)}
             </div>`
-          : ""}
+            : ""
+        }
       </div>
     `;
   }
@@ -233,13 +250,17 @@ export class AmbienceWeatherConfig extends LitElement {
         ${localize(this.hass, "ui.add_group", "+ Add group")}
       </button>
 
-      ${this._warnings.length ? html`
+      ${
+        this._warnings.length
+          ? html`
         <div class="warnings">
           <strong>${localize(this.hass, "ui.day_warning_prefix", "Warning:")}</strong>
           ${localize(this.hass, "ui.weather_warning_text", "rules now reference an unconfigured weather entity:")}
-          <ul>${this._warnings.map(w => html`<li>${scopeLabel(w)} / "${w.rule_name}" → ${w.reason}</li>`)}</ul>
+          <ul>${this._warnings.map((w) => html`<li>${scopeLabel(w)} / "${w.rule_name}" → ${w.reason}</li>`)}</ul>
         </div>
-      ` : ""}
+      `
+          : ""
+      }
     `;
   }
 }

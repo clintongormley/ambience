@@ -1,13 +1,31 @@
-import { describe, test, expect, afterEach, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
-  listConditions: vi.fn(async () => ([
+  listConditions: vi.fn(async () => [
     { name: "mode", description: "", predicate_help: "", input: "text", priority: 1000 },
-    { name: "weather", description: "W", predicate_help: "", input: "weather_predicate", priority: 700 },
-    { name: "time_of_day", description: "TOD", predicate_help: "", input: "time_of_day", priority: 800 },
+    {
+      name: "weather",
+      description: "W",
+      predicate_help: "",
+      input: "weather_predicate",
+      priority: 700,
+    },
+    {
+      name: "time_of_day",
+      description: "TOD",
+      predicate_help: "",
+      input: "time_of_day",
+      priority: 800,
+    },
     { name: "day", description: "Day", predicate_help: "", input: "day_predicate", priority: 900 },
-    { name: "state", description: "State", predicate_help: "", input: "state_predicate", priority: 600 },
-  ])),
+    {
+      name: "state",
+      description: "State",
+      predicate_help: "",
+      input: "state_predicate",
+      priority: 600,
+    },
+  ]),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
   saveDayConfig: vi.fn(async () => ({ ok: true, warnings: [] })),
   listPeriods: vi.fn(async () => ({ builtins: {}, custom: {}, hidden: [] })),

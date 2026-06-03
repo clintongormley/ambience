@@ -4,7 +4,11 @@
 if (typeof document !== "undefined" && !("adoptedStyleSheets" in Document.prototype)) {
   Object.defineProperty(Document.prototype, "adoptedStyleSheets", {
     configurable: true,
-    get() { return []; },
-    set() { /* no-op */ },
+    get() {
+      return [];
+    },
+    set() {
+      /* no-op */
+    },
   });
 }

@@ -1,28 +1,20 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import type {
-  AreaRegistryEvent,
-  FloorRegistryEvent,
-  HassConnection,
-} from "../api.js";
-import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
-import { scopeKey } from "../entities-for-scope.js";
-import { stripPositionMetadata } from "../rule.js";
-import { localize } from "../i18n.js";
+import type { AreaRegistryEvent, FloorRegistryEvent, HassConnection } from "../api.js";
 import {
   applyRules,
   getArea,
   getDayConfig,
   getFloor,
   getHouse,
+  getServiceSchema,
   getWeatherConfig,
   listAreas,
-  getServiceSchema,
-  listExposedActions,
-  listFloors,
   listCategories,
   listConditions,
+  listExposedActions,
+  listFloors,
   listPeriods,
   listSwitches,
   runRuleActions,
@@ -30,6 +22,10 @@ import {
   saveFloor,
   saveHouse,
 } from "../api.js";
+import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
+import { scopeKey } from "../entities-for-scope.js";
+import { localize } from "../i18n.js";
+import { stripPositionMetadata } from "../rule.js";
 import type {
   AreaListItem,
   ConditionInfo,
@@ -69,14 +65,9 @@ const PIN_GAP = 1024;
 
 /** Pick a priority for a rule dropped between `above` and `below` (either may be
  *  undefined at the list ends). `all` is the current rule set for end fallbacks. */
-function _pinPriority(
-  above: number | undefined,
-  below: number | undefined,
-  all: Rule[],
-): number {
+function _pinPriority(above: number | undefined, below: number | undefined, all: Rule[]): number {
   // Common case: dropped between two rules — no need to scan the whole list.
-  if (above !== undefined && below !== undefined)
-    return Math.floor((above + below) / 2);
+  if (above !== undefined && below !== undefined) return Math.floor((above + below) / 2);
   const nums = all.map((r) => r.priority ?? 0);
   if (above === undefined && below === undefined) return PIN_GAP;
   if (above === undefined) return Math.max(...nums) + PIN_GAP; // top slot
@@ -330,10 +321,7 @@ export class AmbienceScopesView extends LitElement {
 
   override async connectedCallback() {
     super.connectedCallback();
-    window.addEventListener(
-      "ambience-exposed-actions-changed",
-      this._onExposedActionsChanged,
-    );
+    window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     await this._loadStatic();
     await Promise.all([
       this._refreshAreas(),
@@ -346,10 +334,7 @@ export class AmbienceScopesView extends LitElement {
 
   override disconnectedCallback() {
     super.disconnectedCallback();
-    window.removeEventListener(
-      "ambience-exposed-actions-changed",
-      this._onExposedActionsChanged,
-    );
+    window.removeEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     this._unsubArea?.();
     this._unsubArea = undefined;
     this._unsubFloor?.();
@@ -360,21 +345,15 @@ export class AmbienceScopesView extends LitElement {
 
   private async _loadStatic() {
     try {
-      const [
-        conditions,
-        actions,
-        periods,
-        dayConfig,
-        weatherConfig,
-        categories,
-      ] = await Promise.all([
-        listConditions(this.hass),
-        listExposedActions(this.hass),
-        listPeriods(this.hass),
-        getDayConfig(this.hass),
-        getWeatherConfig(this.hass),
-        listCategories(this.hass),
-      ]);
+      const [conditions, actions, periods, dayConfig, weatherConfig, categories] =
+        await Promise.all([
+          listConditions(this.hass),
+          listExposedActions(this.hass),
+          listPeriods(this.hass),
+          getDayConfig(this.hass),
+          getWeatherConfig(this.hass),
+          listCategories(this.hass),
+        ]);
       if (!this.isConnected) return;
       this._conditions = conditions;
       this._actions = actions;
@@ -404,10 +383,7 @@ export class AmbienceScopesView extends LitElement {
             configs.set(a.area_id, existing);
             return;
           }
-          configs.set(
-            a.area_id,
-            _normalize(await getArea(this.hass, a.area_id)),
-          );
+          configs.set(a.area_id, _normalize(await getArea(this.hass, a.area_id)));
         }),
       );
       if (!this.isConnected) return;
@@ -432,10 +408,7 @@ export class AmbienceScopesView extends LitElement {
             configs.set(f.floor_id, existing);
             return;
           }
-          configs.set(
-            f.floor_id,
-            _normalize(await getFloor(this.hass, f.floor_id)),
-          );
+          configs.set(f.floor_id, _normalize(await getFloor(this.hass, f.floor_id)));
         }),
       );
       if (!this.isConnected) return;
@@ -465,9 +438,7 @@ export class AmbienceScopesView extends LitElement {
           // Route through scopeKey() — the single source of truth for scope
           // identity — rather than re-deriving its string format here.
           const scope: Scope =
-            s.scope_kind === "house"
-              ? { kind: "house" }
-              : { kind: s.scope_kind, id: s.scope_id! };
+            s.scope_kind === "house" ? { kind: "house" } : { kind: s.scope_kind, id: s.scope_id! };
           return [scopeKey(scope), s.entity_id];
         }),
       );
@@ -477,46 +448,34 @@ export class AmbienceScopesView extends LitElement {
   }
 
   private async _subscribe() {
-    const subArea = this.hass.connection.subscribeEvents<AreaRegistryEvent>(
-      (event) => {
-        if (event.data.action === "remove") {
-          const id = event.data.area_id;
-          const expanded = new Set(this._expanded);
-          expanded.delete(`area:${id}`);
-          this._expanded = expanded;
-          if (
-            this._editing?.scope.kind === "area" &&
-            this._editing.scope.id === id
-          ) {
-            this._editing = null;
-          }
+    const subArea = this.hass.connection.subscribeEvents<AreaRegistryEvent>((event) => {
+      if (event.data.action === "remove") {
+        const id = event.data.area_id;
+        const expanded = new Set(this._expanded);
+        expanded.delete(`area:${id}`);
+        this._expanded = expanded;
+        if (this._editing?.scope.kind === "area" && this._editing.scope.id === id) {
+          this._editing = null;
         }
-        void this._refreshAreas();
-        // The switch set only changes when an area is added or removed.
-        if (event.data.action !== "update") void this._refreshSwitches();
-      },
-      "area_registry_updated",
-    );
-    const subFloor = this.hass.connection.subscribeEvents<FloorRegistryEvent>(
-      (event) => {
-        if (event.data.action === "remove") {
-          const id = event.data.floor_id;
-          const expanded = new Set(this._expanded);
-          expanded.delete(`floor:${id}`);
-          this._expanded = expanded;
-          if (
-            this._editing?.scope.kind === "floor" &&
-            this._editing.scope.id === id
-          ) {
-            this._editing = null;
-          }
+      }
+      void this._refreshAreas();
+      // The switch set only changes when an area is added or removed.
+      if (event.data.action !== "update") void this._refreshSwitches();
+    }, "area_registry_updated");
+    const subFloor = this.hass.connection.subscribeEvents<FloorRegistryEvent>((event) => {
+      if (event.data.action === "remove") {
+        const id = event.data.floor_id;
+        const expanded = new Set(this._expanded);
+        expanded.delete(`floor:${id}`);
+        this._expanded = expanded;
+        if (this._editing?.scope.kind === "floor" && this._editing.scope.id === id) {
+          this._editing = null;
         }
-        void this._refreshFloors();
-        // The switch set only changes when a floor is added or removed.
-        if (event.data.action !== "update") void this._refreshSwitches();
-      },
-      "floor_registry_updated",
-    );
+      }
+      void this._refreshFloors();
+      // The switch set only changes when a floor is added or removed.
+      if (event.data.action !== "update") void this._refreshSwitches();
+    }, "floor_registry_updated");
     const [unsubArea, unsubFloor] = await Promise.all([subArea, subFloor]);
     if (this.isConnected) {
       this._unsubArea = unsubArea;
@@ -565,8 +524,7 @@ export class AmbienceScopesView extends LitElement {
     try {
       let result: { ok: true; config: ScopeConfig };
       if (scope.kind === "house") result = await saveHouse(this.hass, next);
-      else if (scope.kind === "area")
-        result = await saveArea(this.hass, scope.id, next);
+      else if (scope.kind === "area") result = await saveArea(this.hass, scope.id, next);
       else result = await saveFloor(this.hass, scope.id, next);
       this._setConfig(scope, _normalize(result.config));
       return true;
@@ -617,10 +575,7 @@ export class AmbienceScopesView extends LitElement {
     void this._mutate(scope, { ...cfg, rules });
   }
 
-  private _reorderRules(
-    scope: Scope,
-    e: CustomEvent<{ from: number; to: number }>,
-  ) {
+  private _reorderRules(scope: Scope, e: CustomEvent<{ from: number; to: number }>) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
     const { from, to } = e.detail;
@@ -635,8 +590,7 @@ export class AmbienceScopesView extends LitElement {
     // Pin priority is computed from the nearest SAME-CATEGORY neighbours around
     // the drop position (the backend keeps categories contiguous, so scanning
     // outward finds category-mates).
-    const sameCategory = (idx: number) =>
-      rules[idx] && rules[idx].category === moved.category;
+    const sameCategory = (idx: number) => rules[idx] && rules[idx].category === moved.category;
     let a = to - 1;
     while (a >= 0 && !sameCategory(a)) a--;
     let b = to + 1;
@@ -655,16 +609,11 @@ export class AmbienceScopesView extends LitElement {
   private _unpinRule(scope: Scope, e: CustomEvent<{ index: number }>) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
-    const rules = cfg.rules.map((r, i) =>
-      i === e.detail.index ? { ...r, pinned: false } : r,
-    );
+    const rules = cfg.rules.map((r, i) => (i === e.detail.index ? { ...r, pinned: false } : r));
     void this._mutate(scope, { ...cfg, rules });
   }
 
-  private _toggleRuleEnabled(
-    scope: Scope,
-    e: CustomEvent<{ index: number; enabled: boolean }>,
-  ) {
+  private _toggleRuleEnabled(scope: Scope, e: CustomEvent<{ index: number; enabled: boolean }>) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
     const rules = cfg.rules.map((r, i) => {
@@ -736,9 +685,7 @@ export class AmbienceScopesView extends LitElement {
   }
 
   private _runRuleActions(scope: Scope, e: CustomEvent<{ index: number }>) {
-    return this._callApi(() =>
-      runRuleActions(this.hass, scope, e.detail.index),
-    );
+    return this._callApi(() => runRuleActions(this.hass, scope, e.detail.index));
   }
 
   private _cancelRule() {
@@ -746,12 +693,7 @@ export class AmbienceScopesView extends LitElement {
     this._editing = null;
   }
 
-  private _onScopeMenu(
-    scope: Scope,
-    _name: string,
-    _cfg: ScopeConfig,
-    id: string,
-  ) {
+  private _onScopeMenu(scope: Scope, _name: string, _cfg: ScopeConfig, id: string) {
     if (id === "run") void this._applyRules(scope);
   }
 
@@ -809,19 +751,12 @@ export class AmbienceScopesView extends LitElement {
    *  more than one category exists. */
   private _renderFilter() {
     if (this._categories.length <= 1) return "";
-    const sorted = [...this._categories].sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
-    const current =
-      this._categories.find((g) => g.id === this._filterCategory) ?? null;
+    const sorted = [...this._categories].sort((a, b) => a.name.localeCompare(b.name));
+    const current = this._categories.find((g) => g.id === this._filterCategory) ?? null;
     return html`
       <div class="category-filter-row">
         <span class="category-filter-label"
-          >${localize(
-            this.hass,
-            "ui.filter_by_category",
-            "Filter by category",
-          )}</span
+          >${localize(this.hass, "ui.filter_by_category", "Filter by category")}</span
         >
         <div class="category-filter">
           <button
@@ -835,8 +770,9 @@ export class AmbienceScopesView extends LitElement {
             ${this._renderFilterEntry(current)}
             <ha-icon class="caret" icon="mdi:menu-down"></ha-icon>
           </button>
-          ${this._filterOpen
-            ? html`
+          ${
+            this._filterOpen
+              ? html`
                 <div
                   class="category-filter-backdrop"
                   @click=${() => {
@@ -865,7 +801,8 @@ export class AmbienceScopesView extends LitElement {
                   )}
                 </div>
               `
-            : ""}
+              : ""
+          }
         </div>
       </div>
     `;
@@ -877,17 +814,14 @@ export class AmbienceScopesView extends LitElement {
    *  single category is selected, otherwise the alphabetically-first category. */
   private _defaultCategoryId(): string {
     if (this._filterCategory !== "") return this._filterCategory;
-    const sorted = [...this._categories].sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
+    const sorted = [...this._categories].sort((a, b) => a.name.localeCompare(b.name));
     return sorted[0]?.id ?? "";
   }
 
   private get _editingRule(): Rule | null {
     if (!this._editing) return null;
     if (this._editing.seed) return this._editing.seed;
-    if (this._editing.isNew)
-      return { when: {}, actions: [], category: this._defaultCategoryId() };
+    if (this._editing.isNew) return { when: {}, actions: [], category: this._defaultCategoryId() };
     const cfg = this._getConfig(this._editing.scope);
     return cfg?.rules[this._editing.index] ?? null;
   }
@@ -927,8 +861,7 @@ export class AmbienceScopesView extends LitElement {
     const r =
       this._filterCategory === ""
         ? cfg.rules.length
-        : cfg.rules.filter((rule) => rule.category === this._filterCategory)
-            .length;
+        : cfg.rules.filter((rule) => rule.category === this._filterCategory).length;
     const noun =
       r === 1
         ? localize(this.hass, "ui.rule_singular", "rule")
@@ -961,26 +894,24 @@ export class AmbienceScopesView extends LitElement {
             "floor",
           );
         })}
-        ${this._areas.length === 0
-          ? html`<li>
+        ${
+          this._areas.length === 0
+            ? html`<li>
               <p class="empty">
-                ${localize(
-                  this.hass,
-                  "ui.no_areas",
-                  "No areas found in Home Assistant.",
-                )}
+                ${localize(this.hass, "ui.no_areas", "No areas found in Home Assistant.")}
               </p>
             </li>`
-          : this._areas.map((a) => {
-              const cfg = this._areaConfigs.get(a.area_id);
-              if (!cfg) return html``;
-              return this._renderScopeRow(
-                { kind: "area", id: a.area_id },
-                `${areaPrefix}${a.name}`,
-                cfg,
-                "area",
-              );
-            })}
+            : this._areas.map((a) => {
+                const cfg = this._areaConfigs.get(a.area_id);
+                if (!cfg) return html``;
+                return this._renderScopeRow(
+                  { kind: "area", id: a.area_id },
+                  `${areaPrefix}${a.name}`,
+                  cfg,
+                  "area",
+                );
+              })
+        }
       </ul>
 
       <ambience-rule-editor
@@ -1003,10 +934,12 @@ export class AmbienceScopesView extends LitElement {
       <ambience-traces-modal
         ?open=${this._viewingTraces !== null}
         .hass=${this.hass}
-        .scope=${this._viewingTraces?.scope ?? {
-          scope_kind: "house",
-          scope_id: null,
-        }}
+        .scope=${
+          this._viewingTraces?.scope ?? {
+            scope_kind: "house",
+            scope_id: null,
+          }
+        }
         .category=${this._viewingTraces?.category ?? ""}
         .categoryName=${this._viewingTraces?.categoryName ?? null}
         @close=${() => {
@@ -1016,10 +949,12 @@ export class AmbienceScopesView extends LitElement {
       <ambience-simulator-modal
         ?open=${this._viewingSimulator !== null}
         .hass=${this.hass}
-        .scope=${this._viewingSimulator?.scope ?? {
-          scope_kind: "house",
-          scope_id: null,
-        }}
+        .scope=${
+          this._viewingSimulator?.scope ?? {
+            scope_kind: "house",
+            scope_id: null,
+          }
+        }
         .category=${this._viewingSimulator?.category ?? ""}
         .categoryName=${this._viewingSimulator?.categoryName ?? null}
         @close=${() => {
@@ -1050,20 +985,23 @@ export class AmbienceScopesView extends LitElement {
           <ambience-kebab-menu
             data-test="scope-kebab"
             .hass=${this.hass}
-            .items=${[
-              {
-                id: "run",
-                label: localize(this.hass, "ui.run", "Run"),
-                icon: "mdi:play",
-              },
-            ] satisfies KebabItem[]}
+            .items=${
+              [
+                {
+                  id: "run",
+                  label: localize(this.hass, "ui.run", "Run"),
+                  icon: "mdi:play",
+                },
+              ] satisfies KebabItem[]
+            }
             @menu-action=${(e: CustomEvent<{ id: string }>) =>
               this._onScopeMenu(scope, name, cfg, e.detail.id)}
             @click=${(e: Event) => e.stopPropagation()}
           ></ambience-kebab-menu>
         </div>
-        ${open
-          ? html`
+        ${
+          open
+            ? html`
               <div class="scope-body">
                 <ambience-rules-list
                   .rules=${cfg.rules}
@@ -1076,20 +1014,15 @@ export class AmbienceScopesView extends LitElement {
                   .filterCategory=${this._filterCategory}
                   .hass=${this.hass}
                   @add-rule=${() => this._addRule(scope)}
-                  @edit-rule=${(e: CustomEvent<{ index: number }>) =>
-                    this._editRule(scope, e)}
+                  @edit-rule=${(e: CustomEvent<{ index: number }>) => this._editRule(scope, e)}
                   @duplicate-rule=${(e: CustomEvent<{ index: number }>) =>
                     this._duplicateRule(scope, e)}
-                  @delete-rule=${(e: CustomEvent<{ index: number }>) =>
-                    this._deleteRule(scope, e)}
-                  @reorder-rules=${(
-                    e: CustomEvent<{ from: number; to: number }>,
-                  ) => this._reorderRules(scope, e)}
-                  @unpin-rule=${(e: CustomEvent<{ index: number }>) =>
-                    this._unpinRule(scope, e)}
-                  @toggle-rule-enabled=${(
-                    e: CustomEvent<{ index: number; enabled: boolean }>,
-                  ) => this._toggleRuleEnabled(scope, e)}
+                  @delete-rule=${(e: CustomEvent<{ index: number }>) => this._deleteRule(scope, e)}
+                  @reorder-rules=${(e: CustomEvent<{ from: number; to: number }>) =>
+                    this._reorderRules(scope, e)}
+                  @unpin-rule=${(e: CustomEvent<{ index: number }>) => this._unpinRule(scope, e)}
+                  @toggle-rule-enabled=${(e: CustomEvent<{ index: number; enabled: boolean }>) =>
+                    this._toggleRuleEnabled(scope, e)}
                   @run-rule-actions=${(e: CustomEvent<{ index: number }>) =>
                     this._runRuleActions(scope, e)}
                   @apply-category=${(e: CustomEvent<{ categoryId: string }>) =>
@@ -1101,7 +1034,8 @@ export class AmbienceScopesView extends LitElement {
                 ></ambience-rules-list>
               </div>
             `
-          : ""}
+            : ""
+        }
       </li>
     `;
   }

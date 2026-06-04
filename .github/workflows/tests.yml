@@ -14,6 +14,13 @@ jobs:
       matrix:
         python-version: ["3.13", "3.14"]
         ha-version: ["stable", "dev"]
+        include:
+          # Minimum supported HA: 2025.2.0, the first release to require
+          # Python 3.13. Pinned to the exact pytest-homeassistant-custom-component
+          # release that bundles it, so CI verifies our declared floor still
+          # works. Only on 3.13 — HA 2025.2 predates Python 3.14 support.
+          - python-version: "3.13"
+            ha-version: "min"
     continue-on-error: ${{ matrix.ha-version == 'dev' }}
 
     steps:
@@ -30,6 +37,10 @@ jobs:
           if [ "${{ matrix.ha-version }}" = "dev" ]; then
             python -m pip install pytest pytest-asyncio pytest-cov
             python -m pip install --pre pytest-homeassistant-custom-component
+          elif [ "${{ matrix.ha-version }}" = "min" ]; then
+            # Pin to HA 2025.2.0, our declared minimum supported version.
+            python -m pip install pytest pytest-asyncio pytest-cov
+            python -m pip install "pytest-homeassistant-custom-component==0.13.210"
           else
             python -m pip install pytest pytest-asyncio pytest-cov pytest-homeassistant-custom-component
           fi

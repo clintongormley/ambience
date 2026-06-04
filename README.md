@@ -19,7 +19,7 @@ You describe scenes for each room and give each one the conditions that should b
 
 Copy `custom_components/ambience/` into your Home Assistant `config/custom_components/` directory and restart.
 
-Requires Home Assistant **2024.1.0** or newer.
+Requires Home Assistant **2025.2.0** or newer.
 
 See the [full documentation](docs/index.md) for details.
 

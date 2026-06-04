@@ -1,8 +1,8 @@
 name: Release
 
 # Publishes a GitHub Release when a v* tag is pushed (HACS reads GitHub
-# releases), then opens a follow-up PR bumping main to the next minor so
-# unreleased work no longer carries the just-released version.
+# releases), then opens and auto-merges a follow-up PR bumping main to the next
+# minor so unreleased work no longer carries the just-released version.
 #
 # Release flow:
 #   1. bin/release.sh <version>  -> opens the chore/release PR (bumps manifest)
@@ -86,6 +86,7 @@ jobs:
           bin/bump-version.sh "$NEXT"
 
       - name: Open next-minor bump PR
+        id: cpr
         uses: peter-evans/create-pull-request@v7
         with:
           # Version-less branch name: HACS rejects version numbers in branch names.
@@ -99,4 +100,25 @@ jobs:
 
             Released `v${{ needs.publish.outputs.version }}`; this rolls `main`
             forward to the next minor so unreleased work no longer carries the
-            just-released version.
+            just-released version. Auto-merged by the release workflow.
+
+      # main requires a PR (can't push directly), but the bump is trivial,
+      # machine-generated, and already verified by bin/bump-version.sh — so
+      # merge it automatically. Retry briefly: GitHub computes mergeability
+      # asynchronously right after the PR is created.
+      - name: Auto-merge the bump PR
+        if: steps.cpr.outputs.pull-request-number
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if gh pr merge "$PR" --merge --delete-branch; then
+              echo "Auto-merged bump PR #$PR"
+              exit 0
+            fi
+            echo "merge attempt $attempt failed (PR may not be mergeable yet); retrying in 5s..."
+            sleep 5
+          done
+          echo "::error::failed to auto-merge bump PR #$PR after retries"
+          exit 1

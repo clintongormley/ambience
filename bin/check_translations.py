@@ -1,6 +1,6 @@
 """Validate translation files stay in sync with strings.json (the HA source of truth).
 
-Usage: python -m scripts.check_translations [--component PATH]
+Usage: python -m bin.check_translations [--component PATH]
 Exits non-zero (and prints drift) if any translations/<locale>.json key set
 differs from strings.json. en.json must match exactly; other locales may omit
 keys (untranslated) but must not introduce unknown keys.

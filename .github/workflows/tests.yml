@@ -117,4 +117,4 @@ jobs:
       - name: Install dependencies
         run: pip install pytest-homeassistant-custom-component
       - name: Translation key parity
-        run: python -m scripts.check_translations
+        run: python -m bin.check_translations

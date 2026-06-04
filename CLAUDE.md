@@ -9,7 +9,7 @@
 
 ## Code Quality
 
-- Run `sh scripts/install-hooks.sh` once per clone/worktree. The committed `.githooks/pre-push` mirrors CI: fast lint/format first, then tests for the changed language, plus coverage/translation/docs-drift gates. Bypass in an emergency with `git push --no-verify`. See `CONTRIBUTING.md`.
+- Run `sh bin/install-hooks.sh` once per clone/worktree. The committed `.githooks/pre-push` mirrors CI: fast lint/format first, then tests for the changed language, plus coverage/translation/docs-drift gates. Bypass in an emergency with `git push --no-verify`. See `CONTRIBUTING.md`.
 - Before creating a PR, run `ruff check .` and `ruff format .` (Python) and `npm run ci` (frontend Biome lint+format) to fix any issues — or just let the pre-push hook run them.
 - Before creating a release, update docs, translations, and tests.
 - The `manifest.json` keys must be sorted: `domain`, `name` first, then all remaining keys in alphabetical order.

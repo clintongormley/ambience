@@ -11,7 +11,7 @@ lint-js:        ## Fast: biome lint+format check + tsc type-check
 	npm run ci && npm run check
 
 translations:   ## strings.json <-> translations key parity
-	python -m scripts.check_translations
+	python -m bin.check_translations
 
 coverage-py:    ## backend tests + coverage gate (fail_under in pyproject.toml)
 	python -m pytest tests/ --cov=custom_components.ambience --cov-report=term-missing
@@ -23,4 +23,4 @@ build-check:    ## rebuild bundle and fail if the committed output differs
 	npm run build && git diff --exit-code custom_components/ambience/frontend/
 
 install-hooks:  ## point git at the committed hooks
-	sh scripts/install-hooks.sh
+	sh bin/install-hooks.sh

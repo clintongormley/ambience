@@ -3,7 +3,7 @@
 # then run ONLY the changed language's tests + always-cheap drift checks, so
 # pushing stays lightweight but CI rarely fails.
 #
-# Install once per clone:  sh scripts/install-hooks.sh
+# Install once per clone:  sh bin/install-hooks.sh
 # Bypass in an emergency:  git push --no-verify
 set -eu
 

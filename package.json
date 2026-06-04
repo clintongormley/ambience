@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "node scripts/check-deps.mjs",
+    "prebuild": "node bin/check-deps.mjs",
     "build": "node esbuild.config.mjs",
     "check": "tsc --noEmit",
     "test": "vitest run",

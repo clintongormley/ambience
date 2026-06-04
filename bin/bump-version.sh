@@ -74,17 +74,17 @@ grep -q "\"version\": \"$VERSION\"" package.json \
 # so dependency versions are never touched.
 sed -i.bak "/\"node_modules\//,\$ ! s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" package-lock.json
 rm -f package-lock.json.bak
-# Verify both root occurrences landed using a JSON-aware read (tolerant of
-# formatting), which also confirms we did not corrupt the file.
-python3 - "$VERSION" <<'PY'
-import json, sys
-want = sys.argv[1]
-lock = json.load(open("package-lock.json"))
-root = lock.get("version")
-pkg = lock.get("packages", {}).get("", {}).get("version")
-if root != want or pkg != want:
-    sys.exit(
-        f"error: failed to bump package-lock.json root version "
-        f"(top-level={root!r}, packages['']={pkg!r}, want={want!r})"
-    )
-PY
+# Verify the bump landed: count the bumped version entries in the header block
+# (before the first "node_modules/" entry) — there must be at least the two
+# root occurrences (top-level + packages[""]). Uses awk/grep (no Python
+# subprocess: a python3 child here gets coverage-instrumented under pytest-cov
+# and corrupts the combined coverage data).
+ROOT_BUMPED=$(
+  awk '/"node_modules\//{exit} {print}' package-lock.json \
+    | grep -cF "\"version\": \"$VERSION\"" || true
+)
+if [ "$ROOT_BUMPED" -lt 2 ]; then
+  echo "error: failed to bump package-lock.json root version" >&2
+  echo "  expected >=2 root \"version\": \"$VERSION\" entries, found $ROOT_BUMPED" >&2
+  exit 1
+fi

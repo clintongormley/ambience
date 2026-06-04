@@ -211,6 +211,22 @@ def test_bump_version_fails_loudly_when_write_does_not_land(tmp_path: Path):
     assert result.returncode != 0, result.stdout + result.stderr
 
 
+def test_bump_version_fails_loudly_when_lockfile_does_not_land(tmp_path: Path):
+    """The lockfile root version must be verified too: if the bump doesn't land
+    (e.g. unexpected formatting), fail rather than ship a stale lockfile."""
+    _init_repo(tmp_path)
+    # Compact lockfile: the bump's spaced `"version": "..."` pattern won't match
+    # the unspaced `"version":"0.1.0"`, so the root version edit is a no-op.
+    (tmp_path / "package-lock.json").write_text(
+        '{"name":"ambience-panel","version":"0.1.0",'
+        '"packages":{"":{"name":"ambience-panel","version":"0.1.0"}}}\n'
+    )
+    _git("add", ".", cwd=tmp_path)
+    _git("commit", "-qm", "compact lockfile", cwd=tmp_path)
+    result = _run_bump(tmp_path, "0.2.0")
+    assert result.returncode != 0, result.stdout + result.stderr
+
+
 def test_rejects_when_release_branch_already_exists(tmp_path: Path):
     """A leftover chore/release branch (aborted/undeleted prior release) must be
     reported clearly in pre-flight, not crash `git checkout -b` mid-run."""

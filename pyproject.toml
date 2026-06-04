@@ -9,7 +9,10 @@ test = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
-    "pytest-homeassistant-custom-component>=0.13.300",
+    # 0.13.210 bundles HA 2025.2.0, our declared minimum (first release to
+    # require Python 3.13). CI pins this exact version in the "min" matrix job;
+    # local installs resolve to the latest compatible release.
+    "pytest-homeassistant-custom-component>=0.13.210",
 ]
 
 [tool.pytest.ini_options]

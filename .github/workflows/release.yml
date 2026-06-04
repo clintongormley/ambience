@@ -70,7 +70,7 @@ jobs:
         with:
           ref: main
 
-      - name: Compute next minor and bump manifest.json
+      - name: Compute next minor and bump version files
         id: bump
         env:
           VERSION: ${{ needs.publish.outputs.version }}
@@ -80,6 +80,11 @@ jobs:
           # sed (not json.dump) so the manifest's required key order is preserved.
           sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$NEXT\"/" custom_components/ambience/manifest.json
           grep -q "\"version\": \"$NEXT\"" custom_components/ambience/manifest.json
+          # Keep the npm package in lockstep. The lockfile carries the root
+          # version twice (top-level + packages[""]); restrict to the header
+          # block before the first "node_modules/" entry so deps are untouched.
+          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$NEXT\"/" package.json
+          sed -i "/\"node_modules\//,\$ ! s/\"version\": \"[^\"]*\"/\"version\": \"$NEXT\"/" package-lock.json
 
       - name: Open next-minor bump PR
         uses: peter-evans/create-pull-request@v7

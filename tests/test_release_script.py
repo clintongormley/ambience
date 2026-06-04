@@ -87,6 +87,30 @@ def _init_repo(tmp_path: Path, *, branch: str = "main", dirty: bool = False) -> 
     (comp / "manifest.json").write_text('{\n  "domain": "ambience",\n  "version": "0.1.0"\n}\n')
     (comp / "frontend" / "ambience-panel.js").write_text("// built bundle\n")
 
+    # The npm package ships with the integration, so its version is kept in
+    # lockstep with the manifest. The lockfile carries the root version twice
+    # (top-level and packages[""]) plus an unrelated dependency at the same
+    # version, which must NOT be touched.
+    (tmp_path / "package.json").write_text(
+        '{\n  "name": "ambience-panel",\n  "version": "0.1.0",\n  "private": true\n}\n'
+    )
+    (tmp_path / "package-lock.json").write_text(
+        "{\n"
+        '  "name": "ambience-panel",\n'
+        '  "version": "0.1.0",\n'
+        '  "lockfileVersion": 3,\n'
+        '  "packages": {\n'
+        '    "": {\n'
+        '      "name": "ambience-panel",\n'
+        '      "version": "0.1.0"\n'
+        "    },\n"
+        '    "node_modules/esbuild": {\n'
+        '      "version": "0.1.0"\n'
+        "    }\n"
+        "  }\n"
+        "}\n"
+    )
+
     _git("add", ".", cwd=tmp_path)
     _git("commit", "-qm", "init", cwd=tmp_path)
 
@@ -102,6 +126,28 @@ def _manifest_version(repo: Path) -> str:
     return json.loads((repo / "custom_components" / "ambience" / "manifest.json").read_text())[
         "version"
     ]
+
+
+def test_syncs_package_json_and_lockfile_to_manifest(tmp_path: Path):
+    """package.json and package-lock.json (root version, both occurrences) are
+    bumped in lockstep with the manifest; unrelated dependency versions in the
+    lockfile are left untouched."""
+    _init_repo(tmp_path)
+    result = _run(tmp_path, "0.2.0", "--no-push")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    _git("checkout", "-q", RELEASE_BRANCH, cwd=tmp_path)
+
+    import json
+
+    pkg = json.loads((tmp_path / "package.json").read_text())
+    assert pkg["version"] == "0.2.0"
+
+    lock = json.loads((tmp_path / "package-lock.json").read_text())
+    assert lock["version"] == "0.2.0"
+    assert lock["packages"][""]["version"] == "0.2.0"
+    # The dependency pinned at the old version must NOT have been rewritten.
+    assert lock["packages"]["node_modules/esbuild"]["version"] == "0.1.0"
 
 
 def test_rejects_non_main_branch(tmp_path: Path):

@@ -102,6 +102,19 @@ sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$MANIFEST"
 rm -f "$MANIFEST.bak"
 grep -q "\"version\": \"$VERSION\"" "$MANIFEST"
 
+# Keep the npm package in lockstep: it ships with the integration. Bump
+# package.json and the root version in package-lock.json (which appears twice:
+# top-level and packages[""]). Restrict the lockfile edit to the header block
+# before the first "node_modules/" entry so dependency versions are untouched.
+if [ -f package.json ]; then
+  sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" package.json
+  rm -f package.json.bak
+fi
+if [ -f package-lock.json ]; then
+  sed -i.bak "/\"node_modules\//,\$ ! s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" package-lock.json
+  rm -f package-lock.json.bak
+fi
+
 git add -A
 # --allow-empty supports the "version already bumped in an earlier feature commit"
 # workflow: the release branch still gets a clear `chore: release` marker commit.

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from scripts.check_translations import compare_keys, flatten_keys
+from bin.check_translations import compare_keys, flatten_keys
 
 
 def test_flatten_keys_nests_with_dots():

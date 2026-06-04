@@ -8,7 +8,7 @@ pip install -e ".[test]"
 # Frontend deps
 npm install
 # Install the local git hooks (mirrors CI)
-sh scripts/install-hooks.sh
+sh bin/install-hooks.sh
 ```
 
 `install-hooks.sh` points `core.hooksPath` at the committed `.githooks/`

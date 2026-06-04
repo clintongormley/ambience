@@ -181,7 +181,9 @@ def test_branch_name_has_no_version_number(tmp_path: Path):
     result = _run(tmp_path, "0.2.0", "--no-push")
     assert result.returncode == 0, result.stdout + result.stderr
 
-    branches = _git("branch", "--format=%(refname:short)", cwd=tmp_path, capture_output=True, text=True).stdout
+    branches = _git(
+        "branch", "--format=%(refname:short)", cwd=tmp_path, capture_output=True, text=True
+    ).stdout
     for name in branches.split():
         assert "0.2.0" not in name, f"branch {name!r} contains a version number"
 

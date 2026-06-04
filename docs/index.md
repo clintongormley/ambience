@@ -78,7 +78,18 @@ overlap:
 | The projector is on for movie time             | Blinds closed |
 
 A **single winning scene** is chosen only from the scenes belonging to the
-**same scope and category**.
+**same scope and category**. Because exactly one scene wins per scope and
+category, there is no way for two rules to clash over the same device; the
+winner is always well defined.
+
+### Switches
+
+Each scope has its own independent **switch** that toggles Ambience's automatic
+control for that scope on or off. The House and Floor switches **cascade
+downwards**, so if you turn off the Floor switch it will also turn off the Areas
+on that floor, and if you turn off the House switch it'll disable Ambience
+everywhere. But because switches are independent, you can, for example, turn off
+the House switch and then reenable just the room you are in.
 
 ### Actions
 
@@ -97,8 +108,11 @@ with just the fields that matter to you.
 
 ### Readable, traceable, and testable
 
-Scenes are described using human-friendly language with a compact format, which
-makes them easy to understand and to compare with each other.
+Scenes are described using human-friendly language with a compact format that
+makes them easy to understand and to compare with each other. The editor also
+flags **unreachable scenes** — scenes that can never win because an earlier
+scene will always match first, making it obvious where problems need to be
+solved.
 
 Extensive debug logging is available, along with the ability to trace the
 decisions made for each scope and category to understand why a particular scene

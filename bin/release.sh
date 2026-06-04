@@ -17,7 +17,8 @@
 #
 # After the PR merges, push the v<version> tag to publish the GitHub Release:
 #   git tag v<version> && git push origin v<version>
-# The release workflow then opens a follow-up PR bumping main to the next minor.
+# The release workflow then opens and auto-merges a follow-up PR bumping main to
+# the next minor.
 #
 # The release branch is deliberately version-less: HACS scans every branch and
 # complains about version numbers in branch names (see CLAUDE.md).

@@ -19,6 +19,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "bin" / "release.sh"
+BUMP_SCRIPT = REPO_ROOT / "bin" / "bump-version.sh"
 RELEASE_BRANCH = "chore/release"
 
 
@@ -45,6 +46,16 @@ def _git(*args: str, cwd: Path, check: bool = True, **kwargs) -> subprocess.Comp
 def _run(cwd: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["bash", str(SCRIPT), *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        env=_clean_env(env),
+    )
+
+
+def _run_bump(cwd: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["bash", str(BUMP_SCRIPT), *args],
         cwd=cwd,
         capture_output=True,
         text=True,
@@ -148,6 +159,77 @@ def test_syncs_package_json_and_lockfile_to_manifest(tmp_path: Path):
     assert lock["packages"][""]["version"] == "0.2.0"
     # The dependency pinned at the old version must NOT have been rewritten.
     assert lock["packages"]["node_modules/esbuild"]["version"] == "0.1.0"
+
+
+# --- bin/bump-version.sh: the shared bump used by release.sh and the workflow ---
+
+
+def test_bump_version_bumps_all_files_and_verifies(tmp_path: Path):
+    """The standalone bump script updates manifest, package.json, and both root
+    lockfile occurrences, leaving unrelated dependency versions alone."""
+    import json
+
+    _init_repo(tmp_path)
+    result = _run_bump(tmp_path, "0.2.0")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    assert _manifest_version(tmp_path) == "0.2.0"
+    assert json.loads((tmp_path / "package.json").read_text())["version"] == "0.2.0"
+    lock = json.loads((tmp_path / "package-lock.json").read_text())
+    assert lock["version"] == "0.2.0"
+    assert lock["packages"][""]["version"] == "0.2.0"
+    assert lock["packages"]["node_modules/esbuild"]["version"] == "0.1.0"
+
+
+def test_bump_version_rejects_invalid_semver(tmp_path: Path):
+    _init_repo(tmp_path)
+    result = _run_bump(tmp_path, "not-a-version")
+    assert result.returncode != 0
+    assert "semver" in (result.stdout + result.stderr).lower()
+    assert _manifest_version(tmp_path) == "0.1.0"  # nothing written
+
+
+def test_bump_version_validate_mode_writes_nothing(tmp_path: Path):
+    _init_repo(tmp_path)
+    result = _run_bump(tmp_path, "--validate", "0.2.0")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _manifest_version(tmp_path) == "0.1.0"
+
+
+def test_bump_version_fails_loudly_when_write_does_not_land(tmp_path: Path):
+    """If the version pattern doesn't match (e.g. unexpected formatting), the
+    bump must fail rather than silently ship a stale version."""
+    _init_repo(tmp_path)
+    # Compact manifest with no space after the colon: the bump's sed pattern
+    # (which expects `"version": "..."`) won't match, so the write is a no-op.
+    (tmp_path / "custom_components" / "ambience" / "manifest.json").write_text(
+        '{"domain":"ambience","version":"0.1.0"}\n'
+    )
+    _git("add", ".", cwd=tmp_path)
+    _git("commit", "-qm", "compact manifest", cwd=tmp_path)
+    result = _run_bump(tmp_path, "0.2.0")
+    assert result.returncode != 0, result.stdout + result.stderr
+
+
+def test_rejects_when_release_branch_already_exists(tmp_path: Path):
+    """A leftover chore/release branch (aborted/undeleted prior release) must be
+    reported clearly in pre-flight, not crash `git checkout -b` mid-run."""
+    _init_repo(tmp_path)
+    _git("branch", RELEASE_BRANCH, cwd=tmp_path)
+    # A marker the fake build touches: it must NOT exist if the branch-exists
+    # check fails fast in pre-flight, before the (slow) build runs.
+    marker = tmp_path / "build_ran"
+    result = _run(tmp_path, "0.2.0", "--no-push", env={"BUILD_CMD": f"touch {marker}"})
+    assert result.returncode != 0
+    combined = (result.stdout + result.stderr).lower()
+    assert "chore/release" in combined
+    assert "exists" in combined or "already" in combined
+    assert not marker.exists(), "build ran before the branch-exists pre-flight check"
+    # Pre-flight must fail before mutating: still on main.
+    branch = _git(
+        "rev-parse", "--abbrev-ref", "HEAD", cwd=tmp_path, capture_output=True, text=True
+    ).stdout.strip()
+    assert branch == "main"
 
 
 def test_rejects_non_main_branch(tmp_path: Path):

@@ -347,6 +347,12 @@ export type SimulateInputs = { knobs: SimulateKnob[]; has_time: boolean };
 export type SimulateScope = { scope_kind: string; scope_id: string | null };
 export type SimulateOverrides = Record<
   string,
-  { state?: string; attributes?: Record<string, unknown> }
+  {
+    state?: string;
+    attributes?: Record<string, unknown>;
+    /** How long the entity has held this state — backdates its clock so `for:`
+     *  conditions evaluate as intended. Omitted/zero reads as just-changed. */
+    for?: StateForDuration;
+  }
 >;
 export type SimulateVerdicts = Record<string, Record<string, boolean>>;

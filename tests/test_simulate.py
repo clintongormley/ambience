@@ -1,6 +1,6 @@
 """What-if simulator core."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -8,6 +8,7 @@ from custom_components.ambience.conditions.script import ScriptCondition, _cache
 from custom_components.ambience.const import DATA_CONDITIONS, DATA_STORE, DOMAIN
 from custom_components.ambience.simulate import (
     SimulatedWorld,
+    _build_override_states,
     _collect_state_attributes,
     _in_domain,
     _is_number,
@@ -85,6 +86,52 @@ class _Hass:
         self.config = _Config()
         self.states = _States(states)
         self.data = {DOMAIN: {DATA_CONDITIONS: {"recording": _RecordingCondition()}}}
+
+
+def test_build_override_states_backdates_clock_for_for_duration():
+    # A `for` duration makes the overridden state read as having been held that
+    # long, so `for:` conditions evaluate as the user intends.
+    hass = _Hass([_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(
+        now=FIXED,
+        overrides={"binary_sensor.motion": {"state": "on", "for": {"h": 0, "m": 5, "s": 0}}},
+    )
+    s = _build_override_states(hass, world)["binary_sensor.motion"]
+    assert s.state == "on"
+    assert s.last_changed == FIXED - timedelta(minutes=5)
+    assert s.last_updated == FIXED - timedelta(minutes=5)
+
+
+def test_build_override_states_clock_defaults_to_now_without_for():
+    # No `for` → the entity reads as just-changed at the simulated `now`.
+    hass = _Hass([_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
+    s = _build_override_states(hass, world)["binary_sensor.motion"]
+    assert s.last_changed == FIXED
+    assert s.last_updated == FIXED
+
+
+def test_build_override_states_handles_absurd_for_without_crashing():
+    # A duration so large that `now - for` underflows datetime must not raise —
+    # it reads as "held effectively forever" (backdated to a valid floor).
+    hass = _Hass([_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(
+        now=FIXED,
+        overrides={"binary_sensor.motion": {"state": "on", "for": {"h": 100_000_000, "m": 0, "s": 0}}},
+    )
+    s = _build_override_states(hass, world)["binary_sensor.motion"]
+    assert s.last_changed < FIXED
+
+
+def test_build_override_states_clamps_negative_for_to_now():
+    # Defense in depth: a negative `for` must not backdate into the future.
+    hass = _Hass([_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(
+        now=FIXED,
+        overrides={"binary_sensor.motion": {"state": "on", "for": {"h": 0, "m": -5, "s": 0}}},
+    )
+    s = _build_override_states(hass, world)["binary_sensor.motion"]
+    assert s.last_changed == FIXED
 
 
 @pytest.mark.asyncio

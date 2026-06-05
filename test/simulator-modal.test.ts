@@ -109,6 +109,44 @@ describe("ambience-simulator-modal", () => {
     expect(el.shadowRoot.querySelector("select[data-verdict='script:k1']")).toBeTruthy();
   });
 
+  test("renders an h:m:s For control per entity row", async () => {
+    el = await mount();
+    expect(el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:h']")).toBeTruthy();
+    expect(el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:m']")).toBeTruthy();
+    expect(el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:s']")).toBeTruthy();
+  });
+
+  test("Simulate sends the per-entity For duration", async () => {
+    el = await mount();
+    const m = el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:m']");
+    m.value = "5";
+    m.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    const overrides = vi.mocked(api.simulate).mock.calls[0][4];
+    expect(overrides["binary_sensor.motion"].for).toEqual({ h: 0, m: 5, s: 0 });
+  });
+
+  test("a zero For duration is omitted from the override", async () => {
+    el = await mount();
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    const overrides = vi.mocked(api.simulate).mock.calls[0][4];
+    expect(overrides["binary_sensor.motion"].for).toBeUndefined();
+  });
+
+  test("reset restores the For duration to zero", async () => {
+    el = await mount();
+    const m = el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:m']");
+    m.value = "5";
+    m.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    el.shadowRoot.querySelector("[data-reset='binary_sensor.motion']").click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:m']").value).toBe("0");
+  });
+
   test("Simulate sends overrides + verdicts; reset restores live", async () => {
     el = await mount();
     const motion = el.shadowRoot.querySelector("select[data-entity='binary_sensor.motion']");

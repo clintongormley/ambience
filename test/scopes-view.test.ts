@@ -508,6 +508,32 @@ describe("ambience-scopes-view", () => {
     expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
   });
 
+  test("the conditions hint names both when neither weather nor workday is configured", async () => {
+    el = await mount(); // default: both unconfigured
+    const banner = el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]');
+    expect(banner.textContent).toContain("Workday & Weather");
+  });
+
+  test("the conditions hint names only Workday when weather is configured", async () => {
+    el = await mount({
+      weatherConfig: { entity: "weather.home", groups: [] },
+      dayConfig: { workday_sensor: null, workday_calendar: null },
+    });
+    const banner = el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]');
+    expect(banner.textContent).toContain("Workday");
+    expect(banner.textContent).not.toContain("Weather");
+  });
+
+  test("the conditions hint names only Weather when workday is configured", async () => {
+    el = await mount({
+      weatherConfig: { entity: null, groups: [] },
+      dayConfig: { workday_sensor: "binary_sensor.workday", workday_calendar: null },
+    });
+    const banner = el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]');
+    expect(banner.textContent).toContain("Weather");
+    expect(banner.textContent).not.toContain("Workday");
+  });
+
   test("the conditions hint button opens settings on the conditions tab", async () => {
     el = await mount();
     let detail: any = null;
@@ -537,6 +563,40 @@ describe("ambience-scopes-view", () => {
     el.remove();
     el = await mount();
     expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+  });
+
+  test("hides the conditions hint live when weather + workday get configured", async () => {
+    el = await mount(); // unconfigured → hint shown
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
+    // The user configures both in the settings modal, which broadcasts a change.
+    vi.mocked(api.getWeatherConfig).mockResolvedValue({ entity: "weather.home", groups: [] });
+    vi.mocked(api.getDayConfig).mockResolvedValue({
+      workday_sensor: "binary_sensor.workday",
+      workday_calendar: null,
+    });
+    window.dispatchEvent(new CustomEvent("ambience-conditions-changed"));
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+  });
+
+  test("re-shows the conditions hint live when weather/workday are cleared", async () => {
+    el = await mount({
+      weatherConfig: { entity: "weather.home", groups: [] },
+      dayConfig: { workday_sensor: "binary_sensor.workday", workday_calendar: null },
+    });
+    // Configured → hidden.
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+    // Both configs are cleared again; the hint must come back (no sticky state).
+    vi.mocked(api.getWeatherConfig).mockResolvedValue({ entity: null, groups: [] });
+    vi.mocked(api.getDayConfig).mockResolvedValue({
+      workday_sensor: null,
+      workday_calendar: null,
+    });
+    window.dispatchEvent(new CustomEvent("ambience-conditions-changed"));
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
   });
 
   // --- duplicate ----------------------------------------------------------

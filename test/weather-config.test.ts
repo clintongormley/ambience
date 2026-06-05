@@ -47,6 +47,16 @@ describe("ambience-weather-config", () => {
     );
   });
 
+  test("a successful save fires ambience-conditions-changed so views refetch", async () => {
+    el = await mount();
+    const seen = vi.fn();
+    window.addEventListener("ambience-conditions-changed", seen);
+    el._onEntityChange({ detail: { value: "weather.home" } });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(seen).toHaveBeenCalledTimes(1);
+    window.removeEventListener("ambience-conditions-changed", seen);
+  });
+
   test("_addGroup appends a new group with a unique id", async () => {
     el = await mount();
     el._addGroup();

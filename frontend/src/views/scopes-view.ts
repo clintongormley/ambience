@@ -454,6 +454,24 @@ export class AmbienceScopesView extends LitElement {
     }
   };
 
+  // Workday/Weather are configured in the settings modal, which stays mounted
+  // alongside this view — so without this refetch the conditions hint would keep
+  // showing (or stay hidden) until a full reload. Re-pull both configs on change
+  // so the hint reflects live state.
+  private _onConditionsChanged = async () => {
+    try {
+      const [dayConfig, weatherConfig] = await Promise.all([
+        getDayConfig(this.hass),
+        getWeatherConfig(this.hass),
+      ]);
+      if (!this.isConnected) return;
+      this._dayConfig = dayConfig;
+      this._weatherConfig = weatherConfig;
+    } catch {
+      // Silent — same rationale as the other change handlers.
+    }
+  };
+
   /** Fetch the service schema for each exposed action. Failures per-service
    *  are silently skipped (the summary just falls back to humanized ids). */
   private async _refreshSchemas(actions: ExposedAction[]): Promise<void> {
@@ -480,6 +498,7 @@ export class AmbienceScopesView extends LitElement {
     this._conditionsHintDismissed = readConditionsHintDismissed();
     window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.addEventListener("ambience-categories-changed", this._onCategoriesChanged);
+    window.addEventListener("ambience-conditions-changed", this._onConditionsChanged);
     await this._loadStatic();
     await Promise.all([
       this._refreshAreas(),
@@ -494,6 +513,7 @@ export class AmbienceScopesView extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.removeEventListener("ambience-categories-changed", this._onCategoriesChanged);
+    window.removeEventListener("ambience-conditions-changed", this._onConditionsChanged);
     this._unsubArea?.();
     this._unsubArea = undefined;
     this._unsubFloor?.();
@@ -1069,13 +1089,61 @@ export class AmbienceScopesView extends LitElement {
 
   // --- empty-state banners -------------------------------------------------
 
-  /** True when neither Weather nor Workday is configured enough to be used as a
-   *  scene condition (the optional hint nudges the user to set them up). */
-  private get _conditionsUnconfigured(): boolean {
-    const weatherUnset = !this._weatherConfig || this._weatherConfig.entity == null;
+  /** True when Weather has no entity picked — it can't be used as a condition. */
+  private get _weatherUnconfigured(): boolean {
+    return !this._weatherConfig || this._weatherConfig.entity == null;
+  }
+
+  /** True when neither a Workday sensor nor calendar is picked. */
+  private get _workdayUnconfigured(): boolean {
     const day = this._dayConfig;
-    const workdayUnset = !day || (day.workday_sensor == null && day.workday_calendar == null);
-    return weatherUnset || workdayUnset;
+    return !day || (day.workday_sensor == null && day.workday_calendar == null);
+  }
+
+  /** True when either Weather or Workday is unconfigured (the optional hint
+   *  nudges the user to set up whichever is still missing). */
+  private get _conditionsUnconfigured(): boolean {
+    return this._weatherUnconfigured || this._workdayUnconfigured;
+  }
+
+  /** Title + body for the conditions hint, naming only the input(s) still
+   *  missing — so configuring one narrows the nudge rather than leaving it
+   *  unchanged. Only called when at least one is unconfigured. */
+  private _conditionsHintText(): { title: string; body: string } {
+    const weatherUnset = this._weatherUnconfigured;
+    const workdayUnset = this._workdayUnconfigured;
+    if (weatherUnset && workdayUnset) {
+      return {
+        title: localize(
+          this.hass,
+          "ui.conditions_hint_title",
+          "Optional: set up Workday & Weather",
+        ),
+        body: localize(
+          this.hass,
+          "ui.conditions_hint_body",
+          "Configure Workday and Weather in Conditions to use them in your scene conditions.",
+        ),
+      };
+    }
+    if (workdayUnset) {
+      return {
+        title: localize(this.hass, "ui.conditions_hint_title_workday", "Optional: set up Workday"),
+        body: localize(
+          this.hass,
+          "ui.conditions_hint_body_workday",
+          "Configure Workday in Conditions to use it in your scene conditions.",
+        ),
+      };
+    }
+    return {
+      title: localize(this.hass, "ui.conditions_hint_title_weather", "Optional: set up Weather"),
+      body: localize(
+        this.hass,
+        "ui.conditions_hint_body_weather",
+        "Configure Weather in Conditions to use it in your scene conditions.",
+      ),
+    };
   }
 
   private _openSettings(tab: "actions" | "conditions") {
@@ -1122,20 +1190,13 @@ export class AmbienceScopesView extends LitElement {
       `;
     }
     if (!this._conditionsHintDismissed && this._conditionsUnconfigured) {
+      const { title, body } = this._conditionsHintText();
       return html`
         <div class="banner banner-hint" data-test="conditions-hint-banner">
           <ha-icon class="banner-icon" icon="mdi:lightbulb-on-outline"></ha-icon>
           <div class="banner-text">
-            <strong
-              >${localize(this.hass, "ui.conditions_hint_title", "Optional: set up Workday & Weather")}</strong
-            >
-            <span
-              >${localize(
-                this.hass,
-                "ui.conditions_hint_body",
-                "Configure Workday and Weather in Conditions to use them in your scene conditions.",
-              )}</span
-            >
+            <strong>${title}</strong>
+            <span>${body}</span>
           </div>
           <button
             class="banner-cta"

@@ -211,7 +211,14 @@ export class AmbienceScopesView extends LitElement {
         gap: 0.5rem;
         padding: 0.75rem 1rem;
         cursor: pointer;
-        background: var(--secondary-background-color, #f5f5f5);
+        /* A soft grey header strip. --secondary-background-color is the page
+         backdrop (a fairly heavy grey); mixing it down toward the card colour
+         gives the lighter section-header tint HA uses for similar dividers. */
+        background: color-mix(
+          in srgb,
+          var(--secondary-background-color, #e0e0e0) 50%,
+          var(--card-background-color, #fff)
+        );
         /* Collapsed: round all corners to match the card. */
         border-radius: 4px;
       }
@@ -219,6 +226,34 @@ export class AmbienceScopesView extends LitElement {
        body below with a flush edge. */
       .scope-header.open {
         border-radius: 4px 4px 0 0;
+      }
+      /* Faded ("empty"): the scope is on but has no rules in the active category.
+       Dim the glyphs + text so it recedes behind active scopes; the switch and
+       kebab stay full-strength so the row is still operable. */
+      .scope-header.empty .chevron,
+      .scope-header.empty .scope-icon,
+      .scope-header.empty .scope-name,
+      .scope-header.empty .scope-summary {
+        opacity: 0.5;
+      }
+      /* Disabled ("off"): the scope's switch is off. Read more emphatically
+       disabled than the faded state — flatten the header tint and dim its
+       contents harder — while leaving the switch fully lit to re-enable. */
+      .scope-header.off {
+        /* A barely-there grey (≈ #f8f8f8 on the default light theme) — paler
+         than the active header so a disabled scope reads washed-out. */
+        background: color-mix(
+          in srgb,
+          var(--secondary-background-color, #e0e0e0) 25%,
+          var(--card-background-color, #fff)
+        );
+      }
+      .scope-header.off .chevron,
+      .scope-header.off .scope-icon,
+      .scope-header.off .scope-name,
+      .scope-header.off .scope-summary,
+      .scope-header.off ambience-kebab-menu {
+        opacity: 0.4;
       }
       .chevron {
         width: 1em;
@@ -237,6 +272,7 @@ export class AmbienceScopesView extends LitElement {
       }
       .scope-name {
         flex: 1;
+        text-align: left;
         font-weight: 600;
       }
       .scope-summary {
@@ -1009,16 +1045,21 @@ export class AmbienceScopesView extends LitElement {
     ];
   }
 
+  /** How many of a scope's scenes match the active category filter ("" = all).
+   *  0 for a genuinely empty scope, and also 0 for a scope whose scenes all sit
+   *  in other categories — the signal the header uses to fade itself. */
+  private _matchingSceneCount(cfg: ScopeConfig): number {
+    if (this._filterCategory === "") return cfg.scenes.length;
+    return cfg.scenes.filter((scene) => scene.category === this._filterCategory).length;
+  }
+
   private _summary(cfg: ScopeConfig): string {
     // A genuinely empty scope reads "not configured" regardless of filter.
     if (cfg.scenes.length === 0) {
       return localize(this.hass, "ui.not_configured", "not configured");
     }
     // Otherwise count the scenes matching the active filter (all when "").
-    const r =
-      this._filterCategory === ""
-        ? cfg.scenes.length
-        : cfg.scenes.filter((scene) => scene.category === this._filterCategory).length;
+    const r = this._matchingSceneCount(cfg);
     const noun =
       r === 1
         ? localize(this.hass, "ui.scene_singular", "scene")
@@ -1258,10 +1299,18 @@ export class AmbienceScopesView extends LitElement {
   ) {
     const open = this._expanded.has(scopeKey(scope));
     const dataId = scope.kind === "house" ? "" : scope.id;
+    // Header de-emphasis, strongest first: a switched-off scope reads fully
+    // "disabled"; an on scope with no rules in the active category reads "empty"
+    // (faded). Off wins so a disabled scope never also looks merely empty.
+    const stateClass = this._isSwitchedOff(scope)
+      ? "off"
+      : this._matchingSceneCount(cfg) === 0
+        ? "empty"
+        : "";
     return html`
       <li class="scope-row ${rowClass}" data-id=${dataId}>
         <div
-          class="scope-header ${open ? "open" : ""}"
+          class="scope-header ${open ? "open" : ""} ${stateClass}"
           @click=${() => this._toggleExpand(scope)}
         >
           <span class="chevron ${open ? "open" : ""}">▶</span>

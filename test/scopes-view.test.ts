@@ -1227,6 +1227,73 @@ describe("ambience-scopes-view", () => {
     expect(br).toBeFalsy();
   });
 
+  // --- disabled / faded scope styling -------------------------------------
+
+  const headerOf = (e: any, sel: string): HTMLElement =>
+    e.shadowRoot.querySelector(`${sel} .scope-header`) as HTMLElement;
+
+  test("a switched-off scope header gets the 'off' (disabled) class", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.bedroom_ambience": { state: "off" } },
+    });
+    const header = headerOf(el, ".scope-row.area[data-id='bedroom']");
+    expect(header.classList.contains("off")).toBe(true);
+  });
+
+  test("an on scope with no scenes gets the 'empty' (faded) class", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.living_room_ambience": { state: "on" } },
+    });
+    const header = headerOf(el, ".scope-row.area[data-id='living_room']");
+    expect(header.classList.contains("empty")).toBe(true);
+    expect(header.classList.contains("off")).toBe(false);
+  });
+
+  test("an on scope with matching scenes is neither off nor empty", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.living_room_ambience": { state: "on" } },
+      areaConfigs: {
+        living_room: { scenes: [{ when: {}, actions: [], category: "a" }] },
+      },
+    });
+    const header = headerOf(el, ".scope-row.area[data-id='living_room']");
+    expect(header.classList.contains("empty")).toBe(false);
+    expect(header.classList.contains("off")).toBe(false);
+  });
+
+  test("the 'empty' class follows the active category filter", async () => {
+    el = await mount({
+      areaConfigs: {
+        living_room: { scenes: [{ when: {}, actions: [], category: "a" }] },
+      },
+    });
+    // Filtered to the scene's own category: the scope has a matching rule.
+    el._filterCategory = "a";
+    await el.updateComplete;
+    expect(headerOf(el, ".scope-row.area[data-id='living_room']").classList.contains("empty")).toBe(
+      false,
+    );
+    // Filtered to a category the scope has no scene in: faded.
+    el._filterCategory = "b";
+    await el.updateComplete;
+    expect(headerOf(el, ".scope-row.area[data-id='living_room']").classList.contains("empty")).toBe(
+      true,
+    );
+  });
+
+  test("a switched-off empty scope reads 'off', not 'empty' (off takes precedence)", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.bedroom_ambience": { state: "off" } },
+    });
+    const header = headerOf(el, ".scope-row.area[data-id='bedroom']");
+    expect(header.classList.contains("off")).toBe(true);
+    expect(header.classList.contains("empty")).toBe(false);
+  });
+
   // --- apply-scenes / run-scene-actions ----------------------------------------
 
   async function pickScopeKebab(target: any, rowSelector: string, action: string) {

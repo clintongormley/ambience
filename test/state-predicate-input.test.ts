@@ -1300,6 +1300,55 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.states).toEqual(["on"]);
   });
 
+  test("flipping the op of a still-blank atom keeps the row (only an emptied atom is dropped)", async () => {
+    // A freshly-added blank atom whose op the user changes before picking an
+    // entity must NOT vanish — removal only applies when an atom that HAD
+    // content is emptied.
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "x", states: ["on"] },
+        { kind: "is", entity_id: "", states: [] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el.dispatchEvent(
+      new CustomEvent("node-change", {
+        detail: { path: [1], value: { kind: "is_not", entity_id: "", states: [] } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(2);
+    expect(captured.items[1].kind).toBe("is_not");
+  });
+
+  test("clearing the open atom's entity resets openPath (no stale index opens a sibling)", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+        { kind: "is", entity_id: "c", states: ["on"] },
+      ],
+    });
+    el._setOpen([1]); // user is editing the middle condition
+    el.dispatchEvent(
+      new CustomEvent("node-change", {
+        detail: { path: [1], value: { kind: "is", entity_id: "", states: [], attribute: null } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    // The emptied (open) atom is removed; openPath must not still be [1], which
+    // would now point at — and expand — the shifted sibling.
+    expect(el._openPath).toBeNull();
+  });
+
   test("node-wrap event dispatched from a child propagates to the host and calls _wrapAt", async () => {
     // Covers _onNodeWrap (lines 323-326) via event dispatch.
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });

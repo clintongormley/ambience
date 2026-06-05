@@ -77,6 +77,74 @@ export function deriveActionLabel(serviceId: string): string {
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
+/** HA's snake_case → "Sentence case" attribute formatter, with the same
+ *  acronym fixups HA applies. Used as a fallback when the running HA doesn't
+ *  expose `hass.formatEntityAttributeName`. */
+export function formatAttributeName(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\bid\b/g, "ID")
+    .replace(/\bip\b/g, "IP")
+    .replace(/\bmac\b/g, "MAC")
+    .replace(/\bgps\b/g, "GPS")
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/** Human-readable label for an entity attribute. Prefers HA's own translation-
+ *  aware formatter (so it matches the automation editor / more-info dialog and
+ *  the state condition's Where dropdown), falling back to
+ *  {@link formatAttributeName}. `stateObj` is the entity's hass.states entry,
+ *  needed by HA's formatter; pass undefined to force the fallback. */
+export function stateAttributeLabel(
+  hass: HassLike | undefined,
+  stateObj: unknown,
+  attribute: string,
+): string {
+  const fmt = (
+    hass as { formatEntityAttributeName?: (s: unknown, a: string) => string } | undefined
+  )?.formatEntityAttributeName;
+  if (fmt && stateObj) {
+    const label = fmt(stateObj, attribute);
+    if (label) return label;
+  }
+  return formatAttributeName(attribute);
+}
+
+/** Human-readable label for a candidate state/attribute VALUE. Mirrors
+ *  {@link stateAttributeLabel} but for the right-hand side of a comparison:
+ *  prefers HA's `formatEntityAttributeValue` (attribute mode) or
+ *  `formatEntityState` (state mode) so a stored raw value (e.g. `heat_cool`)
+ *  displays the way HA shows it (`Heat/cool`). `stateObj` is the entity's
+ *  hass.states entry. Falls back to the raw value verbatim. */
+export function stateValueLabel(
+  hass: HassLike | undefined,
+  stateObj: unknown,
+  attribute: string | null | undefined,
+  value: string,
+): string {
+  if (!stateObj) return value;
+  const h = hass as
+    | {
+        formatEntityState?: (s: unknown, state?: string) => string;
+        formatEntityAttributeValue?: (s: unknown, attr: string, v?: string) => string;
+      }
+    | undefined;
+  if (attribute) {
+    const fmt = h?.formatEntityAttributeValue;
+    if (fmt) {
+      const label = fmt(stateObj, attribute, value);
+      if (label) return label;
+    }
+  } else {
+    const fmt = h?.formatEntityState;
+    if (fmt) {
+      const label = fmt(stateObj, value);
+      if (label) return label;
+    }
+  }
+  return value;
+}
+
 export function conditionLabel(hass: HassLike | undefined, name: string): string {
   return _resolve(hass, `component.ambience.condition.${name}`, _friendlyFallback(name));
 }

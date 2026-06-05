@@ -271,10 +271,10 @@ describe("ambience-scenes-list", () => {
     expect(el.shadowRoot.querySelector(".summary")?.textContent).toContain("movie");
   });
 
-  test("summary shows 0 actions for empty actions", async () => {
+  test("summary flags a no-op (no actions) as 'NOOP - 0 actions'", async () => {
     const r: Scene = { name: "x", when: {}, actions: [] };
     el = await mount([r]);
-    expect(el.shadowRoot.querySelector(".summary")?.textContent).toContain("0 actions");
+    expect(el.shadowRoot.querySelector(".summary")?.textContent).toContain("NOOP - 0 actions");
   });
 
   test("summary shows period label for time_of_day predicate", async () => {

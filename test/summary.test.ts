@@ -721,6 +721,18 @@ test("summariseState keeps the NOT prefix for a numeric clause (inline reads bad
   ).toBe("NOT sensor.t ≥ 20");
 });
 
+test("summariseState keeps the NOT prefix for an is_not clause (avoids a double negative)", () => {
+  expect(
+    summariseState(
+      {
+        kind: "not",
+        item: { kind: "is_not", entity_id: "a", states: ["on"] },
+      },
+      {},
+    ),
+  ).toBe("NOT a is not on");
+});
+
 test("summariseState still parenthesises NOT around a group (so the scope is unambiguous)", () => {
   expect(
     summariseState(

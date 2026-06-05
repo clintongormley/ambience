@@ -1,5 +1,6 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
 
 import type { AreaRegistryEvent, FloorRegistryEvent, HassConnection } from "../api.js";
 import {
@@ -1179,8 +1180,14 @@ export class AmbienceScopesView extends LitElement {
       ${this._renderBanners()}
       ${this._renderFilter()}
       <ul>
-        ${this._orderedScopeRows(floorPrefix, areaPrefix).map((r) =>
-          this._renderScopeRow(r.scope, r.name, r.cfg, r.rowClass),
+        ${repeat(
+          this._orderedScopeRows(floorPrefix, areaPrefix),
+          // Key by scope identity so reordering (e.g. a switched-off scope
+          // sinking to the end) moves each row's DOM with its scope rather than
+          // reusing nodes positionally — otherwise a toggle's checked state can
+          // bleed onto whichever scope inherits its old position.
+          (r) => scopeKey(r.scope),
+          (r) => this._renderScopeRow(r.scope, r.name, r.cfg, r.rowClass),
         )}
         ${
           this._areas.length === 0

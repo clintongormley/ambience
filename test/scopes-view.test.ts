@@ -1189,6 +1189,34 @@ describe("ambience-scopes-view", () => {
     ]);
   });
 
+  test("toggling a scope off does not corrupt a sibling toggle when the list reorders", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: {
+        "switch.living_room_ambience": { state: "on" },
+        "switch.bedroom_ambience": { state: "on" },
+      },
+    });
+    // Both areas on, so living_room precedes bedroom in the base order.
+    const lr = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='living_room']"));
+    expect(lr.checked).toBe(true);
+
+    // User flips living_room off: the browser unchecks that toggle, the change
+    // handler fires, and HA then reports the new "off" state.
+    lr.checked = false;
+    lr.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    el.hass = makeFakeHass({
+      "switch.living_room_ambience": { state: "off" },
+      "switch.bedroom_ambience": { state: "on" },
+    });
+    await el.updateComplete;
+
+    // living_room sinks below bedroom. Bedroom is still on and its toggle must
+    // still read on — its DOM must not be confused with living_room's old node.
+    const br = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
+    expect(br.checked).toBe(true);
+  });
+
   test("renders no toggle for a scope with no known switch entity", async () => {
     el = await mount({
       switches: [

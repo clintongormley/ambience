@@ -215,7 +215,9 @@ export class AmbienceStateExprAtom extends LitElement {
    *  storage key at the data/emit boundary (these maps). */
   private _attrLabelMaps(): AttrLabelMaps {
     const attrs = this._knownAttributesFor(this.value.entity_id);
-    const key = `${this.value.entity_id}|${attrs.join(",")}`;
+    // Include the active language so a mid-edit locale switch re-derives labels.
+    const lang = (this.hass as { language?: string } | undefined)?.language ?? "";
+    const key = `${lang}|${this.value.entity_id}|${attrs.join(",")}`;
     if (this._attrMapsCache?.key === key) return this._attrMapsCache.maps;
     const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
     const keyToLabel = new Map<string, string>();
@@ -375,7 +377,8 @@ export class AmbienceStateExprAtom extends LitElement {
   private _valueLabelMaps(): ValueLabelMaps {
     const attr = this.value.attribute;
     const options = this._rawValueOptions();
-    const key = `${this.value.entity_id}|${attr ?? ""}|${options.join(",")}`;
+    const lang = (this.hass as { language?: string } | undefined)?.language ?? "";
+    const key = `${lang}|${this.value.entity_id}|${attr ?? ""}|${options.join(",")}`;
     if (this._valueMapsCache?.key === key) return this._valueMapsCache.maps;
     const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
     const rawToLabel = new Map<string, string>();

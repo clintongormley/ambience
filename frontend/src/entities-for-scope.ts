@@ -7,6 +7,13 @@ export function scopeKey(scope: Scope): string {
   return scope.kind === "house" ? "house" : `${scope.kind}:${scope.id}`;
 }
 
+/** Composite key identifying the (scope, category) pair within which scene
+ *  names must be unique. The NUL separator can't appear in a scope or category
+ *  id, so the two parts can't collide. */
+export function sceneNameKey(scope: Scope, category: string): string {
+  return `${scopeKey(scope)}\u0000${category}`;
+}
+
 /**
  * HA service target metadata. Mirrors the shape of the `target` field in
  * HA's services.yaml descriptions (and what HA returns from

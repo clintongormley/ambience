@@ -67,10 +67,26 @@ export class AmbienceFrontend extends LitElement {
 
   @property({ attribute: false }) hass!: HassConnection;
   @state() private _settingsOpen = false;
+  @state() private _settingsTab?: "ambience" | "conditions" | "actions";
+
+  // Deep-link from a child view (e.g. a scopes-view empty-state banner) asking
+  // to open Settings on a specific tab. Composed so it crosses the shadow
+  // boundary up to this host.
+  private _onOpenSettings = (e: Event) => {
+    const tab = (e as CustomEvent<{ tab?: "ambience" | "conditions" | "actions" }>).detail?.tab;
+    this._settingsTab = tab;
+    this._settingsOpen = true;
+  };
 
   override connectedCallback() {
     super.connectedCallback();
     watchHaComponents(this);
+    this.addEventListener("ambience-open-settings", this._onOpenSettings);
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback();
+    this.removeEventListener("ambience-open-settings", this._onOpenSettings);
   }
 
   override render() {
@@ -85,6 +101,7 @@ export class AmbienceFrontend extends LitElement {
         <button
           class="settings-btn"
           @click=${() => {
+            this._settingsTab = undefined;
             this._settingsOpen = true;
           }}
           aria-label=${localize(this.hass, "ui.tab_settings", "Settings")}
@@ -94,6 +111,7 @@ export class AmbienceFrontend extends LitElement {
       <ambience-scopes-view .hass=${this.hass}></ambience-scopes-view>
       <ambience-settings-modal
         .hass=${this.hass}
+        .initialTab=${this._settingsTab}
         ?open=${this._settingsOpen}
         @close=${() => {
           this._settingsOpen = false;

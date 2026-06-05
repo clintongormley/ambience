@@ -53,6 +53,19 @@ describe("ambience-settings-modal", () => {
     expect(el.shadowRoot.querySelector("ambience-settings-view")).not.toBeNull();
   });
 
+  test("forwards initialTab to the settings view", async () => {
+    el = document.createElement("ambience-settings-modal");
+    el.hass = {};
+    el.open = true;
+    el.initialTab = "conditions";
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const view = el.shadowRoot.querySelector("ambience-settings-view");
+    expect(view.initialTab).toBe("conditions");
+  });
+
   test("emits close when the ✕ button is clicked", async () => {
     el = await mount(true);
     let closed = false;

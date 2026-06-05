@@ -63,7 +63,17 @@ export class AmbienceSettingsView extends LitElement {
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
+  /** Optional initial tab (set by the modal when deep-linked from a banner).
+   *  Absent → defaults to "ambience". */
+  @property({ attribute: false }) initialTab?: Tab;
   @state() private _tab: Tab = "ambience";
+
+  protected override willUpdate(changed: Map<string, unknown>) {
+    // Seed the active tab from `initialTab` when supplied. The modal recreates
+    // this view on each open, so this runs fresh per open; manual tab clicks
+    // afterward aren't clobbered (initialTab doesn't change between renders).
+    if (changed.has("initialTab") && this.initialTab) this._tab = this.initialTab;
+  }
 
   override render() {
     return html`

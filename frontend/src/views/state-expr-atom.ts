@@ -1,12 +1,46 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { getKnownStates, type HassConnection } from "../api.js";
+import { getKnownAttributeValues, getKnownStates, type HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { localize, stateOpLabel } from "../i18n.js";
 import type { StateAtom, StateForDuration } from "../types.js";
 import { statesMap } from "./hass-states.js";
+
+/** Minimal shape of an HA state object as read from `hass.states`. */
+type StateObj = { state?: string; attributes?: Record<string, unknown> };
+
+/** HA's snake_case → "Sentence case" attribute formatter, with the same
+ *  acronym fixups HA applies. Used as a fallback when the running HA doesn't
+ *  expose `hass.formatEntityAttributeName`. */
+function formatAttributeName(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\bid\b/g, "ID")
+    .replace(/\bip\b/g, "IP")
+    .replace(/\bmac\b/g, "MAC")
+    .replace(/\bgps\b/g, "GPS")
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/** Human-readable label for an attribute name. Prefers HA's own translation-
+ *  aware formatter (so it matches the automation editor / more-info dialog),
+ *  falling back to `formatAttributeName`. */
+function attributeLabel(
+  hass: HassConnection | undefined,
+  stateObj: StateObj | undefined,
+  attribute: string,
+): string {
+  const fmt = (
+    hass as { formatEntityAttributeName?: (s: unknown, a: string) => string } | undefined
+  )?.formatEntityAttributeName;
+  if (fmt && stateObj) {
+    const label = fmt(stateObj, attribute);
+    if (label) return label;
+  }
+  return formatAttributeName(attribute);
+}
 
 /**
  * Single atom of a state-predicate tree, laid out like HA's automation State
@@ -63,19 +97,33 @@ export class AmbienceStateExprAtom extends LitElement {
   };
 
   @state() private _knownStates: string[] = [];
+  @state() private _knownAttributeValues: string[] = [];
 
   override async updated(changed: Map<string, unknown>): Promise<void> {
-    if (changed.has("value")) {
-      const prev = changed.get("value") as StateAtom | undefined;
-      const prevId = prev?.entity_id;
-      const curId = this.value.entity_id;
-      if (curId && curId !== prevId && this.hass) {
+    if (!changed.has("value")) return;
+    const prev = changed.get("value") as StateAtom | undefined;
+    const curId = this.value.entity_id;
+    if (curId && curId !== prev?.entity_id && this.hass) {
+      try {
+        this._knownStates = (await getKnownStates(this.hass, curId)).states;
+      } catch {
+        this._knownStates = [];
+      }
+    }
+    // Attribute values are fetched from the backend (single source of truth with
+    // known states) whenever the entity or the chosen attribute changes.
+    const attr = this.value.attribute;
+    if (curId !== prev?.entity_id || attr !== prev?.attribute) {
+      if (curId && attr && this.hass) {
         try {
-          const r = await getKnownStates(this.hass, curId);
-          this._knownStates = r.states;
+          this._knownAttributeValues = (
+            await getKnownAttributeValues(this.hass, curId, attr)
+          ).values;
         } catch {
-          this._knownStates = [];
+          this._knownAttributeValues = [];
         }
+      } else if (this._knownAttributeValues.length) {
+        this._knownAttributeValues = [];
       }
     }
   }
@@ -187,6 +235,7 @@ export class AmbienceStateExprAtom extends LitElement {
    *  user can still type an attribute name we don't know about. */
   _attributeSchema(): HaFormSchema[] {
     const attrs = this._knownAttributesFor(this.value.entity_id);
+    const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
     return [
       {
         name: "attribute",
@@ -196,14 +245,15 @@ export class AmbienceStateExprAtom extends LitElement {
             custom_value: true,
             // Sentinel value and label are both the literal word 'State' so
             // ha-form's custom_value combobox displays "State" rather than an
-            // internal key. Localizing the label would diverge value-from-text
-            // when custom_value is on, so we leave it untranslated here.
+            // internal key.
             options: [
               {
                 value: AmbienceStateExprAtom._STATE_SENTINEL,
                 label: AmbienceStateExprAtom._STATE_SENTINEL,
               },
-              ...attrs.map((a) => ({ value: a, label: a })),
+              // Value stays the raw attribute key (storage); the label is
+              // humanised so the dropdown reads like the automation editor.
+              ...attrs.map((a) => ({ value: a, label: attributeLabel(this.hass, stateObj, a) })),
             ],
           },
         },
@@ -277,20 +327,11 @@ export class AmbienceStateExprAtom extends LitElement {
     ];
   }
 
-  /** Current value of the configured target — entity.attributes[attribute]
-   *  when in attribute mode, undefined otherwise (state mode uses the
-   *  fetched _knownStates list instead). */
-  private _currentAttributeValue(): unknown {
-    if (!this.value.attribute) return undefined;
-    return statesMap(this.hass)[this.value.entity_id]?.attributes?.[this.value.attribute];
-  }
-
   /** ha-form schema for a single value row.
    *    Numeric ops      → number selector.
-   *    Attribute mode   → combobox seeded with the attribute's current
-   *                       value (one option); custom_value lets the user
-   *                       type others. Empty list when the attribute is
-   *                       unavailable.
+   *    Attribute mode   → combobox seeded with the attribute's possible values
+   *                       (fetched from the backend, like the automation
+   *                       editor); custom_value lets the user type others.
    *    State mode       → combobox seeded with the entity's known states. */
   _valueSchema(): HaFormSchema[] {
     if (this._isNumericOp(this.value.kind)) {
@@ -303,8 +344,9 @@ export class AmbienceStateExprAtom extends LitElement {
     }
     let options: string[];
     if (this.value.attribute) {
-      const v = this._currentAttributeValue();
-      options = v === undefined || v === null ? [] : [String(v)];
+      // Possible values come from the backend (single source of truth with the
+      // known-states list), already including the current value.
+      options = this._knownAttributeValues;
     } else {
       options = this._knownStates;
     }

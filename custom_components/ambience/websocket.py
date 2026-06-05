@@ -33,7 +33,7 @@ from .service import (
 )
 from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import condition_priority
-from .state_options import known_states_for
+from .state_options import known_attribute_values_for, known_states_for
 from .store import CategoryInUseError, LastCategoryError
 from .trace import buffered_unit_to_dict
 from .websocket_helpers import (
@@ -119,6 +119,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_weather_config_list)
     websocket_api.async_register_command(hass, _ws_weather_config_save)
     websocket_api.async_register_command(hass, _ws_state_known_states)
+    websocket_api.async_register_command(hass, _ws_state_known_attribute_values)
     websocket_api.async_register_command(hass, _ws_switch_defaults_list)
     websocket_api.async_register_command(hass, _ws_switch_defaults_save)
     websocket_api.async_register_command(hass, _ws_switches_list)
@@ -744,6 +745,24 @@ async def _ws_state_known_states(
 ) -> None:
     states = known_states_for(hass, msg["entity_id"])
     connection.send_result(msg["id"], {"states": states})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/state/known_attribute_values",
+        vol.Required("entity_id"): str,
+        vol.Required("attribute"): str,
+    }
+)
+@websocket_api.async_response
+async def _ws_state_known_attribute_values(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    values = known_attribute_values_for(hass, msg["entity_id"], msg["attribute"])
+    connection.send_result(msg["id"], {"values": values})
 
 
 @websocket_api.require_admin

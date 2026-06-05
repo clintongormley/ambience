@@ -55,6 +55,8 @@ export class AmbienceSettingsModal extends LitElement {
 
   @property({ attribute: false }) hass!: HassConnection;
   @property({ type: Boolean, reflect: true }) open = false;
+  /** Tab to open on (forwarded to the settings view). Absent → "ambience". */
+  @property({ attribute: false }) initialTab?: "ambience" | "conditions" | "actions";
 
   private _onKeydown = (e: KeyboardEvent): void => {
     if (this.open && e.key === "Escape") this._close();
@@ -96,7 +98,10 @@ export class AmbienceSettingsModal extends LitElement {
           <button class="close" @click=${this._close} aria-label="Close">✕</button>
         </div>
         <div class="body">
-          <ambience-settings-view .hass=${this.hass}></ambience-settings-view>
+          <ambience-settings-view
+            .hass=${this.hass}
+            .initialTab=${this.initialTab}
+          ></ambience-settings-view>
         </div>
       </div>
     `;

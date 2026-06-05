@@ -3,6 +3,7 @@ import "../frontend/src/views/scopes-view";
 import type {
   AreaListItem,
   ConditionInfo,
+  DayConfig,
   ExposedAction,
   FloorListItem,
   PeriodStoreView,
@@ -11,6 +12,7 @@ import type {
   Scope,
   ScopeConfig,
   ScopeSwitch,
+  WeatherConfig,
 } from "../frontend/src/types";
 
 // Mock the api module — same shape as test/areas-list-view.test.ts but with
@@ -79,6 +81,9 @@ type MountOpts = {
   houseConfig?: ScopeConfig;
   switches?: ScopeSwitch[];
   states?: Record<string, { state?: string }>;
+  actions?: ExposedAction[];
+  weatherConfig?: WeatherConfig;
+  dayConfig?: DayConfig;
 };
 
 async function mount(opts: MountOpts = {}): Promise<any> {
@@ -99,8 +104,14 @@ async function mount(opts: MountOpts = {}): Promise<any> {
   vi.mocked(api.getHouse).mockResolvedValue(houseConfig);
   vi.mocked(api.listSwitches).mockResolvedValue(opts.switches ?? []);
   vi.mocked(api.listConditions).mockResolvedValue(conditions);
-  vi.mocked(api.listExposedActions).mockResolvedValue(actions);
+  vi.mocked(api.listExposedActions).mockResolvedValue(opts.actions ?? actions);
   vi.mocked(api.listPeriods).mockResolvedValue(periods);
+  vi.mocked(api.getWeatherConfig).mockResolvedValue(
+    opts.weatherConfig ?? { entity: null, groups: [] },
+  );
+  vi.mocked(api.getDayConfig).mockResolvedValue(
+    opts.dayConfig ?? { workday_sensor: null, workday_calendar: null },
+  );
   vi.mocked(api.saveArea).mockResolvedValue({ ok: true, config: baseConfig });
   vi.mocked(api.saveFloor).mockResolvedValue({ ok: true, config: baseConfig });
   vi.mocked(api.saveHouse).mockResolvedValue({ ok: true, config: baseConfig });
@@ -122,6 +133,7 @@ describe("ambience-scopes-view", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -459,6 +471,74 @@ describe("ambience-scopes-view", () => {
     );
   });
 
+  // --- empty-state banners -------------------------------------------------
+
+  test("shows the no-actions banner when no actions are configured", async () => {
+    el = await mount({ actions: [] });
+    expect(el.shadowRoot.querySelector('[data-test="no-actions-banner"]')).not.toBeNull();
+    // The optional conditions hint is sequenced AFTER an action exists.
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+  });
+
+  test("the no-actions banner button opens settings on the actions tab", async () => {
+    el = await mount({ actions: [] });
+    let detail: any = null;
+    el.addEventListener("ambience-open-settings", (e: CustomEvent) => {
+      detail = e.detail;
+    });
+    (el.shadowRoot.querySelector('[data-test="setup-actions-btn"]') as HTMLElement).click();
+    expect(detail).toEqual({ tab: "actions" });
+  });
+
+  test("hides the no-actions banner once at least one action exists", async () => {
+    el = await mount(); // default mock has one action
+    expect(el.shadowRoot.querySelector('[data-test="no-actions-banner"]')).toBeNull();
+  });
+
+  test("shows the conditions hint when actions exist but weather/workday are unconfigured", async () => {
+    el = await mount();
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
+  });
+
+  test("shows the conditions hint when only workday is unconfigured", async () => {
+    el = await mount({
+      weatherConfig: { entity: "weather.home", groups: [] },
+      dayConfig: { workday_sensor: null, workday_calendar: null },
+    });
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
+  });
+
+  test("the conditions hint button opens settings on the conditions tab", async () => {
+    el = await mount();
+    let detail: any = null;
+    el.addEventListener("ambience-open-settings", (e: CustomEvent) => {
+      detail = e.detail;
+    });
+    (el.shadowRoot.querySelector('[data-test="setup-conditions-btn"]') as HTMLElement).click();
+    expect(detail).toEqual({ tab: "conditions" });
+  });
+
+  test("hides the conditions hint when weather and workday are both configured", async () => {
+    el = await mount({
+      weatherConfig: { entity: "weather.home", groups: [] },
+      dayConfig: { workday_sensor: "binary_sensor.workday", workday_calendar: null },
+    });
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+  });
+
+  test("dismissing the conditions hint hides it and persists across remounts", async () => {
+    el = await mount();
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
+    (el.shadowRoot.querySelector('[data-test="dismiss-conditions-hint"]') as HTMLElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+
+    // Persisted via localStorage: a fresh mount stays dismissed.
+    el.remove();
+    el = await mount();
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+  });
+
   // --- duplicate ----------------------------------------------------------
 
   test("duplicate opens the editor with a clone and saves nothing until confirmed", async () => {
@@ -480,6 +560,51 @@ describe("ambience-scopes-view", () => {
     expect(editor.scene).toEqual(scene); // equal-by-value clone
     expect(editor.scene).not.toBe(scene); // but not the same object
     expect(api.saveArea).not.toHaveBeenCalled();
+  });
+
+  test("editor gets sibling scene names for uniqueness, excluding the edited scene", async () => {
+    const scenes: Scene[] = [
+      { name: "Movie", when: {}, actions: [], category: "a" },
+      { name: "Dinner", when: {}, actions: [], category: "a" },
+      { name: "Bright", when: {}, actions: [], category: "b" },
+    ];
+    el = await mount({ areaConfigs: { living_room: { scenes } } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-scenes-list")!
+      .dispatchEvent(
+        new CustomEvent("edit-scene", { detail: { index: 0 }, bubbles: true, composed: true }),
+      );
+    await el.updateComplete;
+
+    const editor: any = el.shadowRoot.querySelector("ambience-scene-editor");
+    const takenA = editor.takenNames.get("area:living_room\u0000a");
+    // Sibling in the same category is present; the edited scene itself is not.
+    expect(takenA.has("dinner")).toBe(true);
+    expect(takenA.has("movie")).toBe(false);
+    // A different category is keyed separately.
+    expect(editor.takenNames.get("area:living_room\u0000b").has("bright")).toBe(true);
+  });
+
+  test("editor gets all names (none excluded) when adding a new scene", async () => {
+    const scenes: Scene[] = [{ name: "Movie", when: {}, actions: [], category: "a" }];
+    el = await mount({ areaConfigs: { living_room: { scenes } } });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-scenes-list")!
+      .dispatchEvent(new CustomEvent("add-scene", { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    const editor: any = el.shadowRoot.querySelector("ambience-scene-editor");
+    expect(editor.takenNames.get("area:living_room\u0000a").has("movie")).toBe(true);
   });
 
   test("duplicating a pinned scene drops the pin and its fixed priority", async () => {
@@ -511,7 +636,7 @@ describe("ambience-scopes-view", () => {
     expect(scene.pinned).toBe(true);
   });
 
-  test("duplicate makes the destination area directly editable", async () => {
+  test("duplicate opens the editor without auto-opening the destination", async () => {
     const scene: Scene = { name: "Orig", when: {}, actions: [], category: "a" };
     el = await mount({ areaConfigs: { living_room: { scenes: [scene] } } });
     const row = el.shadowRoot.querySelector(
@@ -526,25 +651,13 @@ describe("ambience-scopes-view", () => {
     await el.updateComplete;
 
     const editor: any = el.shadowRoot.querySelector("ambience-scene-editor");
-    expect(editor.autoEditScope).toBe(true);
-  });
-
-  test("editing an existing scene does not auto-open the destination", async () => {
-    const scene: Scene = { name: "Orig", when: {}, actions: [], category: "a" };
-    el = await mount({ areaConfigs: { living_room: { scenes: [scene] } } });
-    const row = el.shadowRoot.querySelector(
-      ".scope-row.area[data-id='living_room']",
-    ) as HTMLElement;
-    (row.querySelector(".scope-header") as HTMLElement).click();
-    await el.updateComplete;
-    const scenesList = row.querySelector("ambience-scenes-list")!;
-    scenesList.dispatchEvent(
-      new CustomEvent("edit-scene", { detail: { index: 0 }, bubbles: true, composed: true }),
-    );
-    await el.updateComplete;
-
-    const editor: any = el.shadowRoot.querySelector("ambience-scene-editor");
-    expect(editor.autoEditScope).toBe(false);
+    await editor.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await editor.updateComplete;
+    // Editor is open with the clone, but the destination/scope slot stays
+    // collapsed — duplicating should not auto-expand the scope picker.
+    expect(editor.open).toBe(true);
+    expect(editor.shadowRoot.querySelector(".scope-option")).toBeNull();
   });
 
   test("saveArea error is displayed", async () => {
@@ -1020,6 +1133,60 @@ describe("ambience-scopes-view", () => {
     toggleIn(row).click();
     await el.updateComplete;
     expect(row.querySelector(".scope-body")).toBeFalsy();
+  });
+
+  function scopeRowIds(e: any): string[] {
+    return [...e.shadowRoot.querySelectorAll(".scope-row")].map((r: Element) => {
+      const cls = r.classList.contains("house")
+        ? "house"
+        : r.classList.contains("floor")
+          ? "floor"
+          : "area";
+      return `${cls}:${r.getAttribute("data-id") || "house"}`;
+    });
+  }
+
+  test("scopes with the switch off sort to the end of the list (stable otherwise)", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: {
+        "switch.global_ambience": { state: "on" },
+        "switch.upstairs_floor_ambience": { state: "on" },
+        "switch.living_room_ambience": { state: "on" },
+        "switch.ground_floor_ambience": { state: "off" },
+        "switch.bedroom_ambience": { state: "off" },
+      },
+    });
+    // Base order is house, floor:ground, floor:upstairs, area:living_room,
+    // area:bedroom. The two "off" scopes (ground, bedroom) sink to the end,
+    // keeping their relative order; the "on" ones keep theirs.
+    expect(scopeRowIds(el)).toEqual([
+      "house:house",
+      "floor:upstairs",
+      "area:living_room",
+      "floor:ground",
+      "area:bedroom",
+    ]);
+  });
+
+  test("scopes keep their base order when no switch is off", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: {
+        "switch.global_ambience": { state: "on" },
+        "switch.ground_floor_ambience": { state: "on" },
+        "switch.upstairs_floor_ambience": { state: "on" },
+        "switch.living_room_ambience": { state: "on" },
+        "switch.bedroom_ambience": { state: "on" },
+      },
+    });
+    expect(scopeRowIds(el)).toEqual([
+      "house:house",
+      "floor:ground",
+      "floor:upstairs",
+      "area:living_room",
+      "area:bedroom",
+    ]);
   });
 
   test("renders no toggle for a scope with no known switch entity", async () => {

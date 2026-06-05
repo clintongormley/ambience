@@ -16,6 +16,7 @@ import type {
   DayItem,
   DayPredicate,
   ExposedAction,
+  OccupancyPredicate,
   PeoplePredicate,
   PeriodStoreView,
   Scene,
@@ -106,6 +107,9 @@ export function summariseCondition(
   }
   if (conditionName === "people") {
     return summarisePeople(predicate as PeoplePredicate, ctx);
+  }
+  if (conditionName === "occupancy") {
+    return summariseOccupancy(predicate as OccupancyPredicate, ctx);
   }
   if (conditionName === "template") {
     return summariseTemplate(predicate as TemplatePredicate, ctx);
@@ -404,6 +408,34 @@ function _entityDisplayName(ctx: ConditionContext, entity_id: string): string {
  *  friendly_name when set, else the raw entity_id. */
 export function entityDisplayName(hass: HassLike | undefined, entity_id: string): string {
   return _entityDisplayName({ hass }, entity_id);
+}
+
+/**
+ * "<Sensor> is occupied/vacant" for one sensor, or
+ * "any of (A, B) occupied" / "all of (A, B) vacant" for several, with an
+ * optional "for ≥<dur>" suffix. Sensor names use friendly_name when set.
+ */
+export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionContext = {}): string {
+  if (pred == null || !pred.sensors?.length) return localize(ctx.hass, "ui.summary_any", "any");
+  const names = pred.sensors.map((id) => entityName(ctx.hass as HassWithStates | undefined, id));
+  const verb =
+    pred.occupied === false
+      ? localize(ctx.hass, "occupancy_summary.vacant", "vacant")
+      : localize(ctx.hass, "occupancy_summary.occupied", "occupied");
+  let head: string;
+  if (names.length === 1) {
+    head = `${names[0]} is ${verb}`;
+  } else {
+    const q =
+      pred.quant === "all"
+        ? localize(ctx.hass, "occupancy_summary.all_of", "all of")
+        : localize(ctx.hass, "occupancy_summary.any_of", "any of");
+    head = `${q} (${names.join(", ")}) ${verb}`;
+  }
+  if (pred.for && (pred.for.h !== 0 || pred.for.m !== 0 || pred.for.s !== 0)) {
+    return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
+  }
+  return head;
 }
 
 export function summariseState(pred: StatePredicate, ctx: ConditionContext = {}): string {

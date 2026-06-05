@@ -613,6 +613,52 @@ test("summariseCondition delegates weather", () => {
   expect(summariseCondition("weather", { groups: ["wet"], thresholds: [] }, ctx)).toBe("Wet");
 });
 
+test("summariseOccupancy: single sensor occupied", () => {
+  const hass = {
+    states: { "binary_sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+  } as any;
+  expect(
+    summariseCondition(
+      "occupancy",
+      { sensors: ["binary_sensor.lounge"], occupied: true },
+      { hass },
+    ),
+  ).toBe("Lounge is occupied");
+});
+
+test("summariseOccupancy: vacant with for", () => {
+  const hass = {
+    states: { "binary_sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+  } as any;
+  expect(
+    summariseCondition(
+      "occupancy",
+      { sensors: ["binary_sensor.lounge"], occupied: false, for: { h: 0, m: 5, s: 0 } },
+      { hass },
+    ),
+  ).toBe("Lounge is vacant for ≥5m");
+});
+
+test("summariseOccupancy: multiple sensors with quant", () => {
+  const hass = {
+    states: {
+      "binary_sensor.a": { attributes: { friendly_name: "Lounge" } },
+      "binary_sensor.b": { attributes: { friendly_name: "Hall" } },
+    },
+  } as any;
+  expect(
+    summariseCondition(
+      "occupancy",
+      { sensors: ["binary_sensor.a", "binary_sensor.b"], occupied: true, quant: "all" },
+      { hass },
+    ),
+  ).toBe("all of (Lounge, Hall) occupied");
+});
+
+test("summariseOccupancy: null is 'any'", () => {
+  expect(summariseCondition("occupancy", null, {})).toBe("(any)");
+});
+
 test("summariseState renders a single atom", () => {
   expect(
     summariseState(

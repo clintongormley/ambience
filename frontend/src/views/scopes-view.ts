@@ -991,8 +991,8 @@ export class AmbienceScopesView extends LitElement {
 
   /** Selectable destinations for the scene editor: house, then floors, then areas. */
   private get _scopeOptions(): ScopeOption[] {
-    const floorPrefix = localize(this.hass, "ui.scope_floor_prefix", "Floor: ");
-    const areaPrefix = localize(this.hass, "ui.scope_area_prefix", "Area: ");
+    // Scope kind is conveyed visually (grouping/icons), so the "Floor:"/"Area:"
+    // text prefixes are redundant — show bare names.
     return [
       {
         scope: { kind: "house" },
@@ -1000,11 +1000,11 @@ export class AmbienceScopesView extends LitElement {
       },
       ...this._floors.map((f) => ({
         scope: { kind: "floor" as const, id: f.floor_id },
-        label: `${floorPrefix}${f.name}`,
+        label: f.name,
       })),
       ...this._areas.map((a) => ({
         scope: { kind: "area" as const, id: a.area_id },
-        label: `${areaPrefix}${a.name}`,
+        label: a.name,
       })),
     ];
   }
@@ -1123,7 +1123,7 @@ export class AmbienceScopesView extends LitElement {
   /** The scope rows in display order: house, then floors, then areas — but with
    *  switched-off scopes stably moved to the end, so the active scopes surface
    *  at the top of the list. */
-  private _orderedScopeRows(floorPrefix: string, areaPrefix: string): ScopeRow[] {
+  private _orderedScopeRows(): ScopeRow[] {
     const rows: ScopeRow[] = [
       {
         scope: { kind: "house" },
@@ -1137,7 +1137,7 @@ export class AmbienceScopesView extends LitElement {
       if (cfg) {
         rows.push({
           scope: { kind: "floor", id: f.floor_id },
-          name: `${floorPrefix}${f.name}`,
+          name: f.name,
           cfg,
           rowClass: "floor",
         });
@@ -1148,7 +1148,7 @@ export class AmbienceScopesView extends LitElement {
       if (cfg) {
         rows.push({
           scope: { kind: "area", id: a.area_id },
-          name: `${areaPrefix}${a.name}`,
+          name: a.name,
           cfg,
           rowClass: "area",
         });
@@ -1173,15 +1173,13 @@ export class AmbienceScopesView extends LitElement {
   }
 
   override render() {
-    const floorPrefix = localize(this.hass, "ui.scope_floor_prefix", "Floor: ");
-    const areaPrefix = localize(this.hass, "ui.scope_area_prefix", "Area: ");
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
       ${this._renderBanners()}
       ${this._renderFilter()}
       <ul>
         ${repeat(
-          this._orderedScopeRows(floorPrefix, areaPrefix),
+          this._orderedScopeRows(),
           // Key by scope identity so reordering (e.g. a switched-off scope
           // sinking to the end) moves each row's DOM with its scope rather than
           // reusing nodes positionally — otherwise a toggle's checked state can

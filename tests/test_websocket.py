@@ -1593,6 +1593,35 @@ async def test_state_known_states_missing_entity_returns_empty(
     assert resp["result"]["states"] == []
 
 
+async def test_state_known_attribute_values_from_companion_list(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    hass.states.async_set(
+        "light.lamp", "on", {"effect": "None", "effect_list": ["None", "Rainbow"]}
+    )
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/state/known_attribute_values",
+        entity_id="light.lamp",
+        attribute="effect",
+    )
+    assert resp["success"] is True
+    assert resp["result"]["values"] == ["None", "Rainbow"]
+
+
+async def test_state_known_attribute_values_missing_entity_is_empty(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/state/known_attribute_values",
+        entity_id="light.nope",
+        attribute="effect",
+    )
+    assert resp["success"] is True
+    assert resp["result"]["values"] == []
+
+
 async def test_floors_list_empty(hass: HomeAssistant, installed, hass_ws_client) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/floors/list")
     assert resp["success"] is True

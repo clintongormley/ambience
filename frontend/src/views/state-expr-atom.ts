@@ -1,7 +1,7 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { getKnownStates, type HassConnection } from "../api.js";
+import { getKnownAttributeValues, getKnownStates, type HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { localize, stateOpLabel } from "../i18n.js";
@@ -10,43 +10,6 @@ import { statesMap } from "./hass-states.js";
 
 /** Minimal shape of an HA state object as read from `hass.states`. */
 type StateObj = { state?: string; attributes?: Record<string, unknown> };
-
-/**
- * Maps `(domain, attribute)` → the companion attribute that lists every
- * possible value. Mirrors HA's own `getStates` so the value dropdown offers
- * the same choices as the automation editor (e.g. picking a light's `effect`
- * offers everything in `effect_list`).
- */
-const ATTRIBUTE_OPTION_SOURCE: Record<string, Record<string, string>> = {
-  climate: {
-    fan_mode: "fan_modes",
-    preset_mode: "preset_modes",
-    swing_mode: "swing_modes",
-    swing_horizontal_mode: "swing_horizontal_modes",
-  },
-  fan: { preset_mode: "preset_modes" },
-  humidifier: { mode: "available_modes" },
-  light: { effect: "effect_list" },
-  media_player: { sound_mode: "sound_mode_list", source: "source_list" },
-  remote: { current_activity: "activity_list" },
-  vacuum: { fan_speed: "fan_speed_list" },
-  water_heater: { operation_mode: "operation_list" },
-};
-
-/** Possible values for an entity attribute, read from its companion list
- *  attribute (e.g. `effect` → `effect_list`). Empty when there's no mapping
- *  for this domain/attribute or the list isn't present. */
-function attributeValueOptions(
-  entityId: string,
-  attribute: string,
-  stateObj: StateObj | undefined,
-): string[] {
-  const domain = entityId.includes(".") ? entityId.split(".", 1)[0] : "";
-  const listAttr = ATTRIBUTE_OPTION_SOURCE[domain]?.[attribute];
-  const raw = listAttr ? stateObj?.attributes?.[listAttr] : undefined;
-  if (!Array.isArray(raw)) return [];
-  return raw.filter((v) => v !== null && v !== undefined).map((v) => String(v));
-}
 
 /** HA's snake_case → "Sentence case" attribute formatter, with the same
  *  acronym fixups HA applies. Used as a fallback when the running HA doesn't
@@ -134,19 +97,33 @@ export class AmbienceStateExprAtom extends LitElement {
   };
 
   @state() private _knownStates: string[] = [];
+  @state() private _knownAttributeValues: string[] = [];
 
   override async updated(changed: Map<string, unknown>): Promise<void> {
-    if (changed.has("value")) {
-      const prev = changed.get("value") as StateAtom | undefined;
-      const prevId = prev?.entity_id;
-      const curId = this.value.entity_id;
-      if (curId && curId !== prevId && this.hass) {
+    if (!changed.has("value")) return;
+    const prev = changed.get("value") as StateAtom | undefined;
+    const curId = this.value.entity_id;
+    if (curId && curId !== prev?.entity_id && this.hass) {
+      try {
+        this._knownStates = (await getKnownStates(this.hass, curId)).states;
+      } catch {
+        this._knownStates = [];
+      }
+    }
+    // Attribute values are fetched from the backend (single source of truth with
+    // known states) whenever the entity or the chosen attribute changes.
+    const attr = this.value.attribute;
+    if (curId !== prev?.entity_id || attr !== prev?.attribute) {
+      if (curId && attr && this.hass) {
         try {
-          const r = await getKnownStates(this.hass, curId);
-          this._knownStates = r.states;
+          this._knownAttributeValues = (
+            await getKnownAttributeValues(this.hass, curId, attr)
+          ).values;
         } catch {
-          this._knownStates = [];
+          this._knownAttributeValues = [];
         }
+      } else if (this._knownAttributeValues.length) {
+        this._knownAttributeValues = [];
       }
     }
   }
@@ -350,20 +327,11 @@ export class AmbienceStateExprAtom extends LitElement {
     ];
   }
 
-  /** Current value of the configured target — entity.attributes[attribute]
-   *  when in attribute mode, undefined otherwise (state mode uses the
-   *  fetched _knownStates list instead). */
-  private _currentAttributeValue(): unknown {
-    if (!this.value.attribute) return undefined;
-    return statesMap(this.hass)[this.value.entity_id]?.attributes?.[this.value.attribute];
-  }
-
   /** ha-form schema for a single value row.
    *    Numeric ops      → number selector.
-   *    Attribute mode   → combobox seeded with the attribute's current
-   *                       value (one option); custom_value lets the user
-   *                       type others. Empty list when the attribute is
-   *                       unavailable.
+   *    Attribute mode   → combobox seeded with the attribute's possible values
+   *                       (fetched from the backend, like the automation
+   *                       editor); custom_value lets the user type others.
    *    State mode       → combobox seeded with the entity's known states. */
   _valueSchema(): HaFormSchema[] {
     if (this._isNumericOp(this.value.kind)) {
@@ -376,15 +344,9 @@ export class AmbienceStateExprAtom extends LitElement {
     }
     let options: string[];
     if (this.value.attribute) {
-      // Offer every possible value for the attribute (from its companion list
-      // attribute, like the automation editor), always including the current
-      // value so the active selection is never missing.
-      const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
-      options = attributeValueOptions(this.value.entity_id, this.value.attribute, stateObj);
-      const current = this._currentAttributeValue();
-      if (current !== undefined && current !== null && !options.includes(String(current))) {
-        options = [...options, String(current)];
-      }
+      // Possible values come from the backend (single source of truth with the
+      // known-states list), already including the current value.
+      options = this._knownAttributeValues;
     } else {
       options = this._knownStates;
     }

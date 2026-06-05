@@ -35,6 +35,62 @@ _DOMAIN_KNOWN_STATES: dict[str, list[str]] = {
 }
 
 
+# Maps (domain, attribute) -> the companion attribute that lists every possible
+# value (mirrors HA's own getStates), so the state-condition value dropdown can
+# offer the same choices as the automation editor.
+_ATTRIBUTE_OPTION_SOURCE: dict[str, dict[str, str]] = {
+    "climate": {
+        "fan_mode": "fan_modes",
+        "preset_mode": "preset_modes",
+        "swing_mode": "swing_modes",
+        "swing_horizontal_mode": "swing_horizontal_modes",
+    },
+    "fan": {"preset_mode": "preset_modes"},
+    "humidifier": {"mode": "available_modes"},
+    "light": {"effect": "effect_list"},
+    "media_player": {"sound_mode": "sound_mode_list", "source": "source_list"},
+    "remote": {"current_activity": "activity_list"},
+    "vacuum": {"fan_speed": "fan_speed_list"},
+    "water_heater": {"operation_mode": "operation_list"},
+}
+
+
+def known_attribute_values_for(hass: HomeAssistant, entity_id: str, attribute: str) -> list[str]:
+    """Best-effort list of possible values for an entity attribute.
+
+    Reads the attribute's companion "list" attribute (e.g. a light's `effect`
+    reads `effect_list`) and always includes the attribute's current value so
+    the active selection is never missing. Returns [] when the entity is
+    unknown or there's nothing to offer.
+    """
+    domain = entity_id.split(".", 1)[0] if "." in entity_id else ""
+    values: list[str] = []
+    seen: set[str] = set()
+
+    def _add(value: object) -> None:
+        if value is None:
+            return
+        text = value if isinstance(value, str) else str(value)
+        if text and text not in seen:
+            seen.add(text)
+            values.append(text)
+
+    state = hass.states.get(entity_id)
+    if state is None:
+        return values
+
+    list_attr = _ATTRIBUTE_OPTION_SOURCE.get(domain, {}).get(attribute)
+    if list_attr:
+        raw = state.attributes.get(list_attr)
+        if isinstance(raw, list):
+            for item in raw:
+                _add(item)
+    # Always include the current value so it stays selectable.
+    _add(state.attributes.get(attribute))
+
+    return values
+
+
 def known_states_for(hass: HomeAssistant, entity_id: str) -> list[str]:
     """Best-effort list of plausible states for a given entity."""
     domain = entity_id.split(".", 1)[0] if "." in entity_id else ""

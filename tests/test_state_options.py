@@ -1,6 +1,9 @@
 """Plausible-states helper, shared by the websocket API and the simulator."""
 
-from custom_components.ambience.state_options import known_states_for
+from custom_components.ambience.state_options import (
+    known_attribute_values_for,
+    known_states_for,
+)
 
 
 class _State:
@@ -105,3 +108,55 @@ def test_unavailable_state_is_not_added_to_options() -> None:
     hass_unknown = _Hass({"binary_sensor.door": _State("unknown")})
     result_unknown = known_states_for(hass_unknown, "binary_sensor.door")
     assert "unknown" not in result_unknown
+
+
+# --- known_attribute_values_for -------------------------------------------
+
+
+def test_attribute_values_from_companion_list() -> None:
+    """A light's `effect` reads its possible values from `effect_list`."""
+    hass = _Hass(
+        {
+            "light.lamp": _State(
+                "on", {"effect": "None", "effect_list": ["None", "Rainbow", "Colorloop"]}
+            ),
+        }
+    )
+    result = known_attribute_values_for(hass, "light.lamp", "effect")
+    assert result == ["None", "Rainbow", "Colorloop"]
+
+
+def test_attribute_values_appends_current_when_not_in_list() -> None:
+    """The current value is always selectable, even if absent from the list."""
+    hass = _Hass(
+        {
+            "light.lamp": _State("on", {"effect": "Custom", "effect_list": ["None", "Rainbow"]}),
+        }
+    )
+    result = known_attribute_values_for(hass, "light.lamp", "effect")
+    assert result == ["None", "Rainbow", "Custom"]
+
+
+def test_attribute_values_no_mapping_returns_only_current() -> None:
+    """An attribute with no companion list falls back to just its current value."""
+    hass = _Hass({"light.lamp": _State("on", {"brightness": 254})})
+    assert known_attribute_values_for(hass, "light.lamp", "brightness") == ["254"]
+
+
+def test_attribute_values_empty_when_no_value_and_no_list() -> None:
+    hass = _Hass({"light.lamp": _State("on", {})})
+    assert known_attribute_values_for(hass, "light.lamp", "effect") == []
+
+
+def test_attribute_values_missing_entity_is_empty() -> None:
+    hass = _Hass({})
+    assert known_attribute_values_for(hass, "light.lamp", "effect") == []
+
+
+def test_attribute_values_non_string_list_items_are_stringified() -> None:
+    hass = _Hass(
+        {
+            "climate.x": _State("cool", {"fan_mode": 2, "fan_modes": [1, 2, 3]}),
+        }
+    )
+    assert known_attribute_values_for(hass, "climate.x", "fan_mode") == ["1", "2", "3"]

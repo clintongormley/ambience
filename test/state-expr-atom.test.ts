@@ -2,9 +2,11 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
   getKnownStates: vi.fn(async () => ({ states: ["on", "off"] })),
+  getKnownAttributeValues: vi.fn(async () => ({ values: [] })),
 }));
 
 import "../frontend/src/views/state-expr-atom";
+import { getKnownAttributeValues } from "../frontend/src/api.js";
 import type { StateAtom } from "../frontend/src/types";
 
 async function mount(atom: StateAtom): Promise<any> {
@@ -278,50 +280,22 @@ describe("ambience-state-expr-atom", () => {
     expect(sel.custom_value).toBe(true);
   });
 
-  test("attribute mode: value dropdown options come from the attribute's current value", async () => {
-    const el2: any = document.createElement("ambience-state-expr-atom");
-    el2.value = { kind: "is", entity_id: "media_player.x", attribute: "source", states: [] };
-    el2.hass = {
-      states: { "media_player.x": { attributes: { source: "Spotify" } } },
-    };
-    document.body.appendChild(el2);
-    await el2.updateComplete;
-    const sel = el2._valueSchema()[0].selector.select;
-    expect(sel.options).toEqual([{ value: "Spotify", label: "Spotify" }]);
-    el2.remove();
-  });
-
-  test("attribute mode: value options come from the companion list attribute (like automations)", async () => {
-    const el2: any = document.createElement("ambience-state-expr-atom");
-    el2.value = { kind: "is", entity_id: "climate.living", attribute: "fan_mode", states: [] };
-    el2.hass = {
-      states: {
-        "climate.living": { attributes: { fan_mode: "auto", fan_modes: ["auto", "low", "high"] } },
-      },
-    };
-    document.body.appendChild(el2);
-    await el2.updateComplete;
-    const opts = el2
-      ._valueSchema()[0]
-      .selector.select.options.map((o: { value: string }) => o.value);
-    expect(opts).toEqual(["auto", "low", "high"]);
-    el2.remove();
-  });
-
-  test("attribute mode: the current value is appended when not in the companion list", async () => {
+  test("attribute mode: value options come from getKnownAttributeValues (backend)", async () => {
+    vi.mocked(getKnownAttributeValues).mockResolvedValue({
+      values: ["None", "Rainbow", "Custom"],
+    });
     const el2: any = document.createElement("ambience-state-expr-atom");
     el2.value = { kind: "is", entity_id: "light.lamp", attribute: "effect", states: [] };
-    el2.hass = {
-      states: {
-        "light.lamp": { attributes: { effect: "Custom", effect_list: ["None", "Rainbow"] } },
-      },
-    };
+    el2.hass = { states: { "light.lamp": { attributes: { effect: "Custom" } } } };
     document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
     await el2.updateComplete;
     const opts = el2
       ._valueSchema()[0]
       .selector.select.options.map((o: { value: string }) => o.value);
     expect(opts).toEqual(["None", "Rainbow", "Custom"]);
+    expect(getKnownAttributeValues).toHaveBeenCalledWith(el2.hass, "light.lamp", "effect");
     el2.remove();
   });
 
@@ -341,11 +315,14 @@ describe("ambience-state-expr-atom", () => {
     el2.remove();
   });
 
-  test("attribute mode: value options are empty if the attribute has no current value", async () => {
+  test("attribute mode: value options are empty when the backend returns none", async () => {
+    vi.mocked(getKnownAttributeValues).mockResolvedValue({ values: [] });
     const el2: any = document.createElement("ambience-state-expr-atom");
     el2.value = { kind: "is", entity_id: "x", attribute: "missing_attr", states: [] };
     el2.hass = { states: { x: { attributes: {} } } };
     document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
     await el2.updateComplete;
     expect(el2._valueSchema()[0].selector.select.options).toEqual([]);
     el2.remove();

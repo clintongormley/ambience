@@ -268,6 +268,21 @@ export async function getKnownStates(
   return hass.callWS({ type: "ambience/state/known_states", entity_id });
 }
 
+/** Possible values for an entity attribute, derived from its companion list
+ *  attribute (e.g. a light's `effect` → `effect_list`), always including the
+ *  current value. `[]` when there's nothing to offer. */
+export async function getKnownAttributeValues(
+  hass: HassConnection,
+  entity_id: string,
+  attribute: string,
+): Promise<{ values: string[] }> {
+  return hass.callWS({
+    type: "ambience/state/known_attribute_values",
+    entity_id,
+    attribute,
+  });
+}
+
 export async function getSwitchDefaults(hass: HassConnection): Promise<SwitchDefaults> {
   return hass.callWS({ type: "ambience/switch_defaults/list" });
 }

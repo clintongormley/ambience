@@ -432,7 +432,7 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
         : localize(ctx.hass, "occupancy_summary.any_of", "any of");
     head = `${q} (${names.join(", ")}) ${verb}`;
   }
-  if (pred.for && (pred.for.h !== 0 || pred.for.m !== 0 || pred.for.s !== 0)) {
+  if (pred.for && _hasStateDuration(pred.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
   }
   return head;

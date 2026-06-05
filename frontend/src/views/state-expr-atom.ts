@@ -11,6 +11,9 @@ import { statesMap } from "./hass-states.js";
 /** Minimal shape of an HA state object as read from `hass.states`. */
 type StateObj = { state?: string; attributes?: Record<string, unknown> };
 
+type AttrLabelMaps = { keyToLabel: Map<string, string>; labelToKey: Map<string, string> };
+type ValueLabelMaps = { rawToLabel: Map<string, string>; labelToRaw: Map<string, string> };
+
 /**
  * Single atom of a state-predicate tree, laid out like HA's automation State
  * condition: Entity / Attribute (optional) / Op + values / For (optional).
@@ -199,12 +202,21 @@ export class AmbienceStateExprAtom extends LitElement {
    *  the user's expectation. */
   private static readonly _STATE_SENTINEL = "State";
 
+  // Memo for the label maps below: both are pure functions of the entity, the
+  // attribute, and the known option lists, but are read several times per
+  // render (schema + per-row data). Rebuilding them each call walks every
+  // option through HA's formatter, so cache on the inputs that define them.
+  private _attrMapsCache?: { key: string; maps: AttrLabelMaps };
+  private _valueMapsCache?: { key: string; maps: ValueLabelMaps };
+
   /** key→label / label→key maps for the current entity's known attributes.
    *  ha-form's custom_value combobox displays the option's VALUE, so we use
    *  the human label as both value and label and translate to/from the raw
    *  storage key at the data/emit boundary (these maps). */
-  private _attrLabelMaps(): { keyToLabel: Map<string, string>; labelToKey: Map<string, string> } {
+  private _attrLabelMaps(): AttrLabelMaps {
     const attrs = this._knownAttributesFor(this.value.entity_id);
+    const key = `${this.value.entity_id}|${attrs.join(",")}`;
+    if (this._attrMapsCache?.key === key) return this._attrMapsCache.maps;
     const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
     const keyToLabel = new Map<string, string>();
     const labelToKey = new Map<string, string>();
@@ -213,7 +225,9 @@ export class AmbienceStateExprAtom extends LitElement {
       keyToLabel.set(a, label);
       labelToKey.set(label, a);
     }
-    return { keyToLabel, labelToKey };
+    const maps = { keyToLabel, labelToKey };
+    this._attrMapsCache = { key, maps };
+    return maps;
   }
 
   /** Dropdown of "Where to look": first option is the State sentinel; the
@@ -358,17 +372,22 @@ export class AmbienceStateExprAtom extends LitElement {
 
   /** raw→label / label→raw maps for the current target's candidate values.
    *  Labels are how HA displays the value (e.g. `heat_cool` → "Heat/cool"). */
-  private _valueLabelMaps(): { rawToLabel: Map<string, string>; labelToRaw: Map<string, string> } {
-    const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
+  private _valueLabelMaps(): ValueLabelMaps {
     const attr = this.value.attribute;
+    const options = this._rawValueOptions();
+    const key = `${this.value.entity_id}|${attr ?? ""}|${options.join(",")}`;
+    if (this._valueMapsCache?.key === key) return this._valueMapsCache.maps;
+    const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
     const rawToLabel = new Map<string, string>();
     const labelToRaw = new Map<string, string>();
-    for (const raw of this._rawValueOptions()) {
+    for (const raw of options) {
       const label = stateValueLabel(this.hass, stateObj, attr, raw);
       rawToLabel.set(raw, label);
       labelToRaw.set(label, raw);
     }
-    return { rawToLabel, labelToRaw };
+    const maps = { rawToLabel, labelToRaw };
+    this._valueMapsCache = { key, maps };
+    return maps;
   }
 
   /** Display label for a stored raw value (the combobox shows the value, so we

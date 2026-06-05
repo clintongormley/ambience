@@ -164,69 +164,66 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
     />`;
   }
 
-  private _renderOccupied(occupied: boolean) {
-    const options = [
-      { value: "occupied", label: localize(this.hass, "ui.occupancy_occupied", "Occupied") },
-      { value: "vacant", label: localize(this.hass, "ui.occupancy_vacant", "Vacant") },
-    ];
-    const onChange = (v: string) => this._setOccupied(v === "occupied");
-    const data = occupied ? "occupied" : "vacant";
+  /** A single-select dropdown (ha-form with a native `<select>` fallback),
+   *  shared by the Occupied/Vacant and Any/All controls. */
+  private _renderSelect(
+    cls: string,
+    field: string,
+    value: string,
+    options: { value: string; label: string }[],
+    onChange: (v: string) => void,
+  ) {
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
       const schema: HaFormSchema[] = [
-        { name: "state", required: true, selector: { select: { mode: "dropdown", options } } },
+        { name: field, required: true, selector: { select: { mode: "dropdown", options } } },
       ];
       return html`<ha-form
-        class="state"
+        class=${cls}
         .hass=${this.hass}
         .schema=${schema}
-        .data=${{ state: data }}
+        .data=${{ [field]: value }}
         .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { state?: string } }>) => {
+        @value-changed=${(e: CustomEvent<{ value: Record<string, string | undefined> }>) => {
           e.stopPropagation();
-          if (e.detail.value.state) onChange(e.detail.value.state);
+          const v = e.detail.value[field];
+          if (v) onChange(v);
         }}
       ></ha-form>`;
     }
     /* v8 ignore stop */
     return html`<select
-      class="state"
+      class=${cls}
       @change=${(e: Event) => onChange((e.target as HTMLSelectElement).value)}
     >
-      ${options.map((o) => html`<option value=${o.value} ?selected=${o.value === data}>${o.label}</option>`)}
+      ${options.map((o) => html`<option value=${o.value} ?selected=${o.value === value}>${o.label}</option>`)}
     </select>`;
   }
 
+  private _renderOccupied(occupied: boolean) {
+    return this._renderSelect(
+      "state",
+      "state",
+      occupied ? "occupied" : "vacant",
+      [
+        { value: "occupied", label: localize(this.hass, "ui.occupancy_occupied", "Occupied") },
+        { value: "vacant", label: localize(this.hass, "ui.occupancy_vacant", "Vacant") },
+      ],
+      (v) => this._setOccupied(v === "occupied"),
+    );
+  }
+
   private _renderQuant(quant: OccupancyQuant) {
-    const options = [
-      { value: "any", label: localize(this.hass, "ui.occupancy_any", "Any of") },
-      { value: "all", label: localize(this.hass, "ui.occupancy_all", "All of") },
-    ];
-    const onChange = (v: string) => this._setQuant(v as OccupancyQuant);
-    /* v8 ignore start -- ha-form path (real HA only) */
-    if (customElements.get("ha-form")) {
-      const schema: HaFormSchema[] = [
-        { name: "quant", required: true, selector: { select: { mode: "dropdown", options } } },
-      ];
-      return html`<ha-form
-        class="quant"
-        .hass=${this.hass}
-        .schema=${schema}
-        .data=${{ quant }}
-        .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { quant?: string } }>) => {
-          e.stopPropagation();
-          if (e.detail.value.quant) onChange(e.detail.value.quant);
-        }}
-      ></ha-form>`;
-    }
-    /* v8 ignore stop */
-    return html`<select
-      class="quant"
-      @change=${(e: Event) => onChange((e.target as HTMLSelectElement).value)}
-    >
-      ${options.map((o) => html`<option value=${o.value} ?selected=${o.value === quant}>${o.label}</option>`)}
-    </select>`;
+    return this._renderSelect(
+      "quant",
+      "quant",
+      quant,
+      [
+        { value: "any", label: localize(this.hass, "ui.occupancy_any", "Any of") },
+        { value: "all", label: localize(this.hass, "ui.occupancy_all", "All of") },
+      ],
+      (v) => this._setQuant(v as OccupancyQuant),
+    );
   }
 
   private _renderFor() {

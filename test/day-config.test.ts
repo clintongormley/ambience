@@ -37,6 +37,16 @@ describe("ambience-day-config", () => {
     expect(saveDayConfig).toHaveBeenCalledWith(expect.anything(), "binary_sensor.workday", null);
   });
 
+  test("a successful save fires ambience-conditions-changed so views refetch", async () => {
+    el = await mount();
+    const seen = vi.fn();
+    window.addEventListener("ambience-conditions-changed", seen);
+    el._onSensorChange({ detail: { value: "binary_sensor.workday" } });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(seen).toHaveBeenCalledTimes(1);
+    window.removeEventListener("ambience-conditions-changed", seen);
+  });
+
   test("changing the calendar value calls saveDayConfig with the new calendar", async () => {
     el = await mount();
     el._onCalendarChange({ detail: { value: "calendar.workday" } });

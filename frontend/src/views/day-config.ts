@@ -35,6 +35,8 @@ export class AmbienceDayConfig extends LitElement {
     this._config = next;
     const res = await saveDayConfig(this.hass, next.workday_sensor, next.workday_calendar);
     this._warnings = res.warnings ?? [];
+    // Tell the scopes view to re-evaluate its conditions hint against live state.
+    window.dispatchEvent(new CustomEvent("ambience-conditions-changed"));
   }
 
   _onSensorChange(e: { detail: { value: string | null } }) {

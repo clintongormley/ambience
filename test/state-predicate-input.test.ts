@@ -1236,6 +1236,146 @@ describe("ambience-state-predicate-input", () => {
     expect(captured?.entity_id).toBe("z");
   });
 
+  test("clearing a group child's entity (empties the atom) drops that condition", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "x", states: ["on"] },
+        { kind: "is", entity_id: "y", states: ["off"] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    // Clearing the entity (the field's X) resets states + attribute, so the
+    // atom arrives fully empty — it should be removed, not left blank.
+    el.dispatchEvent(
+      new CustomEvent("node-change", {
+        detail: { path: [1], value: { kind: "is", entity_id: "", states: [], attribute: null } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    // 2 → 1 child: the group collapses to the remaining condition.
+    expect(captured.kind).toBe("is");
+    expect(captured.entity_id).toBe("x");
+  });
+
+  test("clearing the only atom's entity clears the predicate", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    let fired = false;
+    el.addEventListener("value-changed", (e: Event) => {
+      fired = true;
+      captured = (e as CustomEvent).detail.value;
+    });
+    el.dispatchEvent(
+      new CustomEvent("node-change", {
+        detail: { path: [], value: { kind: "is", entity_id: "", states: [], attribute: null } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(fired).toBe(true);
+    expect(captured).toBeNull();
+  });
+
+  test("editing an atom to a value with no entity but a kept state still replaces (not removed)", async () => {
+    // Guard: only a *fully* empty atom is dropped. An atom that still carries a
+    // state (or attribute/for) is a normal edit and must be preserved.
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el.dispatchEvent(
+      new CustomEvent("node-change", {
+        detail: { path: [], value: { kind: "is", entity_id: "", states: ["on"], attribute: null } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(captured).not.toBeNull();
+    expect(captured.states).toEqual(["on"]);
+  });
+
+  test("flipping the op of a still-blank atom keeps the row (only an emptied atom is dropped)", async () => {
+    // A freshly-added blank atom whose op the user changes before picking an
+    // entity must NOT vanish — removal only applies when an atom that HAD
+    // content is emptied.
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "x", states: ["on"] },
+        { kind: "is", entity_id: "", states: [] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el.dispatchEvent(
+      new CustomEvent("node-change", {
+        detail: { path: [1], value: { kind: "is_not", entity_id: "", states: [] } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(2);
+    expect(captured.items[1].kind).toBe("is_not");
+  });
+
+  test("clearing a NOT-wrapped atom's entity still removes the condition", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "x", states: ["on"] },
+        { kind: "not", item: { kind: "is", entity_id: "y", states: ["off"] } },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    // The node emits the emptied atom still wrapped in NOT (negation preserved).
+    el.dispatchEvent(
+      new CustomEvent("node-change", {
+        detail: {
+          path: [1],
+          value: { kind: "not", item: { kind: "is", entity_id: "", states: [], attribute: null } },
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(captured.kind).toBe("is");
+    expect(captured.entity_id).toBe("x");
+  });
+
+  test("clearing the open atom's entity resets openPath (no stale index opens a sibling)", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+        { kind: "is", entity_id: "c", states: ["on"] },
+      ],
+    });
+    el._setOpen([1]); // user is editing the middle condition
+    el.dispatchEvent(
+      new CustomEvent("node-change", {
+        detail: { path: [1], value: { kind: "is", entity_id: "", states: [], attribute: null } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    // The emptied (open) atom is removed; openPath must not still be [1], which
+    // would now point at — and expand — the shifted sibling.
+    expect(el._openPath).toBeNull();
+  });
+
   test("node-wrap event dispatched from a child propagates to the host and calls _wrapAt", async () => {
     // Covers _onNodeWrap (lines 323-326) via event dispatch.
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });

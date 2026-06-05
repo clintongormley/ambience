@@ -292,7 +292,11 @@ export class AmbienceStateExprNode extends LitElement {
               .value=${atom}
               @value-changed=${(e: CustomEvent<{ value: StateAtom }>) => {
                 e.stopPropagation();
-                this._emit("node-change", { value: e.detail.value });
+                // The editor emits the bare inner atom; re-wrap it in NOT so an
+                // edit doesn't silently drop the node's negation.
+                const edited = e.detail.value;
+                const value: StateExpr = isNot ? { kind: "not", item: edited } : edited;
+                this._emit("node-change", { value });
               }}
             ></ambience-state-expr-atom>
             ${

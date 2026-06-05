@@ -11,6 +11,7 @@ import type {
   SimulateOverrides,
   SimulateVerdictKnob,
   SimulateVerdicts,
+  StateForDuration,
 } from "../types.js";
 import { entityName, entityRowStyles, renderEntityIcon } from "./entity-row.js";
 
@@ -25,12 +26,15 @@ function optionLabel(value: string): string {
 function entityDefaults(k: SimulateEntityKnob): {
   state: string;
   attributes: Record<string, string>;
+  for: StateForDuration;
 } {
   return {
     state: k.live_state ?? "",
     attributes: Object.fromEntries(
       k.attributes.map((a) => [a.name, a.live_value == null ? "" : String(a.live_value)]),
     ),
+    // We can't know how long the live state has held, so default to "just now".
+    for: { h: 0, m: 0, s: 0 },
   };
 }
 
@@ -88,6 +92,10 @@ export class AmbienceSimulatorModal extends LitElement {
       select, input { background: var(--card-background-color, #fff); color: inherit;
         border: 1px solid var(--divider-color, #bbb); border-radius: 4px; padding: 4px 7px; font: inherit; }
       input.num { width: 96px; text-align: right; }
+      .for-ctrl { display: inline-flex; align-items: center; gap: 0.15rem;
+        color: var(--secondary-text-color, #888); font-size: 0.9em; }
+      .for-label { margin-right: 0.15rem; }
+      input.for-num { width: 2.6rem; text-align: right; padding: 4px 5px; }
       .attr .row-text { padding-left: 34px; color: var(--secondary-text-color, #777); }
       .runbtn { padding: 0.45rem 1.1rem; background: var(--primary-color, #03a9f4); color: #fff;
         border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
@@ -107,8 +115,10 @@ export class AmbienceSimulatorModal extends LitElement {
   @state() private _hasTime = false;
   @state() private _loading = true;
   @state() private _error = "";
-  @state() private _values: Record<string, { state: string; attributes: Record<string, string> }> =
-    {};
+  @state() private _values: Record<
+    string,
+    { state: string; attributes: Record<string, string>; for: StateForDuration }
+  > = {};
   @state() private _verdicts: Record<string, boolean> = {};
   @state() private _date = "";
   @state() private _time = "";
@@ -166,6 +176,11 @@ export class AmbienceSimulatorModal extends LitElement {
       [id]: { ...cur, attributes: { ...cur.attributes, [name]: value } },
     };
   }
+  private _setFor(id: string, part: "h" | "m" | "s", value: number): void {
+    const cur = this._values[id];
+    const n = Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+    this._values = { ...this._values, [id]: { ...cur, for: { ...cur.for, [part]: n } } };
+  }
   private _setVerdict(vkey: string, value: boolean): void {
     this._verdicts = { ...this._verdicts, [vkey]: value };
   }
@@ -197,9 +212,19 @@ export class AmbienceSimulatorModal extends LitElement {
       // Send `state` only when set; an empty field falls back to the live state
       // server-side, so an attribute-only override (incl. on a stateless entity)
       // is still expressible. Skip entities with nothing to override.
-      const override: { state?: string; attributes: Record<string, unknown> } = { attributes };
+      const override: {
+        state?: string;
+        attributes: Record<string, unknown>;
+        for?: StateForDuration;
+      } = { attributes };
       if (v.state !== "") override.state = v.state;
-      if (override.state !== undefined || Object.keys(attributes).length > 0) {
+      // Only send a non-zero For; zero means "just changed" (the server default).
+      if (v.for.h || v.for.m || v.for.s) override.for = v.for;
+      if (
+        override.state !== undefined ||
+        override.for !== undefined ||
+        Object.keys(attributes).length > 0
+      ) {
         overrides[k.entity_id] = override;
       }
     }
@@ -292,6 +317,7 @@ export class AmbienceSimulatorModal extends LitElement {
         </div>
         <div class="row-ctrl">
           ${this._renderControl(k, v?.state ?? "")}
+          ${this._renderFor(k, v?.for ?? { h: 0, m: 0, s: 0 })}
           <button class="reset" data-reset=${k.entity_id} title="Reset to live"
             @click=${() => this._resetEntity(k)}>↺</button>
         </div>
@@ -325,6 +351,23 @@ export class AmbienceSimulatorModal extends LitElement {
     return html`<input class=${k.control === "number" ? "num" : ""} type=${type} data-entity=${k.entity_id}
       .value=${value}
       @input=${(e: Event) => this._setState(k.entity_id, (e.target as HTMLInputElement).value)} />`;
+  }
+
+  /** Inline "For h:m:s" control — how long the entity has held its state, so
+   *  conditions with a `for:` duration evaluate as the user intends. */
+  private _renderFor(k: SimulateEntityKnob, dur: StateForDuration) {
+    // Per-part aria-labels: without them screen readers announce three bare
+    // number fields. Scope each to the entity so rows stay distinguishable.
+    const unit: Record<"h" | "m" | "s", string> = { h: "hours", m: "minutes", s: "seconds" };
+    const name = entityName(this.hass, k.entity_id);
+    const cell = (part: "h" | "m" | "s") => html`<input class="for-num" type="number" min="0"
+      aria-label=${`${name} — held for, ${unit[part]}`}
+      data-for=${`${k.entity_id}:${part}`} .value=${String(dur[part])}
+      @change=${(e: Event) =>
+        this._setFor(k.entity_id, part, Number((e.target as HTMLInputElement).value))} />`;
+    return html`<span class="for-ctrl" title="How long it has held this state (h:m:s)">
+      <span class="for-label">For</span>${cell("h")}<span>:</span>${cell("m")}<span>:</span>${cell("s")}
+    </span>`;
   }
 
   private _renderVerdict(k: SimulateVerdictKnob) {

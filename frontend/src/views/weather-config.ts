@@ -98,6 +98,8 @@ export class AmbienceWeatherConfig extends LitElement {
   private async _persist() {
     const res = await saveWeatherConfig(this.hass, this._config.entity, this._config.groups);
     this._warnings = res.warnings ?? [];
+    // Tell the scopes view to re-evaluate its conditions hint against live state.
+    window.dispatchEvent(new CustomEvent("ambience-conditions-changed"));
   }
 
   _onEntityChange(e: { detail: { value: string | null } }) {

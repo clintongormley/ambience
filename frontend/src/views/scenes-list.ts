@@ -378,14 +378,16 @@ export class AmbienceScenesList extends LitElement {
     });
   }
 
-  /** "N actions" / "1 action" / "0 actions" label. */
+  /** "N actions" / "1 action" label. A scene with no actions is a no-op — it
+   *  matches but does nothing — so flag it as "NOOP - 0 actions". */
   private _actionCountLabel(scene: Scene): string {
     const n = scene.actions.length;
     const word =
       n === 1
         ? localize(this.hass, "ui.action_singular", "action")
         : localize(this.hass, "ui.action_plural", "actions");
-    return `${n} ${word}`;
+    const count = `${n} ${word}`;
+    return n === 0 ? `${localize(this.hass, "ui.noop_prefix", "NOOP")} - ${count}` : count;
   }
 
   private _toggleScene(i: number) {

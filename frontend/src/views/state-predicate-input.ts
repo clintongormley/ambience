@@ -310,9 +310,37 @@ export class AmbienceStatePredicateInput extends LitElement {
 
   // --- event handlers ---------------------------------------------------
 
+  /** True for an atom carrying no condition at all — no entity, no non-empty
+   *  state, no attribute, no duration. Clearing the entity (its field X) resets
+   *  states + attribute, so the atom arrives here fully empty. */
+  private _isEmptyAtom(node: StateExpr): boolean {
+    // A negated atom is empty when its inner atom is — clearing the entity of a
+    // NOT-wrapped atom should still drop the whole condition.
+    if (node.kind === "not") return this._isEmptyAtom((node as StateNot).item);
+    if (node.kind === "and" || node.kind === "or") return false;
+    const atom = node as StateAtom;
+    return !atom.entity_id && atom.states.every((s) => s === "") && !atom.attribute && !atom.for;
+  }
+
   private _onNodeChange = (e: CustomEvent<{ path: number[]; value: StateExpr }>) => {
     e.stopPropagation();
-    this._replaceAt(e.detail.path, e.detail.value);
+    const { path, value } = e.detail;
+    // An atom the user just emptied (typically by clearing its entity via the
+    // field's X, which also resets states + attribute) carries no condition, so
+    // drop it rather than leaving a blank row — mirroring how clearing a value
+    // row removes that row. Only when it WAS carrying something: editing a
+    // still-blank atom (e.g. flipping its op before picking an entity) keeps it.
+    if (this._isEmptyAtom(value)) {
+      const prev = this._atomAt(path);
+      if (prev && !this._isEmptyAtom(prev)) {
+        // The emptied atom is the open one; collapse so a stale openPath can't
+        // expand whichever sibling shifts into its index.
+        this._openPath = null;
+        this._removeAt(path);
+        return;
+      }
+    }
+    this._replaceAt(path, value);
   };
 
   private _onNodeRemove = (e: CustomEvent<{ path: number[] }>) => {

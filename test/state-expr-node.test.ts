@@ -127,6 +127,28 @@ describe("ambience-state-expr-node — atom", () => {
     expect(captured.value.states).toEqual(["off"]);
   });
 
+  test("editing a NOT-wrapped atom re-wraps the change in NOT (negation is preserved)", async () => {
+    el = await mount(
+      { kind: "not", item: { kind: "is", entity_id: "sensor.x", states: ["on"] } },
+      { path: [2], openPath: [2] },
+    );
+    let captured: any;
+    el.addEventListener("node-change", (e: CustomEvent) => {
+      captured = e.detail;
+    });
+    const atom: any = el.shadowRoot.querySelector("ambience-state-expr-atom");
+    atom.dispatchEvent(
+      new CustomEvent("value-changed", {
+        // The atom editor emits only the bare inner atom (state on → off).
+        detail: { value: { kind: "is", entity_id: "sensor.x", states: ["off"] } },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(captured.value.kind).toBe("not");
+    expect(captured.value.item.states).toEqual(["off"]);
+  });
+
   test("value-changed from inner atom stops propagation (does not leak as value-changed)", async () => {
     el = await mount(
       { kind: "is", entity_id: "sensor.x", states: ["on"] },

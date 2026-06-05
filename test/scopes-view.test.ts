@@ -510,6 +510,32 @@ describe("ambience-scopes-view", () => {
     expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
   });
 
+  test("the conditions hint names both when neither weather nor workday is configured", async () => {
+    el = await mount(); // default: both unconfigured
+    const banner = el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]');
+    expect(banner.textContent).toContain("Workday & Weather");
+  });
+
+  test("the conditions hint names only Workday when weather is configured", async () => {
+    el = await mount({
+      weatherConfig: { entity: "weather.home", groups: [] },
+      dayConfig: { workday_sensor: null, workday_calendar: null },
+    });
+    const banner = el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]');
+    expect(banner.textContent).toContain("Workday");
+    expect(banner.textContent).not.toContain("Weather");
+  });
+
+  test("the conditions hint names only Weather when workday is configured", async () => {
+    el = await mount({
+      weatherConfig: { entity: null, groups: [] },
+      dayConfig: { workday_sensor: "binary_sensor.workday", workday_calendar: null },
+    });
+    const banner = el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]');
+    expect(banner.textContent).toContain("Weather");
+    expect(banner.textContent).not.toContain("Workday");
+  });
+
   test("the conditions hint button opens settings on the conditions tab", async () => {
     el = await mount();
     let detail: any = null;
@@ -539,6 +565,40 @@ describe("ambience-scopes-view", () => {
     el.remove();
     el = await mount();
     expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+  });
+
+  test("hides the conditions hint live when weather + workday get configured", async () => {
+    el = await mount(); // unconfigured → hint shown
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
+    // The user configures both in the settings modal, which broadcasts a change.
+    vi.mocked(api.getWeatherConfig).mockResolvedValue({ entity: "weather.home", groups: [] });
+    vi.mocked(api.getDayConfig).mockResolvedValue({
+      workday_sensor: "binary_sensor.workday",
+      workday_calendar: null,
+    });
+    window.dispatchEvent(new CustomEvent("ambience-conditions-changed"));
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+  });
+
+  test("re-shows the conditions hint live when weather/workday are cleared", async () => {
+    el = await mount({
+      weatherConfig: { entity: "weather.home", groups: [] },
+      dayConfig: { workday_sensor: "binary_sensor.workday", workday_calendar: null },
+    });
+    // Configured → hidden.
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).toBeNull();
+    // Both configs are cleared again; the hint must come back (no sticky state).
+    vi.mocked(api.getWeatherConfig).mockResolvedValue({ entity: null, groups: [] });
+    vi.mocked(api.getDayConfig).mockResolvedValue({
+      workday_sensor: null,
+      workday_calendar: null,
+    });
+    window.dispatchEvent(new CustomEvent("ambience-conditions-changed"));
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-test="conditions-hint-banner"]')).not.toBeNull();
   });
 
   // --- duplicate ----------------------------------------------------------
@@ -1227,6 +1287,73 @@ describe("ambience-scopes-view", () => {
     });
     const br = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
     expect(br).toBeFalsy();
+  });
+
+  // --- disabled / faded scope styling -------------------------------------
+
+  const headerOf = (e: any, sel: string): HTMLElement =>
+    e.shadowRoot.querySelector(`${sel} .scope-header`) as HTMLElement;
+
+  test("a switched-off scope header gets the 'off' (disabled) class", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.bedroom_ambience": { state: "off" } },
+    });
+    const header = headerOf(el, ".scope-row.area[data-id='bedroom']");
+    expect(header.classList.contains("off")).toBe(true);
+  });
+
+  test("an on scope with no scenes gets the 'empty' (faded) class", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.living_room_ambience": { state: "on" } },
+    });
+    const header = headerOf(el, ".scope-row.area[data-id='living_room']");
+    expect(header.classList.contains("empty")).toBe(true);
+    expect(header.classList.contains("off")).toBe(false);
+  });
+
+  test("an on scope with matching scenes is neither off nor empty", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.living_room_ambience": { state: "on" } },
+      areaConfigs: {
+        living_room: { scenes: [{ when: {}, actions: [], category: "a" }] },
+      },
+    });
+    const header = headerOf(el, ".scope-row.area[data-id='living_room']");
+    expect(header.classList.contains("empty")).toBe(false);
+    expect(header.classList.contains("off")).toBe(false);
+  });
+
+  test("the 'empty' class follows the active category filter", async () => {
+    el = await mount({
+      areaConfigs: {
+        living_room: { scenes: [{ when: {}, actions: [], category: "a" }] },
+      },
+    });
+    // Filtered to the scene's own category: the scope has a matching rule.
+    el._filterCategory = "a";
+    await el.updateComplete;
+    expect(headerOf(el, ".scope-row.area[data-id='living_room']").classList.contains("empty")).toBe(
+      false,
+    );
+    // Filtered to a category the scope has no scene in: faded.
+    el._filterCategory = "b";
+    await el.updateComplete;
+    expect(headerOf(el, ".scope-row.area[data-id='living_room']").classList.contains("empty")).toBe(
+      true,
+    );
+  });
+
+  test("a switched-off empty scope reads 'off', not 'empty' (off takes precedence)", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.bedroom_ambience": { state: "off" } },
+    });
+    const header = headerOf(el, ".scope-row.area[data-id='bedroom']");
+    expect(header.classList.contains("off")).toBe(true);
+    expect(header.classList.contains("empty")).toBe(false);
   });
 
   // --- apply-scenes / run-scene-actions ----------------------------------------

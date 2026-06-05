@@ -211,7 +211,14 @@ export class AmbienceScopesView extends LitElement {
         gap: 0.5rem;
         padding: 0.75rem 1rem;
         cursor: pointer;
-        background: var(--secondary-background-color, #f5f5f5);
+        /* A soft grey header strip. --secondary-background-color is the page
+         backdrop (a fairly heavy grey); mixing it down toward the card colour
+         gives the lighter section-header tint HA uses for similar dividers. */
+        background: color-mix(
+          in srgb,
+          var(--secondary-background-color, #e0e0e0) 50%,
+          var(--card-background-color, #fff)
+        );
         /* Collapsed: round all corners to match the card. */
         border-radius: 4px;
       }
@@ -219,6 +226,34 @@ export class AmbienceScopesView extends LitElement {
        body below with a flush edge. */
       .scope-header.open {
         border-radius: 4px 4px 0 0;
+      }
+      /* Faded ("empty"): the scope is on but has no rules in the active category.
+       Dim the glyphs + text so it recedes behind active scopes; the switch and
+       kebab stay full-strength so the row is still operable. */
+      .scope-header.empty .chevron,
+      .scope-header.empty .scope-icon,
+      .scope-header.empty .scope-name,
+      .scope-header.empty .scope-summary {
+        opacity: 0.5;
+      }
+      /* Disabled ("off"): the scope's switch is off. Read more emphatically
+       disabled than the faded state — flatten the header tint and dim its
+       contents harder — while leaving the switch fully lit to re-enable. */
+      .scope-header.off {
+        /* A barely-there grey (≈ #f8f8f8 on the default light theme) — paler
+         than the active header so a disabled scope reads washed-out. */
+        background: color-mix(
+          in srgb,
+          var(--secondary-background-color, #e0e0e0) 25%,
+          var(--card-background-color, #fff)
+        );
+      }
+      .scope-header.off .chevron,
+      .scope-header.off .scope-icon,
+      .scope-header.off .scope-name,
+      .scope-header.off .scope-summary,
+      .scope-header.off ambience-kebab-menu {
+        opacity: 0.4;
       }
       .chevron {
         width: 1em;
@@ -237,6 +272,7 @@ export class AmbienceScopesView extends LitElement {
       }
       .scope-name {
         flex: 1;
+        text-align: left;
         font-weight: 600;
       }
       .scope-summary {
@@ -418,6 +454,24 @@ export class AmbienceScopesView extends LitElement {
     }
   };
 
+  // Workday/Weather are configured in the settings modal, which stays mounted
+  // alongside this view — so without this refetch the conditions hint would keep
+  // showing (or stay hidden) until a full reload. Re-pull both configs on change
+  // so the hint reflects live state.
+  private _onConditionsChanged = async () => {
+    try {
+      const [dayConfig, weatherConfig] = await Promise.all([
+        getDayConfig(this.hass),
+        getWeatherConfig(this.hass),
+      ]);
+      if (!this.isConnected) return;
+      this._dayConfig = dayConfig;
+      this._weatherConfig = weatherConfig;
+    } catch {
+      // Silent — same rationale as the other change handlers.
+    }
+  };
+
   /** Fetch the service schema for each exposed action. Failures per-service
    *  are silently skipped (the summary just falls back to humanized ids). */
   private async _refreshSchemas(actions: ExposedAction[]): Promise<void> {
@@ -444,6 +498,7 @@ export class AmbienceScopesView extends LitElement {
     this._conditionsHintDismissed = readConditionsHintDismissed();
     window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.addEventListener("ambience-categories-changed", this._onCategoriesChanged);
+    window.addEventListener("ambience-conditions-changed", this._onConditionsChanged);
     await this._loadStatic();
     await Promise.all([
       this._refreshAreas(),
@@ -458,6 +513,7 @@ export class AmbienceScopesView extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.removeEventListener("ambience-categories-changed", this._onCategoriesChanged);
+    window.removeEventListener("ambience-conditions-changed", this._onConditionsChanged);
     this._unsubArea?.();
     this._unsubArea = undefined;
     this._unsubFloor?.();
@@ -1009,16 +1065,21 @@ export class AmbienceScopesView extends LitElement {
     ];
   }
 
+  /** How many of a scope's scenes match the active category filter ("" = all).
+   *  0 for a genuinely empty scope, and also 0 for a scope whose scenes all sit
+   *  in other categories — the signal the header uses to fade itself. */
+  private _matchingSceneCount(cfg: ScopeConfig): number {
+    if (this._filterCategory === "") return cfg.scenes.length;
+    return cfg.scenes.filter((scene) => scene.category === this._filterCategory).length;
+  }
+
   private _summary(cfg: ScopeConfig): string {
     // A genuinely empty scope reads "not configured" regardless of filter.
     if (cfg.scenes.length === 0) {
       return localize(this.hass, "ui.not_configured", "not configured");
     }
     // Otherwise count the scenes matching the active filter (all when "").
-    const r =
-      this._filterCategory === ""
-        ? cfg.scenes.length
-        : cfg.scenes.filter((scene) => scene.category === this._filterCategory).length;
+    const r = this._matchingSceneCount(cfg);
     const noun =
       r === 1
         ? localize(this.hass, "ui.scene_singular", "scene")
@@ -1028,13 +1089,61 @@ export class AmbienceScopesView extends LitElement {
 
   // --- empty-state banners -------------------------------------------------
 
-  /** True when neither Weather nor Workday is configured enough to be used as a
-   *  scene condition (the optional hint nudges the user to set them up). */
-  private get _conditionsUnconfigured(): boolean {
-    const weatherUnset = !this._weatherConfig || this._weatherConfig.entity == null;
+  /** True when Weather has no entity picked — it can't be used as a condition. */
+  private get _weatherUnconfigured(): boolean {
+    return !this._weatherConfig || this._weatherConfig.entity == null;
+  }
+
+  /** True when neither a Workday sensor nor calendar is picked. */
+  private get _workdayUnconfigured(): boolean {
     const day = this._dayConfig;
-    const workdayUnset = !day || (day.workday_sensor == null && day.workday_calendar == null);
-    return weatherUnset || workdayUnset;
+    return !day || (day.workday_sensor == null && day.workday_calendar == null);
+  }
+
+  /** True when either Weather or Workday is unconfigured (the optional hint
+   *  nudges the user to set up whichever is still missing). */
+  private get _conditionsUnconfigured(): boolean {
+    return this._weatherUnconfigured || this._workdayUnconfigured;
+  }
+
+  /** Title + body for the conditions hint, naming only the input(s) still
+   *  missing — so configuring one narrows the nudge rather than leaving it
+   *  unchanged. Only called when at least one is unconfigured. */
+  private _conditionsHintText(): { title: string; body: string } {
+    const weatherUnset = this._weatherUnconfigured;
+    const workdayUnset = this._workdayUnconfigured;
+    if (weatherUnset && workdayUnset) {
+      return {
+        title: localize(
+          this.hass,
+          "ui.conditions_hint_title",
+          "Optional: set up Workday & Weather",
+        ),
+        body: localize(
+          this.hass,
+          "ui.conditions_hint_body",
+          "Configure Workday and Weather in Conditions to use them in your scene conditions.",
+        ),
+      };
+    }
+    if (workdayUnset) {
+      return {
+        title: localize(this.hass, "ui.conditions_hint_title_workday", "Optional: set up Workday"),
+        body: localize(
+          this.hass,
+          "ui.conditions_hint_body_workday",
+          "Configure Workday in Conditions to use it in your scene conditions.",
+        ),
+      };
+    }
+    return {
+      title: localize(this.hass, "ui.conditions_hint_title_weather", "Optional: set up Weather"),
+      body: localize(
+        this.hass,
+        "ui.conditions_hint_body_weather",
+        "Configure Weather in Conditions to use it in your scene conditions.",
+      ),
+    };
   }
 
   private _openSettings(tab: "actions" | "conditions") {
@@ -1081,20 +1190,13 @@ export class AmbienceScopesView extends LitElement {
       `;
     }
     if (!this._conditionsHintDismissed && this._conditionsUnconfigured) {
+      const { title, body } = this._conditionsHintText();
       return html`
         <div class="banner banner-hint" data-test="conditions-hint-banner">
           <ha-icon class="banner-icon" icon="mdi:lightbulb-on-outline"></ha-icon>
           <div class="banner-text">
-            <strong
-              >${localize(this.hass, "ui.conditions_hint_title", "Optional: set up Workday & Weather")}</strong
-            >
-            <span
-              >${localize(
-                this.hass,
-                "ui.conditions_hint_body",
-                "Configure Workday and Weather in Conditions to use them in your scene conditions.",
-              )}</span
-            >
+            <strong>${title}</strong>
+            <span>${body}</span>
           </div>
           <button
             class="banner-cta"
@@ -1256,10 +1358,18 @@ export class AmbienceScopesView extends LitElement {
   ) {
     const open = this._expanded.has(scopeKey(scope));
     const dataId = scope.kind === "house" ? "" : scope.id;
+    // Header de-emphasis, strongest first: a switched-off scope reads fully
+    // "disabled"; an on scope with no rules in the active category reads "empty"
+    // (faded). Off wins so a disabled scope never also looks merely empty.
+    const stateClass = this._isSwitchedOff(scope)
+      ? "off"
+      : this._matchingSceneCount(cfg) === 0
+        ? "empty"
+        : "";
     return html`
       <li class="scope-row ${rowClass}" data-id=${dataId}>
         <div
-          class="scope-header ${open ? "open" : ""}"
+          class="scope-header ${open ? "open" : ""} ${stateClass}"
           @click=${() => this._toggleExpand(scope)}
         >
           <span class="chevron ${open ? "open" : ""}">▶</span>

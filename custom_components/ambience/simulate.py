@@ -11,12 +11,13 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 
+from .conditions._common import dur_seconds
 from .conditions.script import ScriptSnapshot
 from .conditions.template import TemplateSnapshot
 from .conditions.weather import WEATHER_CONDITIONS
@@ -48,8 +49,10 @@ _OPAQUE_CONDITIONS = ("script", "template")
 class SimulatedWorld:
     """The hypothetical world to resolve against.
 
-    `overrides` maps entity_id -> {"state": str, "attributes": {name: value}};
-    `attributes` is optional and merged over the entity's live attributes.
+    `overrides` maps entity_id -> {"state": str, "attributes": {name: value},
+    "for": {"h","m","s"}}; `attributes` is optional and merged over the entity's
+    live attributes; `for` is optional and backdates the state's clock so `for:`
+    conditions see the entity as having held this state for that long.
     `verdicts` maps an opaque condition_key -> {result_key: bool}, forcing each
     `script`/`template` predicate's result (the simulator computes the keys).
     """
@@ -107,7 +110,24 @@ def _build_override_states(hass: HomeAssistant, world: SimulatedWorld) -> dict[s
         attributes = dict(live.attributes) if live is not None else {}
         attributes.update(spec.get("attributes") or {})
         fallback = live.state if live is not None else STATE_UNKNOWN
-        overrides[entity_id] = State(entity_id, spec.get("state", fallback), attributes)
+        # Backdate the state clock by `for` so duration conditions see the entity
+        # as having held this state that long; absent (0s) it reads just-changed
+        # at the simulated `now`. Set both timestamps: state-mode `for:` atoms
+        # clock off last_changed, attribute-mode atoms off last_updated.
+        # Clamp negatives (never backdate into the future) and guard an absurd
+        # duration that would underflow datetime — that just reads as "forever".
+        seconds = max(0.0, dur_seconds(spec.get("for")))
+        try:
+            since = world.now - timedelta(seconds=seconds)
+        except OverflowError:
+            since = datetime.min.replace(tzinfo=world.now.tzinfo)
+        overrides[entity_id] = State(
+            entity_id,
+            spec.get("state", fallback),
+            attributes,
+            last_changed=since,
+            last_updated=since,
+        )
     if "sun.sun" not in overrides:
         overrides["sun.sun"] = synthetic_sun_state(hass, world.now)
     return overrides

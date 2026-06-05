@@ -22,6 +22,7 @@ import type {
   Scene,
   ScriptPredicate,
   ServiceSchema,
+  StateAtom,
   StateExpr,
   StatePredicate,
   SunPredicate,
@@ -443,6 +444,37 @@ export function summariseState(pred: StatePredicate, ctx: ConditionContext = {})
   return _renderStateExpr(pred, ctx);
 }
 
+/** One atom clause: `<entity[.attr]> <verb> [NOT ]<value> [for ≥…]`. When
+ *  `negate` is set the NOT sits inline before the value ("a is NOT on"), which
+ *  reads more naturally than a leading "NOT a is on" for a simple `is` clause. */
+function _renderAtomClause(expr: StateAtom, ctx: ConditionContext, negate: boolean): string {
+  const verb = stateOpLabel(ctx.hass, expr.kind);
+  // Use the entity's friendly_name when available (falls back to the
+  // raw entity_id). Attribute-mode renders as `<name>.<attribute>`.
+  const name = _entityDisplayName(ctx, expr.entity_id);
+  const stateObj = (ctx.hass as HassWithStates | undefined)?.states?.[expr.entity_id];
+  // For is/is_not: multi-value list joined with "/", each value humanised the
+  // way HA displays it (e.g. `heat_cool` → "Heat/cool") so the summary matches
+  // the editor's value dropdown. For numeric: a single threshold (states[0]),
+  // left raw since it's a number, not a state key.
+  const isNumeric = expr.kind !== "is" && expr.kind !== "is_not";
+  const rhs = isNumeric
+    ? (expr.states[0] ?? "")
+    : expr.states.map((v) => stateValueLabel(ctx.hass, stateObj, expr.attribute, v)).join("/");
+  // Humanise the attribute name so the summary matches the editor's "Where"
+  // dropdown (e.g. `current_temperature` → "Current temperature") rather than
+  // leaking the raw storage key.
+  const lhs = expr.attribute
+    ? `${name}.${stateAttributeLabel(ctx.hass, stateObj, expr.attribute)}`
+    : name;
+  const not = negate ? `${stateOpLabel(ctx.hass, "not")} ` : "";
+  const head = `${lhs} ${verb} ${not}${rhs}`;
+  if (expr.for && _hasStateDuration(expr.for)) {
+    return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(expr.for)}`;
+  }
+  return head;
+}
+
 function _renderStateExpr(expr: StateExpr, ctx: ConditionContext): string {
   if (
     expr.kind === "is" ||
@@ -452,39 +484,22 @@ function _renderStateExpr(expr: StateExpr, ctx: ConditionContext): string {
     expr.kind === "<" ||
     expr.kind === "<="
   ) {
-    const verb = stateOpLabel(ctx.hass, expr.kind);
-    // Use the entity's friendly_name when available (falls back to the
-    // raw entity_id). Attribute-mode renders as `<name>.<attribute>`.
-    const name = _entityDisplayName(ctx, expr.entity_id);
-    const stateObj = (ctx.hass as HassWithStates | undefined)?.states?.[expr.entity_id];
-    // For is/is_not: multi-value list joined with "/", each value humanised the
-    // way HA displays it (e.g. `heat_cool` → "Heat/cool") so the summary matches
-    // the editor's value dropdown. For numeric: a single threshold (states[0]),
-    // left raw since it's a number, not a state key.
-    const isNumeric = expr.kind !== "is" && expr.kind !== "is_not";
-    const rhs = isNumeric
-      ? (expr.states[0] ?? "")
-      : expr.states.map((v) => stateValueLabel(ctx.hass, stateObj, expr.attribute, v)).join("/");
-    // Humanise the attribute name so the summary matches the editor's "Where"
-    // dropdown (e.g. `current_temperature` → "Current temperature") rather
-    // than leaking the raw storage key.
-    const lhs = expr.attribute
-      ? `${name}.${stateAttributeLabel(ctx.hass, stateObj, expr.attribute)}`
-      : name;
-    const head = `${lhs} ${verb} ${rhs}`;
-    if (expr.for && _hasStateDuration(expr.for)) {
-      return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(expr.for)}`;
-    }
-    return head;
+    return _renderAtomClause(expr, ctx, false);
   }
   if (expr.kind === "and" || expr.kind === "or") {
     const sep = ` ${stateOpLabel(ctx.hass, expr.kind)} `;
     return expr.items.map((it) => _wrapStateIfGroup(it, ctx)).join(sep);
   }
   if (expr.kind === "not") {
-    // For an atom-as-item, no parens — "NOT a is on" reads cleanly. For a
-    // group-as-item, keep parens so the scope of the NOT is unambiguous.
-    return `${stateOpLabel(ctx.hass, "not")} ${_wrapStateIfGroup(expr.item, ctx)}`;
+    // Inline the negation for a simple `is` clause — "a is NOT on" reads more
+    // naturally than "NOT a is on". Other shapes keep the leading "NOT …":
+    // numeric ("NOT a ≥ 20" beats "a ≥ NOT 20"), is_not (avoids a double
+    // negative), and groups (parens keep the NOT's scope unambiguous).
+    const item = expr.item;
+    if (item.kind === "is") {
+      return _renderAtomClause(item, ctx, true);
+    }
+    return `${stateOpLabel(ctx.hass, "not")} ${_wrapStateIfGroup(item, ctx)}`;
   }
   return "";
 }

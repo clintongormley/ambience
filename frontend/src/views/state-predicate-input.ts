@@ -310,8 +310,24 @@ export class AmbienceStatePredicateInput extends LitElement {
 
   // --- event handlers ---------------------------------------------------
 
+  /** True for an atom carrying no condition at all — no entity, no non-empty
+   *  state, no attribute, no duration. Clearing the entity (its field X) resets
+   *  states + attribute, so the atom arrives here fully empty. */
+  private _isEmptyAtom(node: StateExpr): boolean {
+    if (node.kind === "and" || node.kind === "or" || node.kind === "not") return false;
+    const atom = node as StateAtom;
+    return !atom.entity_id && !atom.states.some((s) => s !== "") && !atom.attribute && !atom.for;
+  }
+
   private _onNodeChange = (e: CustomEvent<{ path: number[]; value: StateExpr }>) => {
     e.stopPropagation();
+    // An atom edited down to nothing (typically by clearing its entity via the
+    // field's X) carries no condition — drop it rather than leaving a blank row,
+    // mirroring how clearing a value row removes that row.
+    if (this._isEmptyAtom(e.detail.value)) {
+      this._removeAt(e.detail.path);
+      return;
+    }
     this._replaceAt(e.detail.path, e.detail.value);
   };
 

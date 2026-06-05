@@ -1327,6 +1327,33 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.items[1].kind).toBe("is_not");
   });
 
+  test("clearing a NOT-wrapped atom's entity still removes the condition", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "x", states: ["on"] },
+        { kind: "not", item: { kind: "is", entity_id: "y", states: ["off"] } },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    // The node emits the emptied atom still wrapped in NOT (negation preserved).
+    el.dispatchEvent(
+      new CustomEvent("node-change", {
+        detail: {
+          path: [1],
+          value: { kind: "not", item: { kind: "is", entity_id: "", states: [], attribute: null } },
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    expect(captured.kind).toBe("is");
+    expect(captured.entity_id).toBe("x");
+  });
+
   test("clearing the open atom's entity resets openPath (no stale index opens a sibling)", async () => {
     el = await mount({
       kind: "and",

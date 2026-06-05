@@ -314,7 +314,10 @@ export class AmbienceStatePredicateInput extends LitElement {
    *  state, no attribute, no duration. Clearing the entity (its field X) resets
    *  states + attribute, so the atom arrives here fully empty. */
   private _isEmptyAtom(node: StateExpr): boolean {
-    if (node.kind === "and" || node.kind === "or" || node.kind === "not") return false;
+    // A negated atom is empty when its inner atom is — clearing the entity of a
+    // NOT-wrapped atom should still drop the whole condition.
+    if (node.kind === "not") return this._isEmptyAtom((node as StateNot).item);
+    if (node.kind === "and" || node.kind === "or") return false;
     const atom = node as StateAtom;
     return !atom.entity_id && atom.states.every((s) => s === "") && !atom.attribute && !atom.for;
   }

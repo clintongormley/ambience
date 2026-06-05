@@ -680,7 +680,7 @@ test("summariseState renders OR group", () => {
   ).toBe("a is on OR b is off");
 });
 
-test("summariseState renders NOT", () => {
+test("summariseState inlines NOT into a simple 'is' clause", () => {
   expect(
     summariseState(
       {
@@ -689,7 +689,36 @@ test("summariseState renders NOT", () => {
       },
       {},
     ),
-  ).toBe("NOT a is on");
+  ).toBe("a is NOT on");
+});
+
+test("summariseState inlines NOT before the value, keeping the 'for' suffix", () => {
+  expect(
+    summariseState(
+      {
+        kind: "not",
+        item: {
+          kind: "is",
+          entity_id: "binary_sensor.bed",
+          states: ["off"],
+          for: { h: 0, m: 20, s: 0 },
+        },
+      },
+      {},
+    ),
+  ).toBe("binary_sensor.bed is NOT off for ≥20m");
+});
+
+test("summariseState keeps the NOT prefix for a numeric clause (inline reads badly)", () => {
+  expect(
+    summariseState(
+      {
+        kind: "not",
+        item: { kind: ">=", entity_id: "sensor.t", states: ["20"] },
+      },
+      {},
+    ),
+  ).toBe("NOT sensor.t ≥ 20");
 });
 
 test("summariseState still parenthesises NOT around a group (so the scope is unambiguous)", () => {

@@ -356,7 +356,12 @@ export class AmbienceSimulatorModal extends LitElement {
   /** Inline "For h:m:s" control — how long the entity has held its state, so
    *  conditions with a `for:` duration evaluate as the user intends. */
   private _renderFor(k: SimulateEntityKnob, dur: StateForDuration) {
+    // Per-part aria-labels: without them screen readers announce three bare
+    // number fields. Scope each to the entity so rows stay distinguishable.
+    const unit: Record<"h" | "m" | "s", string> = { h: "hours", m: "minutes", s: "seconds" };
+    const name = entityName(this.hass, k.entity_id);
     const cell = (part: "h" | "m" | "s") => html`<input class="for-num" type="number" min="0"
+      aria-label=${`${name} — held for, ${unit[part]}`}
       data-for=${`${k.entity_id}:${part}`} .value=${String(dur[part])}
       @change=${(e: Event) =>
         this._setFor(k.entity_id, part, Number((e.target as HTMLInputElement).value))} />`;

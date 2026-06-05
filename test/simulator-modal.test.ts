@@ -116,6 +116,16 @@ describe("ambience-simulator-modal", () => {
     expect(el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:s']")).toBeTruthy();
   });
 
+  test("each For input has an accessible per-part label", async () => {
+    el = await mount();
+    const h = el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:h']");
+    const m = el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:m']");
+    const s = el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:s']");
+    expect(h.getAttribute("aria-label")).toContain("hours");
+    expect(m.getAttribute("aria-label")).toContain("minutes");
+    expect(s.getAttribute("aria-label")).toContain("seconds");
+  });
+
   test("Simulate sends the per-entity For duration", async () => {
     el = await mount();
     const m = el.shadowRoot.querySelector("input[data-for='binary_sensor.motion:m']");

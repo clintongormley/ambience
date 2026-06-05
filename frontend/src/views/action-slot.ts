@@ -113,6 +113,9 @@ export class AmbienceActionSlot extends LitElement {
   @property({ attribute: false }) exposed?: ExposedAction;
   @property({ attribute: false }) entityIds: string[] = [];
   @property({ attribute: false }) params: Record<string, unknown> = {};
+  /** Entities already targeted by other actions in the scene; hidden from this
+   *  slot's target picker so the same entity can't be driven by two actions. */
+  @property({ attribute: false }) excludeEntities: string[] = [];
 
   @state() private _schema: ServiceSchema | null | undefined = undefined;
   @state() private _schemaError: string | null = null;
@@ -260,7 +263,8 @@ export class AmbienceActionSlot extends LitElement {
 
   private _renderTargetPicker() {
     if (!this._hasTarget()) return "";
-    const entities = this._scopeEntities();
+    const excluded = new Set(this.excludeEntities);
+    const entities = this._scopeEntities().filter((e) => !excluded.has(e));
     const target = (this._schema?.target ?? null) as HaTarget;
     const label = localize(this.hass, "ui.target", "Target");
     return html`

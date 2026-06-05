@@ -317,6 +317,63 @@ describe("ambience-scene-editor — collapse + friendly labels", () => {
     expect(action.querySelector("ambience-action-slot")).toBeTruthy();
   });
 
+  test("an action's target picker hides entities already used by another action", async () => {
+    el = await mount({
+      name: "test",
+      when: {},
+      actions: [
+        { service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {} },
+        { service: "light.turn_on", entity_ids: [], params: {} },
+      ],
+    });
+    const action1 = el.shadowRoot.querySelector('.slot[data-slot-id="action-1"]') as HTMLElement;
+    action1.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const slot = action1.querySelector("ambience-action-slot") as any;
+    expect(slot.excludeEntities).toContain("light.lamp_a");
+    const picker = slot.shadowRoot.querySelector("ambience-target-picker") as any;
+    expect(picker.entities).not.toContain("light.lamp_a");
+    expect(picker.entities).toContain("light.lamp_b");
+  });
+
+  test("updating one action's targets reactively updates what another action may pick", async () => {
+    el = await mount({
+      name: "test",
+      when: {},
+      actions: [
+        { service: "light.turn_on", entity_ids: [], params: {} },
+        { service: "light.turn_on", entity_ids: [], params: {} },
+      ],
+    });
+    const action1 = el.shadowRoot.querySelector('.slot[data-slot-id="action-1"]') as HTMLElement;
+    action1.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    let slot = action1.querySelector("ambience-action-slot") as any;
+    expect(slot.excludeEntities).not.toContain("light.lamp_a");
+
+    // Action 0 claims lamp_a — mirror the draft mutation the editor performs.
+    el._draft = {
+      ...el._draft,
+      actions: el._draft.actions.map((a: any, i: number) =>
+        i === 0 ? { ...a, entity_ids: ["light.lamp_a"] } : a,
+      ),
+    };
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    slot = action1.querySelector("ambience-action-slot") as any;
+    expect(slot.excludeEntities).toContain("light.lamp_a");
+  });
+
   test("expanded action body does not include an action type dropdown", async () => {
     el = await mount({
       name: "test",

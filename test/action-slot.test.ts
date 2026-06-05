@@ -38,6 +38,7 @@ async function mount(
     schema?: ServiceSchema | null;
     entityIds?: string[];
     params?: Record<string, unknown>;
+    excludeEntities?: string[];
   } = {},
 ): Promise<any> {
   if (opts.schema !== undefined) {
@@ -49,6 +50,7 @@ async function mount(
   if (opts.exposed) el.exposed = opts.exposed;
   el.entityIds = opts.entityIds ?? [];
   el.params = opts.params ?? {};
+  if (opts.excludeEntities) el.excludeEntities = opts.excludeEntities;
   document.body.appendChild(el);
   await el.updateComplete;
   await new Promise((r) => setTimeout(r, 0));
@@ -255,6 +257,42 @@ describe("ambience-action-slot", () => {
     // entities are the full scope list; the picker itself intersects with target
     expect(picker.entities).toContain("light.lamp_a");
     expect(picker.entities).toContain("switch.fan");
+  });
+
+  test("excludeEntities are removed from the candidate list passed to the picker", async () => {
+    const schema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: {},
+    };
+    el = await mount({
+      exposed: {
+        id: "light.turn_on",
+        label: "",
+        visible_fields: [],
+        defaults: {},
+      },
+      schema,
+      excludeEntities: ["light.lamp_a"],
+    });
+    const picker = el.shadowRoot.querySelector("ambience-target-picker") as any;
+    // lamp_a is claimed by another action → omitted from this picker's candidates.
+    expect(picker.entities).not.toContain("light.lamp_a");
+    // The rest of the in-scope entities remain available.
+    expect(picker.entities).toContain("light.lamp_b");
+  });
+
+  test("excludeEntities defaults to passing through all scope entities", async () => {
+    const schema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: {},
+    };
+    el = await mount({
+      exposed: { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
+      schema,
+    });
+    const picker = el.shadowRoot.querySelector("ambience-target-picker") as any;
+    expect(picker.entities).toContain("light.lamp_a");
+    expect(picker.entities).toContain("light.lamp_b");
   });
 
   test("required visible field renders an asterisk in the fallback label", async () => {

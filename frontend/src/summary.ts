@@ -5,7 +5,9 @@ import {
   localize,
   monthLabel,
   periodLabel,
+  stateAttributeLabel,
   stateOpLabel,
+  stateValueLabel,
   weatherAttrLabel,
   weekdayLabel,
 } from "./i18n.js";
@@ -14,6 +16,7 @@ import type {
   DayItem,
   DayPredicate,
   ExposedAction,
+  OccupancyPredicate,
   PeoplePredicate,
   PeriodStoreView,
   Scene,
@@ -104,6 +107,9 @@ export function summariseCondition(
   }
   if (conditionName === "people") {
     return summarisePeople(predicate as PeoplePredicate, ctx);
+  }
+  if (conditionName === "occupancy") {
+    return summariseOccupancy(predicate as OccupancyPredicate, ctx);
   }
   if (conditionName === "template") {
     return summariseTemplate(predicate as TemplatePredicate, ctx);
@@ -404,6 +410,34 @@ export function entityDisplayName(hass: HassLike | undefined, entity_id: string)
   return _entityDisplayName({ hass }, entity_id);
 }
 
+/**
+ * "<Sensor> is occupied/vacant" for one sensor, or
+ * "any of (A, B) occupied" / "all of (A, B) vacant" for several, with an
+ * optional "for ≥<dur>" suffix. Sensor names use friendly_name when set.
+ */
+export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionContext = {}): string {
+  if (pred == null || !pred.sensors?.length) return localize(ctx.hass, "ui.summary_any", "any");
+  const names = pred.sensors.map((id) => entityName(ctx.hass as HassWithStates | undefined, id));
+  const verb =
+    pred.occupied === false
+      ? localize(ctx.hass, "occupancy_summary.vacant", "vacant")
+      : localize(ctx.hass, "occupancy_summary.occupied", "occupied");
+  let head: string;
+  if (names.length === 1) {
+    head = `${names[0]} is ${verb}`;
+  } else {
+    const q =
+      pred.quant === "all"
+        ? localize(ctx.hass, "occupancy_summary.all_of", "all of")
+        : localize(ctx.hass, "occupancy_summary.any_of", "any of");
+    head = `${q} (${names.join(", ")}) ${verb}`;
+  }
+  if (pred.for && _hasStateDuration(pred.for)) {
+    return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
+  }
+  return head;
+}
+
 export function summariseState(pred: StatePredicate, ctx: ConditionContext = {}): string {
   if (pred == null) return localize(ctx.hass, "ui.summary_any", "any");
   return _renderStateExpr(pred, ctx);
@@ -419,14 +453,24 @@ function _renderStateExpr(expr: StateExpr, ctx: ConditionContext): string {
     expr.kind === "<="
   ) {
     const verb = stateOpLabel(ctx.hass, expr.kind);
-    // For is/is_not: multi-value list joined with "/". For numeric: a single
-    // threshold value (states[0]).
-    const isNumeric = expr.kind !== "is" && expr.kind !== "is_not";
-    const rhs = isNumeric ? (expr.states[0] ?? "") : expr.states.join("/");
     // Use the entity's friendly_name when available (falls back to the
     // raw entity_id). Attribute-mode renders as `<name>.<attribute>`.
     const name = _entityDisplayName(ctx, expr.entity_id);
-    const lhs = expr.attribute ? `${name}.${expr.attribute}` : name;
+    const stateObj = (ctx.hass as HassWithStates | undefined)?.states?.[expr.entity_id];
+    // For is/is_not: multi-value list joined with "/", each value humanised the
+    // way HA displays it (e.g. `heat_cool` → "Heat/cool") so the summary matches
+    // the editor's value dropdown. For numeric: a single threshold (states[0]),
+    // left raw since it's a number, not a state key.
+    const isNumeric = expr.kind !== "is" && expr.kind !== "is_not";
+    const rhs = isNumeric
+      ? (expr.states[0] ?? "")
+      : expr.states.map((v) => stateValueLabel(ctx.hass, stateObj, expr.attribute, v)).join("/");
+    // Humanise the attribute name so the summary matches the editor's "Where"
+    // dropdown (e.g. `current_temperature` → "Current temperature") rather
+    // than leaking the raw storage key.
+    const lhs = expr.attribute
+      ? `${name}.${stateAttributeLabel(ctx.hass, stateObj, expr.attribute)}`
+      : name;
     const head = `${lhs} ${verb} ${rhs}`;
     if (expr.for && _hasStateDuration(expr.for)) {
       return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(expr.for)}`;
@@ -515,13 +559,20 @@ function _actionDisplayName(action: ActionSpec, ctx: ActionContext): string {
 }
 
 /**
- * Pluralisation noun for the target count summary. We don't have HA target
- * metadata here, so derive a noun from the service's domain ("light" from
- * "light.turn_on") — same heuristic as the old ActionInfo.domains[0] path.
+ * Pluralisation noun for the target count summary. Derived from the TARGET
+ * entities' domain ("light" from "light.lounge"), not the service's domain —
+ * an integration's service may act on another domain's entities (e.g.
+ * `fado.fade_lights` targets `light.*`, so the noun is "light", not "fado").
+ * Falls back to a generic noun when targets span multiple domains or carry no
+ * domain prefix.
  */
 function _targetNoun(action: ActionSpec, ctx: ActionContext): string {
-  const dot = action.service.indexOf(".");
-  if (dot > 0) return action.service.slice(0, dot);
+  const domains = new Set<string>();
+  for (const id of action.entity_ids) {
+    const dot = id.indexOf(".");
+    if (dot > 0) domains.add(id.slice(0, dot));
+  }
+  if (domains.size === 1) return [...domains][0];
   return localize(ctx.hass, "ui.target_noun", "target");
 }
 

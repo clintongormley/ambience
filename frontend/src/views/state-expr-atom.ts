@@ -4,43 +4,15 @@ import { customElement, property, state } from "lit/decorators.js";
 import { getKnownAttributeValues, getKnownStates, type HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
-import { localize, stateOpLabel } from "../i18n.js";
+import { localize, stateAttributeLabel, stateOpLabel, stateValueLabel } from "../i18n.js";
 import type { StateAtom, StateForDuration } from "../types.js";
 import { statesMap } from "./hass-states.js";
 
 /** Minimal shape of an HA state object as read from `hass.states`. */
 type StateObj = { state?: string; attributes?: Record<string, unknown> };
 
-/** HA's snake_case → "Sentence case" attribute formatter, with the same
- *  acronym fixups HA applies. Used as a fallback when the running HA doesn't
- *  expose `hass.formatEntityAttributeName`. */
-function formatAttributeName(value: string): string {
-  return value
-    .replace(/_/g, " ")
-    .replace(/\bid\b/g, "ID")
-    .replace(/\bip\b/g, "IP")
-    .replace(/\bmac\b/g, "MAC")
-    .replace(/\bgps\b/g, "GPS")
-    .replace(/^\w/, (c) => c.toUpperCase());
-}
-
-/** Human-readable label for an attribute name. Prefers HA's own translation-
- *  aware formatter (so it matches the automation editor / more-info dialog),
- *  falling back to `formatAttributeName`. */
-function attributeLabel(
-  hass: HassConnection | undefined,
-  stateObj: StateObj | undefined,
-  attribute: string,
-): string {
-  const fmt = (
-    hass as { formatEntityAttributeName?: (s: unknown, a: string) => string } | undefined
-  )?.formatEntityAttributeName;
-  if (fmt && stateObj) {
-    const label = fmt(stateObj, attribute);
-    if (label) return label;
-  }
-  return formatAttributeName(attribute);
-}
+type AttrLabelMaps = { keyToLabel: Map<string, string>; labelToKey: Map<string, string> };
+type ValueLabelMaps = { rawToLabel: Map<string, string>; labelToRaw: Map<string, string> };
 
 /**
  * Single atom of a state-predicate tree, laid out like HA's automation State
@@ -230,12 +202,41 @@ export class AmbienceStateExprAtom extends LitElement {
    *  the user's expectation. */
   private static readonly _STATE_SENTINEL = "State";
 
+  // Memo for the label maps below: both are pure functions of the entity, the
+  // attribute, and the known option lists, but are read several times per
+  // render (schema + per-row data). Rebuilding them each call walks every
+  // option through HA's formatter, so cache on the inputs that define them.
+  private _attrMapsCache?: { key: string; maps: AttrLabelMaps };
+  private _valueMapsCache?: { key: string; maps: ValueLabelMaps };
+
+  /** key→label / label→key maps for the current entity's known attributes.
+   *  ha-form's custom_value combobox displays the option's VALUE, so we use
+   *  the human label as both value and label and translate to/from the raw
+   *  storage key at the data/emit boundary (these maps). */
+  private _attrLabelMaps(): AttrLabelMaps {
+    const attrs = this._knownAttributesFor(this.value.entity_id);
+    // Include the active language so a mid-edit locale switch re-derives labels.
+    const lang = (this.hass as { language?: string } | undefined)?.language ?? "";
+    const key = `${lang}|${this.value.entity_id}|${attrs.join(",")}`;
+    if (this._attrMapsCache?.key === key) return this._attrMapsCache.maps;
+    const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
+    const keyToLabel = new Map<string, string>();
+    const labelToKey = new Map<string, string>();
+    for (const a of attrs) {
+      const label = stateAttributeLabel(this.hass, stateObj, a);
+      keyToLabel.set(a, label);
+      labelToKey.set(label, a);
+    }
+    const maps = { keyToLabel, labelToKey };
+    this._attrMapsCache = { key, maps };
+    return maps;
+  }
+
   /** Dropdown of "Where to look": first option is the State sentinel; the
    *  rest are the entity's known attributes. custom_value: true so the
    *  user can still type an attribute name we don't know about. */
   _attributeSchema(): HaFormSchema[] {
-    const attrs = this._knownAttributesFor(this.value.entity_id);
-    const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
+    const { keyToLabel } = this._attrLabelMaps();
     return [
       {
         name: "attribute",
@@ -243,17 +244,16 @@ export class AmbienceStateExprAtom extends LitElement {
           select: {
             mode: "dropdown",
             custom_value: true,
-            // Sentinel value and label are both the literal word 'State' so
-            // ha-form's custom_value combobox displays "State" rather than an
-            // internal key.
+            // ha-form's custom_value combobox shows each option's VALUE, not
+            // its label — so value and label must match or the dropdown shows
+            // a raw key once selected. The sentinel's word ('State') and every
+            // attribute's human label are therefore used as both.
             options: [
               {
                 value: AmbienceStateExprAtom._STATE_SENTINEL,
                 label: AmbienceStateExprAtom._STATE_SENTINEL,
               },
-              // Value stays the raw attribute key (storage); the label is
-              // humanised so the dropdown reads like the automation editor.
-              ...attrs.map((a) => ({ value: a, label: attributeLabel(this.hass, stateObj, a) })),
+              ...[...keyToLabel.values()].map((label) => ({ value: label, label })),
             ],
           },
         },
@@ -262,22 +262,27 @@ export class AmbienceStateExprAtom extends LitElement {
   }
 
   /** Translate storage (`attribute: null | ""` or string) to the ha-form
-   *  dropdown's data shape (sentinel for state-mode, otherwise the
-   *  attribute name verbatim). */
+   *  dropdown's data shape: the sentinel for state-mode, the attribute's
+   *  human label for a known key (so the combobox shows the label), or the
+   *  raw value verbatim for a custom-typed attribute we don't know about. */
   _attributeData(): { attribute: string } {
     const attr = this.value.attribute;
     if (!attr) return { attribute: AmbienceStateExprAtom._STATE_SENTINEL };
-    return { attribute: attr };
+    const { keyToLabel } = this._attrLabelMaps();
+    return { attribute: keyToLabel.get(attr) ?? attr };
   }
 
-  /** Inverse of `_attributeData`: ha-form emits the sentinel for the
-   *  State option; we translate back to "" so `_normalize` stores null. */
+  /** Inverse of `_attributeData`: ha-form emits the sentinel for the State
+   *  option, a known attribute's human label for a dropdown pick, or a
+   *  free-typed string for a custom value. Map labels back to the raw storage
+   *  key; the sentinel becomes "" so `_normalize` stores null. */
   _setAttributeFromHaForm(v: string) {
     if (v === AmbienceStateExprAtom._STATE_SENTINEL) {
       this._setAttribute("");
-    } else {
-      this._setAttribute(v);
+      return;
     }
+    const { labelToKey } = this._attrLabelMaps();
+    this._setAttribute(labelToKey.get(v) ?? v);
   }
 
   private static readonly _NUMERIC_OPS = [">", ">=", "<", "<="] as const;
@@ -342,14 +347,11 @@ export class AmbienceStateExprAtom extends LitElement {
         },
       ];
     }
-    let options: string[];
-    if (this.value.attribute) {
-      // Possible values come from the backend (single source of truth with the
-      // known-states list), already including the current value.
-      options = this._knownAttributeValues;
-    } else {
-      options = this._knownStates;
-    }
+    // ha-form's custom_value combobox displays the option's VALUE, not its
+    // label (same quirk as the attribute dropdown), so value and label are
+    // both the humanised display string and we translate to/from the raw
+    // stored value at the data/emit boundary (_valueDisplay / *FromHaForm).
+    const { rawToLabel } = this._valueLabelMaps();
     return [
       {
         name: "value",
@@ -357,11 +359,61 @@ export class AmbienceStateExprAtom extends LitElement {
           select: {
             mode: "dropdown",
             custom_value: true,
-            options: options.map((s) => ({ value: s, label: s })),
+            options: [...rawToLabel.values()].map((label) => ({ value: label, label })),
           },
         },
       },
     ];
+  }
+
+  /** Raw candidate values for the current target (entity state, or the chosen
+   *  attribute's values), fetched from the backend. */
+  private _rawValueOptions(): string[] {
+    return this.value.attribute ? this._knownAttributeValues : this._knownStates;
+  }
+
+  /** raw→label / label→raw maps for the current target's candidate values.
+   *  Labels are how HA displays the value (e.g. `heat_cool` → "Heat/cool"). */
+  private _valueLabelMaps(): ValueLabelMaps {
+    const attr = this.value.attribute;
+    const options = this._rawValueOptions();
+    const lang = (this.hass as { language?: string } | undefined)?.language ?? "";
+    const key = `${lang}|${this.value.entity_id}|${attr ?? ""}|${options.join(",")}`;
+    if (this._valueMapsCache?.key === key) return this._valueMapsCache.maps;
+    const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
+    const rawToLabel = new Map<string, string>();
+    const labelToRaw = new Map<string, string>();
+    for (const raw of options) {
+      const label = stateValueLabel(this.hass, stateObj, attr, raw);
+      rawToLabel.set(raw, label);
+      labelToRaw.set(label, raw);
+    }
+    const maps = { rawToLabel, labelToRaw };
+    this._valueMapsCache = { key, maps };
+    return maps;
+  }
+
+  /** Display label for a stored raw value (the combobox shows the value, so we
+   *  feed it the label). Only known values are translated; a custom-typed value
+   *  we don't recognise passes through verbatim so it round-trips intact. */
+  _valueDisplay(raw: string): string {
+    return this._valueLabelMaps().rawToLabel.get(raw) ?? raw;
+  }
+
+  /** Inverse of `_valueDisplay`: map a label the user picked back to the raw
+   *  storage value (custom-typed values pass through verbatim). */
+  private _labelToRaw(v: string): string {
+    return this._valueLabelMaps().labelToRaw.get(v) ?? v;
+  }
+
+  /** Set the value at `idx` from an ha-form emit (label → raw). */
+  _setValueFromHaForm(idx: number, v: string) {
+    this._setValueAt(idx, this._labelToRaw(v));
+  }
+
+  /** Append a value from an ha-form emit (label → raw). */
+  _addValueFromHaForm(v: string) {
+    this._addValue(this._labelToRaw(v));
   }
 
   /** ha-form schema for the optional "for" duration. Blank by default; we
@@ -478,10 +530,11 @@ export class AmbienceStateExprAtom extends LitElement {
     const isNumeric = this._isNumericOp(this.value.kind);
     // ha-form's number selector wants a number in `data` and emits a number
     // in the change event; we store the threshold as a string for wire-
-    // format consistency, so we coerce at the boundary.
+    // format consistency, so we coerce at the boundary. Non-numeric values are
+    // shown via their humanised label (the combobox displays the value).
     const data: Record<string, unknown> = isNumeric
       ? { value: value === "" ? undefined : Number(value) }
-      : { value };
+      : { value: this._valueDisplay(value) };
     /* v8 ignore start */
     if (customElements.get("ha-form")) {
       return html`
@@ -494,7 +547,16 @@ export class AmbienceStateExprAtom extends LitElement {
             @value-changed=${(e: CustomEvent<{ value: { value?: string | number } }>) => {
               e.stopPropagation();
               const v = e.detail.value.value;
-              onChange(v === undefined || v === null ? "" : String(v));
+              const s = v === undefined || v === null ? "" : String(v);
+              // Numeric thresholds are stored verbatim; non-numeric values are
+              // emitted as labels and translated back to the raw storage value.
+              if (isNumeric) {
+                onChange(s);
+              } else if (isAddRow) {
+                this._addValueFromHaForm(s);
+              } else {
+                this._setValueFromHaForm(idx, s);
+              }
             }}
           ></ha-form>
         </div>

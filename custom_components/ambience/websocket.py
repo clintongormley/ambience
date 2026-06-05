@@ -132,6 +132,14 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_simulate)
 
 
+def _schedule_reapply(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> None:
+    """Re-evaluate a scope right after its config is saved, so a toggled or
+    edited scene takes effect immediately instead of waiting for the next
+    trigger. Scheduled (not awaited) so the save response isn't blocked by
+    device calls; `force=False`, so a scope whose switch is off is left alone."""
+    hass.async_create_task(async_apply_scene(hass, scope_kind, scope_id))
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "ambience/areas/list"})
 @websocket_api.async_response
@@ -366,6 +374,7 @@ async def _ws_area_save(
     coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
     await store.async_save_area(area_id, config)
+    _schedule_reapply(hass, "area", area_id)
     connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
 
 
@@ -424,6 +433,7 @@ async def _ws_floor_save(
     coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
     await store.async_save_floor(floor_id, config)
+    _schedule_reapply(hass, "floor", floor_id)
     connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
 
 
@@ -464,6 +474,7 @@ async def _ws_house_save(
     coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
     await store.async_save_house(config)
+    _schedule_reapply(hass, "house", None)
     connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
 
 

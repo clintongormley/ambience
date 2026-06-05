@@ -70,12 +70,43 @@ describe("ambience-state-expr-atom", () => {
     // value and translate at the boundary.
     expect(sel.options[0].label).toBe("State");
     expect(sel.options[0].value).not.toBe("");
-    // Then the entity's known attributes, sorted.
-    expect(sel.options.slice(1).map((o: { value: string }) => o.value)).toEqual([
-      "friendly_name",
-      "source",
-      "volume_level",
+    // ha-form's custom_value combobox displays the option's VALUE, not its
+    // label. So every option's value must equal its (human) label, otherwise
+    // selecting an attribute shows the raw key. Attributes are sorted by key.
+    expect(sel.options.slice(1)).toEqual([
+      { value: "Friendly name", label: "Friendly name" },
+      { value: "Source", label: "Source" },
+      { value: "Volume level", label: "Volume level" },
     ]);
+    el2.remove();
+  });
+
+  test("_attributeData translates a stored attribute key to its human label so the combobox shows the label", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "media_player.x", attribute: "source", states: [] };
+    el2.hass = {
+      states: { "media_player.x": { attributes: { source: "Spotify", volume_level: 0.5 } } },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    expect(el2._attributeData().attribute).toBe("Source");
+    el2.remove();
+  });
+
+  test("_setAttributeFromHaForm maps a human label back to the raw attribute key", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "media_player.x", states: [] };
+    el2.hass = {
+      states: { "media_player.x": { attributes: { source: "Spotify", volume_level: 0.5 } } },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el2._setAttributeFromHaForm("Source");
+    expect(captured.attribute).toBe("source");
     el2.remove();
   });
 
@@ -308,10 +339,11 @@ describe("ambience-state-expr-atom", () => {
     document.body.appendChild(el2);
     await el2.updateComplete;
     const opts = el2._attributeSchema()[0].selector.select.options;
-    const byValue = (v: string) => opts.find((o: { value: string }) => o.value === v);
-    // Value stays the raw attribute key; label is humanised.
-    expect(byValue("fan_mode").label).toBe("Fan mode");
-    expect(byValue("hvac_action").label).toBe("Hvac action");
+    const byLabel = (l: string) => opts.find((o: { label: string }) => o.label === l);
+    // Value and label are both the humanised name (ha-form's custom_value
+    // combobox displays the value, so they must match).
+    expect(byLabel("Fan mode")).toEqual({ value: "Fan mode", label: "Fan mode" });
+    expect(byLabel("Hvac action")).toEqual({ value: "Hvac action", label: "Hvac action" });
     el2.remove();
   });
 
@@ -413,6 +445,119 @@ describe("ambience-state-expr-atom", () => {
     });
     el._setValueAt(0, "");
     expect(captured.states).toEqual(["off"]);
+  });
+
+  test("state-mode value options use HA's formatted label as both value and label", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "binary_sensor.x", states: [] };
+    el2.hass = {
+      states: { "binary_sensor.x": { state: "on", attributes: {} } },
+      formatEntityState: (_s: unknown, v: string) => ({ on: "Detected", off: "Clear" })[v] ?? v,
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    expect(el2._valueSchema()[0].selector.select.options).toEqual([
+      { value: "Detected", label: "Detected" },
+      { value: "Clear", label: "Clear" },
+    ]);
+    el2.remove();
+  });
+
+  test("attribute-mode value options use formatEntityAttributeValue label (value===label)", async () => {
+    vi.mocked(getKnownAttributeValues).mockResolvedValue({ values: ["nvidia", "ps5"] });
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "remote.cine", attribute: "current_activity", states: [] };
+    el2.hass = {
+      states: { "remote.cine": { state: "on", attributes: { current_activity: "nvidia" } } },
+      formatEntityAttributeValue: (_s: unknown, _a: string, v: string) =>
+        ({ nvidia: "Nvidia (TV)", ps5: "PlayStation 5 (TV)" })[v] ?? v,
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    expect(el2._valueSchema()[0].selector.select.options).toEqual([
+      { value: "Nvidia (TV)", label: "Nvidia (TV)" },
+      { value: "PlayStation 5 (TV)", label: "PlayStation 5 (TV)" },
+    ]);
+    el2.remove();
+  });
+
+  test("_valueDisplay translates a stored raw value to its formatted label", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "binary_sensor.x", states: ["on"] };
+    el2.hass = {
+      states: { "binary_sensor.x": { state: "on", attributes: {} } },
+      formatEntityState: (_s: unknown, v: string) => (v === "on" ? "Detected" : v),
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    expect(el2._valueDisplay("on")).toBe("Detected");
+    el2.remove();
+  });
+
+  test("_addValueFromHaForm maps a formatted label back to the raw value before storing", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "binary_sensor.x", states: [] };
+    el2.hass = {
+      states: { "binary_sensor.x": { state: "on", attributes: {} } },
+      formatEntityState: (_s: unknown, v: string) => ({ on: "Detected", off: "Clear" })[v] ?? v,
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el2._addValueFromHaForm("Detected");
+    expect(captured.states).toEqual(["on"]);
+    el2.remove();
+  });
+
+  test("_setValueFromHaForm maps a formatted label back to the raw value at an index", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "binary_sensor.x", states: ["on"] };
+    el2.hass = {
+      states: { "binary_sensor.x": { state: "on", attributes: {} } },
+      formatEntityState: (_s: unknown, v: string) => ({ on: "Detected", off: "Clear" })[v] ?? v,
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el2._setValueFromHaForm(0, "Clear");
+    expect(captured.states).toEqual(["off"]);
+    el2.remove();
+  });
+
+  test("_addValueFromHaForm keeps an unknown custom value verbatim", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "binary_sensor.x", states: [] };
+    el2.hass = {
+      states: { "binary_sensor.x": { state: "on", attributes: {} } },
+      formatEntityState: (_s: unknown, v: string) => ({ on: "Detected", off: "Clear" })[v] ?? v,
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el2._addValueFromHaForm("custom_state_we_dont_know");
+    expect(captured.states).toEqual(["custom_state_we_dont_know"]);
+    el2.remove();
   });
 
   test("_removeValueAt deletes the row", async () => {

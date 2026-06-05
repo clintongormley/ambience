@@ -446,3 +446,27 @@ def test_shadowed_by_contains_callable_returns_false_is_not_superset() -> None:
     ]
     # narrow does not contain wide, so wide is not shadowed.
     assert shadowed_by(ordered, conditions) == {}
+
+
+def test_state_rule_outranks_occupancy_rule() -> None:
+    """An explicit state rule (priority 950) must sort above an occupancy rule
+    (915) when their conditions are disjoint — the 'Watch TV beats presence'
+    precedence fix. The state slot is compared first; the occupancy scene is a
+    wildcard there, so the state scene wins regardless of the occupancy
+    scene's own (lower-priority) slot."""
+
+    class StateLike:
+        priority = 950
+
+        def order_key(self, p: Any) -> str:
+            return p.get("entity_id", "")
+
+    class OccLike:
+        priority = 915
+
+    conditions = {"state": StateLike(), "occupancy": OccLike()}
+    scenes = [
+        _scene("presence", {"occupancy": {"sensors": ["binary_sensor.lounge"]}}),
+        _scene("watch-tv", {"state": {"kind": "is", "entity_id": "remote.cine"}}),
+    ]
+    assert _names(sort_scenes(scenes, conditions)) == ["watch-tv", "presence"]

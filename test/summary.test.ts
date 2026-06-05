@@ -510,6 +510,23 @@ describe("summariseAction", () => {
     expect(summariseAction(action, { hass: noLocalize })).toBe("X.unknown: 2 xs");
   });
 
+  test("target noun comes from the entity domain, not the service domain (fado.fade_lights → lights)", () => {
+    // fado.fade_lights is a fado-integration service that acts on light
+    // entities. The count noun must follow the targets ("lights"), not the
+    // service's own domain ("fados").
+    const action: ActionSpec = {
+      service: "fado.fade_lights",
+      entity_ids: ["light.a", "light.b", "light.c"],
+      params: { brightness: 40 },
+    };
+    const exposed: ExposedAction[] = [
+      { id: "fado.fade_lights", label: "Fade lights", visible_fields: [], defaults: {} },
+    ];
+    expect(summariseAction(action, { hass: noLocalize, exposedActions: exposed })).toBe(
+      "Fade lights: 3 lights, Brightness: 40",
+    );
+  });
+
   test("script.<id> service is just another action", () => {
     const action: ActionSpec = {
       service: "script.foo",
@@ -594,6 +611,52 @@ test("summariseWeather renders dangling group ids title-cased (no '?' suffix)", 
 test("summariseCondition delegates weather", () => {
   const ctx = { weatherGroups: [{ id: "wet", label: "Wet", conditions: ["rainy"] }] };
   expect(summariseCondition("weather", { groups: ["wet"], thresholds: [] }, ctx)).toBe("Wet");
+});
+
+test("summariseOccupancy: single sensor occupied", () => {
+  const hass = {
+    states: { "binary_sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+  } as any;
+  expect(
+    summariseCondition(
+      "occupancy",
+      { sensors: ["binary_sensor.lounge"], occupied: true },
+      { hass },
+    ),
+  ).toBe("Lounge is occupied");
+});
+
+test("summariseOccupancy: vacant with for", () => {
+  const hass = {
+    states: { "binary_sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+  } as any;
+  expect(
+    summariseCondition(
+      "occupancy",
+      { sensors: ["binary_sensor.lounge"], occupied: false, for: { h: 0, m: 5, s: 0 } },
+      { hass },
+    ),
+  ).toBe("Lounge is vacant for ≥5m");
+});
+
+test("summariseOccupancy: multiple sensors with quant", () => {
+  const hass = {
+    states: {
+      "binary_sensor.a": { attributes: { friendly_name: "Lounge" } },
+      "binary_sensor.b": { attributes: { friendly_name: "Hall" } },
+    },
+  } as any;
+  expect(
+    summariseCondition(
+      "occupancy",
+      { sensors: ["binary_sensor.a", "binary_sensor.b"], occupied: true, quant: "all" },
+      { hass },
+    ),
+  ).toBe("all of (Lounge, Hall) occupied");
+});
+
+test("summariseOccupancy: null is 'any'", () => {
+  expect(summariseCondition("occupancy", null, {})).toBe("(any)");
 });
 
 test("summariseState renders a single atom", () => {
@@ -760,7 +823,45 @@ test("summariseState renders an atom with an attribute as entity.attr", () => {
       },
       {},
     ),
-  ).toBe("media_player.x.source is Spotify/Tidal");
+  ).toBe("media_player.x.Source is Spotify/Tidal");
+});
+
+test("summariseState humanises state values via HA's formatEntityState", () => {
+  const hass = {
+    states: { "climate.x": { state: "heat", attributes: {} } },
+    formatEntityState: (_s: unknown, v: string) => (v === "heat_cool" ? "Heat/cool" : v),
+  } as any;
+  expect(
+    summariseState({ kind: "is", entity_id: "climate.x", states: ["heat_cool"] }, { hass }),
+  ).toBe("climate.x is Heat/cool");
+});
+
+test("summariseState humanises attribute values via formatEntityAttributeValue", () => {
+  const hass = {
+    states: { "remote.cine": { state: "on", attributes: { current_activity: "nvidia" } } },
+    formatEntityAttributeValue: (_s: unknown, _a: string, v: string) =>
+      v === "nvidia" ? "Nvidia (TV)" : v,
+  } as any;
+  expect(
+    summariseState(
+      { kind: "is", entity_id: "remote.cine", attribute: "current_activity", states: ["nvidia"] },
+      { hass },
+    ),
+  ).toBe("remote.cine.Current activity is Nvidia (TV)");
+});
+
+test("summariseState humanises a multi-word attribute name (matches the editor's Where dropdown)", () => {
+  expect(
+    summariseState(
+      {
+        kind: ">",
+        entity_id: "climate.x",
+        attribute: "current_temperature",
+        states: ["21"],
+      },
+      {},
+    ),
+  ).toBe("climate.x.Current temperature > 21");
 });
 
 test("summariseState renders attribute-mode is_not", () => {
@@ -774,7 +875,7 @@ test("summariseState renders attribute-mode is_not", () => {
       },
       {},
     ),
-  ).toBe("light.x.brightness is not 255");
+  ).toBe("light.x.Brightness is not 255");
 });
 
 test("summariseState falls back to entity-state when attribute is null/empty", () => {
@@ -856,7 +957,7 @@ test("summariseState renders numeric ops on attributes as 'entity.attr op N'", (
       },
       {},
     ),
-  ).toBe("light.x.brightness > 100");
+  ).toBe("light.x.Brightness > 100");
 });
 
 test("summariseState appends 'for' clause to a numeric atom", () => {
@@ -907,7 +1008,7 @@ test("summariseState combines friendly_name with the attribute name", () => {
       },
       { hass },
     ),
-  ).toBe("Kitchen light.brightness > 100");
+  ).toBe("Kitchen light.Brightness > 100");
 });
 
 test("summariseState falls back to entity_id when no friendly_name is set", () => {

@@ -11,6 +11,7 @@ import "./weather-predicate-input.js";
 import "./sun-predicate-input.js";
 import "./state-predicate-input.js";
 import "./people-predicate-input.js";
+import "./occupancy-predicate-input.js";
 import "./template-predicate-input.js";
 import { emitValueChanged } from "../dom.js";
 
@@ -161,6 +162,18 @@ export class AmbienceConditionInput extends LitElement {
             this._emit(e.detail.value);
           }}
         ></ambience-people-predicate-input>
+      `;
+    }
+    if (this.condition.input === "occupancy_predicate") {
+      return html`
+        <ambience-occupancy-predicate-input
+          .hass=${this.hass}
+          .value=${this.value as any}
+          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
+            e.stopPropagation();
+            this._emit(e.detail.value);
+          }}
+        ></ambience-occupancy-predicate-input>
       `;
     }
     return html`

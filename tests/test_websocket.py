@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -2330,3 +2331,44 @@ async def test_categories_delete_plain_value_error_returns_validation_error(
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
     assert "something went wrong" in resp["error"]["message"]
+
+
+async def test_area_save_reapplies_scope(
+    hass: HomeAssistant, installed, hass_ws_client, area_id
+) -> None:
+    """Saving an area (e.g. toggling or editing a scene) re-evaluates that scope
+    immediately rather than waiting for the next trigger."""
+    with patch(
+        "custom_components.ambience.websocket.async_apply_scene", new_callable=AsyncMock
+    ) as apply:
+        resp = await _ws_send(
+            hass_ws_client,
+            type="ambience/area/save",
+            area_id=area_id,
+            config={"scenes": []},
+        )
+        assert resp["success"] is True
+        await hass.async_block_till_done()
+    assert apply.await_count >= 1
+    args = apply.await_args.args
+    assert args[1] == "area"
+    assert args[2] == area_id
+
+
+async def test_house_save_reapplies_house_scope(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    with patch(
+        "custom_components.ambience.websocket.async_apply_scene", new_callable=AsyncMock
+    ) as apply:
+        resp = await _ws_send(
+            hass_ws_client,
+            type="ambience/house/save",
+            config={"scenes": []},
+        )
+        assert resp["success"] is True
+        await hass.async_block_till_done()
+    assert apply.await_count >= 1
+    args = apply.await_args.args
+    assert args[1] == "house"
+    assert args[2] is None

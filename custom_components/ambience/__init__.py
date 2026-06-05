@@ -30,6 +30,7 @@ from .card_resources import (
     async_unregister_card_resource,
 )
 from .conditions.day import DayCondition
+from .conditions.occupancy import OccupancyCondition
 from .conditions.people import PeopleCondition
 from .conditions.script import ScriptCondition
 from .conditions.state import StateCondition
@@ -153,6 +154,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "weather": WeatherCondition(hass=hass),
         "sun": SunCondition(hass=hass),
         "state": StateCondition(hass=hass),
+        "occupancy": OccupancyCondition(hass=hass),
         "people": PeopleCondition(hass=hass),
         "script": ScriptCondition(hass=hass),
         "template": TemplateCondition(hass=hass),

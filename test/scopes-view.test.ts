@@ -149,16 +149,18 @@ describe("ambience-scopes-view", () => {
     expect(houseRow.textContent).toContain("House");
   });
 
-  test("renders one row per HA area with 'Area: ' prefix", async () => {
+  test("renders one row per HA area by bare name (no redundant 'Area: ' prefix)", async () => {
     el = await mount();
-    expect(el.shadowRoot.textContent).toContain("Area: Living Room");
-    expect(el.shadowRoot.textContent).toContain("Area: Bedroom");
+    expect(el.shadowRoot.textContent).toContain("Living Room");
+    expect(el.shadowRoot.textContent).toContain("Bedroom");
+    expect(el.shadowRoot.textContent).not.toContain("Area: ");
   });
 
-  test("renders one row per HA floor with 'Floor: ' prefix", async () => {
+  test("renders one row per HA floor by bare name (no redundant 'Floor: ' prefix)", async () => {
     el = await mount();
-    expect(el.shadowRoot.textContent).toContain("Floor: Ground");
-    expect(el.shadowRoot.textContent).toContain("Floor: Upstairs");
+    expect(el.shadowRoot.textContent).toContain("Ground");
+    expect(el.shadowRoot.textContent).toContain("Upstairs");
+    expect(el.shadowRoot.textContent).not.toContain("Floor: ");
   });
 
   test("no floor rows render when listFloors returns []", async () => {

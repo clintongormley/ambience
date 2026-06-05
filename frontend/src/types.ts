@@ -235,6 +235,18 @@ export interface PeoplePredicate {
   for?: { h: number; m: number; s: number } | null;
 }
 
+// --- occupancy condition ----------------------------------------------------
+
+export type OccupancyQuant = "any" | "all";
+
+/** Per-scene predicate. `null` = wildcard (no presence constraint). */
+export interface OccupancyPredicate {
+  sensors: string[]; // binary_sensor.* entity_ids; empty = match-anything
+  occupied?: boolean; // default true; false = vacant
+  quant?: OccupancyQuant; // default "any"
+  for?: { h: number; m: number; s: number } | null;
+}
+
 // --- script condition -------------------------------------------------------
 
 /** Per-scene predicate. `null` = wildcard. */

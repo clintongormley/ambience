@@ -147,8 +147,16 @@ class OccupancyCondition:
         (inner's match-set ⊆ outer's). Conservative: unprovable -> False."""
         if not isinstance(outer, dict) or not isinstance(inner, dict):
             return False
-        # Comparable only when polarity AND quant match: a different polarity or
-        # quantifier is a different (non-nesting) match-set.
+        # Empty/absent `sensors` is a wildcard (matches every world-state, per
+        # matches()), so its polarity/quant/for are irrelevant. A wildcard outer
+        # contains everything; a wildcard inner is the universe, contained only
+        # by another wildcard outer (handled above).
+        if not outer.get("sensors"):
+            return True
+        if not inner.get("sensors"):
+            return False
+        # Both constrained: comparable only when polarity AND quant match (a
+        # different polarity or quantifier is a different, non-nesting match-set).
         if (outer.get("occupied", True) is not False) != (inner.get("occupied", True) is not False):
             return False
         if (outer.get("quant") or "any") != (inner.get("quant") or "any"):
@@ -156,24 +164,8 @@ class OccupancyCondition:
         # inner must hold at least as long as outer (longer for = more specific).
         if dur_seconds(inner.get("for")) < dur_seconds(outer.get("for")):
             return False
-        so = self._sensor_set(outer.get("sensors"))
-        si = self._sensor_set(inner.get("sensors"))
+        so = frozenset(outer["sensors"])
+        si = frozenset(inner["sensors"])
         if (outer.get("quant") or "any") == "any":
-            return self._subset(si, so)  # any over fewer sensors ⊆ any over more
-        return self._subset(so, si)  # all over more sensors ⊆ all over fewer
-
-    @staticmethod
-    def _sensor_set(sensors: Any) -> frozenset[str] | None:
-        """A sensor set, or None meaning ALL (the universe)."""
-        if not sensors:
-            return None
-        return frozenset(sensors)
-
-    @staticmethod
-    def _subset(a: frozenset[str] | None, b: frozenset[str] | None) -> bool:
-        """a ⊆ b, where None = ALL (the universe)."""
-        if b is None:
-            return True
-        if a is None:
-            return False
-        return a <= b
+            return si <= so  # any over fewer sensors ⊆ any over more
+        return so <= si  # all over more sensors ⊆ all over fewer

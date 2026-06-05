@@ -159,3 +159,26 @@ def test_contains_longer_for_is_more_specific() -> None:
     inner = {"sensors": ["binary_sensor.a"], "for": {"h": 0, "m": 5, "s": 0}}
     assert m.contains(outer, inner) is True
     assert m.contains(inner, outer) is False
+
+
+def test_contains_empty_sensors_is_a_wildcard_matching_matches() -> None:
+    # Empty/absent `sensors` matches every world-state (see matches()), so its
+    # match-set is the universe. `contains` must agree: a wildcard outer
+    # contains any inner (regardless of polarity/quant); a wildcard inner (the
+    # universe) is only contained by another wildcard.
+    m = OccupancyCondition()
+    # The UI emits {sensors: [], quant: "all"} when the picker is cleared after
+    # choosing "all" — the previously-broken case.
+    assert m.contains({"sensors": [], "quant": "all"}, {"sensors": ["binary_sensor.a"]}) is True
+    # Wildcard outer ignores polarity/quant differences.
+    assert (
+        m.contains(
+            {"sensors": [], "occupied": False},
+            {"sensors": ["binary_sensor.a"], "occupied": True},
+        )
+        is True
+    )
+    # A constrained outer cannot contain the universe (wildcard inner).
+    assert m.contains({"sensors": ["binary_sensor.a"]}, {"sensors": []}) is False
+    # Two wildcards: universe ⊆ universe.
+    assert m.contains({"sensors": []}, {"sensors": []}) is True

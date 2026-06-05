@@ -8,6 +8,77 @@ import { localize, stateOpLabel } from "../i18n.js";
 import type { StateAtom, StateForDuration } from "../types.js";
 import { statesMap } from "./hass-states.js";
 
+/** Minimal shape of an HA state object as read from `hass.states`. */
+type StateObj = { state?: string; attributes?: Record<string, unknown> };
+
+/**
+ * Maps `(domain, attribute)` → the companion attribute that lists every
+ * possible value. Mirrors HA's own `getStates` so the value dropdown offers
+ * the same choices as the automation editor (e.g. picking a light's `effect`
+ * offers everything in `effect_list`).
+ */
+const ATTRIBUTE_OPTION_SOURCE: Record<string, Record<string, string>> = {
+  climate: {
+    fan_mode: "fan_modes",
+    preset_mode: "preset_modes",
+    swing_mode: "swing_modes",
+    swing_horizontal_mode: "swing_horizontal_modes",
+  },
+  fan: { preset_mode: "preset_modes" },
+  humidifier: { mode: "available_modes" },
+  light: { effect: "effect_list" },
+  media_player: { sound_mode: "sound_mode_list", source: "source_list" },
+  remote: { current_activity: "activity_list" },
+  vacuum: { fan_speed: "fan_speed_list" },
+  water_heater: { operation_mode: "operation_list" },
+};
+
+/** Possible values for an entity attribute, read from its companion list
+ *  attribute (e.g. `effect` → `effect_list`). Empty when there's no mapping
+ *  for this domain/attribute or the list isn't present. */
+function attributeValueOptions(
+  entityId: string,
+  attribute: string,
+  stateObj: StateObj | undefined,
+): string[] {
+  const domain = entityId.includes(".") ? entityId.split(".", 1)[0] : "";
+  const listAttr = ATTRIBUTE_OPTION_SOURCE[domain]?.[attribute];
+  const raw = listAttr ? stateObj?.attributes?.[listAttr] : undefined;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v) => v !== null && v !== undefined).map((v) => String(v));
+}
+
+/** HA's snake_case → "Sentence case" attribute formatter, with the same
+ *  acronym fixups HA applies. Used as a fallback when the running HA doesn't
+ *  expose `hass.formatEntityAttributeName`. */
+function formatAttributeName(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\bid\b/g, "ID")
+    .replace(/\bip\b/g, "IP")
+    .replace(/\bmac\b/g, "MAC")
+    .replace(/\bgps\b/g, "GPS")
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/** Human-readable label for an attribute name. Prefers HA's own translation-
+ *  aware formatter (so it matches the automation editor / more-info dialog),
+ *  falling back to `formatAttributeName`. */
+function attributeLabel(
+  hass: HassConnection | undefined,
+  stateObj: StateObj | undefined,
+  attribute: string,
+): string {
+  const fmt = (
+    hass as { formatEntityAttributeName?: (s: unknown, a: string) => string } | undefined
+  )?.formatEntityAttributeName;
+  if (fmt && stateObj) {
+    const label = fmt(stateObj, attribute);
+    if (label) return label;
+  }
+  return formatAttributeName(attribute);
+}
+
 /**
  * Single atom of a state-predicate tree, laid out like HA's automation State
  * condition: Entity / Attribute (optional) / Op + values / For (optional).
@@ -187,6 +258,7 @@ export class AmbienceStateExprAtom extends LitElement {
    *  user can still type an attribute name we don't know about. */
   _attributeSchema(): HaFormSchema[] {
     const attrs = this._knownAttributesFor(this.value.entity_id);
+    const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
     return [
       {
         name: "attribute",
@@ -196,14 +268,15 @@ export class AmbienceStateExprAtom extends LitElement {
             custom_value: true,
             // Sentinel value and label are both the literal word 'State' so
             // ha-form's custom_value combobox displays "State" rather than an
-            // internal key. Localizing the label would diverge value-from-text
-            // when custom_value is on, so we leave it untranslated here.
+            // internal key.
             options: [
               {
                 value: AmbienceStateExprAtom._STATE_SENTINEL,
                 label: AmbienceStateExprAtom._STATE_SENTINEL,
               },
-              ...attrs.map((a) => ({ value: a, label: a })),
+              // Value stays the raw attribute key (storage); the label is
+              // humanised so the dropdown reads like the automation editor.
+              ...attrs.map((a) => ({ value: a, label: attributeLabel(this.hass, stateObj, a) })),
             ],
           },
         },
@@ -303,8 +376,15 @@ export class AmbienceStateExprAtom extends LitElement {
     }
     let options: string[];
     if (this.value.attribute) {
-      const v = this._currentAttributeValue();
-      options = v === undefined || v === null ? [] : [String(v)];
+      // Offer every possible value for the attribute (from its companion list
+      // attribute, like the automation editor), always including the current
+      // value so the active selection is never missing.
+      const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
+      options = attributeValueOptions(this.value.entity_id, this.value.attribute, stateObj);
+      const current = this._currentAttributeValue();
+      if (current !== undefined && current !== null && !options.includes(String(current))) {
+        options = [...options, String(current)];
+      }
     } else {
       options = this._knownStates;
     }

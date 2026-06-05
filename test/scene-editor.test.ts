@@ -2129,7 +2129,7 @@ describe("ambience-scene-editor — destination selector", () => {
     expect(saved.scene.when).toEqual({});
   });
 
-  test("autoEditScope opens the destination slot on mount (used when duplicating)", async () => {
+  test("the destination slot starts collapsed on mount", async () => {
     const e: any = document.createElement("ambience-scene-editor");
     e.conditions = conditions;
     e.availableActions = availableActions;
@@ -2137,7 +2137,6 @@ describe("ambience-scene-editor — destination selector", () => {
     e.hass = hass;
     e.scope = { kind: "area", id: "bedroom" };
     e.scopes = scopes;
-    e.autoEditScope = true;
     e.scene = { when: {}, actions: [] };
     e.open = true;
     document.body.appendChild(e);
@@ -2145,7 +2144,111 @@ describe("ambience-scene-editor — destination selector", () => {
     await new Promise((r) => setTimeout(r, 0));
     await e.updateComplete;
     el = e;
-    // Expanded straight away: the picker trigger is in the DOM without a click.
-    expect(el.shadowRoot.querySelector(".scope-option")).toBeTruthy();
+    // Collapsed by default: the summary is shown, the option list is not.
+    expect(el.shadowRoot.querySelector('[data-slot-id="destination"] .summary')).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".scope-option")).toBeNull();
+  });
+});
+
+describe("ambience-scene-editor — unique name per scope + category", () => {
+  let el: any;
+  afterEach(() => {
+    el?.remove();
+  });
+
+  const cats: SceneCategory[] = [
+    { id: "a", name: "Alpha" },
+    { id: "b", name: "Beta" },
+  ];
+
+  function clickSave(e: any) {
+    (e.shadowRoot.querySelector("button.primary") as HTMLElement).click();
+  }
+
+  function captureSave(e: any): { detail: any } {
+    const out: { detail: any } = { detail: null };
+    e.addEventListener("save-scene", (ev: CustomEvent) => {
+      out.detail = ev.detail;
+    });
+    return out;
+  }
+
+  test("blocks save when the name duplicates a sibling in the same scope + category", async () => {
+    el = await mount(
+      { name: "Movie", when: {}, actions: [], category: "a" },
+      { scope: { kind: "area", id: "living_room" }, categories: cats },
+    );
+    el.takenNames = new Map([["area:living_room\u0000a", new Set(["movie"])]]);
+    await el.updateComplete;
+    const saved = captureSave(el);
+
+    clickSave(el);
+    await el.updateComplete;
+
+    expect(saved.detail).toBeNull();
+    const err = el.shadowRoot.querySelector('[data-slot-id="name"] .error');
+    expect(err?.textContent).toContain("already exists");
+  });
+
+  test("the duplicate match is case-insensitive and trimmed", async () => {
+    el = await mount(
+      { name: "  mOvIe  ", when: {}, actions: [], category: "a" },
+      { scope: { kind: "area", id: "living_room" }, categories: cats },
+    );
+    el.takenNames = new Map([["area:living_room\u0000a", new Set(["movie"])]]);
+    await el.updateComplete;
+    const saved = captureSave(el);
+
+    clickSave(el);
+    await el.updateComplete;
+
+    expect(saved.detail).toBeNull();
+  });
+
+  test("allows save when the name is unique in the scope + category", async () => {
+    el = await mount(
+      { name: "Dinner", when: {}, actions: [], category: "a" },
+      { scope: { kind: "area", id: "living_room" }, categories: cats },
+    );
+    el.takenNames = new Map([["area:living_room\u0000a", new Set(["movie"])]]);
+    await el.updateComplete;
+    const saved = captureSave(el);
+
+    clickSave(el);
+    await el.updateComplete;
+
+    expect(saved.detail).not.toBeNull();
+    expect(saved.detail.scene.name).toBe("Dinner");
+  });
+
+  test("the same name is allowed in a different category", async () => {
+    el = await mount(
+      { name: "Movie", when: {}, actions: [], category: "b" },
+      { scope: { kind: "area", id: "living_room" }, categories: cats },
+    );
+    // "movie" taken only in category "a", not "b".
+    el.takenNames = new Map([["area:living_room\u0000a", new Set(["movie"])]]);
+    await el.updateComplete;
+    const saved = captureSave(el);
+
+    clickSave(el);
+    await el.updateComplete;
+
+    expect(saved.detail).not.toBeNull();
+  });
+
+  test("an empty name is exempt from the uniqueness check", async () => {
+    el = await mount(
+      { name: "", when: {}, actions: [], category: "a" },
+      { scope: { kind: "area", id: "living_room" }, categories: cats },
+    );
+    el.takenNames = new Map([["area:living_room\u0000a", new Set([""])]]);
+    await el.updateComplete;
+    const saved = captureSave(el);
+
+    clickSave(el);
+    await el.updateComplete;
+
+    expect(saved.detail).not.toBeNull();
   });
 });

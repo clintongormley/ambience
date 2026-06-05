@@ -23,7 +23,7 @@ import {
   saveHouse,
 } from "../api.js";
 import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
-import { scopeKey } from "../entities-for-scope.js";
+import { sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { localize } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
 import { scopeIcon } from "../scope-icon.js";
@@ -56,6 +56,14 @@ type EditingState = {
   seed?: Scene;
 };
 
+/** A single row in the front-page scope list. */
+type ScopeRow = {
+  scope: Scope;
+  name: string;
+  cfg: ScopeConfig;
+  rowClass: "house" | "floor" | "area";
+};
+
 function _normalize(cfg: ScopeConfig): ScopeConfig {
   return { scenes: cfg.scenes ?? [] };
 }
@@ -63,6 +71,28 @@ function _normalize(cfg: ScopeConfig): ScopeConfig {
 // Must stay in sync with GAP in custom_components/ambience/sorting.py — the
 // midpoint math below assumes the backend spaces auto priorities by this much.
 const PIN_GAP = 1024;
+
+// localStorage key remembering that the user dismissed the optional
+// "configure Workday & Weather" hint banner.
+const CONDITIONS_HINT_DISMISSED_KEY = "ambience-conditions-hint-dismissed";
+
+function readConditionsHintDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(CONDITIONS_HINT_DISMISSED_KEY) === "1";
+  } catch {
+    /* v8 ignore next -- storage disabled (e.g. private mode); treat as not dismissed */
+    return false;
+  }
+}
+
+function persistConditionsHintDismissed(): void {
+  try {
+    window.localStorage.setItem(CONDITIONS_HINT_DISMISSED_KEY, "1");
+    /* v8 ignore next 2 -- storage disabled; dismissal just won't persist */
+  } catch {
+    /* ignore */
+  }
+}
 
 /** Pick a priority for a scene dropped between `above` and `below` (either may be
  *  undefined at the list ends). `all` is the current scene set for end fallbacks. */
@@ -96,6 +126,72 @@ export class AmbienceScopesView extends LitElement {
       .error {
         color: var(--error-color, #d32f2f);
         margin: 0.5rem 0;
+      }
+      .banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.85rem 1rem;
+        margin: 0 0 1rem 0;
+        border: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 8px;
+        background: var(--card-background-color, #fff);
+      }
+      .banner-icon {
+        flex: 0 0 auto;
+        margin-top: 0.1rem;
+        --mdc-icon-size: 22px;
+      }
+      .banner-required {
+        border-color: var(--warning-color, #ffa600);
+        background: color-mix(in srgb, var(--warning-color, #ffa600) 12%, var(--card-background-color, #fff));
+      }
+      .banner-required .banner-icon {
+        color: var(--warning-color, #ffa600);
+      }
+      .banner-hint .banner-icon {
+        color: var(--primary-color, #03a9f4);
+      }
+      .banner-text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2rem;
+      }
+      .banner-text strong {
+        font-weight: 600;
+      }
+      .banner-text span {
+        font-size: 0.9rem;
+        color: var(--secondary-text-color, #888);
+      }
+      .banner-cta {
+        flex: 0 0 auto;
+        align-self: center;
+        background: var(--primary-color, #03a9f4);
+        border: 1px solid var(--primary-color, #03a9f4);
+        color: var(--text-primary-color, #fff);
+        border-radius: 4px;
+        padding: 0.45rem 0.9rem;
+        font: inherit;
+        font-size: 0.9rem;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .banner-dismiss {
+        flex: 0 0 auto;
+        align-self: flex-start;
+        background: transparent;
+        border: none;
+        color: var(--secondary-text-color, #888);
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+        padding: 0.15rem 0.3rem;
+      }
+      .banner-dismiss:hover {
+        color: var(--primary-text-color, inherit);
       }
       ul {
         list-style: none;
@@ -275,6 +371,10 @@ export class AmbienceScopesView extends LitElement {
   // _expanded keys: "area:<id>" | "floor:<id>" | "house"
   @state() private _expanded = new Set<string>();
   @state() private _error = "";
+  // True once the initial static load (actions, weather, workday, …) finishes,
+  // so the empty-state banners don't flash during loading.
+  @state() private _staticLoaded = false;
+  @state() private _conditionsHintDismissed = false;
   @state() private _editing: EditingState | null = null;
   @state() private _viewingTraces: {
     scope: { scope_kind: string; scope_id: string | null };
@@ -340,6 +440,7 @@ export class AmbienceScopesView extends LitElement {
 
   override async connectedCallback() {
     super.connectedCallback();
+    this._conditionsHintDismissed = readConditionsHintDismissed();
     window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.addEventListener("ambience-categories-changed", this._onCategoriesChanged);
     await this._loadStatic();
@@ -382,6 +483,7 @@ export class AmbienceScopesView extends LitElement {
       this._dayConfig = dayConfig;
       this._weatherConfig = weatherConfig;
       this._categories = categories;
+      this._staticLoaded = true;
       await this._refreshSchemas(actions);
     } catch (e) {
       this._error = (e as Error).message || String(e);
@@ -853,6 +955,39 @@ export class AmbienceScopesView extends LitElement {
     return this._conditions.slice().sort((a, b) => b.priority - a.priority);
   }
 
+  /** Lowercased scene names taken in each (scope, category) pair, for the scene
+   *  editor's uniqueness check. The scene currently being edited is excluded so
+   *  saving it under its own unchanged name is never a false conflict. */
+  private get _takenSceneNames(): Map<string, Set<string>> {
+    const map = new Map<string, Set<string>>();
+    const editing = this._editing;
+    const addScope = (scope: Scope, cfg: ScopeConfig | undefined) => {
+      if (!cfg) return;
+      const editingThisScope =
+        !!editing && !editing.isNew && scopeKey(editing.scope) === scopeKey(scope);
+      cfg.scenes.forEach((scene, i) => {
+        if (editingThisScope && i === editing.index) return; // exclude the edited scene
+        const name = scene.name?.trim().toLowerCase();
+        if (!name) return;
+        const key = sceneNameKey(scope, scene.category);
+        let set = map.get(key);
+        if (!set) {
+          set = new Set();
+          map.set(key, set);
+        }
+        set.add(name);
+      });
+    };
+    addScope({ kind: "house" }, this._house);
+    for (const f of this._floors) {
+      addScope({ kind: "floor", id: f.floor_id }, this._floorConfigs.get(f.floor_id));
+    }
+    for (const a of this._areas) {
+      addScope({ kind: "area", id: a.area_id }, this._areaConfigs.get(a.area_id));
+    }
+    return map;
+  }
+
   /** Selectable destinations for the scene editor: house, then floors, then areas. */
   private get _scopeOptions(): ScopeOption[] {
     const floorPrefix = localize(this.hass, "ui.scope_floor_prefix", "Floor: ");
@@ -890,31 +1025,163 @@ export class AmbienceScopesView extends LitElement {
     return `${r} ${noun}`;
   }
 
+  // --- empty-state banners -------------------------------------------------
+
+  /** True when neither Weather nor Workday is configured enough to be used as a
+   *  scene condition (the optional hint nudges the user to set them up). */
+  private get _conditionsUnconfigured(): boolean {
+    const weatherUnset = !this._weatherConfig || this._weatherConfig.entity == null;
+    const day = this._dayConfig;
+    const workdayUnset = !day || (day.workday_sensor == null && day.workday_calendar == null);
+    return weatherUnset || workdayUnset;
+  }
+
+  private _openSettings(tab: "actions" | "conditions") {
+    this.dispatchEvent(
+      new CustomEvent("ambience-open-settings", { detail: { tab }, bubbles: true, composed: true }),
+    );
+  }
+
+  private _dismissConditionsHint() {
+    this._conditionsHintDismissed = true;
+    persistConditionsHintDismissed();
+  }
+
+  /** The empty-state nudges shown above the scope list:
+   *  - a required, non-dismissible banner when no action is exposed yet;
+   *  - else an optional, dismissible hint to configure Workday/Weather.
+   *  Sequenced: the optional hint only appears once at least one action exists. */
+  private _renderBanners() {
+    if (!this._staticLoaded) return "";
+    if (this._actions.length === 0) {
+      return html`
+        <div class="banner banner-required" data-test="no-actions-banner" role="alert">
+          <ha-icon class="banner-icon" icon="mdi:alert-circle-outline"></ha-icon>
+          <div class="banner-text">
+            <strong
+              >${localize(this.hass, "ui.no_actions_title", "Set up an action to get started")}</strong
+            >
+            <span
+              >${localize(
+                this.hass,
+                "ui.no_actions_body",
+                "Ambience can't apply anything until you expose at least one action — scenes need actions to run.",
+              )}</span
+            >
+          </div>
+          <button
+            class="banner-cta"
+            data-test="setup-actions-btn"
+            @click=${() => this._openSettings("actions")}
+          >
+            ${localize(this.hass, "ui.no_actions_cta", "Set up actions")}
+          </button>
+        </div>
+      `;
+    }
+    if (!this._conditionsHintDismissed && this._conditionsUnconfigured) {
+      return html`
+        <div class="banner banner-hint" data-test="conditions-hint-banner">
+          <ha-icon class="banner-icon" icon="mdi:lightbulb-on-outline"></ha-icon>
+          <div class="banner-text">
+            <strong
+              >${localize(this.hass, "ui.conditions_hint_title", "Optional: set up Workday & Weather")}</strong
+            >
+            <span
+              >${localize(
+                this.hass,
+                "ui.conditions_hint_body",
+                "Configure Workday and Weather in Conditions to use them in your scene conditions.",
+              )}</span
+            >
+          </div>
+          <button
+            class="banner-cta"
+            data-test="setup-conditions-btn"
+            @click=${() => this._openSettings("conditions")}
+          >
+            ${localize(this.hass, "ui.conditions_hint_cta", "Configure conditions")}
+          </button>
+          <button
+            class="banner-dismiss"
+            data-test="dismiss-conditions-hint"
+            title=${localize(this.hass, "ui.dismiss", "Dismiss")}
+            aria-label=${localize(this.hass, "ui.dismiss", "Dismiss")}
+            @click=${() => this._dismissConditionsHint()}
+          >
+            ✕
+          </button>
+        </div>
+      `;
+    }
+    return "";
+  }
+
   // --- render --------------------------------------------------------------
+
+  /** The scope rows in display order: house, then floors, then areas — but with
+   *  switched-off scopes stably moved to the end, so the active scopes surface
+   *  at the top of the list. */
+  private _orderedScopeRows(floorPrefix: string, areaPrefix: string): ScopeRow[] {
+    const rows: ScopeRow[] = [
+      {
+        scope: { kind: "house" },
+        name: localize(this.hass, "ui.scope_house", "House"),
+        cfg: this._house,
+        rowClass: "house",
+      },
+    ];
+    for (const f of this._floors) {
+      const cfg = this._floorConfigs.get(f.floor_id);
+      if (cfg) {
+        rows.push({
+          scope: { kind: "floor", id: f.floor_id },
+          name: `${floorPrefix}${f.name}`,
+          cfg,
+          rowClass: "floor",
+        });
+      }
+    }
+    for (const a of this._areas) {
+      const cfg = this._areaConfigs.get(a.area_id);
+      if (cfg) {
+        rows.push({
+          scope: { kind: "area", id: a.area_id },
+          name: `${areaPrefix}${a.name}`,
+          cfg,
+          rowClass: "area",
+        });
+      }
+    }
+    // Stable partition in a single pass: "on" rows keep their base order and
+    // the "off" rows follow in theirs.
+    const on: ScopeRow[] = [];
+    const off: ScopeRow[] = [];
+    for (const r of rows) {
+      (this._isSwitchedOff(r.scope) ? off : on).push(r);
+    }
+    return [...on, ...off];
+  }
+
+  /** True only when the scope's Ambience switch is resolved AND currently off.
+   *  An unresolved/unknown switch is treated as "not off" so it stays in place. */
+  private _isSwitchedOff(scope: Scope): boolean {
+    const entityId = this._switchEntityIds.get(scopeKey(scope));
+    if (!entityId) return false;
+    return this.hass.states?.[entityId]?.state === "off";
+  }
 
   override render() {
     const floorPrefix = localize(this.hass, "ui.scope_floor_prefix", "Floor: ");
     const areaPrefix = localize(this.hass, "ui.scope_area_prefix", "Area: ");
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
+      ${this._renderBanners()}
       ${this._renderFilter()}
       <ul>
-        ${this._renderScopeRow(
-          { kind: "house" },
-          localize(this.hass, "ui.scope_house", "House"),
-          this._house,
-          "house",
+        ${this._orderedScopeRows(floorPrefix, areaPrefix).map((r) =>
+          this._renderScopeRow(r.scope, r.name, r.cfg, r.rowClass),
         )}
-        ${this._floors.map((f) => {
-          const cfg = this._floorConfigs.get(f.floor_id);
-          if (!cfg) return html``;
-          return this._renderScopeRow(
-            { kind: "floor", id: f.floor_id },
-            `${floorPrefix}${f.name}`,
-            cfg,
-            "floor",
-          );
-        })}
         ${
           this._areas.length === 0
             ? html`<li>
@@ -922,16 +1189,7 @@ export class AmbienceScopesView extends LitElement {
                 ${localize(this.hass, "ui.no_areas", "No areas found in Home Assistant.")}
               </p>
             </li>`
-            : this._areas.map((a) => {
-                const cfg = this._areaConfigs.get(a.area_id);
-                if (!cfg) return html``;
-                return this._renderScopeRow(
-                  { kind: "area", id: a.area_id },
-                  `${areaPrefix}${a.name}`,
-                  cfg,
-                  "area",
-                );
-              })
+            : ""
         }
       </ul>
 
@@ -940,7 +1198,7 @@ export class AmbienceScopesView extends LitElement {
         .hass=${this.hass}
         .scope=${this._editing ? this._editing.scope : undefined}
         .scopes=${this._scopeOptions}
-        .autoEditScope=${!!this._editing?.seed}
+        .takenNames=${this._takenSceneNames}
         .scene=${this._editingScene}
         .conditions=${this._editorConditions}
         .periods=${this._periods}

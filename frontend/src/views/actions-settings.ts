@@ -598,14 +598,14 @@ export class AmbienceActionsSettings extends LitElement {
   }
 
   private _toggleExpand(actionId: string) {
-    const next = new Set(this._expanded);
-    if (next.has(actionId)) {
-      next.delete(actionId);
+    // At most one card is expanded at a time: opening a card collapses any
+    // other open one. Clicking the already-open card collapses it.
+    if (this._expanded.has(actionId)) {
+      this._expanded = new Set();
     } else {
-      next.add(actionId);
+      this._expanded = new Set([actionId]);
       void this._ensureSchema(actionId);
     }
-    this._expanded = next;
   }
 
   private async _addService(serviceId: string) {
@@ -619,7 +619,8 @@ export class AmbienceActionsSettings extends LitElement {
       ...this._actions,
       { id: serviceId, label: this._labelForService(serviceId), visible_fields: [], defaults: {} },
     ];
-    this._expanded = new Set([...this._expanded, serviceId]);
+    // Expand only the newly-added card, collapsing any previously-open one.
+    this._expanded = new Set([serviceId]);
     this._adding = false;
     void this._autoSave();
   }

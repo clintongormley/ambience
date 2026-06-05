@@ -2,7 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
-import { entitiesForScope, scopeKey } from "../entities-for-scope.js";
+import { entitiesForScope, sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { conditionLabel, localize } from "../i18n.js";
 import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
@@ -255,9 +255,13 @@ export class AmbienceSceneEditor extends LitElement {
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) scope?: Scope;
   @property({ attribute: false }) scopes: ScopeOption[] = [];
-  // When the editor opens, start with the destination slot already expanded.
-  // Set by the parent when duplicating, where retargeting the area is the point.
-  @property({ type: Boolean }) autoEditScope = false;
+  /**
+   * Lowercased, trimmed names already taken in each (scope, category) pair,
+   * keyed by `sceneNameKey`. Supplied by the parent, which excludes the scene
+   * currently being edited so renaming-to-same is never a false conflict. A
+   * scene's name must be unique within its scope + category.
+   */
+  @property({ attribute: false }) takenNames: Map<string, Set<string>> = new Map();
 
   @state() private _draft: Scene | null = null;
   @state() private _scope?: Scope;
@@ -301,9 +305,8 @@ export class AmbienceSceneEditor extends LitElement {
     if (isOpening) {
       this._draft = this.scene ? JSON.parse(JSON.stringify(this.scene)) : null;
       this._scope = this.scope;
-      // Everything collapsed by default; on a duplicate, open the destination
-      // slot so the user can retarget the area straight away.
-      this._open = this.autoEditScope && this.scopes.length > 0 ? { kind: "destination" } : null;
+      // Everything collapsed by default.
+      this._open = null;
       this._showError = false;
     }
   }
@@ -396,9 +399,11 @@ export class AmbienceSceneEditor extends LitElement {
       // The .slot class is kept (with the .name-slot.expanded variant) so the
       // click-outside detection in _onModalClick still treats this region as
       // "inside" an editable slot.
+      const error = this._showError ? this._nameError() : null;
       return html`
         <div class="slot name-slot expanded" data-slot-id="name">
           ${this._renderNameInputControl(value)}
+          ${error ? html`<div class="error">${error}</div>` : ""}
         </div>
       `;
     }
@@ -455,7 +460,7 @@ export class AmbienceSceneEditor extends LitElement {
   private _renderCategorySlot() {
     if (this.categories.length === 0) return "";
     const sorted = [...this.categories].sort((a, b) => a.name.localeCompare(b.name));
-    const currentId = this._draft!.category || sorted[0].id;
+    const currentId = this._effectiveCategoryId();
     const current = this.categories.find((g) => g.id === currentId) ?? sorted[0];
     if (this._isOpen({ kind: "category" })) {
       return html`
@@ -501,11 +506,36 @@ export class AmbienceSceneEditor extends LitElement {
     return true;
   }
 
+  /** The category the draft will be saved under: its explicit category, or the
+   *  alphabetically-first one (which the collapsed category summary also shows
+   *  as the effective value). */
+  private _effectiveCategoryId(): string {
+    if (this._draft?.category) return this._draft.category;
+    const sorted = [...this.categories].sort((a, b) => a.name.localeCompare(b.name));
+    return sorted[0]?.id ?? "";
+  }
+
+  /** Name-slot validation: a non-empty name must be unique (case-insensitively)
+   *  within the current scope + category. Empty/unnamed scenes are exempt. */
+  private _nameError(): string | null {
+    const name = this._draft?.name?.trim().toLowerCase();
+    if (!name || !this._scope) return null;
+    const key = sceneNameKey(this._scope, this._effectiveCategoryId());
+    if (this.takenNames.get(key)?.has(name)) {
+      return localize(
+        this.hass,
+        "ui.name_duplicate",
+        "A scene with this name already exists in this category.",
+      );
+    }
+    return null;
+  }
+
   /**
    * Returns a user-facing error string if the currently open slot has invalid
    * data, or null if valid.
    *
-   * - Name slot: always valid (optional).
+   * - Name slot: must be unique within the scope + category (see `_nameError`).
    * - Condition slots: predicates are valid by construction, with one exception —
    *   the people condition's "X of:" modes carry a `who` array that must not be
    *   empty (an unfinished selection). A present-but-empty `who` is the error.
@@ -516,9 +546,9 @@ export class AmbienceSceneEditor extends LitElement {
    */
   private _validationError(slot: OpenSlot): string | null {
     if (slot === null) return null;
-    // Name is optional; category and destination always carry a valid value.
-    if (slot.kind === "name" || slot.kind === "category" || slot.kind === "destination")
-      return null;
+    // Category and destination always carry a valid value.
+    if (slot.kind === "category" || slot.kind === "destination") return null;
+    if (slot.kind === "name") return this._nameError();
     if (slot.kind === "condition") {
       // People empty-selection case: an "X of:" mode (who key present) with
       // zero people ticked. Other conditions are valid by construction.
@@ -1038,6 +1068,11 @@ export class AmbienceSceneEditor extends LitElement {
     // Collapsed or loaded-from-storage slots are never opened, so this is the
     // only place they're checked — block on the first error and re-open the
     // offending slot with its message shown.
+    if (this._nameError() !== null) {
+      this._showError = true;
+      this._open = { kind: "name" };
+      return;
+    }
     for (const id of Object.keys(this._draft.when)) {
       if (
         this._draft.when[id] != null &&

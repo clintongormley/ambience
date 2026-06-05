@@ -291,6 +291,56 @@ describe("ambience-state-expr-atom", () => {
     el2.remove();
   });
 
+  test("attribute mode: value options come from the companion list attribute (like automations)", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "climate.living", attribute: "fan_mode", states: [] };
+    el2.hass = {
+      states: {
+        "climate.living": { attributes: { fan_mode: "auto", fan_modes: ["auto", "low", "high"] } },
+      },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    const opts = el2
+      ._valueSchema()[0]
+      .selector.select.options.map((o: { value: string }) => o.value);
+    expect(opts).toEqual(["auto", "low", "high"]);
+    el2.remove();
+  });
+
+  test("attribute mode: the current value is appended when not in the companion list", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "light.lamp", attribute: "effect", states: [] };
+    el2.hass = {
+      states: {
+        "light.lamp": { attributes: { effect: "Custom", effect_list: ["None", "Rainbow"] } },
+      },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    const opts = el2
+      ._valueSchema()[0]
+      .selector.select.options.map((o: { value: string }) => o.value);
+    expect(opts).toEqual(["None", "Rainbow", "Custom"]);
+    el2.remove();
+  });
+
+  test("_attributeSchema labels attribute names in human-readable form", async () => {
+    const el2: any = document.createElement("ambience-state-expr-atom");
+    el2.value = { kind: "is", entity_id: "climate.x", states: [] };
+    el2.hass = {
+      states: { "climate.x": { attributes: { fan_mode: "auto", hvac_action: "idle" } } },
+    };
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    const opts = el2._attributeSchema()[0].selector.select.options;
+    const byValue = (v: string) => opts.find((o: { value: string }) => o.value === v);
+    // Value stays the raw attribute key; label is humanised.
+    expect(byValue("fan_mode").label).toBe("Fan mode");
+    expect(byValue("hvac_action").label).toBe("Hvac action");
+    el2.remove();
+  });
+
   test("attribute mode: value options are empty if the attribute has no current value", async () => {
     const el2: any = document.createElement("ambience-state-expr-atom");
     el2.value = { kind: "is", entity_id: "x", attribute: "missing_attr", states: [] };

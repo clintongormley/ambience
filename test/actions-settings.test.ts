@@ -370,6 +370,49 @@ describe("ambience-actions-settings", () => {
     );
   });
 
+  test("expanding a card collapses any other expanded card", async () => {
+    vi.mocked(listExposedActions).mockResolvedValueOnce([
+      { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
+      { id: "light.turn_off", label: "", visible_fields: [], defaults: {} },
+    ]);
+    el = await mount();
+    const headers = el.shadowRoot.querySelectorAll("[data-card] [data-toggle]");
+    expect(headers.length).toBe(2);
+
+    (headers[0] as HTMLElement).click();
+    await flush(el);
+    expect(el.shadowRoot.querySelectorAll("[data-card] .body").length).toBe(1);
+
+    // Expanding the second card collapses the first — at most one open.
+    const headers2 = el.shadowRoot.querySelectorAll("[data-card] [data-toggle]");
+    (headers2[1] as HTMLElement).click();
+    await flush(el);
+    const cards = el.shadowRoot.querySelectorAll("[data-card]");
+    expect(cards[0].querySelector(".body")).toBeNull();
+    expect(cards[1].querySelector(".body")).toBeTruthy();
+  });
+
+  test("adding an action collapses any already-expanded card", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await flush(el);
+    expect(el.shadowRoot.querySelectorAll("[data-card] .body").length).toBe(1);
+
+    const addBtn = el.shadowRoot.querySelector("button[data-action='add']") as HTMLButtonElement;
+    addBtn.click();
+    await el.updateComplete;
+    const picker = el.shadowRoot.querySelector("select[data-add-service]") as HTMLSelectElement;
+    picker.value = "light.turn_off";
+    picker.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush(el);
+
+    const cards = el.shadowRoot.querySelectorAll("[data-card]");
+    expect(cards.length).toBe(2);
+    const open = [...cards].filter((c) => c.querySelector(".body"));
+    expect(open.length).toBe(1);
+    expect(open[0].getAttribute("data-service")).toBe("light.turn_off");
+  });
+
   test("adding a service populates the predefined HA service name as label", async () => {
     el = await mount();
     const addBtn = el.shadowRoot.querySelector("button[data-action='add']") as HTMLButtonElement;

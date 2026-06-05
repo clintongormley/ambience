@@ -55,6 +55,23 @@ describe("<ambience-frontend>", () => {
     expect(modal!.open).toBe(true);
   });
 
+  test("an ambience-open-settings event opens the modal on the requested tab", async () => {
+    const scopes = el.shadowRoot!.querySelector("ambience-scopes-view")!;
+    scopes.dispatchEvent(
+      new CustomEvent("ambience-open-settings", {
+        detail: { tab: "actions" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    const modal = el.shadowRoot!.querySelector<SettingsModal & { initialTab?: string }>(
+      "ambience-settings-modal",
+    )!;
+    expect(modal.open).toBe(true);
+    expect(modal.initialTab).toBe("actions");
+  });
+
   test("a close event from the modal dismisses it", async () => {
     el.shadowRoot!.querySelector<HTMLButtonElement>(".settings-btn")!.click();
     await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;

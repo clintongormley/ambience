@@ -40,6 +40,18 @@ describe("ambience-settings-view", () => {
     expect(el.shadowRoot.querySelector("ambience-ambience-settings")).not.toBeNull();
   });
 
+  test("initialTab seeds the active tab", async () => {
+    el = document.createElement("ambience-settings-view");
+    el.hass = {};
+    el.initialTab = "actions";
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("ambience-actions-settings")).not.toBeNull();
+    expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
+  });
+
   test("clicking Conditions swaps the body", async () => {
     el = await mount();
     const buttons = el.shadowRoot.querySelectorAll("nav button");

@@ -1,3 +1,22 @@
+// jsdom under this Node/vitest combo doesn't expose a working localStorage
+// (Node's experimental Web Storage is gated behind --localstorage-file). The
+// panel uses window.localStorage to remember a dismissed banner, so provide a
+// minimal in-memory Storage for tests.
+if (typeof window !== "undefined" && !("localStorage" in window && window.localStorage)) {
+  const store = new Map<string, string>();
+  const storage: Storage = {
+    get length() {
+      return store.size;
+    },
+    clear: () => store.clear(),
+    getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+    key: (i: number) => Array.from(store.keys())[i] ?? null,
+    removeItem: (k: string) => void store.delete(k),
+    setItem: (k: string, v: string) => void store.set(k, String(v)),
+  };
+  Object.defineProperty(window, "localStorage", { configurable: true, value: storage });
+}
+
 // jsdom doesn't ship CSSStyleSheet.replaceSync used by Lit's adoptedStyleSheets.
 // Lit's polyfill kicks in when adoptedStyleSheets is undefined; force that path.
 // @ts-expect-error -- runtime-only shim

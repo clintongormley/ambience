@@ -117,7 +117,9 @@ def test_build_override_states_handles_absurd_for_without_crashing():
     hass = _Hass([_State("binary_sensor.motion", "off")])
     world = SimulatedWorld(
         now=FIXED,
-        overrides={"binary_sensor.motion": {"state": "on", "for": {"h": 100_000_000, "m": 0, "s": 0}}},
+        overrides={
+            "binary_sensor.motion": {"state": "on", "for": {"h": 100_000_000, "m": 0, "s": 0}}
+        },
     )
     s = _build_override_states(hass, world)["binary_sensor.motion"]
     assert s.last_changed < FIXED

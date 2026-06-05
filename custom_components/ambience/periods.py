@@ -18,6 +18,9 @@ from typing import Any, Protocol
 _PERIOD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _VALID_ANCHORS = {"sunrise", "sunset", "noon", "midnight", "dawn", "dusk"}
 
+# Key order is "specific-first, broad-last": `describe()` returns the first
+# matching period, so e.g. a 2pm time reads as "afternoon" rather than the
+# all-day "daytime". (The time-of-day chooser applies its own display order.)
 BUILTIN_PERIODS: dict[str, dict[str, Any]] = {
     "morning": {
         "from": {"kind": "sun", "anchor": "dawn", "offset_min": 0},

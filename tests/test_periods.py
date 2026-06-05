@@ -26,6 +26,13 @@ def test_builtin_periods_contains_expected_seeds() -> None:
     assert set(BUILTIN_PERIODS) == {"morning", "afternoon", "evening", "nighttime", "daytime"}
 
 
+def test_builtin_periods_specific_before_broad_daytime() -> None:
+    # Order matters for describe()'s first-match: the all-day "daytime" span must
+    # come after the narrower periods so a mid-afternoon time reads "afternoon".
+    ids = list(BUILTIN_PERIODS)
+    assert ids.index("daytime") > ids.index("afternoon")
+
+
 def test_builtin_periods_have_from_to_endpoints() -> None:
     for pid, defn in BUILTIN_PERIODS.items():
         assert "from" in defn, pid

@@ -73,6 +73,29 @@ describe("ambience-time-of-day-input", () => {
     expect(options).not.toContain("morning"); // hidden
   });
 
+  test("the chooser lists Daytime first, then the day's progression", async () => {
+    const def = {
+      from: { kind: "sun" as const, anchor: "dawn", offset_min: 0 },
+      to: { kind: "sun" as const, anchor: "dusk", offset_min: 0 },
+    };
+    el = document.createElement("ambience-time-of-day-input");
+    el.value = null;
+    el.periods = {
+      // Supplied in the backend's "specific-first" order; the chooser reorders.
+      builtins: { morning: def, afternoon: def, evening: def, nighttime: def, daytime: def },
+      custom: {},
+      hidden: [],
+    } as PeriodStoreView;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    const builtinOpts = Array.from(el.shadowRoot.querySelectorAll(".entry option"))
+      .map((o: any) => o.value)
+      // Keep only period ids (drop the __any__/__custom__ sentinels and the
+      // "──────" separator).
+      .filter((v: string) => /^[a-z]/.test(v));
+    expect(builtinOpts).toEqual(["daytime", "morning", "afternoon", "evening", "nighttime"]);
+  });
+
   test("selecting a named period emits {period: id}", async () => {
     el = await mount(null);
     const get = captureEmit(el);

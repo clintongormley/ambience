@@ -19,6 +19,21 @@ const DEFAULT_RANGE: TimeRange = {
   to: { kind: "time", hh: 17, mm: 0 },
 };
 
+// Display order for the built-in periods in the chooser: Daytime first (the
+// broad span), then the day's natural progression. Independent of the backend's
+// shipped order, which is tuned for describe()'s first-match precedence. Ids not
+// listed here keep their incoming order, after these.
+const BUILTIN_DISPLAY_ORDER = ["daytime", "morning", "afternoon", "evening", "nighttime"];
+
+function _byDisplayOrder(a: string, b: string): number {
+  const ia = BUILTIN_DISPLAY_ORDER.indexOf(a);
+  const ib = BUILTIN_DISPLAY_ORDER.indexOf(b);
+  if (ia === -1 && ib === -1) return 0;
+  if (ia === -1) return 1;
+  if (ib === -1) return -1;
+  return ia - ib;
+}
+
 /**
  * Predicate input for the time_of_day condition.
  *
@@ -120,7 +135,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
 
   private _effectiveIds(): string[] {
     if (!this.periods) return [];
-    const builtinIds = Object.keys(this.periods.builtins);
+    const builtinIds = Object.keys(this.periods.builtins).sort(_byDisplayOrder);
     const customOnly = Object.keys(this.periods.custom).filter(
       (id) => !(id in this.periods!.builtins),
     );

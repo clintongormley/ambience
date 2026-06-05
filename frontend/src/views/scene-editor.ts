@@ -6,7 +6,7 @@ import { entitiesForScope, sceneNameKey, scopeKey } from "../entities-for-scope.
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { conditionLabel, localize } from "../i18n.js";
 import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
-import { stripPositionMetadata } from "../scene.js";
+import { entitiesUsedByOtherActions, stripPositionMetadata } from "../scene.js";
 import { scopeIcon } from "../scope-icon.js";
 import { sceneDisplayName, summariseAction, summariseCondition } from "../summary.js";
 import type {
@@ -1028,6 +1028,7 @@ export class AmbienceSceneEditor extends LitElement {
               .scope=${this._scope}
               .exposed=${exposed}
               .entityIds=${action.entity_ids}
+              .excludeEntities=${entitiesUsedByOtherActions(this._draft?.actions ?? [], idx)}
               .params=${action.params}
               @entity-ids-changed=${(e: CustomEvent<{ entityIds: string[] }>) => {
                 e.stopPropagation();

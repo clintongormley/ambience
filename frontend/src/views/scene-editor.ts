@@ -22,6 +22,7 @@ import type {
 } from "../types.js";
 import "./action-slot.js";
 import "./condition-input.js";
+import { statePredicateError } from "./state-predicate-input.js";
 
 type OpenSlot =
   | { kind: "name" }
@@ -566,6 +567,14 @@ export class AmbienceSceneEditor extends LitElement {
       if (_isEmptyWhoPredicate(pred)) {
         return localize(this.hass, "ui.people_select_one", "Select at least one person");
       }
+      // Structurally validate a state predicate, so an incomplete atom (e.g.
+      // entity picked but no state chosen) is caught even when this slot was
+      // never opened — the input widget only mounts when expanded, so it can't
+      // report via `render-invalid-changed`. Without this, a scene loaded from
+      // storage with a half-filled state atom would pass the save gate and be
+      // rejected by the backend with a cryptic ValueError.
+      const stateErr = statePredicateError(pred, this.hass);
+      if (stateErr) return stateErr;
       // A condition whose input widget reports an error (e.g. a `template` whose
       // Jinja throws) must not be left in the scene.
       if (this._conditionError.has(slot.id)) {

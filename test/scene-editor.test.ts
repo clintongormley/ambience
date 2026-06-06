@@ -1178,6 +1178,37 @@ describe("ambience-scene-editor — condition dropdown + full-height layout", ()
     expect(el._showError).toBe(false);
   });
 
+  // Regression: the save gate must structurally validate a state predicate even
+  // when its slot was never opened — so the input widget never mounted to report
+  // validity via `render-invalid-changed`. A scene loaded straight from storage
+  // with an incomplete state atom would otherwise sail through the gate and be
+  // rejected by the backend with a cryptic "state atom requires a non-empty
+  // states list" error.
+  test("save is blocked when a never-opened state condition is incomplete", async () => {
+    el = await mount({
+      name: "t",
+      when: { state: { kind: "is", entity_id: "light.lamp_a", states: [] } }, // value blank
+      actions: [],
+    });
+    let saved = false;
+    el.addEventListener("save-scene", () => {
+      saved = true;
+    });
+    // Do NOT open the state slot — its input widget never mounts.
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button")).find((b: any) =>
+      /save/i.test(b.textContent ?? ""),
+    ) as HTMLButtonElement;
+    saveBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+
+    expect(saved).toBe(false);
+    const after = el.shadowRoot.querySelector('.slot[data-slot-id="state"]') as HTMLElement;
+    expect(after.classList.contains("expanded")).toBe(true); // reopened with the error
+    expect(after.querySelector(".error")?.textContent?.toLowerCase()).toContain(
+      "state is required",
+    );
+  });
+
   test("renders a row for a toggleable condition that IS used in the scene", async () => {
     el = await mount({ name: "test", when: { time_of_day: { period: "afternoon" } }, actions: [] });
     expect(el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]')).toBeTruthy();

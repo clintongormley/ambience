@@ -15,6 +15,60 @@ function _samePath(a: number[] | null, b: number[] | null): boolean {
 
 import type { StateAtom, StateExpr, StateGroup, StateNot, StatePredicate } from "../types.js";
 
+/** State-predicate node kinds. Used to recognise a state predicate by shape so
+ *  {@link statePredicateError} can ignore other condition shapes (template,
+ *  people, …) it might be handed. */
+const _STATE_KINDS = new Set(["is", "is_not", ">", ">=", "<", "<=", "and", "or", "not"]);
+
+/** Return a localized validation message for a single atom, or null if valid.
+ *  Pure (no component state) so the scene editor's save gate can reuse it. */
+function _stateAtomError(atom: StateAtom, hass?: HassConnection): string | null {
+  if (!atom.entity_id) {
+    return localize(hass, "ui.state_err_entity", "Entity is required");
+  }
+  const isNumeric = atom.kind !== "is" && atom.kind !== "is_not";
+  if (isNumeric) {
+    const v = atom.states[0];
+    if (!v) return localize(hass, "ui.state_err_value", "Value is required");
+    if (!Number.isFinite(Number(v))) {
+      return localize(hass, "ui.state_err_numeric", "Value must be a number");
+    }
+  } else if (!atom.states.some((s) => s !== "")) {
+    return localize(hass, "ui.state_err_state", "State is required");
+  }
+  return null;
+}
+
+/** First validation error anywhere in an expression tree, or null when every
+ *  atom is complete. Walks groups/NOT wrappers and validates each atom. */
+function _stateTreeError(tree: StateExpr | null, hass?: HassConnection): string | null {
+  if (!tree) return null;
+  if (tree.kind === "not") return _stateTreeError((tree as StateNot).item, hass);
+  if (tree.kind === "and" || tree.kind === "or") {
+    for (const item of (tree as StateGroup).items) {
+      const err = _stateTreeError(item, hass);
+      if (err !== null) return err;
+    }
+    return null;
+  }
+  return _stateAtomError(tree as StateAtom, hass);
+}
+
+/** Structural validation for a whole state predicate: a localized message for
+ *  the first incomplete atom, or null when complete (or not a state predicate).
+ *
+ *  Pure and exported so the scene editor can gate *saving* even when this widget
+ *  was never mounted to announce its validity via `render-invalid-changed` —
+ *  e.g. a scene loaded from storage whose state slot is left collapsed. Returns
+ *  null for anything that isn't a state-predicate shape, mirroring how the
+ *  editor's who-check ignores unrelated predicates. */
+export function statePredicateError(pred: unknown, hass?: HassConnection): string | null {
+  if (pred == null || typeof pred !== "object") return null; // "(any)" — no constraint
+  const kind = (pred as { kind?: unknown }).kind;
+  if (typeof kind !== "string" || !_STATE_KINDS.has(kind)) return null;
+  return _stateTreeError(pred as StateExpr, hass);
+}
+
 /**
  * Root component for editing a state predicate. Holds the full expression
  * tree; renders an empty-state Add button when null, otherwise a single
@@ -478,16 +532,7 @@ export class AmbienceStatePredicateInput extends LitElement {
    *  the scene — otherwise a half-filled atom (e.g. entity picked, value blank)
    *  would silently survive when the user navigates to another condition. */
   _treeError(tree: StatePredicate = this.value): string | null {
-    if (!tree) return null;
-    if (tree.kind === "not") return this._treeError((tree as StateNot).item);
-    if (tree.kind === "and" || tree.kind === "or") {
-      for (const item of tree.items) {
-        const err = this._treeError(item);
-        if (err !== null) return err;
-      }
-      return null;
-    }
-    return this._atomError(tree as StateAtom);
+    return _stateTreeError(tree, this.hass);
   }
 
   private _lastValidity: string | null | undefined;
@@ -510,20 +555,7 @@ export class AmbienceStatePredicateInput extends LitElement {
 
   /** Return a localized validation message for an atom, or null if valid. */
   _atomError(atom: StateAtom): string | null {
-    if (!atom.entity_id) {
-      return localize(this.hass, "ui.state_err_entity", "Entity is required");
-    }
-    const isNumeric = atom.kind !== "is" && atom.kind !== "is_not";
-    if (isNumeric) {
-      const v = atom.states[0];
-      if (!v) return localize(this.hass, "ui.state_err_value", "Value is required");
-      if (!Number.isFinite(Number(v))) {
-        return localize(this.hass, "ui.state_err_numeric", "Value must be a number");
-      }
-    } else if (!atom.states.some((s) => s !== "")) {
-      return localize(this.hass, "ui.state_err_state", "State is required");
-    }
-    return null;
+    return _stateAtomError(atom, this.hass);
   }
 
   /** The X button on a group header maps to this. Behaviour:

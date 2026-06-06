@@ -118,7 +118,11 @@ class WeatherCondition:
         return store.get_condition_config("weather").get("entity")
 
     async def snapshot(
-        self, hass: HomeAssistant, *, now: datetime | None = None
+        self,
+        hass: HomeAssistant,
+        *,
+        now: datetime | None = None,
+        entities: frozenset[str] | None = None,  # part of the shared contract; not entity-driven
     ) -> WeatherSnapshot:
         from ..const import DATA_STORE, DOMAIN
 

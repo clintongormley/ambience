@@ -59,7 +59,11 @@ class TimeOfDayCondition:
         self._period_lookup = period_lookup or (lambda: {})
 
     async def snapshot(
-        self, hass: HomeAssistant, *, now: datetime | None = None
+        self,
+        hass: HomeAssistant,
+        *,
+        now: datetime | None = None,
+        entities: frozenset[str] | None = None,  # part of the shared contract; not entity-driven
     ) -> TimeOfDaySnapshot:
         state = hass.states.get("sun.sun")
         if state is None:

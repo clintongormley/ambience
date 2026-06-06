@@ -59,7 +59,13 @@ class StateCondition:
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
 
-    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> StateSnapshot:
+    async def snapshot(
+        self,
+        hass: HomeAssistant,
+        *,
+        now: datetime | None = None,
+        entities: frozenset[str] | None = None,  # part of the shared contract; not used here
+    ) -> StateSnapshot:
         states: dict[str, tuple[str, datetime, datetime]] = {}
         attributes: dict[str, dict[str, Any]] = {}
         for s in hass.states.async_all():

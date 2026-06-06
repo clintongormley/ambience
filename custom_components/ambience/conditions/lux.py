@@ -61,10 +61,27 @@ class LuxCondition:
         self._hass = hass
         self._range_lookup = range_lookup or (lambda: {})
 
-    async def snapshot(self, hass: HomeAssistant, *, now: Any | None = None) -> LuxSnapshot:
+    async def snapshot(
+        self,
+        hass: HomeAssistant,
+        *,
+        now: Any | None = None,
+        entities: frozenset[str] | None = None,
+    ) -> LuxSnapshot:
         sensors: dict[str, float | None] = {}
         names: dict[str, str] = {}
-        for s in hass.states.async_all("sensor"):
+        # `entities` (the sensors scenes actually reference) lets us read those
+        # directly; None means scan the whole sensor domain (back-compat). The
+        # device_class filter stays either way, so a referenced-but-non-lux
+        # sensor is excluded exactly as a domain scan would exclude it.
+        states = (
+            [hass.states.get(eid) for eid in entities]
+            if entities is not None
+            else hass.states.async_all("sensor")
+        )
+        for s in states:
+            if s is None:
+                continue  # referenced entity that doesn't exist
             if s.attributes.get("device_class") != "illuminance":
                 continue
             sensors[s.entity_id] = as_float_state(s.state)

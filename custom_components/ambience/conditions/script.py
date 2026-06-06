@@ -163,7 +163,13 @@ class ScriptCondition:
     # Per-call timeout for script invocations. Tests may override.
     _timeout_seconds: float = 5.0
 
-    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> ScriptSnapshot:
+    async def snapshot(
+        self,
+        hass: HomeAssistant,
+        *,
+        now: datetime | None = None,
+        entities: frozenset[str] | None = None,  # part of the shared contract; not used here
+    ) -> ScriptSnapshot:
         pairs = self._collect_pairs()
         results: dict[str, bool] = {}
         misses: list[tuple[str, str, str]] = []  # (script, args_json, cache_key)

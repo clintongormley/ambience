@@ -22,6 +22,7 @@ from .const import (
     DOMAIN,
 )
 from .engine import evaluate_explained, resolve
+from .scope_triggers import referenced_entities
 from .service_logbook import log_apply, log_run_actions
 from .trace import (
     CauseKind,
@@ -161,10 +162,24 @@ async def async_resolve_with_snapshots(
 
 
 async def _snapshot_all(hass: HomeAssistant) -> dict[str, Any]:
-    """Snapshot every registered condition fresh; failures become None."""
+    """Snapshot every registered condition fresh; failures become None.
+
+    Each condition is handed the entities its scenes reference (the union across
+    every scope, computed once), so sensor-backed conditions snapshot only those
+    instead of scanning a whole domain. A condition that references nothing gets
+    an empty set (snapshot nothing); conditions that aren't entity-driven ignore
+    the hint.
+    """
     conditions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
+    store = hass.data[DOMAIN][DATA_STORE]
+    referenced = referenced_entities(
+        conditions_registry, [cfg for _kind, _scope_id, cfg in store.all_scope_configs()]
+    )
     snapshot_results = await asyncio.gather(
-        *[m.snapshot(hass) for m in conditions_registry.values()],
+        *[
+            m.snapshot(hass, entities=referenced.get(name, frozenset()))
+            for name, m in conditions_registry.items()
+        ],
         return_exceptions=True,
     )
     snapshots: dict[str, Any] = {}

@@ -49,6 +49,46 @@ async def test_snapshot_non_numeric_value_is_none(hass: HomeAssistant) -> None:
     assert snap.sensors["sensor.lounge"] is None
 
 
+async def test_snapshot_with_entities_captures_only_referenced(hass: HomeAssistant) -> None:
+    hass.states.async_set(
+        "sensor.lounge", "320", {"device_class": "illuminance", "friendly_name": "Lounge"}
+    )
+    hass.states.async_set("sensor.bedroom", "12", {"device_class": "illuminance"})
+    snap = await LuxCondition().snapshot(hass, entities=frozenset({"sensor.lounge"}))
+    assert snap.sensors == {"sensor.lounge": 320.0}
+    assert "sensor.bedroom" not in snap.sensors
+
+
+async def test_snapshot_with_entities_does_not_scan_the_domain(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    """With a referenced set supplied, snapshot must target entities directly and
+    never enumerate the whole sensor domain (the point of the change)."""
+    hass.states.async_set("sensor.lounge", "320", {"device_class": "illuminance"})
+
+    def _tripwire(*_args, **_kwargs):
+        raise AssertionError("snapshot must not call hass.states.async_all when entities given")
+
+    monkeypatch.setattr(type(hass.states), "async_all", _tripwire)
+    snap = await LuxCondition().snapshot(hass, entities=frozenset({"sensor.lounge"}))
+    assert snap.sensors == {"sensor.lounge": 320.0}
+
+
+async def test_snapshot_with_entities_skips_missing_and_non_illuminance(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set("sensor.temp", "21", {"device_class": "temperature"})
+    # sensor.ghost is referenced but absent; sensor.temp is referenced but not lux.
+    snap = await LuxCondition().snapshot(hass, entities=frozenset({"sensor.ghost", "sensor.temp"}))
+    assert snap.sensors == {}
+
+
+async def test_snapshot_with_empty_entities_captures_nothing(hass: HomeAssistant) -> None:
+    hass.states.async_set("sensor.lounge", "320", {"device_class": "illuminance"})
+    snap = await LuxCondition().snapshot(hass, entities=frozenset())
+    assert snap.sensors == {}
+
+
 def test_matches_none_is_true() -> None:
     assert _cond().matches(None, _snap()) is True
 

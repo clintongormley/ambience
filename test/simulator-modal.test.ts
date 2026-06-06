@@ -118,14 +118,16 @@ describe("ambience-simulator-modal", () => {
 
     const restore = el.shadowRoot.querySelector(".when .reset");
     expect(restore).toBeTruthy();
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const expectedDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    // Freeze the clock only across the reset so the expected value is exact and
+    // the test never depends on the real wall-clock. _resetWhen reads new Date()
+    // synchronously on click, so the frozen time is what lands in the fields.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 2, 3, 4, 0)); // 2026-01-02 03:04 local
     restore.click();
+    vi.useRealTimers();
     await el.updateComplete;
-    expect(el._date).toBe(expectedDate);
-    expect(el._time).toMatch(/^\d{2}:\d{2}$/);
-    expect(el._time).not.toBe("03:04");
+    expect(el._date).toBe("2026-01-02");
+    expect(el._time).toBe("03:04");
   });
 
   test("verdict knob renders a true/false select", async () => {

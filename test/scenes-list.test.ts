@@ -432,6 +432,25 @@ describe("ambience-scenes-list", () => {
     expect(get()).toBeUndefined();
   });
 
+  test("the post-drag click guard is one-shot: a later click still unpins", async () => {
+    // Regression: the `moved` flag was only reset on the next pointerdown, so a
+    // click that doesn't go through the handle (e.g. keyboard-activating the
+    // pin) could stay suppressed after an earlier drag. The trailing click must
+    // consume the flag so subsequent clicks unpin normally.
+    const pinned: Scene = { ...movieScene, pinned: true, priority: 2048 };
+    el = await mount([pinned, eveningScene]);
+    const get = captureEvent(el, "unpin-scene");
+    const pin = el.shadowRoot.querySelector(".pin") as HTMLElement;
+    grabPin(el, 0);
+    stubHitRow(el, 1);
+    firePointer("pointermove");
+    firePointer("pointerup");
+    pin.click(); // trailing click — swallowed
+    expect(get()).toBeUndefined();
+    pin.click(); // a fresh, independent click — must unpin
+    expect(get()).toEqual({ index: 0 });
+  });
+
   test("dragging a row onto another marks it as the drop target", async () => {
     el = await mount([movieScene, eveningScene]);
     grabHandle(el, 0);

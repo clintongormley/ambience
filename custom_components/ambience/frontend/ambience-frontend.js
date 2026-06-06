@@ -132,7 +132,7 @@ var Fs=Object.defineProperty;var Ns=Object.getOwnPropertyDescriptor;var u=(t,n,e
                 title=${s}
                 aria-label=${s}
                 @pointerdown=${c=>this._drag.start(e,c)}
-                @click=${c=>{c.stopPropagation(),!this._drag.moved&&this._emit("unpin-scene",{index:e})}}
+                @click=${c=>{if(c.stopPropagation(),this._drag.moved){this._drag.moved=!1;return}this._emit("unpin-scene",{index:e})}}
               >
                 📌
               </button>`:l`<span

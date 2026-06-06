@@ -488,8 +488,14 @@ export class AmbienceScenesList extends LitElement {
                   e.stopPropagation();
                   // The pin doubles as the grab handle: a tap unpins, a drag
                   // reorders. The browser fires a trailing click after a pointer
-                  // drag too, so skip the unpin when the gesture actually moved.
-                  if (this._drag.moved) return;
+                  // drag, so swallow that one — but CONSUME the flag so it's
+                  // one-shot. Otherwise a stale `moved` (only otherwise reset on
+                  // the next pointerdown) could suppress a later click that never
+                  // went through the handle, e.g. keyboard-activating the pin.
+                  if (this._drag.moved) {
+                    this._drag.moved = false;
+                    return;
+                  }
                   this._emit("unpin-scene", { index: i });
                 }}
               >

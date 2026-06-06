@@ -22,6 +22,70 @@ describe("ambience-state-predicate-input", () => {
   let el: any;
   afterEach(() => el?.remove());
 
+  /** Build + attach an element with a listener wired BEFORE first render, so the
+   *  validity event fired during the initial update cycle is captured. */
+  async function mountCapturingValidity(
+    value: StatePredicate,
+  ): Promise<{ el: any; errors: (string | null)[] }> {
+    const node: any = document.createElement("ambience-state-predicate-input");
+    node.hass = {};
+    node.value = value;
+    const errors: (string | null)[] = [];
+    node.addEventListener("render-invalid-changed", (e: Event) => {
+      errors.push((e as CustomEvent).detail.error);
+    });
+    document.body.appendChild(node);
+    await node.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await node.updateComplete;
+    return { el: node, errors };
+  }
+
+  test("emits render-invalid-changed with an error when an atom has a blank value", async () => {
+    const { el: node, errors } = await mountCapturingValidity({
+      kind: "is",
+      entity_id: "light.x",
+      states: [], // entity picked, value left blank — incomplete
+    });
+    expect(errors.at(-1)).toBeTruthy();
+    node.remove();
+  });
+
+  test("emits render-invalid-changed with an error when the entity is blank", async () => {
+    const { el: node, errors } = await mountCapturingValidity({
+      kind: "is",
+      entity_id: "",
+      states: [],
+    });
+    expect(errors.at(-1)).toBeTruthy();
+    node.remove();
+  });
+
+  test("reports valid (null) once every atom is complete", async () => {
+    const { el: node, errors } = await mountCapturingValidity({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "light.x", states: ["on"] },
+        { kind: "is", entity_id: "light.y", states: ["off"] },
+      ],
+    });
+    // Either no event (already valid from the start) or a trailing null.
+    expect(errors.at(-1) ?? null).toBeNull();
+    node.remove();
+  });
+
+  test("flags an incomplete atom nested inside a group", async () => {
+    const { el: node, errors } = await mountCapturingValidity({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "light.x", states: ["on"] },
+        { kind: "is", entity_id: "light.y", states: [] }, // incomplete child
+      ],
+    });
+    expect(errors.at(-1)).toBeTruthy();
+    node.remove();
+  });
+
   test("null value renders an empty-state Add button", async () => {
     el = await mount(null);
     const txt = el.shadowRoot.textContent ?? "";

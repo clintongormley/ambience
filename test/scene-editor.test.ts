@@ -11,6 +11,7 @@ vi.mock("../frontend/src/api", () => ({
       transition: { selector: { number: { min: 0 } } },
     },
   })),
+  getKnownStates: vi.fn(async () => ({ states: ["on", "off"] })),
 }));
 
 import "../frontend/src/views/scene-editor";
@@ -35,6 +36,7 @@ const conditions: ConditionInfo[] = [
     input: "template_predicate",
     priority: 30,
   },
+  { name: "state", description: "", predicate_help: "", input: "state_predicate", priority: 100 },
 ];
 
 const availableActions: ExposedAction[] = [
@@ -1127,6 +1129,53 @@ describe("ambience-scene-editor — condition dropdown + full-height layout", ()
     expect(el.shadowRoot.querySelector('.slot[data-slot-id="mode"]')).toBeNull();
     // time_of_day is toggleable and not in `when` → no row
     expect(el.shadowRoot.querySelector('.slot[data-slot-id="time_of_day"]')).toBeNull();
+  });
+
+  // Regression: an incomplete state condition (entity picked, value left blank)
+  // could be navigated away from, leaving a half-filled predicate that renders
+  // blank / gets lost. The state condition must report its invalidity so the
+  // editor blocks leaving it, exactly like the template/people conditions.
+  test("blocks adding a new condition while the open state condition is incomplete", async () => {
+    el = await mount({
+      name: "t",
+      when: { state: { kind: "is", entity_id: "light.lamp_a", states: [] } }, // value blank
+      actions: [],
+    });
+    // Open the state slot so its input mounts and reports validity to the editor.
+    el._open = { kind: "condition", id: "state" };
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // Try to add another condition — must be refused while state is incomplete.
+    el._addCondition("mode");
+    await el.updateComplete;
+
+    expect(el._open).toEqual({ kind: "condition", id: "state" });
+    expect(el._showError).toBe(true);
+    // The incomplete state condition is still in the draft (not silently lost).
+    expect(el._draft.when.state).toBeTruthy();
+    // The blocking error renders in the state slot.
+    const stateSlot = el.shadowRoot.querySelector('[data-slot-id="state"]');
+    expect(stateSlot?.querySelector(".error")).toBeTruthy();
+  });
+
+  test("allows adding a new condition once the state condition is complete", async () => {
+    el = await mount({
+      name: "t",
+      when: { state: { kind: "is", entity_id: "light.lamp_a", states: ["on"] } }, // complete
+      actions: [],
+    });
+    el._open = { kind: "condition", id: "state" };
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    el._addCondition("mode");
+    await el.updateComplete;
+
+    expect(el._open).toEqual({ kind: "condition", id: "mode" });
+    expect(el._showError).toBe(false);
   });
 
   test("renders a row for a toggleable condition that IS used in the scene", async () => {

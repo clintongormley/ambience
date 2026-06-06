@@ -24,7 +24,7 @@ from .conditions.weather import WEATHER_CONDITIONS
 from .const import DATA_CONDITIONS, DATA_STORE, DOMAIN
 from .engine import evaluate_explained
 from .naming import category_names, scope_display_name
-from .scope_triggers import iter_predicate_specs, scope_trigger_spec
+from .scope_triggers import iter_predicate_specs, referenced_entities, scope_trigger_spec
 from .service import _switch_state
 from .state_options import known_states_for
 from .sun_position import synthetic_sun_state
@@ -145,21 +145,36 @@ def _verdict_snapshot(condition_key: str, verdicts: dict[str, bool]) -> Any:
     raise ValueError(f"no verdict snapshot for opaque condition {condition_key!r}")
 
 
-async def build_simulated_snapshots(hass: HomeAssistant, world: SimulatedWorld) -> dict[str, Any]:
+async def build_simulated_snapshots(
+    hass: HomeAssistant,
+    world: SimulatedWorld,
+    *,
+    referenced: dict[str, frozenset[str]] | None = None,
+) -> dict[str, Any]:
     """Snapshot every registered condition against the simulated world.
 
     Entity-reading conditions snapshot against the overlay (with injected `now`);
     opaque conditions (script/template) are built from `world.verdicts` so no real
     script runs and overrides are honoured. A live condition whose snapshot raises
-    degrades to None (same policy as `_snapshot_all`)."""
+    degrades to None (same policy as `_snapshot_all`).
+
+    `referenced` (condition_key -> entity_ids the simulated scenes use, from
+    `scope_triggers.referenced_entities`) narrows sensor-backed conditions to
+    those entities; a condition absent from the map gets an empty set. `None`
+    means "no hint, scan as before" — the back-compat default for direct callers.
+    """
     conditions: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
     overlay = _SimulatedHass(
         hass,
         _SimulatedStates(hass.states, _build_override_states(hass, world)),
     )
     live = {name: m for name, m in conditions.items() if name not in _OPAQUE_CONDITIONS}
+
+    def _entities(name: str) -> frozenset[str] | None:
+        return None if referenced is None else referenced.get(name, frozenset())
+
     results = await asyncio.gather(
-        *[m.snapshot(overlay, now=world.now) for m in live.values()],
+        *[m.snapshot(overlay, now=world.now, entities=_entities(name)) for name, m in live.items()],
         return_exceptions=True,
     )
     snapshots: dict[str, Any] = {}
@@ -429,7 +444,10 @@ async def run_simulation(
     dict (the shape `renderEvaluation()` consumes), with a `simulated` cause."""
     conditions: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
     candidates = _category_config(hass, scope_kind, scope_id, category)["scenes"]
-    snapshots = await build_simulated_snapshots(hass, world)
+    # Narrow each condition's snapshot to the entities the simulated category's
+    # scenes actually reference (the simulated scene set), mirroring production.
+    referenced = referenced_entities(conditions, [{"scenes": candidates}])
+    snapshots = await build_simulated_snapshots(hass, world, referenced=referenced)
     explanation = evaluate_explained(candidates, snapshots, conditions, describe=True)
 
     switch_state = _switch_state(hass, scope_kind, scope_id)

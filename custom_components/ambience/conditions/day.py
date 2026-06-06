@@ -98,7 +98,13 @@ class DayCondition:
             return {"workday_sensor": None, "workday_calendar": None}
         return store.get_condition_config("day")
 
-    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> DaySnapshot:
+    async def snapshot(
+        self,
+        hass: HomeAssistant,
+        *,
+        now: datetime | None = None,
+        entities: frozenset[str] | None = None,  # part of the shared contract; not entity-driven
+    ) -> DaySnapshot:
         from ..const import DATA_STORE, DOMAIN  # local import to avoid cycles
 
         store = hass.data[DOMAIN][DATA_STORE]

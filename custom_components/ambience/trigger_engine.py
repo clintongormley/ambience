@@ -24,7 +24,7 @@ from .const import (
     DATA_STORE,
     DOMAIN,
 )
-from .scope_triggers import iter_predicate_specs
+from .scope_triggers import iter_predicate_specs, referenced_entities
 from .service import (
     _switch_state,
     async_execute_plan,
@@ -70,6 +70,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._predicate_state: dict[PredKey, bool] = {}
         # Scope configs captured at the last rebuild, for predicate lookup.
         self._scope_cfgs: dict[tuple[str, str | None], dict[str, Any]] = {}
+        # Per-condition union of referenced entity_ids, captured at the last
+        # rebuild — lets sensor-backed conditions snapshot only what scenes use.
+        self._referenced: dict[str, frozenset[str]] = {}
         self._index: TriggerIndex = build_index([])
         self._snapshots: dict[str, Any] = {}
         self._unsubs: list[Callable[[], None]] = []
@@ -105,6 +108,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._scope_cfgs = {
             (scope_kind, scope_id): cfg for scope_kind, scope_id, cfg in store.all_scope_configs()
         }
+        self._referenced = referenced_entities(self._conditions(), self._scope_cfgs.values())
         self._index = build_index(self._build_entries())
         # Drop flip-state for predicates that no longer exist (scenes removed /
         # reordered), so it can't grow unbounded across config edits.
@@ -196,7 +200,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             if condition is None:
                 continue
             try:
-                self._snapshots[key] = await condition.snapshot(self._hass)
+                self._snapshots[key] = await condition.snapshot(
+                    self._hass, entities=self._referenced.get(key, frozenset())
+                )
             except Exception as exc:  # noqa: BLE001 — any condition error => None snapshot
                 _LOGGER.warning("ambience: condition %r snapshot failed: %s", key, exc)
                 self._snapshots[key] = None

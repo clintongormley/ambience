@@ -10,7 +10,7 @@ simulator. Pure logic — conditions are passed in; no HA imports, no I/O.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from .engine import scene_enabled
@@ -48,3 +48,26 @@ def iter_predicate_specs(
 def scope_trigger_spec(conditions: dict[str, Any], cfg: dict[str, Any]) -> TriggerSpec:
     """Merge every scene predicate's ``trigger_deps`` in ``cfg`` into one spec."""
     return merge(spec for _, _, spec in iter_predicate_specs(conditions, cfg))
+
+
+def referenced_entities(
+    conditions: dict[str, Any], cfgs: Iterable[dict[str, Any]]
+) -> dict[str, frozenset[str]]:
+    """Per-condition union of ``trigger_deps(...).entities`` across all ``cfgs``.
+
+    Maps ``condition_key -> the entity_ids any of that condition's predicates
+    reference``. A condition with no entity-backed predicate is absent from the
+    result (callers treat absent as "references nothing", i.e. snapshot nothing).
+
+    Reuses :func:`iter_predicate_specs`, so it inherits the same disabled-scene /
+    wildcard / unknown-condition handling as the trigger watch-set — keeping a
+    condition's snapshot scope identical to what wakes it. Lets sensor-backed
+    conditions snapshot only the entities scenes use instead of a whole domain.
+    Pure logic — no HA imports, no I/O.
+    """
+    out: dict[str, set[str]] = {}
+    for cfg in cfgs:
+        for _scene_index, condition_key, spec in iter_predicate_specs(conditions, cfg):
+            if spec.entities:
+                out.setdefault(condition_key, set()).update(spec.entities)
+    return {key: frozenset(ents) for key, ents in out.items()}

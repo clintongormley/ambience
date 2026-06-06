@@ -60,11 +60,24 @@ class OccupancyCondition:
         self._hass = hass
 
     async def snapshot(
-        self, hass: HomeAssistant, *, now: datetime | None = None
+        self,
+        hass: HomeAssistant,
+        *,
+        now: datetime | None = None,
+        entities: frozenset[str] | None = None,
     ) -> OccupancySnapshot:
         sensors: dict[str, tuple[str, datetime]] = {}
         names: dict[str, str] = {}
-        for s in hass.states.async_all("binary_sensor"):
+        # `entities` (the sensors scenes actually reference) lets us read those
+        # directly; None means scan the whole binary_sensor domain (back-compat).
+        states = (
+            [hass.states.get(eid) for eid in entities]
+            if entities is not None
+            else hass.states.async_all("binary_sensor")
+        )
+        for s in states:
+            if s is None:
+                continue  # referenced entity that doesn't exist
             sensors[s.entity_id] = (s.state, s.last_changed)
             names[s.entity_id] = s.attributes.get("friendly_name") or s.entity_id
         return OccupancySnapshot(now=now or dt_util.utcnow(), sensors=sensors, names=names)

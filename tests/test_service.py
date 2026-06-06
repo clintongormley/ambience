@@ -34,6 +34,7 @@ from custom_components.ambience.service import (
     scope_reapply_intervals,
 )
 from custom_components.ambience.trace import TraceEvent
+from custom_components.ambience.triggers import TriggerSpec
 
 
 def test_category_ids_returns_only_real_ids():
@@ -49,7 +50,7 @@ class FixedCondition:
     def __init__(self, current: str) -> None:
         self._current = current
 
-    async def snapshot(self, hass):
+    async def snapshot(self, hass, **_):
         return self._current
 
     def matches(self, predicate, snapshot):
@@ -67,7 +68,7 @@ class FixedCondition:
 class FailingCondition:
     name = "weather"
 
-    async def snapshot(self, hass):
+    async def snapshot(self, hass, **_):
         raise RuntimeError("weather snapshot failed")
 
     def matches(self, predicate, snapshot):
@@ -86,6 +87,9 @@ class FakeStore:
 
     def get_area(self, area_id):
         return self._areas.get(area_id)
+
+    def all_scope_configs(self):
+        return [("area", area_id, cfg) for area_id, cfg in self._areas.items()]
 
     def categories(self):
         return []
@@ -448,7 +452,7 @@ async def test_cancellation_treated_as_failure_isolation(
     class CancelledCondition:
         name = "tod"
 
-        async def snapshot(self, hass):
+        async def snapshot(self, hass, **_):
             import asyncio
 
             raise asyncio.CancelledError()
@@ -552,8 +556,58 @@ class FakeScopeStore:
     def get_house(self):
         return dict(self._house)
 
+    def all_scope_configs(self):
+        triples = [("area", aid, cfg) for aid, cfg in self._areas.items()]
+        triples += [("floor", fid, cfg) for fid, cfg in self._floors.items()]
+        triples.append(("house", None, self._house))
+        return triples
+
     def categories(self):
         return []
+
+
+async def test_snapshot_all_passes_referenced_entities_per_condition(
+    hass: HomeAssistant,
+) -> None:
+    """_snapshot_all hands each condition the union of the entities its scenes
+    reference (via trigger_deps), so sensor-backed conditions can target instead
+    of scanning the whole domain. Two scenes naming different sensors -> union."""
+
+    class RecordingCondition:
+        name = "rec"
+
+        def __init__(self) -> None:
+            self.received: object = "UNSET"
+
+        async def snapshot(self, hass, *, now=None, entities=None):
+            self.received = entities
+            return {}
+
+        def matches(self, predicate, snapshot):
+            return predicate is None
+
+        def describe(self, snapshot):
+            return None
+
+        def validate_predicate(self, predicate):
+            return
+
+        def trigger_deps(self, predicate):
+            return TriggerSpec(entities=frozenset(predicate.get("sensors", [])))
+
+    rec = RecordingCondition()
+    areas = {
+        "a": {
+            "scenes": [
+                {"name": "s1", "when": {"rec": {"sensors": ["sensor.a"]}}, "actions": []},
+                {"name": "s2", "when": {"rec": {"sensors": ["sensor.b"]}}, "actions": []},
+            ]
+        }
+    }
+    _install(hass, areas=areas, conditions={"rec": rec})
+
+    await async_resolve_only(hass, "area", "a")
+    assert rec.received == frozenset({"sensor.a", "sensor.b"})
 
 
 async def test_async_resolve_only_floor_routes_to_floor_store(hass: HomeAssistant) -> None:
@@ -630,7 +684,7 @@ async def test_resolve_with_snapshots_does_not_call_snapshot(hass: HomeAssistant
     class ExplodingSnapshot:
         name = "tod"
 
-        async def snapshot(self, hass):
+        async def snapshot(self, hass, **_):
             raise AssertionError("snapshot() must not be called by resolve_with_snapshots")
 
         def matches(self, predicate, snapshot):
@@ -1229,7 +1283,7 @@ async def test_apply_scene_category_exception_logged_not_raised(
     class BoomCondition:
         name = "boom"
 
-        async def snapshot(self, hass):
+        async def snapshot(self, hass, **_):
             return "x"
 
         def matches(self, predicate, snapshot):

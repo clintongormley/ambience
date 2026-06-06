@@ -283,7 +283,13 @@ def test_rejects_main_behind_origin(tmp_path: Path):
     _git("push", "-q", "origin", "main", cwd=local)
 
     other = tmp_path / "other"
-    _git("clone", "-q", str(origin), str(other), cwd=tmp_path)
+    # --no-local: a default local-path clone copies/hardlinks the bare repo's
+    # loose objects directly, which intermittently races a concurrent repack of
+    # origin.git (objects vanish mid-copy -> "failed to copy file ... No such
+    # file or directory" / "hardlink different from source"). --no-local forces
+    # git's normal pack-transfer protocol, which never touches individual source
+    # objects, making the clone deterministic.
+    _git("clone", "-q", "--no-local", str(origin), str(other), cwd=tmp_path)
     _git("config", "user.email", "t@test", cwd=other)
     _git("config", "user.name", "t", cwd=other)
     (other / "new.txt").write_text("x")

@@ -69,13 +69,14 @@ class _Config:
 
 
 class _RecordingCondition:
-    """Captures the hass/now it was snapshotted with."""
+    """Captures the hass/now/entities it was snapshotted with."""
 
     name = "recording"
 
-    async def snapshot(self, hass, *, now=None):
+    async def snapshot(self, hass, *, now=None, entities=None):
         return {
             "now": now,
+            "entities": entities,
             "motion": hass.states.get("binary_sensor.motion"),
             "sun": hass.states.get("sun.sun"),
         }
@@ -146,6 +147,26 @@ async def test_build_simulated_snapshots_injects_now_and_overrides():
     snaps = await build_simulated_snapshots(hass, world)
     assert snaps["recording"]["now"] == FIXED
     assert snaps["recording"]["motion"].state == "on"  # override applied
+
+
+@pytest.mark.asyncio
+async def test_build_simulated_snapshots_passes_referenced_entities():
+    """A referenced map narrows each condition's snapshot to the entities the
+    simulated scenes use; conditions absent from the map get an empty set."""
+    hass = _Hass([])
+    world = SimulatedWorld(now=FIXED, overrides={})
+    snaps = await build_simulated_snapshots(
+        hass, world, referenced={"recording": frozenset({"sensor.x"})}
+    )
+    assert snaps["recording"]["entities"] == frozenset({"sensor.x"})
+
+
+@pytest.mark.asyncio
+async def test_build_simulated_snapshots_without_referenced_scans_all():
+    """No referenced map -> entities=None (back-compat scan-all)."""
+    hass = _Hass([])
+    snaps = await build_simulated_snapshots(hass, SimulatedWorld(now=FIXED, overrides={}))
+    assert snaps["recording"]["entities"] is None
 
 
 @pytest.mark.asyncio
@@ -598,7 +619,7 @@ async def test_build_simulated_snapshots_degraded_on_exception():
     class _FailingCondition:
         name = "failing"
 
-        async def snapshot(self, hass, *, now=None):
+        async def snapshot(self, hass, *, now=None, entities=None):
             raise RuntimeError("snapshot boom")
 
     hass = _Hass([])

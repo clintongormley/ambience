@@ -26,12 +26,26 @@ class Condition(Protocol):
     description: str
     predicate_help: str
 
-    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> Any:
+    async def snapshot(
+        self,
+        hass: HomeAssistant,
+        *,
+        now: datetime | None = None,
+        entities: frozenset[str] | None = None,
+    ) -> Any:
         """Capture all state needed to evaluate predicates.
 
         `now` overrides the wall-clock the snapshot is taken at (used by the
         what-if simulator to time-travel). When None, the condition reads the
         real current time. Time-insensitive conditions accept and ignore it.
+
+        `entities` is the set of entity_ids that scenes actually reference for
+        this condition (the union of every predicate's `trigger_deps().entities`,
+        see `scope_triggers.referenced_entities`). A sensor-backed condition uses
+        it to snapshot only those entities instead of scanning the whole domain.
+        `None` means "no hint, scan as before" — the back-compat default for
+        direct/test calls and for conditions that aren't entity-list-driven, which
+        accept and ignore it. An empty set means "references nothing".
         """
         ...
 

@@ -306,7 +306,7 @@ class CacheCondition:
     def trigger_deps(self, predicate: Any) -> TriggerSpec:
         return self._deps
 
-    async def snapshot(self, hass: Any) -> Any:
+    async def snapshot(self, hass: Any, **_) -> Any:
         return self.value
 
     def matches(self, predicate: Any, snapshot: Any) -> bool:
@@ -390,6 +390,49 @@ async def test_resolve_and_apply_force_reapplies_unchanged_winner(hass) -> None:
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
 
 
+class RecordingCondition:
+    """Records the ``entities`` hint passed to snapshot()."""
+
+    def __init__(self, spec: TriggerSpec) -> None:
+        self._spec = spec
+        self.received: Any = "UNSET"
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        return self._spec
+
+    async def snapshot(self, hass: Any, *, now=None, entities=None) -> Any:
+        self.received = entities
+        return {}
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        return predicate is None or predicate == snapshot
+
+    def describe(self, snapshot: Any) -> str | None:
+        return None
+
+
+async def test_refresh_snapshots_passes_referenced_entities(hass) -> None:
+    """The engine snapshots each condition with the entities its scenes reference
+    (unioned across scopes), so sensor-backed conditions can target instead of
+    scanning their whole domain."""
+    scopes = [
+        ("area", "a", {"scenes": [{"when": {"rec": {"sensors": ["sensor.x"]}}, "actions": []}]}),
+        ("area", "b", {"scenes": [{"when": {"rec": {"sensors": ["sensor.y"]}}, "actions": []}]}),
+    ]
+
+    # The engine must union referenced entities across both scopes' predicates, so
+    # derive each predicate's entities from its own `sensors` list.
+    def _deps(predicate):
+        return TriggerSpec(entities=frozenset(predicate.get("sensors", [])))
+
+    rec = RecordingCondition(TriggerSpec())
+    rec.trigger_deps = _deps  # type: ignore[method-assign]
+    engine = _engine(hass, scopes, {"rec": rec})
+    engine.async_rebuild()
+    await engine._refresh_all_snapshots()
+    assert rec.received == frozenset({"sensor.x", "sensor.y"})
+
+
 class SpyCondition:
     """Counts snapshot() calls — to prove unfired conditions aren't re-snapshotted."""
 
@@ -400,7 +443,7 @@ class SpyCondition:
     def trigger_deps(self, predicate: Any) -> TriggerSpec:
         return self._deps
 
-    async def snapshot(self, hass: Any) -> Any:
+    async def snapshot(self, hass: Any, **_) -> Any:
         self.snapshot_calls += 1
         return {}
 
@@ -446,7 +489,7 @@ class StateReadCondition:
     def trigger_deps(self, predicate: Any) -> TriggerSpec:
         return TriggerSpec(entities=frozenset({"binary_sensor.x"}))
 
-    async def snapshot(self, hass: Any) -> Any:
+    async def snapshot(self, hass: Any, **_) -> Any:
         state = hass.states.get("binary_sensor.x")
         return state.state if state else None
 
@@ -511,7 +554,7 @@ async def test_has_time_tick_fires(hass) -> None:
         def trigger_deps(self, predicate):
             return TriggerSpec(entities=frozenset(), has_time=True)
 
-        async def snapshot(self, hass):
+        async def snapshot(self, hass, **_):
             return "v"
 
         def matches(self, predicate, snapshot):
@@ -550,7 +593,7 @@ async def test_sun_event_scheduled_when_sun_available(hass) -> None:
         def trigger_deps(self, predicate):
             return TriggerSpec(sun_events=frozenset({("sunset", 0)}))
 
-        async def snapshot(self, hass):
+        async def snapshot(self, hass, **_):
             return "v"
 
         def matches(self, predicate, snapshot):
@@ -584,7 +627,7 @@ async def test_for_recheck_scheduled_on_state_change(hass) -> None:
                 entity_durations=frozenset({("binary_sensor.x", 600.0)}),
             )
 
-        async def snapshot(self, hass):
+        async def snapshot(self, hass, **_):
             state = hass.states.get("binary_sensor.x")
             return state.state if state else None
 
@@ -1041,7 +1084,7 @@ async def test_refresh_snapshots_stores_none_on_snapshot_exception(hass) -> None
         def trigger_deps(self, predicate: Any) -> TriggerSpec:
             return TriggerSpec(entities=frozenset())
 
-        async def snapshot(self, hass: Any) -> Any:
+        async def snapshot(self, hass: Any, **_) -> Any:
             raise RuntimeError("simulated snapshot failure")
 
         def matches(self, predicate: Any, snapshot: Any) -> bool:

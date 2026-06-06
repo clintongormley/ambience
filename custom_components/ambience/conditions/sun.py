@@ -47,7 +47,13 @@ class SunCondition:
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
 
-    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> SunSnapshot:
+    async def snapshot(
+        self,
+        hass: HomeAssistant,
+        *,
+        now: datetime | None = None,
+        entities: frozenset[str] | None = None,  # part of the shared contract; not entity-driven
+    ) -> SunSnapshot:
         state = hass.states.get("sun.sun")
         if state is None or state.state in UNAVAILABLE:
             return SunSnapshot(elevation=None, azimuth=None)

@@ -62,6 +62,42 @@ async def test_snapshot_captures_in_zones(hass: HomeAssistant) -> None:
     assert snap.in_zones["person.bob"] is None
 
 
+async def test_snapshot_with_entities_captures_only_referenced_persons(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set("person.alice", "home", {"friendly_name": "Alice"})
+    hass.states.async_set("person.bob", "not_home", {"friendly_name": "Bob"})
+    hass.states.async_set("zone.home", "1", {"friendly_name": "Home"})
+    snap = await PeopleCondition().snapshot(hass, entities=frozenset({"person.alice"}))
+    assert set(snap.persons) == {"person.alice"}
+    assert "person.bob" not in snap.persons
+    # Zones are not person-scoped — they stay fully captured for location matching.
+    assert snap.zone_labels["zone.home"] == "home"
+
+
+async def test_snapshot_with_entities_does_not_scan_person_domain(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    hass.states.async_set("person.alice", "home")
+    hass.states.async_set("zone.home", "1", {"friendly_name": "Home"})
+    real_async_all = type(hass.states).async_all
+
+    def _guard(self, domain=None, *args, **kwargs):
+        # The person domain must be targeted directly; zone is still allowed.
+        assert domain != "person", "snapshot must not scan the person domain when entities given"
+        return real_async_all(self, domain, *args, **kwargs)
+
+    monkeypatch.setattr(type(hass.states), "async_all", _guard)
+    snap = await PeopleCondition().snapshot(hass, entities=frozenset({"person.alice"}))
+    assert set(snap.persons) == {"person.alice"}
+
+
+async def test_snapshot_with_entities_skips_missing_person(hass: HomeAssistant) -> None:
+    hass.states.async_set("zone.home", "1", {"friendly_name": "Home"})
+    snap = await PeopleCondition().snapshot(hass, entities=frozenset({"person.ghost"}))
+    assert snap.persons == {}
+
+
 def _p(state: str) -> tuple[str, datetime]:
     return (state, datetime(2026, 5, 25, 11, 0, tzinfo=UTC))
 

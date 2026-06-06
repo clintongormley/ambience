@@ -66,11 +66,30 @@ class PeopleCondition:
     def __init__(self, hass: HomeAssistant | None = None) -> None:
         self._hass = hass
 
-    async def snapshot(self, hass: HomeAssistant, *, now: datetime | None = None) -> PeopleSnapshot:
+    async def snapshot(
+        self,
+        hass: HomeAssistant,
+        *,
+        now: datetime | None = None,
+        entities: frozenset[str] | None = None,
+    ) -> PeopleSnapshot:
         persons: dict[str, tuple[str, datetime]] = {}
         names: dict[str, str] = {}
         in_zones: dict[str, list[str] | None] = {}
-        for s in hass.states.async_all("person"):
+        # `entities` (the persons scenes actually reference) lets us read those
+        # directly; None means scan the whole person domain (back-compat). A
+        # wildcard `who` predicate's trigger_deps enumerates every person, so the
+        # referenced set is "all persons" whenever any wildcard people scene
+        # exists — keeping matches()'s person universe correct. Zones are not
+        # person-scoped, so they are always captured in full below.
+        person_states = (
+            [hass.states.get(eid) for eid in entities]
+            if entities is not None
+            else hass.states.async_all("person")
+        )
+        for s in person_states:
+            if s is None:
+                continue  # referenced person that doesn't exist
             persons[s.entity_id] = (s.state, s.last_changed)
             names[s.entity_id] = s.attributes.get("friendly_name") or s.entity_id
             raw = s.attributes.get("in_zones")

@@ -175,7 +175,11 @@ class TemplateCondition:
         return templates
 
     async def snapshot(
-        self, hass: HomeAssistant, *, now: datetime | None = None
+        self,
+        hass: HomeAssistant,
+        *,
+        now: datetime | None = None,
+        entities: frozenset[str] | None = None,  # part of the shared contract; not used here
     ) -> TemplateSnapshot:
         results: dict[str, bool] = {}
         deps: dict[str, TemplateDeps] = {}

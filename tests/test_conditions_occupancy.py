@@ -44,6 +44,32 @@ async def test_snapshot_captures_only_binary_sensors(hass: HomeAssistant) -> Non
     assert "light.x" not in snap.sensors
 
 
+async def test_snapshot_with_entities_captures_only_referenced(hass: HomeAssistant) -> None:
+    hass.states.async_set("binary_sensor.lounge", "on", {"friendly_name": "Lounge"})
+    hass.states.async_set("binary_sensor.bedroom", "off")
+    snap = await OccupancyCondition().snapshot(hass, entities=frozenset({"binary_sensor.lounge"}))
+    assert set(snap.sensors) == {"binary_sensor.lounge"}
+    assert "binary_sensor.bedroom" not in snap.sensors
+
+
+async def test_snapshot_with_entities_does_not_scan_the_domain(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    hass.states.async_set("binary_sensor.lounge", "on")
+
+    def _tripwire(*_args, **_kwargs):
+        raise AssertionError("snapshot must not call hass.states.async_all when entities given")
+
+    monkeypatch.setattr(type(hass.states), "async_all", _tripwire)
+    snap = await OccupancyCondition().snapshot(hass, entities=frozenset({"binary_sensor.lounge"}))
+    assert set(snap.sensors) == {"binary_sensor.lounge"}
+
+
+async def test_snapshot_with_entities_skips_missing(hass: HomeAssistant) -> None:
+    snap = await OccupancyCondition().snapshot(hass, entities=frozenset({"binary_sensor.ghost"}))
+    assert snap.sensors == {}
+
+
 def test_matches_none_is_true() -> None:
     assert OccupancyCondition().matches(None, _snap()) is True
 

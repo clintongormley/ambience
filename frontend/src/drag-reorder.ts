@@ -35,6 +35,14 @@ export class DragReorderController implements ReactiveController {
   from: number | null = null;
   /** Index currently hovered as the drop target, or null. */
   over: number | null = null;
+  /**
+   * True once the pointer has hovered a row other than the source during the
+   * current/just-finished drag — i.e. a genuine reorder gesture rather than a
+   * stationary tap. Reset at {@link start}, set in {@link _hover}, and
+   * deliberately NOT cleared by {@link _reset}, so a handler running on the
+   * trailing `click` (the browser still fires one after a pointer drag) can
+   * distinguish "dragged" from "tapped" and suppress its tap action. */
+  moved = false;
 
   private readonly _locate: Locate;
   /** Tears down the active pointer drag's listeners; null when idle. */
@@ -69,6 +77,7 @@ export class DragReorderController implements ReactiveController {
     // breaking buttons that share the handle area (e.g. the pin toggle).
     // Scroll-suppression is the handle's `touch-action: none` instead.
     this.from = i;
+    this.moved = false;
     this.host.requestUpdate();
     // Drag the whole row/card under the pointer for feedback (its `[data-drag-index]`
     // element, the same marker the hit-test uses).
@@ -89,6 +98,7 @@ export class DragReorderController implements ReactiveController {
   private _hover(i: number | null) {
     if (this.from === null) return;
     const next = i === null || i === this.from ? null : i;
+    if (next !== null) this.moved = true;
     if (this.over !== next) {
       this.over = next;
       this.host.requestUpdate();

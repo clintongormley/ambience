@@ -362,6 +362,13 @@ describe("ambience-scenes-list", () => {
     );
   }
 
+  /** Press the 📌 pin button of row `index` with a primary pointer. */
+  function grabPin(el: any, index: number) {
+    (el.shadowRoot.querySelectorAll("li .pin")[index] as HTMLElement).dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, isPrimary: true, button: 0 }),
+    );
+  }
+
   test("rows carry a data-drag-index for hit-testing", async () => {
     el = await mount([movieScene, eveningScene]);
     const rows = rowsDraggable(el);
@@ -377,16 +384,71 @@ describe("ambience-scenes-list", () => {
     expect(el._drag.from).toBe(0);
   });
 
-  test("pressing the pin button on a pinned row does NOT start a drag", async () => {
+  test("pressing the 📌 pin on a pinned row starts a drag from that row's index", async () => {
     const pinned: Scene = { ...movieScene, pinned: true, priority: 2048 };
     el = await mount([pinned]);
-    const pin = el.shadowRoot.querySelector(".pin") as HTMLElement;
-    pin.dispatchEvent(
-      new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, isPrimary: true, button: 0 }),
-    );
+    grabPin(el, 0);
     await el.updateComplete;
-    // The pin is a plain button, not a grab handle — no drag armed.
-    expect(el._drag.from).toBeNull();
+    // A pinned row's pin doubles as its grab handle, so it can be re-dragged.
+    expect(el._drag.from).toBe(0);
+  });
+
+  test("dragging a pinned row's 📌 onto another row emits reorder-scenes", async () => {
+    const pinned: Scene = { ...movieScene, pinned: true, priority: 2048 };
+    el = await mount([pinned, eveningScene]);
+    const get = captureEvent(el, "reorder-scenes");
+    grabPin(el, 0);
+    stubHitRow(el, 1);
+    firePointer("pointermove");
+    firePointer("pointerup");
+    await el.updateComplete;
+    expect(get()).toEqual({ from: 0, to: 1 });
+  });
+
+  test("tapping the 📌 without dragging still emits unpin-scene", async () => {
+    const pinned: Scene = { ...movieScene, pinned: true, priority: 2048 };
+    el = await mount([pinned]);
+    const get = captureEvent(el, "unpin-scene");
+    const pin = el.shadowRoot.querySelector(".pin") as HTMLElement;
+    grabPin(el, 0);
+    stubHitRow(el, 0);
+    firePointer("pointerup"); // released on the same row — no reorder
+    pin.click();
+    await el.updateComplete;
+    expect(get()).toEqual({ index: 0 });
+  });
+
+  test("dragging the 📌 to reorder does NOT also unpin on the trailing click", async () => {
+    const pinned: Scene = { ...movieScene, pinned: true, priority: 2048 };
+    el = await mount([pinned, eveningScene]);
+    const get = captureEvent(el, "unpin-scene");
+    const pin = el.shadowRoot.querySelector(".pin") as HTMLElement;
+    grabPin(el, 0);
+    stubHitRow(el, 1);
+    firePointer("pointermove"); // a genuine cross-row drag
+    firePointer("pointerup");
+    pin.click(); // the browser's trailing click after a drag must not unpin
+    await el.updateComplete;
+    expect(get()).toBeUndefined();
+  });
+
+  test("the post-drag click guard is one-shot: a later click still unpins", async () => {
+    // Regression: the `moved` flag was only reset on the next pointerdown, so a
+    // click that doesn't go through the handle (e.g. keyboard-activating the
+    // pin) could stay suppressed after an earlier drag. The trailing click must
+    // consume the flag so subsequent clicks unpin normally.
+    const pinned: Scene = { ...movieScene, pinned: true, priority: 2048 };
+    el = await mount([pinned, eveningScene]);
+    const get = captureEvent(el, "unpin-scene");
+    const pin = el.shadowRoot.querySelector(".pin") as HTMLElement;
+    grabPin(el, 0);
+    stubHitRow(el, 1);
+    firePointer("pointermove");
+    firePointer("pointerup");
+    pin.click(); // trailing click — swallowed
+    expect(get()).toBeUndefined();
+    pin.click(); // a fresh, independent click — must unpin
+    expect(get()).toEqual({ index: 0 });
   });
 
   test("dragging a row onto another marks it as the drop target", async () => {

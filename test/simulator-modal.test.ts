@@ -104,6 +104,32 @@ describe("ambience-simulator-modal", () => {
     expect(el.shadowRoot.querySelector('input[type="date"]')).toBeTruthy();
   });
 
+  test("restore button in the When section resets date+time to now", async () => {
+    el = await mount();
+    const dateInput = el.shadowRoot.querySelector('input[type="date"]');
+    const timeInput = el.shadowRoot.querySelector('input[type="time"]');
+    dateInput.value = "2000-01-01";
+    dateInput.dispatchEvent(new Event("change"));
+    timeInput.value = "03:04";
+    timeInput.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    expect(el._date).toBe("2000-01-01");
+    expect(el._time).toBe("03:04");
+
+    const restore = el.shadowRoot.querySelector(".when .reset");
+    expect(restore).toBeTruthy();
+    // Freeze the clock only across the reset so the expected value is exact and
+    // the test never depends on the real wall-clock. _resetWhen reads new Date()
+    // synchronously on click, so the frozen time is what lands in the fields.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 2, 3, 4, 0)); // 2026-01-02 03:04 local
+    restore.click();
+    vi.useRealTimers();
+    await el.updateComplete;
+    expect(el._date).toBe("2026-01-02");
+    expect(el._time).toBe("03:04");
+  });
+
   test("verdict knob renders a true/false select", async () => {
     el = await mount();
     expect(el.shadowRoot.querySelector("select[data-verdict='script:k1']")).toBeTruthy();

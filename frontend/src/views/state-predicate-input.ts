@@ -471,6 +471,43 @@ export class AmbienceStatePredicateInput extends LitElement {
     return null;
   }
 
+  /** First validation error anywhere in the tree, or null when every atom is
+   *  complete. Walks groups/NOT wrappers and validates each atom with
+   *  {@link _atomError}. Used to tell the parent scene editor (via
+   *  `render-invalid-changed`) that an incomplete predicate must not be left in
+   *  the scene — otherwise a half-filled atom (e.g. entity picked, value blank)
+   *  would silently survive when the user navigates to another condition. */
+  _treeError(tree: StatePredicate = this.value): string | null {
+    if (!tree) return null;
+    if (tree.kind === "not") return this._treeError((tree as StateNot).item);
+    if (tree.kind === "and" || tree.kind === "or") {
+      for (const item of tree.items) {
+        const err = this._treeError(item);
+        if (err !== null) return err;
+      }
+      return null;
+    }
+    return this._atomError(tree as StateAtom);
+  }
+
+  private _lastValidity: string | null | undefined;
+
+  /** Mirror of the template condition's validity channel: announce to the scene
+   *  editor whether this predicate is currently complete, so it can block
+   *  closing/leaving an invalid slot. Deduped so it only fires on transitions. */
+  private _emitValidity() {
+    const error = this._treeError();
+    if (this._lastValidity === error) return;
+    this._lastValidity = error;
+    this.dispatchEvent(
+      new CustomEvent("render-invalid-changed", {
+        detail: { error },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   /** Return a localized validation message for an atom, or null if valid. */
   _atomError(atom: StateAtom): string | null {
     if (!atom.entity_id) {
@@ -569,6 +606,9 @@ export class AmbienceStatePredicateInput extends LitElement {
           this._showError = false;
         }
       }
+      // Tell the parent scene editor whether the whole predicate is complete,
+      // so it can block leaving an incomplete state condition behind.
+      this._emitValidity();
     }
   }
 

@@ -4,7 +4,8 @@ Predicate (scoped quantifier):
   {sensors: [binary_sensor.*]? (empty/absent = match-anything),
    occupied: bool? (default true; false = vacant),
    quant: 'any'|'all' (default 'any'),
-   for?: {h,m,s}}
+   for?: {h,m,s},
+   negate: bool? (default false; inverts the whole match)}
 None = vacuous true (no constraint).
 """
 
@@ -45,7 +46,8 @@ class OccupancyCondition:
     description = "Matches whether presence/occupancy sensors are active."
     predicate_help = (
         "{sensors: [binary_sensor.*] (empty = match-anything), "
-        "occupied: bool (default true), quant: 'any'|'all', for?: {h,m,s}}. "
+        "occupied: bool (default true), quant: 'any'|'all', for?: {h,m,s}, "
+        "negate: bool (default false, inverts the whole match)}. "
         "None = match-anything."
     )
     input = "occupancy_predicate"
@@ -74,7 +76,7 @@ class OccupancyCondition:
             return False
         sensors = predicate.get("sensors") or []
         if not sensors:
-            return True  # no constraint
+            return True  # no constraint — nothing to negate either
         want_on = predicate.get("occupied", True) is not False
         quant = predicate.get("quant") or "any"
         seconds = dur_seconds(predicate.get("for"))
@@ -91,8 +93,12 @@ class OccupancyCondition:
             return not (seconds > 0 and (snapshot.now - changed).total_seconds() < seconds)
 
         if quant == "all":
-            return all(holds(e) for e in sensors)
-        return any(holds(e) for e in sensors)
+            result = all(holds(e) for e in sensors)
+        else:
+            result = any(holds(e) for e in sensors)
+        # `negate` wraps the whole match (polarity + quant + `for`): "NOT
+        # (vacant for >=20m)" is a different match-set from "occupied for >=20m".
+        return not result if predicate.get("negate") else result
 
     def describe(self, snapshot: OccupancySnapshot) -> str | None:
         if not snapshot.sensors:
@@ -125,6 +131,9 @@ class OccupancyCondition:
         quant = predicate.get("quant")
         if quant is not None and quant not in _QUANTS:
             raise ValueError(f"`quant` must be one of {_QUANTS}, got {quant!r}")
+        negate = predicate.get("negate")
+        if negate is not None and not isinstance(negate, bool):
+            raise ValueError(f"`negate` must be a bool, got {negate!r}")
         validate_for(predicate.get("for"))
 
     # --- trigger dependencies -------------------------------------------
@@ -137,15 +146,27 @@ class OccupancyCondition:
         durations = frozenset((e, seconds) for e in sensors) if seconds > 0 else frozenset()
         return TriggerSpec(entities=frozenset(sensors), entity_durations=durations)
 
+    def is_constraining(self, predicate: Any) -> bool:
+        """Empty/absent `sensors` is match-anything (see matches()), so it is a
+        wildcard for sorting, not a real constraint."""
+        return isinstance(predicate, dict) and bool(predicate.get("sensors"))
+
     # --- sorting (containment lattice) ----------------------------------
     # No order_key: there is no meaningful total order among occupancy
-    # predicates, so that linearisation slot falls back to "sorts last";
-    # `contains` is this condition's only sort contribution.
+    # predicates, so constrained scenes tie within this slot — but a scene that
+    # constrains occupancy still sorts ahead of one that leaves it a wildcard
+    # (the slot is ranked by this condition's high priority). `contains` is this
+    # condition's only intra-slot sort contribution.
 
     def contains(self, outer: Any, inner: Any) -> bool:
         """True iff every world-state matching `inner` also matches `outer`
         (inner's match-set ⊆ outer's). Conservative: unprovable -> False."""
         if not isinstance(outer, dict) or not isinstance(inner, dict):
+            return False
+        # A negated predicate's match-set is a complement, which does not nest
+        # under this (sensor-subset / polarity / quant / for) lattice. Be
+        # conservative: unprovable -> False.
+        if outer.get("negate") or inner.get("negate"):
             return False
         # Empty/absent `sensors` is a wildcard (matches every world-state, per
         # matches()), so its polarity/quant/for are irrelevant. A wildcard outer

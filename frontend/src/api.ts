@@ -12,6 +12,8 @@ import type {
   ExposedAction,
   ExposedActionWarning,
   FloorListItem,
+  LuxRangeDef,
+  LuxRangeStoreView,
   PeriodDef,
   PeriodStoreView,
   SceneCategory,
@@ -197,7 +199,7 @@ export async function savePeriods(
     scope_kind: string;
     scope_id: string | null;
     scene_name: string;
-    missing_period: string;
+    missing_id: string;
   }>;
 }> {
   return hass.callWS({
@@ -209,6 +211,30 @@ export async function savePeriods(
 
 export async function resetPeriods(hass: HassConnection): Promise<{ ok: true }> {
   return hass.callWS({ type: "ambience/time_of_day_periods/reset" });
+}
+
+export async function listLuxRanges(hass: HassConnection): Promise<LuxRangeStoreView> {
+  return hass.callWS({ type: "ambience/lux_ranges/list" });
+}
+
+export async function saveLuxRanges(
+  hass: HassConnection,
+  custom: Record<string, LuxRangeDef>,
+  hidden: string[],
+): Promise<{
+  ok: true;
+  warnings: Array<{
+    scope_kind: string;
+    scope_id: string | null;
+    scene_name: string;
+    missing_id: string;
+  }>;
+}> {
+  return hass.callWS({ type: "ambience/lux_ranges/save", custom, hidden });
+}
+
+export async function resetLuxRanges(hass: HassConnection): Promise<{ ok: true }> {
+  return hass.callWS({ type: "ambience/lux_ranges/reset" });
 }
 
 export async function getDayConfig(hass: HassConnection): Promise<DayConfig> {

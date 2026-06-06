@@ -140,6 +140,15 @@ def missing_period_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
     return []
 
 
+def missing_lux_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
+    """Return lux range ids referenced by predicate that are not in effective_ids."""
+    if isinstance(predicate, dict) and "range" in predicate:
+        rid = predicate["range"]
+        if isinstance(rid, str) and rid not in effective_ids:
+            return [rid]
+    return []
+
+
 def dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> list[dict[str, Any]]:
     store = hass.data[DOMAIN][DATA_STORE]
     sensor_ok = bool(cfg.get("workday_sensor"))

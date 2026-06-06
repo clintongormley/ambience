@@ -32,6 +32,7 @@ vi.mock("../frontend/src/api", () => ({
   listCategories: vi.fn(async () => []),
   getServiceSchema: vi.fn(async () => ({})),
   listPeriods: vi.fn(),
+  listLuxRanges: vi.fn(async () => ({ builtins: {}, custom: {}, hidden: [] })),
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
   getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
   applyScenes: vi.fn(async () => ({ ok: true })),
@@ -667,6 +668,50 @@ describe("ambience-scopes-view", () => {
 
     const editor: any = el.shadowRoot.querySelector("ambience-scene-editor");
     expect(editor.takenNames.get("area:living_room\u0000a").has("movie")).toBe(true);
+  });
+
+  test("per-category add-scene opens a new scene defaulting to that category", async () => {
+    const scenes: Scene[] = [{ name: "X", when: {}, actions: [], category: "a" }];
+    el = await mount({ areaConfigs: { living_room: { scenes } } });
+    el._categories = [
+      { id: "a", name: "Awnings" },
+      { id: "b", name: "Blinds" },
+    ];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-scenes-list")!
+      .dispatchEvent(
+        new CustomEvent("add-scene", { detail: { category: "b" }, bubbles: true, composed: true }),
+      );
+    await el.updateComplete;
+    const editor: any = el.shadowRoot.querySelector("ambience-scene-editor");
+    expect(editor.scene.category).toBe("b");
+  });
+
+  test("add-scene without a category falls back to the first category alphabetically", async () => {
+    const scenes: Scene[] = [{ name: "X", when: {}, actions: [], category: "b" }];
+    el = await mount({ areaConfigs: { living_room: { scenes } } });
+    el._categories = [
+      { id: "b", name: "Blinds" },
+      { id: "a", name: "Awnings" },
+    ];
+    await el.updateComplete;
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-scenes-list")!
+      .dispatchEvent(new CustomEvent("add-scene", { detail: {}, bubbles: true, composed: true }));
+    await el.updateComplete;
+    const editor: any = el.shadowRoot.querySelector("ambience-scene-editor");
+    expect(editor.scene.category).toBe("a"); // Awnings sorts before Blinds
   });
 
   test("duplicating a pinned scene drops the pin and its fixed priority", async () => {

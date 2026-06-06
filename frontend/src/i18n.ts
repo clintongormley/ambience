@@ -176,6 +176,20 @@ export function periodLabel(
   return _resolve(hass, `component.ambience.time_of_day_period.${id}`, fallback);
 }
 
+/** Resolve a lux-range id to a display name. Mirrors {@link periodLabel}:
+ *  custom label → `component.ambience.lux_range.<id>` → id with first letter
+ *  uppercased (underscores become spaces, e.g. "very_bright" → "Very bright"). */
+export function luxLabel(
+  hass: HassLike | undefined,
+  id: string,
+  custom: Record<string, { label?: string | null }>,
+): string {
+  const custom_label = custom[id]?.label;
+  if (custom_label) return custom_label;
+
+  return _resolve(hass, `component.ambience.lux_range.${id}`, humanizeId(id));
+}
+
 /** Generic localizer: resolves `component.ambience.<subKey>` with an English fallback. */
 export function localize(hass: HassLike | undefined, subKey: string, fallback: string): string {
   return _resolve(hass, `component.ambience.${subKey}`, fallback);

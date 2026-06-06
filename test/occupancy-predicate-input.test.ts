@@ -57,6 +57,21 @@ describe("ambience-occupancy-predicate-input", () => {
     el.remove();
   });
 
+  test("toggling 'is not' emits negate:true; 'is' drops it", async () => {
+    const el = await mount({ sensors: ["binary_sensor.a"], occupied: false });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setNegate(true);
+    expect(captured.negate).toBe(true);
+    expect(captured.occupied).toBe(false);
+    expect(captured.sensors).toEqual(["binary_sensor.a"]);
+    el._setNegate(false);
+    expect(captured.negate).toBeUndefined();
+    el.remove();
+  });
+
   test("a zero 'for' duration is normalised out of the emitted predicate", async () => {
     const el = await mount({ sensors: ["binary_sensor.a"], occupied: true });
     let captured: any;

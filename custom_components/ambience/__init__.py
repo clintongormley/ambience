@@ -30,6 +30,7 @@ from .card_resources import (
     async_unregister_card_resource,
 )
 from .conditions.day import DayCondition
+from .conditions.lux import LuxCondition
 from .conditions.occupancy import OccupancyCondition
 from .conditions.people import PeopleCondition
 from .conditions.script import ScriptCondition
@@ -45,6 +46,7 @@ from .const import (
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_LAST_APPLIED,
+    DATA_LUX_RANGES,
     DATA_PERIODS,
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
@@ -56,6 +58,7 @@ from .const import (
     SIGNAL_CONFIG_CHANGED,
 )
 from .exposed_actions import ExposedActionsStore
+from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .service import async_apply_scene, clear_last_applied
 from .store import AmbienceStore
@@ -145,12 +148,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     period_store = PeriodStore(store)
     domain_data[DATA_PERIODS] = period_store
 
+    lux_range_store = LuxRangeStore(store)
+    domain_data[DATA_LUX_RANGES] = lux_range_store
+
     # The built-in conditions, keyed by their `name`. Conditions are an internal
     # implementation detail — there is deliberately no registration hook for
     # third-party conditions.
     domain_data[DATA_CONDITIONS] = {
         "time_of_day": TimeOfDayCondition(period_lookup=period_store.effective),
         "day": DayCondition(hass=hass),
+        "lux": LuxCondition(hass=hass, range_lookup=lux_range_store.effective),
         "weather": WeatherCondition(hass=hass),
         "sun": SunCondition(hass=hass),
         "state": StateCondition(hass=hass),

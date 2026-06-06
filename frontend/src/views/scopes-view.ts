@@ -16,6 +16,7 @@ import {
   listConditions,
   listExposedActions,
   listFloors,
+  listLuxRanges,
   listPeriods,
   listSwitches,
   runSceneActions,
@@ -34,6 +35,7 @@ import type {
   DayConfig,
   ExposedAction,
   FloorListItem,
+  LuxRangeStoreView,
   PeriodStoreView,
   Scene,
   SceneCategory,
@@ -55,6 +57,9 @@ type EditingState = {
   index: number;
   isNew: boolean;
   seed?: Scene;
+  // For a new scene: the category to default to (from the per-category "Add
+  // scene" button). Absent → fall back to `_defaultCategoryId()`.
+  category?: string;
 };
 
 /** A single row in the front-page scope list. */
@@ -419,6 +424,7 @@ export class AmbienceScopesView extends LitElement {
   // field id. Best-effort: services whose schema fetch fails are omitted.
   @state() private _schemas: Record<string, ServiceSchema> = {};
   @state() private _periods?: PeriodStoreView;
+  @state() private _luxRanges?: LuxRangeStoreView;
   @state() private _dayConfig?: DayConfig;
   @state() private _weatherConfig?: WeatherConfig;
   // _expanded keys: "area:<id>" | "floor:<id>" | "house"
@@ -540,11 +546,12 @@ export class AmbienceScopesView extends LitElement {
 
   private async _loadStatic() {
     try {
-      const [conditions, actions, periods, dayConfig, weatherConfig, categories] =
+      const [conditions, actions, periods, luxRanges, dayConfig, weatherConfig, categories] =
         await Promise.all([
           listConditions(this.hass),
           listExposedActions(this.hass),
           listPeriods(this.hass),
+          listLuxRanges(this.hass),
           getDayConfig(this.hass),
           getWeatherConfig(this.hass),
           listCategories(this.hass),
@@ -553,6 +560,7 @@ export class AmbienceScopesView extends LitElement {
       this._conditions = conditions;
       this._actions = actions;
       this._periods = periods;
+      this._luxRanges = luxRanges;
       this._dayConfig = dayConfig;
       this._weatherConfig = weatherConfig;
       this._categories = categories;
@@ -743,10 +751,10 @@ export class AmbienceScopesView extends LitElement {
 
   // --- scenes ---------------------------------------------------------------
 
-  private _addScene(scope: Scope) {
+  private _addScene(scope: Scope, category?: string) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
-    this._editing = { scope, index: cfg.scenes.length, isNew: true };
+    this._editing = { scope, index: cfg.scenes.length, isNew: true, category };
   }
 
   private _editScene(scope: Scope, e: CustomEvent<{ index: number }>) {
@@ -1046,7 +1054,12 @@ export class AmbienceScopesView extends LitElement {
   private get _editingScene(): Scene | null {
     if (!this._editing) return null;
     if (this._editing.seed) return this._editing.seed;
-    if (this._editing.isNew) return { when: {}, actions: [], category: this._defaultCategoryId() };
+    if (this._editing.isNew)
+      return {
+        when: {},
+        actions: [],
+        category: this._editing.category ?? this._defaultCategoryId(),
+      };
     const cfg = this._getConfig(this._editing.scope);
     return cfg?.scenes[this._editing.index] ?? null;
   }
@@ -1354,6 +1367,7 @@ export class AmbienceScopesView extends LitElement {
         .scene=${this._editingScene}
         .conditions=${this._editorConditions}
         .periods=${this._periods}
+        .luxRanges=${this._luxRanges}
         .dayConfig=${this._dayConfig}
         .weatherConfig=${this._weatherConfig}
         .availableActions=${this._actions}
@@ -1446,6 +1460,7 @@ export class AmbienceScopesView extends LitElement {
                 <ambience-scenes-list
                   .scenes=${cfg.scenes}
                   .periods=${this._periods}
+                  .luxRanges=${this._luxRanges}
                   .weatherConfig=${this._weatherConfig}
                   .conditions=${this._conditions}
                   .availableActions=${this._actions}
@@ -1453,7 +1468,8 @@ export class AmbienceScopesView extends LitElement {
                   .categories=${this._categories}
                   .filterCategory=${this._filterCategory}
                   .hass=${this.hass}
-                  @add-scene=${() => this._addScene(scope)}
+                  @add-scene=${(e: CustomEvent<{ category?: string }>) =>
+                    this._addScene(scope, e.detail?.category)}
                   @edit-scene=${(e: CustomEvent<{ index: number }>) => this._editScene(scope, e)}
                   @duplicate-scene=${(e: CustomEvent<{ index: number }>) =>
                     this._duplicateScene(scope, e)}

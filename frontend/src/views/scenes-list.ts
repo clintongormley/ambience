@@ -203,6 +203,7 @@ export class AmbienceScenesList extends LitElement {
 
   @property({ attribute: false }) scenes: Scene[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
+  @property({ attribute: false }) luxRanges?: import("../types.js").LuxRangeStoreView;
   @property({ attribute: false })
   weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) hass?: {
@@ -350,6 +351,7 @@ export class AmbienceScenesList extends LitElement {
       const body = summariseCondition(k, scene.when[k], {
         hass: this.hass as any,
         periods: this.periods,
+        luxRanges: this.luxRanges,
         weatherGroups: this.weatherConfig?.groups,
       });
       const sep = i === 0 ? "" : ", ";
@@ -370,6 +372,7 @@ export class AmbienceScenesList extends LitElement {
       const body = summariseCondition(k, scene.when[k], {
         hass: this.hass as any,
         periods: this.periods,
+        luxRanges: this.luxRanges,
         weatherGroups: this.weatherConfig?.groups,
       });
       return html`<div class="condition-line">
@@ -601,20 +604,23 @@ export class AmbienceScenesList extends LitElement {
   }
 
   override render() {
-    if (this.scenes.length === 0) {
+    // Only render sections that actually have scenes — when filtering to a
+    // single category, a scope with no scenes in that category shows no header.
+    const sections = this._sections().filter((section) => section.rows.length > 0);
+    if (sections.length === 0) {
+      // Nothing to show: an empty scope, or a category filter with no matches in
+      // this scope. Still offer an Add button (defaulting to the filtered
+      // category when one is active) so there's never a dead-end.
+      const detail = this.filterCategory ? { category: this.filterCategory } : {};
       return html`
         <p class="empty">
           ${localize(this.hass, "ui.no_scenes_yet", "No scenes yet.")}
         </p>
-        <button class="add" @click=${() => this._emit("add-scene", {})}>
+        <button class="add" @click=${() => this._emit("add-scene", detail)}>
           ${localize(this.hass, "ui.add_scene", "+ Add scene")}
         </button>
       `;
     }
-    // Only render sections that actually have scenes — when filtering to a
-    // single category, a scope with no scenes in that category shows nothing (no
-    // empty header bar).
-    const sections = this._sections().filter((section) => section.rows.length > 0);
     // Show the coloured category header for every section, including when a single
     // category is filtered — the bar labels which category these scenes belong to.
     const showHeaders = this.categories.length > 0;
@@ -626,12 +632,15 @@ export class AmbienceScenesList extends LitElement {
             <ul>
               ${section.rows.map(([i, scene], n) => this._renderRow(i, scene, n + 1))}
             </ul>
+            <button
+              class="add"
+              @click=${() => this._emit("add-scene", { category: section.category?.id })}
+            >
+              ${localize(this.hass, "ui.add_scene", "+ Add scene")}
+            </button>
           </div>
         `,
       )}
-      <button class="add" @click=${() => this._emit("add-scene", {})}>
-        ${localize(this.hass, "ui.add_scene", "+ Add scene")}
-      </button>
     `;
   }
 }

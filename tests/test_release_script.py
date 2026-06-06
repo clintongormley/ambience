@@ -400,7 +400,9 @@ def test_does_not_leak_to_parent_git_dir_via_env(tmp_path: Path, monkeypatch):
     """If GIT_DIR is set in the env, the test fixtures must not write to that repo."""
     parent = tmp_path / "parent_repo"
     parent.mkdir()
-    subprocess.run(["git", "init", "-q", "-b", "main", str(parent)], check=True)
+    # Scrub GIT_* here too: under a pre-push hook an inherited GIT_DIR would make
+    # this `git init` re-init the real repo instead of creating parent/.git.
+    subprocess.run(["git", "init", "-q", "-b", "main", str(parent)], check=True, env=_clean_env())
     parent_git = parent / ".git"
     config_before = (parent_git / "config").read_text()
 

@@ -224,7 +224,7 @@ describe("ambience-time-of-day-config", () => {
           scope_kind: "area",
           scope_id: "abc",
           scene_name: "Evening scene",
-          missing_period: "evening",
+          missing_id: "evening",
         },
       ],
     });
@@ -257,13 +257,13 @@ describe("ambience-time-of-day-config", () => {
           scope_kind: "floor",
           scope_id: "ground",
           scene_name: "Floor scene",
-          missing_period: "evening",
+          missing_id: "evening",
         },
         {
           scope_kind: "house",
           scope_id: null,
           scene_name: "House scene",
-          missing_period: "evening",
+          missing_id: "evening",
         },
       ],
     });

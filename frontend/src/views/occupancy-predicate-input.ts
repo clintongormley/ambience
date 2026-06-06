@@ -6,6 +6,7 @@ import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { localize } from "../i18n.js";
 import type { OccupancyPredicate, OccupancyQuant } from "../types.js";
+import { renderSelect, renderSensorField } from "./form-controls.js";
 
 /**
  * Editor for an `occupancy` predicate: a presence-sensor picker (binary_sensor
@@ -74,6 +75,7 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
     if (merged.occupied === false) out.occupied = false;
     if (merged.quant === "all") out.quant = "all";
     if (this._hasFor(merged.for)) out.for = merged.for;
+    if (merged.negate === true) out.negate = true;
     return out;
   }
 
@@ -88,6 +90,10 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
 
   _setOccupied(occupied: boolean) {
     this._emit(this._build({ occupied }));
+  }
+
+  _setNegate(negate: boolean) {
+    this._emit(this._build({ negate }));
   }
 
   _setQuant(quant: OccupancyQuant) {
@@ -131,77 +137,32 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
   // --- render --------------------------------------------------------------
 
   private _renderSensors() {
-    const current = this._sensors();
-    /* v8 ignore start -- ha-form path (real HA only) */
-    if (customElements.get("ha-form")) {
-      return html`<ha-form
-        class="field"
-        data-field="sensors"
-        .hass=${this.hass}
-        .schema=${this._sensorSchema()}
-        .data=${{ sensors: current }}
-        .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { sensors?: string[] } }>) => {
-          e.stopPropagation();
-          this._setSensors(e.detail.value.sensors ?? []);
-        }}
-      ></ha-form>`;
-    }
-    /* v8 ignore stop */
-    return html`<input
-      class="field"
-      data-field="sensors"
-      type="text"
-      placeholder="binary_sensor.a, binary_sensor.b"
-      .value=${current.join(", ")}
-      @change=${(e: Event) =>
-        this._setSensors(
-          (e.target as HTMLInputElement).value
-            .split(",")
-            .map((s) => s.trim())
-            .filter((s) => s !== ""),
-        )}
-    />`;
+    return renderSensorField(
+      this.hass,
+      this._sensorSchema(),
+      this._sensors(),
+      "binary_sensor.a, binary_sensor.b",
+      (ids) => this._setSensors(ids),
+    );
   }
 
-  /** A single-select dropdown (ha-form with a native `<select>` fallback),
-   *  shared by the Occupied/Vacant and Any/All controls. */
-  private _renderSelect(
-    cls: string,
-    field: string,
-    value: string,
-    options: { value: string; label: string }[],
-    onChange: (v: string) => void,
-  ) {
-    /* v8 ignore start -- ha-form path (real HA only) */
-    if (customElements.get("ha-form")) {
-      const schema: HaFormSchema[] = [
-        { name: field, required: true, selector: { select: { mode: "dropdown", options } } },
-      ];
-      return html`<ha-form
-        class=${cls}
-        .hass=${this.hass}
-        .schema=${schema}
-        .data=${{ [field]: value }}
-        .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: Record<string, string | undefined> }>) => {
-          e.stopPropagation();
-          const v = e.detail.value[field];
-          if (v) onChange(v);
-        }}
-      ></ha-form>`;
-    }
-    /* v8 ignore stop */
-    return html`<select
-      class=${cls}
-      @change=${(e: Event) => onChange((e.target as HTMLSelectElement).value)}
-    >
-      ${options.map((o) => html`<option value=${o.value} ?selected=${o.value === value}>${o.label}</option>`)}
-    </select>`;
+  private _renderNegate(negate: boolean) {
+    return renderSelect(
+      this.hass,
+      "negate",
+      "negate",
+      negate ? "is_not" : "is",
+      [
+        { value: "is", label: localize(this.hass, "ui.occupancy_is", "is") },
+        { value: "is_not", label: localize(this.hass, "ui.occupancy_is_not", "is not") },
+      ],
+      (v) => this._setNegate(v === "is_not"),
+    );
   }
 
   private _renderOccupied(occupied: boolean) {
-    return this._renderSelect(
+    return renderSelect(
+      this.hass,
       "state",
       "state",
       occupied ? "occupied" : "vacant",
@@ -214,7 +175,8 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
   }
 
   private _renderQuant(quant: OccupancyQuant) {
-    return this._renderSelect(
+    return renderSelect(
+      this.hass,
       "quant",
       "quant",
       quant,
@@ -262,10 +224,12 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
   override render() {
     const cur = this._cur();
     const occupied = cur.occupied !== false;
+    const negate = cur.negate === true;
     const quant: OccupancyQuant = cur.quant === "all" ? "all" : "any";
     return html`
       <div class="row">${this._renderSensors()}</div>
       <div class="row">
+        ${this._renderNegate(negate)}
         ${this._renderOccupied(occupied)}
         ${this._showQuant() ? this._renderQuant(quant) : ""}
       </div>

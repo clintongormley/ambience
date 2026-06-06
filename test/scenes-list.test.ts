@@ -222,6 +222,69 @@ describe("ambience-scenes-list", () => {
     expect(get()).toBeDefined();
   });
 
+  test("each displayed category section has its own Add scene button", async () => {
+    const groups = [
+      { id: "a", name: "Awnings" },
+      { id: "b", name: "Blinds" },
+    ];
+    const scenes: Scene[] = [
+      { when: {}, actions: [], category: "a" },
+      { when: {}, actions: [], category: "b" },
+    ];
+    el = await mount(scenes, [], {}, groups);
+    const sections = el.shadowRoot.querySelectorAll(".category-section");
+    expect(sections.length).toBe(2);
+    for (const section of sections) {
+      expect(section.querySelector("button.add")).toBeTruthy();
+    }
+    // No separate trailing global button outside the sections.
+    const topLevelAdds = Array.from(el.shadowRoot.querySelectorAll("button.add")).filter(
+      (b: any) => !b.closest(".category-section"),
+    );
+    expect(topLevelAdds.length).toBe(0);
+  });
+
+  test("a category's Add button emits add-scene with that category id", async () => {
+    const groups = [
+      { id: "a", name: "Awnings" },
+      { id: "b", name: "Blinds" },
+    ];
+    const scenes: Scene[] = [
+      { when: {}, actions: [], category: "a" },
+      { when: {}, actions: [], category: "b" },
+    ];
+    el = await mount(scenes, [], {}, groups);
+    const get = captureEvent(el, "add-scene");
+    // Sections are sorted by name: Awnings(a), Blinds(b). Click the second.
+    const sections = el.shadowRoot.querySelectorAll(".category-section");
+    (sections[1].querySelector("button.add") as HTMLButtonElement).click();
+    expect(get().category).toBe("b");
+  });
+
+  test("empty-state Add button emits add-scene with no category (fallback)", async () => {
+    el = await mount([]);
+    const get = captureEvent(el, "add-scene");
+    (el.shadowRoot.querySelector("button.add") as HTMLButtonElement).click();
+    expect(get().category).toBeUndefined();
+  });
+
+  test("a filter matching no scenes in this scope still offers an Add button for that category", async () => {
+    const groups = [
+      { id: "a", name: "Awnings" },
+      { id: "b", name: "Blinds" },
+    ];
+    // Scope has scenes only in category "a", but the active filter is "b".
+    const scenes: Scene[] = [{ when: {}, actions: [], category: "a" }];
+    el = await mount(scenes, [], {}, groups);
+    el.filterCategory = "b";
+    await el.updateComplete;
+    const btn = el.shadowRoot.querySelector("button.add") as HTMLButtonElement;
+    expect(btn).toBeTruthy(); // not a dead-end blank panel
+    const get = captureEvent(el, "add-scene");
+    btn.click();
+    expect(get().category).toBe("b");
+  });
+
   test("unpinned rows show a drag handle", async () => {
     el = await mount([movieScene, eveningScene]);
     expect(el.shadowRoot.querySelectorAll(".handle").length).toBe(2);

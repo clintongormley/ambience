@@ -1,0 +1,6 @@
+# Generated frontend bundles (esbuild output). Mark as generated so GitHub
+# collapses them in diffs and review tools/bots skip them. They are also
+# excluded from CodeQL via .github/workflows/codeql.yml paths-ignore.
+custom_components/ambience/frontend/ambience-frontend.js linguist-generated=true
+custom_components/ambience/frontend/ambience-panel.js linguist-generated=true
+custom_components/ambience/frontend/ambience-card.js linguist-generated=true

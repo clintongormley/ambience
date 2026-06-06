@@ -25,6 +25,16 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
+          # Exclude the generated/minified frontend bundles: they are build
+          # artifacts (esbuild output, incl. bundled Lit), so scanning them only
+          # yields minification noise and false positives (e.g. Lit's HTML
+          # comment-end regex). The TypeScript sources under frontend/src/ are
+          # still analysed.
+          config: |
+            paths-ignore:
+              - custom_components/ambience/frontend/ambience-frontend.js
+              - custom_components/ambience/frontend/ambience-panel.js
+              - custom_components/ambience/frontend/ambience-card.js
       - uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"

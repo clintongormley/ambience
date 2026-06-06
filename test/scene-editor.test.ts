@@ -2357,4 +2357,75 @@ describe("ambience-scene-editor — unique name per scope + category", () => {
 
     expect(saved.detail).not.toBeNull();
   });
+
+  // A name conflict is resolvable from another slot — move the scene to a
+  // category (or scope) where the name is free. So unlike a malformed
+  // condition/action, it must NOT lock the user into the name slot. (Regression:
+  // duplicating a scene and hitting Save force-opened the name slot, and the
+  // slot-leave guard then refused to open the category/destination slot, so the
+  // only escape was renaming.)
+  test("a name conflict does not lock the user into the name slot — the category slot still opens", async () => {
+    el = await mount(
+      { name: "Movie", when: {}, actions: [], category: "a" },
+      { scope: { kind: "area", id: "living_room" }, categories: cats },
+    );
+    el.takenNames = new Map([["area:living_room\u0000a", new Set(["movie"])]]);
+    await el.updateComplete;
+
+    // Save is blocked and the name slot is force-opened with the conflict error.
+    clickSave(el);
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-slot-id="name"] .error')?.textContent).toContain(
+      "already exists",
+    );
+
+    // The user should be able to open the category slot to resolve the conflict.
+    await openSlot(el, "category");
+
+    const catSlot = el.shadowRoot.querySelector('[data-slot-id="category"]') as HTMLElement;
+    expect(catSlot.classList.contains("expanded")).toBe(true);
+    expect(el.shadowRoot.querySelector(".category-option")).toBeTruthy();
+  });
+
+  test("renders a parent-supplied save error in the actions bar", async () => {
+    el = await mount(
+      { name: "Movie", when: {}, actions: [], category: "a" },
+      { scope: { kind: "area", id: "living_room" }, categories: cats },
+    );
+    el.saveError = "Backend rejected the save";
+    await el.updateComplete;
+
+    const err = el.shadowRoot.querySelector(".actions-bar .error");
+    expect(err?.textContent).toContain("Backend rejected the save");
+  });
+
+  test("moving to a free category from a conflicting name lets the scene save", async () => {
+    el = await mount(
+      { name: "Movie", when: {}, actions: [], category: "a" },
+      { scope: { kind: "area", id: "living_room" }, categories: cats },
+    );
+    // "movie" is taken in category "a" only.
+    el.takenNames = new Map([["area:living_room\u0000a", new Set(["movie"])]]);
+    await el.updateComplete;
+    const saved = captureSave(el);
+
+    // Blocked; name slot force-opened.
+    clickSave(el);
+    await el.updateComplete;
+    expect(saved.detail).toBeNull();
+
+    // Open the category slot and pick "Beta" (b) — where "movie" is free.
+    await openSlot(el, "category");
+    const beta = Array.from(el.shadowRoot.querySelectorAll(".category-option")).find(
+      (b: any) => b.textContent.trim() === "Beta",
+    ) as HTMLElement;
+    beta.click();
+    await el.updateComplete;
+
+    // Now saving succeeds with the new category.
+    clickSave(el);
+    await el.updateComplete;
+    expect(saved.detail).not.toBeNull();
+    expect(saved.detail.scene.category).toBe("b");
+  });
 });

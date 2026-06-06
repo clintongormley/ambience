@@ -26,11 +26,13 @@ from .const import (
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from .exposed_actions import ExposedActionsStore
+from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
     async_apply_scene,
     async_resolve_categories_only,
     async_resolve_only,
     async_run_scene_actions,
+    scope_reapply_intervals,
 )
 from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import condition_priority
@@ -91,6 +93,7 @@ _WS_COMMANDS = (
     "ambience/categories/list",
     "ambience/categories/save",
     "ambience/categories/delete",
+    "ambience/auto_triggers/list",
     "ambience/traces/list",
     "ambience/traces/clear",
     "ambience/simulate/inputs",
@@ -133,6 +136,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_switches_list)
     websocket_api.async_register_command(hass, _ws_categories_list)
     websocket_api.async_register_command(hass, _ws_categories_save)
+    websocket_api.async_register_command(hass, _ws_auto_triggers_list)
     websocket_api.async_register_command(hass, _ws_categories_delete)
     websocket_api.async_register_command(hass, _ws_traces_list)
     websocket_api.async_register_command(hass, _ws_traces_clear)
@@ -484,6 +488,44 @@ async def _ws_house_save(
     await store.async_save_house(config)
     _schedule_reapply(hass, "house", None)
     connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/auto_triggers/list",
+        vol.Required("scope_kind"): str,
+        vol.Optional("scope_id"): vol.Any(str, None),
+    }
+)
+@websocket_api.async_response
+async def _ws_auto_triggers_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read-only list of the watches the engine derives from a scope's scenes.
+
+    Triggers are computed live from the scope's scenes (each condition's
+    ``trigger_deps``) — entities, clock times, sun events, date rollover, and
+    periodic re-apply intervals. Purely informational: there are no enable/disable
+    controls (auto-triggers are always on).
+    """
+    store = hass.data[DOMAIN][DATA_STORE]
+    conditions = hass.data[DOMAIN][DATA_CONDITIONS]
+    try:
+        cfg = store.scope_config(msg["scope_kind"], msg.get("scope_id"))
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    spec = scope_trigger_spec(conditions, cfg)
+    triggers = trigger_descriptors(spec)
+    exposed = hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
+    for interval in scope_reapply_intervals(cfg, exposed):
+        triggers.append(
+            {"key": f"reapply:{interval}", "kind": "reapply", "interval_seconds": interval}
+        )
+    connection.send_result(msg["id"], {"triggers": triggers, "opaque": spec.opaque})
 
 
 @websocket_api.require_admin

@@ -305,6 +305,30 @@ export type FloorListItem = {
 // Storage shape is identical for area, floor, and house: alias for clarity.
 export type ScopeConfig = AreaConfig;
 
+// --- Auto-triggers (read-only display) -------------------------------------
+// One derived "watch" the engine sets up for a scope, computed from its scenes.
+// Purely informational — there are no enable/disable controls (auto-triggers
+// are always on). Entities get one row each; clock times / periodic re-check /
+// date rollover collapse into a single `time` group; sun events into a `sun`
+// group; each distinct re-apply interval is its own `reapply` row.
+export type AutoTrigger = { key: string } & (
+  | { kind: "entity"; entity_id: string }
+  | {
+      kind: "time";
+      clocks: { hour: number; minute: number }[];
+      has_time: boolean;
+      date_rollover: boolean;
+    }
+  | { kind: "sun"; suns: { anchor: string; offset: number }[] }
+  | { kind: "reapply"; interval_seconds: number }
+);
+
+export type AutoTriggerList = {
+  triggers: AutoTrigger[];
+  // True when a scene's deps may be incomplete (e.g. an opaque script condition).
+  opaque: boolean;
+};
+
 // --- trace viewer (mirrors custom_components/ambience/trace.py buffered_unit_to_dict) ---
 
 export type TraceCause = {

@@ -49,6 +49,7 @@ import "./scenes-list.js";
 import "./scene-editor.js";
 import "./kebab-menu.js";
 import "./traces-modal.js";
+import "./auto-triggers-modal.js";
 import "./simulator-modal.js";
 import type { KebabItem } from "./kebab-menu.js";
 
@@ -435,6 +436,11 @@ export class AmbienceScopesView extends LitElement {
   @state() private _staticLoaded = false;
   @state() private _conditionsHintDismissed = false;
   @state() private _editing: EditingState | null = null;
+  // A failed scene save's message, shown inside the (still-open) editor.
+  @state() private _sceneEditorError = "";
+  // Re-entrancy guard: the editor stays open during the save await, so a
+  // double-clicked Save must not dispatch a second mutation.
+  private _savingScene = false;
   @state() private _viewingTraces: {
     scope: { scope_kind: string; scope_id: string | null };
     category: string;
@@ -445,6 +451,9 @@ export class AmbienceScopesView extends LitElement {
     category: string;
     categoryName: string | null;
   } | null = null;
+  // The scope whose read-only Auto-triggers modal is open (null = closed). The
+  // scenes are carried so the modal re-fetches when they change while open.
+  @state() private _autoTriggers: { scope: Scope; name: string; scenes: Scene[] } | null = null;
   // Global category filter shared by every scope: "" = All, else a category id.
   // Sticky for the session (component lifetime).
   @state() private _filterCategory = "";
@@ -754,10 +763,12 @@ export class AmbienceScopesView extends LitElement {
   private _addScene(scope: Scope, category?: string) {
     const cfg = this._getConfig(scope);
     if (!cfg) return;
+    this._sceneEditorError = "";
     this._editing = { scope, index: cfg.scenes.length, isNew: true, category };
   }
 
   private _editScene(scope: Scope, e: CustomEvent<{ index: number }>) {
+    this._sceneEditorError = "";
     this._editing = { scope, index: e.detail.index, isNew: false };
   }
 
@@ -769,6 +780,7 @@ export class AmbienceScopesView extends LitElement {
     // A duplicate is a fresh scene: drop the original's fixed position so it
     // doesn't inherit the pin/priority slot (the backend assigns a new one).
     const seed = stripPositionMetadata(JSON.parse(JSON.stringify(original)));
+    this._sceneEditorError = "";
     this._editing = { scope, index: cfg.scenes.length, isNew: true, seed };
   }
 
@@ -835,43 +847,67 @@ export class AmbienceScopesView extends LitElement {
   }
 
   private async _saveScene(e: CustomEvent<{ scene: Scene; scope: Scope }>) {
+    // Ignore a re-entrant save (e.g. a double-clicked Save) while one is still
+    // in flight — the editor stays open during the await, so without this guard
+    // a second dispatch would push a duplicate mutation.
+    if (this._savingScene) return;
     const editing = this._editing;
-    this._editing = null;
     if (!editing) return;
     const { scene, scope: target } = e.detail;
-
-    if (scopeKey(target) === scopeKey(editing.scope)) {
-      // Same scope: replace in place, or append a new scene.
-      const cfg = this._getConfig(target);
-      if (!cfg) return;
-      const scenes = [...cfg.scenes];
-      if (editing.isNew) scenes.push(scene);
-      else scenes[editing.index] = scene;
-      await this._mutate(target, { ...cfg, scenes });
-      return;
-    }
-
-    // Different scope: the scene lands fresh. Strip ordering metadata so the
-    // backend assigns a new priority.
-    const fresh = stripPositionMetadata(scene);
-    const targetCfg = this._getConfig(target);
-    if (!targetCfg) return;
-    const added = await this._mutate(target, {
-      ...targetCfg,
-      scenes: [...targetCfg.scenes, fresh],
-    });
-
-    // Only remove the original once it is safely in the new scope — otherwise a
-    // failed add would lose the scene entirely. (A failed removal after a
-    // successful add merely leaves a duplicate, which is the accepted
-    // non-atomic outcome.)
-    if (added && !editing.isNew) {
-      const srcCfg = this._getConfig(editing.scope);
-      if (srcCfg) {
-        const scenes = srcCfg.scenes.filter((_, i) => i !== editing.index);
-        await this._mutate(editing.scope, { ...srcCfg, scenes });
+    this._savingScene = true;
+    this._sceneEditorError = "";
+    try {
+      if (scopeKey(target) === scopeKey(editing.scope)) {
+        // Same scope: replace in place, or append a new scene.
+        const cfg = this._getConfig(target);
+        if (!cfg) return;
+        const scenes = [...cfg.scenes];
+        if (editing.isNew) scenes.push(scene);
+        else scenes[editing.index] = scene;
+        // Close the editor only on success; on failure keep it open with the
+        // draft intact and show why the save was rejected.
+        if (await this._mutate(target, { ...cfg, scenes })) this._editing = null;
+        else this._sceneEditorError = this._takeError();
+        return;
       }
+
+      // Different scope: the scene lands fresh. Strip ordering metadata so the
+      // backend assigns a new priority.
+      const fresh = stripPositionMetadata(scene);
+      const targetCfg = this._getConfig(target);
+      if (!targetCfg) return;
+      const added = await this._mutate(target, {
+        ...targetCfg,
+        scenes: [...targetCfg.scenes, fresh],
+      });
+      if (!added) {
+        this._sceneEditorError = this._takeError();
+        return;
+      }
+      this._editing = null;
+
+      // Only remove the original once it is safely in the new scope — otherwise a
+      // failed add would lose the scene entirely. (A failed removal after a
+      // successful add merely leaves a duplicate, which is the accepted
+      // non-atomic outcome.)
+      if (!editing.isNew) {
+        const srcCfg = this._getConfig(editing.scope);
+        if (srcCfg) {
+          const scenes = srcCfg.scenes.filter((_, i) => i !== editing.index);
+          await this._mutate(editing.scope, { ...srcCfg, scenes });
+        }
+      }
+    } finally {
+      this._savingScene = false;
     }
+  }
+
+  /** Move the page-level error (set by `_mutate`) into the scene editor, where
+   *  it shows in the open modal rather than behind it, and clear the banner. */
+  private _takeError(): string {
+    const msg = this._error;
+    this._error = "";
+    return msg;
   }
 
   /** Run an api call, surfacing any failure in `_error`. */
@@ -894,11 +930,13 @@ export class AmbienceScopesView extends LitElement {
 
   private _cancelScene() {
     // New scenes are not added to the config until saved, so cancel is a no-op.
+    this._sceneEditorError = "";
     this._editing = null;
   }
 
-  private _onScopeMenu(scope: Scope, _name: string, _cfg: ScopeConfig, id: string) {
+  private _onScopeMenu(scope: Scope, name: string, cfg: ScopeConfig, id: string) {
     if (id === "run") void this._applyScenes(scope);
+    else if (id === "auto") this._autoTriggers = { scope, name, scenes: cfg.scenes };
   }
 
   private _showTraces(scope: Scope, category: string) {
@@ -1364,6 +1402,7 @@ export class AmbienceScopesView extends LitElement {
         .scope=${this._editing ? this._editing.scope : undefined}
         .scopes=${this._scopeOptions}
         .takenNames=${this._takenSceneNames}
+        .saveError=${this._sceneEditorError}
         .scene=${this._editingScene}
         .conditions=${this._editorConditions}
         .periods=${this._periods}
@@ -1391,6 +1430,16 @@ export class AmbienceScopesView extends LitElement {
           this._viewingTraces = null;
         }}
       ></ambience-traces-modal>
+      <ambience-auto-triggers-modal
+        ?open=${this._autoTriggers !== null}
+        .hass=${this.hass}
+        .scope=${this._autoTriggers?.scope ?? { kind: "house" }}
+        .scopeName=${this._autoTriggers?.name ?? ""}
+        .scenes=${this._autoTriggers?.scenes ?? []}
+        @close=${() => {
+          this._autoTriggers = null;
+        }}
+      ></ambience-auto-triggers-modal>
       <ambience-simulator-modal
         ?open=${this._viewingSimulator !== null}
         .hass=${this.hass}
@@ -1445,6 +1494,11 @@ export class AmbienceScopesView extends LitElement {
                   id: "run",
                   label: localize(this.hass, "ui.run", "Run"),
                   icon: "mdi:play",
+                },
+                {
+                  id: "auto",
+                  label: localize(this.hass, "ui.auto_triggers_section", "Auto-triggers"),
+                  icon: "mdi:flash-auto",
                 },
               ] satisfies KebabItem[]
             }

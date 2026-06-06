@@ -146,6 +146,11 @@ class OccupancyCondition:
         durations = frozenset((e, seconds) for e in sensors) if seconds > 0 else frozenset()
         return TriggerSpec(entities=frozenset(sensors), entity_durations=durations)
 
+    def is_constraining(self, predicate: Any) -> bool:
+        """Empty/absent `sensors` is match-anything (see matches()), so it is a
+        wildcard for sorting, not a real constraint."""
+        return isinstance(predicate, dict) and bool(predicate.get("sensors"))
+
     # --- sorting (containment lattice) ----------------------------------
     # No order_key: there is no meaningful total order among occupancy
     # predicates, so constrained scenes tie within this slot — but a scene that

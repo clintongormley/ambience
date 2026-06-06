@@ -99,6 +99,22 @@ def test_unobservable_sensor_never_holds() -> None:
     assert _cond().matches({"sensors": ["sensor.a"], "range": "dark"}, snap) is False
 
 
+async def test_snapshot_non_finite_value_is_none(hass: HomeAssistant) -> None:
+    # float("nan") succeeds but NaN fails every band comparison, which would make
+    # it match *every* band — treat non-finite readings as unobservable.
+    hass.states.async_set("sensor.lounge", "nan", {"device_class": "illuminance"})
+    hass.states.async_set("sensor.hall", "inf", {"device_class": "illuminance"})
+    snap = await LuxCondition().snapshot(hass)
+    assert snap.sensors["sensor.lounge"] is None
+    assert snap.sensors["sensor.hall"] is None
+
+
+def test_nan_reading_does_not_match_any_band() -> None:
+    snap = _snap({"sensor.a": float("nan")})
+    assert _cond().matches({"sensors": ["sensor.a"], "range": "dark"}, snap) is False
+    assert _cond().matches({"sensors": ["sensor.a"], "min": 0}, snap) is False
+
+
 def test_unknown_range_is_a_non_match_not_a_crash() -> None:
     # A scene may reference a range the user later hides/deletes. matches() must
     # not raise (that would abort the whole scope's evaluation) — it fails the
@@ -144,6 +160,13 @@ def test_validate_accepts_valid_and_none() -> None:
 def test_validate_rejects(bad) -> None:
     with pytest.raises(ValueError):
         _cond().validate_predicate(bad)
+
+
+def test_validate_rejects_unknown_range_id() -> None:
+    # Save-time check (mirrors time_of_day rejecting unknown periods); runtime
+    # matches() stays tolerant for ranges hidden after the scene was saved.
+    with pytest.raises(ValueError, match="unknown lux range"):
+        _cond().validate_predicate({"sensors": ["sensor.a"], "range": "nope"})
 
 
 def test_trigger_deps_watches_sensors() -> None:

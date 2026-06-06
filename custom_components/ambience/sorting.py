@@ -35,6 +35,17 @@ def condition_priority(condition: Any) -> int:
     return value if isinstance(value, int) else _DEFAULT_PRIORITY
 
 
+def _constrains(condition: Any, predicate: Any) -> bool:
+    """Whether `predicate` is a real constraint for sorting. A non-None predicate
+    that still matches every world-state (e.g. a sensor-based predicate with no
+    sensors) is a wildcard — not more specific than an absent predicate — so it
+    must sort last in its slot. Conditions declare this via an optional
+    ``is_constraining(predicate)`` hook; the default is "any non-None predicate
+    constrains"."""
+    checker = getattr(condition, "is_constraining", None)
+    return checker(predicate) if callable(checker) else True
+
+
 def _constrained(scene: Scene) -> dict[str, Any]:
     """The `when` entries that actually constrain — non-None predicates."""
     return {k: v for k, v in scene.get("when", {}).items() if v is not None}
@@ -62,8 +73,9 @@ def sort_scenes(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
         slots: list[tuple[int, Any]] = []
         for name in slot_names:
             predicate = when.get(name)
-            if predicate is None:
-                # Unconstrained: a wildcard for this slot — sorts last.
+            if predicate is None or not _constrains(conditions.get(name), predicate):
+                # Unconstrained, or a vacuous predicate that matches everything
+                # (e.g. empty sensors): a wildcard for this slot — sorts last.
                 slots.append((1, None))
                 continue
             # Constrained → tier 0, ahead of any wildcard in this slot. When the

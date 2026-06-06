@@ -987,14 +987,14 @@ var Ds=Object.defineProperty;var Hs=Object.getOwnPropertyDescriptor;var u=(t,n,e
   />`}var ri="__custom__",xe=class extends b{constructor(){super(...arguments);this.value=null}_cur(){return this.value??{sensors:[],range:this._defaultRangeId()}}_sensors(){return this._cur().sensors??[]}_showQuant(){return this._sensors().length>1}_effectiveRangeIds(){return mr(this.luxRanges)}_defaultRangeId(){return this._effectiveRangeIds()[0]??"dark"}_isCustom(e){return e.range==null}_build(e){let r={...this._cur(),...e},i={sensors:r.sensors??[]};return this._isCustom(r)?(r.min!=null&&(i.min=r.min),r.max!=null&&(i.max=r.max)):i.range=r.range??this._defaultRangeId(),r.quant==="all"&&(i.quant="all"),i}_emit(e){this.value=e,L(this,e)}_setSensors(e){this._emit(this._build({sensors:e}))}_setQuant(e){this._emit(this._build({quant:e}))}_setBand(e){if(e===ri){let r=this._cur();this._emit(this._build({range:void 0,min:r.min??0,max:r.max}))}else this._emit(this._build({range:e,min:void 0,max:void 0}))}_setMin(e){this._emit(this._build({min:e}))}_setMax(e){this._emit(this._build({max:e}))}_sensorSchema(){return[{name:"sensors",selector:{entity:{domain:"sensor",device_class:["illuminance"],multiple:!0}}}]}_renderSensors(){return fr(this.hass,this._sensorSchema(),this._sensors(),"sensor.a, sensor.b",e=>this._setSensors(e))}_renderBand(e){let r=this._isCustom(e),i=[...this._effectiveRangeIds().map(o=>({value:o,label:Ve(this.hass,o,this.luxRanges?.custom??{})})),{value:ri,label:d(this.hass,"ui.custom_range","Custom range")}],s=Ie(this.hass,"band","band",r?ri:e.range??this._defaultRangeId(),i,o=>this._setBand(o));if(!r)return s;let a=o=>o==null?"":String(o);return l`${s}
       <span class="band-row" data-field="band-custom">
         <input
-          type="number" min="0" data-field="min"
+          type="number" min="0" step="1" data-field="min"
           placeholder=${d(this.hass,"ui.lux_min_placeholder","0")}
           .value=${a(e.min)}
           @change=${o=>{let c=o.target.value;this._setMin(c===""?void 0:Number(c))}}
         />
         <span>–</span>
         <input
-          type="number" min="0" data-field="max"
+          type="number" min="0" step="1" data-field="max"
           placeholder=${d(this.hass,"ui.lux_max_placeholder","\u221E")}
           .value=${a(e.max)}
           @change=${o=>{let c=o.target.value;this._setMax(c===""?void 0:Number(c))}}
@@ -3499,12 +3499,12 @@ var Ds=Object.defineProperty;var Hs=Object.getOwnPropertyDescriptor;var u=(t,n,e
       <div class="row">
         <div class="field">
           <label for="min">${d(this.hass,"ui.lux_min_label","Min (lx)")}</label>
-          <input id="min" type="number" min="0" .value=${this._min==null?"":String(this._min)}
+          <input id="min" type="number" min="0" step="1" .value=${this._min==null?"":String(this._min)}
             @input=${this._onMinInput} placeholder=${d(this.hass,"ui.lux_min_placeholder","0")} />
         </div>
         <div class="field">
           <label for="max">${d(this.hass,"ui.lux_max_label","Max (lx)")}</label>
-          <input id="max" type="number" min="0" .value=${this._max==null?"":String(this._max)}
+          <input id="max" type="number" min="0" step="1" .value=${this._max==null?"":String(this._max)}
             @input=${this._onMaxInput} placeholder=${d(this.hass,"ui.lux_max_placeholder","\u221E")} />
         </div>
       </div>

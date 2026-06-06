@@ -64,12 +64,12 @@ export class AmbienceLuxEditModal extends AmbienceNamedDefEditModal<LuxRangeDef>
       <div class="row">
         <div class="field">
           <label for="min">${localize(this.hass, "ui.lux_min_label", "Min (lx)")}</label>
-          <input id="min" type="number" min="0" .value=${this._min == null ? "" : String(this._min)}
+          <input id="min" type="number" min="0" step="1" .value=${this._min == null ? "" : String(this._min)}
             @input=${this._onMinInput} placeholder=${localize(this.hass, "ui.lux_min_placeholder", "0")} />
         </div>
         <div class="field">
           <label for="max">${localize(this.hass, "ui.lux_max_label", "Max (lx)")}</label>
-          <input id="max" type="number" min="0" .value=${this._max == null ? "" : String(this._max)}
+          <input id="max" type="number" min="0" step="1" .value=${this._max == null ? "" : String(this._max)}
             @input=${this._onMaxInput} placeholder=${localize(this.hass, "ui.lux_max_placeholder", "∞")} />
         </div>
       </div>

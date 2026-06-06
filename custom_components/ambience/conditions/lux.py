@@ -14,6 +14,7 @@ unlike a `state` numeric condition (950) which would otherwise dominate.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -88,8 +89,8 @@ class LuxCondition:
 
         def holds(eid: str) -> bool:
             val = snapshot.sensors.get(eid)
-            if val is None:
-                return False  # unobservable
+            if val is None or not math.isfinite(val):
+                return False  # unobservable (incl. NaN/inf, which fail band tests)
             if lo is not None and val < lo:
                 return False
             return not (hi is not None and val >= hi)
@@ -135,10 +136,16 @@ class LuxCondition:
                     raise ValueError(f"`sensors` entries must be sensor.* ids, got {e!r}")
         has_inline = predicate.get("min") is not None or predicate.get("max") is not None
         if "range" in predicate:
-            if not isinstance(predicate["range"], str):
-                raise ValueError(f"`range` must be a string, got {predicate['range']!r}")
+            rid = predicate["range"]
+            if not isinstance(rid, str):
+                raise ValueError(f"`range` must be a string, got {rid!r}")
             if has_inline:
                 raise ValueError("specify `range` or `min`/`max`, not both")
+            # Reject a dangling range id at save time (mirrors time_of_day, which
+            # rejects unknown period ids). Runtime matches() stays tolerant for
+            # ranges hidden *after* a scene was saved.
+            if rid not in self._range_lookup():
+                raise ValueError(f"unknown lux range: {rid!r}")
         else:
             validate_int_bound(predicate.get("min"), "min")
             validate_int_bound(predicate.get("max"), "max")
@@ -158,6 +165,11 @@ class LuxCondition:
         return TriggerSpec(entities=frozenset(sensors))
 
     # --- sorting (containment lattice) ----------------------------------
+
+    def is_constraining(self, predicate: Any) -> bool:
+        """Empty/absent `sensors` is match-anything (see matches()), so it is a
+        wildcard for sorting, not a real constraint."""
+        return isinstance(predicate, dict) and bool(predicate.get("sensors"))
 
     def contains(self, outer: Any, inner: Any) -> bool:
         """True iff every world-state matching `inner` also matches `outer`.
@@ -186,11 +198,16 @@ class LuxCondition:
 
 
 def as_float_state(state: str) -> float | None:
-    """Coerce an entity state string to a lux float, or None if non-numeric."""
+    """Coerce an entity state string to a finite lux float, else None.
+
+    Non-finite values are treated as unobservable: ``float('nan')`` succeeds but
+    NaN fails every band comparison (``nan < lo`` and ``nan >= hi`` are both
+    False), which would otherwise make a NaN reading match *every* band."""
     try:
-        return float(state)
+        value = float(state)
     except (TypeError, ValueError):
         return None
+    return value if math.isfinite(value) else None
 
 
 def _band_within(

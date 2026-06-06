@@ -174,7 +174,7 @@ export class AmbienceLuxInput extends LitElement {
     return html`${select}
       <span class="band-row" data-field="band-custom">
         <input
-          type="number" min="0" data-field="min"
+          type="number" min="0" step="1" data-field="min"
           placeholder=${localize(this.hass, "ui.lux_min_placeholder", "0")}
           .value=${num(cur.min)}
           @change=${(e: Event) => {
@@ -184,7 +184,7 @@ export class AmbienceLuxInput extends LitElement {
         />
         <span>–</span>
         <input
-          type="number" min="0" data-field="max"
+          type="number" min="0" step="1" data-field="max"
           placeholder=${localize(this.hass, "ui.lux_max_placeholder", "∞")}
           .value=${num(cur.max)}
           @change=${(e: Event) => {

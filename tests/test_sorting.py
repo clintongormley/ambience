@@ -39,14 +39,22 @@ class StringCondition:
 
 
 class QuantCondition:
-    """Test double mirroring occupancy/people/day: a `priority` and `contains`,
-    but deliberately NO `order_key` (no meaningful intra-condition order)."""
+    """Test double mirroring occupancy/lux: a `priority` and `contains`, NO
+    `order_key`, and an `is_constraining` hook where an empty `sensors` list is a
+    wildcard (matches everything)."""
 
     def __init__(self, priority: int = 100) -> None:
         self.priority = priority
 
     def contains(self, outer: Any, inner: Any) -> bool:
         return outer == inner
+
+    def is_constraining(self, predicate: Any) -> bool:
+        # Only a dict with an empty sensors list is a wildcard; other shapes
+        # (incl. the string stand-ins older tests use) are real constraints.
+        if isinstance(predicate, dict):
+            return bool(predicate.get("sensors"))
+        return True
 
 
 class BareCondition:
@@ -172,6 +180,22 @@ def test_two_order_keyless_conditions_constraint_beats_wildcard_by_priority() ->
         _scene("ppl", {"people": "nobody"}),
     ]
     assert _names(sort_scenes(scenes, conditions)) == ["ppl", "occ"]
+
+
+def test_vacuous_predicate_sorts_as_wildcard_not_as_a_constraint() -> None:
+    # A sensor-based condition's {sensors: []} matches everything, so despite
+    # being a non-None predicate it must sort LAST in its slot (like an absent
+    # predicate) — it must NOT outrank a scene that constrains a lower-priority
+    # slot just because its dict is "present".
+    conditions = {
+        "occupancy": QuantCondition(priority=915),  # no order_key; empty = wildcard
+        "time_of_day": IntervalCondition(priority=800),
+    }
+    scenes = [
+        _scene("evening", {"time_of_day": (18, 19)}),
+        _scene("wild-occ", {"occupancy": {"sensors": []}}),  # wildcard via empty sensors
+    ]
+    assert _names(sort_scenes(scenes, conditions)) == ["evening", "wild-occ"]
 
 
 def test_condition_without_contains_yields_no_hard_edge() -> None:

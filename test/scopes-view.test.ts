@@ -1029,6 +1029,71 @@ describe("ambience-scopes-view", () => {
     expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeNull();
   });
 
+  test("the filter dropdown has an add-category action that opens the ambience settings and closes the menu", async () => {
+    el = await mount();
+    el._categories = [
+      { id: "a", name: "Awn" },
+      { id: "b", name: "Bee" },
+    ] as SceneCategory[];
+    await el.updateComplete;
+    // Open the menu.
+    (el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
+    await el.updateComplete;
+    let detail: any = null;
+    el.addEventListener("ambience-open-settings", (e: CustomEvent) => {
+      detail = e.detail;
+    });
+    const add = el.shadowRoot.querySelector(".category-filter-add") as HTMLButtonElement;
+    expect(add).not.toBeNull();
+    add.click();
+    await el.updateComplete;
+    // Opens the Ambience settings tab (where categories are managed)…
+    expect(detail).toEqual({ tab: "ambience" });
+    // …and closes the dropdown.
+    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeNull();
+  });
+
+  test("the dropdown add-category action sits outside the listbox (valid ARIA)", async () => {
+    el = await mount();
+    el._categories = [
+      { id: "a", name: "Awn" },
+      { id: "b", name: "Bee" },
+    ] as SceneCategory[];
+    await el.updateComplete;
+    (el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
+    await el.updateComplete;
+    // The listbox must contain only role="option" children — the add action,
+    // being an action and not a selectable option, sits outside it.
+    expect(el.shadowRoot.querySelector('[role="listbox"] .category-filter-add')).toBeNull();
+    expect(el.shadowRoot.querySelector(".category-filter-add")).not.toBeNull();
+  });
+
+  test("shows a standalone add-category link opening ambience settings when there is no filter dropdown", async () => {
+    el = await mount();
+    el._categories = [{ id: "a", name: "Awn" }] as SceneCategory[];
+    await el.updateComplete;
+    // A single category: no filter dropdown to filter with…
+    expect(el.shadowRoot.querySelector(".category-filter-trigger")).toBeNull();
+    // …but the add-category link is still reachable as a standalone link.
+    let detail: any = null;
+    el.addEventListener("ambience-open-settings", (e: CustomEvent) => {
+      detail = e.detail;
+    });
+    const add = el.shadowRoot.querySelector(".category-filter-add") as HTMLButtonElement;
+    expect(add).not.toBeNull();
+    add.click();
+    expect(detail).toEqual({ tab: "ambience" });
+  });
+
+  test("hides the standalone add-category link until the initial load finishes", async () => {
+    el = await mount();
+    el._staticLoaded = false;
+    el._categories = [] as SceneCategory[];
+    await el.updateComplete;
+    // No flash of the add link before categories have loaded.
+    expect(el.shadowRoot.querySelector(".category-filter-add")).toBeNull();
+  });
+
   test("per-scope summary counts scenes matching the active filter", async () => {
     el = await mount();
     const cfg = {

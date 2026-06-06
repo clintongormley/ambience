@@ -203,6 +203,7 @@ export class AmbienceScenesList extends LitElement {
 
   @property({ attribute: false }) scenes: Scene[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
+  @property({ attribute: false }) luxRanges?: import("../types.js").LuxRangeStoreView;
   @property({ attribute: false })
   weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) hass?: {
@@ -350,6 +351,7 @@ export class AmbienceScenesList extends LitElement {
       const body = summariseCondition(k, scene.when[k], {
         hass: this.hass as any,
         periods: this.periods,
+        luxRanges: this.luxRanges,
         weatherGroups: this.weatherConfig?.groups,
       });
       const sep = i === 0 ? "" : ", ";
@@ -370,6 +372,7 @@ export class AmbienceScenesList extends LitElement {
       const body = summariseCondition(k, scene.when[k], {
         hass: this.hass as any,
         periods: this.periods,
+        luxRanges: this.luxRanges,
         weatherGroups: this.weatherConfig?.groups,
       });
       return html`<div class="condition-line">
@@ -626,12 +629,15 @@ export class AmbienceScenesList extends LitElement {
             <ul>
               ${section.rows.map(([i, scene], n) => this._renderRow(i, scene, n + 1))}
             </ul>
+            <button
+              class="add"
+              @click=${() => this._emit("add-scene", { category: section.category?.id })}
+            >
+              ${localize(this.hass, "ui.add_scene", "+ Add scene")}
+            </button>
           </div>
         `,
       )}
-      <button class="add" @click=${() => this._emit("add-scene", {})}>
-        ${localize(this.hass, "ui.add_scene", "+ Add scene")}
-      </button>
     `;
   }
 }

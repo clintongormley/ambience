@@ -68,6 +68,7 @@ class AmbienceStore:
                 "time_of_day": {"custom": {}, "hidden": []},
                 "day": {"workday_sensor": None, "workday_calendar": None},
                 "weather": {"entity": None, "groups": list(DEFAULT_WEATHER_GROUPS)},
+                "lux": {"custom": {}, "hidden": []},
             },
             "switch_defaults": {
                 "name": DEFAULT_SWITCH_NAME,
@@ -84,6 +85,7 @@ class AmbienceStore:
         weather = namespace.setdefault("weather", {})
         weather.setdefault("entity", None)
         weather.setdefault("groups", list(DEFAULT_WEATHER_GROUPS))
+        namespace.setdefault("lux", {"custom": {}, "hidden": []})
 
     def _ensure_scope_buckets(self) -> None:
         """Floors and house keys are additive — make sure they exist."""
@@ -210,7 +212,7 @@ class AmbienceStore:
     def get_condition_config(self, name: str) -> dict[str, Any]:
         """Return per-condition config dict, with defaults applied for missing keys."""
         cfg = self._data.get("conditions", {}).get(name, {})
-        if name == "time_of_day":
+        if name in ("time_of_day", "lux"):
             return {
                 "custom": cfg.get("custom", {}),
                 "hidden": cfg.get("hidden", []),
@@ -237,6 +239,12 @@ class AmbienceStore:
 
     async def async_save_periods(self, payload: dict[str, Any]) -> None:
         await self.async_save_condition_config("time_of_day", payload)
+
+    def get_lux_ranges(self) -> dict[str, Any]:
+        return self.get_condition_config("lux")
+
+    async def async_save_lux_ranges(self, payload: dict[str, Any]) -> None:
+        await self.async_save_condition_config("lux", payload)
 
     # -------------------------------------------------------------------------
     # Switch defaults + per-scope off-at state

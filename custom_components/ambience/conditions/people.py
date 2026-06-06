@@ -226,8 +226,10 @@ class PeopleCondition:
 
     # --- sorting (containment lattice) ----------------------------------
     # No `order_key`: there is no meaningful total order among people
-    # predicates for the linearisation tiebreaker, so that slot falls back to
-    # "sorts last". `contains` is this condition's only sorting contribution.
+    # predicates, so constrained scenes tie within this slot — but a scene that
+    # constrains people still sorts ahead of one that leaves it a wildcard (the
+    # slot is ranked by this condition's high priority). `contains` is this
+    # condition's only intra-slot sorting contribution.
 
     def contains(self, outer: Any, inner: Any) -> bool:
         """True iff every world-state matching `inner` also matches `outer`

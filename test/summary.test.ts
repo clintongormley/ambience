@@ -655,8 +655,102 @@ test("summariseOccupancy: multiple sensors with quant", () => {
   ).toBe("all of (Lounge, Hall) occupied");
 });
 
+test("summariseOccupancy: negated single sensor with for", () => {
+  const hass = {
+    states: { "binary_sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+  } as any;
+  expect(
+    summariseCondition(
+      "occupancy",
+      {
+        sensors: ["binary_sensor.lounge"],
+        occupied: false,
+        negate: true,
+        for: { h: 0, m: 20, s: 0 },
+      },
+      { hass },
+    ),
+  ).toBe("Lounge is not vacant for ≥20m");
+});
+
+test("summariseOccupancy: negated multiple sensors with quant", () => {
+  const hass = {
+    states: {
+      "binary_sensor.a": { attributes: { friendly_name: "Lounge" } },
+      "binary_sensor.b": { attributes: { friendly_name: "Hall" } },
+    },
+  } as any;
+  expect(
+    summariseCondition(
+      "occupancy",
+      {
+        sensors: ["binary_sensor.a", "binary_sensor.b"],
+        occupied: true,
+        quant: "any",
+        negate: true,
+      },
+      { hass },
+    ),
+  ).toBe("any of (Lounge, Hall) not occupied");
+});
+
 test("summariseOccupancy: null is 'any'", () => {
   expect(summariseCondition("occupancy", null, {})).toBe("(any)");
+});
+
+test("summariseLux: single sensor named range", () => {
+  const hass = {
+    states: { "sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+  } as any;
+  expect(summariseCondition("lux", { sensors: ["sensor.lounge"], range: "dark" }, { hass })).toBe(
+    "Lounge Dark",
+  );
+});
+
+test("summariseLux: single sensor inline band", () => {
+  const hass = {
+    states: { "sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+  } as any;
+  expect(
+    summariseCondition("lux", { sensors: ["sensor.lounge"], min: 50, max: 300 }, { hass }),
+  ).toBe("Lounge 50–300 lx");
+});
+
+test("summariseLux: open-ended bands", () => {
+  const hass = {
+    states: { "sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+  } as any;
+  expect(summariseCondition("lux", { sensors: ["sensor.lounge"], min: 1000 }, { hass })).toBe(
+    "Lounge ≥1000 lx",
+  );
+  expect(summariseCondition("lux", { sensors: ["sensor.lounge"], max: 10 }, { hass })).toBe(
+    "Lounge <10 lx",
+  );
+});
+
+test("summariseLux: multiple sensors with quant and custom label", () => {
+  const hass = {
+    states: {
+      "sensor.a": { attributes: { friendly_name: "Lounge" } },
+      "sensor.b": { attributes: { friendly_name: "Hall" } },
+    },
+  } as any;
+  const luxRanges = {
+    builtins: {},
+    custom: { gloomy: { min: 5, max: 30, label: "Gloomy" } },
+    hidden: [],
+  };
+  expect(
+    summariseCondition(
+      "lux",
+      { sensors: ["sensor.a", "sensor.b"], range: "gloomy", quant: "all" },
+      { hass, luxRanges },
+    ),
+  ).toBe("all of (Lounge, Hall) Gloomy");
+});
+
+test("summariseLux: null is 'any'", () => {
+  expect(summariseCondition("lux", null, {})).toBe("(any)");
 });
 
 test("summariseState renders a single atom", () => {

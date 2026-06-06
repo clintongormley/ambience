@@ -3,9 +3,10 @@ import { customElement, property } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
-import type { ConditionInfo, DayConfig, PeriodStoreView } from "../types.js";
+import type { ConditionInfo, DayConfig, LuxRangeStoreView, PeriodStoreView } from "../types.js";
 import "./script-predicate-input.js";
 import "./time-of-day-input.js";
+import "./lux-input.js";
 import "./day-predicate-input.js";
 import "./weather-predicate-input.js";
 import "./sun-predicate-input.js";
@@ -50,6 +51,7 @@ export class AmbienceConditionInput extends LitElement {
   @property({ attribute: false }) condition!: ConditionInfo;
   @property({ attribute: false }) value: unknown = null;
   @property({ attribute: false }) periods?: PeriodStoreView;
+  @property({ attribute: false }) luxRanges?: LuxRangeStoreView;
   @property({ attribute: false }) dayConfig?: DayConfig;
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) hass?: HassConnection;
@@ -162,6 +164,19 @@ export class AmbienceConditionInput extends LitElement {
             this._emit(e.detail.value);
           }}
         ></ambience-people-predicate-input>
+      `;
+    }
+    if (this.condition.input === "lux") {
+      return html`
+        <ambience-lux-input
+          .hass=${this.hass}
+          .value=${this.value as any}
+          .luxRanges=${this.luxRanges}
+          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
+            e.stopPropagation();
+            this._emit(e.detail.value);
+          }}
+        ></ambience-lux-input>
       `;
     }
     if (this.condition.input === "occupancy_predicate") {

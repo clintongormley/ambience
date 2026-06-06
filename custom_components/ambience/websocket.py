@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
+    DATA_LUX_RANGES,
     DATA_PERIODS,
     DATA_STORE,
     DATA_SWITCHES,
@@ -41,6 +42,7 @@ from .websocket_helpers import (
     coerce_scene_categories,
     dangling_day_entity_warnings,
     dangling_weather_warnings,
+    missing_lux_refs,
     missing_period_refs,
     validate_scope_config,
     validate_weather_groups,
@@ -75,6 +77,9 @@ _WS_COMMANDS = (
     "ambience/time_of_day_periods/list",
     "ambience/time_of_day_periods/save",
     "ambience/time_of_day_periods/reset",
+    "ambience/lux_ranges/list",
+    "ambience/lux_ranges/save",
+    "ambience/lux_ranges/reset",
     "ambience/conditions/day/config/list",
     "ambience/conditions/day/config/save",
     "ambience/conditions/weather/config/list",
@@ -114,6 +119,9 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_periods_list)
     websocket_api.async_register_command(hass, _ws_periods_save)
     websocket_api.async_register_command(hass, _ws_periods_reset)
+    websocket_api.async_register_command(hass, _ws_lux_ranges_list)
+    websocket_api.async_register_command(hass, _ws_lux_ranges_save)
+    websocket_api.async_register_command(hass, _ws_lux_ranges_reset)
     websocket_api.async_register_command(hass, _ws_day_config_list)
     websocket_api.async_register_command(hass, _ws_day_config_save)
     websocket_api.async_register_command(hass, _ws_weather_config_list)
@@ -663,6 +671,72 @@ async def _ws_periods_reset(
 ) -> None:
     period_store = hass.data[DOMAIN][DATA_PERIODS]
     await period_store.reset()
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/lux_ranges/list"})
+@websocket_api.async_response
+async def _ws_lux_ranges_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    lux_store = hass.data[DOMAIN][DATA_LUX_RANGES]
+    connection.send_result(msg["id"], lux_store.view_for_ui())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/lux_ranges/save",
+        vol.Required("custom"): dict,
+        vol.Required("hidden"): list,
+    }
+)
+@websocket_api.async_response
+async def _ws_lux_ranges_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    lux_store = hass.data[DOMAIN][DATA_LUX_RANGES]
+    try:
+        await lux_store.save(msg["custom"], msg["hidden"])
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+
+    # Walk every persisted scene and collect dangling-range warnings.
+    store = hass.data[DOMAIN][DATA_STORE]
+    effective_ids = set(lux_store.effective())
+    warnings: list[dict[str, Any]] = []
+    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
+        for scene in scope_cfg.get("scenes", []):
+            pred = scene.get("when", {}).get("lux")
+            for missing in missing_lux_refs(pred, effective_ids):
+                warnings.append(
+                    {
+                        "scope_kind": scope_kind,
+                        "scope_id": scope_id,
+                        "scene_name": scene.get("name", ""),
+                        "missing_range": missing,
+                    }
+                )
+
+    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/lux_ranges/reset"})
+@websocket_api.async_response
+async def _ws_lux_ranges_reset(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    lux_store = hass.data[DOMAIN][DATA_LUX_RANGES]
+    await lux_store.reset()
     connection.send_result(msg["id"], {"ok": True})
 
 

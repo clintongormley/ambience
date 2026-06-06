@@ -157,6 +157,12 @@ async def test_conditions_list(hass: HomeAssistant, installed, hass_ws_client) -
     assert tod["description"].strip() != ""
     assert tod["predicate_help"].strip() != ""
 
+    lux = by_name["lux"]
+    assert lux["input"] == "lux"
+    assert lux["priority"] == 775
+    assert lux["description"].strip() != ""
+    assert lux["predicate_help"].strip() != ""
+
 
 # ---------------------------------------------------------------------------
 # services/list, services/get_schema, exposed_actions/list, exposed_actions/save
@@ -1263,6 +1269,121 @@ async def test_ws_periods_reset_clears_custom_and_hidden(
 
     # Verify via list
     await client.send_json({"id": 3, "type": "ambience/time_of_day_periods/list"})
+    msg = await client.receive_json()
+    assert msg["result"]["custom"] == {}
+    assert msg["result"]["hidden"] == []
+
+
+# ---------------------------------------------------------------------------
+# ambience/lux_ranges/{list,save,reset}
+# ---------------------------------------------------------------------------
+
+
+async def test_ws_lux_ranges_list_returns_builtins_custom_hidden(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/lux_ranges/list")
+    assert resp["success"]
+    result = resp["result"]
+    assert set(result["builtins"]) == {"dark", "dim", "normal", "bright", "very_bright"}
+    assert result["custom"] == {}
+    assert result["hidden"] == []
+
+
+async def test_ws_lux_ranges_save_persists_payload(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    payload = {"custom": {"gloomy": {"min": 5, "max": 30, "label": "Gloomy"}}, "hidden": ["dark"]}
+    client = await hass_ws_client()
+    await client.send_json({"id": 1, "type": "ambience/lux_ranges/save", **payload})
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["ok"] is True
+    assert msg["result"]["warnings"] == []
+
+    await client.send_json({"id": 2, "type": "ambience/lux_ranges/list"})
+    msg = await client.receive_json()
+    assert msg["result"]["custom"] == payload["custom"]
+    assert msg["result"]["hidden"] == payload["hidden"]
+
+
+async def test_ws_lux_ranges_save_rejects_malformed(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/lux_ranges/save",
+        custom={"bad": {"min": 50, "max": 10}},
+        hidden=[],
+    )
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_ws_lux_ranges_save_returns_warnings_for_dangling_refs(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    from homeassistant.helpers import area_registry as ar
+
+    area_reg = ar.async_get(hass)
+    area = area_reg.async_create("Living Room")
+    client = await hass_ws_client()
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "ambience/area/save",
+            "area_id": area.id,
+            "config": {
+                "conditions": ["lux"],
+                "scenes": [
+                    {
+                        "name": "Dark scene",
+                        "when": {"lux": {"sensors": ["sensor.a"], "range": "dark"}},
+                        "actions": [],
+                    }
+                ],
+            },
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+
+    await client.send_json(
+        {"id": 2, "type": "ambience/lux_ranges/save", "custom": {}, "hidden": ["dark"]}
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+    warnings = msg["result"]["warnings"]
+    assert any(
+        w["scope_kind"] == "area"
+        and w["scope_id"] == area.id
+        and w["scene_name"] == "Dark scene"
+        and w["missing_range"] == "dark"
+        for w in warnings
+    )
+
+
+async def test_ws_lux_ranges_reset_clears_custom_and_hidden(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    client = await hass_ws_client()
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "ambience/lux_ranges/save",
+            "custom": {"gloomy": {"min": 5, "max": 30}},
+            "hidden": ["dark"],
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"]
+
+    await client.send_json({"id": 2, "type": "ambience/lux_ranges/reset"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"]["ok"] is True
+
+    await client.send_json({"id": 3, "type": "ambience/lux_ranges/list"})
     msg = await client.receive_json()
     assert msg["result"]["custom"] == {}
     assert msg["result"]["hidden"] == []

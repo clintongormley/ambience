@@ -92,6 +92,56 @@ def test_for_duration_held_long_enough() -> None:
     assert OccupancyCondition().matches(pred, snap) is True
 
 
+def test_negate_inverts_simple_match() -> None:
+    snap = _snap({"binary_sensor.a": _s("on")})
+    pred = {"sensors": ["binary_sensor.a"], "occupied": True, "quant": "any"}
+    assert OccupancyCondition().matches(pred, snap) is True
+    assert OccupancyCondition().matches({**pred, "negate": True}, snap) is False
+
+
+def test_negate_not_vacant_for_differs_from_occupied_for() -> None:
+    # Sensor is ON, but only for 5 min, with a 20 min `for` gate.
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    changed = datetime(2026, 5, 25, 11, 55, tzinfo=UTC)  # 5 min ago
+    snap = _snap({"binary_sensor.a": ("on", changed)}, now=now)
+    m = OccupancyCondition()
+    twenty = {"h": 0, "m": 20, "s": 0}
+    # "NOT (vacant for >=20m)": it is on, so vacant-for-20m is false -> negate true.
+    not_vacant_for = {
+        "sensors": ["binary_sensor.a"],
+        "occupied": False,
+        "for": twenty,
+        "negate": True,
+    }
+    # "occupied for >=20m": on, but held only 5m -> false.
+    occupied_for = {"sensors": ["binary_sensor.a"], "occupied": True, "for": twenty}
+    assert m.matches(not_vacant_for, snap) is True
+    assert m.matches(occupied_for, snap) is False
+
+
+def test_negate_with_empty_sensors_stays_wildcard() -> None:
+    # No constraint to negate: a wildcard stays a wildcard.
+    assert OccupancyCondition().matches({"sensors": [], "negate": True}, _snap()) is True
+
+
+def test_validate_accepts_negate() -> None:
+    OccupancyCondition().validate_predicate({"sensors": ["binary_sensor.a"], "negate": True})
+
+
+def test_validate_rejects_non_bool_negate() -> None:
+    with pytest.raises(ValueError):
+        OccupancyCondition().validate_predicate({"sensors": ["binary_sensor.a"], "negate": "yes"})
+
+
+def test_contains_conservative_when_either_side_negates() -> None:
+    m = OccupancyCondition()
+    plain = {"sensors": ["binary_sensor.a"], "quant": "any"}
+    neg = {"sensors": ["binary_sensor.a"], "quant": "any", "negate": True}
+    assert m.contains(neg, plain) is False
+    assert m.contains(plain, neg) is False
+    assert m.contains(neg, neg) is False
+
+
 def test_describe_counts_active() -> None:
     snap = _snap(
         {"binary_sensor.a": _s("on"), "binary_sensor.b": _s("off")},

@@ -38,6 +38,17 @@ class StringCondition:
         return predicate.lower()
 
 
+class QuantCondition:
+    """Test double mirroring occupancy/people/day: a `priority` and `contains`,
+    but deliberately NO `order_key` (no meaningful intra-condition order)."""
+
+    def __init__(self, priority: int = 100) -> None:
+        self.priority = priority
+
+    def contains(self, outer: Any, inner: Any) -> bool:
+        return outer == inner
+
+
 class BareCondition:
     """Test double with no sort members at all."""
 
@@ -128,6 +139,39 @@ def test_wildcard_slot_sorts_last() -> None:
         _scene("tod-only", {"tod": (8, 10)}),
     ]
     assert _names(sort_scenes(scenes, conditions)) == ["tod-only", "weather-only"]
+
+
+def test_constrained_high_priority_without_order_key_beats_lower_priority_slot() -> None:
+    # Regression: a scene constraining a HIGH-priority condition that lacks
+    # `order_key` (like occupancy/people/day) must still sort before — and so win
+    # first-match over — a scene that only constrains a LOWER-priority condition
+    # that has `order_key` (like time_of_day). The high-priority *constraint*
+    # must beat the low-priority one; constraining-without-order_key must not
+    # collapse to a wildcard.
+    conditions = {
+        "occupancy": QuantCondition(priority=915),  # no order_key
+        "time_of_day": IntervalCondition(priority=800),  # has order_key
+    }
+    scenes = [
+        _scene("evening", {"time_of_day": (18, 19)}),
+        _scene("vacant", {"occupancy": "vacant"}),
+    ]
+    assert _names(sort_scenes(scenes, conditions)) == ["vacant", "evening"]
+
+
+def test_two_order_keyless_conditions_constraint_beats_wildcard_by_priority() -> None:
+    # Two conditions, neither with order_key. The scene constraining the
+    # higher-priority one sorts first; constraining beats not-constraining within
+    # the top slot.
+    conditions = {
+        "people": QuantCondition(priority=925),
+        "occupancy": QuantCondition(priority=915),
+    }
+    scenes = [
+        _scene("occ", {"occupancy": "vacant"}),
+        _scene("ppl", {"people": "nobody"}),
+    ]
+    assert _names(sort_scenes(scenes, conditions)) == ["ppl", "occ"]
 
 
 def test_condition_without_contains_yields_no_hard_edge() -> None:

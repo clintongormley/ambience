@@ -16,6 +16,7 @@ STORAGE_VERSION = 1
 DATA_EXPOSED_ACTIONS = "exposed_actions"
 DATA_CONDITIONS = "conditions"
 DATA_PERIODS = "periods"
+DATA_LUX_RANGES = "lux_ranges"
 DATA_STORE = "store"
 
 # Switch entity

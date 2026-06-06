@@ -3,6 +3,7 @@ import {
   anchorLabel,
   humanizeId,
   localize,
+  luxLabel,
   monthLabel,
   periodLabel,
   stateAttributeLabel,
@@ -16,6 +17,8 @@ import type {
   DayItem,
   DayPredicate,
   ExposedAction,
+  LuxPredicate,
+  LuxRangeStoreView,
   OccupancyPredicate,
   PeoplePredicate,
   PeriodStoreView,
@@ -42,6 +45,7 @@ interface HassLike {
 interface ConditionContext {
   hass?: HassLike;
   periods?: PeriodStoreView;
+  luxRanges?: LuxRangeStoreView;
   weatherGroups?: WeatherGroup[];
 }
 
@@ -111,6 +115,9 @@ export function summariseCondition(
   }
   if (conditionName === "occupancy") {
     return summariseOccupancy(predicate as OccupancyPredicate, ctx);
+  }
+  if (conditionName === "lux") {
+    return summariseLux(predicate as LuxPredicate, ctx);
   }
   if (conditionName === "template") {
     return summariseTemplate(predicate as TemplatePredicate, ctx);
@@ -423,20 +430,57 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
     pred.occupied === false
       ? localize(ctx.hass, "occupancy_summary.vacant", "vacant")
       : localize(ctx.hass, "occupancy_summary.occupied", "occupied");
+  // `negate` wraps the whole predicate; phrase it like the state condition's
+  // inline negation ("Lounge is not vacant for ≥20m"), not a flipped polarity.
+  const not = pred.negate ? `${localize(ctx.hass, "occupancy_summary.not", "not")} ` : "";
   let head: string;
   if (names.length === 1) {
-    head = `${names[0]} is ${verb}`;
+    head = `${names[0]} is ${not}${verb}`;
   } else {
     const q =
       pred.quant === "all"
         ? localize(ctx.hass, "occupancy_summary.all_of", "all of")
         : localize(ctx.hass, "occupancy_summary.any_of", "any of");
-    head = `${q} (${names.join(", ")}) ${verb}`;
+    head = `${q} (${names.join(", ")}) ${not}${verb}`;
   }
   if (pred.for && _hasStateDuration(pred.for)) {
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
   }
   return head;
+}
+
+/** Render an inline lux band: "<10 lx", "≥1000 lx", "50–300 lx". `empty` is the
+ *  label when neither bound is set. */
+export function fmtLuxBand(
+  min: number | null | undefined,
+  max: number | null | undefined,
+  empty = "any lux",
+): string {
+  if (min != null && max != null) return `${min}–${max} lx`;
+  if (max != null) return `<${max} lx`;
+  if (min != null) return `≥${min} lx`;
+  return empty;
+}
+
+/**
+ * "<Sensor> dark" / "<Sensor> 50–300 lx" for one sensor, or
+ * "any of (A, B) bright" for several. Named ranges resolve via luxLabel.
+ */
+export function summariseLux(pred: LuxPredicate, ctx: ConditionContext = {}): string {
+  if (pred == null || !pred.sensors?.length) return localize(ctx.hass, "ui.summary_any", "any");
+  const names = pred.sensors.map((id) => entityName(ctx.hass as HassWithStates | undefined, id));
+  const band =
+    pred.range != null
+      ? luxLabel(ctx.hass, pred.range, ctx.luxRanges?.custom ?? {})
+      : fmtLuxBand(pred.min, pred.max);
+  if (names.length === 1) {
+    return `${names[0]} ${band}`;
+  }
+  const q =
+    pred.quant === "all"
+      ? localize(ctx.hass, "lux_summary.all_of", "all of")
+      : localize(ctx.hass, "lux_summary.any_of", "any of");
+  return `${q} (${names.join(", ")}) ${band}`;
 }
 
 export function summariseState(pred: StatePredicate, ctx: ConditionContext = {}): string {

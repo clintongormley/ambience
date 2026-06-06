@@ -1,14 +1,25 @@
-import { css, html, LitElement } from "lit";
+import { css, html, LitElement, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, listConditions } from "../api.js";
 import type { ConditionInfo } from "../types.js";
 import "./condition-card.js";
 import "./time-of-day-config.js";
+import "./lux-config.js";
 import "./day-config.js";
 import "./weather-config.js";
 
-const CONFIGURABLE_CONDITIONS = new Set(["time_of_day", "day", "weather"]);
+// Per-condition settings panel, keyed by condition name. A condition with no
+// entry here exposes no settings UI.
+const CONFIG_PANELS: Record<string, (hass: HassConnection) => TemplateResult> = {
+  time_of_day: (hass) =>
+    html`<ambience-time-of-day-config .hass=${hass}></ambience-time-of-day-config>`,
+  lux: (hass) => html`<ambience-lux-config .hass=${hass}></ambience-lux-config>`,
+  day: (hass) => html`<ambience-day-config .hass=${hass}></ambience-day-config>`,
+  weather: (hass) => html`<ambience-weather-config .hass=${hass}></ambience-weather-config>`,
+};
+
+const CONFIGURABLE_CONDITIONS = new Set(Object.keys(CONFIG_PANELS));
 
 @customElement("ambience-conditions-settings")
 export class AmbienceConditionsSettings extends LitElement {
@@ -40,15 +51,7 @@ export class AmbienceConditionsSettings extends LitElement {
       ${configurable.map(
         (m) => html`
         <ambience-condition-card .hass=${this.hass} .conditionName=${m.name} .conditionDescription=${m.description}>
-          ${
-            m.name === "time_of_day"
-              ? html`<ambience-time-of-day-config .hass=${this.hass}></ambience-time-of-day-config>`
-              : m.name === "day"
-                ? html`<ambience-day-config .hass=${this.hass}></ambience-day-config>`
-                : m.name === "weather"
-                  ? html`<ambience-weather-config .hass=${this.hass}></ambience-weather-config>`
-                  : html``
-          }
+          ${CONFIG_PANELS[m.name]?.(this.hass) ?? html``}
         </ambience-condition-card>
       `,
       )}

@@ -6,9 +6,11 @@ See spec §5. Scene order has two parts:
     strict subset of Q's (under first-match-wins, Q would otherwise permanently
     shadow P);
   * a linearisation — among scenes the partial order leaves free, the one with
-    the smaller linearisation key (a per-condition tuple of `order_key` values,
-    the slots ordered by condition `priority` DESCENDING — higher priority =
-    more important = sorts earlier; a slot a scene does not constrain sorts last).
+    the smaller linearisation key. The key has one slot per condition, the slots
+    ordered by condition `priority` DESCENDING (higher priority = more important
+    = sorts earlier). Within a slot a scene that CONSTRAINS the condition sorts
+    ahead of one that leaves it a wildcard; among constrained scenes `order_key`
+    (when the condition has one) breaks the tie, else they tie.
 
 The result is a stable topological sort: scenes tying on everything keep their
 original relative order.
@@ -60,12 +62,17 @@ def sort_scenes(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
         slots: list[tuple[int, Any]] = []
         for name in slot_names:
             predicate = when.get(name)
-            order_fn = getattr(conditions.get(name), "order_key", None)
-            if predicate is not None and callable(order_fn):
-                slots.append((0, order_fn(predicate)))
-            else:
-                # Unconstrained (or no order_key) is a wildcard: sorts last.
+            if predicate is None:
+                # Unconstrained: a wildcard for this slot — sorts last.
                 slots.append((1, None))
+                continue
+            # Constrained → tier 0, ahead of any wildcard in this slot. When the
+            # condition exposes `order_key`, use it to order among constrained
+            # scenes; otherwise they all tie (tier 0, constant) — still ahead of
+            # wildcards, so a higher-priority constraint isn't demoted to a
+            # wildcard just because its condition has no intra-condition order.
+            order_fn = getattr(conditions.get(name), "order_key", None)
+            slots.append((0, order_fn(predicate)) if callable(order_fn) else (0, 0))
         return tuple(slots)
 
     lin_keys = [lin_key(scene) for scene in scenes]

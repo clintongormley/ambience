@@ -247,6 +247,7 @@ export class AmbienceSceneEditor extends LitElement {
   @property({ attribute: false }) scene: Scene | null = null;
   @property({ attribute: false }) conditions: ConditionInfo[] = [];
   @property({ attribute: false }) periods?: PeriodStoreView;
+  @property({ attribute: false }) luxRanges?: import("../types.js").LuxRangeStoreView;
   @property({ attribute: false }) dayConfig?: DayConfig;
   @property({ attribute: false }) weatherConfig?: import("../types.js").WeatherConfig;
   @property({ attribute: false }) availableActions: ExposedAction[] = [];
@@ -653,6 +654,7 @@ export class AmbienceSceneEditor extends LitElement {
     const summary = summariseCondition(m.name, value, {
       hass: this.hass as any,
       periods: this.periods,
+      luxRanges: this.luxRanges,
     });
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id=${m.name}>
@@ -676,6 +678,7 @@ export class AmbienceSceneEditor extends LitElement {
               .condition=${m}
               .value=${value}
               .periods=${this.periods}
+              .luxRanges=${this.luxRanges}
               .dayConfig=${this.dayConfig}
               .weatherConfig=${this.weatherConfig}
               @value-changed=${(e: CustomEvent<{ value: unknown }>) => this._setPredicate(m.name, e.detail.value)}

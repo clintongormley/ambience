@@ -151,6 +151,29 @@ export type PeriodStoreView = {
   hidden: string[];
 };
 
+// --- lux condition ----------------------------------------------------------
+
+export type LuxQuant = "any" | "all";
+
+/** A named lux band: half-open `min <= lux < max`, either bound optional. */
+export type LuxRangeDef = { min?: number | null; max?: number | null; label?: string | null };
+
+export type LuxRangeStoreView = {
+  builtins: Record<string, LuxRangeDef>;
+  custom: Record<string, LuxRangeDef>;
+  hidden: string[];
+};
+
+/** Per-scene predicate. `null` = wildcard (no lux constraint). A predicate
+ *  references a named `range` XOR an inline `min`/`max` band. */
+export interface LuxPredicate {
+  sensors: string[]; // sensor.* (illuminance) entity_ids; empty = match-anything
+  range?: string; // a named lux range id
+  min?: number; // inline band lower bound (inclusive)
+  max?: number; // inline band upper bound (exclusive)
+  quant?: LuxQuant; // default "any"
+}
+
 export type DayConfig = {
   workday_sensor: string | null;
   workday_calendar: string | null;
@@ -245,6 +268,7 @@ export interface OccupancyPredicate {
   occupied?: boolean; // default true; false = vacant
   quant?: OccupancyQuant; // default "any"
   for?: { h: number; m: number; s: number } | null;
+  negate?: boolean; // default false; inverts the whole match (incl. `for`)
 }
 
 // --- script condition -------------------------------------------------------

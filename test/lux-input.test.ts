@@ -75,6 +75,17 @@ describe("ambience-lux-input", () => {
     el.remove();
   });
 
+  test("clearing both bounds stays in custom mode (does not revert to a named range)", async () => {
+    const el = await mount({ sensors: ["sensor.a"], min: 50, max: 300 });
+    const got = capture(el);
+    el._setMax(undefined);
+    el._setMin(undefined);
+    expect(got().range).toBeUndefined();
+    expect(got().min).toBeUndefined();
+    expect(got().max).toBeUndefined();
+    el.remove();
+  });
+
   test("quant 'all' is kept, 'any' is dropped", async () => {
     const el = await mount({ sensors: ["sensor.a", "sensor.b"], range: "dark" });
     const got = capture(el);

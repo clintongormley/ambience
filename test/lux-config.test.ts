@@ -128,7 +128,7 @@ describe("ambience-lux-config", () => {
           scope_kind: "area",
           scope_id: "lr",
           scene_name: "Movie",
-          missing_range: "gloomy",
+          missing_id: "gloomy",
         },
       ],
     });

@@ -6,6 +6,7 @@ import { summariseTimeOfDay } from "../summary.js";
 import type { PeriodStoreView, TimeEndpoint, TimeOfDayPredicate, TimeRange } from "../types.js";
 import "./time-endpoint.js";
 import { emitValueChanged } from "../dom.js";
+import { effectiveDefIds } from "./named-def-config.js";
 
 type Entry =
   | { kind: "any" }
@@ -134,13 +135,7 @@ export class AmbienceTimeOfDayInput extends LitElement {
   }
 
   private _effectiveIds(): string[] {
-    if (!this.periods) return [];
-    const builtinIds = Object.keys(this.periods.builtins).sort(_byDisplayOrder);
-    const customOnly = Object.keys(this.periods.custom).filter(
-      (id) => !(id in this.periods!.builtins),
-    );
-    const hidden = new Set(this.periods.hidden);
-    return [...builtinIds.filter((id) => !hidden.has(id)), ...customOnly];
+    return effectiveDefIds(this.periods, _byDisplayOrder);
   }
 
   private _onSelectChange(idx: number, e: Event) {

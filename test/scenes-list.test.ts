@@ -268,6 +268,23 @@ describe("ambience-scenes-list", () => {
     expect(get().category).toBeUndefined();
   });
 
+  test("a filter matching no scenes in this scope still offers an Add button for that category", async () => {
+    const groups = [
+      { id: "a", name: "Awnings" },
+      { id: "b", name: "Blinds" },
+    ];
+    // Scope has scenes only in category "a", but the active filter is "b".
+    const scenes: Scene[] = [{ when: {}, actions: [], category: "a" }];
+    el = await mount(scenes, [], {}, groups);
+    el.filterCategory = "b";
+    await el.updateComplete;
+    const btn = el.shadowRoot.querySelector("button.add") as HTMLButtonElement;
+    expect(btn).toBeTruthy(); // not a dead-end blank panel
+    const get = captureEvent(el, "add-scene");
+    btn.click();
+    expect(get().category).toBe("b");
+  });
+
   test("unpinned rows show a drag handle", async () => {
     el = await mount([movieScene, eveningScene]);
     expect(el.shadowRoot.querySelectorAll(".handle").length).toBe(2);

@@ -14,14 +14,31 @@ export type DefWarning = {
   scope_kind: string;
   scope_id: string | null;
   scene_name: string;
-  missing_period?: string;
-  missing_range?: string;
+  missing_id: string; // the referenced builtin/custom id that no longer exists
 };
 
 export type ModalState<Def> =
   | { mode: "closed" }
   | { mode: "add" }
   | { mode: "edit"; id: string; initial: Def };
+
+/** The visible, selectable ids of a named-def view: built-ins (minus hidden)
+ *  then custom-only ids. `sortBuiltins` orders the built-ins when a display
+ *  order differs from storage order (e.g. time-of-day periods); omit it to keep
+ *  storage order (e.g. lux ranges). Shared by the predicate-input dropdowns. */
+export function effectiveDefIds<Def>(
+  view:
+    | { builtins: Record<string, Def>; custom: Record<string, Def>; hidden: string[] }
+    | undefined,
+  sortBuiltins?: (a: string, b: string) => number,
+): string[] {
+  if (!view) return [];
+  const builtinIds = Object.keys(view.builtins ?? {});
+  const ordered = sortBuiltins ? builtinIds.slice().sort(sortBuiltins) : builtinIds;
+  const hidden = new Set(view.hidden ?? []);
+  const customOnly = Object.keys(view.custom ?? {}).filter((id) => !(id in (view.builtins ?? {})));
+  return [...ordered.filter((id) => !hidden.has(id)), ...customOnly];
+}
 
 /**
  * Abstract base for a named-definition management screen (periods, lux ranges):
@@ -79,7 +96,6 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
   ): Promise<{ warnings: DefWarning[] }>;
   protected abstract _label(id: string, custom: Record<string, Def>): string;
   protected abstract _formatDef(defn: Def): string;
-  protected abstract _missingId(w: DefWarning): string;
   protected abstract _headingKey(): [string, string];
   protected abstract _addKey(): [string, string];
   protected abstract _warningTextKey(): [string, string];
@@ -179,7 +195,7 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
             <strong>${localize(this.hass, "ui.period_warning_prefix", "Warning:")}</strong> ${localize(this.hass, warnKey, warnFb)}
             <ul>
               ${this._warnings.map(
-                (w) => html`<li>${scopeLabel(w)} / "${w.scene_name}" → ${this._missingId(w)}</li>`,
+                (w) => html`<li>${scopeLabel(w)} / "${w.scene_name}" → ${w.missing_id}</li>`,
               )}
             </ul>
           </div>`

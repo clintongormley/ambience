@@ -99,9 +99,14 @@ def test_unobservable_sensor_never_holds() -> None:
     assert _cond().matches({"sensors": ["sensor.a"], "range": "dark"}, snap) is False
 
 
-def test_unknown_range_raises() -> None:
-    with pytest.raises(ValueError):
+def test_unknown_range_is_a_non_match_not_a_crash() -> None:
+    # A scene may reference a range the user later hides/deletes. matches() must
+    # not raise (that would abort the whole scope's evaluation) — it fails the
+    # scene instead, like an unobservable sensor.
+    assert (
         _cond().matches({"sensors": ["sensor.a"], "range": "nope"}, _snap({"sensor.a": 5.0}))
+        is False
+    )
 
 
 def test_describe_lists_readings() -> None:

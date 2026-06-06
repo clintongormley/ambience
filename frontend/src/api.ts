@@ -199,7 +199,7 @@ export async function savePeriods(
     scope_kind: string;
     scope_id: string | null;
     scene_name: string;
-    missing_period: string;
+    missing_id: string;
   }>;
 }> {
   return hass.callWS({
@@ -227,7 +227,7 @@ export async function saveLuxRanges(
     scope_kind: string;
     scope_id: string | null;
     scene_name: string;
-    missing_range: string;
+    missing_id: string;
   }>;
 }> {
   return hass.callWS({ type: "ambience/lux_ranges/save", custom, hidden });

@@ -4,7 +4,7 @@ import { listLuxRanges, saveLuxRanges } from "../api.js";
 import { luxLabel } from "../i18n.js";
 import { fmtLuxBand } from "../summary.js";
 import type { LuxRangeDef } from "../types.js";
-import { AmbienceNamedDefConfig, type DefWarning, type NamedDefView } from "./named-def-config.js";
+import { AmbienceNamedDefConfig, type NamedDefView } from "./named-def-config.js";
 import "./lux-edit-modal.js";
 
 /**
@@ -25,9 +25,6 @@ export class AmbienceLuxConfig extends AmbienceNamedDefConfig<LuxRangeDef> {
   }
   protected _formatDef(d: LuxRangeDef): string {
     return fmtLuxBand(d.min, d.max, "any");
-  }
-  protected _missingId(w: DefWarning): string {
-    return w.missing_range ?? "";
   }
   protected _headingKey(): [string, string] {
     return ["ui.lux_heading", "Lux ranges"];

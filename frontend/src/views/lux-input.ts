@@ -7,6 +7,7 @@ import type { HaFormSchema } from "../ha-form.js";
 import { localize, luxLabel } from "../i18n.js";
 import type { LuxPredicate, LuxQuant, LuxRangeStoreView } from "../types.js";
 import { renderSelect, renderSensorField } from "./form-controls.js";
+import { effectiveDefIds } from "./named-def-config.js";
 
 const CUSTOM = "__custom__";
 
@@ -60,22 +61,22 @@ export class AmbienceLuxInput extends LitElement {
     return this._sensors().length > 1;
   }
 
-  /** Effective (visible) range ids: built-ins minus hidden, then custom-only. */
+  /** Effective (visible) range ids: built-ins minus hidden, then custom-only.
+   *  No display-order sort — lux ranges are stored in their natural order. */
   _effectiveRangeIds(): string[] {
-    const v = this.luxRanges;
-    if (!v) return [];
-    const hidden = new Set(v.hidden ?? []);
-    const builtins = Object.keys(v.builtins ?? {}).filter((id) => !hidden.has(id));
-    const customOnly = Object.keys(v.custom ?? {}).filter((id) => !(id in (v.builtins ?? {})));
-    return [...builtins, ...customOnly];
+    return effectiveDefIds(this.luxRanges);
   }
 
   private _defaultRangeId(): string {
     return this._effectiveRangeIds()[0] ?? "dark";
   }
 
+  // Custom (inline-band) mode is exactly "no named range": switching to custom
+  // clears `range`, switching to a named range clears min/max. Keying off `range`
+  // alone (rather than also requiring a bound) keeps the user in custom mode when
+  // they clear both min and max, instead of snapping back to a default range.
   private _isCustom(c: LuxPredicate): boolean {
-    return c.range == null && (c.min != null || c.max != null);
+    return c.range == null;
   }
 
   /** Build a clean predicate from the current value + overrides. The default

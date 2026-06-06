@@ -1196,7 +1196,7 @@ async def test_ws_periods_save_returns_warnings_for_dangling_refs(
         w["scope_kind"] == "area"
         and w["scope_id"] == area.id
         and w["scene_name"] == "Evening scene"
-        and w["missing_period"] == "evening"
+        and w["missing_id"] == "evening"
         for w in warnings
     )
 
@@ -1232,7 +1232,7 @@ async def test_periods_save_warnings_include_floor_scope(
         w for w in warnings if w.get("scope_kind") == "floor" and w.get("scope_id") == floor_id
     ]
     assert matching, f"expected a floor warning, got {warnings!r}"
-    assert matching[0]["missing_period"] == "supper"
+    assert matching[0]["missing_id"] == "supper"
 
 
 # ---------------------------------------------------------------------------
@@ -1358,7 +1358,7 @@ async def test_ws_lux_ranges_save_returns_warnings_for_dangling_refs(
         w["scope_kind"] == "area"
         and w["scope_id"] == area.id
         and w["scene_name"] == "Dark scene"
-        and w["missing_range"] == "dark"
+        and w["missing_id"] == "dark"
         for w in warnings
     )
 

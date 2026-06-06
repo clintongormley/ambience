@@ -654,7 +654,7 @@ async def _ws_periods_save(
                         "scope_kind": scope_kind,
                         "scope_id": scope_id,
                         "scene_name": scene.get("name", ""),
-                        "missing_period": missing,
+                        "missing_id": missing,
                     }
                 )
 
@@ -720,7 +720,7 @@ async def _ws_lux_ranges_save(
                         "scope_kind": scope_kind,
                         "scope_id": scope_id,
                         "scene_name": scene.get("name", ""),
-                        "missing_range": missing,
+                        "missing_id": missing,
                     }
                 )
 

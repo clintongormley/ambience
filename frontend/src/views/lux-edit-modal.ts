@@ -44,7 +44,7 @@ export class AmbienceLuxEditModal extends AmbienceNamedDefEditModal<LuxRangeDef>
     return localize(this.hass, "ui.lux_modal_edit_title", 'Edit "{name}"');
   }
   protected _namePlaceholder() {
-    return localize(this.hass, "ui.name_placeholder", "e.g. Gloomy");
+    return localize(this.hass, "ui.lux_name_placeholder", "e.g. Gloomy");
   }
   protected _initialLabel() {
     return this.initial.label;

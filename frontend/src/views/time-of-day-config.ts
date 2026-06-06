@@ -4,7 +4,7 @@ import type { HassConnection } from "../api.js";
 import { listPeriods, savePeriods } from "../api.js";
 import { anchorLabel, localize, periodLabel } from "../i18n.js";
 import type { PeriodDef, TimeEndpoint } from "../types.js";
-import { AmbienceNamedDefConfig, type DefWarning, type NamedDefView } from "./named-def-config.js";
+import { AmbienceNamedDefConfig, type NamedDefView } from "./named-def-config.js";
 import "./period-edit-modal.js";
 
 function formatEndpoint(ep: TimeEndpoint, hass?: HassConnection): string {
@@ -38,9 +38,6 @@ export class AmbienceTimeOfDayConfig extends AmbienceNamedDefConfig<PeriodDef> {
   }
   protected _formatDef(d: PeriodDef): string {
     return `${formatEndpoint(d.from, this.hass)} → ${formatEndpoint(d.to, this.hass)}`;
-  }
-  protected _missingId(w: DefWarning): string {
-    return w.missing_period ?? "";
   }
   protected _headingKey(): [string, string] {
     return ["ui.periods_heading", "Periods"];

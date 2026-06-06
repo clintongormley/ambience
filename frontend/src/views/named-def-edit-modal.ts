@@ -93,7 +93,7 @@ export abstract class AmbienceNamedDefEditModal<Def extends WithLabel> extends L
       return localize(
         this.hass,
         "ui.error_name_exists",
-        "A definition with this name already exists. Choose a different name.",
+        "An entry with this name already exists. Choose a different name.",
       );
     return "";
   }

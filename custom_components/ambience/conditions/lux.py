@@ -78,7 +78,12 @@ class LuxCondition:
         sensors = predicate.get("sensors") or []
         if not sensors:
             return True  # no constraint
-        lo, hi = self._resolve_range(predicate)
+        try:
+            lo, hi = self._resolve_range(predicate)
+        except ValueError:
+            # A referenced named range was hidden/deleted: the predicate can't be
+            # evaluated, so fail this scene rather than aborting the whole scope.
+            return False
         quant = predicate.get("quant") or "any"
 
         def holds(eid: str) -> bool:

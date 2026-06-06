@@ -104,6 +104,30 @@ describe("ambience-simulator-modal", () => {
     expect(el.shadowRoot.querySelector('input[type="date"]')).toBeTruthy();
   });
 
+  test("restore button in the When section resets date+time to now", async () => {
+    el = await mount();
+    const dateInput = el.shadowRoot.querySelector('input[type="date"]');
+    const timeInput = el.shadowRoot.querySelector('input[type="time"]');
+    dateInput.value = "2000-01-01";
+    dateInput.dispatchEvent(new Event("change"));
+    timeInput.value = "03:04";
+    timeInput.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    expect(el._date).toBe("2000-01-01");
+    expect(el._time).toBe("03:04");
+
+    const restore = el.shadowRoot.querySelector(".when .reset");
+    expect(restore).toBeTruthy();
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const expectedDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    restore.click();
+    await el.updateComplete;
+    expect(el._date).toBe(expectedDate);
+    expect(el._time).toMatch(/^\d{2}:\d{2}$/);
+    expect(el._time).not.toBe("03:04");
+  });
+
   test("verdict knob renders a true/false select", async () => {
     el = await mount();
     expect(el.shadowRoot.querySelector("select[data-verdict='script:k1']")).toBeTruthy();

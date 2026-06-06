@@ -185,6 +185,12 @@ export class AmbienceSimulatorModal extends LitElement {
     this._verdicts = { ...this._verdicts, [vkey]: value };
   }
 
+  private _resetWhen(): void {
+    const now = new Date();
+    this._date = localDate(now);
+    this._time = localTime(now);
+  }
+
   private _resetEntity(k: SimulateEntityKnob): void {
     this._values = { ...this._values, [k.entity_id]: entityDefaults(k) };
   }
@@ -286,6 +292,8 @@ export class AmbienceSimulatorModal extends LitElement {
                   @change=${(e: Event) => (this._date = (e.target as HTMLInputElement).value)} />
                 <input type="time" .value=${this._time}
                   @change=${(e: Event) => (this._time = (e.target as HTMLInputElement).value)} />
+                <button class="reset" title="Reset to now" aria-label="Reset to now"
+                  @click=${() => this._resetWhen()}>↺</button>
                 <span class="hint">drives sun, time-of-day, weekday &amp; workday</span>
               </div>`
                 : nothing

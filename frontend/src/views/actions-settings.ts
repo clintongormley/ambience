@@ -41,7 +41,10 @@ export class AmbienceActionsSettings extends LitElement {
       border-color: var(--primary-color, #03a9f4);
     }
     .card.dragging {
-      opacity: 0.4;
+      opacity: 0.8;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      position: relative;
+      z-index: 1000;
     }
     .card-header {
       display: flex;
@@ -56,6 +59,9 @@ export class AmbienceActionsSettings extends LitElement {
       user-select: none;
       font-size: 1rem;
       line-height: 1;
+      /* Pointer-Events drag handle: stop the browser from panning/scrolling
+         when a drag begins on a touchscreen. */
+      touch-action: none;
     }
     .drag-handle:active {
       cursor: grabbing;
@@ -674,9 +680,7 @@ export class AmbienceActionsSettings extends LitElement {
         class="card ${this._drag.over === index ? "drag-over" : ""} ${this._drag.from === index ? "dragging" : ""}"
         data-card
         data-service=${action.id}
-        @dragover=${(e: DragEvent) => this._drag.dragOver(e, index)}
-        @drop=${() => this._drag.drop(index)}
-        @dragend=${() => this._drag.end()}
+        data-drag-index=${index}
       >
         <div
           class="card-header"
@@ -691,14 +695,8 @@ export class AmbienceActionsSettings extends LitElement {
           <span
             class="drag-handle"
             data-drag-handle
-            draggable="true"
             title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}
-            @dragstart=${(e: DragEvent) =>
-              this._drag.start(
-                index,
-                e,
-                (e.currentTarget as HTMLElement).closest<HTMLElement>(".card"),
-              )}
+            @pointerdown=${(e: PointerEvent) => this._drag.start(index, e)}
             @click=${(e: Event) => e.stopPropagation()}
           >⠿</span>
           <span class="toggle-arrow">${isExpanded ? "▾" : "▸"}</span>

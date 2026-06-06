@@ -1,16 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-
-// jsdom doesn't include DragEvent — polyfill it with a minimal MouseEvent subclass.
-beforeAll(() => {
-  if (typeof DragEvent === "undefined") {
-    // @ts-expect-error -- test-only polyfill
-    globalThis.DragEvent = class DragEvent extends MouseEvent {
-      constructor(type: string, init?: EventInit & { cancelable?: boolean }) {
-        super(type, { bubbles: true, cancelable: true, ...init });
-      }
-    };
-  }
-});
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
   listExposedActions: vi.fn(async () => [
@@ -456,11 +444,32 @@ describe("ambience-actions-settings", () => {
     );
   });
 
-  test("each card header has a drag handle", async () => {
+  // --- drag-to-reorder (Pointer Events) ---
+  //
+  // jsdom has no layout, so the controller's default hit-test can't resolve a
+  // card from coordinates. Stub the shadow root's elementFromPoint to return a
+  // chosen card, driving the host's real wiring as a browser would.
+
+  function stubHitCard(el: any, index: number | null) {
+    el.shadowRoot.elementFromPoint = (_x: number, _y: number) =>
+      index === null ? null : el.shadowRoot.querySelectorAll("[data-card]")[index];
+  }
+
+  function firePointer(type: string) {
+    window.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1 }));
+  }
+
+  function grab(card: Element) {
+    (card.querySelector("[data-drag-handle]") as HTMLElement).dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, isPrimary: true, button: 0 }),
+    );
+  }
+
+  test("each card has a drag handle and a data-drag-index", async () => {
     el = await mount();
-    const handle = el.shadowRoot.querySelector("[data-card] [data-drag-handle]");
-    expect(handle).not.toBeNull();
-    expect((handle as HTMLElement).getAttribute("draggable")).toBe("true");
+    const card = el.shadowRoot.querySelector("[data-card]");
+    expect(card.querySelector("[data-drag-handle]")).not.toBeNull();
+    expect(card.getAttribute("data-drag-index")).toBe("0");
   });
 
   test("dragging a card's handle reorders the actions and auto-saves", async () => {
@@ -472,10 +481,9 @@ describe("ambience-actions-settings", () => {
     let cards = el.shadowRoot.querySelectorAll("[data-card]");
     expect(cards.length).toBe(2);
 
-    const handle = cards[0].querySelector("[data-drag-handle]") as HTMLElement;
-    handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
-    cards[1].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true }));
-    cards[1].dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    grab(cards[0]);
+    stubHitCard(el, 1);
+    firePointer("pointerup");
     await flush(el);
 
     cards = el.shadowRoot.querySelectorAll("[data-card]");
@@ -498,32 +506,31 @@ describe("ambience-actions-settings", () => {
     ]);
     el = await mount();
     let cards = el.shadowRoot.querySelectorAll("[data-card]");
-    const handle = cards[0].querySelector("[data-drag-handle]") as HTMLElement;
-    handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    grab(cards[0]);
     await el.updateComplete;
 
     cards = el.shadowRoot.querySelectorAll("[data-card]");
     expect(cards[0].classList.contains("dragging")).toBe(true);
     expect(cards[1].classList.contains("dragging")).toBe(false);
 
-    cards[0].dispatchEvent(new DragEvent("dragend", { bubbles: true }));
+    firePointer("pointercancel");
     await el.updateComplete;
     cards = el.shadowRoot.querySelectorAll("[data-card]");
     expect(cards[0].classList.contains("dragging")).toBe(false);
   });
 
-  test("dragend cancels the drag and resets state without reordering", async () => {
+  test("pointercancel cancels the drag and resets state without reordering", async () => {
     vi.mocked(listExposedActions).mockResolvedValueOnce([
       { id: "light.turn_on", label: "On", visible_fields: [], defaults: {} },
       { id: "light.turn_off", label: "Off", visible_fields: [], defaults: {} },
     ]);
     el = await mount();
     const cards = el.shadowRoot.querySelectorAll("[data-card]");
-    const handle = cards[0].querySelector("[data-drag-handle]") as HTMLElement;
-    handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
-    cards[1].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true }));
+    grab(cards[0]);
+    stubHitCard(el, 1);
+    firePointer("pointermove");
     expect(el._drag.over).toBe(1);
-    cards[0].dispatchEvent(new DragEvent("dragend", { bubbles: true }));
+    firePointer("pointercancel");
     await flush(el);
 
     expect(el._drag.from).toBeNull();
@@ -535,16 +542,16 @@ describe("ambience-actions-settings", () => {
     expect(saveExposedActions).not.toHaveBeenCalled();
   });
 
-  test("dropping a card on itself is a no-op (no reorder, no save)", async () => {
+  test("releasing a card on itself is a no-op (no reorder, no save)", async () => {
     vi.mocked(listExposedActions).mockResolvedValueOnce([
       { id: "light.turn_on", label: "On", visible_fields: [], defaults: {} },
       { id: "light.turn_off", label: "Off", visible_fields: [], defaults: {} },
     ]);
     el = await mount();
     const cards = el.shadowRoot.querySelectorAll("[data-card]");
-    const handle = cards[0].querySelector("[data-drag-handle]") as HTMLElement;
-    handle.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
-    cards[0].dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    grab(cards[0]);
+    stubHitCard(el, 0);
+    firePointer("pointerup");
     await flush(el);
 
     const idsAfter = Array.from(el.shadowRoot.querySelectorAll("[data-card]")).map((c: any) =>

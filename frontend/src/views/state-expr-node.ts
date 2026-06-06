@@ -1,5 +1,5 @@
 import { css, html, LitElement } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { customElement, property } from "lit/decorators.js";
 
 import "./state-expr-atom.js";
 import type { HassConnection } from "../api.js";
@@ -142,11 +142,28 @@ export class AmbienceStateExprNode extends LitElement {
       outline: 2px solid var(--primary-color, #03a9f4);
       outline-offset: -2px;
     }
-    /* Hint that the header — and only the header — is grabbable. The
-       summary text and empty padding inside the header pick up grab; the
-       buttons keep their own cursor via the default cascade. */
-    .atom-header[draggable="true"],
-    .group-header[draggable="true"] { cursor: grab; }
+    /* The node currently being dragged lifts (solid, with a shadow) as it
+       tracks the pointer — matching the scene/action lists' dragged-item
+       treatment. */
+    .atom-card.dragging,
+    .group.dragging {
+      opacity: 0.8; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      position: relative; z-index: 1000;
+    }
+    /* The drag handle (⠿) is the only grabbable part of a row. Pointer
+       Events drive the drag (so it works on touch, unlike native HTML5
+       DnD); touch-action:none stops the browser panning when a drag
+       begins on a touchscreen, while the rest of the header still scrolls
+       and clicks normally. */
+    .drag-handle {
+      flex: 0 0 auto;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      color: var(--secondary-text-color, #888);
+      font-size: 1em; line-height: 1;
+    }
+    .drag-handle:active { cursor: grabbing; }
     .atom-error {
       margin-top: 0.5rem;
       color: var(--error-color, #b71c1c);
@@ -158,9 +175,14 @@ export class AmbienceStateExprNode extends LitElement {
   @property({ attribute: false }) value!: StateExpr;
   /** Path of this node from the root. The root passes []. */
   @property({ attribute: false }) path: number[] = [];
-  /** Whether THIS card is currently the hovered drop target during a drag.
-   *  Drives the .drag-over visual state. */
-  @state() private _dragOver = false;
+  /** Path of the node the pointer is currently hovering as a drop target
+   *  during a drag, owned and set by the root (state-predicate-input) and
+   *  threaded down the tree. When it equals this node's path, this card
+   *  renders the .drag-over highlight. */
+  @property({ attribute: false }) dragOverPath: number[] | null = null;
+  /** Path of the node currently being dragged (set by the root). When it
+   *  equals this node's path, the card dims to show it's the one moving. */
+  @property({ attribute: false }) dragFromPath: number[] | null = null;
   /** Path of the currently-open atom (set by the root). When this node is
    *  an atom and its path matches, it renders expanded. Incomplete atoms
    *  render expanded regardless. */
@@ -190,62 +212,46 @@ export class AmbienceStateExprNode extends LitElement {
 
   // --- drag-and-drop ----------------------------------------------------
 
-  /** Skip dragstart when the user grabbed an interactive element (button,
-   *  dropdown, ha-form). Cards stay draggable from any other point. */
-  private _onDragStart(e: DragEvent) {
-    if (this.path.length === 0) {
-      // Root can't be dragged — there's no parent to move it to.
-      e.preventDefault();
-      return;
-    }
-    const target = e.target as HTMLElement | null;
-    if (target?.closest("button, select, input, textarea, ha-form")) {
-      e.preventDefault();
-      return;
-    }
-    e.stopPropagation();
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("application/x-ambience-path", JSON.stringify(this.path));
-    }
+  /** True when the pointer is hovering THIS node as the drop target. */
+  private _isDropTarget(): boolean {
+    return _samePath(this.path, this.dragOverPath);
   }
 
-  private _onDragOver(e: DragEvent) {
-    if (this.path.length === 0) return; // root not a drop target
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-    this._dragOver = true;
+  /** True while THIS node is the one being dragged. */
+  private _isDragging(): boolean {
+    return _samePath(this.path, this.dragFromPath);
   }
 
-  private _onDragLeave(e: DragEvent) {
+  /** Begin a drag from the grab handle. The root (state-predicate-input)
+   *  runs the actual Pointer-Events drag — hit-testing, highlighting and
+   *  the move — so all this node does is announce its path and hand over
+   *  the originating pointer event. */
+  private _onDragHandleDown(e: PointerEvent) {
+    if (this.path.length === 0) return; // root can't be moved
+    // Only a primary pointer with the main button drags — ignore right/middle
+    // clicks and secondary touches.
+    if (!e.isPrimary || e.button > 0) return;
     e.stopPropagation();
-    this._dragOver = false;
-  }
-
-  private _onDrop(e: DragEvent) {
-    if (this.path.length === 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    this._dragOver = false;
-    if (!e.dataTransfer) return;
-    const raw = e.dataTransfer.getData("application/x-ambience-path");
-    if (!raw) return;
-    let from: number[];
-    try {
-      from = JSON.parse(raw);
-    } catch {
-      return;
-    }
-    if (!Array.isArray(from) || from.every((v) => typeof v === "number") === false) return;
-    if (_samePath(from, this.path)) return; // no-op drop on self
     this.dispatchEvent(
-      new CustomEvent("node-move", {
-        detail: { from, to: this.path },
+      new CustomEvent("node-drag-start", {
+        detail: { path: this.path, pointer: e },
         bubbles: true,
         composed: true,
       }),
     );
+  }
+
+  /** The ⠿ grab handle, shown on every node except the root (which has no
+   *  parent to be moved within). */
+  private _dragHandle() {
+    if (this.path.length === 0) return "";
+    return html`<span
+      class="drag-handle"
+      title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}
+      @pointerdown=${this._onDragHandleDown}
+      @click=${(e: Event) => e.stopPropagation()}
+      >⠿</span
+    >`;
   }
 
   private _renderAtomCard(atom: StateAtom, isNot: boolean) {
@@ -255,14 +261,10 @@ export class AmbienceStateExprNode extends LitElement {
       ? summariseState(atom, { hass: this.hass })
       : localize(this.hass, "ui.state_new_condition", "(new condition)");
     return html`
-      <div class="atom-card ${expanded ? "expanded" : "collapsed"} ${this._dragOver ? "drag-over" : ""}"
-        @dragover=${this._onDragOver}
-        @dragleave=${this._onDragLeave}
-        @drop=${this._onDrop}>
+      <div class="atom-card ${expanded ? "expanded" : "collapsed"} ${this._isDropTarget() ? "drag-over" : ""} ${this._isDragging() ? "dragging" : ""}">
         <div class="atom-header"
-          draggable=${this.path.length > 0}
-          @dragstart=${this._onDragStart}
           @click=${() => this._emit("node-open")}>
+          ${this._dragHandle()}
           <button class="not-toggle ${isNot ? "on" : ""}"
             title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
             @click=${(e: Event) => {
@@ -323,6 +325,8 @@ export class AmbienceStateExprNode extends LitElement {
         .value=${child}
         .path=${childPath}
         .openPath=${this.openPath}
+        .dragOverPath=${this.dragOverPath}
+        .dragFromPath=${this.dragFromPath}
         .errorPath=${this.errorPath}
         .errorMessage=${this.errorMessage}
       ></ambience-state-expr-node>
@@ -338,13 +342,9 @@ export class AmbienceStateExprNode extends LitElement {
    *  the whole group". */
   private _renderGroup(group: StateGroup) {
     return html`
-      <div class="group ${this._dragOver ? "drag-over" : ""}"
-        @dragover=${this._onDragOver}
-        @dragleave=${this._onDragLeave}
-        @drop=${this._onDrop}>
-        <div class="group-header"
-          draggable=${this.path.length > 0}
-          @dragstart=${this._onDragStart}>
+      <div class="group ${this._isDropTarget() ? "drag-over" : ""} ${this._isDragging() ? "dragging" : ""}">
+        <div class="group-header">
+          ${this._dragHandle()}
           <select class="group-op"
             @change=${(e: Event) =>
               this._emit("node-set-op", {

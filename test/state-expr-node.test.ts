@@ -34,35 +34,6 @@ async function flush(el: any): Promise<void> {
   await el.updateComplete;
 }
 
-function makeDragEvent(
-  type: string,
-  overrides: Partial<DragEvent> & { dataTransferData?: string } = {},
-): DragEvent {
-  const dt = {
-    effectAllowed: "",
-    dropEffect: "",
-    data: {} as Record<string, string>,
-    setData(format: string, val: string) {
-      this.data[format] = val;
-    },
-    getData(format: string) {
-      return this.data[format] ?? "";
-    },
-  };
-  const { dataTransferData, ...rest } = overrides;
-  if (dataTransferData !== undefined) {
-    dt.data["application/x-ambience-path"] = dataTransferData;
-  }
-  const evt = new Event(type, {
-    bubbles: true,
-    cancelable: true,
-    composed: true,
-  }) as unknown as DragEvent;
-  Object.defineProperty(evt, "dataTransfer", { value: dt });
-  Object.assign(evt, { preventDefault: vi.fn(), stopPropagation: vi.fn(), ...rest });
-  return evt;
-}
-
 // ---------------------------------------------------------------------------
 // Atom card rendering
 // ---------------------------------------------------------------------------
@@ -446,173 +417,171 @@ describe("ambience-state-expr-node — group", () => {
 // Drag-and-drop
 // ---------------------------------------------------------------------------
 
-describe("ambience-state-expr-node — drag-and-drop", () => {
+describe("ambience-state-expr-node — drag-and-drop (Pointer Events)", () => {
   let el: any;
   afterEach(() => el?.remove());
 
-  // _onDragStart
+  // --- drag handle presence ---
 
-  test("dragstart at root (path=[]) calls preventDefault and does not propagate", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [] });
-    const header = el.shadowRoot.querySelector(".atom-header") as HTMLElement;
-    const evt = makeDragEvent("dragstart");
-    header.dispatchEvent(evt);
-    expect((evt.preventDefault as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
-  });
-
-  test("dragstart from a button calls preventDefault (interactive element guard)", async () => {
+  test("a non-root atom renders a drag handle", async () => {
     el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
-    const btn = el.shadowRoot.querySelector("button.not-toggle") as HTMLButtonElement;
-    const evt = makeDragEvent("dragstart");
-    // Simulate that the target is the button itself (closest("button,...") finds it)
-    Object.defineProperty(evt, "target", { value: btn });
-    el._onDragStart(evt);
-    expect((evt.preventDefault as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+    expect(el.shadowRoot.querySelector(".atom-header .drag-handle")).toBeTruthy();
   });
 
-  test("dragstart from non-interactive area at non-root path sets dataTransfer", async () => {
-    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [1] });
-    const evt = makeDragEvent("dragstart");
-    // target is the atom-header itself (not a button)
-    const header = el.shadowRoot.querySelector(".atom-header") as HTMLElement;
-    Object.defineProperty(evt, "target", { value: header });
-    el._onDragStart(evt);
-    expect((evt.preventDefault as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
-    const stored = (evt.dataTransfer as any).data["application/x-ambience-path"];
-    expect(stored).toBe(JSON.stringify([1]));
+  test("the root atom (path=[]) renders no drag handle — there's nowhere to move it", async () => {
+    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [] });
+    expect(el.shadowRoot.querySelector(".drag-handle")).toBeNull();
   });
 
-  // _onDragOver
-
-  test("dragover at root (path=[]) returns early without setting dragOver", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [] });
-    const evt = makeDragEvent("dragover");
-    el._onDragOver(evt);
-    expect(el._dragOver).toBe(false);
-    expect((evt.preventDefault as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
-  });
-
-  test("dragover at non-root sets _dragOver=true and calls preventDefault", async () => {
-    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
-    const evt = makeDragEvent("dragover");
-    el._onDragOver(evt);
-    expect(el._dragOver).toBe(true);
-    expect((evt.preventDefault as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
-  });
-
-  test("dragover sets dropEffect to 'move'", async () => {
-    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
-    const evt = makeDragEvent("dragover");
-    el._onDragOver(evt);
-    expect((evt.dataTransfer as any).dropEffect).toBe("move");
-  });
-
-  // _onDragLeave
-
-  test("dragleave clears _dragOver", async () => {
-    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
-    el._dragOver = true;
-    const evt = makeDragEvent("dragleave");
-    el._onDragLeave(evt);
-    expect(el._dragOver).toBe(false);
-  });
-
-  // --- drag-over CSS class ---
-
-  test("atom card gets drag-over class when _dragOver=true", async () => {
-    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
-    el._dragOver = true;
-    await flush(el);
-    const card = el.shadowRoot.querySelector(".atom-card");
-    expect(card?.classList.contains("drag-over")).toBe(true);
-  });
-
-  test("group card gets drag-over class when _dragOver=true", async () => {
+  test("a non-root group renders a drag handle", async () => {
     el = await mount(
       { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
       { path: [0] },
     );
-    el._dragOver = true;
-    await flush(el);
-    const group = el.shadowRoot.querySelector(".group");
-    expect(group?.classList.contains("drag-over")).toBe(true);
+    expect(el.shadowRoot.querySelector(".group-header .drag-handle")).toBeTruthy();
   });
 
-  // _onDrop
-
-  test("drop at root (path=[]) returns early", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [] });
-    let moved = false;
-    el.addEventListener("node-move", () => {
-      moved = true;
-    });
-    const evt = makeDragEvent("drop", { dataTransferData: JSON.stringify([1]) });
-    el._onDrop(evt);
-    expect(moved).toBe(false);
+  test("the root group renders no drag handle", async () => {
+    el = await mount(
+      { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
+      { path: [] },
+    );
+    expect(el.shadowRoot.querySelector(".drag-handle")).toBeNull();
   });
 
-  test("drop with no dataTransfer data returns early (no event)", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [1] });
-    let moved = false;
-    el.addEventListener("node-move", () => {
-      moved = true;
-    });
-    const evt = makeDragEvent("drop"); // no dataTransferData
-    el._onDrop(evt);
-    expect(moved).toBe(false);
-  });
+  // --- pointerdown on the handle starts a drag ---
 
-  test("drop with invalid JSON returns early", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [1] });
-    let moved = false;
-    el.addEventListener("node-move", () => {
-      moved = true;
-    });
-    const evt = makeDragEvent("drop", { dataTransferData: "not-json" });
-    el._onDrop(evt);
-    expect(moved).toBe(false);
-  });
-
-  test("drop on self (same path) returns early without emitting node-move", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [1] });
-    let moved = false;
-    el.addEventListener("node-move", () => {
-      moved = true;
-    });
-    const evt = makeDragEvent("drop", { dataTransferData: JSON.stringify([1]) });
-    el._onDrop(evt);
-    expect(moved).toBe(false);
-  });
-
-  test("valid drop emits node-move with from and to paths", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [1] });
+  test("pointerdown on the handle emits node-drag-start carrying this node's path and the pointer", async () => {
+    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [1] });
     let captured: any;
-    el.addEventListener("node-move", (e: CustomEvent) => {
+    el.addEventListener("node-drag-start", (e: CustomEvent) => {
       captured = e.detail;
     });
-    const evt = makeDragEvent("drop", { dataTransferData: JSON.stringify([0]) });
-    el._onDrop(evt);
+    const handle = el.shadowRoot.querySelector(".drag-handle") as HTMLElement;
+    const evt = new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, isPrimary: true });
+    handle.dispatchEvent(evt);
     expect(captured).toBeDefined();
-    expect(captured.from).toEqual([0]);
-    expect(captured.to).toEqual([1]);
+    expect(captured.path).toEqual([1]);
+    expect(captured.pointer).toBe(evt);
   });
 
-  test("drop clears _dragOver state", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [1] });
-    el._dragOver = true;
-    const evt = makeDragEvent("drop", { dataTransferData: JSON.stringify([0]) });
-    el._onDrop(evt);
-    expect(el._dragOver).toBe(false);
-  });
-
-  test("drop with non-number-array JSON returns early", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [1] });
-    let moved = false;
-    el.addEventListener("node-move", () => {
-      moved = true;
+  test("a non-primary pointer / secondary button on the handle does NOT start a drag", async () => {
+    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [1] });
+    let fired = false;
+    el.addEventListener("node-drag-start", () => {
+      fired = true;
     });
-    const evt = makeDragEvent("drop", { dataTransferData: JSON.stringify(["a", "b"]) });
-    el._onDrop(evt);
-    expect(moved).toBe(false);
+    const handle = el.shadowRoot.querySelector(".drag-handle") as HTMLElement;
+    handle.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, pointerId: 2, isPrimary: false }),
+    );
+    handle.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, isPrimary: true, button: 2 }),
+    );
+    expect(fired).toBe(false);
+  });
+
+  test("pointerdown on the handle does not also fire node-open (drag must not expand the atom)", async () => {
+    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [1] });
+    let opened = false;
+    el.addEventListener("node-open", () => {
+      opened = true;
+    });
+    const handle = el.shadowRoot.querySelector(".drag-handle") as HTMLElement;
+    handle.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, isPrimary: true }),
+    );
+    handle.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(opened).toBe(false);
+  });
+
+  // --- drag-over highlight is driven by dragOverPath from the root ---
+
+  test("atom card gets the drag-over class when dragOverPath matches this node's path", async () => {
+    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
+    el.dragOverPath = [0];
+    await flush(el);
+    expect(el.shadowRoot.querySelector(".atom-card")?.classList.contains("drag-over")).toBe(true);
+  });
+
+  test("atom card has no drag-over class when dragOverPath differs", async () => {
+    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
+    el.dragOverPath = [1];
+    await flush(el);
+    expect(el.shadowRoot.querySelector(".atom-card")?.classList.contains("drag-over")).toBe(false);
+  });
+
+  test("group card gets the drag-over class when dragOverPath matches this node's path", async () => {
+    el = await mount(
+      { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
+      { path: [0] },
+    );
+    el.dragOverPath = [0];
+    await flush(el);
+    expect(el.shadowRoot.querySelector(".group")?.classList.contains("drag-over")).toBe(true);
+  });
+
+  test("the dragged node dims (atom card gets the dragging class when dragFromPath matches)", async () => {
+    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
+    el.dragFromPath = [0];
+    await flush(el);
+    expect(el.shadowRoot.querySelector(".atom-card")?.classList.contains("dragging")).toBe(true);
+  });
+
+  test("a non-dragged node does not dim", async () => {
+    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
+    el.dragFromPath = [1];
+    await flush(el);
+    expect(el.shadowRoot.querySelector(".atom-card")?.classList.contains("dragging")).toBe(false);
+  });
+
+  test("the dragged group dims (group gets the dragging class when dragFromPath matches)", async () => {
+    el = await mount(
+      { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
+      { path: [0] },
+    );
+    el.dragFromPath = [0];
+    await flush(el);
+    expect(el.shadowRoot.querySelector(".group")?.classList.contains("dragging")).toBe(true);
+  });
+
+  test("child nodes inherit dragFromPath", async () => {
+    el = await mount(
+      {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+      { path: [] },
+    );
+    el.dragFromPath = [0];
+    await flush(el);
+    const children = Array.from(
+      el.shadowRoot.querySelectorAll("ambience-state-expr-node"),
+    ) as any[];
+    expect(children[0].dragFromPath).toEqual([0]);
+    expect(children[1].dragFromPath).toEqual([0]);
+  });
+
+  test("child nodes inherit dragOverPath so deep drop targets can highlight", async () => {
+    el = await mount(
+      {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "a", states: ["on"] },
+          { kind: "is", entity_id: "b", states: ["off"] },
+        ],
+      },
+      { path: [] },
+    );
+    el.dragOverPath = [1];
+    await flush(el);
+    const children = Array.from(
+      el.shadowRoot.querySelectorAll("ambience-state-expr-node"),
+    ) as any[];
+    expect(children[0].dragOverPath).toEqual([1]);
+    expect(children[1].dragOverPath).toEqual([1]);
   });
 });

@@ -1,16 +1,5 @@
-import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
-// jsdom doesn't include DragEvent — polyfill it with a minimal MouseEvent subclass.
-beforeAll(() => {
-  if (typeof DragEvent === "undefined") {
-    // @ts-expect-error -- test-only polyfill
-    globalThis.DragEvent = class DragEvent extends MouseEvent {
-      constructor(type: string, init?: EventInit & { cancelable?: boolean }) {
-        super(type, { bubbles: true, cancelable: true, ...init });
-      }
-    };
-  }
-});
 import "../frontend/src/views/scenes-list";
 import { colorHex } from "../frontend/src/category-colors";
 import type {
@@ -347,43 +336,74 @@ describe("ambience-scenes-list", () => {
     expect(summary.toLowerCase()).toContain("morning");
   });
 
-  test("drag start sets _dragFrom index", async () => {
+  // --- drag-to-reorder (Pointer Events) ---
+  //
+  // jsdom has no layout, so the controller's default hit-test (elementFromPoint)
+  // can't resolve a row. We stub the shadow root's elementFromPoint to return a
+  // chosen row, driving the full host wiring exactly as a browser would.
+
+  function rowsDraggable(el: any) {
+    return el.shadowRoot.querySelectorAll("li[data-drag-index]");
+  }
+
+  function stubHitRow(el: any, index: number | null) {
+    el.shadowRoot.elementFromPoint = (_x: number, _y: number) =>
+      index === null ? null : el.shadowRoot.querySelector(`li[data-drag-index="${index}"]`);
+  }
+
+  function firePointer(type: string, init: { pointerId?: number } = {}) {
+    window.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, ...init }));
+  }
+
+  /** Press the ⠿ grab handle of row `index` with a primary pointer. */
+  function grabHandle(el: any, index: number) {
+    (el.shadowRoot.querySelectorAll("li .handle")[index] as HTMLElement).dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, isPrimary: true, button: 0 }),
+    );
+  }
+
+  test("rows carry a data-drag-index for hit-testing", async () => {
     el = await mount([movieScene, eveningScene]);
-    const items = el.shadowRoot.querySelectorAll("li");
-    items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    const rows = rowsDraggable(el);
+    expect(rows.length).toBe(2);
+    expect(rows[0].getAttribute("data-drag-index")).toBe("0");
+    expect(rows[1].getAttribute("data-drag-index")).toBe("1");
+  });
+
+  test("pressing the ⠿ handle starts a drag from that row's index", async () => {
+    el = await mount([movieScene, eveningScene]);
+    grabHandle(el, 0);
     await el.updateComplete;
-    // _dragFrom should be 0 — verified indirectly by drop emitting reorder
-    // (we can't read private state directly, but we can test the side effect)
     expect(el._drag.from).toBe(0);
   });
 
-  test("drag over a different item allows drop and sets _dragOver", async () => {
-    el = await mount([movieScene, eveningScene]);
-    const items = el.shadowRoot.querySelectorAll("li");
-    items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+  test("pressing the pin button on a pinned row does NOT start a drag", async () => {
+    const pinned: Scene = { ...movieScene, pinned: true, priority: 2048 };
+    el = await mount([pinned]);
+    const pin = el.shadowRoot.querySelector(".pin") as HTMLElement;
+    pin.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, pointerId: 1, isPrimary: true, button: 0 }),
+    );
+    await el.updateComplete;
+    // The pin is a plain button, not a grab handle — no drag armed.
+    expect(el._drag.from).toBeNull();
+  });
 
-    const dragOverEvent = new DragEvent("dragover", { bubbles: true, cancelable: true });
-    items[1].dispatchEvent(dragOverEvent);
+  test("dragging a row onto another marks it as the drop target", async () => {
+    el = await mount([movieScene, eveningScene]);
+    grabHandle(el, 0);
+    stubHitRow(el, 1);
+    firePointer("pointermove");
     await el.updateComplete;
     expect(el._drag.over).toBe(1);
   });
 
-  test("drag over the same item is a no-op", async () => {
-    el = await mount([movieScene, eveningScene]);
-    const items = el.shadowRoot.querySelectorAll("li");
-    items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
-    items[0].dispatchEvent(new DragEvent("dragover", { bubbles: true }));
-    await el.updateComplete;
-    expect(el._drag.over).toBeNull();
-  });
-
-  test("drop emits reorder-scenes and resets drag state", async () => {
+  test("releasing over another row emits reorder-scenes and resets drag state", async () => {
     el = await mount([movieScene, eveningScene]);
     const get = captureEvent(el, "reorder-scenes");
-    const items = el.shadowRoot.querySelectorAll("li");
-    items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
-    items[1].dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true }));
-    items[1].dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    grabHandle(el, 0);
+    stubHitRow(el, 1);
+    firePointer("pointerup");
     await el.updateComplete;
 
     expect(get()).toEqual({ from: 0, to: 1 });
@@ -391,23 +411,23 @@ describe("ambience-scenes-list", () => {
     expect(el._drag.over).toBeNull();
   });
 
-  test("drop on the same index is a no-op", async () => {
+  test("releasing on the same row is a no-op", async () => {
     el = await mount([movieScene, eveningScene]);
     const get = captureEvent(el, "reorder-scenes");
-    const items = el.shadowRoot.querySelectorAll("li");
-    items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
-    // Drop on same item (from=0, to=0)
-    items[0].dispatchEvent(new DragEvent("drop", { bubbles: true }));
+    grabHandle(el, 0);
+    stubHitRow(el, 0);
+    firePointer("pointerup");
     await el.updateComplete;
     expect(get()).toBeUndefined();
   });
 
-  test("dragend resets drag state", async () => {
+  test("pointercancel resets drag state without reordering", async () => {
     el = await mount([movieScene, eveningScene]);
-    const items = el.shadowRoot.querySelectorAll("li");
-    items[0].dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
-    items[0].dispatchEvent(new DragEvent("dragend", { bubbles: true }));
+    const get = captureEvent(el, "reorder-scenes");
+    grabHandle(el, 0);
+    firePointer("pointercancel");
     await el.updateComplete;
+    expect(get()).toBeUndefined();
     expect(el._drag.from).toBeNull();
     expect(el._drag.over).toBeNull();
   });

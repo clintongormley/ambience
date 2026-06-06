@@ -5,6 +5,7 @@ import "./state-expr-node.js";
 import type { HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
 import { localize } from "../i18n.js";
+import { deepElementFromPoint, startPointerDrag } from "../pointer-drag.js";
 
 function _samePath(a: number[] | null, b: number[] | null): boolean {
   if (a === null || b === null) return false;
@@ -52,6 +53,13 @@ export class AmbienceStatePredicateInput extends LitElement {
    *  Mirrors the scene-editor pattern: errors only surface after a switch
    *  attempt, not from the start. Reset when the open atom becomes valid. */
   @state() private _showError = false;
+  /** Path of the node currently being dragged, or null when idle. */
+  @state() private _dragFrom: number[] | null = null;
+  /** Path of the node the pointer is hovering as a drop target during a drag,
+   *  threaded down to the node tree to drive the .drag-over highlight. */
+  @state() private _dragOverPath: number[] | null = null;
+  /** Detaches the active pointer drag's listeners; null when idle. */
+  private _cancelDrag: (() => void) | null = null;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -63,7 +71,13 @@ export class AmbienceStatePredicateInput extends LitElement {
     this.addEventListener("node-set-op", this._onNodeSetOp as EventListener);
     this.addEventListener("node-open", this._onNodeOpen as EventListener);
     this.addEventListener("node-unwrap", this._onNodeUnwrap as EventListener);
-    this.addEventListener("node-move", this._onNodeMove as EventListener);
+    this.addEventListener("node-drag-start", this._onNodeDragStart as EventListener);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    // Drop any in-flight drag so its window listeners don't outlive us.
+    this._endDrag();
   }
 
   private _emit(value: StatePredicate) {
@@ -204,10 +218,79 @@ export class AmbienceStatePredicateInput extends LitElement {
     return { ...node, items: out };
   }
 
-  private _onNodeMove = (e: CustomEvent<{ from: number[]; to: number[] }>) => {
+  // --- pointer-drag coordination ----------------------------------------
+  //
+  // Nodes only announce a drag (node-drag-start) and hand over the pointer;
+  // the root runs the whole Pointer-Events gesture — hit-testing each move to
+  // find the node under the finger, highlighting a valid target, and applying
+  // the move on release. Centralising it here keeps drop-target hit-testing
+  // (which must reach across every node's shadow root) in one place.
+
+  private _onNodeDragStart = (e: CustomEvent<{ path: number[]; pointer: PointerEvent }>) => {
     e.stopPropagation();
-    this._moveAt(e.detail.from, e.detail.to);
+    this._startDrag(e.detail.path, e.detail.pointer);
   };
+
+  private _startDrag(from: number[], pointer: PointerEvent) {
+    this._endDrag(); // defensively clear any prior drag
+    this._dragFrom = from;
+    this._dragOverPath = null;
+    // Drag the grabbed node's card under the pointer for feedback.
+    const follow = (pointer.target as Element | null)?.closest(".atom-card, .group");
+    this._cancelDrag = startPointerDrag(
+      pointer,
+      {
+        onMove: (x, y) => {
+          const to = this._locatePathAt(x, y);
+          const next = this._isDroppable(from, to) ? to : null;
+          // pointermove fires continuously and _locatePathAt returns a fresh
+          // array each time; only reassign (and re-render the tree) when the
+          // highlighted target actually changes.
+          const changed =
+            next === null ? this._dragOverPath !== null : !_samePath(next, this._dragOverPath);
+          if (changed) this._dragOverPath = next;
+        },
+        onEnd: (x, y) => {
+          const to = this._locatePathAt(x, y);
+          if (this._isDroppable(from, to)) this._moveAt(from, to);
+          this._endDrag();
+        },
+        onCancel: () => this._endDrag(),
+      },
+      { follow },
+    );
+  }
+
+  private _endDrag() {
+    this._cancelDrag?.();
+    this._cancelDrag = null;
+    this._dragFrom = null;
+    this._dragOverPath = null;
+  }
+
+  /** A drop target is droppable when it's a real non-root node other than the
+   *  source itself, and not inside the source's own subtree. */
+  private _isDroppable(from: number[], to: number[] | null): to is number[] {
+    return to !== null && to.length > 0 && !_samePath(from, to) && !this._isPrefix(from, to);
+  }
+
+  /** Resolve the path of the node under viewport point (x, y), or null. Lives
+   *  here (not on the node) because it must pierce every node's shadow root.
+   *  Overridable in tests, where there is no layout to hit-test against. */
+  private _locatePathAt(x: number, y: number): number[] | null {
+    let node: Node | null = deepElementFromPoint(x, y);
+    while (node) {
+      if (node instanceof Element && node.localName === "ambience-state-expr-node") {
+        const path = (node as unknown as { path?: number[] }).path;
+        return path ? [...path] : null;
+      }
+      const parent = node.parentNode;
+      if (parent) node = parent;
+      else if (node instanceof ShadowRoot) node = node.host;
+      else node = null;
+    }
+    return null;
+  }
 
   private _walkNode(tree: StateExpr | null, path: number[]): StateExpr | null {
     if (!tree) return null;
@@ -545,6 +628,8 @@ export class AmbienceStatePredicateInput extends LitElement {
         .value=${this.value}
         .path=${[]}
         .openPath=${this._openPath}
+        .dragOverPath=${this._dragOverPath}
+        .dragFromPath=${this._dragFrom}
         .errorPath=${errorMessage ? this._openPath : null}
         .errorMessage=${errorMessage}
       ></ambience-state-expr-node>

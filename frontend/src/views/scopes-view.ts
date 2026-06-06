@@ -353,7 +353,9 @@ export class AmbienceScopesView extends LitElement {
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
         padding: 0.35rem;
       }
-      .category-filter-option {
+      /* Shared row layout for the filter options and the add-category action. */
+      .category-filter-option,
+      .category-filter-add {
         display: flex;
         align-items: center;
         gap: 0.65rem;
@@ -364,18 +366,32 @@ export class AmbienceScopesView extends LitElement {
         border: 0;
         border-radius: 6px;
         background: none;
-        color: var(--primary-text-color, #212121);
         cursor: pointer;
         font: inherit;
         font-size: 1rem;
         text-align: left;
       }
-      .category-filter-option:hover {
+      .category-filter-option:hover,
+      .category-filter-add:hover {
         background: var(--secondary-background-color, #f5f5f5);
+      }
+      .category-filter-option {
+        color: var(--primary-text-color, #212121);
       }
       .category-filter-option[aria-selected="true"] {
         background: var(--secondary-background-color, #eee);
         font-weight: 600;
+      }
+      /* The add-category action uses the accent colour so it reads as an action,
+       not a filter. The footer variant (inside the dropdown) adds a divider
+       separating it from the options above. */
+      .category-filter-add {
+        color: var(--primary-color, #03a9f4);
+      }
+      .category-filter-add--footer {
+        margin-top: 0.35rem;
+        border-top: 1px solid var(--divider-color, #e0e0e0);
+        border-radius: 0 0 6px 6px;
       }
       /* Swatch shell + sizing come from categorySwatchStyles (2rem default); it is
        always present so rows and the trigger keep a consistent height. */
@@ -929,8 +945,34 @@ export class AmbienceScopesView extends LitElement {
   /** The colour-coded global category filter: a trigger showing the current
    *  selection and a dropdown of swatch+icon+name options. Shown only when
    *  more than one category exists. */
+  /** The "add category" action: jumps to the Ambience settings tab where
+   *  categories are managed. `footer` adds a divider so it reads as a footer
+   *  action below the filter options; without it the link stands alone. */
+  private _renderAddCategory(footer: boolean) {
+    return html`
+      <button
+        class="category-filter-add${footer ? " category-filter-add--footer" : ""}"
+        @click=${() => {
+          this._filterOpen = false;
+          this._openSettings("ambience");
+        }}
+      >
+        <ha-icon icon="mdi:plus"></ha-icon>
+        <span class="category-name"
+          >${localize(this.hass, "ui.add_category", "Add category…")}</span
+        >
+      </button>
+    `;
+  }
+
   private _renderFilter() {
-    if (this._categories.length <= 1) return "";
+    // With 0–1 categories there's nothing to filter, so skip the dropdown and
+    // offer just the standalone "add category" link — but only once the initial
+    // load has finished, so it doesn't flash before categories are known.
+    if (this._categories.length <= 1) {
+      if (!this._staticLoaded) return "";
+      return html`<div class="category-filter-row">${this._renderAddCategory(false)}</div>`;
+    }
     const sorted = [...this._categories].sort((a, b) => a.name.localeCompare(b.name));
     const current = this._categories.find((g) => g.id === this._filterCategory) ?? null;
     return html`
@@ -959,26 +1001,29 @@ export class AmbienceScopesView extends LitElement {
                     this._filterOpen = false;
                   }}
                 ></div>
-                <div class="category-filter-menu" role="listbox">
-                  <button
-                    class="category-filter-option"
-                    role="option"
-                    aria-selected=${this._filterCategory === ""}
-                    @click=${() => this._selectFilter("")}
-                  >
-                    ${this._renderFilterEntry(null)}
-                  </button>
-                  ${sorted.map(
-                    (g) =>
-                      html`<button
-                        class="category-filter-option"
-                        role="option"
-                        aria-selected=${this._filterCategory === g.id}
-                        @click=${() => this._selectFilter(g.id)}
-                      >
-                        ${this._renderFilterEntry(g)}
-                      </button>`,
-                  )}
+                <div class="category-filter-menu">
+                  <div class="category-filter-options" role="listbox">
+                    <button
+                      class="category-filter-option"
+                      role="option"
+                      aria-selected=${this._filterCategory === ""}
+                      @click=${() => this._selectFilter("")}
+                    >
+                      ${this._renderFilterEntry(null)}
+                    </button>
+                    ${sorted.map(
+                      (g) =>
+                        html`<button
+                          class="category-filter-option"
+                          role="option"
+                          aria-selected=${this._filterCategory === g.id}
+                          @click=${() => this._selectFilter(g.id)}
+                        >
+                          ${this._renderFilterEntry(g)}
+                        </button>`,
+                    )}
+                  </div>
+                  ${this._renderAddCategory(true)}
                 </div>
               `
               : ""
@@ -1146,7 +1191,7 @@ export class AmbienceScopesView extends LitElement {
     };
   }
 
-  private _openSettings(tab: "actions" | "conditions") {
+  private _openSettings(tab: "ambience" | "actions" | "conditions") {
     this.dispatchEvent(
       new CustomEvent("ambience-open-settings", { detail: { tab }, bubbles: true, composed: true }),
     );

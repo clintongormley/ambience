@@ -50,6 +50,12 @@ export class AmbienceScenesList extends LitElement {
     li.drag-over {
       border-color: var(--primary-color, #03a9f4);
     }
+    li.dragging {
+      opacity: 0.8;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      position: relative;
+      z-index: 1000;
+    }
     li.disabled .body,
     li.disabled .idx {
       opacity: 0.5;
@@ -64,6 +70,13 @@ export class AmbienceScenesList extends LitElement {
       cursor: grab;
       color: var(--secondary-text-color, #888);
       user-select: none;
+      /* The ⠿ glyph (not the whole lead slot) is the grab handle, so the pin
+         button beside it stays tappable. touch-action:none suppresses the
+         browser's touch panning so a drag on a phone reorders, not scrolls. */
+      touch-action: none;
+    }
+    .handle:active {
+      cursor: grabbing;
     }
     .idx {
       font-family: monospace;
@@ -453,12 +466,8 @@ export class AmbienceScenesList extends LitElement {
       : localize(this.hass, "ui.disable_scene", "Disable scene");
     return html`
       <li
-        class="${this._drag.over === i ? "drag-over " : ""}${isDisabled ? "disabled" : ""}"
-        draggable="true"
-        @dragstart=${() => this._drag.start(i)}
-        @dragover=${(e: DragEvent) => this._drag.dragOver(e, i)}
-        @drop=${() => this._drag.drop(i)}
-        @dragend=${() => this._drag.end()}
+        data-drag-index=${i}
+        class="${this._drag.over === i ? "drag-over " : ""}${this._drag.from === i ? "dragging " : ""}${isDisabled ? "disabled" : ""}"
       >
         <span class="lead">
           ${
@@ -477,6 +486,7 @@ export class AmbienceScenesList extends LitElement {
               : html`<span
                 class="handle"
                 title=${localize(this.hass, "ui.drag_to_reorder", "Drag to reorder")}
+                @pointerdown=${(e: PointerEvent) => this._drag.start(i, e)}
                 >⠿</span
               >`
           }

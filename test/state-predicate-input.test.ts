@@ -1141,27 +1141,149 @@ describe("ambience-state-predicate-input", () => {
 
   // --- event handler dispatch paths ----------------------------------------
 
-  test("node-move event dispatched from a child propagates to the host and calls _moveAt", async () => {
-    // Covers _onNodeMove (lines 207-210) via event dispatch.
-    el = await mount({
-      kind: "and",
+  // --- pointer-drag coordination (node-drag-start → hit-test → move) ------
+  //
+  // The root runs the Pointer-Events drag. jsdom has no layout, so the
+  // coordinate→path hit-test (_locatePathAt) is stubbed per test to model what
+  // the pointer is over.
+
+  function twoAtoms() {
+    return {
+      kind: "and" as const,
       items: [
-        { kind: "is", entity_id: "a", states: ["on"] },
-        { kind: "is", entity_id: "b", states: ["off"] },
+        { kind: "is" as const, entity_id: "a", states: ["on"] },
+        { kind: "is" as const, entity_id: "b", states: ["off"] },
       ],
-    });
+    };
+  }
+
+  function startNodeDrag(el: any, from: number[]) {
+    const pointer = new PointerEvent("pointerdown", { bubbles: true, pointerId: 1 });
+    el.dispatchEvent(
+      new CustomEvent("node-drag-start", {
+        detail: { path: from, pointer },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  function firePointer(type: string) {
+    window.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1 }));
+  }
+
+  test("releasing a drag over a droppable target moves the node (node-drag-start → _moveAt)", async () => {
+    el = await mount(twoAtoms());
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => {
       captured = (e as CustomEvent).detail.value;
     });
-    const event = new CustomEvent("node-move", {
-      detail: { from: [0], to: [1] },
-      bubbles: true,
-      composed: true,
-    });
-    el.dispatchEvent(event);
+    el._locatePathAt = () => [1];
+    startNodeDrag(el, [0]);
+    firePointer("pointerup");
     // [0]=a moved to where [1]=b was → [b, a].
     expect(captured.items.map((i: any) => i.entity_id)).toEqual(["b", "a"]);
+  });
+
+  test("pointer movement over a droppable target highlights it via _dragOverPath", async () => {
+    el = await mount(twoAtoms());
+    el._locatePathAt = () => [1];
+    startNodeDrag(el, [0]);
+    firePointer("pointermove");
+    await el.updateComplete;
+    expect(el._dragOverPath).toEqual([1]);
+  });
+
+  test("hovering a non-droppable spot clears the highlight", async () => {
+    el = await mount(twoAtoms());
+    el._locatePathAt = () => [1];
+    startNodeDrag(el, [0]);
+    firePointer("pointermove");
+    await el.updateComplete;
+    expect(el._dragOverPath).toEqual([1]);
+
+    el._locatePathAt = () => null;
+    firePointer("pointermove");
+    await el.updateComplete;
+    expect(el._dragOverPath).toBeNull();
+  });
+
+  test("releasing on the source itself is a no-op", async () => {
+    el = await mount(twoAtoms());
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._locatePathAt = () => [0];
+    startNodeDrag(el, [0]);
+    firePointer("pointerup");
+    expect(fired).toBe(false);
+  });
+
+  test("releasing into the source's own descendant is rejected", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
+        { kind: "is", entity_id: "y", states: ["off"] },
+      ],
+    });
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    // Drag the inner group [0] and try to drop it inside its own child [0,0].
+    el._locatePathAt = () => [0, 0];
+    startNodeDrag(el, [0]);
+    firePointer("pointerup");
+    expect(fired).toBe(false);
+  });
+
+  test("pointercancel aborts the drag without moving and clears drag state", async () => {
+    el = await mount(twoAtoms());
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._locatePathAt = () => [1];
+    startNodeDrag(el, [0]);
+    firePointer("pointercancel");
+    expect(fired).toBe(false);
+    expect(el._dragFrom).toBeNull();
+    expect(el._dragOverPath).toBeNull();
+  });
+
+  test("the drag-over path is passed down to the rendered node tree", async () => {
+    el = await mount(twoAtoms());
+    el._locatePathAt = () => [1];
+    startNodeDrag(el, [0]);
+    firePointer("pointermove");
+    await el.updateComplete;
+    const node: any = el.shadowRoot.querySelector("ambience-state-expr-node");
+    expect(node.dragOverPath).toEqual([1]);
+  });
+
+  test("_locatePathAt returns null when the environment can't hit-test", async () => {
+    el = await mount(twoAtoms());
+    // jsdom has no elementFromPoint, so deepElementFromPoint yields null.
+    expect(el._locatePathAt(5, 5)).toBeNull();
+  });
+
+  test("_locatePathAt resolves the nearest state-expr-node's path under the point", async () => {
+    el = await mount(twoAtoms());
+    const node = document.createElement("ambience-state-expr-node") as any;
+    node.path = [2];
+    const original = Object.getOwnPropertyDescriptor(Document.prototype, "elementFromPoint");
+    Object.defineProperty(Document.prototype, "elementFromPoint", {
+      configurable: true,
+      value: () => node,
+    });
+    try {
+      expect(el._locatePathAt(5, 5)).toEqual([2]);
+    } finally {
+      if (original) Object.defineProperty(Document.prototype, "elementFromPoint", original);
+      else delete (Document.prototype as unknown as Record<string, unknown>).elementFromPoint;
+    }
   });
 
   // --- render: errorMessage when _atomAt returns null ----------------------

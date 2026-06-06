@@ -415,19 +415,17 @@ async def test_refresh_snapshots_passes_referenced_entities(hass) -> None:
     """The engine snapshots each condition with the entities its scenes reference
     (unioned across scopes), so sensor-backed conditions can target instead of
     scanning their whole domain."""
-    rec = RecordingCondition(TriggerSpec(entities=frozenset({"sensor.x"})))
     scopes = [
         ("area", "a", {"scenes": [{"when": {"rec": {"sensors": ["sensor.x"]}}, "actions": []}]}),
         ("area", "b", {"scenes": [{"when": {"rec": {"sensors": ["sensor.y"]}}, "actions": []}]}),
     ]
-    # trigger_deps returns the same fixed spec per predicate, but the engine must
-    # union across both scopes' predicates; emulate distinct entities by reading
-    # the predicate instead.
-    rec = RecordingCondition(TriggerSpec())
 
+    # The engine must union referenced entities across both scopes' predicates, so
+    # derive each predicate's entities from its own `sensors` list.
     def _deps(predicate):
         return TriggerSpec(entities=frozenset(predicate.get("sensors", [])))
 
+    rec = RecordingCondition(TriggerSpec())
     rec.trigger_deps = _deps  # type: ignore[method-assign]
     engine = _engine(hass, scopes, {"rec": rec})
     engine.async_rebuild()

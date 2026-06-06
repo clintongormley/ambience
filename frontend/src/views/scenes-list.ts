@@ -170,6 +170,13 @@ export class AmbienceScenesList extends LitElement {
     }
     .pin {
       padding: 0;
+      /* The pin doubles as the grab handle (tap = unpin, drag = reorder), so it
+         needs the same grab cursor and touch-pan suppression as .handle. */
+      cursor: grab;
+      touch-action: none;
+    }
+    .pin:active {
+      cursor: grabbing;
     }
     .shadow-warning {
       color: var(--error-color, #db4437);
@@ -476,8 +483,13 @@ export class AmbienceScenesList extends LitElement {
                 class="pin"
                 title=${unpinLabel}
                 aria-label=${unpinLabel}
+                @pointerdown=${(e: PointerEvent) => this._drag.start(i, e)}
                 @click=${(e: Event) => {
                   e.stopPropagation();
+                  // The pin doubles as the grab handle: a tap unpins, a drag
+                  // reorders. The browser fires a trailing click after a pointer
+                  // drag too, so skip the unpin when the gesture actually moved.
+                  if (this._drag.moved) return;
                   this._emit("unpin-scene", { index: i });
                 }}
               >

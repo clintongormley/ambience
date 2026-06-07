@@ -103,6 +103,7 @@ export type ScopeSwitch = {
 export type AreaConfig = {
   // Ordered list — array order is authoritative for the engine.
   scenes: Scene[];
+  enabled?: boolean; // permanent per-scope enable (default true when absent)
 };
 
 // `name` is resolved by the backend from HA's area registry, not stored.

@@ -331,6 +331,19 @@ export async function listSwitches(hass: HassConnection): Promise<ScopeSwitch[]>
   return hass.callWS({ type: "ambience/switches/list" });
 }
 
+/** Set a scope's permanent enable/disable flag (non-hierarchical). */
+export async function setScopeEnabled(
+  hass: HassConnection,
+  scope: Scope,
+  enabled: boolean,
+): Promise<{ ok: true }> {
+  return hass.callWS({
+    type: "ambience/set_scope_enabled",
+    ...scopeFields(scope),
+    enabled,
+  });
+}
+
 export async function saveSwitchDefaults(
   hass: HassConnection,
   name: string,

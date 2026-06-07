@@ -186,3 +186,30 @@ async def test_scope_config_unknown_kind_raises(hass: HomeAssistant) -> None:
     await store.async_load()
     with pytest.raises(ValueError, match="unknown scope_kind"):
         store.scope_config("planet", "x")
+
+
+# --- per-scope enabled flag --------------------------------------------------
+
+
+async def test_scope_enabled_defaults_true(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.get_scope_enabled("house", None) is True
+    assert store.get_scope_enabled("area", "living_room") is True
+
+
+async def test_scope_enabled_round_trip(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_set_scope_enabled("area", "living_room", False)
+    fresh = AmbienceStore(hass)
+    await fresh.async_load()
+    assert fresh.get_scope_enabled("area", "living_room") is False
+    assert fresh.get_scope_enabled("house", None) is True
+
+
+async def test_scope_enabled_rejects_unknown_kind(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with pytest.raises(ValueError):
+        store.get_scope_enabled("planet", None)

@@ -315,6 +315,25 @@ class AmbienceStore:
         sw["off_at"] = off_at
         await self._store.async_save(self._data)
 
+    def get_scope_enabled(self, scope_kind: str, scope_id: str | None) -> bool:
+        """Whether a scope is permanently enabled (default ``True``).
+
+        Independent of the switch's temporary on/off (``off_at``): a scope
+        applies scenes only when it is enabled AND its switch is not paused.
+        """
+        if scope_kind not in self._SCOPE_KINDS:
+            raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+        return self.scope_config(scope_kind, scope_id).get("enabled", True) is not False
+
+    async def async_set_scope_enabled(
+        self, scope_kind: str, scope_id: str | None, enabled: bool
+    ) -> None:
+        if scope_kind not in self._SCOPE_KINDS:
+            raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+        container = self._scope_container(scope_kind, scope_id)
+        container["enabled"] = bool(enabled)
+        await self._store.async_save(self._data)
+
     def scope_config(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
         """Read-only per-scope config dict ({} if absent). Does not create."""
         if scope_kind == "house":

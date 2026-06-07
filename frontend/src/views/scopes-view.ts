@@ -24,7 +24,6 @@ import {
   saveFloor,
   saveHouse,
 } from "../api.js";
-import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
 import { sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { localize } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
@@ -115,7 +114,6 @@ function _pinPriority(above: number | undefined, below: number | undefined, all:
 @customElement("ambience-scopes-view")
 export class AmbienceScopesView extends LitElement {
   static override styles = [
-    categorySwatchStyles,
     css`
       :host {
         display: block;
@@ -295,115 +293,6 @@ export class AmbienceScopesView extends LitElement {
         padding: 0.5rem 1rem 1rem 1rem;
         border-top: 1px solid var(--divider-color, #e0e0e0);
       }
-      .category-filter-row {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        margin: 0 0 1.25rem 0;
-      }
-      .category-filter-label {
-        font-size: 0.95rem;
-        font-weight: 500;
-        color: var(--secondary-text-color, #888);
-      }
-      .category-filter {
-        position: relative;
-        min-width: 18rem;
-      }
-      /* Trigger keeps a stable height regardless of the selection (the swatch is
-       always present), so picking a category never resizes the control. */
-      .category-filter-trigger {
-        display: flex;
-        align-items: center;
-        gap: 0.65rem;
-        width: 100%;
-        min-height: 48px;
-        box-sizing: border-box;
-        padding: 0.4rem 0.6rem 0.4rem 0.5rem;
-        border: 1px solid var(--divider-color, #e0e0e0);
-        border-radius: 8px;
-        background: var(--card-background-color, #fff);
-        color: var(--primary-text-color, #212121);
-        cursor: pointer;
-        font: inherit;
-        font-size: 1rem;
-      }
-      .category-filter-trigger:hover {
-        background: var(--secondary-background-color, #f5f5f5);
-      }
-      .category-filter-trigger .category-name {
-        flex: 1;
-        text-align: left;
-      }
-      .category-filter-trigger .caret {
-        color: var(--secondary-text-color, #888);
-        flex: 0 0 auto;
-      }
-      /* Transparent full-screen catcher so any outside click closes the menu. */
-      .category-filter-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 10;
-      }
-      .category-filter-menu {
-        position: absolute;
-        top: calc(100% + 4px);
-        left: 0;
-        right: 0;
-        z-index: 11;
-        max-height: 60vh;
-        overflow-y: auto;
-        background: var(--card-background-color, #fff);
-        border: 1px solid var(--divider-color, #e0e0e0);
-        border-radius: 8px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-        padding: 0.35rem;
-      }
-      /* Shared row layout for the filter options and the add-category action. */
-      .category-filter-option,
-      .category-filter-add {
-        display: flex;
-        align-items: center;
-        gap: 0.65rem;
-        width: 100%;
-        min-height: 44px;
-        box-sizing: border-box;
-        padding: 0.4rem 0.6rem;
-        border: 0;
-        border-radius: 6px;
-        background: none;
-        cursor: pointer;
-        font: inherit;
-        font-size: 1rem;
-        text-align: left;
-      }
-      .category-filter-option:hover,
-      .category-filter-add:hover {
-        background: var(--secondary-background-color, #f5f5f5);
-      }
-      .category-filter-option {
-        color: var(--primary-text-color, #212121);
-      }
-      .category-filter-option[aria-selected="true"] {
-        background: var(--secondary-background-color, #eee);
-        font-weight: 600;
-      }
-      /* The add-category action uses the accent colour so it reads as an action,
-       not a filter. The footer variant (inside the dropdown) adds a divider
-       separating it from the options above. */
-      .category-filter-add {
-        color: var(--primary-color, #03a9f4);
-      }
-      .category-filter-add--footer {
-        margin-top: 0.35rem;
-        border-top: 1px solid var(--divider-color, #e0e0e0);
-        border-radius: 0 0 6px 6px;
-      }
-      /* Swatch shell + sizing come from categorySwatchStyles (2rem default); it is
-       always present so rows and the trigger keep a consistent height. */
-      .category-name {
-        flex: 1;
-      }
     `,
   ];
 
@@ -455,11 +344,9 @@ export class AmbienceScopesView extends LitElement {
   // scope identity is stored; the live scenes are read from `_getConfig` at
   // render time so the modal re-fetches if that scope's config changes.
   @state() private _autoTriggers: { scope: Scope; name: string } | null = null;
-  // Global category filter shared by every scope: "" = All, else a category id.
-  // Sticky for the session (component lifetime).
-  @state() private _filterCategory = "";
-  // Whether the colour-coded filter dropdown menu is open.
-  @state() private _filterOpen = false;
+  // Global category filter, driven by the header's <ambience-category-filter>:
+  // "" = All, else a category id.
+  @property() filterCategory = "";
   private _unsubArea?: () => void;
   private _unsubFloor?: () => void;
 
@@ -964,128 +851,12 @@ export class AmbienceScopesView extends LitElement {
     };
   }
 
-  // --- category filter -----------------------------------------------------
-
-  private _selectFilter(id: string) {
-    this._filterCategory = id;
-    this._filterOpen = false;
-  }
-
-  /** A colour swatch (category colour bg + icon) followed by the category name.
-   *  `null` renders the "All categories" entry with a neutral filter-icon swatch,
-   *  so the trigger and option rows keep a consistent height across selections. */
-  private _renderFilterEntry(category: SceneCategory | null) {
-    if (category === null) {
-      return html`
-        ${categorySwatch(undefined, "mdi:filter-variant")}
-        <span class="category-name"
-          >${localize(this.hass, "ui.all_categories", "All categories")}</span
-        >
-      `;
-    }
-    return html`
-      ${categorySwatch(category.color, category.icon)}
-      <span class="category-name">${category.name}</span>
-    `;
-  }
-
-  /** The colour-coded global category filter: a trigger showing the current
-   *  selection and a dropdown of swatch+icon+name options. Shown only when
-   *  more than one category exists. */
-  /** The "add category" action: jumps to the Ambience settings tab where
-   *  categories are managed. `footer` adds a divider so it reads as a footer
-   *  action below the filter options; without it the link stands alone. */
-  private _renderAddCategory(footer: boolean) {
-    return html`
-      <button
-        class="category-filter-add${footer ? " category-filter-add--footer" : ""}"
-        @click=${() => {
-          this._filterOpen = false;
-          this._openSettings("ambience");
-        }}
-      >
-        <ha-icon icon="mdi:plus"></ha-icon>
-        <span class="category-name"
-          >${localize(this.hass, "ui.add_category", "Add category…")}</span
-        >
-      </button>
-    `;
-  }
-
-  private _renderFilter() {
-    // With 0–1 categories there's nothing to filter, so skip the dropdown and
-    // offer just the standalone "add category" link — but only once the initial
-    // load has finished, so it doesn't flash before categories are known.
-    if (this._categories.length <= 1) {
-      if (!this._staticLoaded) return "";
-      return html`<div class="category-filter-row">${this._renderAddCategory(false)}</div>`;
-    }
-    const sorted = [...this._categories].sort((a, b) => a.name.localeCompare(b.name));
-    const current = this._categories.find((g) => g.id === this._filterCategory) ?? null;
-    return html`
-      <div class="category-filter-row">
-        <span class="category-filter-label"
-          >${localize(this.hass, "ui.filter_by_category", "Filter by category")}</span
-        >
-        <div class="category-filter">
-          <button
-            class="category-filter-trigger"
-            aria-haspopup="listbox"
-            aria-expanded=${this._filterOpen}
-            @click=${() => {
-              this._filterOpen = !this._filterOpen;
-            }}
-          >
-            ${this._renderFilterEntry(current)}
-            <ha-icon class="caret" icon="mdi:menu-down"></ha-icon>
-          </button>
-          ${
-            this._filterOpen
-              ? html`
-                <div
-                  class="category-filter-backdrop"
-                  @click=${() => {
-                    this._filterOpen = false;
-                  }}
-                ></div>
-                <div class="category-filter-menu">
-                  <div class="category-filter-options" role="listbox">
-                    <button
-                      class="category-filter-option"
-                      role="option"
-                      aria-selected=${this._filterCategory === ""}
-                      @click=${() => this._selectFilter("")}
-                    >
-                      ${this._renderFilterEntry(null)}
-                    </button>
-                    ${sorted.map(
-                      (g) =>
-                        html`<button
-                          class="category-filter-option"
-                          role="option"
-                          aria-selected=${this._filterCategory === g.id}
-                          @click=${() => this._selectFilter(g.id)}
-                        >
-                          ${this._renderFilterEntry(g)}
-                        </button>`,
-                    )}
-                  </div>
-                  ${this._renderAddCategory(true)}
-                </div>
-              `
-              : ""
-          }
-        </div>
-      </div>
-    `;
-  }
-
   // --- derived -------------------------------------------------------------
 
   /** The category a newly-added scene should default to: the active filter when a
    *  single category is selected, otherwise the alphabetically-first category. */
   private _defaultCategoryId(): string {
-    if (this._filterCategory !== "") return this._filterCategory;
+    if (this.filterCategory !== "") return this.filterCategory;
     const sorted = [...this._categories].sort((a, b) => a.name.localeCompare(b.name));
     return sorted[0]?.id ?? "";
   }
@@ -1166,8 +937,8 @@ export class AmbienceScopesView extends LitElement {
    *  0 for a genuinely empty scope, and also 0 for a scope whose scenes all sit
    *  in other categories — the signal the header uses to fade itself. */
   private _matchingSceneCount(cfg: ScopeConfig): number {
-    if (this._filterCategory === "") return cfg.scenes.length;
-    return cfg.scenes.filter((scene) => scene.category === this._filterCategory).length;
+    if (this.filterCategory === "") return cfg.scenes.length;
+    return cfg.scenes.filter((scene) => scene.category === this.filterCategory).length;
   }
 
   private _summary(cfg: ScopeConfig): string {
@@ -1375,7 +1146,6 @@ export class AmbienceScopesView extends LitElement {
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
       ${this._renderBanners()}
-      ${this._renderFilter()}
       <ul>
         ${repeat(
           this._orderedScopeRows(),
@@ -1523,7 +1293,7 @@ export class AmbienceScopesView extends LitElement {
                   .availableActions=${this._actions}
                   .schemas=${this._schemas}
                   .categories=${this._categories}
-                  .filterCategory=${this._filterCategory}
+                  .filterCategory=${this.filterCategory}
                   .hass=${this.hass}
                   @add-scene=${(e: CustomEvent<{ category?: string }>) =>
                     this._addScene(scope, e.detail?.category)}

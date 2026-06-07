@@ -43,15 +43,17 @@ export class AmbienceFrontend extends LitElement {
        the header's own width regardless of the surrounding panel/card. */
       container-type: inline-size;
     }
-    /* Header contents are capped to the content width and centred. The filter
-     is the only in-flow child so it centres at the bar midpoint; the logo and
-     cog are absolutely positioned at the edges so they never shift the centre. */
+    /* Header contents are capped to the content width and centred, tracking the
+     same reading-column cap as the body below (the card overrides this var to
+     fill its width). The filter is the only in-flow child so it centres at the
+     bar midpoint; the logo and cog are absolutely positioned at the edges so
+     they never shift the centre. */
     .bar {
       position: relative;
       display: flex;
       justify-content: center;
       align-items: center;
-      max-width: 60rem;
+      max-width: var(--ambience-content-max-width, 60rem);
       margin: 0 auto;
       padding: 0.75rem 1rem;
     }

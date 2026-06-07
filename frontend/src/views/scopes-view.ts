@@ -451,9 +451,10 @@ export class AmbienceScopesView extends LitElement {
     category: string;
     categoryName: string | null;
   } | null = null;
-  // The scope whose read-only Auto-triggers modal is open (null = closed). The
-  // scenes are carried so the modal re-fetches when they change while open.
-  @state() private _autoTriggers: { scope: Scope; name: string; scenes: Scene[] } | null = null;
+  // The scope whose read-only Auto-triggers modal is open (null = closed). Only
+  // scope identity is stored; the live scenes are read from `_getConfig` at
+  // render time so the modal re-fetches if that scope's config changes.
+  @state() private _autoTriggers: { scope: Scope; name: string } | null = null;
   // Global category filter shared by every scope: "" = All, else a category id.
   // Sticky for the session (component lifetime).
   @state() private _filterCategory = "";
@@ -934,9 +935,9 @@ export class AmbienceScopesView extends LitElement {
     this._editing = null;
   }
 
-  private _onScopeMenu(scope: Scope, name: string, cfg: ScopeConfig, id: string) {
+  private _onScopeMenu(scope: Scope, name: string, _cfg: ScopeConfig, id: string) {
     if (id === "run") void this._applyScenes(scope);
-    else if (id === "auto") this._autoTriggers = { scope, name, scenes: cfg.scenes };
+    else if (id === "auto") this._autoTriggers = { scope, name };
   }
 
   private _showTraces(scope: Scope, category: string) {
@@ -1435,7 +1436,9 @@ export class AmbienceScopesView extends LitElement {
         .hass=${this.hass}
         .scope=${this._autoTriggers?.scope ?? { kind: "house" }}
         .scopeName=${this._autoTriggers?.name ?? ""}
-        .scenes=${this._autoTriggers?.scenes ?? []}
+        .scenes=${
+          this._autoTriggers ? (this._getConfig(this._autoTriggers.scope)?.scenes ?? []) : []
+        }
         @close=${() => {
           this._autoTriggers = null;
         }}

@@ -46,7 +46,14 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
     for scene_idx, scene in enumerate(config.get("scenes", [])):
         name = scene.get("name")
         if isinstance(name, str) and name.strip():
-            name_key = (scene.get("category"), name.strip().lower())
+            category = scene.get("category")
+            # `category` is a string id (or absent). Guard against corrupted /
+            # hand-edited storage so a non-hashable value raises a clean
+            # ValueError here instead of an unhashable-key TypeError that would
+            # escape the websocket validation path.
+            if category is not None and not isinstance(category, str):
+                raise ValueError(f"scene {scene_idx}: category must be a string")
+            name_key = (category, name.strip().lower())
             if name_key in seen_names:
                 raise ValueError(
                     f"scene {scene_idx}: a scene named {name.strip()!r} "

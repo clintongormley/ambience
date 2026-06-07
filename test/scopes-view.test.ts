@@ -1579,6 +1579,29 @@ describe("ambience-scopes-view", () => {
     expect(modal.scope).toEqual({ kind: "house" });
   });
 
+  test("the Auto-triggers modal reads the scope's live scenes, not a snapshot", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [{ name: "A", when: {}, actions: [] }] } },
+    });
+    await pickScopeKebab(el, "li.scope-row.area[data-id='living_room']", "auto");
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-auto-triggers-modal");
+    expect(modal.scenes.map((s: Scene) => s.name)).toEqual(["A"]);
+
+    // The scope's config changes while the modal is open — it must reflect the
+    // new scenes (a frozen snapshot taken at open time would still show ["A"]).
+    const next = new Map(el._areaConfigs);
+    next.set("living_room", {
+      scenes: [
+        { name: "A", when: {}, actions: [] },
+        { name: "B", when: {}, actions: [] },
+      ],
+    });
+    el._areaConfigs = next;
+    await el.updateComplete;
+    expect(modal.scenes.map((s: Scene) => s.name)).toEqual(["A", "B"]);
+  });
+
   test("run-scene-actions event from a scene list calls api.runSceneActions", async () => {
     el = await mount({
       areaConfigs: {

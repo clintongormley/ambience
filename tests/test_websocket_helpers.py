@@ -293,6 +293,17 @@ class TestValidateScopeConfig:
         }
         validate_scope_config(hass, config)  # no error
 
+    def test_non_string_category_raises_value_error_not_typeerror(self) -> None:
+        # A corrupted/hand-edited category that isn't a string must surface a
+        # clean ValueError (caught by the websocket handler), not an unhashable
+        # TypeError that escapes the validation path.
+        hass = _make_hass()
+        config = {
+            "scenes": [{"name": "Movie", "category": ["a"], "when": {}, "actions": []}],
+        }
+        with pytest.raises(ValueError, match="category"):
+            validate_scope_config(hass, config)
+
 
 # ---------------------------------------------------------------------------
 # missing_period_refs

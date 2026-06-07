@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE, dur_seconds, validate_for
+from ._common import UNAVAILABLE, dur_seconds, fmt_duration, validate_for
 
 _HOME = "home"
 _QUANTS = ("any", "everyone", "nobody")
@@ -127,17 +127,9 @@ class PeopleCondition:
             at = self._loc_match(state, snapshot.in_zones.get(pid), where, snapshot)
             if at is None:  # unobservable (unavailable / unknown zone)
                 return False
-            if negate:  # "not at <where>" -> invert the observable location test
-                at = not at
-            if at is not want_at:
-                return False
-            # NOTE: the `for` clock uses `last_changed`, which advances on STATE
-            # changes only. Because zones can overlap, entering/leaving an
-            # overlapping zone can change `in_zones` without changing `state`
-            # (the resolved zone stays the same), so a zone-membership `for` is
-            # approximate in that edge case. Same class of caveat as the
-            # last_changed-vs-last_updated note above; we do not track history.
-            return not (seconds > 0 and (snapshot.now - changed).total_seconds() < seconds)
+            return self._holds_at(
+                at, changed, snapshot.now, want_at=want_at, negate=negate, seconds=seconds
+            )
 
         if quant == "everyone":
             return bool(person_ids) and all(holds(p, True) for p in person_ids)
@@ -205,7 +197,89 @@ class PeopleCondition:
             return "zone.home" in in_zones
         return state == _HOME
 
-    def describe(self, snapshot: PeopleSnapshot) -> str | None:
+    @staticmethod
+    def _holds_at(
+        at: bool,
+        changed: datetime,
+        now: datetime,
+        *,
+        want_at: bool,
+        negate: bool,
+        seconds: float,
+    ) -> bool:
+        """Apply negate/want_at/`for` to an observable location test `at`.
+
+        NOTE: the `for` clock uses `last_changed`, which advances on STATE
+        changes only. Because zones can overlap, entering/leaving an overlapping
+        zone can change `in_zones` without changing `state` (the resolved zone
+        stays the same), so a zone-membership `for` is approximate in that edge
+        case. We do not track history.
+        """
+        if negate:  # "not at <where>" -> invert the observable location test
+            at = not at
+        if at is not want_at:
+            return False
+        return not (seconds > 0 and (now - changed).total_seconds() < seconds)
+
+    def describe(self, snapshot: PeopleSnapshot, predicate: Any = None) -> str | None:
+        # No predicate: whole-snapshot summary (used by `snapshots_described`).
+        if predicate is None:
+            return self._describe_snapshot(snapshot)
+        if not isinstance(predicate, dict):
+            return None
+        who = predicate.get("who") or []
+        quant = predicate.get("quant") or "any"
+        where = predicate.get("where") or _HOME
+        negate = bool(predicate.get("negate"))
+        seconds = dur_seconds(predicate.get("for"))
+        # Empty `who` means "all persons" (a real constraint, unlike occupancy's
+        # empty `sensors` wildcard), so enumerate the snapshot's persons.
+        person_ids = list(who) if who else list(snapshot.persons)
+        if not person_ids:
+            return "no people tracked"
+        want_at = quant != "nobody"
+        parts: list[str] = []
+        for pid in person_ids:
+            name = snapshot.names.get(pid, pid)
+            cur = snapshot.persons.get(pid)
+            at = (
+                self._loc_match(cur[0], snapshot.in_zones.get(pid), where, snapshot)
+                if cur is not None
+                else None
+            )
+            if at is None:  # absent / unavailable / unknown zone
+                parts.append(f"{name}: unavailable ✗")
+                continue
+            held = self._holds_at(
+                at, cur[1], snapshot.now, want_at=want_at, negate=negate, seconds=seconds
+            )
+            loc = self._loc_word(at, where, snapshot)
+            # With a `for` gate, show how long they've held this location so a
+            # recently-arrived person's ✗ is self-explanatory.
+            elapsed = f" {fmt_duration((snapshot.now - cur[1]).total_seconds())}" if seconds else ""
+            parts.append(f"{name}: {loc}{elapsed} {'✓' if held else '✗'}")
+        prefix = f"want {self._quant_word(quant)} {self._where_word(where, negate, snapshot)}"
+        if seconds:
+            prefix += f" for ≥{fmt_duration(seconds)}"
+        return f"{prefix}: {', '.join(parts)}"
+
+    @staticmethod
+    def _quant_word(quant: str) -> str:
+        return {"any": "anyone", "everyone": "everyone", "nobody": "nobody"}.get(quant, "anyone")
+
+    @staticmethod
+    def _where_word(where: str, negate: bool, snapshot: PeopleSnapshot) -> str:
+        base = "home" if where == _HOME else f"in {snapshot.zone_labels.get(where, where)}"
+        return f"not {base}" if negate else base
+
+    @staticmethod
+    def _loc_word(at: bool, where: str, snapshot: PeopleSnapshot) -> str:
+        if where == _HOME:
+            return "home" if at else "away"
+        label = snapshot.zone_labels.get(where, where)
+        return f"in {label}" if at else f"not in {label}"
+
+    def _describe_snapshot(self, snapshot: PeopleSnapshot) -> str | None:
         if not snapshot.persons:
             return "no people tracked"
         total = len(snapshot.persons)

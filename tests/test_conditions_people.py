@@ -399,6 +399,80 @@ def test_describe_none_home() -> None:
 
 def test_describe_empty() -> None:
     assert PeopleCondition().describe(_snap()) == "no people tracked"
+    assert PeopleCondition().describe(_snap(), None) == "no people tracked"
+
+
+def test_describe_predicate_lists_each_person_any_home() -> None:
+    snap = _snap(
+        {"person.a": _p("home"), "person.b": _p("not_home")},
+        names={"person.a": "Alice", "person.b": "Bob"},
+    )
+    pred = {"who": ["person.a", "person.b"]}
+    assert PeopleCondition().describe(snap, pred) == "want anyone home: Alice: home ✓, Bob: away ✗"
+
+
+def test_describe_predicate_everyone() -> None:
+    snap = _snap(
+        {"person.a": _p("home"), "person.b": _p("not_home")},
+        names={"person.a": "Alice", "person.b": "Bob"},
+    )
+    pred = {"who": ["person.a", "person.b"], "quant": "everyone"}
+    assert (
+        PeopleCondition().describe(snap, pred) == "want everyone home: Alice: home ✓, Bob: away ✗"
+    )
+
+
+def test_describe_predicate_nobody_marks_away_as_match() -> None:
+    snap = _snap(
+        {"person.a": _p("not_home"), "person.b": _p("not_home")},
+        names={"person.a": "Alice", "person.b": "Bob"},
+    )
+    pred = {"who": ["person.a", "person.b"], "quant": "nobody"}
+    assert PeopleCondition().describe(snap, pred) == "want nobody home: Alice: away ✓, Bob: away ✓"
+
+
+def test_describe_predicate_negate_not_home() -> None:
+    snap = _snap({"person.a": _p("home")}, names={"person.a": "Alice"})
+    pred = {"who": ["person.a"], "negate": True}
+    assert PeopleCondition().describe(snap, pred) == "want anyone not home: Alice: home ✗"
+
+
+def test_describe_predicate_zone_where() -> None:
+    snap = _snap(
+        {"person.a": _p("Work")},
+        names={"person.a": "Alice"},
+        zone_labels={"zone.work": "Work"},
+        in_zones={"person.a": ["zone.work"]},
+    )
+    pred = {"who": ["person.a"], "where": "zone.work"}
+    assert PeopleCondition().describe(snap, pred) == "want anyone in Work: Alice: in Work ✓"
+
+
+def test_describe_predicate_missing_person_is_unavailable() -> None:
+    pred = {"who": ["person.ghost"]}
+    assert (
+        PeopleCondition().describe(_snap(), pred) == "want anyone home: person.ghost: unavailable ✗"
+    )
+
+
+def test_describe_predicate_empty_who_lists_all_persons() -> None:
+    snap = _snap({"person.a": _p("home")}, names={"person.a": "Alice"})
+    assert PeopleCondition().describe(snap, {"who": []}) == "want anyone home: Alice: home ✓"
+
+
+def test_describe_predicate_for_shows_elapsed_and_requirement() -> None:
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    home_25m = ("home", datetime(2026, 5, 25, 11, 35, tzinfo=UTC))  # meets ≥20m
+    home_5m = ("home", datetime(2026, 5, 25, 11, 55, tzinfo=UTC))  # too short
+    snap = _snap(
+        {"person.a": home_25m, "person.b": home_5m},
+        now=now,
+        names={"person.a": "Alice", "person.b": "Bob"},
+    )
+    pred = {"who": ["person.a", "person.b"], "quant": "everyone", "for": {"m": 20}}
+    assert PeopleCondition().describe(snap, pred) == (
+        "want everyone home for ≥20m: Alice: home 25m ✓, Bob: home 5m ✗"
+    )
 
 
 # contains(outer, inner) -> True iff every state matching inner also matches outer

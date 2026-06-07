@@ -177,6 +177,44 @@ def test_describe_no_sensors() -> None:
     assert _cond().describe(_snap()) == "no lux sensors"
 
 
+def test_describe_predicate_scopes_to_referenced_sensor() -> None:
+    # The shared snapshot holds several sensors; a scene referencing one must
+    # get a verdict for that one, with the target band stated so a miss reads.
+    snap = _snap(
+        {"sensor.a": 5.0, "sensor.b": 320.0, "sensor.c": 8.0},
+        names={"sensor.a": "Lounge", "sensor.b": "Bed", "sensor.c": "Hall"},
+    )
+    pred = {"sensors": ["sensor.b"], "min": 0, "max": 10}
+    assert _cond().describe(snap, pred) == "want 0-10 lx; Bed: 320 lx ✗"
+    pred_ok = {"sensors": ["sensor.a"], "min": 0, "max": 10}
+    assert _cond().describe(snap, pred_ok) == "want 0-10 lx; Lounge: 5 lx ✓"
+
+
+def test_describe_predicate_quant_all_lists_each_in_order() -> None:
+    snap = _snap(
+        {"sensor.a": 150.0, "sensor.b": 50.0},
+        names={"sensor.a": "Lounge", "sensor.b": "Hall"},
+    )
+    pred = {"sensors": ["sensor.a", "sensor.b"], "min": 100, "quant": "all"}
+    assert _cond().describe(snap, pred) == "want ≥100 lx; all of: Lounge: 150 lx ✓, Hall: 50 lx ✗"
+
+
+def test_describe_predicate_max_only_band() -> None:
+    snap = _snap({"sensor.a": 320.0}, names={"sensor.a": "Lounge"})
+    pred = {"sensors": ["sensor.a"], "max": 500}
+    assert _cond().describe(snap, pred) == "want <500 lx; Lounge: 320 lx ✓"
+
+
+def test_describe_predicate_missing_sensor_is_unavailable() -> None:
+    pred = {"sensors": ["sensor.gone"], "min": 0, "max": 10}
+    assert _cond().describe(_snap(), pred) == "want 0-10 lx; sensor.gone: unavailable ✗"
+
+
+def test_describe_predicate_empty_sensors_is_wildcard() -> None:
+    snap = _snap({"sensor.a": 5.0}, names={"sensor.a": "Lounge"})
+    assert _cond().describe(snap, {"sensors": []}) == "any sensor (no constraint)"
+
+
 def test_validate_accepts_valid_and_none() -> None:
     m = _cond()
     m.validate_predicate(None)

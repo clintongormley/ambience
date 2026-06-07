@@ -58,7 +58,7 @@ class FixedCondition:
             return True
         return predicate == snapshot
 
-    def describe(self, snapshot):
+    def describe(self, snapshot, predicate=None):
         return snapshot
 
     def validate_predicate(self, predicate):
@@ -74,7 +74,7 @@ class FailingCondition:
     def matches(self, predicate, snapshot):
         return False
 
-    def describe(self, snapshot):
+    def describe(self, snapshot, predicate=None):
         return None
 
     def validate_predicate(self, predicate):
@@ -463,7 +463,7 @@ async def test_cancellation_treated_as_failure_isolation(
         def matches(self, predicate, snapshot):
             return False
 
-        def describe(self, snapshot):
+        def describe(self, snapshot, predicate=None):
             return None
 
         def validate_predicate(self, predicate):
@@ -592,7 +592,7 @@ async def test_snapshot_all_passes_referenced_entities_per_condition(
         def matches(self, predicate, snapshot):
             return predicate is None
 
-        def describe(self, snapshot):
+        def describe(self, snapshot, predicate=None):
             return None
 
         def validate_predicate(self, predicate):
@@ -696,7 +696,7 @@ async def test_resolve_with_snapshots_does_not_call_snapshot(hass: HomeAssistant
         def matches(self, predicate, snapshot):
             return predicate is None or predicate == snapshot
 
-        def describe(self, snapshot):
+        def describe(self, snapshot, predicate=None):
             return snapshot
 
         def validate_predicate(self, predicate):
@@ -721,7 +721,7 @@ async def test_resolve_with_snapshots_no_match(hass: HomeAssistant) -> None:
         def matches(self, predicate, snapshot):
             return predicate is None or predicate == snapshot
 
-        def describe(self, snapshot):
+        def describe(self, snapshot, predicate=None):
             return snapshot
 
         def validate_predicate(self, predicate):
@@ -1295,7 +1295,7 @@ async def test_apply_scene_category_exception_logged_not_raised(
         def matches(self, predicate, snapshot):
             raise RuntimeError("boom in matches")
 
-        def describe(self, snapshot):
+        def describe(self, snapshot, predicate=None):
             return None
 
         def validate_predicate(self, predicate):

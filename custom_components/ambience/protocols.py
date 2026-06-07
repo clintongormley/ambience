@@ -53,8 +53,15 @@ class Condition(Protocol):
         """Pure: return True iff this snapshot satisfies the predicate."""
         ...
 
-    def describe(self, snapshot: Any) -> str | None:
-        """Human-readable current value, for diagnostics."""
+    def describe(self, snapshot: Any, predicate: Any = None) -> str | None:
+        """Human-readable current value, for diagnostics.
+
+        `predicate=None` summarises the whole snapshot (used by
+        `snapshots_described`). When a predicate is supplied, entity-quantifier
+        conditions (occupancy/people/lux) scope the detail to the entities THAT
+        predicate references and mark each one match/miss; conditions describing
+        a single global fact (time/sun/weather/...) ignore it.
+        """
         ...
 
     def validate_predicate(self, predicate: Any) -> None:

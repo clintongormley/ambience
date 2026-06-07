@@ -114,7 +114,7 @@ class SunCondition:
                 return float(lo)
         return float("-inf")
 
-    def describe(self, snapshot: SunSnapshot) -> str | None:
+    def describe(self, snapshot: SunSnapshot, predicate: Any = None) -> str | None:
         if snapshot.elevation is None and snapshot.azimuth is None:
             return None
         parts: list[str] = []

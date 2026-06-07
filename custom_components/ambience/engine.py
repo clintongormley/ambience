@@ -100,7 +100,9 @@ def evaluate_explained(
                 ok = False
                 break
             passed = bool(condition.matches(predicate, snap))
-            detail = condition.describe(snap) if describe else None
+            # Pass the predicate so the trace detail is scoped to the sensors/
+            # persons THIS scene references, not the whole shared snapshot.
+            detail = condition.describe(snap, predicate) if describe else None
             predicates.append(PredicateResult(key, passed, detail))
             if not passed:
                 ok = False

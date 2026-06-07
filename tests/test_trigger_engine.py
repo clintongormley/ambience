@@ -321,7 +321,7 @@ class CacheCondition:
     def matches(self, predicate: Any, snapshot: Any) -> bool:
         return predicate is None or predicate == snapshot
 
-    def describe(self, snapshot: Any) -> str:
+    def describe(self, snapshot: Any, predicate=None) -> str:
         return str(snapshot)
 
 
@@ -416,7 +416,7 @@ class RecordingCondition:
     def matches(self, predicate: Any, snapshot: Any) -> bool:
         return predicate is None or predicate == snapshot
 
-    def describe(self, snapshot: Any) -> str | None:
+    def describe(self, snapshot: Any, predicate=None) -> str | None:
         return None
 
 
@@ -459,7 +459,7 @@ class SpyCondition:
     def matches(self, predicate: Any, snapshot: Any) -> bool:
         return False
 
-    def describe(self, snapshot: Any) -> str | None:
+    def describe(self, snapshot: Any, predicate=None) -> str | None:
         return None
 
 
@@ -505,7 +505,7 @@ class StateReadCondition:
     def matches(self, predicate: Any, snapshot: Any) -> bool:
         return predicate == snapshot
 
-    def describe(self, snapshot: Any) -> str | None:
+    def describe(self, snapshot: Any, predicate=None) -> str | None:
         return snapshot
 
 
@@ -570,7 +570,7 @@ async def test_has_time_tick_fires(hass) -> None:
             calls.append(1)
             return True
 
-        def describe(self, snapshot):
+        def describe(self, snapshot, predicate=None):
             return None
 
     scopes = [("area", "a", {"scenes": [{"when": {"tmpl": "x"}, "actions": []}]})]
@@ -608,7 +608,7 @@ async def test_sun_event_scheduled_when_sun_available(hass) -> None:
         def matches(self, predicate, snapshot):
             return True
 
-        def describe(self, snapshot):
+        def describe(self, snapshot, predicate=None):
             return None
 
     scopes = [("area", "a", {"scenes": [{"when": {"sun": "x"}, "actions": []}]})]
@@ -643,7 +643,7 @@ async def test_for_recheck_scheduled_on_state_change(hass) -> None:
         def matches(self, predicate, snapshot):
             return snapshot == "on"
 
-        def describe(self, snapshot):
+        def describe(self, snapshot, predicate=None):
             return snapshot
 
     scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]

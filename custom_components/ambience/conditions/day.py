@@ -219,7 +219,7 @@ class DayCondition:
         # wraparound (e.g. Dec 20 -> Jan 5)
         return today_md >= from_md or today_md <= to_md
 
-    def describe(self, snapshot: DaySnapshot) -> str | None:
+    def describe(self, snapshot: DaySnapshot, predicate: Any = None) -> str | None:
         return None
 
     def validate_predicate(self, predicate: Any) -> None:

@@ -393,13 +393,17 @@ async def async_run_scene_actions(
     scope_id: str | None,
     scene_index: int,
 ) -> dict[str, Any]:
-    """Run one scene's actions unconditionally.
+    """Run one scene's actions, respecting only the permanent disable flag.
 
-    Does NOT evaluate the scene's `when`, does NOT gate on the scope switch, and
-    does NOT touch last_applied (it is an out-of-band manual override, not a
-    resolution). Returns {ran, scene_name} for UI feedback. An out-of-range
-    `scene_index` raises ServiceValidationError.
+    Does NOT evaluate the scene's `when`, does NOT gate on the temporary scope
+    switch, and does NOT touch last_applied (it is an out-of-band manual
+    override, not a resolution). It DOES refuse to fire when the scope is
+    permanently disabled (`enabled` is False), raising ServiceValidationError.
+    Returns {ran, scene_name} for UI feedback. An out-of-range `scene_index`
+    raises ServiceValidationError.
     """
+    if not _scope_enabled(hass, scope_kind, scope_id):
+        raise ServiceValidationError(f"scope {scope_kind}/{scope_id} is disabled")
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = _scope_config(store, scope_kind, scope_id)
     scenes = cfg.get("scenes", [])

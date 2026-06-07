@@ -23,6 +23,7 @@ import {
   saveArea,
   saveFloor,
   saveHouse,
+  setScopeEnabled,
 } from "../api.js";
 import { sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { localize } from "../i18n.js";
@@ -77,7 +78,12 @@ type ScopeRow = {
 };
 
 function _normalize(cfg: ScopeConfig): ScopeConfig {
-  return { scenes: cfg.scenes ?? [] };
+  // Preserve the permanent per-scope `enabled` flag (absent ⇒ enabled) so the
+  // header toggle reflects the persisted value; only drop it when it's the
+  // default (true/absent) to keep configs minimal.
+  return cfg.enabled === false
+    ? { scenes: cfg.scenes ?? [], enabled: false }
+    : { scenes: cfg.scenes ?? [] };
 }
 
 // Must stay in sync with GAP in custom_components/ambience/sorting.py — the
@@ -1251,7 +1257,7 @@ export class AmbienceScopesView extends LitElement {
           <ha-icon class="scope-icon" icon=${scopeIcon(scope, this.hass as any)}></ha-icon>
           <span class="scope-name">${name}</span>
           <span class="scope-summary">${this._summary(cfg)}</span>
-          ${this._renderScopeSwitch(scope)}
+          ${this._renderScopeSwitch(scope, cfg)}
           <ambience-kebab-menu
             data-test="scope-kebab"
             .hass=${this.hass}
@@ -1317,27 +1323,24 @@ export class AmbienceScopesView extends LitElement {
     `;
   }
 
-  /** Live on/off toggle for the scope's Ambience switch, shown in the header.
-   *  Renders nothing until the backend has resolved the switch entity_id.
+  /** Permanent enable/disable toggle for the scope (non-hierarchical).
+   *  Reads/writes the scope config `enabled` flag (default true).
    *  Uses HA's <ha-switch> when registered, else a themed checkbox fallback
    *  (which also keeps the toggle testable under jsdom). */
-  private _renderScopeSwitch(scope: Scope) {
-    const entityId = this._switchEntityIds.get(scopeKey(scope));
-    if (!entityId) return "";
-    const on = this.hass.states?.[entityId]?.state === "on";
+  private _renderScopeSwitch(scope: Scope, cfg: ScopeConfig) {
+    const enabled = cfg.enabled !== false;
     // Don't let toggling expand/collapse the row.
     const stop = (e: Event) => e.stopPropagation();
-    const onChange = (e: Event) => {
+    const onChange = async (e: Event) => {
       e.stopPropagation();
-      void this.hass.callService?.("switch", on ? "turn_off" : "turn_on", {
-        entity_id: entityId,
-      });
+      await setScopeEnabled(this.hass, scope, !enabled);
+      await this._reloadScope(scope);
     };
     if (customElements.get("ha-switch")) {
       return html`<ha-switch
         class="scope-switch"
         data-test="scope-switch"
-        .checked=${on}
+        .checked=${enabled}
         @click=${stop}
         @change=${onChange}
       ></ha-switch>`;
@@ -1346,9 +1349,24 @@ export class AmbienceScopesView extends LitElement {
       class="scope-switch"
       data-test="scope-switch"
       type="checkbox"
-      .checked=${on}
+      .checked=${enabled}
       @click=${stop}
       @change=${onChange}
     />`;
+  }
+
+  /** Re-fetch just this scope's config and update the relevant store, so the
+   *  header toggle reflects the persisted `enabled` value after a write. */
+  private async _reloadScope(scope: Scope) {
+    try {
+      let cfg: ScopeConfig;
+      if (scope.kind === "house") cfg = _normalize(await getHouse(this.hass));
+      else if (scope.kind === "area") cfg = _normalize(await getArea(this.hass, scope.id));
+      else cfg = _normalize(await getFloor(this.hass, scope.id));
+      if (!this.isConnected) return;
+      this._setConfig(scope, cfg);
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
+    }
   }
 }

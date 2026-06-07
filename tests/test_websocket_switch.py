@@ -119,3 +119,45 @@ async def test_dry_run_includes_switch_state_for_house(hass, installed, hass_ws_
     resp = await _ws_send(hass_ws_client, type="ambience/dry_run", house=True)
     assert resp["success"]
     assert resp["result"]["switch_state"] in ("on", "off", "unknown")
+
+
+# --- set_scope_enabled ------------------------------------------------------
+
+
+async def test_set_scope_enabled_persists_and_disables_entity(hass, installed, hass_ws_client):
+    from homeassistant.helpers import entity_registry as er
+
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=False
+    )
+    assert resp["success"]
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    assert store.get_scope_enabled("house", None) is False
+
+    reg = er.async_get(hass)
+    entity_id = reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house")
+    assert reg.async_get(entity_id).disabled is True
+
+
+async def test_set_scope_enabled_reenables_entity(hass, installed, hass_ws_client):
+    from homeassistant.helpers import entity_registry as er
+
+    for enabled in (False, True):
+        resp = await _ws_send(
+            hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=enabled
+        )
+        assert resp["success"]
+        await hass.async_block_till_done()
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    assert store.get_scope_enabled("house", None) is True
+
+    reg = er.async_get(hass)
+    entity_id = reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house")
+    assert reg.async_get(entity_id).disabled is False
+
+
+async def test_set_scope_enabled_requires_one_scope(hass, installed, hass_ws_client):
+    resp = await _ws_send(hass_ws_client, type="ambience/set_scope_enabled", enabled=False)
+    assert not resp["success"]

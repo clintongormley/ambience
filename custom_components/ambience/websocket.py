@@ -10,6 +10,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
@@ -38,6 +39,7 @@ from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import condition_priority
 from .state_options import known_attribute_values_for, known_states_for
 from .store import CategoryInUseError, LastCategoryError
+from .switch import switch_unique_id
 from .trace import buffered_unit_to_dict
 from .websocket_helpers import (
     canonicalise,
@@ -90,6 +92,7 @@ _WS_COMMANDS = (
     "ambience/switch_defaults/list",
     "ambience/switch_defaults/save",
     "ambience/switches/list",
+    "ambience/set_scope_enabled",
     "ambience/categories/list",
     "ambience/categories/save",
     "ambience/categories/delete",
@@ -134,6 +137,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_switch_defaults_list)
     websocket_api.async_register_command(hass, _ws_switch_defaults_save)
     websocket_api.async_register_command(hass, _ws_switches_list)
+    websocket_api.async_register_command(hass, _ws_set_scope_enabled)
     websocket_api.async_register_command(hass, _ws_categories_list)
     websocket_api.async_register_command(hass, _ws_categories_save)
     websocket_api.async_register_command(hass, _ws_auto_triggers_list)
@@ -949,6 +953,49 @@ async def _ws_switches_list(
         for (kind, scope_id), sw in switches.items()
     ]
     connection.send_result(msg["id"], result)
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/set_scope_enabled",
+        vol.Optional("area_id"): str,
+        vol.Optional("floor_id"): str,
+        vol.Optional("house"): _house_must_be_true,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def _ws_set_scope_enabled(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    try:
+        scope_kind, scope_id = _parse_scope(msg, "set_scope_enabled")
+    except ServiceValidationError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    enabled = msg["enabled"]
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_set_scope_enabled(scope_kind, scope_id, enabled)
+
+    # Disabled scopes never apply scenes, so hide their switch entity from HA's
+    # default views by registry-disabling it (re-enabling restores it).
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "switch", DOMAIN, switch_unique_id(scope_kind, scope_id)
+    )
+    if entity_id is not None:
+        registry.async_update_entity(
+            entity_id,
+            disabled_by=None if enabled else er.RegistryEntryDisabler.INTEGRATION,
+        )
+    # Re-enabling resyncs the scope (mirrors switch turn-on's force resync).
+    if enabled:
+        await async_apply_scene(hass, scope_kind, scope_id)
+
+    connection.send_result(msg["id"], {"ok": True})
 
 
 @websocket_api.require_admin

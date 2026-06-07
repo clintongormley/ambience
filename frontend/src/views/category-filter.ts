@@ -8,7 +8,7 @@
  * event ({ category }), and routes "Add category…" to the settings modal via
  * the existing `ambience-open-settings` event ({ tab: "ambience" }).
  */
-import { css, html, LitElement, type TemplateResult } from "lit";
+import { css, html, LitElement, type PropertyValues, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
@@ -121,6 +121,9 @@ export class AmbienceCategoryFilter extends LitElement {
   @property({ attribute: false }) hass!: HassConnection;
 
   @state() private _categories: SceneCategory[] = [];
+  // _categories sorted by name, recomputed only when _categories changes (not on
+  // every render — render runs on every hass update).
+  private _sortedCategories: SceneCategory[] = [];
   // Current selection, "" = All; session-sticky for the component's lifetime.
   @state() private _filterCategory = "";
   @state() private _open = false;
@@ -128,11 +131,14 @@ export class AmbienceCategoryFilter extends LitElement {
   // flash before categories are known.
   @state() private _loaded = false;
 
+  private async _fetchCategories() {
+    const categories = await listCategories(this.hass);
+    if (this.isConnected) this._categories = categories;
+  }
+
   private _onCategoriesChanged = async () => {
     try {
-      const categories = await listCategories(this.hass);
-      if (!this.isConnected) return;
-      this._categories = categories;
+      await this._fetchCategories();
     } catch {
       // Silent — a transient refetch failure after a save isn't worth
       // surfacing; the next reload re-fetches.
@@ -152,8 +158,7 @@ export class AmbienceCategoryFilter extends LitElement {
     window.addEventListener("ambience-categories-changed", this._onCategoriesChanged);
     window.addEventListener("click", this._onDocClick);
     try {
-      const categories = await listCategories(this.hass);
-      if (this.isConnected) this._categories = categories;
+      await this._fetchCategories();
     } catch {
       // Leave the list empty; a later change event or reload will populate it.
     } finally {
@@ -168,6 +173,12 @@ export class AmbienceCategoryFilter extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener("ambience-categories-changed", this._onCategoriesChanged);
     window.removeEventListener("click", this._onDocClick);
+  }
+
+  override willUpdate(changed: PropertyValues) {
+    if (changed.has("_categories")) {
+      this._sortedCategories = [...this._categories].sort((a, b) => a.name.localeCompare(b.name));
+    }
   }
 
   private _select(id: string) {
@@ -235,7 +246,7 @@ export class AmbienceCategoryFilter extends LitElement {
     if (this._categories.length <= 1) {
       return this._renderAddCategory(false);
     }
-    const sorted = [...this._categories].sort((a, b) => a.name.localeCompare(b.name));
+    const sorted = this._sortedCategories;
     const current = this._categories.find((g) => g.id === this._filterCategory) ?? null;
     return html`
       <div class="category-filter">

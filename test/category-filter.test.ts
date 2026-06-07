@@ -15,16 +15,20 @@ const cats: SceneCategory[] = [
 
 type Filter = HTMLElement & { hass?: unknown; updateComplete: Promise<unknown> };
 
+// Two cycles: connectedCallback resolves listCategories on a later microtask,
+// then Lit needs another update to re-render with the loaded categories.
+async function flush(el: Filter): Promise<void> {
+  await el.updateComplete;
+  await new Promise((r) => setTimeout(r, 0));
+  await el.updateComplete;
+}
+
 async function mount(categories: SceneCategory[]): Promise<Filter> {
   vi.mocked(api.listCategories).mockResolvedValue(categories);
   const el = document.createElement("ambience-category-filter") as Filter;
   el.hass = {};
   document.body.appendChild(el);
-  // Two cycles: connectedCallback resolves listCategories on a later microtask,
-  // then Lit needs another update to re-render with the loaded categories.
-  await el.updateComplete;
-  await new Promise((r) => setTimeout(r, 0));
-  await el.updateComplete;
+  await flush(el);
   return el;
 }
 
@@ -52,8 +56,7 @@ describe("<ambience-category-filter>", () => {
     expect(el.shadowRoot!.querySelector(".category-filter-add")).toBeNull();
 
     resolve(cats);
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
+    await flush(el);
     expect(el.shadowRoot!.querySelector(".category-filter-trigger")).not.toBeNull();
   });
 
@@ -118,8 +121,7 @@ describe("<ambience-category-filter>", () => {
     expect(el.shadowRoot!.querySelector(".category-filter-trigger")).toBeNull();
     vi.mocked(api.listCategories).mockResolvedValue(cats);
     window.dispatchEvent(new Event("ambience-categories-changed"));
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
+    await flush(el);
     expect(el.shadowRoot!.querySelector(".category-filter-trigger")).not.toBeNull();
   });
 

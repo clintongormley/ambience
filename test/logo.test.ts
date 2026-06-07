@@ -1,12 +1,21 @@
-import { render } from "lit";
+import { render, type TemplateResult } from "lit";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { renderIcon, renderLogo } from "../frontend/src/logo";
 
-function draw(opts?: { dark?: boolean; title?: string }): HTMLImageElement {
+type BrandOpts = { dark?: boolean; title?: string };
+
+function drawWith(
+  renderer: (opts?: BrandOpts) => TemplateResult,
+  opts?: BrandOpts,
+): HTMLImageElement {
   const c = document.createElement("div");
-  render(renderLogo(opts), c);
+  render(renderer(opts), c);
   return c.querySelector("img")!;
+}
+
+function draw(opts?: BrandOpts): HTMLImageElement {
+  return drawWith(renderLogo, opts);
 }
 
 describe("renderLogo", () => {
@@ -47,10 +56,8 @@ describe("renderLogo", () => {
   });
 });
 
-function drawIcon(opts?: { dark?: boolean; title?: string }): HTMLImageElement {
-  const c = document.createElement("div");
-  render(renderIcon(opts), c);
-  return c.querySelector("img")!;
+function drawIcon(opts?: BrandOpts): HTMLImageElement {
+  return drawWith(renderIcon, opts);
 }
 
 describe("renderIcon", () => {

@@ -8,7 +8,7 @@
  * event ({ category }), and routes "Add category…" to the settings modal via
  * the existing `ambience-open-settings` event ({ tab: "ambience" }).
  */
-import { css, html, LitElement, type PropertyValues, type TemplateResult } from "lit";
+import { css, html, LitElement, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import type { HassConnection } from "../api.js";
@@ -133,7 +133,14 @@ export class AmbienceCategoryFilter extends LitElement {
 
   private async _fetchCategories() {
     const categories = await listCategories(this.hass);
-    if (this.isConnected) this._categories = categories;
+    if (!this.isConnected) return;
+    this._categories = categories;
+    // If the active selection was deleted, fall back to All and notify — otherwise
+    // the scene list keeps filtering by a category that no longer exists and shows
+    // nothing, with the trigger misleadingly reading "All categories".
+    if (this._filterCategory && !categories.some((g) => g.id === this._filterCategory)) {
+      this._select("");
+    }
   }
 
   private _onCategoriesChanged = async () => {
@@ -289,7 +296,7 @@ export class AmbienceCategoryFilter extends LitElement {
                 ${this._renderAddCategory(true)}
               </div>
             `
-            : ""
+            : nothing
         }
       </div>
     `;

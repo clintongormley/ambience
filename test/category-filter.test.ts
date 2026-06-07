@@ -125,6 +125,32 @@ describe("<ambience-category-filter>", () => {
     expect(el.shadowRoot!.querySelector(".category-filter-trigger")).not.toBeNull();
   });
 
+  test("resets to All and emits when the selected category is deleted", async () => {
+    const three: SceneCategory[] = [...cats, { id: "c", name: "Gamma" }];
+    el = await mount(three);
+    // Select 'a'.
+    (el.shadowRoot!.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
+    await el.updateComplete;
+    el.shadowRoot!.querySelectorAll<HTMLButtonElement>(".category-filter-option")[1].click();
+    await el.updateComplete;
+
+    const events: string[] = [];
+    el.addEventListener("ambience-filter-changed", (e) =>
+      events.push((e as CustomEvent<{ category: string }>).detail.category),
+    );
+    // 'a' is deleted — the list refreshes to b + c only.
+    vi.mocked(api.listCategories).mockResolvedValue([
+      { id: "b", name: "Beta" },
+      { id: "c", name: "Gamma" },
+    ]);
+    window.dispatchEvent(new Event("ambience-categories-changed"));
+    await flush(el);
+
+    expect(events).toEqual([""]);
+    const trigger = el.shadowRoot!.querySelector(".category-filter-trigger")!;
+    expect(trigger.textContent).toContain("All categories");
+  });
+
   test("a click outside the component closes the open menu", async () => {
     el = await mount(cats);
     (el.shadowRoot!.querySelector(".category-filter-trigger") as HTMLButtonElement).click();

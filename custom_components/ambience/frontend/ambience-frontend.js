@@ -23,7 +23,7 @@ var Vs=Object.defineProperty;var Ks=Object.getOwnPropertyDescriptor;var u=(t,n,e
   }
 `;function Xe(t,n){return l`<span class="category-swatch" style=${er(t)}>
     ${n?l`<ha-icon icon=${n}></ha-icon>`:""}
-  </span>`}var ee=class extends b{constructor(){super(...arguments);this._categories=[];this._sortedCategories=[];this._filterCategory="";this._open=!1;this._loaded=!1;this._onCategoriesChanged=async()=>{try{await this._fetchCategories()}catch{}};this._onDocClick=e=>{this._open&&!e.composedPath().includes(this)&&(this._open=!1)}}async _fetchCategories(){let e=await Ie(this.hass);this.isConnected&&(this._categories=e)}async connectedCallback(){super.connectedCallback(),window.addEventListener("ambience-categories-changed",this._onCategoriesChanged),window.addEventListener("click",this._onDocClick);try{await this._fetchCategories()}catch{}finally{this.isConnected&&(this._loaded=!0)}}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("ambience-categories-changed",this._onCategoriesChanged),window.removeEventListener("click",this._onDocClick)}willUpdate(e){e.has("_categories")&&(this._sortedCategories=[...this._categories].sort((r,i)=>r.name.localeCompare(i.name)))}_select(e){this._filterCategory=e,this._open=!1,this.dispatchEvent(new CustomEvent("ambience-filter-changed",{detail:{category:e},bubbles:!0,composed:!0}))}_openSettings(){this._open=!1,this.dispatchEvent(new CustomEvent("ambience-open-settings",{detail:{tab:"ambience"},bubbles:!0,composed:!0}))}_renderEntry(e){return e===null?l`
+  </span>`}var ee=class extends b{constructor(){super(...arguments);this._categories=[];this._sortedCategories=[];this._filterCategory="";this._open=!1;this._loaded=!1;this._onCategoriesChanged=async()=>{try{await this._fetchCategories()}catch{}};this._onDocClick=e=>{this._open&&!e.composedPath().includes(this)&&(this._open=!1)}}async _fetchCategories(){let e=await Ie(this.hass);this.isConnected&&(this._categories=e,this._filterCategory&&!e.some(r=>r.id===this._filterCategory)&&this._select(""))}async connectedCallback(){super.connectedCallback(),window.addEventListener("ambience-categories-changed",this._onCategoriesChanged),window.addEventListener("click",this._onDocClick);try{await this._fetchCategories()}catch{}finally{this.isConnected&&(this._loaded=!0)}}disconnectedCallback(){super.disconnectedCallback(),window.removeEventListener("ambience-categories-changed",this._onCategoriesChanged),window.removeEventListener("click",this._onDocClick)}willUpdate(e){e.has("_categories")&&(this._sortedCategories=[...this._categories].sort((r,i)=>r.name.localeCompare(i.name)))}_select(e){this._filterCategory=e,this._open=!1,this.dispatchEvent(new CustomEvent("ambience-filter-changed",{detail:{category:e},bubbles:!0,composed:!0}))}_openSettings(){this._open=!1,this.dispatchEvent(new CustomEvent("ambience-open-settings",{detail:{tab:"ambience"},bubbles:!0,composed:!0}))}_renderEntry(e){return e===null?l`
         ${Xe(void 0,"mdi:filter-variant")}
         <span class="category-name"
           >${d(this.hass,"ui.all_categories","All categories")}</span
@@ -74,7 +74,7 @@ var Vs=Object.defineProperty;var Ks=Object.getOwnPropertyDescriptor;var u=(t,n,e
                 </div>
                 ${this._renderAddCategory(!0)}
               </div>
-            `:""}
+            `:k}
       </div>
     `}};ee.styles=[tr,v`
       :host {

@@ -66,7 +66,9 @@ const actions: ExposedAction[] = [
 
 const periods: PeriodStoreView = { builtins: {}, custom: {}, hidden: [] };
 
-function makeFakeHass(states: Record<string, { state?: string }> = {}) {
+type FakeState = { state?: string; attributes?: Record<string, unknown> };
+
+function makeFakeHass(states: Record<string, FakeState> = {}) {
   return {
     states,
     callService: vi.fn().mockResolvedValue(undefined),
@@ -83,7 +85,7 @@ type MountOpts = {
   floorConfigs?: Record<string, ScopeConfig>;
   houseConfig?: ScopeConfig;
   switches?: ScopeSwitch[];
-  states?: Record<string, { state?: string }>;
+  states?: Record<string, FakeState>;
   actions?: ExposedAction[];
   weatherConfig?: WeatherConfig;
   dayConfig?: DayConfig;
@@ -1332,6 +1334,74 @@ describe("ambience-scopes-view", () => {
     toggleIn(row).click();
     await el.updateComplete;
     expect(row.querySelector(".scope-body")).toBeFalsy();
+  });
+
+  // --- temporary-pause timer icon -----------------------------------------
+
+  const houseSwitch = [
+    { scope_kind: "house", scope_id: null, entity_id: "switch.house_ambience" },
+  ] satisfies ScopeSwitch[];
+
+  function pauseIn(root: any): HTMLElement | null {
+    return root.shadowRoot
+      .querySelector(".scope-row.house")
+      .querySelector("[data-test='scope-pause']");
+  }
+
+  test("pause icon: not paused → tap calls switch.turn_off", async () => {
+    el = await mount({
+      switches: houseSwitch,
+      houseConfig: { scenes: [], enabled: true },
+      states: {
+        "switch.house_ambience": {
+          state: "on",
+          attributes: { off_at: null, auto_on_delay_seconds: 7200 },
+        },
+      },
+    });
+    const icon = pauseIn(el) as HTMLElement;
+    expect(icon).toBeTruthy();
+    icon.click();
+    expect(el.hass.callService).toHaveBeenCalledWith("switch", "turn_off", {
+      entity_id: "switch.house_ambience",
+    });
+  });
+
+  test("pause icon: paused → shows countdown and tap calls switch.turn_on", async () => {
+    // off_at is 30 min before "now"; delay 7200s → ~90 min remaining,
+    // regardless of the real clock at test time.
+    const offAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    el = await mount({
+      switches: houseSwitch,
+      houseConfig: { scenes: [], enabled: true },
+      states: {
+        "switch.house_ambience": {
+          state: "off",
+          attributes: { off_at: offAt, auto_on_delay_seconds: 7200 },
+        },
+      },
+    });
+    const icon = pauseIn(el) as HTMLElement;
+    expect(icon).toBeTruthy();
+    expect(icon.textContent).toMatch(/\d+:\d{2}/);
+    icon.click();
+    expect(el.hass.callService).toHaveBeenCalledWith("switch", "turn_on", {
+      entity_id: "switch.house_ambience",
+    });
+  });
+
+  test("pause icon hidden when scope permanently disabled", async () => {
+    el = await mount({
+      switches: houseSwitch,
+      houseConfig: { scenes: [], enabled: false },
+      states: {
+        "switch.house_ambience": {
+          state: "on",
+          attributes: { off_at: null, auto_on_delay_seconds: 7200 },
+        },
+      },
+    });
+    expect(pauseIn(el)).toBeNull();
   });
 
   function scopeRowIds(e: any): string[] {

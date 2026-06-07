@@ -29,6 +29,7 @@ from homeassistant.util import dt as dt_util
 from .conditions.time_of_day import ANCHOR_ATTR
 from .const import DATA_EXPOSED_ACTIONS, DATA_SWITCHES, DOMAIN
 from .service import (
+    _scope_enabled,
     _switch_state,
     async_execute_actions,
     category_ids,
@@ -194,6 +195,8 @@ class TriggerSubscriptionsMixin:
         range.
         """
         scope_kind, scope_id = scope
+        if not _scope_enabled(self._hass, scope_kind, scope_id):
+            return
         switch_state = _switch_state(self._hass, scope_kind, scope_id)
         if switch_state == "off":
             return

@@ -43,6 +43,15 @@ class FakeStore:
         self._scopes = scopes
         self._by_key = {(kind, sid): cfg for kind, sid, cfg in scopes}
         self._categories = categories or []
+        self._scope_enabled: dict[tuple[str, str | None], bool] = {}
+
+    def get_scope_enabled(self, scope_kind: str, scope_id: str | None) -> bool:
+        return self._scope_enabled.get((scope_kind, scope_id), True)
+
+    async def async_set_scope_enabled(
+        self, scope_kind: str, scope_id: str | None, enabled: bool
+    ) -> None:
+        self._scope_enabled[(scope_kind, scope_id)] = enabled
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict]]:
         return list(self._scopes)
@@ -285,6 +294,36 @@ async def test_reapply_scope_skips_when_scope_config_is_missing(hass) -> None:
 
     await engine._reapply_scope(("area", "k"), 10)
     # No action was fired because cfg lookup returned None.
+    assert calls == []
+
+
+async def test_disabled_scope_skips_reapply(hass) -> None:
+    """_reapply_scope must return early when the scope is disabled (switch ON)."""
+    calls: list = []
+    hass.services.async_register("light", "turn_on", lambda c: calls.append(c))
+    action = {
+        "service": "light.turn_on",
+        "entity_ids": ["light.a"],
+        "params": {},
+        "reapply_seconds": 10,
+    }
+    scene = {"when": {}, "category": "g", "actions": [action]}
+    store = FakeStore([("area", "k", {"scenes": [scene]})])
+    hass.data[DOMAIN] = {
+        DATA_STORE: store,
+        DATA_CONDITIONS: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {("area", "k", "g"): 0},
+        # Switch left ON so only the disabled gate can prevent the reapply.
+        DATA_SWITCHES: {("area", "k"): SimpleNamespace(is_on=True)},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    # Disable the scope while leaving the switch on.
+    await store.async_set_scope_enabled("area", "k", False)
+
+    await engine._reapply_scope(("area", "k"), 10)
+    # No action was fired because the scope is disabled.
     assert calls == []
 
 

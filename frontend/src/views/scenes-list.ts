@@ -111,10 +111,14 @@ export class AmbienceScenesList extends LitElement {
       padding-left: 1.25rem;
       text-indent: -1.25rem;
     }
-    .actions-detail {
+    .actions-detail,
+    .noop-detail {
       margin-top: 0.35rem;
       padding-top: 0.35rem;
       border-top: 1px dashed var(--divider-color, #e0e0e0);
+    }
+    .noop-detail {
+      font-style: italic;
     }
     .actions-detail-item {
       padding: 0.15rem 0;
@@ -549,7 +553,9 @@ export class AmbienceScenesList extends LitElement {
                   ${this._whenStacked(scene)}
                   ${
                     scene.actions.length === 0
-                      ? ""
+                      ? html`<div class="noop-detail">
+                        ${this._actionCountLabel(scene)}
+                      </div>`
                       : html`<div class="actions-detail">
                         ${scene.actions.map((a) => {
                           const params = this._actionParamsString(a);

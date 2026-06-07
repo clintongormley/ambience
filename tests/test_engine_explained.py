@@ -18,7 +18,7 @@ class FakeCondition:
     def matches(self, predicate: Any, snapshot: Any) -> bool:
         return predicate == snapshot
 
-    def describe(self, snapshot: Any) -> str | None:
+    def describe(self, snapshot: Any, predicate=None) -> str | None:
         return f"value={snapshot}"
 
 
@@ -49,6 +49,40 @@ def test_records_every_predicate_result(conditions: dict[str, FakeCondition]) ->
         ("tod", True),
     ]
     assert scene_eval.predicates[0].detail == "value=day"
+
+
+def test_detail_is_scoped_to_the_scene_predicate_not_the_shared_snapshot() -> None:
+    """Regression: a scene referencing one sensor must get a verdict for THAT
+    sensor, not a dump of every sensor in the shared per-condition snapshot."""
+    from datetime import UTC, datetime
+
+    from custom_components.ambience.conditions.occupancy import (
+        OccupancyCondition,
+        OccupancySnapshot,
+    )
+
+    changed = datetime(2026, 5, 25, 11, 0, tzinfo=UTC)
+    # The shared snapshot is the union of sensors across ALL scenes (here 3).
+    snap = OccupancySnapshot(
+        now=datetime(2026, 5, 25, 12, 0, tzinfo=UTC),
+        sensors={
+            "binary_sensor.bed": ("off", changed),
+            "binary_sensor.lounge": ("on", changed),
+            "binary_sensor.bath": ("on", changed),
+        },
+        names={
+            "binary_sensor.bed": "Bedroom 1 Bed Presence",
+            "binary_sensor.lounge": "Lounge",
+            "binary_sensor.bath": "Bathroom",
+        },
+    )
+    scenes = [{"name": "Bed mode", "when": {"occupancy": {"sensors": ["binary_sensor.bed"]}}}]
+    explanation = evaluate_explained(
+        scenes, {"occupancy": snap}, {"occupancy": OccupancyCondition()}, describe=True
+    )
+    detail = explanation.scenes[0].predicates[0].detail
+    # Only the referenced sensor — no "1 of 3 active (Lounge, Bathroom)" pool dump.
+    assert detail == "Bedroom 1 Bed Presence: off ✗"
 
 
 def test_short_circuits_predicates_and_scenes(conditions: dict[str, FakeCondition]) -> None:

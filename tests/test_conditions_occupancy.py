@@ -173,7 +173,94 @@ def test_describe_counts_active() -> None:
         {"binary_sensor.a": _s("on"), "binary_sensor.b": _s("off")},
         names={"binary_sensor.a": "Lounge", "binary_sensor.b": "Hall"},
     )
+    # No predicate = the whole-snapshot summary (used by snapshots_described).
     assert OccupancyCondition().describe(snap) == "1 of 2 active (Lounge)"
+    assert OccupancyCondition().describe(snap, None) == "1 of 2 active (Lounge)"
+
+
+def test_describe_predicate_scopes_to_referenced_sensor() -> None:
+    # The shared snapshot holds many sensors, but a scene referencing only one
+    # must get a verdict for THAT sensor, not the whole pool.
+    snap = _snap(
+        {
+            "binary_sensor.a": _s("on"),
+            "binary_sensor.b": _s("off"),
+            "binary_sensor.c": _s("on"),
+        },
+        names={
+            "binary_sensor.a": "Lounge",
+            "binary_sensor.b": "Bed",
+            "binary_sensor.c": "Hall",
+        },
+    )
+    assert OccupancyCondition().describe(snap, {"sensors": ["binary_sensor.b"]}) == "Bed: off ✗"
+    assert OccupancyCondition().describe(snap, {"sensors": ["binary_sensor.a"]}) == "Lounge: on ✓"
+
+
+def test_describe_predicate_quant_all_lists_each_in_order() -> None:
+    snap = _snap(
+        {"binary_sensor.a": _s("on"), "binary_sensor.b": _s("off")},
+        names={"binary_sensor.a": "Lounge", "binary_sensor.b": "Hall"},
+    )
+    pred = {"sensors": ["binary_sensor.a", "binary_sensor.b"], "quant": "all"}
+    assert OccupancyCondition().describe(snap, pred) == "all of: Lounge: on ✓, Hall: off ✗"
+
+
+def test_describe_predicate_quant_any_lists_each_in_order() -> None:
+    snap = _snap(
+        {"binary_sensor.a": _s("off"), "binary_sensor.b": _s("on")},
+        names={"binary_sensor.a": "Kitchen", "binary_sensor.b": "Lounge"},
+    )
+    pred = {"sensors": ["binary_sensor.a", "binary_sensor.b"], "quant": "any"}
+    assert OccupancyCondition().describe(snap, pred) == "any of: Kitchen: off ✗, Lounge: on ✓"
+
+
+def test_describe_predicate_vacant_inverts_marks() -> None:
+    # occupied: false means an "off" sensor is the match.
+    snap = _snap({"binary_sensor.a": _s("off")}, names={"binary_sensor.a": "Lounge"})
+    pred = {"sensors": ["binary_sensor.a"], "occupied": False}
+    assert OccupancyCondition().describe(snap, pred) == "Lounge: off ✓"
+
+
+def test_describe_predicate_missing_sensor_is_unavailable() -> None:
+    snap = _snap({}, names={})
+    pred = {"sensors": ["binary_sensor.gone"]}
+    assert OccupancyCondition().describe(snap, pred) == "binary_sensor.gone: unavailable ✗"
+
+
+def test_describe_predicate_empty_sensors_is_wildcard() -> None:
+    snap = _snap({"binary_sensor.a": _s("on")}, names={"binary_sensor.a": "Lounge"})
+    assert OccupancyCondition().describe(snap, {"sensors": []}) == "any sensor (no constraint)"
+
+
+def test_describe_predicate_negate_wraps_body() -> None:
+    snap = _snap({"binary_sensor.a": _s("on")}, names={"binary_sensor.a": "Lounge"})
+    pred = {"sensors": ["binary_sensor.a"], "negate": True}
+    assert OccupancyCondition().describe(snap, pred) == "not(Lounge: on ✓)"
+
+
+def test_describe_predicate_for_shows_elapsed_and_requirement() -> None:
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    on_25m = ("on", datetime(2026, 5, 25, 11, 35, tzinfo=UTC))  # held 25m -> meets ≥20m
+    on_5m = ("on", datetime(2026, 5, 25, 11, 55, tzinfo=UTC))  # held 5m -> too short
+    snap = _snap(
+        {"binary_sensor.a": on_25m, "binary_sensor.b": on_5m},
+        now=now,
+        names={"binary_sensor.a": "Lounge", "binary_sensor.b": "Hall"},
+    )
+    pred = {"sensors": ["binary_sensor.a", "binary_sensor.b"], "quant": "all", "for": {"m": 20}}
+    assert (
+        OccupancyCondition().describe(snap, pred)
+        == "all of: Lounge: on 25m ✓, Hall: on 5m ✗ (for ≥20m)"
+    )
+
+
+def test_describe_predicate_for_single_sensor() -> None:
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    on_5m = ("on", datetime(2026, 5, 25, 11, 55, tzinfo=UTC))
+    snap = _snap({"binary_sensor.bed": on_5m}, now=now, names={"binary_sensor.bed": "Bed"})
+    pred = {"sensors": ["binary_sensor.bed"], "for": {"m": 20}}
+    assert OccupancyCondition().describe(snap, pred) == "Bed: on 5m ✗ (for ≥20m)"
 
 
 def test_validate_accepts_valid_and_none() -> None:

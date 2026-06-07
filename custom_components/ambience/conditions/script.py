@@ -70,7 +70,7 @@ class ScriptCondition:
 
     # --- protocol stubs ----------------------------------------------------
 
-    def describe(self, snapshot: Any) -> str | None:
+    def describe(self, snapshot: Any, predicate: Any = None) -> str | None:
         return None
 
     def order_key(self, predicate: Any) -> str:

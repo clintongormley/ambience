@@ -206,7 +206,7 @@ class TimeOfDayCondition:
             raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
         self._match_one(predicate, _synthetic_snapshot())
 
-    def describe(self, snapshot: TimeOfDaySnapshot) -> str | None:
+    def describe(self, snapshot: TimeOfDaySnapshot, predicate: Any = None) -> str | None:
         periods = self._period_lookup()
         for pid in periods:
             try:

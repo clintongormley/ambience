@@ -104,7 +104,7 @@ class SimpleEntityCondition:
     def matches(self, predicate: Any, snapshot: Any) -> bool:
         return predicate == snapshot
 
-    def describe(self, snapshot: Any) -> str | None:
+    def describe(self, snapshot: Any, predicate=None) -> str | None:
         return snapshot
 
 
@@ -171,7 +171,7 @@ async def test_subscribe_registers_clock_time_subscription(hass) -> None:
         def matches(self, predicate: Any, snapshot: Any) -> bool:
             return True
 
-        def describe(self, snapshot: Any) -> str | None:
+        def describe(self, snapshot: Any, predicate=None) -> str | None:
             return None
 
     scopes = [("area", "a", {"scenes": [{"when": {"clk": "x"}, "category": "g", "actions": []}]})]
@@ -205,7 +205,7 @@ async def test_subscribe_registers_midnight_when_index_has_midnight(hass) -> Non
         def matches(self, predicate: Any, snapshot: Any) -> bool:
             return True
 
-        def describe(self, snapshot: Any) -> str | None:
+        def describe(self, snapshot: Any, predicate=None) -> str | None:
             return None
 
     scopes = [("area", "a", {"scenes": [{"when": {"mid": "x"}, "category": "g", "actions": []}]})]
@@ -389,7 +389,7 @@ async def test_schedule_for_rechecks_skips_pred_without_durations(hass) -> None:
         def matches(self, predicate: Any, snapshot: Any) -> bool:
             return True
 
-        def describe(self, snapshot: Any) -> str | None:
+        def describe(self, snapshot: Any, predicate=None) -> str | None:
             return None
 
     scopes = [("area", "a", {"scenes": [{"when": {"nd": "x"}, "category": "g", "actions": []}]})]
@@ -437,7 +437,7 @@ async def test_for_recheck_callback_fires_and_clears_handle(hass) -> None:
         def matches(self, predicate: Any, snapshot: Any) -> bool:
             return snapshot == "on"
 
-        def describe(self, snapshot: Any) -> str | None:
+        def describe(self, snapshot: Any, predicate=None) -> str | None:
             return snapshot
 
     scopes = [("area", "a", {"scenes": [{"when": {"fc": "on"}, "category": "g", "actions": []}]})]
@@ -479,7 +479,7 @@ async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
         def matches(self, predicate: Any, snapshot: Any) -> bool:
             return snapshot == "on"
 
-        def describe(self, snapshot: Any) -> str | None:
+        def describe(self, snapshot: Any, predicate=None) -> str | None:
             return snapshot
 
     scopes = [("area", "a", {"scenes": [{"when": {"fc": "on"}, "category": "g", "actions": []}]})]
@@ -791,7 +791,7 @@ async def test_schedule_sun_handler_fires_preds_and_reschedules(hass) -> None:
         def matches(self, predicate: Any, snapshot: Any) -> bool:
             return True
 
-        def describe(self, snapshot: Any) -> str | None:
+        def describe(self, snapshot: Any, predicate=None) -> str | None:
             return None
 
     hass.states.async_set(

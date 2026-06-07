@@ -105,16 +105,21 @@ class LuxCondition:
         quant = predicate.get("quant") or "any"
 
         def holds(eid: str) -> bool:
-            val = snapshot.sensors.get(eid)
-            if val is None or not math.isfinite(val):
-                return False  # unobservable (incl. NaN/inf, which fail band tests)
-            if lo is not None and val < lo:
-                return False
-            return not (hi is not None and val >= hi)
+            return self._in_band(snapshot.sensors.get(eid), lo, hi) is True
 
         if quant == "all":
             return all(holds(e) for e in sensors)
         return any(holds(e) for e in sensors)
+
+    @staticmethod
+    def _in_band(val: float | None, lo: float | None, hi: float | None) -> bool | None:
+        """Whether a reading falls in [lo, hi). None = unobservable (no reading,
+        NaN/inf); lo/hi None means that end is open."""
+        if val is None or not math.isfinite(val):
+            return None
+        if lo is not None and val < lo:
+            return False
+        return not (hi is not None and val >= hi)
 
     def _resolve_range(self, predicate: Any) -> tuple[float | None, float | None]:
         """Return the (min, max) band, resolving a named range via the lookup.
@@ -129,7 +134,48 @@ class LuxCondition:
             return as_float(defn.get("min")), as_float(defn.get("max"))
         return as_float(predicate.get("min")), as_float(predicate.get("max"))
 
-    def describe(self, snapshot: LuxSnapshot) -> str | None:
+    def describe(self, snapshot: LuxSnapshot, predicate: Any = None) -> str | None:
+        # No predicate: whole-snapshot summary (used by `snapshots_described`).
+        if predicate is None:
+            return self._describe_snapshot(snapshot)
+        if not isinstance(predicate, dict):
+            return None
+        sensors = predicate.get("sensors") or []
+        if not sensors:
+            return "any sensor (no constraint)"  # wildcard — matches() is vacuously true
+        try:
+            lo, hi = self._resolve_range(predicate)
+        except ValueError:
+            return f"unknown lux range: {predicate.get('range')!r}"
+        quant = predicate.get("quant") or "any"
+        # Preserve the predicate's sensor order so the line maps to the config.
+        parts: list[str] = []
+        for eid in sensors:
+            name = snapshot.names.get(eid, eid)
+            held = self._in_band(snapshot.sensors.get(eid), lo, hi)
+            if held is None:
+                parts.append(f"{name}: unavailable ✗")
+                continue
+            val = snapshot.sensors[eid]
+            parts.append(f"{name}: {_fmt_lux(val)} lx {'✓' if held else '✗'}")
+        body = ", ".join(parts)
+        if len(sensors) > 1:
+            body = f"{'all' if quant == 'all' else 'any'} of: {body}"
+        band = self._fmt_band(lo, hi)
+        # A bare reading is meaningless without the target band, so state it once.
+        return f"want {band}; {body}" if band else body
+
+    @staticmethod
+    def _fmt_band(lo: float | None, hi: float | None) -> str:
+        if lo is not None and hi is not None:
+            return f"{_fmt_lux(lo)}-{_fmt_lux(hi)} lx"
+        if lo is not None:
+            return f"≥{_fmt_lux(lo)} lx"
+        if hi is not None:
+            return f"<{_fmt_lux(hi)} lx"
+        return ""
+
+    def _describe_snapshot(self, snapshot: LuxSnapshot) -> str | None:
         if not snapshot.sensors:
             return "no lux sensors"
         readings = sorted(

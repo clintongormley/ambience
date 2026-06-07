@@ -32,6 +32,22 @@ def dur_seconds(dur: Any) -> float:
     return _num("h") * 3600 + _num("m") * 60 + _num("s")
 
 
+def fmt_duration(seconds: float) -> str:
+    """Compact h/m/s render of a whole-second duration, for diagnostics: 1500 ->
+    '25m', 90 -> '1m30s', 3661 -> '1h1m1s', 0 -> '0s'. Fractions floor."""
+    total = int(seconds)
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    parts = []
+    if h:
+        parts.append(f"{h}h")
+    if m:
+        parts.append(f"{m}m")
+    if s:
+        parts.append(f"{s}s")
+    return "".join(parts) or "0s"
+
+
 def validate_for(dur: Any) -> None:
     """Validate an optional `for: {h,m,s}` duration at save time. None is allowed
     (no minimum-duration gate). Each component must be a non-negative int."""

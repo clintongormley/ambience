@@ -19,7 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE, dur_seconds, validate_for
+from ._common import UNAVAILABLE, dur_seconds, fmt_duration, validate_for
 
 _QUANTS = ("any", "all")
 
@@ -82,6 +82,25 @@ class OccupancyCondition:
             names[s.entity_id] = s.attributes.get("friendly_name") or s.entity_id
         return OccupancySnapshot(now=now or dt_util.utcnow(), sensors=sensors, names=names)
 
+    @staticmethod
+    def _holds(
+        eid: str, snapshot: OccupancySnapshot, *, want_on: bool, seconds: float
+    ) -> bool | None:
+        """Whether one sensor satisfies the polarity + `for` test.
+
+        None = unobservable (entity absent from the snapshot, or unavailable);
+        callers that only need pass/fail collapse None to False.
+        """
+        cur = snapshot.sensors.get(eid)
+        if cur is None:
+            return None
+        state, changed = cur
+        if state in UNAVAILABLE:
+            return None
+        if (state == "on") is not want_on:
+            return False
+        return not (seconds > 0 and (snapshot.now - changed).total_seconds() < seconds)
+
     def matches(self, predicate: Any, snapshot: OccupancySnapshot) -> bool:
         if predicate is None:
             return True
@@ -95,15 +114,7 @@ class OccupancyCondition:
         seconds = dur_seconds(predicate.get("for"))
 
         def holds(eid: str) -> bool:
-            cur = snapshot.sensors.get(eid)
-            if cur is None:
-                return False
-            state, changed = cur
-            if state in UNAVAILABLE:
-                return False  # unobservable
-            if (state == "on") is not want_on:
-                return False
-            return not (seconds > 0 and (snapshot.now - changed).total_seconds() < seconds)
+            return bool(self._holds(eid, snapshot, want_on=want_on, seconds=seconds))
 
         if quant == "all":
             result = all(holds(e) for e in sensors)
@@ -113,7 +124,44 @@ class OccupancyCondition:
         # (vacant for >=20m)" is a different match-set from "occupied for >=20m".
         return not result if predicate.get("negate") else result
 
-    def describe(self, snapshot: OccupancySnapshot) -> str | None:
+    def describe(self, snapshot: OccupancySnapshot, predicate: Any = None) -> str | None:
+        # No predicate: whole-snapshot summary (used by `snapshots_described`).
+        if predicate is None:
+            return self._describe_snapshot(snapshot)
+        if not isinstance(predicate, dict):
+            return None
+        sensors = predicate.get("sensors") or []
+        if not sensors:
+            return "any sensor (no constraint)"  # wildcard — matches() is vacuously true
+        want_on = predicate.get("occupied", True) is not False
+        quant = predicate.get("quant") or "any"
+        seconds = dur_seconds(predicate.get("for"))
+        # Preserve the predicate's sensor order so the line maps to the config.
+        parts: list[str] = []
+        for eid in sensors:
+            name = snapshot.names.get(eid, eid)
+            cur = snapshot.sensors.get(eid)
+            if cur is None:
+                parts.append(f"{name}: unavailable ✗")
+                continue
+            state, changed = cur
+            # With a `for` gate, show how long the sensor has held its state so a
+            # recently-changed sensor's ✗ is self-explanatory.
+            elapsed = (
+                f" {fmt_duration((snapshot.now - changed).total_seconds())}" if seconds else ""
+            )
+            held = self._holds(eid, snapshot, want_on=want_on, seconds=seconds)
+            parts.append(f"{name}: {state}{elapsed} {'✓' if held else '✗'}")
+        body = ", ".join(parts)
+        if len(sensors) > 1:
+            body = f"{'all' if quant == 'all' else 'any'} of: {body}"
+        # `negate` inverts the whole match — show it wrapping the per-sensor read.
+        if predicate.get("negate"):
+            body = f"not({body})"
+        # State the duration threshold once so each sensor's elapsed time reads.
+        return f"{body} (for ≥{fmt_duration(seconds)})" if seconds else body
+
+    def _describe_snapshot(self, snapshot: OccupancySnapshot) -> str | None:
         if not snapshot.sensors:
             return "no occupancy sensors"
         total = len(snapshot.sensors)

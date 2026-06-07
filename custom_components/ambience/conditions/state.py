@@ -80,7 +80,7 @@ class StateCondition:
             return True
         return self._eval(predicate, snapshot)
 
-    def describe(self, snapshot: StateSnapshot) -> str | None:
+    def describe(self, snapshot: StateSnapshot, predicate: Any = None) -> str | None:
         # No single "current value" — depends on which atoms a predicate names.
         return None
 

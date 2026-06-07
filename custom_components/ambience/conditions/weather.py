@@ -182,7 +182,7 @@ class WeatherCondition:
             return False
         return _op_satisfied(snap.attributes[attr], t.get("op"), float(value))
 
-    def describe(self, snapshot: WeatherSnapshot) -> str | None:
+    def describe(self, snapshot: WeatherSnapshot, predicate: Any = None) -> str | None:
         return snapshot.condition
 
     def validate_predicate(self, predicate: Any) -> None:

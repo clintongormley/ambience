@@ -263,20 +263,31 @@ def test_validate_rejects_non_dict() -> None:
 
 def test_validate_atom_requires_entity_id() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="entity_id"):
+    with pytest.raises(ValueError, match="entity"):
         m.validate_predicate({"kind": "is", "states": ["on"]})
-    with pytest.raises(ValueError, match="entity_id"):
+    with pytest.raises(ValueError, match="entity"):
         m.validate_predicate({"kind": "is", "entity_id": "", "states": ["on"]})
 
 
 def test_validate_atom_requires_non_empty_states() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="states"):
+    with pytest.raises(ValueError, match="state"):
         m.validate_predicate({"kind": "is", "entity_id": "x", "states": []})
-    with pytest.raises(ValueError, match="states"):
+    with pytest.raises(ValueError, match="state"):
         m.validate_predicate({"kind": "is", "entity_id": "x", "states": "on"})
-    with pytest.raises(ValueError, match="states"):
+    with pytest.raises(ValueError, match="state"):
         m.validate_predicate({"kind": "is", "entity_id": "x", "states": ["on", 42]})
+
+
+def test_validate_messages_are_human_readable() -> None:
+    """Validation errors surface verbatim in the scene editor, so they must read
+    as plain guidance — no internal jargon like "atom" or "states list"."""
+    m = StateCondition()
+    with pytest.raises(ValueError) as exc:
+        m.validate_predicate({"kind": "is", "entity_id": "light.kitchen", "states": []})
+    msg = str(exc.value)
+    assert "atom" not in msg
+    assert "Pick at least one state" in msg
 
 
 def test_validate_atom_for_is_optional() -> None:
@@ -302,15 +313,15 @@ def test_validate_atom_for_rejects_negative_or_non_int() -> None:
 
 def test_validate_group_requires_non_empty_items() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="items"):
+    with pytest.raises(ValueError, match="group"):
         m.validate_predicate({"kind": "and", "items": []})
-    with pytest.raises(ValueError, match="items"):
+    with pytest.raises(ValueError, match="group"):
         m.validate_predicate({"kind": "or"})
 
 
 def test_validate_not_requires_item() -> None:
     m = StateCondition()
-    with pytest.raises(ValueError, match="item"):
+    with pytest.raises(ValueError, match="negate"):
         m.validate_predicate({"kind": "not"})
 
 
@@ -328,7 +339,7 @@ def test_validate_recurses_into_groups_and_not() -> None:
             {"kind": "is", "entity_id": "x", "states": []},
         ],
     }
-    with pytest.raises(ValueError, match="states"):
+    with pytest.raises(ValueError, match="state"):
         m.validate_predicate(bad)
 
 
@@ -615,7 +626,7 @@ def test_validate_numeric_op_requires_one_numeric_value() -> None:
     with pytest.raises(ValueError, match="exactly one"):
         m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["1", "2"]})
     # Non-numeric value
-    with pytest.raises(ValueError, match="numeric"):
+    with pytest.raises(ValueError, match="number"):
         m.validate_predicate({"kind": ">", "entity_id": "x", "states": ["foo"]})
 
 
@@ -719,9 +730,9 @@ def test_numeric_op_fallthrough_unknown_kind_returns_false() -> None:
 
 
 def test_validate_numeric_threshold_empty_string_rejected() -> None:
-    """validate_atom raises when the numeric threshold is an empty string (line 210)."""
+    """validate_atom raises when the numeric threshold is an empty string."""
     m = StateCondition()
-    with pytest.raises(ValueError, match="non-empty string"):
+    with pytest.raises(ValueError, match="number"):
         m.validate_predicate({"kind": ">", "entity_id": "sensor.x", "states": [""]})
 
 

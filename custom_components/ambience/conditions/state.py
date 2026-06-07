@@ -181,53 +181,55 @@ class StateCondition:
         self._validate_expr(predicate)
 
     def _validate_expr(self, expr: Any) -> None:
+        # Messages here surface verbatim to the user in the scene editor, so they
+        # read as plain guidance rather than internal jargon (no "atom"/"list").
         if not isinstance(expr, dict):
-            raise ValueError("state expression must be a dict")
+            raise ValueError("This state condition is malformed.")
         kind = expr.get("kind")
         if kind not in self._VALID_KINDS:
-            raise ValueError(f"unknown kind: {kind!r}")
+            raise ValueError(f"Unknown state condition kind: {kind!r}.")
         if kind in self._ATOM_KINDS:
             self._validate_atom(expr)
         elif kind in ("and", "or"):
             items = expr.get("items")
             if not isinstance(items, list) or not items:
-                raise ValueError(f"{kind} group requires a non-empty items list")
+                raise ValueError(f"An ‘{kind}’ group needs at least one condition.")
             for it in items:
                 self._validate_expr(it)
         else:  # "not"
             item = expr.get("item")
             if item is None:
-                raise ValueError("not requires an item")
+                raise ValueError("A ‘not’ group needs a condition to negate.")
             self._validate_expr(item)
 
     def _validate_atom(self, atom: dict) -> None:
         entity_id = atom.get("entity_id")
         if not isinstance(entity_id, str) or not entity_id.strip():
-            raise ValueError("state atom requires a non-empty entity_id")
+            raise ValueError("Pick an entity for this state condition.")
         kind = atom.get("kind")
         states = atom.get("states")
         if not isinstance(states, list):
-            raise ValueError("state atom requires a states list")
+            raise ValueError("This state condition is malformed.")
         # Numeric ops have stricter shape: exactly one numeric string.
         if kind in self._NUMERIC_KINDS:
             if len(states) != 1:
-                raise ValueError(f"{kind} atom requires exactly one threshold value")
+                raise ValueError(f"The ‘{kind}’ comparison needs exactly one value.")
             if not isinstance(states[0], str) or not states[0]:
-                raise ValueError(f"{kind} atom threshold must be a non-empty string")
+                raise ValueError(f"Enter a number for the ‘{kind}’ comparison.")
             try:
                 float(states[0])
             except ValueError:
                 raise ValueError(
-                    f"{kind} atom threshold must be a numeric string, got {states[0]!r}"
+                    f"The ‘{kind}’ comparison needs a number, but got {states[0]!r}."
                 ) from None
         else:
             if not states:
-                raise ValueError("state atom requires a non-empty states list")
+                raise ValueError("Pick at least one state to match.")
             if not all(isinstance(s, str) and s for s in states):
-                raise ValueError("state atom states must all be non-empty strings")
+                raise ValueError("Every state to match must be a non-empty value.")
         attribute = atom.get("attribute")
         if attribute is not None and (not isinstance(attribute, str) or not attribute.strip()):
-            raise ValueError("`attribute` must be a non-empty string or null")
+            raise ValueError("The attribute name must not be blank.")
         validate_for(atom.get("for"))
 
     # --- linearisation --------------------------------------------------

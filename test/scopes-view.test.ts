@@ -26,6 +26,7 @@ vi.mock("../frontend/src/api", () => ({
   saveFloor: vi.fn(),
   getHouse: vi.fn(),
   saveHouse: vi.fn(),
+  setScopeEnabled: vi.fn(async () => ({ ok: true })),
   listSwitches: vi.fn(async () => []),
   listConditions: vi.fn(),
   listExposedActions: vi.fn(),
@@ -65,7 +66,9 @@ const actions: ExposedAction[] = [
 
 const periods: PeriodStoreView = { builtins: {}, custom: {}, hidden: [] };
 
-function makeFakeHass(states: Record<string, { state?: string }> = {}) {
+type FakeState = { state?: string; attributes?: Record<string, unknown> };
+
+function makeFakeHass(states: Record<string, FakeState> = {}) {
   return {
     states,
     callService: vi.fn().mockResolvedValue(undefined),
@@ -82,7 +85,7 @@ type MountOpts = {
   floorConfigs?: Record<string, ScopeConfig>;
   houseConfig?: ScopeConfig;
   switches?: ScopeSwitch[];
-  states?: Record<string, { state?: string }>;
+  states?: Record<string, FakeState>;
   actions?: ExposedAction[];
   weatherConfig?: WeatherConfig;
   dayConfig?: DayConfig;
@@ -1267,12 +1270,11 @@ describe("ambience-scopes-view", () => {
     return row.querySelector("[data-test='scope-switch']");
   }
 
-  test("renders a toggle per scope reflecting the switch state", async () => {
+  test("renders a toggle per scope reflecting the enabled flag", async () => {
     el = await mount({
-      switches: baseSwitches,
-      states: {
-        "switch.living_room_ambience": { state: "on" },
-        "switch.bedroom_ambience": { state: "off" },
+      areaConfigs: {
+        living_room: { scenes: [], enabled: true },
+        bedroom: { scenes: [], enabled: false },
       },
     });
     const lr = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='living_room']"));
@@ -1283,30 +1285,62 @@ describe("ambience-scopes-view", () => {
     expect(br.checked).toBe(false);
   });
 
-  test("toggling an off switch calls switch.turn_on for its entity", async () => {
-    el = await mount({
-      switches: baseSwitches,
-      states: { "switch.bedroom_ambience": { state: "off" } },
-    });
+  test("toggling a disabled scope writes setScopeEnabled(true)", async () => {
+    el = await mount({ areaConfigs: { bedroom: { scenes: [], enabled: false } } });
     const br = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
     br.checked = true;
     br.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-    expect(el.hass.callService).toHaveBeenCalledWith("switch", "turn_on", {
-      entity_id: "switch.bedroom_ambience",
-    });
+    expect(api.setScopeEnabled).toHaveBeenCalledWith(
+      expect.anything(),
+      { kind: "area", id: "bedroom" },
+      true,
+    );
+    expect(el.hass.callService).not.toHaveBeenCalled();
   });
 
-  test("toggling an on switch calls switch.turn_off for its entity", async () => {
-    el = await mount({
-      switches: baseSwitches,
-      states: { "switch.living_room_ambience": { state: "on" } },
-    });
+  test("toggling an enabled scope writes setScopeEnabled(false)", async () => {
+    el = await mount({ areaConfigs: { living_room: { scenes: [], enabled: true } } });
     const lr = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='living_room']"));
     lr.checked = false;
     lr.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-    expect(el.hass.callService).toHaveBeenCalledWith("switch", "turn_off", {
-      entity_id: "switch.living_room_ambience",
-    });
+    expect(api.setScopeEnabled).toHaveBeenCalledWith(
+      expect.anything(),
+      { kind: "area", id: "living_room" },
+      false,
+    );
+    expect(el.hass.callService).not.toHaveBeenCalled();
+  });
+
+  test("toggling the header switch writes the enabled flag, not the HA switch", async () => {
+    el = await mount({ houseConfig: { scenes: [], enabled: true } });
+    const houseRow = el.shadowRoot.querySelector(".scope-row.house");
+    const sw = toggleIn(houseRow);
+    expect(sw).toBeTruthy();
+    expect(sw.checked).toBe(true);
+    sw.checked = false;
+    sw.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    await el.updateComplete;
+
+    expect(api.setScopeEnabled).toHaveBeenCalledWith(expect.anything(), { kind: "house" }, false);
+    expect(el.hass.callService).not.toHaveBeenCalled();
+  });
+
+  test("a failed enable/disable surfaces an error and reverts the toggle", async () => {
+    el = await mount({ houseConfig: { scenes: [], enabled: true } });
+    vi.mocked(api.setScopeEnabled).mockRejectedValueOnce(new Error("ws boom"));
+    const sw = toggleIn(el.shadowRoot.querySelector(".scope-row.house"));
+    expect(sw.checked).toBe(true);
+    sw.checked = false;
+    sw.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // Error surfaced.
+    expect(el.shadowRoot.querySelector(".error")?.textContent).toContain("ws boom");
+    // Toggle reverted to the persisted (enabled) state.
+    const sw2 = toggleIn(el.shadowRoot.querySelector(".scope-row.house"));
+    expect(sw2.checked).toBe(true);
   });
 
   test("clicking the toggle does not expand the row", async () => {
@@ -1320,6 +1354,74 @@ describe("ambience-scopes-view", () => {
     expect(row.querySelector(".scope-body")).toBeFalsy();
   });
 
+  // --- temporary-pause timer icon -----------------------------------------
+
+  const houseSwitch = [
+    { scope_kind: "house", scope_id: null, entity_id: "switch.house_ambience" },
+  ] satisfies ScopeSwitch[];
+
+  function pauseIn(root: any): HTMLElement | null {
+    return root.shadowRoot
+      .querySelector(".scope-row.house")
+      .querySelector("[data-test='scope-pause']");
+  }
+
+  test("pause icon: not paused → tap calls switch.turn_off", async () => {
+    el = await mount({
+      switches: houseSwitch,
+      houseConfig: { scenes: [], enabled: true },
+      states: {
+        "switch.house_ambience": {
+          state: "on",
+          attributes: { off_at: null, auto_on_delay_seconds: 7200 },
+        },
+      },
+    });
+    const icon = pauseIn(el) as HTMLElement;
+    expect(icon).toBeTruthy();
+    icon.click();
+    expect(el.hass.callService).toHaveBeenCalledWith("switch", "turn_off", {
+      entity_id: "switch.house_ambience",
+    });
+  });
+
+  test("pause icon: paused → shows countdown and tap calls switch.turn_on", async () => {
+    // off_at is 30 min before "now"; delay 7200s → ~90 min remaining,
+    // regardless of the real clock at test time.
+    const offAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    el = await mount({
+      switches: houseSwitch,
+      houseConfig: { scenes: [], enabled: true },
+      states: {
+        "switch.house_ambience": {
+          state: "off",
+          attributes: { off_at: offAt, auto_on_delay_seconds: 7200 },
+        },
+      },
+    });
+    const icon = pauseIn(el) as HTMLElement;
+    expect(icon).toBeTruthy();
+    expect(icon.textContent).toMatch(/\d+:\d{2}/);
+    icon.click();
+    expect(el.hass.callService).toHaveBeenCalledWith("switch", "turn_on", {
+      entity_id: "switch.house_ambience",
+    });
+  });
+
+  test("pause icon hidden when scope permanently disabled", async () => {
+    el = await mount({
+      switches: houseSwitch,
+      houseConfig: { scenes: [], enabled: false },
+      states: {
+        "switch.house_ambience": {
+          state: "on",
+          attributes: { off_at: null, auto_on_delay_seconds: 7200 },
+        },
+      },
+    });
+    expect(pauseIn(el)).toBeNull();
+  });
+
   function scopeRowIds(e: any): string[] {
     return [...e.shadowRoot.querySelectorAll(".scope-row")].map((r: Element) => {
       const cls = r.classList.contains("house")
@@ -1331,40 +1433,62 @@ describe("ambience-scopes-view", () => {
     });
   }
 
-  test("scopes with the switch off sort to the end of the list (stable otherwise)", async () => {
+  test("permanently disabled scopes sort to the end of the list (stable otherwise)", async () => {
+    el = await mount({
+      floorConfigs: { ground: { scenes: [], enabled: false } },
+      areaConfigs: { bedroom: { scenes: [], enabled: false } },
+    });
+    // Base order is house, floor:ground, floor:upstairs, area:living_room,
+    // area:bedroom. The two disabled scopes (ground, bedroom) sink to the end,
+    // keeping their relative order; the enabled ones keep theirs.
+    expect(scopeRowIds(el)).toEqual([
+      "house:house",
+      "floor:upstairs",
+      "area:living_room",
+      "floor:ground",
+      "area:bedroom",
+    ]);
+  });
+
+  test("disabled scopes sort to the end", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [], enabled: false } },
+    });
+    const names = [...el.shadowRoot.querySelectorAll(".scope-name")].map((n: Element) =>
+      n.textContent?.trim(),
+    );
+    expect(names[names.length - 1]).toContain("Living Room");
+  });
+
+  test("scopes keep their base order when none are disabled", async () => {
+    el = await mount({
+      floorConfigs: {
+        ground: { scenes: [], enabled: true },
+        upstairs: { scenes: [], enabled: true },
+      },
+      areaConfigs: {
+        living_room: { scenes: [], enabled: true },
+        bedroom: { scenes: [], enabled: true },
+      },
+    });
+    expect(scopeRowIds(el)).toEqual([
+      "house:house",
+      "floor:ground",
+      "floor:upstairs",
+      "area:living_room",
+      "area:bedroom",
+    ]);
+  });
+
+  test("temporarily switched-off scopes keep their place in the list", async () => {
+    // A switch being off is a *temporary* pause — it must NOT reorder the list.
     el = await mount({
       switches: baseSwitches,
       states: {
-        "switch.global_ambience": { state: "on" },
-        "switch.upstairs_floor_ambience": { state: "on" },
-        "switch.living_room_ambience": { state: "on" },
         "switch.ground_floor_ambience": { state: "off" },
         "switch.bedroom_ambience": { state: "off" },
       },
     });
-    // Base order is house, floor:ground, floor:upstairs, area:living_room,
-    // area:bedroom. The two "off" scopes (ground, bedroom) sink to the end,
-    // keeping their relative order; the "on" ones keep theirs.
-    expect(scopeRowIds(el)).toEqual([
-      "house:house",
-      "floor:upstairs",
-      "area:living_room",
-      "floor:ground",
-      "area:bedroom",
-    ]);
-  });
-
-  test("scopes keep their base order when no switch is off", async () => {
-    el = await mount({
-      switches: baseSwitches,
-      states: {
-        "switch.global_ambience": { state: "on" },
-        "switch.ground_floor_ambience": { state: "on" },
-        "switch.upstairs_floor_ambience": { state: "on" },
-        "switch.living_room_ambience": { state: "on" },
-        "switch.bedroom_ambience": { state: "on" },
-      },
-    });
     expect(scopeRowIds(el)).toEqual([
       "house:house",
       "floor:ground",
@@ -1374,42 +1498,18 @@ describe("ambience-scopes-view", () => {
     ]);
   });
 
-  test("toggling a scope off does not corrupt a sibling toggle when the list reorders", async () => {
-    el = await mount({
-      switches: baseSwitches,
-      states: {
-        "switch.living_room_ambience": { state: "on" },
-        "switch.bedroom_ambience": { state: "on" },
-      },
-    });
-    // Both areas on, so living_room precedes bedroom in the base order.
-    const lr = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='living_room']"));
-    expect(lr.checked).toBe(true);
-
-    // User flips living_room off: the browser unchecks that toggle, the change
-    // handler fires, and HA then reports the new "off" state.
-    lr.checked = false;
-    lr.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-    el.hass = makeFakeHass({
-      "switch.living_room_ambience": { state: "off" },
-      "switch.bedroom_ambience": { state: "on" },
-    });
-    await el.updateComplete;
-
-    // living_room sinks below bedroom. Bedroom is still on and its toggle must
-    // still read on — its DOM must not be confused with living_room's old node.
-    const br = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
-    expect(br.checked).toBe(true);
-  });
-
-  test("renders no toggle for a scope with no known switch entity", async () => {
+  test("renders a toggle for every scope regardless of switch entities", async () => {
+    // The toggle reflects the permanent `enabled` flag, not a switch entity, so
+    // it must render even when no switch entity is known for the scope.
     el = await mount({
       switches: [
         { scope_kind: "area", scope_id: "living_room", entity_id: "switch.living_room_ambience" },
       ],
     });
     const br = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
-    expect(br).toBeFalsy();
+    expect(br).toBeTruthy();
+    // Default (no enabled flag) ⇒ enabled.
+    expect(br.checked).toBe(true);
   });
 
   // --- disabled / faded scope styling -------------------------------------
@@ -1477,6 +1577,26 @@ describe("ambience-scopes-view", () => {
     const header = headerOf(el, ".scope-row.area[data-id='bedroom']");
     expect(header.classList.contains("off")).toBe(true);
     expect(header.classList.contains("empty")).toBe(false);
+  });
+
+  test("disabled scope row carries the scope-disabled class", async () => {
+    el = await mount({
+      areaConfigs: { bedroom: { scenes: [], enabled: false } },
+    });
+    const row = el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']") as HTMLElement;
+    const kebab = row.querySelector('[data-test="scope-kebab"]') as HTMLElement;
+    expect(kebab.closest("li")).toBe(row);
+    expect(row.classList.contains("scope-disabled")).toBe(true);
+  });
+
+  test("an enabled scope row does not carry the scope-disabled class", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [], enabled: true } },
+    });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    expect(row.classList.contains("scope-disabled")).toBe(false);
   });
 
   // --- apply-scenes / run-scene-actions ----------------------------------------
@@ -2655,19 +2775,19 @@ describe("ambience-scopes-view", () => {
 
   // Keep last: registering <ha-switch> is global and switches the toggle widget
   // for any mount that runs after this test.
-  test("uses <ha-switch> when it is registered and toggles via callService", async () => {
+  test("uses <ha-switch> when it is registered and toggles the enabled flag", async () => {
     if (!customElements.get("ha-switch")) {
       customElements.define("ha-switch", class extends HTMLElement {});
     }
-    el = await mount({
-      switches: [{ scope_kind: "area", scope_id: "bedroom", entity_id: "switch.bedroom_ambience" }],
-      states: { "switch.bedroom_ambience": { state: "off" } },
-    });
+    el = await mount({ areaConfigs: { bedroom: { scenes: [], enabled: false } } });
     const toggle = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']"));
     expect(toggle.tagName.toLowerCase()).toBe("ha-switch");
     toggle.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-    expect(el.hass.callService).toHaveBeenCalledWith("switch", "turn_on", {
-      entity_id: "switch.bedroom_ambience",
-    });
+    expect(api.setScopeEnabled).toHaveBeenCalledWith(
+      expect.anything(),
+      { kind: "area", id: "bedroom" },
+      true,
+    );
+    expect(el.hass.callService).not.toHaveBeenCalled();
   });
 });

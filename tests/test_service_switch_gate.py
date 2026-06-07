@@ -137,6 +137,31 @@ async def test_all_on_allows_apply(hass, mock_config_entry, caplog):
     assert "switch is off" not in caplog.text.lower()
 
 
+# --- permanent disable blocks application (even force) ----------------------
+
+
+async def test_disabled_scope_blocks_apply(hass, mock_config_entry, caplog):
+    area_id, _floor_id = await _setup_with_one_scene_per_scope(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_set_scope_enabled("area", area_id, False)
+
+    caplog.set_level("INFO", logger="custom_components.ambience.service")
+    await async_apply_scene(hass, "area", area_id)
+    assert "scope disabled" in caplog.text.lower()
+
+
+async def test_disabled_scope_blocks_force_apply(hass, mock_config_entry, caplog):
+    area_id, _floor_id = await _setup_with_one_scene_per_scope(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_set_scope_enabled("area", area_id, False)
+
+    caplog.set_level("INFO", logger="custom_components.ambience.service")
+    await async_apply_scene(hass, "area", area_id, force=True)
+    # Disabled blocks even the force path: the disabled-skip log fires and no
+    # scene is applied.
+    assert "scope disabled" in caplog.text.lower()
+
+
 async def test_missing_switch_treated_as_on(hass, mock_config_entry):
     area_id, _ = await _setup_with_one_scene_per_scope(hass, mock_config_entry)
     # Simulate the race where the entity hasn't registered yet.

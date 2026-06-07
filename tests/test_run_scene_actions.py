@@ -80,3 +80,16 @@ async def test_out_of_range_index_raises(hass, mock_config_entry):
     area_id = await _install(hass, mock_config_entry)
     with pytest.raises(ServiceValidationError):
         await async_run_scene_actions(hass, "area", area_id, 5)
+
+
+async def test_run_scene_actions_blocked_when_scope_disabled(hass, mock_config_entry):
+    area_id = await _install(hass, mock_config_entry)
+    calls = async_mock_service(hass, "light", "turn_on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_set_scope_enabled("area", area_id, False)
+    await hass.async_block_till_done()
+
+    with pytest.raises(ServiceValidationError):
+        await async_run_scene_actions(hass, "area", area_id, 0)
+
+    assert len(calls) == 0

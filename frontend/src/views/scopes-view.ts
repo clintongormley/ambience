@@ -1,5 +1,6 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { live } from "lit/directives/live.js";
 import { repeat } from "lit/directives/repeat.js";
 
 import type { AreaRegistryEvent, FloorRegistryEvent, HassConnection } from "../api.js";
@@ -23,6 +24,7 @@ import {
   saveArea,
   saveFloor,
   saveHouse,
+  setScopeEnabled,
 } from "../api.js";
 import { sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { localize } from "../i18n.js";
@@ -76,8 +78,23 @@ type ScopeRow = {
   rowClass: "house" | "floor" | "area";
 };
 
+/** Format a remaining-seconds count as a compact countdown:
+ *  `H:MM:SS` when there are hours, otherwise `M:SS`. */
+function formatRemaining(total: number): string {
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
 function _normalize(cfg: ScopeConfig): ScopeConfig {
-  return { scenes: cfg.scenes ?? [] };
+  // Preserve the permanent per-scope `enabled` flag (absent ⇒ enabled) so the
+  // header toggle reflects the persisted value; only drop it when it's the
+  // default (true/absent) to keep configs minimal.
+  return cfg.enabled === false
+    ? { scenes: cfg.scenes ?? [], enabled: false }
+    : { scenes: cfg.scenes ?? [] };
 }
 
 // Must stay in sync with GAP in custom_components/ambience/sorting.py — the
@@ -243,6 +260,11 @@ export class AmbienceScopesView extends LitElement {
       .scope-header.off ambience-kebab-menu {
         opacity: 0.4;
       }
+      /* Permanently disabled scope: dim its kebab menu to signal the state.
+       Opacity only — the menu stays fully clickable. */
+      .scope-disabled ambience-kebab-menu {
+        opacity: 0.4;
+      }
       .chevron {
         width: 1em;
         color: var(--secondary-text-color, #888);
@@ -272,6 +294,23 @@ export class AmbienceScopesView extends LitElement {
         margin-left: 0.5rem;
         accent-color: var(--primary-color, #03a9f4);
         cursor: pointer;
+      }
+      .scope-pause {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--secondary-text-color);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+      }
+      .scope-pause.paused {
+        color: var(--warning-color, #ffa600);
+      }
+      .scope-pause .countdown {
+        font-variant-numeric: tabular-nums;
+        font-size: 0.85em;
       }
       .scope-body {
         padding: 0.5rem 1rem 1rem 1rem;
@@ -399,12 +438,23 @@ export class AmbienceScopesView extends LitElement {
     this._schemas = next;
   }
 
+  // 1s tick that drives the live pause countdown while any scope switch is off.
+  private _tick?: ReturnType<typeof setInterval>;
+
   override async connectedCallback() {
     super.connectedCallback();
     this._conditionsHintDismissed = getConditionsHintDismissed();
     window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.addEventListener("ambience-categories-changed", this._onCategoriesChanged);
     window.addEventListener("ambience-conditions-changed", this._onConditionsChanged);
+    this._tick = setInterval(() => {
+      for (const id of this._switchEntityIds.values()) {
+        if (this.hass.states?.[id]?.state === "off") {
+          this.requestUpdate();
+          return;
+        }
+      }
+    }, 1000);
     await this._loadStatic();
     await Promise.all([
       this._refreshAreas(),
@@ -417,6 +467,8 @@ export class AmbienceScopesView extends LitElement {
 
   override disconnectedCallback() {
     super.disconnectedCallback();
+    if (this._tick) clearInterval(this._tick);
+    this._tick = undefined;
     window.removeEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.removeEventListener("ambience-categories-changed", this._onCategoriesChanged);
     window.removeEventListener("ambience-conditions-changed", this._onConditionsChanged);
@@ -1085,8 +1137,9 @@ export class AmbienceScopesView extends LitElement {
   // --- render --------------------------------------------------------------
 
   /** The scope rows in display order: house, then floors, then areas — but with
-   *  switched-off scopes stably moved to the end, so the active scopes surface
-   *  at the top of the list. */
+   *  permanently-disabled scopes (cfg.enabled === false) stably moved to the
+   *  end, so the active scopes surface at the top of the list. A temporary
+   *  switch-off does NOT reorder (it shows the pause countdown in place). */
   private _orderedScopeRows(): ScopeRow[] {
     const rows: ScopeRow[] = [
       {
@@ -1118,12 +1171,12 @@ export class AmbienceScopesView extends LitElement {
         });
       }
     }
-    // Stable partition in a single pass: "on" rows keep their base order and
-    // the "off" rows follow in theirs.
+    // Stable partition: enabled rows keep their base order and the
+    // permanently-disabled rows (cfg.enabled === false) follow in theirs.
     const on: ScopeRow[] = [];
     const off: ScopeRow[] = [];
     for (const r of rows) {
-      (this._isSwitchedOff(r.scope) ? off : on).push(r);
+      (r.cfg.enabled === false ? off : on).push(r);
     }
     return [...on, ...off];
   }
@@ -1143,7 +1196,7 @@ export class AmbienceScopesView extends LitElement {
       <ul>
         ${repeat(
           this._orderedScopeRows(),
-          // Key by scope identity so reordering (e.g. a switched-off scope
+          // Key by scope identity so reordering (e.g. a disabled scope
           // sinking to the end) moves each row's DOM with its scope rather than
           // reusing nodes positionally — otherwise a toggle's checked state can
           // bleed onto whichever scope inherits its old position.
@@ -1241,8 +1294,9 @@ export class AmbienceScopesView extends LitElement {
       : this._matchingSceneCount(cfg) === 0
         ? "empty"
         : "";
+    const disabled = cfg.enabled === false;
     return html`
-      <li class="scope-row ${rowClass}" data-id=${dataId}>
+      <li class="scope-row ${rowClass} ${disabled ? "scope-disabled" : ""}" data-id=${dataId}>
         <div
           class="scope-header ${open ? "open" : ""} ${stateClass}"
           @click=${() => this._toggleExpand(scope)}
@@ -1251,7 +1305,8 @@ export class AmbienceScopesView extends LitElement {
           <ha-icon class="scope-icon" icon=${scopeIcon(scope, this.hass as any)}></ha-icon>
           <span class="scope-name">${name}</span>
           <span class="scope-summary">${this._summary(cfg)}</span>
-          ${this._renderScopeSwitch(scope)}
+          ${this._renderPauseIcon(scope, cfg)}
+          ${this._renderScopeSwitch(scope, cfg)}
           <ambience-kebab-menu
             data-test="scope-kebab"
             .hass=${this.hass}
@@ -1317,27 +1372,76 @@ export class AmbienceScopesView extends LitElement {
     `;
   }
 
-  /** Live on/off toggle for the scope's Ambience switch, shown in the header.
-   *  Renders nothing until the backend has resolved the switch entity_id.
-   *  Uses HA's <ha-switch> when registered, else a themed checkbox fallback
-   *  (which also keeps the toggle testable under jsdom). */
-  private _renderScopeSwitch(scope: Scope) {
+  /** Seconds remaining until the scope's switch auto-resumes, derived from the
+   *  switch entity's `off_at` / `auto_on_delay_seconds` attributes. 0 if not
+   *  paused or the attributes are missing. */
+  private _pauseRemaining(entityId: string): number {
+    const st = this.hass.states?.[entityId];
+    const offAt = st?.attributes?.off_at as string | null | undefined;
+    const delay = Number(st?.attributes?.auto_on_delay_seconds ?? 0);
+    if (!offAt || !delay) return 0;
+    const elapsed = (Date.now() - new Date(offAt).getTime()) / 1000;
+    return Math.max(0, Math.round(delay - elapsed));
+  }
+
+  /** Temporary-pause control: a timer icon next to the permanent toggle.
+   *  Hidden when the scope is permanently disabled. Tapping pauses (switch off)
+   *  or resumes (switch on); shows a live countdown while paused. */
+  private _renderPauseIcon(scope: Scope, cfg: ScopeConfig) {
+    if (cfg.enabled === false) return "";
     const entityId = this._switchEntityIds.get(scopeKey(scope));
     if (!entityId) return "";
-    const on = this.hass.states?.[entityId]?.state === "on";
-    // Don't let toggling expand/collapse the row.
-    const stop = (e: Event) => e.stopPropagation();
-    const onChange = (e: Event) => {
+    const paused = this.hass.states?.[entityId]?.state === "off";
+    const onClick = (e: Event) => {
       e.stopPropagation();
-      void this.hass.callService?.("switch", on ? "turn_off" : "turn_on", {
+      void this.hass.callService?.("switch", paused ? "turn_on" : "turn_off", {
         entity_id: entityId,
       });
+    };
+    if (!paused) {
+      return html`<button
+        class="scope-pause"
+        data-test="scope-pause"
+        title=${localize(this.hass, "ui.pause_scope", "Pause this scope")}
+        @click=${onClick}
+      >
+        <ha-icon icon="mdi:timer-outline"></ha-icon>
+      </button>`;
+    }
+    const remaining = this._pauseRemaining(entityId);
+    return html`<button
+      class="scope-pause paused"
+      data-test="scope-pause"
+      title=${localize(this.hass, "ui.resume_scope", "Resume now")}
+      @click=${onClick}
+    >
+      <ha-icon icon="mdi:timer"></ha-icon>
+      <span class="countdown">${formatRemaining(remaining)}</span>
+    </button>`;
+  }
+
+  /** Permanent enable/disable toggle for the scope (non-hierarchical).
+   *  Reads/writes the scope config `enabled` flag (default true).
+   *  Uses HA's <ha-switch> when registered, else a themed checkbox fallback
+   *  (which also keeps the toggle testable under jsdom). */
+  private _renderScopeSwitch(scope: Scope, cfg: ScopeConfig) {
+    const enabled = cfg.enabled !== false;
+    // Don't let toggling expand/collapse the row.
+    const stop = (e: Event) => e.stopPropagation();
+    const onChange = async (e: Event) => {
+      e.stopPropagation();
+      try {
+        await setScopeEnabled(this.hass, scope, !enabled);
+        await this._reloadScope(scope);
+      } catch (err) {
+        this._error = (err as Error).message || String(err);
+      }
     };
     if (customElements.get("ha-switch")) {
       return html`<ha-switch
         class="scope-switch"
         data-test="scope-switch"
-        .checked=${on}
+        .checked=${live(enabled)}
         @click=${stop}
         @change=${onChange}
       ></ha-switch>`;
@@ -1346,9 +1450,24 @@ export class AmbienceScopesView extends LitElement {
       class="scope-switch"
       data-test="scope-switch"
       type="checkbox"
-      .checked=${on}
+      .checked=${live(enabled)}
       @click=${stop}
       @change=${onChange}
     />`;
+  }
+
+  /** Re-fetch just this scope's config and update the relevant store, so the
+   *  header toggle reflects the persisted `enabled` value after a write. */
+  private async _reloadScope(scope: Scope) {
+    try {
+      let cfg: ScopeConfig;
+      if (scope.kind === "house") cfg = _normalize(await getHouse(this.hass));
+      else if (scope.kind === "area") cfg = _normalize(await getArea(this.hass, scope.id));
+      else cfg = _normalize(await getFloor(this.hass, scope.id));
+      if (!this.isConnected) return;
+      this._setConfig(scope, cfg);
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
+    }
   }
 }

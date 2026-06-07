@@ -91,6 +91,9 @@ class FakeStore:
     def all_scope_configs(self):
         return [("area", area_id, cfg) for area_id, cfg in self._areas.items()]
 
+    def get_scope_enabled(self, scope_kind, scope_id):
+        return True
+
     def categories(self):
         return []
 
@@ -561,6 +564,9 @@ class FakeScopeStore:
         triples += [("floor", fid, cfg) for fid, cfg in self._floors.items()]
         triples.append(("house", None, self._house))
         return triples
+
+    def get_scope_enabled(self, scope_kind, scope_id):
+        return True
 
     def categories(self):
         return []

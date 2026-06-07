@@ -26,6 +26,7 @@ from .const import (
 )
 from .scope_triggers import iter_predicate_specs, referenced_entities
 from .service import (
+    _scope_enabled,
     _switch_state,
     async_execute_plan,
     async_resolve_with_snapshots,
@@ -214,9 +215,21 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self, scope_kind: str, scope_id: str | None, category_id: str, *, force: bool = False
     ) -> UnitTrace | None:
         """Resolve a dirty (scope, category) unit and apply if the winner changed
-        (or `force`). Skips when the switch is off. Returns a UnitTrace
-        describing the outcome when tracing is active, else None."""
+        (or `force`). Skips when the scope is disabled or the switch is off.
+        Returns a UnitTrace describing the outcome when tracing is active, else
+        None."""
         active = tracing_active(self._hass)
+        if not _scope_enabled(self._hass, scope_kind, scope_id):
+            if active:
+                return UnitTrace(
+                    scope_kind,
+                    scope_id,
+                    category_id,
+                    "on",
+                    Outcome.SKIPPED_SCOPE_DISABLED,
+                    None,
+                )
+            return None
         switch_state = _switch_state(self._hass, scope_kind, scope_id)
         if switch_state == "off":
             if active:

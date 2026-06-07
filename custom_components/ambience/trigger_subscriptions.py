@@ -29,6 +29,7 @@ from homeassistant.util import dt as dt_util
 from .conditions.time_of_day import ANCHOR_ATTR
 from .const import DATA_EXPOSED_ACTIONS, DATA_SWITCHES, DOMAIN
 from .service import (
+    _scope_enabled,
     _switch_state,
     async_execute_actions,
     category_ids,
@@ -190,10 +191,12 @@ class TriggerSubscriptionsMixin:
 
         Uses last-applied per (scope, category) (kept current by the watch system)
         rather than re-resolving, and never mutates last-applied. Skips when the
-        switch is off, a category has no active scene, or its stored index is out of
-        range.
+        scope is disabled, the switch is off, a category has no active scene, or its
+        stored index is out of range.
         """
         scope_kind, scope_id = scope
+        if not _scope_enabled(self._hass, scope_kind, scope_id):
+            return
         switch_state = _switch_state(self._hass, scope_kind, scope_id)
         if switch_state == "off":
             return

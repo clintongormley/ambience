@@ -1,5 +1,10 @@
 import { describe, expect, test, vi } from "vitest";
-import { getSwitchDefaults, listSwitches, saveSwitchDefaults } from "../frontend/src/api.js";
+import {
+  getSwitchDefaults,
+  listSwitches,
+  saveSwitchDefaults,
+  setScopeEnabled,
+} from "../frontend/src/api.js";
 
 function mockHass(impl: (msg: any) => any) {
   return { callWS: vi.fn(impl) } as any;
@@ -29,5 +34,27 @@ describe("switch API wrappers", () => {
     const r = await listSwitches(hass);
     expect(hass.callWS).toHaveBeenCalledWith({ type: "ambience/switches/list" });
     expect(r).toEqual(rows);
+  });
+});
+
+describe("setScopeEnabled", () => {
+  test("area scope", async () => {
+    const hass = mockHass(() => ({ ok: true }));
+    await setScopeEnabled(hass, { kind: "area", id: "living_room" }, false);
+    expect(hass.callWS).toHaveBeenCalledWith({
+      type: "ambience/set_scope_enabled",
+      area_id: "living_room",
+      enabled: false,
+    });
+  });
+
+  test("house scope", async () => {
+    const hass = mockHass(() => ({ ok: true }));
+    await setScopeEnabled(hass, { kind: "house" }, true);
+    expect(hass.callWS).toHaveBeenCalledWith({
+      type: "ambience/set_scope_enabled",
+      house: true,
+      enabled: true,
+    });
   });
 });

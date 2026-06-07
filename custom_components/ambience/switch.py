@@ -52,6 +52,14 @@ class _CancellableTimer:
         return self._cancelled
 
 
+def switch_unique_id(scope_kind: str, scope_id: str | None) -> str:
+    """Deterministic unique_id for a scope's switch entity. Shared with the
+    websocket layer so it can look the entity up to enable/disable it."""
+    if scope_kind == "house":
+        return "ambience_switch_house"
+    return f"ambience_switch_{scope_kind}_{scope_id}"
+
+
 def _entity_id_for(scope_kind: str, display_name: str) -> str:
     if scope_kind == "house":
         return "switch.house_ambience"
@@ -103,10 +111,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         # Fallback prefix if the area/floor disappears from the registry mid-
         # session. House always uses the literal "House".
         self._fallback_prefix = "House" if scope_kind == "house" else display_name
-        if scope_kind == "house":
-            self._attr_unique_id = "ambience_switch_house"
-        else:
-            self._attr_unique_id = f"ambience_switch_{scope_kind}_{scope_id}"
+        self._attr_unique_id = switch_unique_id(scope_kind, scope_id)
         # Area-bound switches show up under the area in HA UI; floor and house
         # don't have an area.
         if scope_kind == "area":
@@ -206,6 +211,15 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
 
     def _resolved_delay(self) -> int:
         return self._store().get_switch_defaults()["auto_on_delay_seconds"]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose pause timing so the frontend can render a countdown without a
+        round-trip. ``off_at`` is None when the switch is on."""
+        return {
+            "off_at": self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id),
+            "auto_on_delay_seconds": self._resolved_delay(),
+        }
 
     def _scope_prefix(self) -> str:
         """Live name of the scope: 'House' / floor name / area name.

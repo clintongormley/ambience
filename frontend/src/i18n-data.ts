@@ -249,6 +249,8 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     category_color_none: "No colour",
     category_save: "Save",
     view_traces: "View traces",
+    pause_scope: "Pause this scope",
+    resume_scope: "Resume now",
   },
   day_summary: {
     any: "any",

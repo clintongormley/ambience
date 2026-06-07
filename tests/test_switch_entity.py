@@ -385,3 +385,33 @@ async def test_config_updated_while_off_reschedules_auto_on(hass, mock_config_en
     # The switch is still off and a (possibly new) timer is active.
     assert ent.is_on is False
     assert ent._timer is not None
+
+
+# --- extra_state_attributes --------------------------------------------------
+
+
+async def test_switch_exposes_off_at_and_delay(hass, mock_config_entry, fixed_utcnow):
+    """extra_state_attributes must expose off_at (None when on) and auto_on_delay_seconds."""
+    await _setup(hass, mock_config_entry)
+    house = _switch(hass, "house", None)
+
+    # After turning off, off_at is set.
+    await house.async_turn_off()
+    await hass.async_block_till_done()
+    attrs = house.extra_state_attributes
+    assert attrs["off_at"] is not None
+    assert attrs["auto_on_delay_seconds"] == 7200
+
+    # After turning on, off_at is cleared.
+    await house.async_turn_on()
+    await hass.async_block_till_done()
+    attrs = house.extra_state_attributes
+    assert attrs["off_at"] is None
+
+
+def test_switch_unique_id_helper() -> None:
+    from custom_components.ambience.switch import switch_unique_id
+
+    assert switch_unique_id("house", None) == "ambience_switch_house"
+    assert switch_unique_id("area", "living_room") == "ambience_switch_area_living_room"
+    assert switch_unique_id("floor", "ground") == "ambience_switch_floor_ground"

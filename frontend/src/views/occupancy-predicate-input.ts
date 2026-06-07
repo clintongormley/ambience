@@ -10,8 +10,10 @@ import { renderSelect, renderSensorField } from "./form-controls.js";
 
 /**
  * Editor for an `occupancy` predicate: a presence-sensor picker (binary_sensor
- * entities filtered to occupancy/presence/motion device classes), an
- * Occupied/Vacant toggle, an Any/All quantifier (shown only when more than one
+ * entities filtered to occupancy/presence/motion device classes), a
+ * Detected/Clear toggle (matching the Clear/Detected labels HA gives presence
+ * binary_sensors in the entity-state condition), an Any/All quantifier (shown
+ * only when more than one
  * sensor is selected), and an optional per-scene `for` duration.
  *
  *   { sensors: binary_sensor.*[]   // empty = match-anything
@@ -167,8 +169,8 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
       "state",
       occupied ? "occupied" : "vacant",
       [
-        { value: "occupied", label: localize(this.hass, "ui.occupancy_occupied", "Occupied") },
-        { value: "vacant", label: localize(this.hass, "ui.occupancy_vacant", "Vacant") },
+        { value: "occupied", label: localize(this.hass, "ui.occupancy_detected", "Detected") },
+        { value: "vacant", label: localize(this.hass, "ui.occupancy_clear", "Clear") },
       ],
       (v) => this._setOccupied(v === "occupied"),
     );

@@ -623,7 +623,7 @@ test("summariseOccupancy: single sensor occupied", () => {
       { sensors: ["binary_sensor.lounge"], occupied: true },
       { hass },
     ),
-  ).toBe("Lounge is occupied");
+  ).toBe("Lounge is detected");
 });
 
 test("summariseOccupancy: vacant with for", () => {
@@ -636,7 +636,7 @@ test("summariseOccupancy: vacant with for", () => {
       { sensors: ["binary_sensor.lounge"], occupied: false, for: { h: 0, m: 5, s: 0 } },
       { hass },
     ),
-  ).toBe("Lounge is vacant for ≥5m");
+  ).toBe("Lounge is clear for ≥5m");
 });
 
 test("summariseOccupancy: multiple sensors with quant", () => {
@@ -652,7 +652,7 @@ test("summariseOccupancy: multiple sensors with quant", () => {
       { sensors: ["binary_sensor.a", "binary_sensor.b"], occupied: true, quant: "all" },
       { hass },
     ),
-  ).toBe("all of (Lounge, Hall) occupied");
+  ).toBe("all of (Lounge, Hall) detected");
 });
 
 test("summariseOccupancy: negated single sensor with for", () => {
@@ -670,7 +670,7 @@ test("summariseOccupancy: negated single sensor with for", () => {
       },
       { hass },
     ),
-  ).toBe("Lounge is not vacant for ≥20m");
+  ).toBe("Lounge is not clear for ≥20m");
 });
 
 test("summariseOccupancy: negated multiple sensors with quant", () => {
@@ -691,7 +691,7 @@ test("summariseOccupancy: negated multiple sensors with quant", () => {
       },
       { hass },
     ),
-  ).toBe("any of (Lounge, Hall) not occupied");
+  ).toBe("any of (Lounge, Hall) not detected");
 });
 
 test("summariseOccupancy: null is 'any'", () => {

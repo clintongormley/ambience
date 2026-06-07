@@ -6,7 +6,7 @@ vi.mock("../frontend/src/api.js", () => ({
 }));
 
 import "../frontend/src/views/state-expr-atom";
-import { getKnownAttributeValues } from "../frontend/src/api.js";
+import { getKnownAttributeValues, getKnownStates } from "../frontend/src/api.js";
 import type { StateAtom } from "../frontend/src/types";
 
 async function mount(atom: StateAtom): Promise<any> {
@@ -245,7 +245,7 @@ describe("ambience-state-expr-atom", () => {
     el2.addEventListener("value-changed", (e: Event) => {
       captured = (e as CustomEvent).detail.value;
     });
-    el2._setEntity("person.bob");
+    await el2._setEntity("person.bob");
     expect(captured.entity_id).toBe("person.bob");
     expect(captured.kind).toBe("is");
     el2.remove();
@@ -263,7 +263,7 @@ describe("ambience-state-expr-atom", () => {
     el2.addEventListener("value-changed", (e: Event) => {
       captured = (e as CustomEvent).detail.value;
     });
-    el2._setEntity("sensor.temp");
+    await el2._setEntity("sensor.temp");
     expect(captured.kind).toBe(">");
     el2.remove();
   });
@@ -570,7 +570,10 @@ describe("ambience-state-expr-atom", () => {
     expect(captured.states).toEqual(["on", "unavailable"]);
   });
 
-  test("setting an entity_id clears both states and attribute", async () => {
+  test("setting an entity_id clears the attribute and any value the new entity can't take", async () => {
+    // getKnownStates is mocked to return ["on","off"]; "Spotify" isn't among
+    // them, so it's dropped. The attribute is always cleared (tied to the old
+    // entity's shape).
     el = await mount({
       kind: "is",
       entity_id: "media_player.a",
@@ -581,10 +584,161 @@ describe("ambience-state-expr-atom", () => {
     el.addEventListener("value-changed", (e: Event) => {
       captured = (e as CustomEvent).detail.value;
     });
-    el._setEntity("light.kitchen");
+    await el._setEntity("light.kitchen");
     expect(captured.entity_id).toBe("light.kitchen");
     expect(captured.states).toEqual([]);
     expect(captured.attribute).toBeNull();
+  });
+
+  test("changing the entity keeps a value the new entity still supports", async () => {
+    // Both presence sensors share on/off (the default getKnownStates mock), so
+    // a "Detected"/on match carries over instead of being wiped.
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "binary_sensor.presence_a", states: ["on"] },
+      {
+        "binary_sensor.presence_a": { state: "on", attributes: {} },
+        "binary_sensor.presence_b": { state: "off", attributes: {} },
+      },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    await el2._setEntity("binary_sensor.presence_b");
+    expect(captured.entity_id).toBe("binary_sensor.presence_b");
+    expect(captured.states).toEqual(["on"]);
+    el2.remove();
+  });
+
+  test("changing the entity keeps only the supported subset of selected values", async () => {
+    vi.mocked(getKnownStates).mockResolvedValueOnce({ states: ["on", "off"] });
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "binary_sensor.a", states: ["on", "jammed"] },
+      {
+        "binary_sensor.a": { state: "on", attributes: {} },
+        "binary_sensor.b": { state: "off", attributes: {} },
+      },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    await el2._setEntity("binary_sensor.b");
+    expect(captured.states).toEqual(["on"]);
+    el2.remove();
+  });
+
+  test("changing the entity drops a value the new entity does not support", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "binary_sensor.x", states: ["on"] },
+      {
+        "binary_sensor.x": { state: "on", attributes: {} },
+        "person.bob": { state: "home", attributes: {} },
+      },
+    );
+    vi.mocked(getKnownStates).mockResolvedValueOnce({ states: ["home", "away"] });
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    await el2._setEntity("person.bob");
+    expect(captured.entity_id).toBe("person.bob");
+    expect(captured.states).toEqual([]);
+    expect(captured.attribute).toBeNull();
+    el2.remove();
+  });
+
+  test("changing the entity keeps the attribute (and its value) when the new entity also has it", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "media_player.a", attribute: "source", states: ["Spotify"] },
+      {
+        "media_player.a": { state: "playing", attributes: { source: "Spotify" } },
+        "media_player.b": { state: "playing", attributes: { source: "Radio" } },
+      },
+    );
+    // The new entity's source list still includes the matched value.
+    vi.mocked(getKnownAttributeValues).mockResolvedValueOnce({ values: ["Spotify", "Radio"] });
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    await el2._setEntity("media_player.b");
+    expect(captured.entity_id).toBe("media_player.b");
+    expect(captured.attribute).toBe("source");
+    expect(captured.states).toEqual(["Spotify"]);
+    el2.remove();
+  });
+
+  test("changing the entity keeps the attribute but drops a value the new entity's attribute can't take", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "media_player.a", attribute: "source", states: ["Spotify"] },
+      {
+        "media_player.a": { state: "playing", attributes: { source: "Spotify" } },
+        "media_player.b": { state: "playing", attributes: { source: "Radio" } },
+      },
+    );
+    // The new entity has `source`, but Spotify isn't one of its sources.
+    vi.mocked(getKnownAttributeValues).mockResolvedValueOnce({ values: ["Radio", "TV"] });
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    await el2._setEntity("media_player.b");
+    expect(captured.attribute).toBe("source");
+    expect(captured.states).toEqual([]);
+    el2.remove();
+  });
+
+  test("changing the entity clears the attribute (and value) when the new entity lacks it", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "media_player.a", attribute: "source", states: ["Spotify"] },
+      {
+        "media_player.a": { state: "playing", attributes: { source: "Spotify" } },
+        "light.kitchen": { state: "on", attributes: { brightness: 200 } },
+      },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    await el2._setEntity("light.kitchen");
+    expect(captured.attribute).toBeNull();
+    expect(captured.states).toEqual([]);
+    el2.remove();
+  });
+
+  test("a superseded entity change doesn't overwrite a newer one when fetches resolve out of order", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "binary_sensor.a", states: ["on"] },
+      {
+        "binary_sensor.a": { state: "on", attributes: {} },
+        "binary_sensor.b": { state: "off", attributes: {} },
+        "binary_sensor.c": { state: "on", attributes: {} },
+      },
+    );
+    // Hand-controlled fetches so the earlier (b) resolves AFTER the later (c).
+    let resolveB!: (v: { states: string[] }) => void;
+    let resolveC!: (v: { states: string[] }) => void;
+    const bP = new Promise<{ states: string[] }>((r) => {
+      resolveB = r;
+    });
+    const cP = new Promise<{ states: string[] }>((r) => {
+      resolveC = r;
+    });
+    vi.mocked(getKnownStates).mockReturnValueOnce(bP).mockReturnValueOnce(cP);
+    const emits: any[] = [];
+    el2.addEventListener("value-changed", (e: Event) => {
+      emits.push((e as CustomEvent).detail.value);
+    });
+    const p1 = el2._setEntity("binary_sensor.b");
+    const p2 = el2._setEntity("binary_sensor.c");
+    resolveC({ states: ["on", "off"] });
+    resolveB({ states: ["on", "off"] });
+    await Promise.all([p1, p2]);
+    // The stale "b" emit must be dropped; only the newest selection wins.
+    expect(emits.every((v) => v.entity_id !== "binary_sensor.b")).toBe(true);
+    expect(emits.at(-1).entity_id).toBe("binary_sensor.c");
+    el2.remove();
   });
 
   test("_setAttribute('') normalises empty string to null on emit", async () => {

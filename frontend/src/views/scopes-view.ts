@@ -44,6 +44,12 @@ import type {
   ServiceSchema,
   WeatherConfig,
 } from "../types.js";
+import {
+  getConditionsHintDismissed,
+  getExpandedScopes,
+  setConditionsHintDismissed,
+  setExpandedScopes,
+} from "../ui-state.js";
 import "./scenes-list.js";
 import "./scene-editor.js";
 import "./kebab-menu.js";
@@ -77,28 +83,6 @@ function _normalize(cfg: ScopeConfig): ScopeConfig {
 // Must stay in sync with GAP in custom_components/ambience/sorting.py — the
 // midpoint math below assumes the backend spaces auto priorities by this much.
 const PIN_GAP = 1024;
-
-// localStorage key remembering that the user dismissed the optional
-// "configure Workday & Weather" hint banner.
-const CONDITIONS_HINT_DISMISSED_KEY = "ambience-conditions-hint-dismissed";
-
-function readConditionsHintDismissed(): boolean {
-  try {
-    return window.localStorage.getItem(CONDITIONS_HINT_DISMISSED_KEY) === "1";
-  } catch {
-    /* v8 ignore next -- storage disabled (e.g. private mode); treat as not dismissed */
-    return false;
-  }
-}
-
-function persistConditionsHintDismissed(): void {
-  try {
-    window.localStorage.setItem(CONDITIONS_HINT_DISMISSED_KEY, "1");
-    /* v8 ignore next 2 -- storage disabled; dismissal just won't persist */
-  } catch {
-    /* ignore */
-  }
-}
 
 /** Pick a priority for a scene dropped between `above` and `below` (either may be
  *  undefined at the list ends). `all` is the current scene set for end fallbacks. */
@@ -317,8 +301,10 @@ export class AmbienceScopesView extends LitElement {
   @state() private _luxRanges?: LuxRangeStoreView;
   @state() private _dayConfig?: DayConfig;
   @state() private _weatherConfig?: WeatherConfig;
-  // _expanded keys: "area:<id>" | "floor:<id>" | "house"
-  @state() private _expanded = new Set<string>();
+  // _expanded keys: "area:<id>" | "floor:<id>" | "house". Seeded from
+  // localStorage so a reload (or HA's panel rebuild on reconnect) restores which
+  // rows were open; persisted on every change via _setExpanded.
+  @state() private _expanded = new Set<string>(getExpandedScopes());
   @state() private _error = "";
   // True once the initial static load (actions, weather, workday, …) finishes,
   // so the empty-state banners don't flash during loading.
@@ -415,7 +401,7 @@ export class AmbienceScopesView extends LitElement {
 
   override async connectedCallback() {
     super.connectedCallback();
-    this._conditionsHintDismissed = readConditionsHintDismissed();
+    this._conditionsHintDismissed = getConditionsHintDismissed();
     window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.addEventListener("ambience-categories-changed", this._onCategoriesChanged);
     window.addEventListener("ambience-conditions-changed", this._onConditionsChanged);
@@ -555,7 +541,7 @@ export class AmbienceScopesView extends LitElement {
         const id = event.data.area_id;
         const expanded = new Set(this._expanded);
         expanded.delete(`area:${id}`);
-        this._expanded = expanded;
+        this._setExpanded(expanded);
         if (this._editing?.scope.kind === "area" && this._editing.scope.id === id) {
           this._editing = null;
         }
@@ -569,7 +555,7 @@ export class AmbienceScopesView extends LitElement {
         const id = event.data.floor_id;
         const expanded = new Set(this._expanded);
         expanded.delete(`floor:${id}`);
-        this._expanded = expanded;
+        this._setExpanded(expanded);
         if (this._editing?.scope.kind === "floor" && this._editing.scope.id === id) {
           this._editing = null;
         }
@@ -639,12 +625,19 @@ export class AmbienceScopesView extends LitElement {
 
   // --- expand --------------------------------------------------------------
 
+  /** Update the expanded set and persist it, so the open/collapsed rows survive
+   *  a reload or HA's panel rebuild on reconnect. */
+  private _setExpanded(next: Set<string>) {
+    this._expanded = next;
+    setExpandedScopes([...next]);
+  }
+
   private _toggleExpand(scope: Scope) {
     const key = scopeKey(scope);
     const next = new Set(this._expanded);
     if (next.has(key)) next.delete(key);
     else next.add(key);
-    this._expanded = next;
+    this._setExpanded(next);
   }
 
   // --- scenes ---------------------------------------------------------------
@@ -1023,7 +1016,7 @@ export class AmbienceScopesView extends LitElement {
 
   private _dismissConditionsHint() {
     this._conditionsHintDismissed = true;
-    persistConditionsHintDismissed();
+    setConditionsHintDismissed();
   }
 
   /** The empty-state nudges shown above the scope list:

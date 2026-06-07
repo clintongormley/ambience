@@ -14,6 +14,7 @@ import { defineElement } from "./define-element.js";
 import { watchHaComponents } from "./ha-components.js";
 import { localize } from "./i18n.js";
 import { renderIcon, renderLogo } from "./logo.js";
+import { getFilterCategory } from "./ui-state.js";
 import "./views/category-filter.js";
 import "./views/scopes-view.js";
 import "./views/settings-modal.js";
@@ -117,7 +118,10 @@ export class AmbienceFrontend extends LitElement {
   @property({ attribute: false }) hass!: HassConnection;
   @state() private _settingsOpen = false;
   @state() private _settingsTab?: "ambience" | "conditions" | "actions";
-  @state() private _filterCategory = "";
+  // Seeded from localStorage so scopes-view renders filtered on first paint
+  // (no flash of "All") after a reload or HA's panel rebuild on reconnect. Kept
+  // in sync thereafter by the ambience-filter-changed event from the header.
+  @state() private _filterCategory = getFilterCategory();
 
   // Deep-link from a child view (e.g. a scopes-view empty-state banner) asking
   // to open Settings on a specific tab. Composed so it crosses the shadow

@@ -53,6 +53,7 @@ class Outcome(StrEnum):
     NO_OP = "no_op"
     NO_MATCH = "no_match"
     SKIPPED_SWITCH_OFF = "skipped_switch_off"
+    SKIPPED_SCOPE_DISABLED = "skipped_scope_disabled"
     # A periodic re-apply re-fired the current winner's due actions without
     # re-resolving; routed to the changes stream alongside ACTED.
     REAPPLIED = "reapplied"
@@ -248,6 +249,9 @@ def format_trace_event(event: TraceEvent) -> list[str]:
         scope = _scope_label(unit)
         if unit.outcome == Outcome.SKIPPED_SWITCH_OFF:
             lines.append(f"  {scope}: skipped (switch off)")
+            continue
+        if unit.outcome == Outcome.SKIPPED_SCOPE_DISABLED:
+            lines.append(f"  {scope}: skipped (scope disabled)")
             continue
         explanation = unit.explanation
         winner = ""

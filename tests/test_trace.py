@@ -94,6 +94,13 @@ def test_format_switch_off_unit_is_terse():
     assert "area/kitchen/General: skipped (switch off)" in text
 
 
+def test_format_skipped_scope_disabled():
+    unit = UnitTrace("area", "kitchen", "General", "off", "skipped_scope_disabled", None)
+    event = TraceEvent(TriggerCause(kind="manual"), [unit])
+    text = "\n".join(format_trace_event(event))
+    assert "area/kitchen/General: skipped (scope disabled)" in text
+
+
 def test_format_marks_unevaluated_scenes():
     explanation = Explanation(
         winner_index=0,

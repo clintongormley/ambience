@@ -9,7 +9,12 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from custom_components.ambience.const import DATA_STORE, DOMAIN, SIGNAL_SWITCH_CONFIG_UPDATED
+from custom_components.ambience.const import (
+    DATA_STORE,
+    DATA_SWITCHES,
+    DOMAIN,
+    SIGNAL_SWITCH_CONFIG_UPDATED,
+)
 
 
 @pytest.fixture
@@ -124,7 +129,7 @@ async def test_dry_run_includes_switch_state_for_house(hass, installed, hass_ws_
 # --- set_scope_enabled ------------------------------------------------------
 
 
-async def test_set_scope_enabled_persists_and_disables_entity(hass, installed, hass_ws_client):
+async def test_set_scope_enabled_hides_switch_but_keeps_it_loaded(hass, installed, hass_ws_client):
     from homeassistant.helpers import entity_registry as er
 
     resp = await _ws_send(
@@ -132,15 +137,19 @@ async def test_set_scope_enabled_persists_and_disables_entity(hass, installed, h
     )
     assert resp["success"]
 
-    store = hass.data[DOMAIN][DATA_STORE]
-    assert store.get_scope_enabled("house", None) is False
-
     reg = er.async_get(hass)
     entity_id = reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house")
-    assert reg.async_get(entity_id).disabled is True
+    entry = reg.async_get(entity_id)
+    # Disabling a scope HIDES its switch (not registry-disables it):
+    assert entry.hidden_by is er.RegistryEntryHider.INTEGRATION
+    assert entry.disabled_by is None
+    # The key fix: the switch is still present/loaded, not removed:
+    assert ("house", None) in hass.data[DOMAIN][DATA_SWITCHES]
+    # Store flag persisted:
+    assert hass.data[DOMAIN][DATA_STORE].get_scope_enabled("house", None) is False
 
 
-async def test_set_scope_enabled_reenables_entity(hass, installed, hass_ws_client):
+async def test_set_scope_enabled_unhides_on_reenable(hass, installed, hass_ws_client):
     from homeassistant.helpers import entity_registry as er
 
     for enabled in (False, True):
@@ -150,12 +159,32 @@ async def test_set_scope_enabled_reenables_entity(hass, installed, hass_ws_clien
         assert resp["success"]
         await hass.async_block_till_done()
 
-    store = hass.data[DOMAIN][DATA_STORE]
-    assert store.get_scope_enabled("house", None) is True
-
     reg = er.async_get(hass)
     entity_id = reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house")
-    assert reg.async_get(entity_id).disabled is False
+    entry = reg.async_get(entity_id)
+    # Re-enabling clears the hidden flag and keeps the switch loaded:
+    assert entry.hidden_by is None
+    assert ("house", None) in hass.data[DOMAIN][DATA_SWITCHES]
+    assert hass.data[DOMAIN][DATA_STORE].get_scope_enabled("house", None) is True
+
+
+async def test_set_scope_enabled_heals_legacy_disabled(hass, installed, hass_ws_client):
+    from homeassistant.helpers import entity_registry as er
+
+    # Pre-condition: simulate the OLD code's leftover state by registry-disabling
+    # the entity via INTEGRATION (as the old set_scope_enabled did on disable).
+    reg = er.async_get(hass)
+    entity_id = reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house")
+    reg.async_update_entity(entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION)
+
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=True
+    )
+    assert resp["success"]
+    await hass.async_block_till_done()
+
+    # Enabling heals the legacy integration-applied disabled flag:
+    assert reg.async_get(entity_id).disabled_by is None
 
 
 async def test_set_scope_enabled_requires_one_scope(hass, installed, hass_ws_client):

@@ -980,17 +980,29 @@ async def _ws_set_scope_enabled(
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_set_scope_enabled(scope_kind, scope_id, enabled)
 
-    # Disabled scopes never apply scenes, so hide their switch entity from HA's
-    # default views by registry-disabling it (re-enabling restores it).
+    # Disabled scopes never apply scenes, so keep their switch entity out of HA's
+    # default views by HIDING it (re-enabling restores it).
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id(
         "switch", DOMAIN, switch_unique_id(scope_kind, scope_id)
     )
     if entity_id is not None:
-        registry.async_update_entity(
-            entity_id,
-            disabled_by=None if enabled else er.RegistryEntryDisabler.INTEGRATION,
-        )
+        if enabled:
+            # Heal any integration-applied hide/disable so the switch reappears.
+            entry = registry.async_get(entity_id)
+            updates: dict[str, Any] = {}
+            if entry and entry.hidden_by is er.RegistryEntryHider.INTEGRATION:
+                updates["hidden_by"] = None
+            if entry and entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
+                updates["disabled_by"] = None
+            if updates:
+                registry.async_update_entity(entity_id, **updates)
+        else:
+            # Hide (don't disable) so the switch stays loaded — disabling removes
+            # it from DATA_SWITCHES and forces a config-entry reload, which breaks
+            # the frontend pause-timer icon. Hidden entities are just kept out of
+            # HA's default views.
+            registry.async_update_entity(entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION)
     # Re-enabling resyncs the scope (mirrors switch turn-on's force resync).
     if enabled:
         await async_apply_scene(hass, scope_kind, scope_id)

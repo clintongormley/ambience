@@ -20,6 +20,8 @@ async function mount(categories: SceneCategory[]): Promise<Filter> {
   const el = document.createElement("ambience-category-filter") as Filter;
   el.hass = {};
   document.body.appendChild(el);
+  // Two cycles: connectedCallback resolves listCategories on a later microtask,
+  // then Lit needs another update to re-render with the loaded categories.
   await el.updateComplete;
   await new Promise((r) => setTimeout(r, 0));
   await el.updateComplete;

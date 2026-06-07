@@ -157,7 +157,10 @@ export class AmbienceCategoryFilter extends LitElement {
     } catch {
       // Leave the list empty; a later change event or reload will populate it.
     } finally {
-      this._loaded = true;
+      // Only mark loaded if still connected — a stale resolve on a disconnected
+      // element must not skip the refetch when it is re-inserted (connectedCallback
+      // runs again on reconnect).
+      if (this.isConnected) this._loaded = true;
     }
   }
 

@@ -26,14 +26,21 @@ function _stateAtomError(atom: StateAtom, hass?: HassConnection): string | null 
   if (!atom.entity_id) {
     return localize(hass, "ui.state_err_entity", "Entity is required");
   }
+  // `states` may be missing/non-array on persisted-but-corrupt data reaching the
+  // save gate (the widget always builds an array). Treat anything else as empty.
+  const states = Array.isArray(atom.states) ? atom.states : [];
   const isNumeric = atom.kind !== "is" && atom.kind !== "is_not";
   if (isNumeric) {
-    const v = atom.states[0];
-    if (!v) return localize(hass, "ui.state_err_value", "Value is required");
+    const v = states[0];
+    // Mirror the backend's float() parse: a non-string or whitespace-only value
+    // is "missing" (JS `Number(" ")` is 0, so the trim guard is what rejects it).
+    if (typeof v !== "string" || !v.trim()) {
+      return localize(hass, "ui.state_err_value", "Value is required");
+    }
     if (!Number.isFinite(Number(v))) {
       return localize(hass, "ui.state_err_numeric", "Value must be a number");
     }
-  } else if (!atom.states.some((s) => s !== "")) {
+  } else if (!states.some((s) => s !== "")) {
     return localize(hass, "ui.state_err_state", "State is required");
   }
   return null;
@@ -42,10 +49,19 @@ function _stateAtomError(atom: StateAtom, hass?: HassConnection): string | null 
 /** First validation error anywhere in an expression tree, or null when every
  *  atom is complete. Walks groups/NOT wrappers and validates each atom. */
 function _stateTreeError(tree: StateExpr | null, hass?: HassConnection): string | null {
-  if (!tree) return null;
-  if (tree.kind === "not") return _stateTreeError((tree as StateNot).item, hass);
+  if (!tree || typeof tree !== "object") return null;
+  if (tree.kind === "not") {
+    const item = (tree as StateNot).item;
+    if (!item) return localize(hass, "ui.state_err_incomplete", "This condition is incomplete");
+    return _stateTreeError(item, hass);
+  }
   if (tree.kind === "and" || tree.kind === "or") {
-    for (const item of (tree as StateGroup).items) {
+    const items = (tree as StateGroup).items;
+    // A corrupt group with no/invalid items would otherwise throw on `for…of`.
+    if (!Array.isArray(items) || items.length === 0) {
+      return localize(hass, "ui.state_err_incomplete", "This condition is incomplete");
+    }
+    for (const item of items) {
       const err = _stateTreeError(item, hass);
       if (err !== null) return err;
     }

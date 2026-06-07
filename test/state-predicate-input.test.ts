@@ -4,8 +4,8 @@ vi.mock("../frontend/src/api.js", () => ({
   getKnownStates: vi.fn(async () => ({ states: ["on", "off"] })),
 }));
 
-import "../frontend/src/views/state-predicate-input";
 import type { StatePredicate } from "../frontend/src/types";
+import { statePredicateError } from "../frontend/src/views/state-predicate-input";
 
 async function mount(value: StatePredicate = null): Promise<any> {
   const el: any = document.createElement("ambience-state-predicate-input");
@@ -1946,5 +1946,34 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.kind).toBe("not");
     expect(captured.item.items[0].entity_id).toBe("z");
     expect(captured.item.items[1].entity_id).toBe("b");
+  });
+});
+
+// `statePredicateError` is exported for the scene-editor SAVE gate, where it runs
+// against persisted `when[...]` data — which can be corrupt/hand-edited and is
+// NOT guaranteed to match the widget-built shape. It must never throw, and it
+// should align with the backend validator so the frontend blocks exactly what
+// the backend would reject (rather than passing it through to a cryptic error).
+describe("statePredicateError — robust to malformed persisted predicates", () => {
+  test("a group missing its items array reports an error instead of throwing", () => {
+    expect(() => statePredicateError({ kind: "and" })).not.toThrow();
+    expect(statePredicateError({ kind: "and" })).toBeTruthy();
+    expect(statePredicateError({ kind: "or", items: null })).toBeTruthy();
+  });
+
+  test("a NOT missing its item reports an error instead of returning valid", () => {
+    expect(() => statePredicateError({ kind: "not" })).not.toThrow();
+    expect(statePredicateError({ kind: "not" })).toBeTruthy();
+  });
+
+  test("an atom missing its states array reports an error instead of throwing", () => {
+    expect(() => statePredicateError({ kind: "is", entity_id: "x" })).not.toThrow();
+    expect(statePredicateError({ kind: "is", entity_id: "x" })).toBeTruthy();
+  });
+
+  test("a numeric threshold of only whitespace is rejected (backend float() would too)", () => {
+    // JS Number(" ") === 0 (finite), so the naive check passed it while the
+    // backend's float(" ") raises — a divergence that let a bad save through.
+    expect(statePredicateError({ kind: ">", entity_id: "x", states: [" "] })).toBeTruthy();
   });
 });

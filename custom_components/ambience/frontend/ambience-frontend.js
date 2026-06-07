@@ -4535,8 +4535,12 @@ var Vs=Object.defineProperty;var Ks=Object.getOwnPropertyDescriptor;var u=(t,n,e
     .settings-btn ha-icon {
       --mdc-icon-size: 24px;
     }
-    /* Too narrow for the wordmark alongside the filter + cog: show the icon. */
-    @container (max-width: 32rem) {
+    /* Too narrow for the wordmark alongside the filter + cog: show the icon.
+       The wordmark is pinned at the left (right edge ≈ 181px) and the filter is
+       centred with a 18rem (≈252px) min-width, so the two collide once the
+       header drops below ≈632px. Swap at 48rem (≈672px at HA's 14px root) to
+       keep a ~20px gap before they touch. (NB rem here is ×14, not ×16.) */
+    @container (max-width: 48rem) {
       .brand .ambience-logo {
         display: none;
       }

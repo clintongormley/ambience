@@ -1,5 +1,6 @@
+import type { CSSResult } from "lit";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import "../frontend/src/ambience-frontend";
+import { AmbienceFrontend } from "../frontend/src/ambience-frontend";
 
 type SettingsModal = HTMLElement & { open: boolean };
 
@@ -89,6 +90,19 @@ describe("<ambience-frontend>", () => {
   test("renders both logo images in the DOM (CSS container query handles the swap)", () => {
     expect(el.shadowRoot!.querySelector("header img.ambience-logo")).not.toBeNull();
     expect(el.shadowRoot!.querySelector("header img.ambience-icon")).not.toBeNull();
+  });
+
+  test("logo→icon collapse breakpoint is reachable on a desktop browser window", () => {
+    // The header is a container-query context and swaps the wordmark for the
+    // icon below this breakpoint. HA sets the root font-size to 14px, and
+    // desktop browsers refuse to shrink a window below ~500px — so a breakpoint
+    // at/under 500px (≈35.7rem) can never be reached by resizing and the swap
+    // would never fire on desktop. The breakpoint must sit comfortably above it.
+    const cssText = (AmbienceFrontend.styles as CSSResult).cssText;
+    const match = cssText.match(/@container\s*\(\s*max-width:\s*([\d.]+)rem\s*\)/);
+    expect(match, "expected an @container (max-width: …rem) rule").not.toBeNull();
+    const breakpointPx = Number(match![1]) * 14;
+    expect(breakpointPx).toBeGreaterThan(500);
   });
 
   test("an ambience-filter-changed event sets the scopes-view filterCategory", async () => {

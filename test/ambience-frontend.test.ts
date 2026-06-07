@@ -81,4 +81,29 @@ describe("<ambience-frontend>", () => {
     const after = el.shadowRoot!.querySelector<SettingsModal>("ambience-settings-modal");
     expect(after === null || !after.open).toBe(true);
   });
+
+  test("renders the category filter inside the header", () => {
+    expect(el.shadowRoot!.querySelector("header ambience-category-filter")).not.toBeNull();
+  });
+
+  test("renders both the wordmark logo and the square icon in the header", () => {
+    expect(el.shadowRoot!.querySelector("header img.ambience-logo")).not.toBeNull();
+    expect(el.shadowRoot!.querySelector("header img.ambience-icon")).not.toBeNull();
+  });
+
+  test("an ambience-filter-changed event sets the scopes-view filterCategory", async () => {
+    const filter = el.shadowRoot!.querySelector("ambience-category-filter")!;
+    filter.dispatchEvent(
+      new CustomEvent("ambience-filter-changed", {
+        detail: { category: "kitchen" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    const scopes = el.shadowRoot!.querySelector("ambience-scopes-view") as HTMLElement & {
+      filterCategory?: string;
+    };
+    expect(scopes.filterCategory).toBe("kitchen");
+  });
 });

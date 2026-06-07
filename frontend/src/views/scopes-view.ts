@@ -345,8 +345,9 @@ export class AmbienceScopesView extends LitElement {
   // render time so the modal re-fetches if that scope's config changes.
   @state() private _autoTriggers: { scope: Scope; name: string } | null = null;
   // Global category filter, driven by the header's <ambience-category-filter>:
-  // "" = All, else a category id.
-  @property() filterCategory = "";
+  // "" = All, else a category id. Set via Lit property binding only (never an
+  // HTML attribute), matching how scenes-list declares the same input.
+  @property({ attribute: false }) filterCategory = "";
   private _unsubArea?: () => void;
   private _unsubFloor?: () => void;
 

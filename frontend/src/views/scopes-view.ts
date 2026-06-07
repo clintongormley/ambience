@@ -1195,7 +1195,7 @@ export class AmbienceScopesView extends LitElement {
       <ul>
         ${repeat(
           this._orderedScopeRows(),
-          // Key by scope identity so reordering (e.g. a switched-off scope
+          // Key by scope identity so reordering (e.g. a disabled scope
           // sinking to the end) moves each row's DOM with its scope rather than
           // reusing nodes positionally — otherwise a toggle's checked state can
           // bleed onto whichever scope inherits its old position.

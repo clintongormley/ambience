@@ -215,8 +215,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self, scope_kind: str, scope_id: str | None, category_id: str, *, force: bool = False
     ) -> UnitTrace | None:
         """Resolve a dirty (scope, category) unit and apply if the winner changed
-        (or `force`). Skips when the switch is off. Returns a UnitTrace
-        describing the outcome when tracing is active, else None."""
+        (or `force`). Skips when the scope is disabled or the switch is off.
+        Returns a UnitTrace describing the outcome when tracing is active, else
+        None."""
         active = tracing_active(self._hass)
         if not _scope_enabled(self._hass, scope_kind, scope_id):
             if active:

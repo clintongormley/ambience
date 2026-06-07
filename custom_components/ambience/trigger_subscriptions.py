@@ -191,8 +191,8 @@ class TriggerSubscriptionsMixin:
 
         Uses last-applied per (scope, category) (kept current by the watch system)
         rather than re-resolving, and never mutates last-applied. Skips when the
-        switch is off, a category has no active scene, or its stored index is out of
-        range.
+        scope is disabled, the switch is off, a category has no active scene, or its
+        stored index is out of range.
         """
         scope_kind, scope_id = scope
         if not _scope_enabled(self._hass, scope_kind, scope_id):

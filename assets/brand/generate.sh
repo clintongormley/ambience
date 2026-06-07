@@ -44,6 +44,7 @@ oxipng -o max --interlace 1 --force --strip safe "$OUT"/*.png
 # so the frontend can load them via new URL("./logo.png", import.meta.url).
 PANEL=../../custom_components/ambience/frontend
 cp "$OUT/logo.png" "$OUT/logo@2x.png" "$OUT/dark_logo.png" "$OUT/dark_logo@2x.png" "$PANEL/"
+cp "$OUT/icon.png" "$OUT/icon@2x.png" "$OUT/dark_icon.png" "$OUT/dark_icon@2x.png" "$PANEL/"
 
 echo "Done. Generated:"
 ls -1 "$OUT"

@@ -36,3 +36,16 @@ export function renderLogo(opts: { dark?: boolean; title?: string } = {}): Templ
     alt=${title}
   />`;
 }
+
+export function renderIcon(opts: { dark?: boolean; title?: string } = {}): TemplateResult {
+  const title = opts.title ?? "Ambience";
+  const base = opts.dark ? "dark_icon" : "icon";
+  const src1x = asset(`${base}.png`);
+  const src2x = asset(`${base}@2x.png`);
+  return html`<img
+    class="ambience-icon"
+    src=${src1x}
+    srcset="${src1x} 1x, ${src2x} 2x"
+    alt=${title}
+  />`;
+}

@@ -43,21 +43,24 @@ export class AmbienceFrontend extends LitElement {
        the header's own width regardless of the surrounding panel/card. */
       container-type: inline-size;
     }
-    /* Header contents are capped to the content width and centred, so the logo,
-     filter, and cog align over the centred page content. The 1fr/auto/1fr grid
-     keeps the filter centred regardless of the logo's and cog's widths. */
+    /* Header contents are capped to the content width and centred. The filter
+     is the only in-flow child so it centres at the bar midpoint; the logo and
+     cog are absolutely positioned at the edges so they never shift the centre. */
     .bar {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
+      position: relative;
+      display: flex;
+      justify-content: center;
       align-items: center;
-      gap: 1rem;
       max-width: 60rem;
       margin: 0 auto;
       padding: 0.75rem 1rem;
     }
     h1.brand {
       margin: 0;
-      justify-self: start;
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
       display: flex;
       align-items: center;
       /* visually replaced by the logo/icon; keep for document outline only */
@@ -73,11 +76,11 @@ export class AmbienceFrontend extends LitElement {
       height: 3rem;
       width: auto;
     }
-    ambience-category-filter {
-      justify-self: center;
-    }
     .settings-btn {
-      justify-self: end;
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
       background: transparent;
       border: none;
       border-radius: 50%;
@@ -121,6 +124,7 @@ export class AmbienceFrontend extends LitElement {
 
   private _onFilterChanged = (e: Event) => {
     this._filterCategory = (e as CustomEvent<{ category?: string }>).detail?.category ?? "";
+    e.stopPropagation();
   };
 
   override connectedCallback() {
@@ -137,18 +141,16 @@ export class AmbienceFrontend extends LitElement {
   }
 
   override render() {
+    const logoOpts = {
+      dark: Boolean((this.hass as { themes?: { darkMode?: boolean } }).themes?.darkMode),
+      title: localize(this.hass, "ui.panel_title", "Ambience"),
+    };
     return html`
       <header>
         <div class="bar">
           <h1 class="brand">
-            ${renderLogo({
-              dark: Boolean((this.hass as { themes?: { darkMode?: boolean } }).themes?.darkMode),
-              title: localize(this.hass, "ui.panel_title", "Ambience"),
-            })}
-            ${renderIcon({
-              dark: Boolean((this.hass as { themes?: { darkMode?: boolean } }).themes?.darkMode),
-              title: localize(this.hass, "ui.panel_title", "Ambience"),
-            })}
+            ${renderLogo(logoOpts)}
+            ${renderIcon(logoOpts)}
           </h1>
           <ambience-category-filter .hass=${this.hass}></ambience-category-filter>
           <button

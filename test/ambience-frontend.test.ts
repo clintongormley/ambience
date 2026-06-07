@@ -86,7 +86,7 @@ describe("<ambience-frontend>", () => {
     expect(el.shadowRoot!.querySelector("header ambience-category-filter")).not.toBeNull();
   });
 
-  test("renders both the wordmark logo and the square icon in the header", () => {
+  test("renders both logo images in the DOM (CSS container query handles the swap)", () => {
     expect(el.shadowRoot!.querySelector("header img.ambience-logo")).not.toBeNull();
     expect(el.shadowRoot!.querySelector("header img.ambience-icon")).not.toBeNull();
   });

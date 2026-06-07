@@ -395,7 +395,7 @@ async def test_switch_exposes_off_at_and_delay(hass, mock_config_entry, fixed_ut
     await _setup(hass, mock_config_entry)
     house = _switch(hass, "house", None)
 
-    # While on, off_at should be None.
+    # After turning off, off_at is set.
     await house.async_turn_off()
     await hass.async_block_till_done()
     attrs = house.extra_state_attributes

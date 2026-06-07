@@ -1,5 +1,6 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { live } from "lit/directives/live.js";
 import { repeat } from "lit/directives/repeat.js";
 
 import type { AreaRegistryEvent, FloorRegistryEvent, HassConnection } from "../api.js";
@@ -1371,10 +1372,6 @@ export class AmbienceScopesView extends LitElement {
     `;
   }
 
-  /** Permanent enable/disable toggle for the scope (non-hierarchical).
-   *  Reads/writes the scope config `enabled` flag (default true).
-   *  Uses HA's <ha-switch> when registered, else a themed checkbox fallback
-   *  (which also keeps the toggle testable under jsdom). */
   /** Seconds remaining until the scope's switch auto-resumes, derived from the
    *  switch entity's `off_at` / `auto_on_delay_seconds` attributes. 0 if not
    *  paused or the attributes are missing. */
@@ -1423,20 +1420,28 @@ export class AmbienceScopesView extends LitElement {
     </button>`;
   }
 
+  /** Permanent enable/disable toggle for the scope (non-hierarchical).
+   *  Reads/writes the scope config `enabled` flag (default true).
+   *  Uses HA's <ha-switch> when registered, else a themed checkbox fallback
+   *  (which also keeps the toggle testable under jsdom). */
   private _renderScopeSwitch(scope: Scope, cfg: ScopeConfig) {
     const enabled = cfg.enabled !== false;
     // Don't let toggling expand/collapse the row.
     const stop = (e: Event) => e.stopPropagation();
     const onChange = async (e: Event) => {
       e.stopPropagation();
-      await setScopeEnabled(this.hass, scope, !enabled);
-      await this._reloadScope(scope);
+      try {
+        await setScopeEnabled(this.hass, scope, !enabled);
+        await this._reloadScope(scope);
+      } catch (err) {
+        this._error = (err as Error).message || String(err);
+      }
     };
     if (customElements.get("ha-switch")) {
       return html`<ha-switch
         class="scope-switch"
         data-test="scope-switch"
-        .checked=${enabled}
+        .checked=${live(enabled)}
         @click=${stop}
         @change=${onChange}
       ></ha-switch>`;
@@ -1445,7 +1450,7 @@ export class AmbienceScopesView extends LitElement {
       class="scope-switch"
       data-test="scope-switch"
       type="checkbox"
-      .checked=${enabled}
+      .checked=${live(enabled)}
       @click=${stop}
       @change=${onChange}
     />`;

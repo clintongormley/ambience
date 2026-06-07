@@ -1325,6 +1325,24 @@ describe("ambience-scopes-view", () => {
     expect(el.hass.callService).not.toHaveBeenCalled();
   });
 
+  test("a failed enable/disable surfaces an error and reverts the toggle", async () => {
+    el = await mount({ houseConfig: { scenes: [], enabled: true } });
+    vi.mocked(api.setScopeEnabled).mockRejectedValueOnce(new Error("ws boom"));
+    const sw = toggleIn(el.shadowRoot.querySelector(".scope-row.house"));
+    expect(sw.checked).toBe(true);
+    sw.checked = false;
+    sw.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // Error surfaced.
+    expect(el.shadowRoot.querySelector(".error")?.textContent).toContain("ws boom");
+    // Toggle reverted to the persisted (enabled) state.
+    const sw2 = toggleIn(el.shadowRoot.querySelector(".scope-row.house"));
+    expect(sw2.checked).toBe(true);
+  });
+
   test("clicking the toggle does not expand the row", async () => {
     el = await mount({
       switches: baseSwitches,

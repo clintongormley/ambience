@@ -55,3 +55,11 @@ export function effectiveReapplySeconds(action: ActionSpec, exposedSeconds: numb
   if ("reapply_seconds" in action) return action.reapply_seconds ?? 0;
   return exposedSeconds;
 }
+
+/** Human-readable re-apply interval, e.g. `5 min`, `45 sec`, `1 min 30 sec`.
+ *  Used by the read-only Auto-triggers display. */
+export function formatReapplyInterval(sec: number): string {
+  if (sec % 60 === 0) return `${sec / 60} min`;
+  if (sec < 60) return `${sec} sec`;
+  return `${Math.floor(sec / 60)} min ${sec % 60} sec`;
+}

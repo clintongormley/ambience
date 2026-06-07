@@ -39,7 +39,27 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
         raise ValueError("config must be an object")
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    # Server-side backstop for the frontend's per (scope, category) scene-name
+    # uniqueness rule: a non-empty name must be unique (case-insensitively,
+    # trimmed) within its category. Empty/unnamed scenes are exempt.
+    seen_names: dict[tuple[Any, str], int] = {}
     for scene_idx, scene in enumerate(config.get("scenes", [])):
+        name = scene.get("name")
+        if isinstance(name, str) and name.strip():
+            category = scene.get("category")
+            # `category` is a string id (or absent). Guard against corrupted /
+            # hand-edited storage so a non-hashable value raises a clean
+            # ValueError here instead of an unhashable-key TypeError that would
+            # escape the websocket validation path.
+            if category is not None and not isinstance(category, str):
+                raise ValueError(f"scene {scene_idx}: category must be a string")
+            name_key = (category, name.strip().lower())
+            if name_key in seen_names:
+                raise ValueError(
+                    f"scene {scene_idx}: a scene named {name.strip()!r} "
+                    f"already exists in this category"
+                )
+            seen_names[name_key] = scene_idx
         when = scene.get("when", {})
         for key, predicate in when.items():
             if predicate is None:

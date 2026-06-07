@@ -37,6 +37,7 @@ vi.mock("../frontend/src/api", () => ({
   getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
   applyScenes: vi.fn(async () => ({ ok: true })),
   runSceneActions: vi.fn(async () => ({ ran: 1, scene_name: "R" })),
+  listAutoTriggers: vi.fn(async () => ({ triggers: [], opaque: false })),
 }));
 
 import * as api from "../frontend/src/api";
@@ -295,6 +296,80 @@ describe("ambience-scopes-view", () => {
     );
     expect(api.saveArea).not.toHaveBeenCalled();
     expect(api.saveFloor).not.toHaveBeenCalled();
+  });
+
+  // --- save failure handling ----------------------------------------------
+
+  async function openEditorViaAdd(scope: Scope): Promise<any> {
+    const row = el.shadowRoot.querySelector(
+      `.scope-row.${scope.kind}${scope.kind === "house" ? "" : `[data-id='${scope.id}']`}`,
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    row
+      .querySelector("ambience-scenes-list")!
+      .dispatchEvent(new CustomEvent("add-scene", { detail: {}, bubbles: true, composed: true }));
+    await el.updateComplete;
+    return el.shadowRoot.querySelector("ambience-scene-editor");
+  }
+
+  function dispatchSave(editor: any, scope: Scope, name = "X"): void {
+    editor.dispatchEvent(
+      new CustomEvent("save-scene", {
+        detail: { scene: { name, when: {}, actions: [] }, scope },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  test("a failed scene save keeps the editor open and surfaces the error inside it", async () => {
+    vi.mocked(api.saveArea).mockRejectedValueOnce(new Error("backend says no"));
+    el = await mount({ areaConfigs: { living_room: { scenes: [] } } });
+    const scope: Scope = { kind: "area", id: "living_room" };
+    const editor = await openEditorViaAdd(scope);
+    dispatchSave(editor, scope);
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // The editor stays open so the user's draft isn't lost...
+    expect(editor.open).toBe(true);
+    // ...and the failure reason is shown inside the editor, not just behind it.
+    expect(editor.saveError).toContain("backend says no");
+  });
+
+  test("a successful scene save closes the editor", async () => {
+    el = await mount({ areaConfigs: { living_room: { scenes: [] } } });
+    const scope: Scope = { kind: "area", id: "living_room" };
+    const editor = await openEditorViaAdd(scope);
+    dispatchSave(editor, scope);
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    expect(editor.open).toBe(false);
+  });
+
+  test("a re-entrant save while one is in flight is ignored (no double-submit)", async () => {
+    let resolveSave: (v: { ok: true; config: ScopeConfig }) => void = () => {};
+    vi.mocked(api.saveArea).mockReturnValueOnce(
+      new Promise((r) => {
+        resolveSave = r;
+      }),
+    );
+    el = await mount({ areaConfigs: { living_room: { scenes: [] } } });
+    const scope: Scope = { kind: "area", id: "living_room" };
+    const editor = await openEditorViaAdd(scope);
+
+    // Two rapid Save clicks before the first mutation resolves.
+    dispatchSave(editor, scope);
+    dispatchSave(editor, scope);
+    await new Promise((r) => setTimeout(r, 0));
+
+    resolveSave({ ok: true, config: { scenes: [] } });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    expect(api.saveArea).toHaveBeenCalledTimes(1);
   });
 
   // --- cross-scope move ---------------------------------------------------
@@ -1489,6 +1564,42 @@ describe("ambience-scopes-view", () => {
     await pickScopeKebab(el, "li.scope-row.house", "run");
     expect(vi.mocked(api.applyScenes)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(api.applyScenes).mock.calls[0][1]).toEqual({ kind: "house" });
+  });
+
+  test("kebab Auto-triggers opens the read-only auto-triggers modal for that scope", async () => {
+    el = await mount();
+    const modal: any = el.shadowRoot.querySelector("ambience-auto-triggers-modal");
+    // Closed until the kebab item is picked.
+    expect(modal.open).toBe(false);
+
+    await pickScopeKebab(el, "li.scope-row.house", "auto");
+    await el.updateComplete;
+
+    expect(modal.open).toBe(true);
+    expect(modal.scope).toEqual({ kind: "house" });
+  });
+
+  test("the Auto-triggers modal reads the scope's live scenes, not a snapshot", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [{ name: "A", when: {}, actions: [] }] } },
+    });
+    await pickScopeKebab(el, "li.scope-row.area[data-id='living_room']", "auto");
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-auto-triggers-modal");
+    expect(modal.scenes.map((s: Scene) => s.name)).toEqual(["A"]);
+
+    // The scope's config changes while the modal is open — it must reflect the
+    // new scenes (a frozen snapshot taken at open time would still show ["A"]).
+    const next = new Map(el._areaConfigs);
+    next.set("living_room", {
+      scenes: [
+        { name: "A", when: {}, actions: [] },
+        { name: "B", when: {}, actions: [] },
+      ],
+    });
+    el._areaConfigs = next;
+    await el.updateComplete;
+    expect(modal.scenes.map((s: Scene) => s.name)).toEqual(["A", "B"]);
   });
 
   test("run-scene-actions event from a scene list calls api.runSceneActions", async () => {

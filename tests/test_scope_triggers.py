@@ -8,8 +8,77 @@ from custom_components.ambience.scope_triggers import (
     iter_predicate_specs,
     referenced_entities,
     scope_trigger_spec,
+    trigger_descriptors,
 )
-from custom_components.ambience.triggers import TriggerSpec
+from custom_components.ambience.triggers import EMPTY, TriggerSpec
+
+# --- trigger_descriptors (read-only rows for the Auto-triggers display) ------
+
+
+def test_descriptors_empty_spec_is_empty() -> None:
+    assert trigger_descriptors(EMPTY) == []
+
+
+def test_descriptors_entity_rows_sorted_with_keys() -> None:
+    spec = TriggerSpec(entities=frozenset({"binary_sensor.motion", "person.bob"}))
+    assert trigger_descriptors(spec) == [
+        {
+            "key": "entity:binary_sensor.motion",
+            "kind": "entity",
+            "entity_id": "binary_sensor.motion",
+        },
+        {"key": "entity:person.bob", "kind": "entity", "entity_id": "person.bob"},
+    ]
+
+
+def test_descriptors_time_group_collects_clocks_periodic_and_rollover() -> None:
+    spec = TriggerSpec(clock_times=frozenset({(18, 0), (6, 30)}), has_time=True, date_rollover=True)
+    assert trigger_descriptors(spec) == [
+        {
+            "key": "group:time",
+            "kind": "time",
+            "clocks": [{"hour": 6, "minute": 30}, {"hour": 18, "minute": 0}],
+            "has_time": True,
+            "date_rollover": True,
+        }
+    ]
+
+
+def test_descriptors_date_rollover_only_is_a_time_group() -> None:
+    rows = trigger_descriptors(TriggerSpec(date_rollover=True))
+    assert [r["kind"] for r in rows] == ["time"]
+    assert rows[0]["date_rollover"] is True
+    assert rows[0]["clocks"] == []
+
+
+def test_descriptors_sun_group_collects_events_only() -> None:
+    spec = TriggerSpec(sun_events=frozenset({("sunset", 30), ("sunrise", -15)}))
+    assert trigger_descriptors(spec) == [
+        {
+            "key": "group:sun",
+            "kind": "sun",
+            "suns": [{"anchor": "sunrise", "offset": -15}, {"anchor": "sunset", "offset": 30}],
+        }
+    ]
+
+
+def test_descriptors_order_entities_then_time_then_sun() -> None:
+    spec = TriggerSpec(
+        entities=frozenset({"person.bob"}),
+        clock_times=frozenset({(7, 0)}),
+        sun_events=frozenset({("dusk", 0)}),
+    )
+    assert [r["kind"] for r in trigger_descriptors(spec)] == ["entity", "time", "sun"]
+
+
+def test_descriptors_no_time_group_when_no_clocks_or_periodic() -> None:
+    spec = TriggerSpec(entities=frozenset({"a.b"}))
+    assert [r["kind"] for r in trigger_descriptors(spec)] == ["entity"]
+
+
+def test_descriptors_opaque_is_not_a_row() -> None:
+    assert trigger_descriptors(TriggerSpec(opaque=True)) == []
+
 
 # --- scope_trigger_spec -----------------------------------------------------
 

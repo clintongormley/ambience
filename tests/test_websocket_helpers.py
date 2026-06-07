@@ -247,6 +247,63 @@ class TestValidateScopeConfig:
         }
         validate_scope_config(hass, config)  # no error
 
+    # --- scene-name uniqueness (server-side backstop for the frontend rule) ---
+
+    def test_rejects_duplicate_scene_name_in_same_category(self) -> None:
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {"name": "Movie", "category": "a", "when": {}, "actions": []},
+                {"name": "Movie", "category": "a", "when": {}, "actions": []},
+            ]
+        }
+        with pytest.raises(ValueError, match="already exists"):
+            validate_scope_config(hass, config)
+
+    def test_allows_same_scene_name_in_different_categories(self) -> None:
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {"name": "Movie", "category": "a", "when": {}, "actions": []},
+                {"name": "Movie", "category": "b", "when": {}, "actions": []},
+            ]
+        }
+        validate_scope_config(hass, config)  # no error
+
+    def test_duplicate_scene_name_match_is_case_insensitive_and_trimmed(self) -> None:
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {"name": "  Movie ", "category": "a", "when": {}, "actions": []},
+                {"name": "MOVIE", "category": "a", "when": {}, "actions": []},
+            ]
+        }
+        with pytest.raises(ValueError, match="already exists"):
+            validate_scope_config(hass, config)
+
+    def test_allows_duplicate_empty_or_missing_scene_names(self) -> None:
+        # Empty/whitespace/absent names are exempt from the uniqueness check.
+        hass = _make_hass()
+        config = {
+            "scenes": [
+                {"name": "", "category": "a", "when": {}, "actions": []},
+                {"name": "   ", "category": "a", "when": {}, "actions": []},
+                {"category": "a", "when": {}, "actions": []},
+            ]
+        }
+        validate_scope_config(hass, config)  # no error
+
+    def test_non_string_category_raises_value_error_not_typeerror(self) -> None:
+        # A corrupted/hand-edited category that isn't a string must surface a
+        # clean ValueError (caught by the websocket handler), not an unhashable
+        # TypeError that escapes the validation path.
+        hass = _make_hass()
+        config = {
+            "scenes": [{"name": "Movie", "category": ["a"], "when": {}, "actions": []}],
+        }
+        with pytest.raises(ValueError, match="category"):
+            validate_scope_config(hass, config)
+
 
 # ---------------------------------------------------------------------------
 # missing_period_refs

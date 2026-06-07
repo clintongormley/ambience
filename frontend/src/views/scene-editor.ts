@@ -129,12 +129,14 @@ export class AmbienceSceneEditor extends LitElement {
       border-top: 1px solid var(--divider-color, #e0e0e0);
     }
     .actions-bar {
-      display: flex; justify-content: flex-end; gap: 0.5rem;
+      display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem;
       padding: 1rem 1.5rem;
       border-top: 1px solid var(--divider-color, #e0e0e0);
       background: var(--card-background-color, #fff);
       flex-shrink: 0;
     }
+    /* Push the save error to the left so the Cancel/Save buttons stay right. */
+    .actions-bar .save-error { margin-right: auto; margin-top: 0; }
     select.add-condition, select.add-action {
       margin-top: 0.5rem;
     }
@@ -263,6 +265,13 @@ export class AmbienceSceneEditor extends LitElement {
    * scene's name must be unique within its scope + category.
    */
   @property({ attribute: false }) takenNames: Map<string, Set<string>> = new Map();
+
+  /**
+   * A save failure reported by the parent (e.g. the backend rejected the save).
+   * Shown in the actions bar so the user sees why the save didn't go through —
+   * the page-level error banner is hidden behind this modal. Empty = no error.
+   */
+  @property({ attribute: false }) saveError = "";
 
   @state() private _draft: Scene | null = null;
   @state() private _scope?: Scope;
@@ -583,13 +592,28 @@ export class AmbienceSceneEditor extends LitElement {
   }
 
   /**
+   * Validation that blocks *leaving* (collapsing or switching away from) a slot.
+   *
+   * A malformed condition/action must not be left behind — it would persist as
+   * invalid data — so its error blocks leaving. A name-uniqueness conflict is
+   * different: it's a cross-slot constraint, resolvable by moving the scene to a
+   * category or scope where the name is free. Locking the user into the name
+   * slot would make that resolution unreachable, so a name error never blocks
+   * leaving — only the final save gate (`_save`) enforces it.
+   */
+  private _leaveBlockingError(slot: OpenSlot): string | null {
+    if (slot?.kind === "name") return null;
+    return this._validationError(slot);
+  }
+
+  /**
    * Attempt to close the currently open slot. Returns true if successfully
    * closed; false if blocked by a validation error (in which case `_showError`
    * is set so the error renders).
    */
   private _tryCloseCurrent(): boolean {
     if (this._open === null) return true;
-    if (this._validationError(this._open) !== null) {
+    if (this._leaveBlockingError(this._open) !== null) {
       this._showError = true;
       return false;
     }
@@ -603,7 +627,7 @@ export class AmbienceSceneEditor extends LitElement {
       // Collapsing your own slot is a "minimize for now" gesture, but a slot
       // with a validation error can't be minimized away — same gate as leaving
       // it. (Removing via the ✕ is always available as an escape.)
-      if (this._validationError(slot) !== null) {
+      if (this._leaveBlockingError(slot) !== null) {
         this._showError = true;
         return;
       }
@@ -1131,6 +1155,7 @@ export class AmbienceSceneEditor extends LitElement {
         </div>
 
         <div class="actions-bar">
+          ${this.saveError ? html`<div class="error save-error">${this.saveError}</div>` : ""}
           <button class="secondary" @click=${this._cancel}>${localize(this.hass, "ui.cancel", "Cancel")}</button>
           <button class="primary" @click=${this._save}>${localize(this.hass, "ui.save_scene", "Save scene")}</button>
         </div>

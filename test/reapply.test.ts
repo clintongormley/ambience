@@ -1,9 +1,25 @@
 import { describe, expect, test } from "vitest";
 import {
+  formatReapplyInterval,
   MIN_REAPPLY_SECONDS,
   parseReapplyConfigSeconds,
   parseReapplyOverrideSeconds,
 } from "../frontend/src/reapply.js";
+
+describe("formatReapplyInterval", () => {
+  test("whole minutes render as 'N min'", () => {
+    expect(formatReapplyInterval(300)).toBe("5 min");
+    expect(formatReapplyInterval(60)).toBe("1 min");
+  });
+
+  test("sub-minute renders as 'N sec'", () => {
+    expect(formatReapplyInterval(45)).toBe("45 sec");
+  });
+
+  test("mixed renders as 'N min M sec'", () => {
+    expect(formatReapplyInterval(90)).toBe("1 min 30 sec");
+  });
+});
 
 describe("MIN_REAPPLY_SECONDS", () => {
   test("is 10", () => {

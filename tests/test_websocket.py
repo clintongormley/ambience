@@ -10,7 +10,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DATA_SWITCHES, DOMAIN
+from custom_components.ambience.const import (
+    DATA_CONDITIONS,
+    DATA_EXPOSED_ACTIONS,
+    DATA_STORE,
+    DATA_SWITCHES,
+    DOMAIN,
+)
+from custom_components.ambience.triggers import TriggerSpec
 
 
 def _seed_services_catalog(hass: HomeAssistant) -> None:
@@ -2493,3 +2500,46 @@ async def test_house_save_reapplies_house_scope(
     args = apply.await_args.args
     assert args[1] == "house"
     assert args[2] is None
+
+
+# --- auto_triggers/list (read-only Auto-triggers display) -------------------
+
+
+class _FauxEntityCondition:
+    """A condition whose trigger_deps watches one fixed entity."""
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        return TriggerSpec(entities=frozenset({"binary_sensor.motion"}))
+
+
+async def test_auto_triggers_list_returns_derived_rows(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    hass.data[DOMAIN][DATA_CONDITIONS]["faux"] = _FauxEntityCondition()
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_house(
+        {"scenes": [{"name": "S", "when": {"faux": {"x": 1}}, "actions": []}]}
+    )
+    resp = await _ws_send(hass_ws_client, type="ambience/auto_triggers/list", scope_kind="house")
+    assert resp["success"] is True
+    assert resp["result"]["opaque"] is False
+    assert {
+        "key": "entity:binary_sensor.motion",
+        "kind": "entity",
+        "entity_id": "binary_sensor.motion",
+    } in resp["result"]["triggers"]
+
+
+async def test_auto_triggers_list_empty_scope_has_no_triggers(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/auto_triggers/list", scope_kind="house")
+    assert resp["success"] is True
+    assert resp["result"] == {"triggers": [], "opaque": False}
+
+
+async def test_auto_triggers_list_rejects_unknown_scope_kind(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/auto_triggers/list", scope_kind="galaxy")
+    assert resp["success"] is False

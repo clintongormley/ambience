@@ -16,6 +16,48 @@ from typing import Any
 from .engine import scene_enabled
 from .triggers import TriggerSpec, merge
 
+# Stable keys for the derived non-entity trigger groups (used by the read-only
+# Auto-triggers display to identify each row).
+GROUP_TIME_KEY = "group:time"
+GROUP_SUN_KEY = "group:sun"
+
+
+def _entity_key(entity_id: str) -> str:
+    return f"entity:{entity_id}"
+
+
+def trigger_descriptors(spec: TriggerSpec) -> list[dict[str, Any]]:
+    """Enumerate a merged spec into grouped ``{key, kind, ...}`` rows for the
+    read-only Auto-triggers display.
+
+    One row per entity (sorted), then a single ``time`` group row (if any clock
+    times / periodic re-check / date rollover) carrying its members, then a
+    single ``sun`` group row (if any sun events). ``opaque`` produces no row.
+    The UI does final display ordering (it sorts entities by name).
+    """
+    rows: list[dict[str, Any]] = []
+    for entity_id in sorted(spec.entities):
+        rows.append({"key": _entity_key(entity_id), "kind": "entity", "entity_id": entity_id})
+    if spec.clock_times or spec.has_time or spec.date_rollover:
+        rows.append(
+            {
+                "key": GROUP_TIME_KEY,
+                "kind": "time",
+                "clocks": [{"hour": h, "minute": m} for h, m in sorted(spec.clock_times)],
+                "has_time": spec.has_time,
+                "date_rollover": spec.date_rollover,
+            }
+        )
+    if spec.sun_events:
+        rows.append(
+            {
+                "key": GROUP_SUN_KEY,
+                "kind": "sun",
+                "suns": [{"anchor": a, "offset": o} for a, o in sorted(spec.sun_events)],
+            }
+        )
+    return rows
+
 
 def iter_predicate_specs(
     conditions: dict[str, Any], cfg: dict[str, Any]

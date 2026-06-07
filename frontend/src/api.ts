@@ -5,6 +5,7 @@
 import type {
   AreaConfig,
   AreaListItem,
+  AutoTriggerList,
   BufferedUnit,
   ConditionInfo,
   DayConfig,
@@ -117,6 +118,18 @@ export async function saveHouse(
 
 export async function listConditions(hass: HassConnection): Promise<ConditionInfo[]> {
   return hass.callWS({ type: "ambience/conditions/list" });
+}
+
+/** Read-only list of the watches the engine derives from a scope's scenes,
+ *  for the Auto-triggers display. `scope_id` is omitted for the house scope. */
+export async function listAutoTriggers(
+  hass: HassConnection,
+  scope_kind: "area" | "floor" | "house",
+  scope_id?: string | null,
+): Promise<AutoTriggerList> {
+  const msg: Record<string, unknown> = { type: "ambience/auto_triggers/list", scope_kind };
+  if (scope_id != null) msg.scope_id = scope_id;
+  return hass.callWS(msg);
 }
 
 export async function listExposedActions(hass: HassConnection): Promise<ExposedAction[]> {

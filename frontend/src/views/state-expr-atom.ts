@@ -127,10 +127,53 @@ export class AmbienceStateExprAtom extends LitElement {
     return next;
   }
 
-  _setEntity(entity_id: string) {
-    // Different entity → previously-selected values almost certainly don't
-    // apply, and the attribute name was tied to the old entity's shape.
-    this._emit(this._autoFlipOp({ ...this.value, entity_id, states: [], attribute: null }));
+  // Bumped on every entity change so a slow fetch from a superseded change
+  // (the user re-picked before it resolved) can be discarded instead of
+  // overwriting the newer selection.
+  private _entitySeq = 0;
+
+  async _setEntity(entity_id: string) {
+    // Carry over what the new entity can still represent: keep the attribute if
+    // it also exposes it, then keep any selected values the resulting target
+    // (entity state, or that kept attribute) can take. Drop whatever it can't —
+    // those would never match.
+    const seq = ++this._entitySeq;
+    const attribute = this._entityHasAttribute(entity_id, this.value.attribute)
+      ? this.value.attribute
+      : null;
+    const states = await this._supportedValues(entity_id, attribute, this.value.states);
+    if (seq !== this._entitySeq) return; // a newer entity change won the race
+    this._emit(this._autoFlipOp({ ...this.value, entity_id, attribute, states }));
+  }
+
+  /** Does `entity_id` expose `attribute`, per its hass.states snapshot (the same
+   *  source the Where dropdown lists)? False for a null/absent attribute. */
+  private _entityHasAttribute(entity_id: string, attribute: string | null | undefined): boolean {
+    if (!attribute) return false;
+    return this._knownAttributesFor(entity_id).includes(attribute);
+  }
+
+  /** Subset of `values` the target can actually take: the new entity's known
+   *  attribute values when an attribute is kept, else its known states (the same
+   *  lists that seed the value dropdown). Returns `[]` for an unset entity, no
+   *  selection, or when the list can't be fetched — the safe default that wipes
+   *  stale values rather than keeping ones that can never match. */
+  private async _supportedValues(
+    entity_id: string,
+    attribute: string | null | undefined,
+    values: string[],
+  ): Promise<string[]> {
+    if (!entity_id || values.length === 0 || !this.hass) return [];
+    try {
+      const known = new Set(
+        attribute
+          ? (await getKnownAttributeValues(this.hass, entity_id, attribute)).values
+          : (await getKnownStates(this.hass, entity_id)).states,
+      );
+      return values.filter((v) => known.has(v));
+    } catch {
+      return [];
+    }
   }
 
   _setAttribute(name: string) {

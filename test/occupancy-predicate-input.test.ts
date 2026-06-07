@@ -34,6 +34,14 @@ describe("ambience-occupancy-predicate-input", () => {
     el.remove();
   });
 
+  test("the occupied/vacant toggle uses Detected/Clear labels (matching the entity-state condition)", async () => {
+    const el = await mount({ sensors: ["binary_sensor.a"], occupied: true });
+    const select = el.shadowRoot.querySelector("select.state");
+    const labels = Array.from(select.options).map((o: HTMLOptionElement) => o.textContent?.trim());
+    expect(labels).toEqual(["Detected", "Clear"]);
+    el.remove();
+  });
+
   test("toggling vacant emits occupied:false and keeps the sensors", async () => {
     const el = await mount({ sensors: ["binary_sensor.a"], occupied: true });
     let captured: any;

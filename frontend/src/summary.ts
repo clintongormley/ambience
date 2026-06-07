@@ -419,8 +419,8 @@ export function entityDisplayName(hass: HassLike | undefined, entity_id: string)
 }
 
 /**
- * "<Sensor> is occupied/vacant" for one sensor, or
- * "any of (A, B) occupied" / "all of (A, B) vacant" for several, with an
+ * "<Sensor> is detected/clear" for one sensor, or
+ * "any of (A, B) detected" / "all of (A, B) clear" for several, with an
  * optional "for ≥<dur>" suffix. Sensor names use friendly_name when set.
  */
 export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionContext = {}): string {
@@ -428,10 +428,10 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
   const names = pred.sensors.map((id) => entityName(ctx.hass as HassWithStates | undefined, id));
   const verb =
     pred.occupied === false
-      ? localize(ctx.hass, "occupancy_summary.vacant", "vacant")
-      : localize(ctx.hass, "occupancy_summary.occupied", "occupied");
+      ? localize(ctx.hass, "occupancy_summary.clear", "clear")
+      : localize(ctx.hass, "occupancy_summary.detected", "detected");
   // `negate` wraps the whole predicate; phrase it like the state condition's
-  // inline negation ("Lounge is not vacant for ≥20m"), not a flipped polarity.
+  // inline negation ("Lounge is not clear for ≥20m"), not a flipped polarity.
   const not = pred.negate ? `${localize(ctx.hass, "occupancy_summary.not", "not")} ` : "";
   let head: string;
   if (names.length === 1) {

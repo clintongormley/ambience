@@ -79,6 +79,15 @@ def _switch_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
     return "on" if switch.is_on else "off"
 
 
+def _scope_enabled(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> bool:
+    """Whether the scope is permanently enabled. Disabled scopes never apply,
+    even on the manual force path."""
+    store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+    if store is None:
+        return True
+    return store.get_scope_enabled(scope_kind, scope_id)
+
+
 async def async_resolve_with_snapshots(
     hass: HomeAssistant,
     scope_kind: str,
@@ -250,6 +259,14 @@ async def async_apply_scene(
     category). `force=True` applies even when the scope's switch is off (used by
     the manual UI buttons).
     """
+    if not _scope_enabled(hass, scope_kind, scope_id):
+        _LOGGER.info(
+            "ambience: scope disabled (scope=%s/%s); skipping apply_scene",
+            scope_kind,
+            scope_id,
+        )
+        return
+
     switch_state = _switch_state(hass, scope_kind, scope_id)
     if not force and switch_state == "off":
         _LOGGER.info(

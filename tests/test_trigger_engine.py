@@ -37,9 +37,18 @@ class FakeStore:
         self._scopes = scopes
         self._by_key = {(kind, sid): cfg for kind, sid, cfg in scopes}
         self._categories = categories or []
+        self._enabled: dict[tuple[str, str | None], bool] = {}
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict]]:
         return list(self._scopes)
+
+    def get_scope_enabled(self, scope_kind: str, scope_id: str | None) -> bool:
+        return self._enabled.get((scope_kind, scope_id), True)
+
+    async def async_set_scope_enabled(
+        self, scope_kind: str, scope_id: str | None, enabled: bool
+    ) -> None:
+        self._enabled[(scope_kind, scope_id)] = bool(enabled)
 
     def categories(self) -> list[dict]:
         return list(self._categories)
@@ -1118,6 +1127,30 @@ async def test_resolve_and_apply_returns_unit_trace_when_switch_off_and_tracing(
         result = await engine._resolve_and_apply("area", "a", "g")
         assert result is not None
         assert result.outcome == Outcome.SKIPPED_SWITCH_OFF
+        assert result.scope_kind == "area"
+        assert result.scope_id == "a"
+        assert result.category == "g"
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
+# ---------------------------------------------------------------------------
+# _resolve_and_apply: disabled scope AND tracing active → SKIPPED_SCOPE_DISABLED
+# ---------------------------------------------------------------------------
+
+
+async def test_disabled_scope_skips_with_trace(hass) -> None:
+    """Disabled scope (switch still on) and tracing active → SKIPPED_SCOPE_DISABLED."""
+    from custom_components.ambience.trace import Outcome
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_set_scope_enabled("area", "a", False)
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g")
+        assert result is not None
+        assert result.outcome is Outcome.SKIPPED_SCOPE_DISABLED
         assert result.scope_kind == "area"
         assert result.scope_id == "a"
         assert result.category == "g"

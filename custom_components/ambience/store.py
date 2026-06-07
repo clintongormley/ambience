@@ -323,7 +323,7 @@ class AmbienceStore:
         """
         if scope_kind not in self._SCOPE_KINDS:
             raise ValueError(f"unknown scope_kind: {scope_kind!r}")
-        return self.scope_config(scope_kind, scope_id).get("enabled", True) is not False
+        return bool(self.scope_config(scope_kind, scope_id).get("enabled", True))
 
     async def async_set_scope_enabled(
         self, scope_kind: str, scope_id: str | None, enabled: bool

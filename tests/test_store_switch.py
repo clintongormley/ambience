@@ -211,5 +211,5 @@ async def test_scope_enabled_round_trip(hass: HomeAssistant) -> None:
 async def test_scope_enabled_rejects_unknown_kind(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unknown scope_kind"):
         store.get_scope_enabled("planet", None)

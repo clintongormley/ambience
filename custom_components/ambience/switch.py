@@ -207,6 +207,15 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     def _resolved_delay(self) -> int:
         return self._store().get_switch_defaults()["auto_on_delay_seconds"]
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose pause timing so the frontend can render a countdown without a
+        round-trip. ``off_at`` is None when the switch is on."""
+        return {
+            "off_at": self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id),
+            "auto_on_delay_seconds": self._resolved_delay(),
+        }
+
     def _scope_prefix(self) -> str:
         """Live name of the scope: 'House' / floor name / area name.
 

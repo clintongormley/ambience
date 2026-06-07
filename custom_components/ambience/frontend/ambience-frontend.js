@@ -459,15 +459,13 @@ var Vs=Object.defineProperty;var Ks=Object.getOwnPropertyDescriptor;var u=(t,n,e
       padding-left: 1.25rem;
       text-indent: -1.25rem;
     }
-    .actions-detail {
+    .actions-detail,
+    .noop-detail {
       margin-top: 0.35rem;
       padding-top: 0.35rem;
       border-top: 1px dashed var(--divider-color, #e0e0e0);
     }
     .noop-detail {
-      margin-top: 0.35rem;
-      padding-top: 0.35rem;
-      border-top: 1px dashed var(--divider-color, #e0e0e0);
       font-style: italic;
     }
     .actions-detail-item {

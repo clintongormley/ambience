@@ -310,7 +310,9 @@ var Vs=Object.defineProperty;var Ks=Object.getOwnPropertyDescriptor;var u=(t,n,e
           ${this._expanded.has(e)?l`
                 <div class="scene-detail">
                   ${this._whenStacked(r)}
-                  ${r.actions.length===0?"":l`<div class="actions-detail">
+                  ${r.actions.length===0?l`<div class="noop-detail">
+                        ${this._actionCountLabel(r)}
+                      </div>`:l`<div class="actions-detail">
                         ${r.actions.map(c=>{let h=this._actionParamsString(c),f=this._actionLabel(c),m=h?`${f} \xB7 ${h}`:f;return l`
                             <div class="actions-detail-item">
                               <div class="action-header">${m}</div>
@@ -461,6 +463,12 @@ var Vs=Object.defineProperty;var Ks=Object.getOwnPropertyDescriptor;var u=(t,n,e
       margin-top: 0.35rem;
       padding-top: 0.35rem;
       border-top: 1px dashed var(--divider-color, #e0e0e0);
+    }
+    .noop-detail {
+      margin-top: 0.35rem;
+      padding-top: 0.35rem;
+      border-top: 1px dashed var(--divider-color, #e0e0e0);
+      font-style: italic;
     }
     .actions-detail-item {
       padding: 0.15rem 0;

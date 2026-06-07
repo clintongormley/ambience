@@ -821,6 +821,16 @@ describe("ambience-scenes-list", () => {
     expect(el.shadowRoot.querySelector(".entity-list")).toBeFalsy();
   });
 
+  test("expanded no-op scene shows 'NOOP - 0 actions' in the detail", async () => {
+    const r: Scene = { name: "x", when: {}, actions: [] };
+    el = await mount([r]);
+    (el.shadowRoot.querySelector(".name") as HTMLElement).click();
+    await el.updateComplete;
+    const detail = el.shadowRoot.querySelector(".scene-detail");
+    expect(detail).toBeTruthy();
+    expect(detail?.textContent).toContain("NOOP - 0 actions");
+  });
+
   test("summary lists conditions in priority order (mode, day, time_of_day, weather)", async () => {
     const scenes: Scene[] = [
       {

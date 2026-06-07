@@ -407,3 +407,11 @@ async def test_switch_exposes_off_at_and_delay(hass, mock_config_entry, fixed_ut
     await hass.async_block_till_done()
     attrs = house.extra_state_attributes
     assert attrs["off_at"] is None
+
+
+def test_switch_unique_id_helper() -> None:
+    from custom_components.ambience.switch import switch_unique_id
+
+    assert switch_unique_id("house", None) == "ambience_switch_house"
+    assert switch_unique_id("area", "living_room") == "ambience_switch_area_living_room"
+    assert switch_unique_id("floor", "ground") == "ambience_switch_floor_ground"

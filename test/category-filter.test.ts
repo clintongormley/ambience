@@ -34,7 +34,10 @@ async function mount(categories: SceneCategory[]): Promise<Filter> {
 
 describe("<ambience-category-filter>", () => {
   let el: Filter | undefined;
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+  });
   afterEach(() => el?.remove());
 
   test("is defined as a custom element", () => {
@@ -149,6 +152,23 @@ describe("<ambience-category-filter>", () => {
     expect(events).toEqual([""]);
     const trigger = el.shadowRoot!.querySelector(".category-filter-trigger")!;
     expect(trigger.textContent).toContain("All categories");
+  });
+
+  test("persists the selection to localStorage when an option is chosen", async () => {
+    el = await mount(cats);
+    (el.shadowRoot!.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
+    await el.updateComplete;
+    // index 1 = first real category (Alpha, id "a")
+    el.shadowRoot!.querySelectorAll<HTMLButtonElement>(".category-filter-option")[1].click();
+    await el.updateComplete;
+    expect(window.localStorage.getItem("ambience-filter-category")).toBe("a");
+  });
+
+  test("restores the persisted selection on mount", async () => {
+    window.localStorage.setItem("ambience-filter-category", "b");
+    el = await mount(cats);
+    const trigger = el.shadowRoot!.querySelector(".category-filter-trigger")!;
+    expect(trigger.textContent).toContain("Beta");
   });
 
   test("a click outside the component closes the open menu", async () => {

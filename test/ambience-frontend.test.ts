@@ -20,6 +20,7 @@ describe("<ambience-frontend>", () => {
   let el: HTMLElement & { hass?: unknown };
 
   beforeEach(async () => {
+    window.localStorage.clear();
     el = document.createElement("ambience-frontend") as HTMLElement & { hass?: unknown };
     el.hass = hass;
     document.body.appendChild(el);
@@ -119,5 +120,19 @@ describe("<ambience-frontend>", () => {
       filterCategory?: string;
     };
     expect(scopes.filterCategory).toBe("kitchen");
+  });
+
+  test("seeds the scopes-view filterCategory from localStorage on first paint", async () => {
+    // A fresh element (the beforeEach one already mounted with no stored value).
+    el.remove();
+    window.localStorage.setItem("ambience-filter-category", "relax");
+    el = document.createElement("ambience-frontend") as HTMLElement & { hass?: unknown };
+    el.hass = hass;
+    document.body.appendChild(el);
+    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    const scopes = el.shadowRoot!.querySelector("ambience-scopes-view") as HTMLElement & {
+      filterCategory?: string;
+    };
+    expect(scopes.filterCategory).toBe("relax");
   });
 });

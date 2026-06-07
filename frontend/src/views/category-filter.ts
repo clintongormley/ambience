@@ -16,6 +16,7 @@ import { listCategories } from "../api.js";
 import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
 import { localize } from "../i18n.js";
 import type { SceneCategory } from "../types.js";
+import { getFilterCategory, setFilterCategory } from "../ui-state.js";
 
 @customElement("ambience-category-filter")
 export class AmbienceCategoryFilter extends LitElement {
@@ -124,8 +125,9 @@ export class AmbienceCategoryFilter extends LitElement {
   // _categories sorted by name, recomputed only when _categories changes (not on
   // every render — render runs on every hass update).
   private _sortedCategories: SceneCategory[] = [];
-  // Current selection, "" = All; session-sticky for the component's lifetime.
-  @state() private _filterCategory = "";
+  // Current selection, "" = All. Seeded from localStorage so a reload (or HA's
+  // panel rebuild on reconnect) restores the last-chosen filter.
+  @state() private _filterCategory = getFilterCategory();
   @state() private _open = false;
   // True once the first list resolves; gates the add affordance so it doesn't
   // flash before categories are known.
@@ -190,6 +192,7 @@ export class AmbienceCategoryFilter extends LitElement {
 
   private _select(id: string) {
     this._filterCategory = id;
+    setFilterCategory(id);
     this._open = false;
     this.dispatchEvent(
       new CustomEvent("ambience-filter-changed", {

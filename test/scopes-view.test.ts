@@ -513,6 +513,47 @@ describe("ambience-scopes-view", () => {
     expect(el.shadowRoot.textContent).not.toContain("Ground");
   });
 
+  // --- expanded-scope persistence -----------------------------------------
+
+  test("persists the expanded set to localStorage when a scope is toggled", async () => {
+    el = await mount();
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    expect(JSON.parse(window.localStorage.getItem("ambience-expanded-scopes")!)).toContain(
+      "area:living_room",
+    );
+  });
+
+  test("drops a scope from localStorage when it is collapsed again", async () => {
+    el = await mount();
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    const header = row.querySelector(".scope-header") as HTMLElement;
+    header.click(); // expand
+    await el.updateComplete;
+    header.click(); // collapse
+    await el.updateComplete;
+    expect(JSON.parse(window.localStorage.getItem("ambience-expanded-scopes")!)).not.toContain(
+      "area:living_room",
+    );
+  });
+
+  test("restores expanded scopes from localStorage on mount", async () => {
+    window.localStorage.setItem("ambience-expanded-scopes", JSON.stringify(["area:living_room"]));
+    el = await mount();
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    expect(row.querySelector(".scope-body")).toBeTruthy();
+    // A scope that wasn't stored stays collapsed.
+    const house = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
+    expect(house.querySelector(".scope-body")).toBeFalsy();
+  });
+
   // --- scene preservation (regression for the existing area behaviour) -----
 
   test("delete-scene on an area calls saveArea with the scene removed", async () => {

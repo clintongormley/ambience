@@ -572,8 +572,8 @@ describe("ambience-state-expr-atom", () => {
 
   test("setting an entity_id clears the attribute and any value the new entity can't take", async () => {
     // getKnownStates is mocked to return ["on","off"]; "Spotify" isn't among
-    // them, so it's dropped. The attribute is always cleared (tied to the old
-    // entity's shape).
+    // them, so it's dropped. The attribute is cleared here because the new
+    // entity (light.kitchen) doesn't expose `source`.
     el = await mount({
       kind: "is",
       entity_id: "media_player.a",

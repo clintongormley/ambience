@@ -11,10 +11,10 @@ import { renderSelect, renderSensorField } from "./form-controls.js";
 /**
  * Editor for an `occupancy` predicate: a presence-sensor picker (binary_sensor
  * entities filtered to occupancy/presence/motion device classes), a
- * Detected/Clear toggle (matching the Clear/Detected labels HA gives presence
+ * Detected/Clear toggle (matching the Detected/Clear labels HA gives presence
  * binary_sensors in the entity-state condition), an Any/All quantifier (shown
- * only when more than one
- * sensor is selected), and an optional per-scene `for` duration.
+ * only when more than one sensor is selected), and an optional per-scene `for`
+ * duration.
  *
  *   { sensors: binary_sensor.*[]   // empty = match-anything
  *     occupied?: boolean           // default true; false = vacant

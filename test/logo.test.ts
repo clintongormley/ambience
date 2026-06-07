@@ -80,6 +80,11 @@ describe("renderIcon", () => {
     expect(srcset).toContain("/dark_icon@2x.png 2x");
   });
 
+  test("defaults to the light variant when no options given", () => {
+    img = drawIcon();
+    expect(img.getAttribute("src")!.endsWith("/icon.png")).toBe(true);
+  });
+
   test("title overrides the alt text", () => {
     img = drawIcon({ title: "Ambiente" });
     expect(img.getAttribute("alt")).toBe("Ambiente");

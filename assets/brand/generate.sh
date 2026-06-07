@@ -49,4 +49,4 @@ cp "$OUT/icon.png" "$OUT/icon@2x.png" "$OUT/dark_icon.png" "$OUT/dark_icon@2x.pn
 echo "Done. Generated:"
 ls -1 "$OUT"
 echo "Published to panel dir:"
-ls -1 "$PANEL"/*logo*.png
+ls -1 "$PANEL"/*.png

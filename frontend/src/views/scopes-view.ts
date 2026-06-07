@@ -259,6 +259,11 @@ export class AmbienceScopesView extends LitElement {
       .scope-header.off ambience-kebab-menu {
         opacity: 0.4;
       }
+      /* Permanently disabled scope: dim its kebab menu to signal the state.
+       Opacity only — the menu stays fully clickable. */
+      .scope-disabled ambience-kebab-menu {
+        opacity: 0.4;
+      }
       .chevron {
         width: 1em;
         color: var(--secondary-text-color, #888);
@@ -1131,8 +1136,9 @@ export class AmbienceScopesView extends LitElement {
   // --- render --------------------------------------------------------------
 
   /** The scope rows in display order: house, then floors, then areas — but with
-   *  switched-off scopes stably moved to the end, so the active scopes surface
-   *  at the top of the list. */
+   *  permanently-disabled scopes (cfg.enabled === false) stably moved to the
+   *  end, so the active scopes surface at the top of the list. A temporary
+   *  switch-off does NOT reorder (it shows the pause countdown in place). */
   private _orderedScopeRows(): ScopeRow[] {
     const rows: ScopeRow[] = [
       {
@@ -1164,12 +1170,12 @@ export class AmbienceScopesView extends LitElement {
         });
       }
     }
-    // Stable partition in a single pass: "on" rows keep their base order and
-    // the "off" rows follow in theirs.
+    // Stable partition: enabled rows keep their base order and the
+    // permanently-disabled rows (cfg.enabled === false) follow in theirs.
     const on: ScopeRow[] = [];
     const off: ScopeRow[] = [];
     for (const r of rows) {
-      (this._isSwitchedOff(r.scope) ? off : on).push(r);
+      (r.cfg.enabled === false ? off : on).push(r);
     }
     return [...on, ...off];
   }
@@ -1287,8 +1293,9 @@ export class AmbienceScopesView extends LitElement {
       : this._matchingSceneCount(cfg) === 0
         ? "empty"
         : "";
+    const disabled = cfg.enabled === false;
     return html`
-      <li class="scope-row ${rowClass}" data-id=${dataId}>
+      <li class="scope-row ${rowClass} ${disabled ? "scope-disabled" : ""}" data-id=${dataId}>
         <div
           class="scope-header ${open ? "open" : ""} ${stateClass}"
           @click=${() => this._toggleExpand(scope)}

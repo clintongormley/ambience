@@ -1108,112 +1108,6 @@ describe("ambience-scopes-view", () => {
 
   // --- global category filter ------------------------------------------------
 
-  test("renders a global category filter only when >1 category", async () => {
-    el = await mount();
-    el._categories = [
-      { id: "a", name: "Awn" },
-      { id: "b", name: "Bee" },
-    ] as SceneCategory[];
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".category-filter-trigger")).toBeTruthy();
-
-    el._categories = [{ id: "a", name: "Awn" }] as SceneCategory[];
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".category-filter-trigger")).toBeNull();
-  });
-
-  test("the filter dropdown lists colour-coded swatch+icon+name options and selecting one sets the filter", async () => {
-    el = await mount();
-    el._categories = [
-      { id: "a", name: "Awn", color: "green", icon: "mdi:blinds" },
-      { id: "b", name: "Bee" },
-    ] as SceneCategory[];
-    await el.updateComplete;
-    // Open the menu.
-    (el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
-    await el.updateComplete;
-    const options = Array.from(
-      el.shadowRoot.querySelectorAll(".category-filter-option"),
-    ) as HTMLElement[];
-    // All categories + 2 categories.
-    expect(options.length).toBe(3);
-    // The "Awn" option carries a coloured swatch with its icon.
-    const awn = options.find((o) => o.textContent!.includes("Awn"))!;
-    const swatch = awn.querySelector(".category-swatch") as HTMLElement;
-    expect(swatch.getAttribute("style") || "").toContain("#4caf50");
-    expect(swatch.querySelector('ha-icon[icon="mdi:blinds"]')).toBeTruthy();
-    // Selecting it sets the filter and closes the menu.
-    awn.click();
-    await el.updateComplete;
-    expect(el._filterCategory).toBe("a");
-    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeNull();
-  });
-
-  test("the filter dropdown has an add-category action that opens the ambience settings and closes the menu", async () => {
-    el = await mount();
-    el._categories = [
-      { id: "a", name: "Awn" },
-      { id: "b", name: "Bee" },
-    ] as SceneCategory[];
-    await el.updateComplete;
-    // Open the menu.
-    (el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
-    await el.updateComplete;
-    let detail: any = null;
-    el.addEventListener("ambience-open-settings", (e: CustomEvent) => {
-      detail = e.detail;
-    });
-    const add = el.shadowRoot.querySelector(".category-filter-add") as HTMLButtonElement;
-    expect(add).not.toBeNull();
-    add.click();
-    await el.updateComplete;
-    // Opens the Ambience settings tab (where categories are managed)…
-    expect(detail).toEqual({ tab: "ambience" });
-    // …and closes the dropdown.
-    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeNull();
-  });
-
-  test("the dropdown add-category action sits outside the listbox (valid ARIA)", async () => {
-    el = await mount();
-    el._categories = [
-      { id: "a", name: "Awn" },
-      { id: "b", name: "Bee" },
-    ] as SceneCategory[];
-    await el.updateComplete;
-    (el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
-    await el.updateComplete;
-    // The listbox must contain only role="option" children — the add action,
-    // being an action and not a selectable option, sits outside it.
-    expect(el.shadowRoot.querySelector('[role="listbox"] .category-filter-add')).toBeNull();
-    expect(el.shadowRoot.querySelector(".category-filter-add")).not.toBeNull();
-  });
-
-  test("shows a standalone add-category link opening ambience settings when there is no filter dropdown", async () => {
-    el = await mount();
-    el._categories = [{ id: "a", name: "Awn" }] as SceneCategory[];
-    await el.updateComplete;
-    // A single category: no filter dropdown to filter with…
-    expect(el.shadowRoot.querySelector(".category-filter-trigger")).toBeNull();
-    // …but the add-category link is still reachable as a standalone link.
-    let detail: any = null;
-    el.addEventListener("ambience-open-settings", (e: CustomEvent) => {
-      detail = e.detail;
-    });
-    const add = el.shadowRoot.querySelector(".category-filter-add") as HTMLButtonElement;
-    expect(add).not.toBeNull();
-    add.click();
-    expect(detail).toEqual({ tab: "ambience" });
-  });
-
-  test("hides the standalone add-category link until the initial load finishes", async () => {
-    el = await mount();
-    el._staticLoaded = false;
-    el._categories = [] as SceneCategory[];
-    await el.updateComplete;
-    // No flash of the add link before categories have loaded.
-    expect(el.shadowRoot.querySelector(".category-filter-add")).toBeNull();
-  });
-
   test("per-scope summary counts scenes matching the active filter", async () => {
     el = await mount();
     const cfg = {
@@ -1223,16 +1117,20 @@ describe("ambience-scopes-view", () => {
         { when: {}, actions: [], category: "a" },
       ],
     };
-    el._filterCategory = "";
+    el.filterCategory = "";
+    await el.updateComplete;
     expect(el._summary(cfg)).toBe("3 scenes");
-    el._filterCategory = "a";
+    el.filterCategory = "a";
+    await el.updateComplete;
     expect(el._summary(cfg)).toBe("2 scenes");
-    el._filterCategory = "b";
+    el.filterCategory = "b";
+    await el.updateComplete;
     expect(el._summary(cfg)).toBe("1 scene");
     // A genuinely empty scope is always "not configured".
     expect(el._summary({ scenes: [] })).toBe("not configured");
     // A scope with scenes but none in the active filter shows "0 scenes".
-    el._filterCategory = "c";
+    el.filterCategory = "c";
+    await el.updateComplete;
     expect(el._summary(cfg)).toBe("0 scenes");
   });
 
@@ -1242,7 +1140,7 @@ describe("ambience-scopes-view", () => {
       { id: "a", name: "Awn" },
       { id: "b", name: "Bee" },
     ] as SceneCategory[];
-    el._filterCategory = "b";
+    el.filterCategory = "b";
     await el.updateComplete;
     el._addScene({ kind: "house" });
     expect(el._editingScene.category).toBe("b");
@@ -1250,7 +1148,6 @@ describe("ambience-scopes-view", () => {
 
   test("a new scene under All defaults to the alphabetically-first category", async () => {
     el = await mount();
-    el._filterCategory = "";
     el._categories = [
       { id: "z", name: "Zed" },
       { id: "a", name: "Awn" },
@@ -1518,13 +1415,13 @@ describe("ambience-scopes-view", () => {
       },
     });
     // Filtered to the scene's own category: the scope has a matching rule.
-    el._filterCategory = "a";
+    el.filterCategory = "a";
     await el.updateComplete;
     expect(headerOf(el, ".scope-row.area[data-id='living_room']").classList.contains("empty")).toBe(
       false,
     );
     // Filtered to a category the scope has no scene in: faded.
-    el._filterCategory = "b";
+    el.filterCategory = "b";
     await el.updateComplete;
     expect(headerOf(el, ".scope-row.area[data-id='living_room']").classList.contains("empty")).toBe(
       true,
@@ -1952,47 +1849,11 @@ describe("ambience-scopes-view", () => {
     expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
   });
 
-  // --- _filterOpen toggle and backdrop click --------------------------------
-
-  test("clicking the category filter backdrop closes the dropdown", async () => {
-    el = await mount();
-    el._categories = [
-      { id: "a", name: "Awn" },
-      { id: "b", name: "Bee" },
-    ] as SceneCategory[];
-    await el.updateComplete;
-    // Open it
-    (el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement).click();
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeTruthy();
-    // Click the backdrop to close
-    (el.shadowRoot.querySelector(".category-filter-backdrop") as HTMLElement).click();
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeNull();
-  });
-
-  test("clicking the filter trigger again toggles the dropdown closed", async () => {
-    el = await mount();
-    el._categories = [
-      { id: "a", name: "Awn" },
-      { id: "b", name: "Bee" },
-    ] as SceneCategory[];
-    await el.updateComplete;
-    const trigger = el.shadowRoot.querySelector(".category-filter-trigger") as HTMLButtonElement;
-    trigger.click();
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeTruthy();
-    trigger.click();
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".category-filter-menu")).toBeNull();
-  });
-
   // --- _defaultCategoryId with no categories --------------------------------
 
   test("_defaultCategoryId returns empty string when no categories exist", async () => {
     el = await mount();
     el._categories = [] as SceneCategory[];
-    el._filterCategory = "";
     expect(el._defaultCategoryId()).toBe("");
   });
 

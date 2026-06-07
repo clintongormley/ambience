@@ -24,15 +24,29 @@ function asset(name: string): string {
   return DIR + name;
 }
 
-export function renderLogo(opts: { dark?: boolean; title?: string } = {}): TemplateResult {
+// The wordmark and the square icon render identically apart from the asset stem
+// (`logo`/`icon`, with a `dark_` prefix for the dark colourway) and the CSS class.
+function renderBrandImage(
+  stem: string,
+  cssClass: string,
+  opts: { dark?: boolean; title?: string },
+): TemplateResult {
   const title = opts.title ?? "Ambience";
-  const base = opts.dark ? "dark_logo" : "logo";
+  const base = opts.dark ? `dark_${stem}` : stem;
   const src1x = asset(`${base}.png`);
   const src2x = asset(`${base}@2x.png`);
   return html`<img
-    class="ambience-logo"
+    class=${cssClass}
     src=${src1x}
     srcset="${src1x} 1x, ${src2x} 2x"
     alt=${title}
   />`;
+}
+
+export function renderLogo(opts: { dark?: boolean; title?: string } = {}): TemplateResult {
+  return renderBrandImage("logo", "ambience-logo", opts);
+}
+
+export function renderIcon(opts: { dark?: boolean; title?: string } = {}): TemplateResult {
+  return renderBrandImage("icon", "ambience-icon", opts);
 }

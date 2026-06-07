@@ -68,7 +68,6 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     not_configured: "not configured",
     scene_singular: "scene",
     scene_plural: "scenes",
-    filter_by_category: "Filter by category",
     all_categories: "All categories",
     add_category: "Add category…",
     loading: "Loading…",

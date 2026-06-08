@@ -359,7 +359,13 @@ export type TraceSceneEval = {
   predicates: TracePredicate[];
 };
 export type TraceExplanation = { winner_index: number | null; scenes: TraceSceneEval[] };
-export type TraceOutcome = "acted" | "no_op" | "no_match" | "skipped_switch_off" | "reapplied";
+export type TraceOutcome =
+  | "acted"
+  | "debounced"
+  | "no_op"
+  | "no_match"
+  | "skipped_switch_off"
+  | "reapplied";
 export type BufferedUnit = {
   event_id: string | null;
   timestamp: string | null;

@@ -299,9 +299,26 @@ async def async_apply_scene(
                 category_id,
                 plan["snapshots_described"],
             )
+            # A no-match is a transition away from the previous winner: drop the
+            # last-applied record so a later win re-applies (mirrors the engine).
+            forget_last_applied(hass, scope_kind, scope_id, category_id)
             if active:
                 return UnitTrace(
                     scope_kind, scope_id, category_id, switch_state, Outcome.NO_MATCH, explanation
+                )
+            return None
+        if not plan["actions"]:
+            # A pure blocker (winner with no actions): nothing to run, transparent
+            # to last-applied (mirrors the engine).
+            if active:
+                return UnitTrace(
+                    scope_kind,
+                    scope_id,
+                    category_id,
+                    switch_state,
+                    Outcome.NO_OP,
+                    explanation,
+                    winner_name=plan["scene_name"],
                 )
             return None
         await async_execute_plan(hass, scope_kind, scope_id, plan, category_id)
@@ -447,8 +464,12 @@ async def async_execute_plan(
     await async_execute_actions(
         hass, scope_kind, scope_id, actions, scene_index=index, context=context
     )
-    domain_data = hass.data[DOMAIN]
-    domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id, category_id)] = index
+    # A winner with no actions (a pure blocker) is transparent to last_applied: it
+    # neither records itself nor clears a prior real winner. Winners that DO carry
+    # actions record their selection even if every action is skipped (unexposed).
+    if actions:
+        domain_data = hass.data[DOMAIN]
+        domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id, category_id)] = index
 
 
 def get_last_applied(
@@ -463,6 +484,14 @@ def clear_last_applied(hass: HomeAssistant, scope_kind: str, scope_id: str | Non
     la = hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
     for key in [k for k in la if k[0] == scope_kind and k[1] == scope_id]:
         la.pop(key, None)
+
+
+def forget_last_applied(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None, category_id: str
+) -> None:
+    """Drop one (scope, category)'s last-applied record, e.g. on a no-match, so the
+    next match re-applies even when it resolves to the same scene as before."""
+    hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).pop((scope_kind, scope_id, category_id), None)
 
 
 def scope_reapply_intervals(cfg: dict[str, Any], exposed_store: Any) -> list[int]:

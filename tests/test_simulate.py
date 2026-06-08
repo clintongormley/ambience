@@ -335,6 +335,28 @@ async def test_run_simulation_returns_winner_as_buffered_unit():
 
 
 @pytest.mark.asyncio
+async def test_run_simulation_reports_no_op_for_no_action_winner():
+    """A winning scene with no actions (a blocker) reports NO_OP, consistent with
+    the engine — not ACTED."""
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Blocker",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [],
+        }
+    ]
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
+    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+
+    assert result["outcome"] == "no_op"
+    assert result["winner_name"] == "Blocker"
+
+
+@pytest.mark.asyncio
 async def test_run_simulation_reports_no_match():
     scenes = [
         {

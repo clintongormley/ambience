@@ -746,7 +746,14 @@ async def test_apply_scene_records_last_applied_scene(hass: HomeAssistant) -> No
     areas = {
         "a": {
             "scenes": [
-                {"name": "r", "category": "lighting", "when": {"tod": "evening"}, "actions": []}
+                {
+                    "name": "r",
+                    "category": "lighting",
+                    "when": {"tod": "evening"},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}
+                    ],
+                }
             ]
         }
     }
@@ -903,6 +910,22 @@ async def test_execute_plan_records_last_applied_even_when_all_actions_skip(
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 2
 
 
+async def test_execute_plan_does_not_record_last_applied_for_no_action_winner(
+    hass: HomeAssistant,
+) -> None:
+    # A pure blocker (winner with no actions) is transparent to last_applied: the
+    # apply primitive must not record it, so a prior real winner survives.
+    exposed = ExposedActionsStore(_FakeExposedStorage([]))
+    hass.data[DOMAIN] = {
+        DATA_EXPOSED_ACTIONS: exposed,
+        DATA_STORE: FakeStore({}),
+        DATA_LAST_APPLIED: {("area", "a", "lighting"): 7},
+    }
+    plan = {"matched_scene_index": 9, "scene_name": None, "actions": []}
+    await async_execute_plan(hass, "area", "a", plan, "lighting")
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 7
+
+
 class _ExposedStub:
     def __init__(self, entries: dict[str, dict]) -> None:
         self._entries = entries
@@ -1020,7 +1043,9 @@ async def test_apply_scene_emits_manual_trace_event(hass: HomeAssistant) -> None
                     "name": "evening-lights",
                     "category": "lighting",
                     "when": {"tod": "evening"},
-                    "actions": [],
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}
+                    ],
                 }
             ]
         }
@@ -1089,6 +1114,73 @@ async def test_apply_scene_manual_trace_includes_no_match_category(hass: HomeAss
         assert any(u.outcome == "no_match" for u in captured[-1].units)
     finally:
         trace_logger.setLevel(logging.NOTSET)
+
+
+async def test_apply_scene_no_action_winner_is_no_op_transparent(hass: HomeAssistant) -> None:
+    """A manual apply whose winner has no actions (a blocker) is NO_OP and leaves
+    last_applied untouched — consistent with the engine path."""
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "blocker",
+                    "category": "lighting",
+                    "when": {"tod": "evening"},
+                    "actions": [],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {("area", "a", "lighting"): 5},  # a prior real winner
+    }
+    captured: list[TraceEvent] = []
+
+    class CaptureSink:
+        def emit(self, event: TraceEvent) -> None:
+            captured.append(event)
+
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [CaptureSink()]
+    trace_logger = logging.getLogger("custom_components.ambience.trace")
+    trace_logger.setLevel(logging.DEBUG)
+    try:
+        await async_apply_scene(hass, "area", "a")
+        assert any(u.outcome == "no_op" for u in captured[-1].units)
+    finally:
+        trace_logger.setLevel(logging.NOTSET)
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 5
+
+
+async def test_apply_scene_no_match_clears_last_applied(hass: HomeAssistant) -> None:
+    """A manual apply matching no scene clears last_applied, consistent with the
+    engine's no-match handling, so a later win of the same scene re-applies."""
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "morning",
+                    "category": "lighting",
+                    "when": {"tod": "morning"},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}
+                    ],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},  # 'morning' scene won't match
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {("area", "a", "lighting"): 3},
+    }
+    await async_apply_scene(hass, "area", "a")
+    assert ("area", "a", "lighting") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
 
 
 async def test_resolve_with_snapshots_includes_explanation_when_explain(

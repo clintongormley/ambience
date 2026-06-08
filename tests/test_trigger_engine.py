@@ -336,18 +336,31 @@ class _FakeExposedStorage:
         self._actions = list(actions)
 
 
+def _light_action(hass):
+    """Register a no-op `light.turn_on` and return a one-action list using it, so
+    a scene carrying it exercises the real ACTED / last-applied path."""
+    hass.services.async_register("light", "turn_on", lambda call: None)
+    return [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}]
+
+
 def _apply_engine(hass, *, switch_on: bool = True):
     """Engine over one area 'a' with scenes [evening->idx0, morning->idx1], the
-    'tod' condition watching sensor.x, switch on, empty exposed actions."""
+    'tod' condition watching sensor.x, switch on, one exposed action per scene.
+
+    The scenes carry a real (exposed) action so the winner exercises the ACTED /
+    last-applied path; a no-action winner is a distinct (blocker) case covered by
+    its own tests.
+    """
     tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    act = _light_action(hass)
     scopes = [
         (
             "area",
             "a",
             {
                 "scenes": [
-                    {"when": {"tod": "evening"}, "category": "g", "actions": []},
-                    {"when": {"tod": "morning"}, "category": "g", "actions": []},
+                    {"when": {"tod": "evening"}, "category": "g", "actions": act},
+                    {"when": {"tod": "morning"}, "category": "g", "actions": act},
                 ]
             },
         )
@@ -356,7 +369,7 @@ def _apply_engine(hass, *, switch_on: bool = True):
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"tod": tod},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=switch_on)},
-        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
     }
     engine = AutoTriggerEngine(hass)
     engine.async_rebuild()
@@ -510,13 +523,15 @@ class StateReadCondition:
 
 
 def _live_engine(hass) -> AutoTriggerEngine:
-    """Engine: area 'a', scene0 fires when binary_sensor.x == 'on'. Switch on."""
-    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    """Engine: area 'a', scene0 (with one exposed action) fires when
+    binary_sensor.x == 'on'. Switch on."""
+    act = _light_action(hass)
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": act}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"x": StateReadCondition()},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
-        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
     }
     engine = AutoTriggerEngine(hass)
     engine.async_rebuild()
@@ -666,12 +681,13 @@ async def test_for_recheck_scheduled_on_state_change(hass) -> None:
 
 async def test_async_start_builds_subscribes_and_syncs(hass) -> None:
     hass.states.async_set("binary_sensor.x", "on")
-    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    act = _light_action(hass)
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": act}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"x": StateReadCondition()},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
-        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
     }
     engine = AutoTriggerEngine(hass)
     await engine.async_start()  # build + subscribe + initial sync
@@ -683,13 +699,14 @@ async def test_async_start_builds_subscribes_and_syncs(hass) -> None:
 
 async def test_switch_off_to_on_force_resyncs(hass) -> None:
     hass.states.async_set("binary_sensor.x", "on")
+    act = _light_action(hass)
     switch = SimpleNamespace(is_on=True, entity_id="switch.ambience_a")
-    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": act}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"x": StateReadCondition()},
         DATA_SWITCHES: {("area", "a"): switch},
-        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
     }
     engine = AutoTriggerEngine(hass)
     engine.async_rebuild()
@@ -1201,12 +1218,15 @@ async def test_resolve_and_apply_returns_no_match_trace_when_no_scene_matches(ha
 
 
 # ---------------------------------------------------------------------------
-# Lines 244-254 — _resolve_and_apply: same winner (no-op) AND tracing active → NO_OP UnitTrace
+# _resolve_and_apply: a winner unchanged since last apply (and with actions) is
+# DEBOUNCED — its identical actions are suppressed, distinct from a no-action
+# (blocker) winner, which is NO_OP.
 # ---------------------------------------------------------------------------
 
 
-async def test_resolve_and_apply_returns_no_op_trace_when_winner_unchanged(hass) -> None:
-    """Lines 244-253: winner == last-applied AND tracing active → NO_OP UnitTrace."""
+async def test_resolve_and_apply_returns_debounced_trace_when_winner_unchanged(hass) -> None:
+    """Winner == last-applied, has actions, tracing active → DEBOUNCED UnitTrace
+    (the identical re-fire is suppressed)."""
     from custom_components.ambience.trace import Outcome
 
     engine, _tod = _apply_engine(hass)
@@ -1217,9 +1237,51 @@ async def test_resolve_and_apply_returns_no_op_trace_when_winner_unchanged(hass)
     try:
         result = await engine._resolve_and_apply("area", "a", "g")
         assert result is not None
+        assert result.outcome == Outcome.DEBOUNCED
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
+async def test_resolve_and_apply_no_match_clears_last_applied(hass) -> None:
+    """A no-match drops the unit's last-applied, so a later win of the *same*
+    scene re-applies instead of being suppressed."""
+    engine, tod = _apply_engine(hass)
+    await engine.async_initial_sync()  # tod="evening" → scene 0 applied
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+    tod.value = "afternoon"  # neither scene matches now
+    engine._snapshots = {"tod": "afternoon"}
+    await engine._resolve_and_apply("area", "a", "g")
+    assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
+async def test_resolve_and_apply_no_action_winner_is_no_op_transparent_to_last_applied(
+    hass,
+) -> None:
+    """A winner with no actions (a pure blocker) is NO_OP and leaves last-applied
+    untouched — it neither records itself nor clears a prior real winner."""
+    from custom_components.ambience.trace import Outcome
+
+    blocker = {"when": {"tod": "evening"}, "category": "g", "actions": []}
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "a", {"scenes": [blocker]})]),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {("area", "a", "g"): 5},  # a prior real winner
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine._snapshots = {"tod": "evening"}
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g")
+        assert result is not None
         assert result.outcome == Outcome.NO_OP
     finally:
         logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    # The blocker did not overwrite or clear the prior real winner.
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 5
 
 
 async def test_resolve_and_apply_returns_none_when_winner_unchanged_and_tracing_inactive(

@@ -542,6 +542,17 @@ describe("trace-detail", () => {
     expect(flat.querySelector(".chev")).toBeNull();
   });
 
+  test("aria-expanded on the header reflects state and is absent when not expandable", () => {
+    expect(
+      renderToHost({}, false).querySelector(".eval-header")?.getAttribute("aria-expanded"),
+    ).toBe("false");
+    expect(
+      renderToHost({}, true).querySelector(".eval-header")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+    const flat = renderToHost({ actions: [], explanation: null, outcome: "no_match" }, false);
+    expect(flat.querySelector(".eval-header")?.hasAttribute("aria-expanded")).toBe(false);
+  });
+
   test("the collapsed header is the toggle target; the expanded panel is not", () => {
     let toggles = 0;
     const host = document.createElement("div");

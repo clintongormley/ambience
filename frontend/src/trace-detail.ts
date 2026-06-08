@@ -236,7 +236,9 @@ export function renderEvaluation(
   // one-line reason (switch off / scope disabled).
   const canExpand = u.explanation !== null || u.actions.length > 0 || isSkipped(u.outcome);
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
+    // Guard e.repeat so holding Space doesn't fire the toggle on every
+    // key-repeat (a native <button> activates once, on keyup).
+    if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
       e.preventDefault();
       onToggle();
     }
@@ -247,6 +249,7 @@ export function renderEvaluation(
         class=${canExpand ? "eval-header clickable" : "eval-header"}
         role=${canExpand ? "button" : nothing}
         tabindex=${canExpand ? "0" : nothing}
+        aria-expanded=${canExpand ? expanded : nothing}
         @click=${canExpand ? onToggle : undefined}
         @keydown=${canExpand ? onKey : undefined}
       >

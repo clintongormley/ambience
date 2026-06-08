@@ -16,17 +16,56 @@ from astral.sun import azimuth, dawn, dusk, elevation, midnight, noon, sunrise, 
 from homeassistant.core import HomeAssistant, State
 from homeassistant.util import dt as dt_util
 
-# sun.sun attribute name -> astral function. Each function returns a tz-aware
-# UTC datetime for the given observer/date; the time_of_day condition normalises
-# anchors to within ±12h of `now`, so a same-date anchor is sufficient.
+# anchor name -> (sun.sun `next_*` attribute, astral fn). Each fn returns a
+# tz-aware UTC datetime for the given observer/date. Single source of truth for
+# both the per-date anchors (`anchor_datetimes`) and the synthetic state.
 _ANCHORS = {
-    "next_rising": sunrise,
-    "next_setting": sunset,
-    "next_noon": noon,
-    "next_midnight": midnight,
-    "next_dawn": dawn,
-    "next_dusk": dusk,
+    "sunrise": ("next_rising", sunrise),
+    "sunset": ("next_setting", sunset),
+    "noon": ("next_noon", noon),
+    "midnight": ("next_midnight", midnight),
+    "dawn": ("next_dawn", dawn),
+    "dusk": ("next_dusk", dusk),
 }
+
+
+def _observer(hass: HomeAssistant) -> Observer:
+    return Observer(
+        latitude=hass.config.latitude,
+        longitude=hass.config.longitude,
+        elevation=hass.config.elevation or 0,
+    )
+
+
+def anchor_datetimes(
+    hass: HomeAssistant, now: datetime, *, allow_missing: bool = False
+) -> dict[str, datetime]:
+    """The six sun anchors for `now`'s local date, as tz-aware UTC datetimes.
+
+    Keyed by the time_of_day anchor names (sunrise/sunset/noon/midnight/dawn/dusk).
+    Each is the occurrence of that solar event on now's local calendar date — the
+    event *belonging to today*, NOT the "next" occurrence. This matters at a
+    boundary: an event that has already fired today must still resolve to today's
+    instance so a just-crossed range boundary stays put. HA core's `sun.sun`
+    `next_*` attributes instead roll to tomorrow the instant an event fires, and
+    `next_event − 24h` drifts by a day's worth of solar movement (tens of seconds
+    to minutes), which would shove the boundary back across `now`.
+
+    By default raises ValueError if any anchor is undefined at the location/date
+    (polar day/night) — the live caller treats that as an unavailable snapshot.
+    With `allow_missing=True`, undefined anchors are omitted from the result
+    instead (the synthetic-state path keeps whatever anchors do exist).
+    """
+    observer = _observer(hass)
+    on_date = dt_util.as_local(now).date()
+    result: dict[str, datetime] = {}
+    for name, (_attr, fn) in _ANCHORS.items():
+        try:
+            result[name] = fn(observer, date=on_date)
+        except ValueError:
+            if not allow_missing:
+                raise
+    return result
 
 
 def synthetic_sun_state(hass: HomeAssistant, now: datetime) -> State:
@@ -37,19 +76,11 @@ def synthetic_sun_state(hass: HomeAssistant, now: datetime) -> State:
     location/date (polar day/night) are omitted; a condition needing a missing
     anchor will fail its snapshot and resolve to None, same as live behaviour.
     """
-    observer = Observer(
-        latitude=hass.config.latitude,
-        longitude=hass.config.longitude,
-        elevation=hass.config.elevation or 0,
-    )
-    on_date = dt_util.as_local(now).date()
-    attributes: dict[str, Any] = {}
-    for attr, fn in _ANCHORS.items():
-        try:
-            attributes[attr] = fn(observer, date=on_date).isoformat()
-        except ValueError:
-            # Anchor undefined at this location/date (e.g. polar day/night).
-            continue
+    observer = _observer(hass)
+    attributes: dict[str, Any] = {
+        _ANCHORS[name][0]: dt.isoformat()
+        for name, dt in anchor_datetimes(hass, now, allow_missing=True).items()
+    }
     el = float(elevation(observer, now))
     attributes["elevation"] = el
     attributes["azimuth"] = float(azimuth(observer, now))

@@ -1,6 +1,7 @@
 """Condition snapshots honour an injected `now` (for the what-if simulator)."""
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from homeassistant.util import dt as dt_util
@@ -56,20 +57,12 @@ async def test_state_snapshot_uses_injected_now():
 
 @pytest.mark.asyncio
 async def test_time_of_day_snapshot_uses_injected_now():
-    # sun.sun must carry the six anchor attributes or snapshot() raises.
-    sun = _FakeState(
-        "sun.sun",
-        "above_horizon",
-        {
-            "next_rising": "2026-12-21T08:00:00+00:00",
-            "next_setting": "2026-12-21T16:01:00+00:00",
-            "next_noon": "2026-12-21T12:00:00+00:00",
-            "next_midnight": "2026-12-22T00:00:00+00:00",
-            "next_dawn": "2026-12-21T07:30:00+00:00",
-            "next_dusk": "2026-12-21T16:30:00+00:00",
-        },
-    )
-    snap = await TimeOfDayCondition().snapshot(_FakeHass({"sun.sun": sun}), now=FIXED)
+    # sun.sun must be present (the integration is up); anchors are computed from
+    # astral for now's local date using hass.config's location.
+    sun = _FakeState("sun.sun", "above_horizon", {})
+    config = SimpleNamespace(latitude=41.9028, longitude=12.4964, elevation=0)
+    hass = _FakeHass({"sun.sun": sun}, config=config)
+    snap = await TimeOfDayCondition().snapshot(hass, now=FIXED)
     assert snap.now == FIXED
 
 

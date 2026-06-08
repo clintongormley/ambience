@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
+from astral import Observer
+from astral.sun import dusk, sunrise
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
@@ -42,6 +44,23 @@ def _build_snapshot(now: datetime, **overrides: datetime) -> TimeOfDaySnapshot:
     }
     defaults.update(overrides)
     return TimeOfDaySnapshot(**defaults)
+
+
+_ROME = (41.9028, 12.4964, 0)  # latitude, longitude, elevation
+
+
+def _set_rome(hass: HomeAssistant) -> Observer:
+    """Pin hass to Rome and return a matching astral Observer."""
+    hass.config.latitude, hass.config.longitude, hass.config.elevation = _ROME
+    return Observer(latitude=_ROME[0], longitude=_ROME[1], elevation=_ROME[2])
+
+
+def _roll_sun_to(hass: HomeAssistant, when: datetime) -> None:
+    """Set sun.sun with every `next_*` anchor pointing at `when` — mimics HA core
+    once the day's events have fired and rolled the anchors over to tomorrow."""
+    iso = when.isoformat()
+    attrs = ("next_rising", "next_setting", "next_noon", "next_midnight", "next_dawn", "next_dusk")
+    hass.states.async_set("sun.sun", "below_horizon", dict.fromkeys(attrs, iso))
 
 
 def _condition(periods: dict[str, dict[str, Any]] | None = None) -> TimeOfDayCondition:
@@ -83,20 +102,70 @@ async def test_snapshot_raises_when_sun_unavailable(hass: HomeAssistant) -> None
         await _condition().snapshot(hass)
 
 
-async def test_snapshot_raises_when_attribute_missing(hass: HomeAssistant) -> None:
-    hass.states.async_set(
-        "sun.sun",
-        "above_horizon",
-        {
-            "next_setting": "2026-05-13T18:00:00+00:00",
-            "next_dawn": "2026-05-13T05:30:00+00:00",
-            "next_dusk": "2026-05-13T18:30:00+00:00",
-            "next_noon": "2026-05-13T12:00:00+00:00",
-            "next_midnight": "2026-05-13T00:00:00+00:00",
-        },
-    )
-    with pytest.raises(RuntimeError, match="next_rising"):
-        await _condition().snapshot(hass)
+async def test_snapshot_uses_anchor_for_now_local_date_not_next_event(
+    hass: HomeAssistant,
+) -> None:
+    """Regression: the snapshot must expose the anchor for now's *local date*.
+
+    Once today's dusk has passed, HA core rolls `sun.sun`'s `next_dusk` over to
+    *tomorrow's* dusk. The snapshot must still resolve TODAY's dusk — not
+    tomorrow's — otherwise the ±12h normalisation (tomorrow's dusk − 24h) lands
+    a day's worth of solar drift later than the dusk that just fired, shoving a
+    just-crossed boundary back across `now`.
+    """
+    obs = _set_rome(hass)
+    today_dusk = dusk(obs, date=date(2026, 6, 6))
+    now = today_dusk + timedelta(seconds=5)  # a moment after today's dusk
+    _roll_sun_to(hass, dusk(obs, date=date(2026, 6, 7)))  # HA advanced next_* to tomorrow
+    snap = await _condition().snapshot(hass, now=now)
+    assert snap.dusk == today_dusk
+
+
+async def test_night_range_stays_matched_just_after_dusk(hass: HomeAssistant) -> None:
+    """Regression (blinds reopening at night): a `dusk → 08:30` night range must
+    keep matching the moment after dusk, and the `08:30 → dusk` day range must
+    NOT match — even though HA's next_dusk has rolled to tomorrow.
+    """
+    obs = _set_rome(hass)
+    today_dusk = dusk(obs, date=date(2026, 6, 6))
+    now = today_dusk + timedelta(seconds=5)
+    _roll_sun_to(hass, dusk(obs, date=date(2026, 6, 7)))
+    snap = await _condition().snapshot(hass, now=now)
+    cond = _condition()
+    night = _range(_sun("dusk"), _time(8, 30))
+    day = _range(_time(8, 30), _sun("dusk"))
+    assert cond.matches(night, snap) is True
+    assert cond.matches(day, snap) is False
+
+
+async def test_sunrise_range_flips_at_real_next_sunrise(hass: HomeAssistant) -> None:
+    """The ±12h normalisation must not place a sun boundary early: a
+    `sunrise → sunset` range flips exactly at the real sunrise, even at a high
+    latitude where day-to-day solar drift is largest. A naive `today ± 24h`
+    approximation would flip it minutes early; the local-date recompute avoids it.
+    """
+    obs = Observer(latitude=60.0, longitude=18.0, elevation=0)
+    hass.config.latitude, hass.config.longitude, hass.config.elevation = 60.0, 18.0, 0
+    hass.states.async_set("sun.sun", "below_horizon", {})
+    real_sunrise = sunrise(obs, date=date(2026, 9, 23))
+    rng = _range(_sun("sunrise"), _sun("sunset"))
+    cond = _condition()
+    before = await cond.snapshot(hass, now=real_sunrise - timedelta(minutes=1))
+    after = await cond.snapshot(hass, now=real_sunrise + timedelta(minutes=1))
+    assert cond.matches(rng, before) is False
+    assert cond.matches(rng, after) is True
+
+
+async def test_snapshot_ignores_sun_sun_attributes(hass: HomeAssistant) -> None:
+    """Anchors come from astral for now's local date; sun.sun's `next_*`
+    attributes are not consulted, so a missing/garbage attribute is harmless.
+    """
+    obs = _set_rome(hass)
+    # sun.sun present (the integration is up) but with no usable anchor attrs.
+    hass.states.async_set("sun.sun", "below_horizon", {})
+    now = datetime(2026, 6, 6, 22, 0, tzinfo=UTC)
+    snap = await _condition().snapshot(hass, now=now)
+    assert snap.dusk == dusk(obs, date=date(2026, 6, 6))
 
 
 # ── matches: explicit ranges ────────────────────────────────────────────────
@@ -479,26 +548,20 @@ def test_absolute_time_uses_local_tz_for_date(hass: HomeAssistant) -> None:
     )
 
 
-# ── snapshot: unparseable attribute value (line 74) ─────────────────────────
+# ── snapshot: anchor undefined at location/date (polar day/night) ───────────
 
 
-async def test_snapshot_raises_when_attribute_unparseable(hass: HomeAssistant) -> None:
-    """snapshot() raises RuntimeError when a sun.sun attribute exists but
-    cannot be parsed as a datetime (line 74 branch)."""
-    hass.states.async_set(
-        "sun.sun",
-        "above_horizon",
-        {
-            "next_rising": "not-a-datetime",
-            "next_setting": "2026-05-13T18:00:00+00:00",
-            "next_dawn": "2026-05-13T05:30:00+00:00",
-            "next_dusk": "2026-05-13T18:30:00+00:00",
-            "next_noon": "2026-05-13T12:00:00+00:00",
-            "next_midnight": "2026-05-13T00:00:00+00:00",
-        },
-    )
-    with pytest.raises(RuntimeError, match="unparseable"):
-        await _condition().snapshot(hass)
+async def test_snapshot_raises_when_anchor_undefined(hass: HomeAssistant) -> None:
+    """snapshot() raises RuntimeError when an anchor is undefined at the
+    location/date (e.g. high-latitude midsummer where the sun never reaches the
+    dusk depression), so the condition resolves to None rather than crashing."""
+    hass.config.latitude = 80.0
+    hass.config.longitude = 0.0
+    hass.config.elevation = 0
+    hass.states.async_set("sun.sun", "above_horizon", {})
+    now = datetime(2026, 6, 21, 12, 0, tzinfo=UTC)
+    with pytest.raises(RuntimeError, match="anchor undefined"):
+        await _condition().snapshot(hass, now=now)
 
 
 # ── _resolve_endpoint error paths (lines 121, 128, 139, 146) ─────────────────

@@ -10,6 +10,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
+from ..sun_position import anchor_datetimes
 from ..triggers import TriggerSpec
 from ._common import merge_intervals
 
@@ -65,20 +66,26 @@ class TimeOfDayCondition:
         now: datetime | None = None,
         entities: frozenset[str] | None = None,  # part of the shared contract; not entity-driven
     ) -> TimeOfDaySnapshot:
-        state = hass.states.get("sun.sun")
-        if state is None:
+        # Presence check only — sun.sun being available means the sun integration
+        # is configured. The anchors themselves come from astral below, not from
+        # this state's attributes.
+        if hass.states.get("sun.sun") is None:
             raise RuntimeError("sun.sun unavailable")
-        anchors: dict[str, datetime] = {}
-        for anchor, attr in ANCHOR_ATTR.items():
-            raw = state.attributes.get(attr)
-            if raw is None:
-                raise RuntimeError(f"sun.sun missing attribute {attr}")
-            parsed = dt_util.parse_datetime(raw)
-            if parsed is None:
-                raise RuntimeError(f"sun.sun attribute {attr} unparseable: {raw!r}")
-            anchors[anchor] = parsed
+        moment = now or dt_util.utcnow()
+        # Resolve each anchor to its occurrence on `moment`'s local date rather
+        # than reading sun.sun's `next_*` attributes: the moment an event fires,
+        # HA rolls `next_*` to tomorrow, and `next_event − 24h` (the ±12h
+        # normalisation in `_resolve_endpoint`) drifts a day's solar movement past
+        # `now`, flipping a just-crossed boundary back (e.g. blinds reopening the
+        # instant after dusk). Today's-date anchors stay put once crossed.
+        try:
+            anchors = anchor_datetimes(hass, moment)
+        except ValueError as err:
+            # Anchor undefined at this location/date (polar day/night) — fail the
+            # snapshot so the condition resolves to None, same as a missing anchor.
+            raise RuntimeError(f"sun anchor undefined: {err}") from err
         return TimeOfDaySnapshot(
-            now=now or dt_util.utcnow(),
+            now=moment,
             sunrise=anchors["sunrise"],
             sunset=anchors["sunset"],
             noon=anchors["noon"],

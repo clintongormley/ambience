@@ -37,7 +37,9 @@ def _observer(hass: HomeAssistant) -> Observer:
     )
 
 
-def anchor_datetimes(hass: HomeAssistant, now: datetime) -> dict[str, datetime]:
+def anchor_datetimes(
+    hass: HomeAssistant, now: datetime, *, allow_missing: bool = False
+) -> dict[str, datetime]:
     """The six sun anchors for `now`'s local date, as tz-aware UTC datetimes.
 
     Keyed by the time_of_day anchor names (sunrise/sunset/noon/midnight/dawn/dusk).
@@ -49,12 +51,21 @@ def anchor_datetimes(hass: HomeAssistant, now: datetime) -> dict[str, datetime]:
     `next_event − 24h` drifts by a day's worth of solar movement (tens of seconds
     to minutes), which would shove the boundary back across `now`.
 
-    Raises ValueError if any anchor is undefined at the location/date (polar
-    day/night) — the caller treats that as an unavailable snapshot.
+    By default raises ValueError if any anchor is undefined at the location/date
+    (polar day/night) — the live caller treats that as an unavailable snapshot.
+    With `allow_missing=True`, undefined anchors are omitted from the result
+    instead (the synthetic-state path keeps whatever anchors do exist).
     """
     observer = _observer(hass)
     on_date = dt_util.as_local(now).date()
-    return {name: fn(observer, date=on_date) for name, (_attr, fn) in _ANCHORS.items()}
+    result: dict[str, datetime] = {}
+    for name, (_attr, fn) in _ANCHORS.items():
+        try:
+            result[name] = fn(observer, date=on_date)
+        except ValueError:
+            if not allow_missing:
+                raise
+    return result
 
 
 def synthetic_sun_state(hass: HomeAssistant, now: datetime) -> State:
@@ -66,14 +77,10 @@ def synthetic_sun_state(hass: HomeAssistant, now: datetime) -> State:
     anchor will fail its snapshot and resolve to None, same as live behaviour.
     """
     observer = _observer(hass)
-    on_date = dt_util.as_local(now).date()
-    attributes: dict[str, Any] = {}
-    for _name, (attr, fn) in _ANCHORS.items():
-        try:
-            attributes[attr] = fn(observer, date=on_date).isoformat()
-        except ValueError:
-            # Anchor undefined at this location/date (e.g. polar day/night).
-            continue
+    attributes: dict[str, Any] = {
+        _ANCHORS[name][0]: dt.isoformat()
+        for name, dt in anchor_datetimes(hass, now, allow_missing=True).items()
+    }
     el = float(elevation(observer, now))
     attributes["elevation"] = el
     attributes["azimuth"] = float(azimuth(observer, now))

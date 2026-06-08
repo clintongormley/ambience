@@ -31,6 +31,7 @@ from .service import (
     async_execute_plan,
     async_resolve_with_snapshots,
     category_ids,
+    forget_last_applied,
     get_last_applied,
     scope_reapply_intervals,
 )
@@ -254,12 +255,18 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         index = plan["matched_scene_index"]
         explanation = plan.get("explanation")
         if index is None:
+            # A no-match is a transition away from the previous winner: drop the
+            # last-applied record so a later win of the same scene re-applies.
+            forget_last_applied(self._hass, scope_kind, scope_id, category_id)
             if active:
                 return UnitTrace(
                     scope_kind, scope_id, category_id, switch_state, Outcome.NO_MATCH, explanation
                 )
             return None
-        if not force and index == get_last_applied(self._hass, scope_kind, scope_id, category_id):
+        if not plan["actions"]:
+            # A pure blocker (winner with no actions): nothing to run, and it stays
+            # transparent to last-applied so it neither records itself nor clears a
+            # prior real winner.
             if active:
                 return UnitTrace(
                     scope_kind,
@@ -267,6 +274,20 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     category_id,
                     switch_state,
                     Outcome.NO_OP,
+                    explanation,
+                    winner_name=plan["scene_name"],
+                )
+            return None
+        if not force and index == get_last_applied(self._hass, scope_kind, scope_id, category_id):
+            # Same winner as last applied, with identical actions → suppress the
+            # redundant re-fire.
+            if active:
+                return UnitTrace(
+                    scope_kind,
+                    scope_id,
+                    category_id,
+                    switch_state,
+                    Outcome.DEBOUNCED,
                     explanation,
                     winner_name=plan["scene_name"],
                 )

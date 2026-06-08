@@ -14,7 +14,7 @@ In the Ambience panel, each category card has a small **Traces** button. Clickin
 
 Each entry shows four things across the top row:
 
-- **Outcome badge** — one of: `acted` (Ambience ran actions and something changed), `reapplied` (the current scene's actions were re-fired on a periodic reapply without re-resolving), `no op` (evaluation ran but nothing changed), or `skipped switch off` (the category's enable switch was off).
+- **Outcome badge** — one of: `acted` (Ambience ran actions and something changed), `reapplied` (the current scene's actions were re-fired on a periodic reapply without re-resolving), `debounced` (a scene won but it is the same one already applied, so its identical actions were suppressed), `no op` (a scene won but it has no actions to run — e.g. a blocker scene), `no match` (no scene matched), or `skipped switch off` (the category's enable switch was off).
 - **Cause** — what triggered the evaluation. Entity causes read as `sensor.my_sensor off → on`; time-based causes read as `clock`, `sun`, or `duration recheck`.
 - **Time** — the local time of the evaluation.
 
@@ -50,7 +50,7 @@ Each category card also has a **Simulate** button. Clicking it opens a modal lab
 
 ### Running the simulation
 
-Click **Simulate ▸** to send the current inputs to Ambience. The result appears below the button as a single trace-detail card. Expand it with **▸ Why this scene won** (or **▸ Why nothing matched**) to see which conditions passed and which actions would have run. The outcome badge reads `acted` or `no match` — it describes what *would* have happened, not what actually happened in your home.
+Click **Simulate ▸** to send the current inputs to Ambience. The result appears below the button as a single trace-detail card. Expand it with **▸ Why this scene won** (or **▸ Why nothing matched**) to see which conditions passed and which actions would have run. The outcome badge reads `acted`, `no op` (a scene won but has no actions), or `no match` — it describes what *would* have happened, not what actually happened in your home. (The simulator never shows `debounced`, which depends on what was last applied at runtime.)
 
 !!! info "📷 Screenshot"
 

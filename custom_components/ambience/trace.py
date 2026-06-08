@@ -50,7 +50,11 @@ class Outcome(StrEnum):
     """What an evaluated (scope, category) unit did."""
 
     ACTED = "acted"
+    # Won, but the scene has no actions to run (a pure blocker).
     NO_OP = "no_op"
+    # Won with actions, but identical to the last applied winner — the redundant
+    # re-fire is suppressed.
+    DEBOUNCED = "debounced"
     NO_MATCH = "no_match"
     SKIPPED_SWITCH_OFF = "skipped_switch_off"
     SKIPPED_SCOPE_DISABLED = "skipped_scope_disabled"

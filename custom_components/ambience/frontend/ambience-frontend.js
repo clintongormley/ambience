@@ -2569,6 +2569,7 @@ var ia=Object.defineProperty;var na=Object.getOwnPropertyDescriptor;var u=(t,n,e
     background: var(--secondary-background-color, #333); color: var(--secondary-text-color, #aaa); }
   .outcome.acted { background: var(--success-color, #4caf50); color: #fff; }
   .outcome.reapplied { background: var(--info-color, #2196f3); color: #fff; }
+  .outcome.debounced { background: var(--warning-color, #ff9800); color: #fff; }
   .won { margin-top: 0.4rem; }
   .won .name { color: var(--success-color, #4caf50); font-weight: 600; }
   .action-summary { margin-top: 0.2rem; font-family: monospace; font-size: 0.82rem;

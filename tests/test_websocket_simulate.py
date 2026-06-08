@@ -47,7 +47,9 @@ async def seeded_area(hass: HomeAssistant, installed) -> str:
                             "states": ["on"],
                         }
                     },
-                    "actions": [],
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.k"], "params": {}}
+                    ],
                 }
             ],
         },

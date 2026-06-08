@@ -468,15 +468,18 @@ async def run_simulation(
         )
     else:
         scene = candidates[winner]
+        actions = scene.get("actions", [])
+        # A winner with no actions (a pure blocker) is a NO_OP, not an ACTED —
+        # mirror the engine so the preview matches what production would record.
         unit = UnitTrace(
             scope_kind,
             scope_id,
             category,
             switch_state,
-            Outcome.ACTED,
+            Outcome.ACTED if actions else Outcome.NO_OP,
             explanation,
             winner_name=scene.get("name"),
-            actions=scene.get("actions", []),
+            actions=actions,
             category_name=category_name,
             scope_name=scope_name,
         )

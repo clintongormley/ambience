@@ -128,6 +128,12 @@ describe("trace-detail", () => {
     expect(host.querySelector(".pred")).toBeFalsy(); // predicates are expansion-only
   });
 
+  test("a debounced outcome renders its own badge (distinct from no_op)", () => {
+    const host = renderToHost({ outcome: "debounced" }, false);
+    expect(host.querySelector(".outcome.debounced")).toBeTruthy();
+    expect(host.querySelector(".outcome")?.textContent?.trim()).toBe("debounced");
+  });
+
   test("singular entity count reads '1 entity'", () => {
     const host = renderToHost(
       {

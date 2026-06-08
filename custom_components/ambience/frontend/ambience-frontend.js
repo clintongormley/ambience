@@ -2983,7 +2983,7 @@ var sa=Object.defineProperty;var aa=Object.getOwnPropertyDescriptor;var u=(t,n,e
             ✕
           </button>
         </div>
-      `}return""}_orderedScopeRows(){let e=[{scope:{kind:"house"},name:d(this.hass,"ui.scope_house","House"),cfg:this._house,rowClass:"house"}];for(let s of this._floors){let a=this._floorConfigs.get(s.floor_id);a&&e.push({scope:{kind:"floor",id:s.floor_id},name:s.name,cfg:a,rowClass:"floor"})}for(let s of this._areas){let a=this._areaConfigs.get(s.area_id);a&&e.push({scope:{kind:"area",id:s.area_id},name:s.name,cfg:a,rowClass:"area"})}let r=[],i=[];for(let s of e)(s.cfg.enabled===!1?i:r).push(s);return[...r,...i]}_isSwitchedOff(e){let r=this._switchEntityIds.get(W(e));return r?this.hass.states?.[r]?.state==="off":!1}_renderAreasPlaceholder(){return this._areasLoaded?this._areas.length===0?l`<li>
+      `}return""}_orderedScopeRows(){let e=[{scope:{kind:"house"},name:d(this.hass,"ui.scope_house","House"),cfg:this._house,rowClass:"house"}];for(let s of this._floors){let a=this._floorConfigs.get(s.floor_id);a&&e.push({scope:{kind:"floor",id:s.floor_id},name:s.name,cfg:a,rowClass:"floor"})}for(let s of this._areas){let a=this._areaConfigs.get(s.area_id);a&&e.push({scope:{kind:"area",id:s.area_id},name:s.name,cfg:a,rowClass:"area"})}let r=[],i=[];for(let s of e)(s.cfg.enabled===!1?i:r).push(s);return[...r,...i]}_isSwitchedOff(e){let r=this._switchEntityIds.get(W(e));return r?this.hass.states?.[r]?.state==="off":!1}_renderAreasPlaceholder(){return this._areasLoaded?!this._error&&this._areas.length===0?l`<li>
         <p class="empty">
           ${d(this.hass,"ui.no_areas","No areas found in Home Assistant.")}
         </p>

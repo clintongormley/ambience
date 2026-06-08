@@ -1216,7 +1216,9 @@ export class AmbienceScopesView extends LitElement {
 
   /** Renders the trailing list item: a spinner while areas are still loading,
    *  the "no areas" empty state once a load with zero areas has settled, else
-   *  nothing (the scope rows above carry the content). */
+   *  nothing (the scope rows above carry the content). On error the error
+   *  banner speaks for the failed load, so the empty state is suppressed —
+   *  "No areas found" would be a false negative when the fetch didn't succeed. */
   private _renderAreasPlaceholder() {
     if (!this._areasLoaded) {
       return html`<li>
@@ -1226,7 +1228,7 @@ export class AmbienceScopesView extends LitElement {
         </p>
       </li>`;
     }
-    if (this._areas.length === 0) {
+    if (!this._error && this._areas.length === 0) {
       return html`<li>
         <p class="empty">
           ${localize(this.hass, "ui.no_areas", "No areas found in Home Assistant.")}

@@ -115,7 +115,13 @@ describe("trace-detail", () => {
     };
     expect(
       formatCauseFriendly(
-        { kind: "duration", entity_id: "binary_sensor.motion", old: null, new: "off", detail: "5m" },
+        {
+          kind: "duration",
+          entity_id: "binary_sensor.motion",
+          old: null,
+          new: "off",
+          detail: "5m",
+        },
         hass,
       ),
     ).toBe("Hall: Clear for 5m");
@@ -264,17 +270,12 @@ describe("trace-detail", () => {
     expect(host.textContent).toContain("not reached");
   });
 
-  test("label says 'Why nothing matched' when there is no winner", () => {
-    const host = renderToHost({ winner_name: null }, false);
-    expect(host.textContent).toContain("Why nothing matched");
-  });
-
   test("a unit with actions but no explanation can still expand to its actions", () => {
     const host = renderToHost({ outcome: "reapplied", explanation: null }, true);
     const titles = [...host.querySelectorAll(".section-title")].map((e) => e.textContent?.trim());
     expect(titles).toContain("Actions taken");
     expect(titles).not.toContain("Scene evaluation");
-    expect(host.querySelector(".why-toggle")).toBeTruthy();
+    expect(host.querySelector(".eval-header.clickable")).toBeTruthy();
   });
 
   test("scene numbers are displayed 1-based (index 0 → 'Scene #1')", () => {
@@ -534,22 +535,43 @@ describe("trace-detail", () => {
     expect(host.textContent).not.toContain("entity");
   });
 
-  // renderEvaluation — line 144-145: collapsed toggle, has explanation AND winner_name
-  // Branch 49: `▸ Why this scene won (N scenes)` label
-  test("collapsed toggle reads 'Why this scene won' when explanation and winner_name are present", () => {
-    const host = renderToHost({}, false); // winner_name set, explanation present
-    expect(host.textContent).toContain("Why this scene won");
-    expect(host.textContent).toContain("2 scenes");
-    expect(host.textContent).not.toContain("Hide details");
+  test("chevron reflects expand state and is absent when not expandable", () => {
+    expect(renderToHost({}, false).querySelector(".chev")?.textContent).toBe("▸");
+    expect(renderToHost({}, true).querySelector(".chev")?.textContent).toBe("▾");
+    const flat = renderToHost({ actions: [], explanation: null, outcome: "no_match" }, false);
+    expect(flat.querySelector(".chev")).toBeNull();
   });
 
-  // renderEvaluation — line 147: collapsed toggle, no explanation but has actions → "▸ Details"
-  // Branch 50: `▸ Details` label when explanation=null but canExpand=true
-  test("collapsed toggle reads '▸ Details' when there is no explanation but actions exist", () => {
-    const host = renderToHost({ explanation: null }, false);
-    expect(host.textContent).toContain("Details");
-    expect(host.textContent).not.toContain("Why");
-    expect(host.textContent).not.toContain("Hide details");
+  test("the collapsed header is the toggle target; the expanded panel is not", () => {
+    let toggles = 0;
+    const host = document.createElement("div");
+    render(
+      renderEvaluation(
+        unit(),
+        true,
+        () => {
+          toggles += 1;
+        },
+        undefined,
+        undefined as never,
+      ),
+      host,
+    );
+    (host.querySelector(".eval-header") as HTMLElement).click();
+    expect(toggles).toBe(1);
+    (host.querySelector(".why") as HTMLElement | null)?.click();
+    expect(toggles).toBe(1); // clicking inside the detail must not toggle
+    expect(host.querySelector(".why-toggle")).toBeNull(); // old button removed
+  });
+
+  test("the expanded panel shows the raw trigger for entity causes only", () => {
+    const entity = renderToHost({}, true); // default cause kind is "entity"
+    expect(entity.querySelector(".raw-trigger")?.textContent).toContain("binary_sensor.motion");
+    const manual = renderToHost(
+      { cause: { kind: "manual", entity_id: null, old: null, new: null, detail: null } },
+      true,
+    );
+    expect(manual.querySelector(".raw-trigger")).toBeNull();
   });
 
   // renderExpansion — line 178: entity_ids absent in expanded action block
@@ -576,19 +598,12 @@ describe("trace-detail", () => {
     expect(titles).toContain("Scene evaluation");
   });
 
-  // renderEvaluation — expanded button shows "▾ Hide details"
-  // Branch 48 (line 141): expanded=true → "▾ Hide details"
-  test("expanded toggle button reads '▾ Hide details'", () => {
-    const host = renderToHost({}, true);
-    expect(host.querySelector(".why-toggle")?.textContent?.trim()).toContain("Hide details");
-  });
-
-  // renderEvaluation — line 147/149: canExpand=false → no why-toggle rendered
+  // renderEvaluation — line 147/149: canExpand=false → not clickable, no .why section
   // canExpand is false when explanation=null AND actions=[] (no-op outcome with nothing to show)
-  test("no expand button rendered when unit has no actions and no explanation", () => {
+  test("not clickable and no .why section when unit has no actions and no explanation", () => {
     const host = renderToHost({ actions: [], explanation: null }, false);
-    expect(host.querySelector(".why-toggle")).toBeFalsy();
-    // The .why section is also absent.
+    expect(host.querySelector(".eval-header.clickable")).toBeFalsy();
+    expect(host.querySelector(".chev")).toBeFalsy();
     expect(host.querySelector(".why")).toBeFalsy();
   });
 
@@ -647,13 +662,13 @@ describe("trace-detail", () => {
       { outcome: "skipped_switch_off", winner_name: null, actions: [], explanation: null },
       true,
     );
-    expect(host.querySelector(".why-toggle")).toBeTruthy();
+    expect(host.querySelector(".eval-header.clickable")).toBeTruthy();
     expect(host.querySelector(".outcome-summary")?.textContent).toContain("switch is off");
   });
 
   test("the cause line is prefixed with 'Trigger: '", () => {
     const host = renderToHost({}, false);
-    expect(host.querySelector(".cause")?.textContent?.trim()).toMatch(/^Trigger:/);
+    expect(host.querySelector(".cause-line")?.textContent?.trim()).toMatch(/^Trigger:/);
   });
 
   test("formatCause uses friendly labels for non-entity causes", () => {

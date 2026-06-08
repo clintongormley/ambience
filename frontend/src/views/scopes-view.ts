@@ -129,6 +129,22 @@ export class AmbienceScopesView extends LitElement {
         text-align: center;
         padding: 2rem;
       }
+      .spinner {
+        display: inline-block;
+        width: 1.1em;
+        height: 1.1em;
+        margin-right: 0.5em;
+        vertical-align: -0.2em;
+        border: 2px solid var(--divider-color, #e0e0e0);
+        border-top-color: var(--primary-color, #03a9f4);
+        border-radius: 50%;
+        animation: ambience-spin 0.8s linear infinite;
+      }
+      @keyframes ambience-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
       .error {
         color: var(--error-color, #d32f2f);
         margin: 0.5rem 0;
@@ -348,6 +364,9 @@ export class AmbienceScopesView extends LitElement {
   // True once the initial static load (actions, weather, workday, …) finishes,
   // so the empty-state banners don't flash during loading.
   @state() private _staticLoaded = false;
+  // True once the first areas fetch settles, so the "No areas found" empty state
+  // doesn't flash a false negative on a slow connection before areas arrive.
+  @state() private _areasLoaded = false;
   @state() private _conditionsHintDismissed = false;
   @state() private _editing: EditingState | null = null;
   // A failed scene save's message, shown inside the (still-open) editor.
@@ -531,6 +550,12 @@ export class AmbienceScopesView extends LitElement {
       this._areaConfigs = configs;
     } catch (e) {
       this._error = (e as Error).message || String(e);
+    } finally {
+      // The fetch has settled (success or failure) — replace the loading spinner
+      // with the areas, the empty state, or (on error) the error banner. Skip
+      // when disconnected (matching the early-return above) so a stale fetch
+      // resolving after teardown can't mark a torn-down element "loaded".
+      if (this.isConnected) this._areasLoaded = true;
     }
   }
 
@@ -1189,6 +1214,30 @@ export class AmbienceScopesView extends LitElement {
     return this.hass.states?.[entityId]?.state === "off";
   }
 
+  /** Renders the trailing list item: a spinner while areas are still loading,
+   *  the "no areas" empty state once a load with zero areas has settled, else
+   *  nothing (the scope rows above carry the content). On error the error
+   *  banner speaks for the failed load, so the empty state is suppressed —
+   *  "No areas found" would be a false negative when the fetch didn't succeed. */
+  private _renderAreasPlaceholder() {
+    if (!this._areasLoaded) {
+      return html`<li>
+        <p class="empty" data-test="areas-loading">
+          <span class="spinner" aria-hidden="true"></span>
+          ${localize(this.hass, "ui.loading", "Loading…")}
+        </p>
+      </li>`;
+    }
+    if (!this._error && this._areas.length === 0) {
+      return html`<li>
+        <p class="empty">
+          ${localize(this.hass, "ui.no_areas", "No areas found in Home Assistant.")}
+        </p>
+      </li>`;
+    }
+    return "";
+  }
+
   override render() {
     return html`
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
@@ -1203,15 +1252,7 @@ export class AmbienceScopesView extends LitElement {
           (r) => scopeKey(r.scope),
           (r) => this._renderScopeRow(r.scope, r.name, r.cfg, r.rowClass),
         )}
-        ${
-          this._areas.length === 0
-            ? html`<li>
-              <p class="empty">
-                ${localize(this.hass, "ui.no_areas", "No areas found in Home Assistant.")}
-              </p>
-            </li>`
-            : ""
-        }
+        ${this._renderAreasPlaceholder()}
       </ul>
 
       <ambience-scene-editor

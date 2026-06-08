@@ -1951,6 +1951,56 @@ describe("ambience-scopes-view", () => {
     expect(el.shadowRoot.textContent).toContain("No areas found");
   });
 
+  test("shows a loading spinner (not the no-areas message) while areas are still loading", async () => {
+    // Simulate a slow connection: everything else resolves, but listAreas hangs
+    // so the areas list never finishes loading.
+    vi.mocked(api.listAreas).mockReturnValue(new Promise<AreaListItem[]>(() => {}));
+    vi.mocked(api.listFloors).mockResolvedValue([]);
+    vi.mocked(api.getHouse).mockResolvedValue(structuredClone(baseConfig));
+    vi.mocked(api.listConditions).mockResolvedValue(conditions);
+    vi.mocked(api.listExposedActions).mockResolvedValue(actions);
+    vi.mocked(api.listPeriods).mockResolvedValue(periods);
+
+    el = document.createElement("ambience-scopes-view");
+    el.hass = makeFakeHass();
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // While loading, show a spinner — never the misleading "No areas found".
+    expect(el.shadowRoot.querySelector('[data-test="areas-loading"]')).not.toBeNull();
+    expect(el.shadowRoot.textContent).not.toContain("No areas found");
+  });
+
+  test("a failed areas fetch shows the error, not the misleading no-areas message", async () => {
+    // Build the element directly so the rejecting listAreas mock isn't overridden
+    // by mount()'s own mockResolvedValue setup.
+    vi.mocked(api.listAreas).mockRejectedValue(new Error("connection lost"));
+    vi.mocked(api.listFloors).mockResolvedValue([]);
+    vi.mocked(api.getHouse).mockResolvedValue(structuredClone(baseConfig));
+    vi.mocked(api.listConditions).mockResolvedValue(conditions);
+    vi.mocked(api.listExposedActions).mockResolvedValue(actions);
+    vi.mocked(api.listPeriods).mockResolvedValue(periods);
+
+    el = document.createElement("ambience-scopes-view");
+    el.hass = makeFakeHass();
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // The areas didn't load, so "No areas found" would be a false negative —
+    // only the error banner should speak for that state.
+    expect(el.shadowRoot.querySelector(".error")).toBeTruthy();
+    expect(el.shadowRoot.textContent).toContain("connection lost");
+    expect(el.shadowRoot.textContent).not.toContain("No areas found");
+    // And the spinner is gone — the fetch settled (in failure).
+    expect(el.shadowRoot.querySelector('[data-test="areas-loading"]')).toBeNull();
+  });
+
   // --- _saveScene: same scope, edit existing scene (non-new) ----------------
 
   test("save-scene replaces an existing scene at its index when editing same scope", async () => {

@@ -189,7 +189,38 @@ describe("trace-detail", () => {
     const host = renderToHost({ outcome: "debounced" }, false);
     expect(host.querySelector(".outcome.debounced")).toBeTruthy();
     // The CSS class stays the internal id; the displayed label is friendlier.
-    expect(host.querySelector(".outcome")?.textContent?.trim()).toBe("unchanged");
+    expect(host.querySelector(".outcome .label")?.textContent?.trim()).toBe("unchanged");
+  });
+
+  // Every outcome that lists no actions surfaces its plain-language explanation
+  // in the action-summary slot (where the action list would otherwise appear),
+  // so the collapsed card never reads as a blank gap.
+  test.each([
+    ["debounced", "Evening", "already applied"],
+    ["no_op", "Blocker", "no actions"],
+    ["no_match", null, "No scene matched"],
+    ["skipped_switch_off", null, "switch is off"],
+    ["skipped_scope_disabled", null, "scope is disabled"],
+  ] as const)("%s (no actions) shows the explanation where the action summary would go", (outcome, winner_name, phrase) => {
+    const host = renderToHost({ outcome, winner_name, actions: [] }, false);
+    const slot = host.querySelector(".action-summary");
+    expect(slot).toBeTruthy();
+    expect(slot?.textContent).toContain(phrase);
+  });
+
+  test("an outcome with actions lists the actions, not the explanation", () => {
+    const host = renderToHost({ outcome: "acted" }, false);
+    const slot = host.querySelector(".action-summary");
+    expect(slot?.textContent).toContain("→");
+    expect(slot?.textContent).not.toContain("Applied");
+  });
+
+  test("expanding a no-action card does not duplicate the explanation in the header", () => {
+    // Collapsed, the explanation sits in the header's action slot; once expanded,
+    // the expansion's outcome-summary carries it, so the header slot drops out.
+    const host = renderToHost({ outcome: "no_match", winner_name: null, actions: [] }, true);
+    expect(host.querySelector(".action-summary")).toBeFalsy();
+    expect(host.querySelector(".outcome-summary")?.textContent).toContain("No scene matched");
   });
 
   test("singular entity count reads '1 entity'", () => {
@@ -275,7 +306,7 @@ describe("trace-detail", () => {
     const titles = [...host.querySelectorAll(".section-title")].map((e) => e.textContent?.trim());
     expect(titles).toContain("Actions taken");
     expect(titles).not.toContain("Scene evaluation");
-    expect(host.querySelector(".eval-header.clickable")).toBeTruthy();
+    expect(host.querySelector(".outcome.clickable")).toBeTruthy();
   });
 
   test("scene numbers are displayed 1-based (index 0 → 'Scene #1')", () => {
@@ -535,25 +566,28 @@ describe("trace-detail", () => {
     expect(host.textContent).not.toContain("entity");
   });
 
-  test("chevron reflects expand state and is absent when not expandable", () => {
-    expect(renderToHost({}, false).querySelector(".chev")?.textContent).toBe("▸");
-    expect(renderToHost({}, true).querySelector(".chev")?.textContent).toBe("▾");
-    const flat = renderToHost({ actions: [], explanation: null, outcome: "no_match" }, false);
-    expect(flat.querySelector(".chev")).toBeNull();
+  test("there is no chevron — the outcome bar itself is the affordance", () => {
+    expect(renderToHost({}, false).querySelector(".chev")).toBeNull();
+    expect(renderToHost({}, true).querySelector(".chev")).toBeNull();
   });
 
-  test("aria-expanded on the header reflects state and is absent when not expandable", () => {
-    expect(
-      renderToHost({}, false).querySelector(".eval-header")?.getAttribute("aria-expanded"),
-    ).toBe("false");
-    expect(
-      renderToHost({}, true).querySelector(".eval-header")?.getAttribute("aria-expanded"),
-    ).toBe("true");
-    const flat = renderToHost({ actions: [], explanation: null, outcome: "no_match" }, false);
-    expect(flat.querySelector(".eval-header")?.hasAttribute("aria-expanded")).toBe(false);
+  test("the timestamp lives inside the outcome bar", () => {
+    const bar = renderToHost({}, false).querySelector(".outcome");
+    expect(bar?.querySelector(".ts")).toBeTruthy();
   });
 
-  test("the collapsed header is the toggle target; the expanded panel is not", () => {
+  test("aria-expanded on the outcome bar reflects state and is absent when not expandable", () => {
+    expect(renderToHost({}, false).querySelector(".outcome")?.getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+    expect(renderToHost({}, true).querySelector(".outcome")?.getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+    const flat = renderToHost({ actions: [], explanation: null, outcome: "no_match" }, false);
+    expect(flat.querySelector(".outcome")?.hasAttribute("aria-expanded")).toBe(false);
+  });
+
+  test("only the outcome bar toggles; the body text and expanded panel do not", () => {
     let toggles = 0;
     const host = document.createElement("div");
     render(
@@ -568,10 +602,13 @@ describe("trace-detail", () => {
       ),
       host,
     );
-    (host.querySelector(".eval-header") as HTMLElement).click();
-    expect(toggles).toBe(1);
+    // The trigger/winner/action body sits outside the bar and must not toggle.
+    (host.querySelector(".cause-line") as HTMLElement).click();
+    expect(toggles).toBe(0);
     (host.querySelector(".why") as HTMLElement | null)?.click();
-    expect(toggles).toBe(1); // clicking inside the detail must not toggle
+    expect(toggles).toBe(0); // clicking inside the detail must not toggle
+    (host.querySelector(".outcome") as HTMLElement).click();
+    expect(toggles).toBe(1); // only the bar toggles
     expect(host.querySelector(".why-toggle")).toBeNull(); // old button removed
   });
 
@@ -613,8 +650,7 @@ describe("trace-detail", () => {
   // canExpand is false when explanation=null AND actions=[] (no-op outcome with nothing to show)
   test("not clickable and no .why section when unit has no actions and no explanation", () => {
     const host = renderToHost({ actions: [], explanation: null }, false);
-    expect(host.querySelector(".eval-header.clickable")).toBeFalsy();
-    expect(host.querySelector(".chev")).toBeFalsy();
+    expect(host.querySelector(".outcome.clickable")).toBeFalsy();
     expect(host.querySelector(".why")).toBeFalsy();
   });
 
@@ -635,7 +671,7 @@ describe("trace-detail", () => {
   test("badge shows the friendly label while keeping the internal CSS class", () => {
     const host = renderToHost({ outcome: "acted" }, false);
     expect(host.querySelector(".outcome.acted")).toBeTruthy(); // class = internal id
-    expect(host.querySelector(".outcome")?.textContent?.trim()).toBe("applied"); // text = label
+    expect(host.querySelector(".outcome .label")?.textContent?.trim()).toBe("applied"); // text = label
   });
 
   test("outcomeSummary explains each outcome in plain language", () => {
@@ -673,7 +709,7 @@ describe("trace-detail", () => {
       { outcome: "skipped_switch_off", winner_name: null, actions: [], explanation: null },
       true,
     );
-    expect(host.querySelector(".eval-header.clickable")).toBeTruthy();
+    expect(host.querySelector(".outcome.clickable")).toBeTruthy();
     expect(host.querySelector(".outcome-summary")?.textContent).toContain("switch is off");
   });
 

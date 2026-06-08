@@ -34,15 +34,18 @@ function formatDetail(hass: HassLike | undefined, conditionKey: string, detail: 
 // Styles for the evaluation card; hosts include this in their `static styles`.
 export const traceDetailStyles = css`
   .eval { border: 1px solid var(--divider-color, #444); border-radius: 8px; padding: 0.7rem 0.9rem; }
-  .eval .top { display: flex; align-items: baseline; gap: 0.5rem; }
-  .eval-header.clickable { cursor: pointer; }
-  .eval-header.clickable:focus-visible { outline: 2px solid var(--primary-color, #03a9f4); outline-offset: 2px; }
-  .chev { color: var(--secondary-text-color, #888); font-size: 0.8rem; }
   .cause-line { font-family: monospace; font-size: 0.85rem; color: var(--secondary-text-color, #bbb); margin-top: 0.2rem; }
   .raw-trigger { font-family: monospace; font-size: 0.8rem; color: var(--secondary-text-color, #bbb); margin-bottom: 0.4rem; }
-  .eval .ts { color: var(--secondary-text-color, #888); font-size: 0.75rem; margin-left: auto; }
-  .outcome { font-size: 0.72rem; text-transform: uppercase; padding: 1px 7px; border-radius: 4px;
+  /* Full-width status bar (was a lozenge): the label is centred across the bar,
+     the timestamp pinned to the right; the whole bar is the expand/collapse hit area. */
+  .outcome { position: relative; display: block; box-sizing: border-box; width: 100%;
+    padding: 3px 5px; margin: 0 0 5px 0; text-align: center; font-weight: bold;
+    font-size: 0.72rem; text-transform: uppercase; border-radius: 4px;
     background: var(--secondary-background-color, #333); color: var(--secondary-text-color, #aaa); }
+  .outcome.clickable { cursor: pointer; }
+  .outcome.clickable:focus-visible { outline: 2px solid var(--primary-color, #03a9f4); outline-offset: 2px; }
+  .outcome .ts { position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    font-weight: normal; font-size: 0.75rem; opacity: 0.85; }
   .outcome.acted { background: var(--success-color, #4caf50); color: #fff; }
   .outcome.reapplied { background: var(--info-color, #2196f3); color: #fff; }
   .outcome.debounced { background: var(--warning-color, #ff9800); color: #fff; }
@@ -221,8 +224,9 @@ function renderScene(r: TraceSceneEval, hass: HassLike | undefined): TemplateRes
 }
 
 // One evaluation card. Stateless: the host owns the expanded set and toggle.
-// Only the collapsed `.eval-header` is the toggle target — the expanded `.why`
-// panel is a sibling outside it, so detail text stays selectable.
+// Only the `.outcome` status bar is the toggle target — the body text and the
+// expanded `.why` panel are siblings outside it, so detail text stays selectable
+// and a stray click on it never collapses the card.
 export function renderEvaluation(
   u: BufferedUnit,
   expanded: boolean,
@@ -246,25 +250,30 @@ export function renderEvaluation(
   return html`
     <div class="eval">
       <div
-        class=${canExpand ? "eval-header clickable" : "eval-header"}
+        class="outcome ${u.outcome}${canExpand ? " clickable" : ""}"
         role=${canExpand ? "button" : nothing}
         tabindex=${canExpand ? "0" : nothing}
         aria-expanded=${canExpand ? expanded : nothing}
         @click=${canExpand ? onToggle : undefined}
         @keydown=${canExpand ? onKey : undefined}
       >
-        <div class="top">
-          ${canExpand ? html`<span class="chev">${expanded ? "▾" : "▸"}</span>` : nothing}
-          <span class="outcome ${u.outcome}">${outcomeLabel(u.outcome)}</span>
-          <span class="ts">${u.timestamp ? new Date(u.timestamp).toLocaleTimeString() : ""}</span>
-        </div>
+        <span class="label">${outcomeLabel(u.outcome)}</span>
+        <span class="ts">${u.timestamp ? new Date(u.timestamp).toLocaleTimeString() : ""}</span>
+      </div>
+      <div class="eval-body">
         <div class="cause-line">Trigger: ${formatCauseFriendly(u.cause, hass)}</div>
         ${u.winner_name ? html`<div class="won">Won: <span class="name">${u.winner_name}</span></div>` : nothing}
         ${
           u.actions.length
             ? html`<div class="action-summary">→ ${services}
               ${n ? html`<span class="n">· ${pluralize(n, "entity", "entities")}</span>` : nothing}</div>`
-            : nothing
+            : // No actions to list (UNCHANGED, blocked, no match, skipped, …) — fill
+              // the slot with the explanation instead. Collapsed only: once expanded,
+              // the expansion's outcome-summary carries it, so showing it here too
+              // would just duplicate the line.
+              expanded
+              ? nothing
+              : html`<div class="action-summary">${outcomeSummary(u)}</div>`
         }
       </div>
       ${expanded ? renderExpansion(u, hass, schemas) : nothing}

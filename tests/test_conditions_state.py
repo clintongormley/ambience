@@ -202,6 +202,24 @@ def test_matches_not_wrapper() -> None:
     assert m.matches(pred, snap) is True
 
 
+def test_not_wrapper_unavailable_is_not_a_match() -> None:
+    # not(entity is "on") must NOT become true when the entity is unavailable.
+    # An unobservable atom is a miss; negating "couldn't tell" must not
+    # manufacture a match.
+    m = StateCondition()
+    snap = _snap({"light.x": ("unavailable", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
+    pred = {"kind": "not", "item": {"kind": "is", "entity_id": "light.x", "states": ["on"]}}
+    assert m.matches(pred, snap) is False
+
+
+def test_not_wrapper_true_on_observable_mismatch() -> None:
+    # not(entity is "on") with an observably "off" entity is a real True.
+    m = StateCondition()
+    snap = _snap({"light.x": ("off", datetime(2026, 5, 25, 11, 0, tzinfo=UTC))})
+    pred = {"kind": "not", "item": {"kind": "is", "entity_id": "light.x", "states": ["on"]}}
+    assert m.matches(pred, snap) is True
+
+
 def test_matches_nested_expression() -> None:
     """(A is home AND B is on) OR NOT C is open"""
     m = StateCondition()

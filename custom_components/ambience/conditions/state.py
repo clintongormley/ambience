@@ -10,7 +10,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE, dur_seconds, validate_for
+from ._common import (
+    UNAVAILABLE,
+    dur_seconds,
+    kleene_all,
+    kleene_any,
+    kleene_not,
+    validate_for,
+)
 
 
 @dataclass(frozen=True)
@@ -78,7 +85,9 @@ class StateCondition:
     def matches(self, predicate: Any, snapshot: StateSnapshot) -> bool:
         if predicate is None:
             return True
-        return self._eval(predicate, snapshot)
+        # `_eval` is tri-state: None = unobservable. Collapse it to a miss here —
+        # only a definite True counts as a match.
+        return self._eval(predicate, snapshot) is True
 
     def describe(self, snapshot: StateSnapshot, predicate: Any = None) -> str | None:
         # No single "current value" — depends on which atoms a predicate names.
@@ -89,32 +98,34 @@ class StateCondition:
     _ATOM_KINDS = ("is", "is_not", ">", ">=", "<", "<=")
     _NUMERIC_KINDS = (">", ">=", "<", "<=")
 
-    def _eval(self, expr: Any, snap: StateSnapshot) -> bool:
+    def _eval(self, expr: Any, snap: StateSnapshot) -> bool | None:
+        # Tri-state (Kleene): True/False, or None when an atom is unobservable
+        # (entity unavailable/unknown/absent). Carrying None through `and`/`or`/
+        # `not` keeps a `not` from inverting an unobservable atom into a spurious
+        # match — `not(light is on)` must not fire when the light is unavailable.
         if not isinstance(expr, dict):
             return False
         kind = expr.get("kind")
         if kind in self._ATOM_KINDS:
             return self._eval_atom(expr, snap)
         if kind == "and":
-            items = expr.get("items") or []
-            return all(self._eval(it, snap) for it in items)
+            return kleene_all(self._eval(it, snap) for it in (expr.get("items") or []))
         if kind == "or":
-            items = expr.get("items") or []
-            return any(self._eval(it, snap) for it in items)
+            return kleene_any(self._eval(it, snap) for it in (expr.get("items") or []))
         if kind == "not":
-            return not self._eval(expr.get("item"), snap)
+            return kleene_not(self._eval(expr.get("item"), snap))
         return False
 
-    def _eval_atom(self, atom: dict, snap: StateSnapshot) -> bool:
+    def _eval_atom(self, atom: dict, snap: StateSnapshot) -> bool | None:
         entity_id = atom.get("entity_id")
         if not isinstance(entity_id, str):
             return False
         cur = snap.states.get(entity_id)
         if cur is None:
-            return False
+            return None  # entity doesn't exist -> unobservable
         state, last_changed, last_updated = cur
         if state in UNAVAILABLE:
-            return False
+            return None  # unobservable
         # When `attribute` is set, swap the LHS from entity.state to
         # entity.attributes[attribute]. Missing attribute → no match.
         attribute = atom.get("attribute")

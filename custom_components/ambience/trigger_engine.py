@@ -82,7 +82,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # separate from _unsubs because they re-arm on each fire — the slot is
         # replaced rather than appended, so dead handles never accumulate.
         self._sun_unsubs: dict[tuple[str, int], Callable[[], None]] = {}
-        self._for_handles: dict[PredKey, list[Callable[[], None]]] = {}
+        # Per predicate, one recheck timer per `(entity, seconds)` `for:` pair,
+        # keyed by that pair so a fired timer drops only its own handle.
+        self._for_handles: dict[PredKey, dict[tuple[str, float], Callable[[], None]]] = {}
         self._switch_scopes: dict[str, tuple[str, str | None]] = {}
         self._reapply_intervals: dict[int, set[tuple[str, str | None]]] = {}
         # Debounced full refresh, for coalescing rapid config-changed signals.

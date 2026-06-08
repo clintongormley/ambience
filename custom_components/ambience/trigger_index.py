@@ -29,7 +29,7 @@ class TriggerIndex:
     - ``durations``: per-predicate ``for:`` recheck delays as ``(entity_id,
       seconds)`` pairs (only for predicates that carry at least one); absent
       otherwise. The entity is kept so the recheck's trace can name what is
-      being waited on (e.g. "binary_sensor.motion off for 5 min").
+      being waited on (e.g. "binary_sensor.motion off for 5m").
     """
 
     by_entity: dict[str, frozenset[PredKey]]

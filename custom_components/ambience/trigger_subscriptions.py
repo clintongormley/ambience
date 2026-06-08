@@ -70,7 +70,7 @@ class TriggerSubscriptionsMixin:
             cancel()
         self._sun_unsubs.clear()
         for handles in self._for_handles.values():
-            for cancel in handles:
+            for cancel in handles.values():
                 cancel()
         self._for_handles.clear()
         self._switch_scopes.clear()
@@ -247,24 +247,36 @@ class TriggerSubscriptionsMixin:
 
     def _schedule_for_rechecks(self, preds: frozenset[PredKey]) -> None:
         """For predicates with a `for:` duration, (re)schedule a recheck so a
-        condition that only becomes true after the delay is still caught."""
+        condition that only becomes true after the delay is still caught.
+
+        A predicate may carry several `(entity, seconds)` rechecks; each gets its
+        own timer, keyed by its pair so a fired timer can drop only its own handle
+        (siblings mark distinct future flip points and must stay armed)."""
         for key in preds:
             durations = self._index.durations.get(key)
             if not durations:
                 continue
-            for cancel in self._for_handles.pop(key, []):
+            for cancel in self._for_handles.pop(key, {}).values():
                 cancel()
-            self._for_handles[key] = [
-                async_call_later(self._hass, seconds, self._make_for_recheck(key, entity, seconds))
+            self._for_handles[key] = {
+                (entity, seconds): async_call_later(
+                    self._hass, seconds, self._make_for_recheck(key, entity, seconds)
+                )
                 for entity, seconds in durations
-            ]
+            }
 
     def _make_for_recheck(self, key: PredKey, entity: str, seconds: float) -> Callable[[Any], None]:
         @callback
         def _recheck(_now: Any) -> None:
-            self._for_handles.pop(key, None)
+            # Drop only this timer's handle; sibling rechecks for the same
+            # predicate (other entities/durations) stay tracked and cancellable.
+            handles = self._for_handles.get(key)
+            if handles is not None:
+                handles.pop((entity, seconds), None)
+                if not handles:
+                    self._for_handles.pop(key, None)
             # Name the entity, the state it has held, and for how long, so the
-            # trace reads e.g. "binary_sensor.motion off for 5 min".
+            # trace reads e.g. "binary_sensor.motion off for 5m".
             state = self._hass.states.get(entity)
             held = state.state if state is not None else STATE_UNKNOWN
             cause = TriggerCause(

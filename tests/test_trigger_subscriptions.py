@@ -360,20 +360,20 @@ async def test_schedule_for_rechecks_cancels_existing_handles(hass) -> None:
         opaque=frozenset(),
     )
 
-    # Plant an existing cancel handle.
+    # Plant an existing cancel handle, keyed by its (entity, seconds) pair.
     cancelled: list[bool] = []
     fake_cancel = MagicMock(side_effect=lambda: cancelled.append(True))
-    engine._for_handles[key] = [fake_cancel]
+    engine._for_handles[key] = {("binary_sensor.x", 10.0): fake_cancel}
 
     fake_unsub = MagicMock()
     with patch.object(_ts_mod, "async_call_later", return_value=fake_unsub):
         engine._schedule_for_rechecks(frozenset({key}))
 
-    # Old handle was cancelled (line 251 executed).
+    # Old handle was cancelled before rescheduling.
     assert cancelled == [True]
-    # New handle was registered.
+    # New handle was registered under its pair.
     assert key in engine._for_handles
-    assert engine._for_handles[key] == [fake_unsub]
+    assert engine._for_handles[key] == {("binary_sensor.x", 10.0): fake_unsub}
 
 
 async def test_schedule_for_rechecks_skips_pred_without_durations(hass) -> None:
@@ -451,15 +451,15 @@ async def test_for_recheck_callback_fires_and_clears_handle(hass) -> None:
     engine.async_rebuild()
 
     key = ("area", "a", 0, "fc")
-    # Manually plant a fake cancel handle so we can test the pop() without
-    # spawning a real async_call_later timer.
+    # Manually plant a fake cancel handle (keyed by its pair) so we can test the
+    # self-removal without spawning a real async_call_later timer.
     fake_cancel = MagicMock()
-    engine._for_handles[key] = [fake_cancel]
+    engine._for_handles[key] = {("binary_sensor.x", 30.0): fake_cancel}
 
     recheck_cb = engine._make_for_recheck(key, "binary_sensor.x", 30.0)
     recheck_cb(None)  # invoke as if the timer fired
 
-    # After the callback fires the key must be cleared from _for_handles.
+    # After the only timer fires, the key is cleared from _for_handles.
     assert key not in engine._for_handles
 
 
@@ -516,6 +516,56 @@ async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
     assert cause.entity_id == "binary_sensor.x"
     assert cause.new == "on"  # the held state, read at recheck time
     assert cause.detail == "5m"  # 300s humanised (compact, matching occupancy/people traces)
+
+
+async def test_for_recheck_fire_does_not_orphan_sibling_timers(hass) -> None:
+    """A predicate with several (entity, seconds) rechecks arms one timer each.
+    When one fires it must drop ONLY its own handle, leaving siblings tracked so
+    a later state change (or teardown) can still cancel them — otherwise stale
+    rechecks fire long after the triggering state changed."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+    from custom_components.ambience.trigger_index import TriggerIndex
+
+    scopes = [("area", "a", {"scenes": [{"when": {"fc": "on"}, "category": "g"}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {},
+        DATA_SWITCHES: {},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+
+    key = ("area", "a", 0, "fc")
+    # Two entities sharing the predicate, each with its own `for:` duration.
+    engine._index = TriggerIndex(
+        by_entity={"binary_sensor.x": frozenset({key}), "binary_sensor.y": frozenset({key})},
+        by_clock={},
+        by_sun={},
+        midnight=frozenset(),
+        has_time=frozenset(),
+        durations={key: frozenset({("binary_sensor.x", 30.0), ("binary_sensor.y", 60.0)})},
+        opaque=frozenset(),
+    )
+
+    captured: list = []  # (seconds, callback)
+
+    def fake_call_later(_hass, seconds, cb):
+        captured.append((seconds, cb))
+        return MagicMock(name=f"cancel-{seconds}")
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        engine._schedule_for_rechecks(frozenset({key}))
+
+    assert len(captured) == 2
+    assert len(engine._for_handles[key]) == 2
+
+    # Fire the first timer's callback.
+    captured[0][1](None)
+
+    # Its own handle is gone, but the sibling stays tracked and cancellable.
+    assert key in engine._for_handles
+    assert len(engine._for_handles[key]) == 1
 
 
 # ---------------------------------------------------------------------------

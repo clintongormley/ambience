@@ -97,11 +97,17 @@ export function formatCause(c: TraceCause): string {
   return c.detail ? `${name} ${c.detail}` : name;
 }
 
+// Cause kinds that carry a raw entity_id + old/new values worth showing
+// separately — the only kinds whose friendly label differs from their raw form.
+function causeHasRawValues(c: TraceCause): boolean {
+  return c.kind === "entity" || c.kind === "duration";
+}
+
 // Friendly trigger line: entity by name, state values via HA's formatter
 // (falls back to the raw value when hass/stateObj is absent). Non-entity causes
 // have no entity/values, so they reuse formatCause's friendly fixed labels.
 export function formatCauseFriendly(c: TraceCause, hass?: HassLike): string {
-  if (c.kind !== "entity" && c.kind !== "duration") return formatCause(c);
+  if (!causeHasRawValues(c)) return formatCause(c);
   const name = c.entity_id ? entityDisplayName(hass, c.entity_id) : "?";
   const stateObj = c.entity_id
     ? (hass as HassWithStates | undefined)?.states?.[c.entity_id]
@@ -238,7 +244,7 @@ export function renderEvaluation(
   return html`
     <div class="eval">
       <div
-        class="eval-header ${canExpand ? "clickable" : ""}"
+        class=${canExpand ? "eval-header clickable" : "eval-header"}
         role=${canExpand ? "button" : nothing}
         tabindex=${canExpand ? "0" : nothing}
         @click=${canExpand ? onToggle : undefined}
@@ -271,7 +277,7 @@ function renderExpansion(
   const summary = outcomeSummary(u);
   // Raw entity_id + raw old→new, one click away. Only entity/duration causes
   // carry raw values; other kinds would just duplicate the friendly label.
-  const showRawTrigger = u.cause.kind === "entity" || u.cause.kind === "duration";
+  const showRawTrigger = causeHasRawValues(u.cause);
   return html`
     <div class="why">
       ${showRawTrigger ? html`<div class="raw-trigger">Trigger: ${formatCause(u.cause)}</div>` : nothing}

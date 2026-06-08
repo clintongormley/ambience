@@ -90,9 +90,10 @@ class StateCondition:
         # only a definite True counts as a match.
         return self._eval(predicate, snapshot) is True
 
-    # Unicode symbols for the numeric comparison kinds; the membership kinds
-    # ("is"/"is_not") render as words instead.
-    _OP_SYMBOLS = {">": ">", ">=": "≥", "<": "<", "<=": "≤"}
+    # The numeric comparison kinds that need a prettier symbol than their key;
+    # `>`/`<` already read fine, so only `>=`/`<=` are remapped. The membership
+    # kinds ("is"/"is_not") render as words instead.
+    _OP_SYMBOLS = {">=": "≥", "<=": "≤"}
 
     def describe(self, snapshot: StateSnapshot, predicate: Any = None) -> str | None:
         # predicate=None is the whole-snapshot summary (snapshots_described); a
@@ -124,7 +125,7 @@ class StateCondition:
         # Friendly name (falls back to the id); in attribute-mode append the
         # attribute so "Thermostat temperature" reads unambiguously.
         name = (attrs or {}).get("friendly_name") or entity_id or "?"
-        label = f"{name} {attribute}" if attribute else f"{name}"
+        label = f"{name} {attribute}" if attribute else name
         seconds = dur_seconds(atom.get("for"))
         cur = snap.states.get(entity_id) if isinstance(entity_id, str) else None
         if cur is None:
@@ -155,7 +156,7 @@ class StateCondition:
         states = atom.get("states") or []
         if kind in self._NUMERIC_KINDS:
             rhs = states[0] if states else "?"
-            return f"{self._OP_SYMBOLS.get(kind, str(kind))} {rhs}"
+            return f"{self._OP_SYMBOLS.get(kind, kind)} {rhs}"
         joined = ", ".join(str(s) for s in states)
         return f"is not {joined}" if kind == "is_not" else f"is {joined}"
 

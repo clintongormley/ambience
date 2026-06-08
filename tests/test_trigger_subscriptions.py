@@ -356,7 +356,7 @@ async def test_schedule_for_rechecks_cancels_existing_handles(hass) -> None:
         by_sun={},
         midnight=frozenset(),
         has_time=frozenset(),
-        durations={key: frozenset({10.0})},
+        durations={key: frozenset({("binary_sensor.x", 10.0)})},
         opaque=frozenset(),
     )
 
@@ -456,7 +456,7 @@ async def test_for_recheck_callback_fires_and_clears_handle(hass) -> None:
     fake_cancel = MagicMock()
     engine._for_handles[key] = [fake_cancel]
 
-    recheck_cb = engine._make_for_recheck(key)
+    recheck_cb = engine._make_for_recheck(key, "binary_sensor.x", 30.0)
     recheck_cb(None)  # invoke as if the timer fired
 
     # After the callback fires the key must be cleared from _for_handles.
@@ -464,7 +464,8 @@ async def test_for_recheck_callback_fires_and_clears_handle(hass) -> None:
 
 
 async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
-    """The for-recheck callback fires a HAS_TIME evaluation for the key."""
+    """The for-recheck callback fires a DURATION evaluation for the key, naming
+    the entity and how long it has held its state."""
 
     class ForCondition:
         def trigger_deps(self, predicate: Any) -> TriggerSpec:
@@ -504,12 +505,17 @@ async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
 
     engine._fire = spy_fire  # type: ignore[method-assign]
 
-    recheck_cb = engine._make_for_recheck(key)
+    hass.states.async_set("binary_sensor.x", "on")
+    recheck_cb = engine._make_for_recheck(key, "binary_sensor.x", 300.0)
     recheck_cb(None)
 
     assert any(key in f for f, _cause in fired_keys)
-    cause_kinds = [c.kind for _f, c in fired_keys if c is not None]
-    assert CauseKind.HAS_TIME in cause_kinds
+    duration_causes = [c for _f, c in fired_keys if c is not None and c.kind == CauseKind.DURATION]
+    assert duration_causes, "expected a DURATION cause"
+    cause = duration_causes[0]
+    assert cause.entity_id == "binary_sensor.x"
+    assert cause.new == "on"  # the held state, read at recheck time
+    assert cause.detail == "5m"  # 300s humanised (compact, matching occupancy/people traces)
 
 
 # ---------------------------------------------------------------------------

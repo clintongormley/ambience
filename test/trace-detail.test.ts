@@ -1,6 +1,12 @@
 import { render } from "lit";
 import { describe, expect, test } from "vitest";
-import { formatActionHeader, formatCause, renderEvaluation } from "../frontend/src/trace-detail";
+import {
+  formatActionHeader,
+  formatCause,
+  outcomeLabel,
+  outcomeSummary,
+  renderEvaluation,
+} from "../frontend/src/trace-detail";
 import type { BufferedUnit } from "../frontend/src/types";
 
 function unit(over: Partial<BufferedUnit> = {}): BufferedUnit {
@@ -131,7 +137,8 @@ describe("trace-detail", () => {
   test("a debounced outcome renders its own badge (distinct from no_op)", () => {
     const host = renderToHost({ outcome: "debounced" }, false);
     expect(host.querySelector(".outcome.debounced")).toBeTruthy();
-    expect(host.querySelector(".outcome")?.textContent?.trim()).toBe("debounced");
+    // The CSS class stays the internal id; the displayed label is friendlier.
+    expect(host.querySelector(".outcome")?.textContent?.trim()).toBe("unchanged");
   });
 
   test("singular entity count reads '1 entity'", () => {
@@ -209,7 +216,7 @@ describe("trace-detail", () => {
       },
       true,
     );
-    expect(host.textContent).toContain("not evaluated");
+    expect(host.textContent).toContain("not reached");
   });
 
   test("label says 'Why nothing matched' when there is no winner", () => {
@@ -327,7 +334,7 @@ describe("trace-detail", () => {
       true,
     );
     expect(host.textContent).toContain("disabled");
-    expect(host.textContent).not.toContain("not evaluated");
+    expect(host.textContent).not.toContain("not reached");
   });
 
   // -------------------------------------------------------------------------
@@ -358,7 +365,7 @@ describe("trace-detail", () => {
       new: null,
       detail: "" as unknown as null, // coerce — empty string is falsy
     });
-    expect(result).toBe("Manual");
+    expect(result).toBe("Manual apply");
   });
 
   // entityCount — line 84: entity_ids absent → `?? 0`
@@ -409,7 +416,7 @@ describe("trace-detail", () => {
       },
       true,
     );
-    expect(host.textContent).toContain("not evaluated");
+    expect(host.textContent).toContain("not reached");
     expect(host.textContent).toContain("—");
   });
 
@@ -427,7 +434,7 @@ describe("trace-detail", () => {
     );
     expect(host.textContent).toContain("Scene #1");
     expect(host.textContent).toContain("—");
-    expect(host.textContent).toContain("no");
+    expect(host.textContent).toContain("no match");
   });
 
   // renderScene — line 103: predicate with no detail → `nothing` branch
@@ -538,5 +545,100 @@ describe("trace-detail", () => {
     expect(host.querySelector(".why-toggle")).toBeFalsy();
     // The .why section is also absent.
     expect(host.querySelector(".why")).toBeFalsy();
+  });
+
+  // -------------------------------------------------------------------------
+  // Wording: friendly outcome labels, summary lines, Trigger: prefix
+  // -------------------------------------------------------------------------
+
+  test("outcomeLabel maps internal ids to friendly badge text", () => {
+    expect(outcomeLabel("acted")).toBe("applied");
+    expect(outcomeLabel("no_op")).toBe("blocked");
+    expect(outcomeLabel("debounced")).toBe("unchanged");
+    expect(outcomeLabel("no_match")).toBe("no match");
+    expect(outcomeLabel("reapplied")).toBe("refreshed");
+    expect(outcomeLabel("skipped_switch_off")).toBe("skipped");
+    expect(outcomeLabel("skipped_scope_disabled")).toBe("skipped");
+  });
+
+  test("badge shows the friendly label while keeping the internal CSS class", () => {
+    const host = renderToHost({ outcome: "acted" }, false);
+    expect(host.querySelector(".outcome.acted")).toBeTruthy(); // class = internal id
+    expect(host.querySelector(".outcome")?.textContent?.trim()).toBe("applied"); // text = label
+  });
+
+  test("outcomeSummary explains each outcome in plain language", () => {
+    const applied = outcomeSummary(unit({ outcome: "acted", winner_name: "Evening" }));
+    expect(applied).toContain("Applied");
+    expect(applied).toContain("Evening");
+
+    expect(outcomeSummary(unit({ outcome: "no_op", winner_name: "Blocker" }))).toContain(
+      "no actions",
+    );
+    expect(outcomeSummary(unit({ outcome: "debounced", winner_name: "Evening" }))).toContain(
+      "already applied",
+    );
+    expect(outcomeSummary(unit({ outcome: "no_match", winner_name: null }))).toContain(
+      "No scene matched",
+    );
+    expect(outcomeSummary(unit({ outcome: "reapplied", winner_name: "Evening" }))).toContain(
+      "re-sent",
+    );
+    expect(outcomeSummary(unit({ outcome: "skipped_switch_off" }))).toContain("switch is off");
+    expect(outcomeSummary(unit({ outcome: "skipped_scope_disabled" }))).toContain(
+      "scope is disabled",
+    );
+  });
+
+  test("the friendly outcome summary appears at the top of the expansion", () => {
+    const host = renderToHost({ outcome: "no_match", winner_name: null }, true);
+    const summary = host.querySelector(".outcome-summary");
+    expect(summary).toBeTruthy();
+    expect(summary?.textContent).toContain("No scene matched");
+  });
+
+  test("a skipped unit can expand to reveal why it was skipped", () => {
+    const host = renderToHost(
+      { outcome: "skipped_switch_off", winner_name: null, actions: [], explanation: null },
+      true,
+    );
+    expect(host.querySelector(".why-toggle")).toBeTruthy();
+    expect(host.querySelector(".outcome-summary")?.textContent).toContain("switch is off");
+  });
+
+  test("the cause line is prefixed with 'Trigger: '", () => {
+    const host = renderToHost({}, false);
+    expect(host.querySelector(".cause")?.textContent?.trim()).toMatch(/^Trigger:/);
+  });
+
+  test("formatCause uses friendly labels for non-entity causes", () => {
+    const base = { entity_id: null, old: null, new: null } as const;
+    expect(formatCause({ kind: "switch", ...base, detail: null })).toBe("Switch turned on");
+    expect(formatCause({ kind: "manual", ...base, detail: null })).toBe("Manual apply");
+    expect(formatCause({ kind: "reapply", ...base, detail: "300s" })).toBe("Periodic refresh");
+    expect(formatCause({ kind: "simulated", ...base, detail: "2026-06-01T10:00:00" })).toBe(
+      "Simulation",
+    );
+    expect(formatCause({ kind: "has_time", ...base, detail: null })).toBe("Periodic time check");
+  });
+
+  test("formatCause renders a duration cause as 'entity state for duration'", () => {
+    expect(
+      formatCause({
+        kind: "duration",
+        entity_id: "binary_sensor.motion",
+        old: null,
+        new: "off",
+        detail: "5m",
+      }),
+    ).toBe("binary_sensor.motion off for 5m");
+  });
+
+  test("per-scene marks read '✓ matched' / '✗ no match'", () => {
+    const host = renderToHost({}, true);
+    const scenes = [...host.querySelectorAll(".scene")].map((e) => e.textContent);
+    expect(scenes.some((t) => t?.includes("✓ matched"))).toBe(true); // Evening won
+    expect(scenes.some((t) => t?.includes("✗ no match"))).toBe(true); // Night lost
+    expect(host.textContent).not.toContain("WON");
   });
 });

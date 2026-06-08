@@ -7,7 +7,13 @@ import {
   weatherConditionLabel,
 } from "./i18n.js";
 import { entityDisplayName, formatArgValue, paramLabel } from "./summary.js";
-import type { BufferedUnit, ServiceSchema, TraceCause, TraceSceneEval } from "./types.js";
+import type {
+  BufferedUnit,
+  ServiceSchema,
+  TraceCause,
+  TraceOutcome,
+  TraceSceneEval,
+} from "./types.js";
 
 type Action = { service: string; entity_ids?: string[]; params?: Record<string, unknown> };
 
@@ -43,6 +49,8 @@ export const traceDetailStyles = css`
     padding: 0.3rem 0; font-size: 0.82rem; }
   .why { margin-top: 0.6rem; padding: 0.2rem 0 0.2rem 0.9rem;
     border-left: 2px solid var(--divider-color, #444); }
+  .outcome-summary { font-size: 0.85rem; color: var(--primary-text-color, #ddd);
+    margin-bottom: 0.7rem; }
   .section + .section { margin-top: 1.25rem; }
   .section-title { font-size: 0.95rem; font-weight: 700; text-transform: uppercase;
     letter-spacing: 0.05em; color: var(--primary-text-color, #fff); margin-bottom: 0.5rem; }
@@ -57,10 +65,78 @@ export const traceDetailStyles = css`
   .action-block .entity { padding-left: 1rem; color: var(--secondary-text-color, #aaa); }
 `;
 
+// Causes whose label is a fixed phrase — the `detail` (a timestamp, an interval,
+// "for", …) is internal and not worth showing to the user.
+const CAUSE_LABELS_FIXED: Record<string, string> = {
+  has_time: "Periodic time check", // template re-checked on the periodic clock sweep
+  switch: "Switch turned on",
+  manual: "Manual apply",
+  startup: "Startup",
+  reapply: "Periodic refresh",
+  simulated: "Simulation",
+};
+
+// Causes that keep their `detail` (which boundary fired) after a friendlier label.
+const CAUSE_LABELS_WITH_DETAIL: Record<string, string> = {
+  clock: "Time of day",
+  sun: "Sun position",
+};
+
 export function formatCause(c: TraceCause): string {
   if (c.kind === "entity") return `${c.entity_id} ${c.old} → ${c.new}`;
-  if (c.detail) return `${humanizeId(c.kind)} ${c.detail}`;
-  return humanizeId(c.kind);
+  // A `for:` duration recheck: name the entity, the state it has held, and how
+  // long (the detail), e.g. "binary_sensor.motion off for 5m".
+  if (c.kind === "duration") return `${c.entity_id} ${c.new} for ${c.detail}`;
+  const fixed = CAUSE_LABELS_FIXED[c.kind];
+  if (fixed) return fixed;
+  const name = CAUSE_LABELS_WITH_DETAIL[c.kind] ?? humanizeId(c.kind);
+  return c.detail ? `${name} ${c.detail}` : name;
+}
+
+// Friendly badge text for each outcome. The internal id stays the CSS class
+// (so colours don't change); only the displayed word is humanised.
+const OUTCOME_LABELS: Record<string, string> = {
+  acted: "applied",
+  no_op: "blocked",
+  debounced: "unchanged",
+  no_match: "no match",
+  reapplied: "refreshed",
+  skipped_switch_off: "skipped",
+  skipped_scope_disabled: "skipped",
+};
+
+export function outcomeLabel(outcome: TraceOutcome): string {
+  return OUTCOME_LABELS[outcome] ?? outcome.replace(/_/g, " ");
+}
+
+// A one-line plain-language explanation of what the outcome actually did —
+// shown at the top of the expansion so an empty action list or a suppressed
+// re-fire reads as a deliberate result, not a gap.
+export function outcomeSummary(u: BufferedUnit): string {
+  const winner = u.winner_name ?? "The matching scene";
+  switch (u.outcome) {
+    case "acted": {
+      const acts = pluralize(u.actions.length, "action", "actions");
+      const e = entityCount(u.actions);
+      return e
+        ? `Applied ${winner} — ${acts} on ${pluralize(e, "entity", "entities")}.`
+        : `Applied ${winner} — ${acts}.`;
+    }
+    case "no_op":
+      return `${winner} matched but has no actions — it blocks lower scenes from applying. Nothing changed.`;
+    case "debounced":
+      return `${winner} matched, but it's already applied — nothing was re-sent.`;
+    case "no_match":
+      return "No scene matched — nothing applied.";
+    case "reapplied":
+      return `Periodic refresh re-sent ${winner}'s actions.`;
+    case "skipped_switch_off":
+      return "Skipped — the category switch is off.";
+    case "skipped_scope_disabled":
+      return "Skipped — the scope is disabled.";
+    default:
+      return "";
+  }
 }
 
 // The action's humanized service label plus its params (key: value) — NOT its
@@ -85,6 +161,17 @@ function entityCount(actions: Action[]): number {
   return actions.reduce((n, a) => n + (a.entity_ids?.length ?? 0), 0);
 }
 
+// "1 entity" / "2 entities" — count plus the correctly-pluralised noun.
+function pluralize(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+// Outcomes where the whole unit's evaluation was skipped (switch off / scope
+// disabled). They carry no explanation or actions but still expand to show why.
+function isSkipped(outcome: TraceOutcome): boolean {
+  return outcome === "skipped_switch_off" || outcome === "skipped_scope_disabled";
+}
+
 function renderScene(r: TraceSceneEval, hass: HassLike | undefined): TemplateResult {
   // `index` is the 0-based position in the scene list; scene numbers are shown 1-based.
   const num = r.index + 1;
@@ -92,10 +179,10 @@ function renderScene(r: TraceSceneEval, hass: HassLike | undefined): TemplateRes
     return html`<div class="scene disabled">Scene #${num} ${r.name ?? "—"}: disabled</div>`;
   }
   if (!r.evaluated) {
-    return html`<div class="scene skipped">Scene #${num} ${r.name ?? "—"}: not evaluated</div>`;
+    return html`<div class="scene skipped">Scene #${num} ${r.name ?? "—"}: not reached</div>`;
   }
   return html`
-    <div class="scene ${r.matched ? "won" : ""}">Scene #${num} ${r.name ?? "—"}: ${r.matched ? "WON" : "no"}</div>
+    <div class="scene ${r.matched ? "won" : ""}">Scene #${num} ${r.name ?? "—"}: ${r.matched ? "✓ matched" : "✗ no match"}</div>
     ${r.predicates.map(
       (p) => html`
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
@@ -119,19 +206,21 @@ export function renderEvaluation(
 ): TemplateResult {
   const services = u.actions.map((a) => deriveActionLabel(a.service)).join(", ");
   const n = entityCount(u.actions);
-  const canExpand = u.explanation !== null || u.actions.length > 0;
+  // Skipped units have no explanation or actions, but still expand to reveal the
+  // one-line reason (switch off / scope disabled).
+  const canExpand = u.explanation !== null || u.actions.length > 0 || isSkipped(u.outcome);
   return html`
     <div class="eval">
       <div class="top">
-        <span class="outcome ${u.outcome}">${u.outcome.replace(/_/g, " ")}</span>
-        <span class="cause">${formatCause(u.cause)}</span>
+        <span class="outcome ${u.outcome}">${outcomeLabel(u.outcome)}</span>
+        <span class="cause">Trigger: ${formatCause(u.cause)}</span>
         <span class="ts">${u.timestamp ? new Date(u.timestamp).toLocaleTimeString() : ""}</span>
       </div>
       ${u.winner_name ? html`<div class="won">Won: <span class="name">${u.winner_name}</span></div>` : nothing}
       ${
         u.actions.length
           ? html`<div class="action-summary">→ ${services}
-            ${n ? html`<span class="n">· ${n} ${n === 1 ? "entity" : "entities"}</span>` : nothing}</div>`
+            ${n ? html`<span class="n">· ${pluralize(n, "entity", "entities")}</span>` : nothing}</div>`
           : nothing
       }
       ${
@@ -159,8 +248,10 @@ function renderExpansion(
   hass: HassLike | undefined,
   schemas: Record<string, ServiceSchema> | undefined,
 ): TemplateResult {
+  const summary = outcomeSummary(u);
   return html`
     <div class="why">
+      ${summary ? html`<div class="outcome-summary">${summary}</div>` : nothing}
       ${
         u.explanation
           ? html`<div class="section">

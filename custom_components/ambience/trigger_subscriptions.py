@@ -16,6 +16,7 @@ from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
+from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import Event, callback
 from homeassistant.helpers.event import (
     async_call_later,
@@ -26,6 +27,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
+from .conditions._common import fmt_duration
 from .conditions.time_of_day import ANCHOR_ATTR
 from .const import DATA_EXPOSED_ACTIONS, DATA_SWITCHES, DOMAIN
 from .service import (
@@ -253,15 +255,25 @@ class TriggerSubscriptionsMixin:
             for cancel in self._for_handles.pop(key, []):
                 cancel()
             self._for_handles[key] = [
-                async_call_later(self._hass, seconds, self._make_for_recheck(key))
-                for seconds in durations
+                async_call_later(self._hass, seconds, self._make_for_recheck(key, entity, seconds))
+                for entity, seconds in durations
             ]
 
-    def _make_for_recheck(self, key: PredKey) -> Callable[[Any], None]:
+    def _make_for_recheck(self, key: PredKey, entity: str, seconds: float) -> Callable[[Any], None]:
         @callback
         def _recheck(_now: Any) -> None:
             self._for_handles.pop(key, None)
-            self._fire({key}, TriggerCause(kind=CauseKind.HAS_TIME, detail="for"))
+            # Name the entity, the state it has held, and for how long, so the
+            # trace reads e.g. "binary_sensor.motion off for 5 min".
+            state = self._hass.states.get(entity)
+            held = state.state if state is not None else STATE_UNKNOWN
+            cause = TriggerCause(
+                kind=CauseKind.DURATION,
+                entity_id=entity,
+                new=held,
+                detail=fmt_duration(seconds),
+            )
+            self._fire({key}, cause)
 
         return _recheck
 

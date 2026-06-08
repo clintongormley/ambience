@@ -505,14 +505,17 @@ def test_cause_describe_sun():
     assert cause.describe() == "sun below_horizon"
 
 
-def test_cause_describe_has_time_with_detail():
-    cause = TriggerCause(kind=CauseKind.HAS_TIME, detail="5m")
-    assert cause.describe() == "duration recheck (5m)"
+def test_cause_describe_has_time_is_periodic_time_check():
+    # HAS_TIME is now only the periodic clock sweep (template re-render), with no
+    # entity to name — it always reads as a periodic time check.
+    assert TriggerCause(kind=CauseKind.HAS_TIME).describe() == "periodic time check"
 
 
-def test_cause_describe_has_time_without_detail():
-    cause = TriggerCause(kind=CauseKind.HAS_TIME)
-    assert cause.describe() == "duration recheck"
+def test_cause_describe_duration_names_entity_state_and_duration():
+    cause = TriggerCause(
+        kind=CauseKind.DURATION, entity_id="binary_sensor.motion", new="off", detail="5m"
+    )
+    assert cause.describe() == "binary_sensor.motion off for 5m"
 
 
 def test_cause_describe_switch():

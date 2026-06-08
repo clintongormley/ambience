@@ -145,6 +145,32 @@ def test_negate_not_vacant_for_differs_from_occupied_for() -> None:
     assert m.matches(occupied_for, snap) is False
 
 
+def test_negate_unavailable_is_not_a_match() -> None:
+    # "not occupied" (negate over the default occupied=True) must NOT become true
+    # when the sensor is unavailable. Unobservable is a miss even under negate —
+    # negating "couldn't tell" must not manufacture a match.
+    snap = _snap({"binary_sensor.a": _s("unavailable")})
+    pred = {"sensors": ["binary_sensor.a"], "negate": True}
+    assert OccupancyCondition().matches(pred, snap) is False
+
+
+def test_negate_any_unobservable_when_one_sensor_unavailable() -> None:
+    # "not (any occupied)": one sensor observably off, one unavailable. We cannot
+    # be sure the unavailable one isn't occupied, so the whole match is
+    # unobservable -> miss (not True).
+    snap = _snap({"binary_sensor.a": _s("off"), "binary_sensor.b": _s("unavailable")})
+    pred = {"sensors": ["binary_sensor.a", "binary_sensor.b"], "quant": "any", "negate": True}
+    assert OccupancyCondition().matches(pred, snap) is False
+
+
+def test_negate_any_true_when_all_observably_vacant() -> None:
+    # "not (any occupied)": every sensor observably off -> definitely not
+    # occupied -> the negation is a real, observable True.
+    snap = _snap({"binary_sensor.a": _s("off"), "binary_sensor.b": _s("off")})
+    pred = {"sensors": ["binary_sensor.a", "binary_sensor.b"], "quant": "any", "negate": True}
+    assert OccupancyCondition().matches(pred, snap) is True
+
+
 def test_negate_with_empty_sensors_stays_wildcard() -> None:
     # No constraint to negate: a wildcard stays a wildcard.
     assert OccupancyCondition().matches({"sensors": [], "negate": True}, _snap()) is True

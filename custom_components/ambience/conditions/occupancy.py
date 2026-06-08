@@ -19,7 +19,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE, dur_seconds, fmt_duration, validate_for
+from ._common import (
+    UNAVAILABLE,
+    dur_seconds,
+    fmt_duration,
+    kleene_all,
+    kleene_any,
+    kleene_not,
+    validate_for,
+)
 
 _QUANTS = ("any", "all")
 
@@ -113,16 +121,19 @@ class OccupancyCondition:
         quant = predicate.get("quant") or "any"
         seconds = dur_seconds(predicate.get("for"))
 
-        def holds(eid: str) -> bool:
-            return bool(self._holds(eid, snapshot, want_on=want_on, seconds=seconds))
-
-        if quant == "all":
-            result = all(holds(e) for e in sensors)
-        else:
-            result = any(holds(e) for e in sensors)
+        # Keep per-sensor verdicts tri-state (None = unobservable) through the
+        # quantifier and negate, so an unavailable sensor can never be inverted
+        # into a spurious match — "not occupied" must not fire on `unavailable`.
+        # A generator lets kleene_any/kleene_all short-circuit (settle without
+        # evaluating every sensor) on the hot path.
+        verdicts = (self._holds(e, snapshot, want_on=want_on, seconds=seconds) for e in sensors)
+        result = kleene_all(verdicts) if quant == "all" else kleene_any(verdicts)
         # `negate` wraps the whole match (polarity + quant + `for`): "NOT
         # (vacant for >=20m)" is a different match-set from "occupied for >=20m".
-        return not result if predicate.get("negate") else result
+        # An unobservable result (None) stays a miss even under negate.
+        if predicate.get("negate"):
+            result = kleene_not(result)
+        return result is True
 
     def describe(self, snapshot: OccupancySnapshot, predicate: Any = None) -> str | None:
         # No predicate: whole-snapshot summary (used by `snapshots_described`).

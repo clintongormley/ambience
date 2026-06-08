@@ -9,11 +9,44 @@ fix-it-in-one-place drift that crept in when each condition carried its own.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 # States that mean "no real value" — treated as a miss by every condition that
 # reads an entity's state.
 UNAVAILABLE: frozenset[str] = frozenset({"unavailable", "unknown"})
+
+
+# Three-valued (Kleene) logic over `bool | None`, where None = "unobservable"
+# (an entity is unavailable/unknown/absent). The point of carrying None instead
+# of collapsing it to False early is negation: `not None` stays None, so an
+# unobservable input can never be inverted into a spurious match. Callers
+# collapse the final verdict with `result is True` (None and False both → miss).
+def kleene_any(values: Iterable[bool | None]) -> bool | None:
+    """OR: True if any term is True; else None if any is unobservable; else False."""
+    seen_none = False
+    for v in values:
+        if v is True:
+            return True
+        if v is None:
+            seen_none = True
+    return None if seen_none else False
+
+
+def kleene_all(values: Iterable[bool | None]) -> bool | None:
+    """AND: False if any term is False; else None if any is unobservable; else True."""
+    seen_none = False
+    for v in values:
+        if v is False:
+            return False
+        if v is None:
+            seen_none = True
+    return None if seen_none else True
+
+
+def kleene_not(value: bool | None) -> bool | None:
+    """NOT: an unobservable term stays unobservable (None); otherwise invert."""
+    return None if value is None else not value
 
 
 def dur_seconds(dur: Any) -> float:

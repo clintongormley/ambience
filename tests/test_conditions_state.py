@@ -820,3 +820,152 @@ def test_collect_deps_skips_atom_with_invalid_entity_id() -> None:
     spec = m.trigger_deps(pred)
     assert spec.entities == frozenset()
     assert spec.entity_durations == frozenset()
+
+
+# --- describe() — per-predicate trace detail ---------------------------------
+
+_DT = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+
+
+def test_describe_none_predicate_is_none() -> None:
+    snap = _snap({"light.k": ("on", _DT)})
+    # predicate=None is the whole-snapshot summary (snapshots_described): a
+    # summary over the entire HA state is meaningless for `state`, so stay None.
+    assert StateCondition().describe(snap) is None
+    assert StateCondition().describe(snap, None) is None
+
+
+def test_describe_non_dict_predicate_is_none() -> None:
+    assert StateCondition().describe(_snap(), "nope") is None
+
+
+def test_describe_atom_is_pass_and_fail() -> None:
+    snap = _snap(
+        {"light.k": ("on", _DT)},
+        attributes={"light.k": {"friendly_name": "Kitchen Light"}},
+    )
+    assert (
+        StateCondition().describe(snap, {"kind": "is", "entity_id": "light.k", "states": ["on"]})
+        == "Kitchen Light: on ✓ (is on)"
+    )
+    assert (
+        StateCondition().describe(snap, {"kind": "is", "entity_id": "light.k", "states": ["off"]})
+        == "Kitchen Light: on ✗ (is off)"
+    )
+
+
+def test_describe_atom_numeric_uses_symbol() -> None:
+    snap = _snap(
+        {"sensor.t": ("19", _DT)},
+        attributes={"sensor.t": {"friendly_name": "Hallway Temp"}},
+    )
+    assert (
+        StateCondition().describe(snap, {"kind": ">=", "entity_id": "sensor.t", "states": ["20"]})
+        == "Hallway Temp: 19 ✗ (≥ 20)"
+    )
+
+
+def test_describe_atom_is_not() -> None:
+    snap = _snap({"lock.f": ("locked", _DT)}, attributes={"lock.f": {"friendly_name": "Front"}})
+    pred = {"kind": "is_not", "entity_id": "lock.f", "states": ["unlocked"]}
+    assert StateCondition().describe(snap, pred) == "Front: locked ✓ (is not unlocked)"
+
+
+def test_describe_atom_is_lists_multiple_states() -> None:
+    snap = _snap({"person.a": ("home", _DT)}, attributes={"person.a": {"friendly_name": "Alice"}})
+    pred = {"kind": "is", "entity_id": "person.a", "states": ["home", "work"]}
+    assert StateCondition().describe(snap, pred) == "Alice: home ✓ (is home, work)"
+
+
+def test_describe_atom_attribute_mode_labels_and_value() -> None:
+    snap = _snap(
+        {"climate.x": ("heat", _DT)},
+        attributes={"climate.x": {"friendly_name": "Thermostat", "temperature": 19}},
+    )
+    pred = {"kind": ">=", "entity_id": "climate.x", "attribute": "temperature", "states": ["20"]}
+    assert StateCondition().describe(snap, pred) == "Thermostat temperature: 19 ✗ (≥ 20)"
+
+
+def test_describe_atom_missing_attribute_shows_dash() -> None:
+    snap = _snap(
+        {"climate.x": ("heat", _DT)},
+        attributes={"climate.x": {"friendly_name": "Thermostat"}},
+    )
+    pred = {"kind": ">=", "entity_id": "climate.x", "attribute": "temperature", "states": ["20"]}
+    assert StateCondition().describe(snap, pred) == "Thermostat temperature: — ✗ (≥ 20)"
+
+
+def test_describe_atom_for_shows_elapsed_and_threshold() -> None:
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    changed = now - timedelta(minutes=2)
+    snap = _snap(
+        {"binary_sensor.door": ("on", changed)},
+        now=now,
+        attributes={"binary_sensor.door": {"friendly_name": "Front Door"}},
+    )
+    pred = {"kind": "is", "entity_id": "binary_sensor.door", "states": ["on"], "for": {"m": 5}}
+    assert StateCondition().describe(snap, pred) == "Front Door: on 2m ✗ (is on, for ≥5m)"
+
+
+def test_describe_atom_unavailable() -> None:
+    snap = _snap(
+        {"light.k": ("unavailable", _DT)},
+        attributes={"light.k": {"friendly_name": "Kitchen Light"}},
+    )
+    pred = {"kind": "is", "entity_id": "light.k", "states": ["on"]}
+    assert StateCondition().describe(snap, pred) == "Kitchen Light: unavailable ✗ (is on)"
+
+
+def test_describe_atom_missing_entity() -> None:
+    pred = {"kind": "is", "entity_id": "light.k", "states": ["on"]}
+    assert StateCondition().describe(_snap(), pred) == "light.k: missing ✗ (is on)"
+
+
+def test_describe_and_group_lists_each() -> None:
+    snap = _snap(
+        {"light.k": ("on", _DT), "sensor.t": ("19", _DT)},
+        attributes={
+            "light.k": {"friendly_name": "Kitchen Light"},
+            "sensor.t": {"friendly_name": "Hallway Temp"},
+        },
+    )
+    pred = {
+        "kind": "and",
+        "items": [
+            {"kind": "is", "entity_id": "light.k", "states": ["on"]},
+            {"kind": ">=", "entity_id": "sensor.t", "states": ["20"]},
+        ],
+    }
+    assert (
+        StateCondition().describe(snap, pred)
+        == "all of: Kitchen Light: on ✓ (is on), Hallway Temp: 19 ✗ (≥ 20)"
+    )
+
+
+def test_describe_or_group_lists_each() -> None:
+    snap = _snap(
+        {"light.k": ("off", _DT), "light.l": ("on", _DT)},
+        attributes={
+            "light.k": {"friendly_name": "Kitchen"},
+            "light.l": {"friendly_name": "Lounge"},
+        },
+    )
+    pred = {
+        "kind": "or",
+        "items": [
+            {"kind": "is", "entity_id": "light.k", "states": ["on"]},
+            {"kind": "is", "entity_id": "light.l", "states": ["on"]},
+        ],
+    }
+    assert (
+        StateCondition().describe(snap, pred)
+        == "any of: Kitchen: off ✗ (is on), Lounge: on ✓ (is on)"
+    )
+
+
+def test_describe_not_wraps() -> None:
+    snap = _snap(
+        {"light.k": ("on", _DT)}, attributes={"light.k": {"friendly_name": "Kitchen Light"}}
+    )
+    pred = {"kind": "not", "item": {"kind": "is", "entity_id": "light.k", "states": ["on"]}}
+    assert StateCondition().describe(snap, pred) == "not(Kitchen Light: on ✓ (is on))"

@@ -4,6 +4,7 @@ import {
   deriveActionLabel,
   humanizeId,
   periodLabel,
+  stateValueLabel,
   weatherConditionLabel,
 } from "./i18n.js";
 import { entityDisplayName, formatArgValue, paramLabel } from "./summary.js";
@@ -14,6 +15,7 @@ import type {
   TraceOutcome,
   TraceSceneEval,
 } from "./types.js";
+import type { HassWithStates } from "./views/entity-row.js";
 
 type Action = { service: string; entity_ids?: string[]; params?: Record<string, unknown> };
 
@@ -33,8 +35,12 @@ function formatDetail(hass: HassLike | undefined, conditionKey: string, detail: 
 export const traceDetailStyles = css`
   .eval { border: 1px solid var(--divider-color, #444); border-radius: 8px; padding: 0.7rem 0.9rem; }
   .eval .top { display: flex; align-items: baseline; gap: 0.5rem; }
-  .eval .cause { flex: 1; font-family: monospace; font-size: 0.85rem; }
-  .eval .ts { color: var(--secondary-text-color, #888); font-size: 0.75rem; }
+  .eval-header.clickable { cursor: pointer; }
+  .eval-header.clickable:focus-visible { outline: 2px solid var(--primary-color, #03a9f4); outline-offset: 2px; }
+  .chev { color: var(--secondary-text-color, #888); font-size: 0.8rem; }
+  .cause-line { font-family: monospace; font-size: 0.85rem; color: var(--secondary-text-color, #bbb); margin-top: 0.2rem; }
+  .raw-trigger { font-family: monospace; font-size: 0.8rem; color: var(--secondary-text-color, #bbb); margin-bottom: 0.4rem; }
+  .eval .ts { color: var(--secondary-text-color, #888); font-size: 0.75rem; margin-left: auto; }
   .outcome { font-size: 0.72rem; text-transform: uppercase; padding: 1px 7px; border-radius: 4px;
     background: var(--secondary-background-color, #333); color: var(--secondary-text-color, #aaa); }
   .outcome.acted { background: var(--success-color, #4caf50); color: #fff; }
@@ -45,8 +51,6 @@ export const traceDetailStyles = css`
   .action-summary { margin-top: 0.2rem; font-family: monospace; font-size: 0.82rem;
     color: var(--secondary-text-color, #bbb); }
   .action-summary .n { color: var(--secondary-text-color, #888); }
-  .why-toggle { background: none; border: none; color: var(--primary-color, #03a9f4); cursor: pointer;
-    padding: 0.3rem 0; font-size: 0.82rem; }
   .why { margin-top: 0.6rem; padding: 0.2rem 0 0.2rem 0.9rem;
     border-left: 2px solid var(--divider-color, #444); }
   .outcome-summary { font-size: 0.85rem; color: var(--primary-text-color, #ddd);
@@ -91,6 +95,26 @@ export function formatCause(c: TraceCause): string {
   if (fixed) return fixed;
   const name = CAUSE_LABELS_WITH_DETAIL[c.kind] ?? humanizeId(c.kind);
   return c.detail ? `${name} ${c.detail}` : name;
+}
+
+// Cause kinds that carry a raw entity_id + old/new values worth showing
+// separately — the only kinds whose friendly label differs from their raw form.
+function causeHasRawValues(c: TraceCause): boolean {
+  return c.kind === "entity" || c.kind === "duration";
+}
+
+// Friendly trigger line: entity by name, state values via HA's formatter
+// (falls back to the raw value when hass/stateObj is absent). Non-entity causes
+// have no entity/values, so they reuse formatCause's friendly fixed labels.
+export function formatCauseFriendly(c: TraceCause, hass?: HassLike): string {
+  if (!causeHasRawValues(c)) return formatCause(c);
+  const name = c.entity_id ? entityDisplayName(hass, c.entity_id) : "?";
+  const stateObj = c.entity_id
+    ? (hass as HassWithStates | undefined)?.states?.[c.entity_id]
+    : undefined;
+  const fmt = (v: string | null) => (v === null ? "?" : stateValueLabel(hass, stateObj, null, v));
+  if (c.kind === "duration") return `${name}: ${fmt(c.new)} for ${c.detail ?? "?"}`;
+  return `${name}: ${fmt(c.old)} → ${fmt(c.new)}`;
 }
 
 // Friendly badge text for each outcome. The internal id stays the CSS class
@@ -197,6 +221,8 @@ function renderScene(r: TraceSceneEval, hass: HassLike | undefined): TemplateRes
 }
 
 // One evaluation card. Stateless: the host owns the expanded set and toggle.
+// Only the collapsed `.eval-header` is the toggle target — the expanded `.why`
+// panel is a sibling outside it, so detail text stays selectable.
 export function renderEvaluation(
   u: BufferedUnit,
   expanded: boolean,
@@ -209,35 +235,38 @@ export function renderEvaluation(
   // Skipped units have no explanation or actions, but still expand to reveal the
   // one-line reason (switch off / scope disabled).
   const canExpand = u.explanation !== null || u.actions.length > 0 || isSkipped(u.outcome);
+  const onKey = (e: KeyboardEvent) => {
+    // Guard e.repeat so holding Space doesn't fire the toggle on every
+    // key-repeat (a native <button> activates once, on keyup).
+    if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
+      e.preventDefault();
+      onToggle();
+    }
+  };
   return html`
     <div class="eval">
-      <div class="top">
-        <span class="outcome ${u.outcome}">${outcomeLabel(u.outcome)}</span>
-        <span class="cause">Trigger: ${formatCause(u.cause)}</span>
-        <span class="ts">${u.timestamp ? new Date(u.timestamp).toLocaleTimeString() : ""}</span>
+      <div
+        class=${canExpand ? "eval-header clickable" : "eval-header"}
+        role=${canExpand ? "button" : nothing}
+        tabindex=${canExpand ? "0" : nothing}
+        aria-expanded=${canExpand ? expanded : nothing}
+        @click=${canExpand ? onToggle : undefined}
+        @keydown=${canExpand ? onKey : undefined}
+      >
+        <div class="top">
+          ${canExpand ? html`<span class="chev">${expanded ? "▾" : "▸"}</span>` : nothing}
+          <span class="outcome ${u.outcome}">${outcomeLabel(u.outcome)}</span>
+          <span class="ts">${u.timestamp ? new Date(u.timestamp).toLocaleTimeString() : ""}</span>
+        </div>
+        <div class="cause-line">Trigger: ${formatCauseFriendly(u.cause, hass)}</div>
+        ${u.winner_name ? html`<div class="won">Won: <span class="name">${u.winner_name}</span></div>` : nothing}
+        ${
+          u.actions.length
+            ? html`<div class="action-summary">→ ${services}
+              ${n ? html`<span class="n">· ${pluralize(n, "entity", "entities")}</span>` : nothing}</div>`
+            : nothing
+        }
       </div>
-      ${u.winner_name ? html`<div class="won">Won: <span class="name">${u.winner_name}</span></div>` : nothing}
-      ${
-        u.actions.length
-          ? html`<div class="action-summary">→ ${services}
-            ${n ? html`<span class="n">· ${pluralize(n, "entity", "entities")}</span>` : nothing}</div>`
-          : nothing
-      }
-      ${
-        canExpand
-          ? html`<button class="why-toggle" @click=${onToggle}>
-            ${
-              expanded
-                ? "▾ Hide details"
-                : u.explanation
-                  ? u.winner_name
-                    ? `▸ Why this scene won (${u.explanation.scenes.length} scenes)`
-                    : `▸ Why nothing matched (${u.explanation.scenes.length} scenes)`
-                  : "▸ Details"
-            }
-          </button>`
-          : nothing
-      }
       ${expanded ? renderExpansion(u, hass, schemas) : nothing}
     </div>
   `;
@@ -249,8 +278,12 @@ function renderExpansion(
   schemas: Record<string, ServiceSchema> | undefined,
 ): TemplateResult {
   const summary = outcomeSummary(u);
+  // Raw entity_id + raw old→new, one click away. Only entity/duration causes
+  // carry raw values; other kinds would just duplicate the friendly label.
+  const showRawTrigger = causeHasRawValues(u.cause);
   return html`
     <div class="why">
+      ${showRawTrigger ? html`<div class="raw-trigger">Trigger: ${formatCause(u.cause)}</div>` : nothing}
       ${summary ? html`<div class="outcome-summary">${summary}</div>` : nothing}
       ${
         u.explanation

@@ -13,6 +13,7 @@ from ..triggers import EMPTY, TriggerSpec
 from ._common import (
     UNAVAILABLE,
     dur_seconds,
+    fmt_duration,
     kleene_all,
     kleene_any,
     kleene_not,
@@ -89,9 +90,74 @@ class StateCondition:
         # only a definite True counts as a match.
         return self._eval(predicate, snapshot) is True
 
+    # Unicode symbols for the numeric comparison kinds; the membership kinds
+    # ("is"/"is_not") render as words instead.
+    _OP_SYMBOLS = {">": ">", ">=": "≥", "<": "<", "<=": "≤"}
+
     def describe(self, snapshot: StateSnapshot, predicate: Any = None) -> str | None:
-        # No single "current value" — depends on which atoms a predicate names.
-        return None
+        # predicate=None is the whole-snapshot summary (snapshots_described); a
+        # summary over the entire HA state is meaningless for `state`, so stay
+        # None. A non-dict predicate is malformed — nothing to describe.
+        if not isinstance(predicate, dict):
+            return None
+        return self._describe_expr(predicate, snapshot)
+
+    def _describe_expr(self, expr: Any, snap: StateSnapshot) -> str:
+        # Mirror occupancy's flat style: atoms render inline; groups wrap their
+        # items with the quantifier; `not` wraps its single child.
+        if not isinstance(expr, dict):
+            return "?"
+        kind = expr.get("kind")
+        if kind in self._ATOM_KINDS:
+            return self._describe_atom(expr, snap)
+        if kind in ("and", "or"):
+            body = ", ".join(self._describe_expr(it, snap) for it in (expr.get("items") or []))
+            return f"{'all' if kind == 'and' else 'any'} of: {body}"
+        if kind == "not":
+            return f"not({self._describe_expr(expr.get('item'), snap)})"
+        return "?"
+
+    def _describe_atom(self, atom: dict, snap: StateSnapshot) -> str:
+        entity_id = atom.get("entity_id")
+        attribute = atom.get("attribute")
+        attrs = snap.attributes.get(entity_id) if isinstance(entity_id, str) else None
+        # Friendly name (falls back to the id); in attribute-mode append the
+        # attribute so "Thermostat temperature" reads unambiguously.
+        name = (attrs or {}).get("friendly_name") or entity_id or "?"
+        label = f"{name} {attribute}" if attribute else f"{name}"
+        seconds = dur_seconds(atom.get("for"))
+        cur = snap.states.get(entity_id) if isinstance(entity_id, str) else None
+        if cur is None:
+            current = "missing"
+            elapsed = ""
+        else:
+            state, last_changed, last_updated = cur
+            if attribute:
+                current = str(attrs[attribute]) if attrs and attribute in attrs else "—"
+            else:
+                current = state
+            # With a `for` gate, show how long the value has held so a
+            # recently-changed atom's ✗ is self-explanatory. Clock matches
+            # _eval_atom: attribute-mode off last_updated, state-mode off
+            # last_changed.
+            if seconds > 0:
+                since = last_updated if attribute else last_changed
+                elapsed = f" {fmt_duration((snap.now - since).total_seconds())}"
+            else:
+                elapsed = ""
+        mark = "✓" if self._eval_atom(atom, snap) is True else "✗"
+        comparison = self._describe_comparison(atom)
+        for_clause = f", for ≥{fmt_duration(seconds)}" if seconds > 0 else ""
+        return f"{label}: {current}{elapsed} {mark} ({comparison}{for_clause})"
+
+    def _describe_comparison(self, atom: dict) -> str:
+        kind = atom.get("kind")
+        states = atom.get("states") or []
+        if kind in self._NUMERIC_KINDS:
+            rhs = states[0] if states else "?"
+            return f"{self._OP_SYMBOLS.get(kind, str(kind))} {rhs}"
+        joined = ", ".join(str(s) for s in states)
+        return f"is not {joined}" if kind == "is_not" else f"is {joined}"
 
     # --- evaluation -----------------------------------------------------
 

@@ -197,6 +197,30 @@ describe("ambience-scene-editor — collapse + friendly labels", () => {
     expect(action.textContent).toContain("Set light");
   });
 
+  // Helper: read the DOM order of the currently-visible condition slots.
+  function visibleConditionOrder(el: any): string[] {
+    const names = new Set(conditions.map((c) => c.name));
+    return Array.from(el.shadowRoot.querySelectorAll(".slot[data-slot-id]"))
+      .map((s: any) => s.getAttribute("data-slot-id"))
+      .filter((id: string) => names.has(id));
+  }
+
+  test("a newly added condition is appended last, regardless of natural order", async () => {
+    // Seed `time_of_day` (index 1 in the conditions list). Then add `mode`
+    // (index 0), which naturally sorts *before* time_of_day. The newly added
+    // condition must still appear last.
+    el = await mount({
+      name: "test",
+      when: { time_of_day: { period: "afternoon" } },
+      actions: [],
+    });
+    const select = el.shadowRoot.querySelector("select.add-condition") as HTMLSelectElement;
+    select.value = "mode";
+    select.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    expect(visibleConditionOrder(el)).toEqual(["time_of_day", "mode"]);
+  });
+
   test("add-condition selector lists conditions alphabetically by label", async () => {
     const el2: any = document.createElement("ambience-scene-editor");
     // Deliberately unsorted, and not in priority order either.

@@ -279,6 +279,15 @@ export class AmbienceSceneEditor extends LitElement {
   @state() private _open: OpenSlot = null;
   @state() private _showError = false;
   /**
+   * Names of conditions added via the dropdown during this editing session, in
+   * the order they were added. A newly added condition always sorts after the
+   * pre-existing ones, so it appears last in the list at the moment it's added.
+   * This is session-only display state — it is NOT persisted, so reopening the
+   * editor reverts to the natural (priority) order. Reset whenever the editor
+   * opens.
+   */
+  @state() private _addOrder: string[] = [];
+  /**
    * Tracks whether each action's service requires a target. Keyed by service
    * id rather than action index so it remains valid when actions are
    * added/deleted/reordered. `false` means the schema loaded and has no target
@@ -319,6 +328,7 @@ export class AmbienceSceneEditor extends LitElement {
       // Everything collapsed by default.
       this._open = null;
       this._showError = false;
+      this._addOrder = [];
     }
   }
 
@@ -744,11 +754,20 @@ export class AmbienceSceneEditor extends LitElement {
   private _visibleConditions(): ConditionInfo[] {
     if (!this._draft) return [];
     const when = this._draft.when;
-    return this.conditions.filter(
+    const visible = this.conditions.filter(
       (m) =>
         (m.name in when && when[m.name] != null) ||
         (this._open?.kind === "condition" && this._open.id === m.name),
     );
+    // Conditions added this session go last, in the order they were added — a
+    // newly added condition appears last. Pre-existing ones keep their natural
+    // (priority) order.
+    const added = new Set(this._addOrder);
+    const preExisting = visible.filter((m) => !added.has(m.name));
+    const addedInOrder = this._addOrder
+      .map((name) => visible.find((m) => m.name === name))
+      .filter((m): m is ConditionInfo => m != null);
+    return [...preExisting, ...addedInOrder];
   }
 
   private _unusedConditions(): ConditionInfo[] {
@@ -795,6 +814,9 @@ export class AmbienceSceneEditor extends LitElement {
     if (def != null && this._draft && !(name in this._draft.when)) {
       this._draft = { ...this._draft, when: { ...this._draft.when, [name]: def } };
     }
+    // Track add-order so the new condition sorts last (see `_addOrder`). Move it
+    // to the end if it was already added-then-removed earlier this session.
+    this._addOrder = [...this._addOrder.filter((n) => n !== name), name];
     this._open = { kind: "condition", id: name };
     this._showError = false;
   }

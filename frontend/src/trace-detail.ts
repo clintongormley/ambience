@@ -8,6 +8,7 @@ import {
   weatherConditionLabel,
 } from "./i18n.js";
 import { entityDisplayName, formatArgValue, paramLabel } from "./summary.js";
+import type { HassWithStates } from "./views/entity-row.js";
 import type {
   BufferedUnit,
   ServiceSchema,
@@ -101,7 +102,7 @@ export function formatCauseFriendly(c: TraceCause, hass?: HassLike): string {
   if (c.kind !== "entity" && c.kind !== "duration") return formatCause(c);
   const name = c.entity_id ? entityDisplayName(hass, c.entity_id) : "?";
   const stateObj = c.entity_id
-    ? (hass as { states?: Record<string, unknown> } | undefined)?.states?.[c.entity_id]
+    ? (hass as HassWithStates | undefined)?.states?.[c.entity_id]
     : undefined;
   const fmt = (v: string | null) => (v === null ? "?" : stateValueLabel(hass, stateObj, null, v));
   if (c.kind === "duration") return `${name}: ${fmt(c.new)} for ${c.detail ?? "?"}`;

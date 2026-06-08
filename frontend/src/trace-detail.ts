@@ -4,6 +4,7 @@ import {
   deriveActionLabel,
   humanizeId,
   periodLabel,
+  stateValueLabel,
   weatherConditionLabel,
 } from "./i18n.js";
 import { entityDisplayName, formatArgValue, paramLabel } from "./summary.js";
@@ -91,6 +92,20 @@ export function formatCause(c: TraceCause): string {
   if (fixed) return fixed;
   const name = CAUSE_LABELS_WITH_DETAIL[c.kind] ?? humanizeId(c.kind);
   return c.detail ? `${name} ${c.detail}` : name;
+}
+
+// Friendly trigger line: entity by name, state values via HA's formatter
+// (falls back to the raw value when hass/stateObj is absent). Non-entity causes
+// have no entity/values, so they reuse formatCause's friendly fixed labels.
+export function formatCauseFriendly(c: TraceCause, hass?: HassLike): string {
+  if (c.kind !== "entity" && c.kind !== "duration") return formatCause(c);
+  const name = c.entity_id ? entityDisplayName(hass, c.entity_id) : "?";
+  const stateObj = c.entity_id
+    ? (hass as { states?: Record<string, unknown> } | undefined)?.states?.[c.entity_id]
+    : undefined;
+  const fmt = (v: string | null) => (v === null ? "?" : stateValueLabel(hass, stateObj, null, v));
+  if (c.kind === "duration") return `${name}: ${fmt(c.new)} for ${c.detail ?? "?"}`;
+  return `${name}: ${fmt(c.old)} → ${fmt(c.new)}`;
 }
 
 // Friendly badge text for each outcome. The internal id stays the CSS class

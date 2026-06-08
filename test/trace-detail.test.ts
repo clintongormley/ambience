@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   formatActionHeader,
   formatCause,
+  formatCauseFriendly,
   outcomeLabel,
   outcomeSummary,
   renderEvaluation,
@@ -80,6 +81,50 @@ describe("trace-detail", () => {
     expect(
       formatCause({ kind: "clock", entity_id: null, old: null, new: null, detail: "20:00" }),
     ).toContain("20:00");
+  });
+
+  test("formatCauseFriendly uses friendly name + formatted values for entity causes", () => {
+    const hass = {
+      states: { "binary_sensor.motion": { attributes: { friendly_name: "Master Bath Presence" } } },
+      formatEntityState: (_s: unknown, v: string) => (v === "on" ? "On" : v === "off" ? "Off" : v),
+    };
+    expect(
+      formatCauseFriendly(
+        { kind: "entity", entity_id: "binary_sensor.motion", old: "off", new: "on", detail: null },
+        hass,
+      ),
+    ).toBe("Master Bath Presence: Off → On");
+  });
+
+  test("formatCauseFriendly falls back to raw id + values without hass", () => {
+    expect(
+      formatCauseFriendly({
+        kind: "entity",
+        entity_id: "binary_sensor.motion",
+        old: "off",
+        new: "on",
+        detail: null,
+      }),
+    ).toBe("binary_sensor.motion: off → on");
+  });
+
+  test("formatCauseFriendly renders duration causes with name + formatted value", () => {
+    const hass = {
+      states: { "binary_sensor.motion": { attributes: { friendly_name: "Hall" } } },
+      formatEntityState: (_s: unknown, v: string) => (v === "off" ? "Clear" : v),
+    };
+    expect(
+      formatCauseFriendly(
+        { kind: "duration", entity_id: "binary_sensor.motion", old: null, new: "off", detail: "5m" },
+        hass,
+      ),
+    ).toBe("Hall: Clear for 5m");
+  });
+
+  test("formatCauseFriendly delegates non-entity causes to formatCause", () => {
+    expect(
+      formatCauseFriendly({ kind: "manual", entity_id: null, old: null, new: null, detail: null }),
+    ).toBe("Manual apply");
   });
 
   test("formatActionHeader humanizes the service and its params (no entities)", () => {

@@ -87,7 +87,7 @@ describe("ambience-traces-modal", () => {
       },
     });
     el = await mount([withExpl]);
-    el.shadowRoot.querySelector(".eval-header").click();
+    el.shadowRoot.querySelector(".outcome").click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".why")).toBeTruthy(); // expanded
     // A reload (reopen / category-change / refresh) must reset expansion.
@@ -143,7 +143,7 @@ describe("ambience-traces-modal", () => {
       }),
     ]);
     // Expand the row to reveal the "Actions taken" section.
-    el.shadowRoot.querySelector(".eval-header").click();
+    el.shadowRoot.querySelector(".outcome").click();
     await el.updateComplete;
     // Let the schema fetch resolve and the label refine.
     await new Promise((r) => setTimeout(r, 0));
@@ -216,7 +216,7 @@ describe("ambience-traces-modal", () => {
       },
     });
     el = await mount([withExpl]);
-    const toggle = el.shadowRoot.querySelector(".eval-header");
+    const toggle = el.shadowRoot.querySelector(".outcome");
     toggle.click(); // expand
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".why")).toBeTruthy();
@@ -289,7 +289,7 @@ describe("ambience-traces-modal", () => {
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
     // Expand the row to verify the fallback humanized key is used
-    el.shadowRoot.querySelector(".eval-header").click();
+    el.shadowRoot.querySelector(".outcome").click();
     await el.updateComplete;
     expect(el.shadowRoot.textContent).toContain("80"); // value still present
     // Schema is absent, so raw/humanized key is shown

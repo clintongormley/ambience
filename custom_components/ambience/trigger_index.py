@@ -26,8 +26,10 @@ class TriggerIndex:
       set of predicates that depend on it (the fan-out).
     - ``midnight`` / ``has_time`` / ``opaque``: predicate sets flagged by the
       corresponding ``TriggerSpec`` booleans.
-    - ``durations``: per-predicate ``for:`` recheck delays in seconds (only for
-      predicates that carry at least one); absent otherwise.
+    - ``durations``: per-predicate ``for:`` recheck delays as ``(entity_id,
+      seconds)`` pairs (only for predicates that carry at least one); absent
+      otherwise. The entity is kept so the recheck's trace can name what is
+      being waited on (e.g. "binary_sensor.motion off for 5m").
     """
 
     by_entity: dict[str, frozenset[PredKey]]
@@ -35,7 +37,7 @@ class TriggerIndex:
     by_sun: dict[tuple[str, int], frozenset[PredKey]]
     midnight: frozenset[PredKey]
     has_time: frozenset[PredKey]
-    durations: dict[PredKey, frozenset[float]]
+    durations: dict[PredKey, frozenset[tuple[str, float]]]
     opaque: frozenset[PredKey]
 
     @property
@@ -74,7 +76,7 @@ def build_index(entries: Iterable[tuple[PredKey, TriggerSpec]]) -> TriggerIndex:
     by_sun: dict[tuple[str, int], set[PredKey]] = {}
     midnight: set[PredKey] = set()
     has_time: set[PredKey] = set()
-    durations: dict[PredKey, frozenset[float]] = {}
+    durations: dict[PredKey, frozenset[tuple[str, float]]] = {}
     opaque: set[PredKey] = set()
 
     for key, spec in entries:
@@ -91,7 +93,7 @@ def build_index(entries: Iterable[tuple[PredKey, TriggerSpec]]) -> TriggerIndex:
         if spec.opaque:
             opaque.add(key)
         if spec.entity_durations:
-            durations[key] = frozenset(seconds for _entity, seconds in spec.entity_durations)
+            durations[key] = frozenset(spec.entity_durations)
 
     return TriggerIndex(
         by_entity={k: frozenset(v) for k, v in by_entity.items()},

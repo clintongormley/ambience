@@ -77,7 +77,7 @@ def test_durations_collected_per_predicate() -> None:
             )
         ]
     )
-    assert idx.durations[p] == frozenset({600.0, 300.0})
+    assert idx.durations[p] == frozenset({("binary_sensor.motion", 600.0), ("person.bob", 300.0)})
 
 
 def test_predicate_with_no_durations_absent_from_durations_map() -> None:

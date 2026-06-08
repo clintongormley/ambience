@@ -338,6 +338,7 @@ export type TraceCause = {
     | "clock"
     | "sun"
     | "has_time"
+    | "duration"
     | "switch"
     | "manual"
     | "startup"
@@ -365,6 +366,7 @@ export type TraceOutcome =
   | "no_op"
   | "no_match"
   | "skipped_switch_off"
+  | "skipped_scope_disabled"
   | "reapplied";
 export type BufferedUnit = {
   event_id: string | null;

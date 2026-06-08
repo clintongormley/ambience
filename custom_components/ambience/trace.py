@@ -37,6 +37,12 @@ class CauseKind(StrEnum):
     ENTITY = "entity"
     CLOCK = "clock"
     SUN = "sun"
+    # A `for:` duration recheck fired: an entity has now held its state long
+    # enough for a duration condition. Carries the entity, its held state, and
+    # the human duration.
+    DURATION = "duration"
+    # A periodic clock sweep re-rendered a wall-clock-dependent template (no
+    # discrete boundary to schedule, no single entity to name).
     HAS_TIME = "has_time"
     SWITCH = "switch"
     MANUAL = "manual"
@@ -80,8 +86,10 @@ class TriggerCause:
             return f"clock {self.detail}"
         if self.kind == CauseKind.SUN:
             return f"sun {self.detail}"
+        if self.kind == CauseKind.DURATION:
+            return f"{self.entity_id} {self.new} for {self.detail}"
         if self.kind == CauseKind.HAS_TIME:
-            return f"duration recheck ({self.detail})" if self.detail else "duration recheck"
+            return "periodic time check"
         if self.kind == CauseKind.SWITCH:
             return f"switch {self.entity_id} on"
         if self.kind == CauseKind.MANUAL:

@@ -61,6 +61,27 @@ GENERAL_CATEGORY = {
 CONF_SHOW_SIDEBAR_PANEL = "show_sidebar_panel"
 DEFAULT_SHOW_SIDEBAR_PANEL = True
 
+# Voice-assistant exposure (options flow).
+CONF_EXPOSED_ASSISTANTS = "exposed_assistants"
+# Mirrors homeassistant.components.homeassistant.exposed_entities.KNOWN_ASSISTANTS,
+# ordered Assist-first for the options form.
+KNOWN_ASSISTANTS = ("conversation", "cloud.google_assistant", "cloud.alexa")
+# Default: switches exposed to local Assist only.
+DEFAULT_EXPOSED_ASSISTANTS = {
+    "conversation": True,
+    "cloud.google_assistant": False,
+    "cloud.alexa": False,
+}
+# Assistant id -> options-form field name (dot-free, so it is a valid form +
+# translation key).
+ASSISTANT_FIELDS = {
+    "conversation": "expose_assist",
+    "cloud.google_assistant": "expose_google",
+    "cloud.alexa": "expose_alexa",
+}
+# hass.data key holding the resolved {assistant: bool} exposure map for this entry.
+DATA_EXPOSED_ASSISTANTS = "exposed_assistants_map"
+
 # hass.data key holding the Lovelace resource id registered for the card, so it
 # can be removed on unload.
 DATA_CARD_RESOURCE_ID = "card_resource_id"

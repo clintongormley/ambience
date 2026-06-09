@@ -477,3 +477,16 @@ async def test_area_assignment_does_not_override_user_move(hass, mock_config_ent
     sw = _switch(hass, "area", area.id)
     sw._assign_area_device()
     assert dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")}).area_id == other.id
+
+
+async def test_sync_device_name_no_device_is_noop(hass, mock_config_entry):
+    """When the scope's device is missing, _sync_device_name returns without
+    attempting a registry update (the `device is None` guard)."""
+    from unittest.mock import patch
+
+    await _setup(hass, mock_config_entry)
+    sw = _switch(hass, "house", None)
+    with patch("custom_components.ambience.switch.dr.async_get") as mock_get:
+        mock_get.return_value.async_get_device.return_value = None
+        sw._sync_device_name()  # must not raise
+        mock_get.return_value.async_update_device.assert_not_called()

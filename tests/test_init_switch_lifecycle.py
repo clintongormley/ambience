@@ -212,3 +212,12 @@ async def test_floor_rename_updates_device_name_via_registry_event(hass, install
     await hass.async_block_till_done()
     name = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor.floor_id}")}).name
     assert name == "Attic Ambience"
+
+
+async def test_remove_scope_device_missing_is_noop(hass, installed):
+    """_remove_scope_device for a scope with no device is a safe no-op (the
+    device-is-None branch)."""
+    from custom_components.ambience import _remove_scope_device
+
+    # No device exists for this id — must not raise and must remove nothing.
+    _remove_scope_device(hass, "area", "does-not-exist")

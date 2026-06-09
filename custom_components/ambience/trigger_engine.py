@@ -87,6 +87,13 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._for_handles: dict[PredKey, dict[tuple[str, float], Callable[[], None]]] = {}
         self._switch_scopes: dict[str, tuple[str, str | None]] = {}
         self._reapply_intervals: dict[int, set[tuple[str, str | None]]] = {}
+        # One lock per (scope_kind, scope_id, category) unit, so a burst of
+        # triggers on the same unit queues through resolve+apply one at a time
+        # rather than racing (each would otherwise read a stale last_applied and
+        # re-fire the same scene). Bounded by scopes×categories; tiny and stable.
+        self._apply_locks: defaultdict[tuple[str, str | None, str], asyncio.Lock] = defaultdict(
+            asyncio.Lock
+        )
         # Debounced full refresh, for coalescing rapid config-changed signals.
         self._refresh_debouncer = Debouncer(
             hass,
@@ -245,56 +252,71 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     None,
                 )
             return None
-        plan = await async_resolve_with_snapshots(
-            self._hass,
-            scope_kind,
-            scope_id,
-            self._snapshots,
-            category=category_id,
-            describe=False,
-            explain=active,
-        )
-        index = plan["matched_scene_index"]
-        explanation = plan.get("explanation")
-        if index is None:
-            # A no-match is a transition away from the previous winner: drop the
-            # last-applied record so a later win of the same scene re-applies.
-            forget_last_applied(self._hass, scope_kind, scope_id, category_id)
-            if active:
-                return UnitTrace(
-                    scope_kind, scope_id, category_id, switch_state, Outcome.NO_MATCH, explanation
-                )
-            return None
-        if not plan["actions"]:
-            # A pure blocker (winner with no actions): nothing to run, and it stays
-            # transparent to last-applied so it neither records itself nor clears a
-            # prior real winner.
-            if active:
-                return UnitTrace(
-                    scope_kind,
-                    scope_id,
-                    category_id,
-                    switch_state,
-                    Outcome.NO_OP,
-                    explanation,
-                    winner_name=plan["scene_name"],
-                )
-            return None
-        if not force and index == get_last_applied(self._hass, scope_kind, scope_id, category_id):
-            # Same winner as last applied, with identical actions → suppress the
-            # redundant re-fire.
-            if active:
-                return UnitTrace(
-                    scope_kind,
-                    scope_id,
-                    category_id,
-                    switch_state,
-                    Outcome.DEBOUNCED,
-                    explanation,
-                    winner_name=plan["scene_name"],
-                )
-            return None
-        await async_execute_plan(self._hass, scope_kind, scope_id, plan, category_id)
+        # Serialize resolve+apply per (scope, category): a burst of triggers on
+        # one unit arrives as separate tasks. Without this, while one task is
+        # suspended running its actions, another resolves and applies the same
+        # unit — re-firing the same scene. Holding the lock across the whole
+        # resolve+apply makes a waiting task proceed only once the first has
+        # recorded last_applied and finished, so it either debounces (same winner)
+        # or applies in order (new winner) instead of interleaving mid-apply.
+        async with self._apply_locks[(scope_kind, scope_id, category_id)]:
+            plan = await async_resolve_with_snapshots(
+                self._hass,
+                scope_kind,
+                scope_id,
+                self._snapshots,
+                category=category_id,
+                describe=False,
+                explain=active,
+            )
+            index = plan["matched_scene_index"]
+            explanation = plan.get("explanation")
+            if index is None:
+                # A no-match is a transition away from the previous winner: drop
+                # the last-applied record so a later win of the same scene re-applies.
+                forget_last_applied(self._hass, scope_kind, scope_id, category_id)
+                if active:
+                    return UnitTrace(
+                        scope_kind,
+                        scope_id,
+                        category_id,
+                        switch_state,
+                        Outcome.NO_MATCH,
+                        explanation,
+                    )
+                return None
+            if not plan["actions"]:
+                # A pure blocker (winner with no actions): nothing to run, and it
+                # stays transparent to last-applied so it neither records itself nor
+                # clears a prior real winner.
+                if active:
+                    return UnitTrace(
+                        scope_kind,
+                        scope_id,
+                        category_id,
+                        switch_state,
+                        Outcome.NO_OP,
+                        explanation,
+                        winner_name=plan["scene_name"],
+                    )
+                return None
+            if not force and index == get_last_applied(
+                self._hass, scope_kind, scope_id, category_id
+            ):
+                # Same winner as last applied, with identical actions → suppress the
+                # redundant re-fire.
+                if active:
+                    return UnitTrace(
+                        scope_kind,
+                        scope_id,
+                        category_id,
+                        switch_state,
+                        Outcome.DEBOUNCED,
+                        explanation,
+                        winner_name=plan["scene_name"],
+                    )
+                return None
+            await async_execute_plan(self._hass, scope_kind, scope_id, plan, category_id)
         if active:
             return UnitTrace(
                 scope_kind,

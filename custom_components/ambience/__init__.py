@@ -61,7 +61,7 @@ from .const import (
 from .exposed_actions import ExposedActionsStore
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
-from .service import async_apply_scene, clear_last_applied
+from .service import async_apply_named_scene, async_apply_scene, clear_last_applied
 from .store import AmbienceStore
 from .trace import BufferSink, LogSink
 from .trigger_engine import AutoTriggerEngine
@@ -181,11 +181,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
         if "area" in call.data:
-            await async_apply_scene(hass, "area", call.data["area"])
+            scope_kind, scope_id = "area", call.data["area"]
         elif "floor" in call.data:
-            await async_apply_scene(hass, "floor", call.data["floor"])
+            scope_kind, scope_id = "floor", call.data["floor"]
         else:  # house
-            await async_apply_scene(hass, "house", None)
+            scope_kind, scope_id = "house", None
+        category = call.data.get("category")
+        scene = call.data.get("scene")
+        force = call.data.get("force", False)
+        if scene is not None:
+            # Schema guarantees category is present whenever scene is.
+            await async_apply_named_scene(
+                hass, scope_kind, scope_id, category, scene, force=force
+            )
+        else:
+            await async_apply_scene(hass, scope_kind, scope_id, category=category, force=force)
 
     # Admin-only: applying a scene dispatches real device service calls, so it must
     # not be reachable by non-admin users (HA services are not admin-gated by default).

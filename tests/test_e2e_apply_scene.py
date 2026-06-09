@@ -390,3 +390,91 @@ async def test_engine_torn_down_on_unload(hass: HomeAssistant, installed: MockCo
     assert await hass.config_entries.async_unload(installed.entry_id)
     await hass.async_block_till_done()
     assert engine._unsubs == []  # async_shutdown ran on unload
+
+
+async def test_service_call_named_scene_runs_actions_bypassing_predicates(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    on_calls = async_mock_service(hass, "light", "turn_on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    await store.async_save_area(
+        "lr",
+        {
+            "scenes": [
+                {
+                    "name": "Bright",
+                    "category": "lighting",
+                    # Never-true predicate: a hit proves the handler bypassed resolution.
+                    "when": {
+                        "state": {
+                            "kind": "is",
+                            "entity_id": "binary_sensor.nope",
+                            "states": ["on"],
+                        }
+                    },
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                }
+            ],
+        },
+    )
+
+    await hass.services.async_call(
+        DOMAIN,
+        "apply_scene",
+        {"area": "lr", "category": "lighting", "scene": "Bright"},
+        blocking=True,
+    )
+
+    assert len(on_calls) == 1
+
+
+async def test_service_call_category_limits_to_one_category(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    light_calls = async_mock_service(hass, "light", "turn_on")
+    cover_calls = async_mock_service(hass, "cover", "open_cover")
+    store = hass.data[DOMAIN][DATA_STORE]
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [
+            {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
+            {"id": "cover.open_cover", "label": "", "visible_fields": [], "defaults": {}},
+        ]
+    )
+    await store.async_save_area(
+        "lr",
+        {
+            "scenes": [
+                {
+                    "category": "lighting",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                },
+                {
+                    "category": "blinds",
+                    "when": {},
+                    "actions": [
+                        {"service": "cover.open_cover", "entity_ids": ["cover.b"], "params": {}}
+                    ],
+                },
+            ],
+        },
+    )
+
+    await hass.services.async_call(
+        DOMAIN,
+        "apply_scene",
+        {"area": "lr", "category": "lighting"},
+        blocking=True,
+    )
+
+    assert len(light_calls) == 1
+    assert len(cover_calls) == 0

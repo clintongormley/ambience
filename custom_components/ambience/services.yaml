@@ -1,16 +1,47 @@
 apply_scene:
   name: Apply scene
-  description: Resolve the area's scenes and apply the matching scene's actions.
+  description: >-
+    Apply scenes at a scope. With no category, re-runs the rules for every
+    category in the scope. With a category, re-runs the rules for just that
+    category. With a category and a scene name, applies that scene's actions
+    directly (ignoring its conditions).
   fields:
     area:
       name: Area
-      description: The HA area id to apply the scene in.
-      required: true
+      description: The HA area id to apply scenes in.
+      required: false
       selector:
         area: {}
-    scene:
-      name: Scene
-      description: Optional scene name. When omitted, scene predicates in scenes are treated as wildcards.
+    floor:
+      name: Floor
+      description: The HA floor id to apply scenes in.
+      required: false
+      selector:
+        floor: {}
+    house:
+      name: House
+      description: Apply at the house scope. Must be true.
+      required: false
+      selector:
+        boolean: {}
+    category:
+      name: Category
+      description: Limit the apply to a single scene category (by category id).
       required: false
       selector:
         text: {}
+    scene:
+      name: Scene
+      description: >-
+        Apply this named scene's actions directly, bypassing its conditions.
+        Requires a category.
+      required: false
+      selector:
+        text: {}
+    force:
+      name: Force
+      description: Apply even when the scope's switch is off.
+      required: false
+      default: false
+      selector:
+        boolean: {}

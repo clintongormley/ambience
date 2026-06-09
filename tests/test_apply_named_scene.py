@@ -81,6 +81,34 @@ async def test_unknown_name_raises(hass, mock_config_entry):
     assert len(calls) == 0
 
 
+async def test_empty_scene_name_does_not_match_unnamed_scene(hass, mock_config_entry):
+    # An unnamed scene (blank name) is exempt from the uniqueness rule; an empty
+    # scene_name must not silently match and run its actions.
+    area_id = await _install(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "",
+                    "category": "lighting",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                }
+            ]
+        },
+    )
+    calls = async_mock_service(hass, "light", "turn_on")
+
+    with pytest.raises(ServiceValidationError):
+        await async_apply_named_scene(hass, "area", area_id, "lighting", "")
+
+    assert len(calls) == 0
+
+
 async def test_does_not_record_last_applied(hass, mock_config_entry):
     area_id = await _install(hass, mock_config_entry)
     async_mock_service(hass, "light", "turn_on")

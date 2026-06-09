@@ -216,10 +216,10 @@ async def test_apply_scene_rejects_zero_scope_fields(
         await hass.services.async_call(DOMAIN, "apply_scene", {}, blocking=True)
 
 
-async def test_apply_scene_rejects_scene_field(
+async def test_apply_scene_rejects_scene_without_category(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """The `scene` field has been removed from apply_scene; it must be rejected."""
+    """A `scene` name requires a `category`; supplying it alone must be rejected."""
     import voluptuous as vol
 
     with pytest.raises(vol.Invalid):

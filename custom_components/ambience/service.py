@@ -471,31 +471,31 @@ async def async_apply_named_scene(
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = _scope_config(store, scope_kind, scope_id)
     target = scene_name.strip().lower()
-    match: tuple[int, dict[str, Any]] | None = None
+    match: tuple[int, dict[str, Any], str] | None = None
     for index, scene in enumerate(cfg.get("scenes", [])):
         if scene.get("category") != category:
             continue
         name = scene.get("name")
-        if isinstance(name, str) and name.strip().lower() == target:
-            match = (index, scene)
+        # Only non-empty names are matchable (unnamed scenes are exempt from the
+        # uniqueness rule), so an empty scene_name never matches an unnamed scene.
+        if isinstance(name, str) and name.strip() and name.strip().lower() == target:
+            match = (index, scene, name)
             break
     if match is None:
         raise ServiceValidationError(
             f"no scene named {scene_name!r} in scope {scope_kind}/{scope_id} category {category!r}"
         )
 
-    index, scene = match
+    index, scene, name = match
     actions = scene.get("actions", [])
-    context = (
-        log_run_actions(hass, scope_kind, scope_id, scene.get("name"), index) if actions else None
-    )
+    context = log_run_actions(hass, scope_kind, scope_id, name, index) if actions else None
     await async_execute_actions(
         hass, scope_kind, scope_id, actions, scene_index=index, context=context
     )
 
     if tracing_active(hass):
         outcome = Outcome.ACTED if actions else Outcome.NO_OP
-        unit_kwargs: dict[str, Any] = {"winner_name": scene.get("name")}
+        unit_kwargs: dict[str, Any] = {"winner_name": name}
         if actions:
             unit_kwargs["actions"] = actions
         emit_trace(

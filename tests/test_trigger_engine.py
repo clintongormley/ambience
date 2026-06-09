@@ -1510,6 +1510,27 @@ async def test_note_config_changed_accumulates_pending(hass) -> None:
     assert engine._pending_all is True
 
 
+async def test_units_for_orders_scopes_deterministically(hass) -> None:
+    # A set has no stable iteration order; _units_for must sort so trace/apply
+    # ordering doesn't vary run to run (house's None scope_id must not break the sort).
+    scene = {"category": "g", "when": {}, "actions": []}
+    scopes = [
+        ("area", "c", {"scenes": [scene]}),
+        ("area", "a", {"scenes": [scene]}),
+        ("floor", "b", {"scenes": [scene]}),
+        ("house", None, {"scenes": [scene]}),
+    ]
+    engine = _engine(hass, scopes, {})
+    engine.async_rebuild()
+    units = engine._units_for({("area", "c"), ("floor", "b"), ("area", "a"), ("house", None)})
+    assert [(kind, sid) for (kind, sid, _cid) in units] == [
+        ("area", "a"),
+        ("area", "c"),
+        ("floor", "b"),
+        ("house", None),
+    ]
+
+
 class _Capture:
     def __init__(self) -> None:
         self.events: list[TraceEvent] = []

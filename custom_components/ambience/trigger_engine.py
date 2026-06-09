@@ -412,14 +412,22 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._teardown()
 
     def _all_units(self) -> list[tuple[str, str | None, str]]:
-        """Every (scope_kind, scope_id, category) unit across all scopes."""
-        return self._units_for(set(self._scope_cfgs))
-
-    def _units_for(self, scopes: set[tuple[str, str | None]]) -> list[tuple[str, str | None, str]]:
-        """The units for the given scopes, skipping any that no longer exist."""
+        """Every (scope_kind, scope_id, category) unit across all scopes, in scope
+        insertion order (deterministic)."""
         return [
             (kind, sid, cid)
-            for (kind, sid) in scopes
+            for (kind, sid), cfg in self._scope_cfgs.items()
+            for cid in category_ids(cfg)
+        ]
+
+    def _units_for(self, scopes: set[tuple[str, str | None]]) -> list[tuple[str, str | None, str]]:
+        """The units for the given scopes, skipping any that no longer exist.
+        Scopes are ordered deterministically (a set has no stable iteration order),
+        so trace and apply ordering doesn't vary run to run."""
+        ordered = sorted(scopes, key=lambda key: (key[0], key[1] or ""))
+        return [
+            (kind, sid, cid)
+            for (kind, sid) in ordered
             if (cfg := self._scope_cfgs.get((kind, sid))) is not None
             for cid in category_ids(cfg)
         ]

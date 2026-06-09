@@ -22,9 +22,7 @@ from .const import (
 @callback
 def async_apply_switch_exposure(hass: HomeAssistant, entity_id: str) -> None:
     """Expose/unexpose one switch on each known assistant per the entry option."""
-    enabled = hass.data.get(DOMAIN, {}).get(
-        DATA_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS
-    )
+    enabled = hass.data.get(DOMAIN, {}).get(DATA_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS)
     for assistant in KNOWN_ASSISTANTS:
         # Default missing keys to unexposed (e.g. a new assistant added to
         # KNOWN_ASSISTANTS before the user re-saves options); bool() guards

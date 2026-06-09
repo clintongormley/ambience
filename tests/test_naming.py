@@ -89,7 +89,4 @@ async def test_scope_device_name_composes_prefix_and_default(hass):
     assert scope_device_name(hass, "house", None, "Ambience") == "House Ambience"
     assert scope_device_name(hass, "area", area.id, "Ambience") == "Living Room Ambience"
     # Falls back to the provided fallback when the registry entry is gone.
-    assert (
-        scope_device_name(hass, "area", "missing", "Mood", fallback="Garage")
-        == "Garage Mood"
-    )
+    assert scope_device_name(hass, "area", "missing", "Mood", fallback="Garage") == "Garage Mood"

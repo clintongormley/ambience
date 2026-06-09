@@ -275,9 +275,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         if self._scope_kind != "area":
             return
         dev_reg = dr.async_get(self.hass)
-        device = dev_reg.async_get_device(
-            identifiers={(DOMAIN, f"area_{self._scope_id}")}
-        )
+        device = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{self._scope_id}")})
         if device is not None and device.area_id is None:
             dev_reg.async_update_device(device.id, area_id=self._scope_id)
 

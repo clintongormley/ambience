@@ -196,10 +196,7 @@ async def test_friendly_names_are_not_doubled(hass, mock_config_entry):
     fr.async_get(hass).async_create("Upstairs")
     await _setup(hass, mock_config_entry)
 
-    names = {
-        _friendly(hass, s.entity_id)
-        for s in hass.states.async_all("switch")
-    }
+    names = {_friendly(hass, s.entity_id) for s in hass.states.async_all("switch")}
     assert names == {"House Ambience", "Upstairs Ambience", "Master Bedroom Ambience"}
 
 
@@ -214,10 +211,7 @@ async def test_default_name_change_updates_device_names(hass, mock_config_entry)
     await hass.async_block_till_done()
 
     dev_reg = dr.async_get(hass)
-    names = {
-        d.name
-        for d in dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)
-    }
+    names = {d.name for d in dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)}
     assert names == {"House Master", "Upstairs Master", "Living Room Master"}
 
 

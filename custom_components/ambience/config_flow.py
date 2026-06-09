@@ -61,15 +61,9 @@ class AmbienceOptionsFlow(OptionsFlow):
                 },
             )
 
-        current = self.config_entry.options.get(
-            CONF_SHOW_SIDEBAR_PANEL, DEFAULT_SHOW_SIDEBAR_PANEL
-        )
-        exposed = self.config_entry.options.get(
-            CONF_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS
-        )
-        fields: dict[Any, Any] = {
-            vol.Required(CONF_SHOW_SIDEBAR_PANEL, default=current): bool
-        }
+        current = self.config_entry.options.get(CONF_SHOW_SIDEBAR_PANEL, DEFAULT_SHOW_SIDEBAR_PANEL)
+        exposed = self.config_entry.options.get(CONF_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS)
+        fields: dict[Any, Any] = {vol.Required(CONF_SHOW_SIDEBAR_PANEL, default=current): bool}
         for assistant, field in ASSISTANT_FIELDS.items():
             # DEFAULT_EXPOSED_ASSISTANTS[assistant] (not .get) so a new assistant
             # added to ASSISTANT_FIELDS but forgotten in DEFAULT_EXPOSED_ASSISTANTS

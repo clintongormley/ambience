@@ -52,6 +52,20 @@ integration's options. Go to **Settings → Devices & Services**, find the
 Ambience integration, and open its **Configure** dialog. The **Show sidebar
 panel** option is enabled by default; uncheck it to remove the sidebar entry.
 
+## Voice assistants
+
+The same **Configure** dialog lets you choose which voice assistants the Ambience
+switches are exposed to. There is one toggle per assistant — **Assist**, **Google
+Assistant**, and **Alexa**. By default the switches are exposed to **Assist** (Home
+Assistant's built-in voice agent) only; the Google and Alexa toggles require Home
+Assistant Cloud (or a manual setup) to have any effect. Because each switch is
+named after its scope (for example "Living Room Ambience") and assigned to the
+matching area, you can say things like "turn off Living Room Ambience".
+
+Changing these toggles reloads the integration and re-applies the exposure to
+every Ambience switch, so any per-switch exposure you had set manually in
+**Settings → Voice assistants → Expose** for these entities is overwritten.
+
 As an alternative to the sidebar, you can add the **Ambience card** to any
 dashboard. The card provides the same interface and is useful if you want to
 embed Ambience within an existing dashboard layout rather than giving it a

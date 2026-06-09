@@ -211,6 +211,11 @@ class AmbienceStore:
         await self._store.async_save(self._data)
         self._notify_config_changed()
 
+    def get_conditions(self) -> dict[str, Any]:
+        """A deep copy of the whole conditions namespace, for diagnostics bundles
+        (cheaper than copying the entire store via :meth:`as_dict`)."""
+        return copy.deepcopy(self._data.get("conditions", {}))
+
     def get_condition_config(self, name: str) -> dict[str, Any]:
         """Return per-condition config dict, with defaults applied for missing keys."""
         cfg = self._data.get("conditions", {}).get(name, {})

@@ -413,11 +413,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
 
     def _all_units(self) -> list[tuple[str, str | None, str]]:
         """Every (scope_kind, scope_id, category) unit across all scopes."""
-        return [
-            (kind, sid, cid)
-            for (kind, sid), cfg in self._scope_cfgs.items()
-            for cid in category_ids(cfg)
-        ]
+        return self._units_for(set(self._scope_cfgs))
 
     def _units_for(self, scopes: set[tuple[str, str | None]]) -> list[tuple[str, str | None, str]]:
         """The units for the given scopes, skipping any that no longer exist."""

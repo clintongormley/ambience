@@ -2676,13 +2676,7 @@ var da=Object.defineProperty;var ca=Object.getOwnPropertyDescriptor;var u=(t,n,e
         display: flex; align-items: center; gap: 0.5rem;
       }
       .header h3 { margin: 0; flex: 1; }
-      .refresh {
-        padding: 0.25rem 0.75rem; cursor: pointer;
-        border: 1px solid var(--divider-color, #ccc);
-        border-radius: 4px; background: none; color: inherit;
-        font-size: 0.85rem;
-      }
-      .download {
+      .refresh, .download {
         padding: 0.25rem 0.75rem; cursor: pointer;
         border: 1px solid var(--divider-color, #ccc);
         border-radius: 4px; background: none; color: inherit;

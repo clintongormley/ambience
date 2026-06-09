@@ -17,7 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
 from .const import DATA_STORE, DATA_TRACE_BUFFER, DOMAIN
-from .trace import buffered_unit_to_dict
+from .trace import BufferedUnit, buffered_unit_to_dict
 
 # Keys whose values can reveal where people live or go: the workday/calendar
 # sensors a household keys off, the configured weather entity, and the
@@ -33,10 +33,14 @@ TO_REDACT = {
 }
 
 
-def _traces_dump(hass: HomeAssistant) -> list[dict[str, Any]]:
+def _buffer_records(hass: HomeAssistant) -> list[BufferedUnit]:
+    """The buffered trace records, or [] when no buffer has been populated."""
     buffer = hass.data.get(DOMAIN, {}).get(DATA_TRACE_BUFFER)
-    records = buffer.records() if buffer is not None else []
-    return async_redact_data([buffered_unit_to_dict(r) for r in records], TO_REDACT)
+    return buffer.records() if buffer is not None else []
+
+
+def _traces_dump(hass: HomeAssistant) -> list[dict[str, Any]]:
+    return async_redact_data([buffered_unit_to_dict(r) for r in _buffer_records(hass)], TO_REDACT)
 
 
 def _store_dump(hass: HomeAssistant) -> dict[str, Any]:
@@ -53,11 +57,9 @@ def scope_diagnostics(
     the global context needed to read it, and that unit's buffered traces — all
     redacted."""
     store = hass.data[DOMAIN][DATA_STORE]
-    buffer = hass.data.get(DOMAIN, {}).get(DATA_TRACE_BUFFER)
-    records = buffer.records() if buffer is not None else []
     mine = [
         r
-        for r in records
+        for r in _buffer_records(hass)
         if r.unit.scope_kind == scope_kind
         and r.unit.scope_id == scope_id
         and r.unit.category == category
@@ -71,7 +73,7 @@ def scope_diagnostics(
         },
         "context": {
             "categories": store.categories(),
-            "conditions": store.as_dict().get("conditions", {}),
+            "conditions": store.get_conditions(),
         },
         "traces": [buffered_unit_to_dict(r) for r in mine],
     }

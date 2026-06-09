@@ -235,7 +235,7 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     reapply_enable_label: "Re-apply periodically",
     reapply_seconds_label: "Re-apply every (seconds)",
     reapply_seconds_unit: "s",
-    settings_tab_categories: "Scene categories",
+    settings_tab_categories: "Categories",
     category_add: "+ Add category",
     category_name_placeholder: "Category name",
     category_icon: "Icon",

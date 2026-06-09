@@ -3,10 +3,11 @@ import { customElement, property, state } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
 import "./ambience-settings.js";
+import "./categories-settings.js";
 import "./conditions-settings.js";
 import "./actions-settings.js";
 
-type Tab = "ambience" | "conditions" | "actions";
+type Tab = "ambience" | "categories" | "conditions" | "actions";
 
 @customElement("ambience-settings-view")
 export class AmbienceSettingsView extends LitElement {
@@ -83,6 +84,11 @@ export class AmbienceSettingsView extends LitElement {
         }}>
           <ha-icon icon="mdi:home-lightbulb"></ha-icon>${localize(this.hass, "ui.settings_tab_ambience", "Ambience")}
         </button>
+        <button class=${this._tab === "categories" ? "active" : ""} @click=${() => {
+          this._tab = "categories";
+        }}>
+          <ha-icon icon="mdi:shape-outline"></ha-icon>${localize(this.hass, "ui.settings_tab_categories", "Categories")}
+        </button>
         <button class=${this._tab === "conditions" ? "active" : ""} @click=${() => {
           this._tab = "conditions";
         }}>
@@ -98,9 +104,11 @@ export class AmbienceSettingsView extends LitElement {
         ${
           this._tab === "ambience"
             ? html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
-            : this._tab === "conditions"
-              ? html`<ambience-conditions-settings .hass=${this.hass}></ambience-conditions-settings>`
-              : html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`
+            : this._tab === "categories"
+              ? html`<ambience-categories-settings .hass=${this.hass}></ambience-categories-settings>`
+              : this._tab === "conditions"
+                ? html`<ambience-conditions-settings .hass=${this.hass}></ambience-conditions-settings>`
+                : html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`
         }
       </div>
     `;

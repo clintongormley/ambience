@@ -52,10 +52,19 @@ describe("ambience-settings-view", () => {
     expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
   });
 
-  test("clicking Conditions swaps the body", async () => {
+  test("clicking Categories swaps the body", async () => {
     el = await mount();
     const buttons = el.shadowRoot.querySelectorAll("nav button");
     (buttons[1] as HTMLButtonElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("ambience-categories-settings")).not.toBeNull();
+    expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
+  });
+
+  test("clicking Conditions swaps the body", async () => {
+    el = await mount();
+    const buttons = el.shadowRoot.querySelectorAll("nav button");
+    (buttons[2] as HTMLButtonElement).click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("ambience-conditions-settings")).not.toBeNull();
     expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
@@ -64,9 +73,21 @@ describe("ambience-settings-view", () => {
   test("clicking Actions swaps the body", async () => {
     el = await mount();
     const buttons = el.shadowRoot.querySelectorAll("nav button");
-    (buttons[2] as HTMLButtonElement).click();
+    (buttons[3] as HTMLButtonElement).click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("ambience-actions-settings")).not.toBeNull();
+  });
+
+  test("initialTab can deep-link to Categories", async () => {
+    el = document.createElement("ambience-settings-view");
+    el.hass = {};
+    el.initialTab = "categories";
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("ambience-categories-settings")).not.toBeNull();
+    expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
   });
 
   test("each tab renders an HA-style icon", async () => {
@@ -74,6 +95,7 @@ describe("ambience-settings-view", () => {
     const icons = el.shadowRoot.querySelectorAll("nav button ha-icon");
     expect(Array.from(icons).map((i: Element) => i.getAttribute("icon"))).toEqual([
       "mdi:home-lightbulb",
+      "mdi:shape-outline",
       "mdi:filter-variant",
       "mdi:flash",
     ]);

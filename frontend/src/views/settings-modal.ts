@@ -56,7 +56,7 @@ export class AmbienceSettingsModal extends LitElement {
   @property({ attribute: false }) hass!: HassConnection;
   @property({ type: Boolean, reflect: true }) open = false;
   /** Tab to open on (forwarded to the settings view). Absent → "ambience". */
-  @property({ attribute: false }) initialTab?: "ambience" | "conditions" | "actions";
+  @property({ attribute: false }) initialTab?: "ambience" | "categories" | "conditions" | "actions";
 
   private _onKeydown = (e: KeyboardEvent): void => {
     if (this.open && e.key === "Escape") this._close();

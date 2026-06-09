@@ -401,8 +401,14 @@ export async function downloadScopeDiagnostics(
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  // The anchor must be connected to the document for the synthetic click to
+  // trigger a download in mobile WebViews (e.g. the HA Companion app).
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // Mobile browsers fetch the blob URL asynchronously after the click; revoking
+  // it synchronously invalidates it before the download starts, so defer it.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 export async function simulateInputs(

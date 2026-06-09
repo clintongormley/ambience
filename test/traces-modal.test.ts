@@ -216,6 +216,17 @@ describe("ambience-traces-modal", () => {
     );
   });
 
+  test("download failure surfaces an error instead of an unhandled rejection", async () => {
+    el = await mount([unit()]);
+    vi.mocked(api.downloadScopeDiagnostics).mockRejectedValueOnce(new Error("ws boom"));
+
+    el.shadowRoot.querySelector(".download").click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    expect(el.shadowRoot.querySelector(".error")!.textContent).toContain("ws boom");
+  });
+
   test("close button dispatches the close event", async () => {
     el = await mount([unit()]);
     const events: Event[] = [];

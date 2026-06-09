@@ -116,14 +116,19 @@ export class AmbienceStateExprAtom extends LitElement {
     emitValueChanged(this, normalized);
   }
 
-  /** Keep the op type in step with the target type: numeric targets use a
-   *  numeric op (>, ≥, <, ≤); non-numeric targets use is/is_not. Defaults
-   *  to `>` and `is` respectively. */
+  /** Keep the op valid for the target type when the target changes. A
+   *  non-numeric target can't use the comparison ops (strings don't order), so
+   *  flip those back to `is`. A numeric target may use *any* op — is/is_not
+   *  included (e.g. "is not <typed status>") — so we only default it to `>` when
+   *  it has just *become* numeric (a fresh pick), never clobbering an op the
+   *  user deliberately chose on an already-numeric target. */
   private _autoFlipOp(next: StateAtom): StateAtom {
     const numericTarget = this._isNumericTargetFor(next);
     const numericOp = this._isNumericOp(next.kind);
-    if (numericTarget && !numericOp) return { ...next, kind: ">" };
     if (!numericTarget && numericOp) return { ...next, kind: "is" };
+    if (numericTarget && !numericOp && !this._isNumericTargetFor(this.value)) {
+      return { ...next, kind: ">" };
+    }
     return next;
   }
 
@@ -180,8 +185,14 @@ export class AmbienceStateExprAtom extends LitElement {
     this._emit(this._autoFlipOp({ ...this.value, attribute: name }));
   }
 
-  _setOp(op: "is" | "is_not") {
-    this._emit({ ...this.value, kind: op });
+  _setOp(op: StateAtom["kind"]) {
+    // `states` means different things per op category: a single threshold for the
+    // numeric ops, a list of match values for is/is_not. When the category
+    // changes, drop the stale values so e.g. a ">" threshold isn't reinterpreted
+    // as a literal match value (and vice versa).
+    const states =
+      this._isNumericOp(op) === this._isNumericOp(this.value.kind) ? this.value.states : [];
+    this._emit({ ...this.value, kind: op, states });
   }
 
   _setStates(states: string[]) {
@@ -349,10 +360,12 @@ export class AmbienceStateExprAtom extends LitElement {
   }
 
   _opSchema(): HaFormSchema[] {
-    // A numeric target only offers numeric ops — is/is_not don't compare
-    // ordered values cleanly. A non-numeric target only offers is/is_not.
+    // A numeric target offers the numeric ops (the default for ordered values)
+    // AND is/is_not, so it can still be matched with "is not <state>" (e.g. a
+    // typed status value). A non-numeric target only offers is/is_not — the
+    // comparison ops don't order strings cleanly.
     const ops: string[] = this._isNumericTargetFor(this.value)
-      ? [...AmbienceStateExprAtom._NUMERIC_OPS]
+      ? [...AmbienceStateExprAtom._NUMERIC_OPS, "is", "is_not"]
       : ["is", "is_not"];
     // Defensive: always include the currently-selected op so the dropdown
     // never shows a blank value (e.g. the entity is briefly unavailable
@@ -546,7 +559,7 @@ export class AmbienceStateExprAtom extends LitElement {
         .schema=${this._opSchema()}
         .data=${{ op: this.value.kind }}
         .computeLabel=${() => ""}
-        @value-changed=${(e: CustomEvent<{ value: { op?: "is" | "is_not" } }>) => {
+        @value-changed=${(e: CustomEvent<{ value: { op?: StateAtom["kind"] } }>) => {
           e.stopPropagation();
           const op = e.detail.value.op;
           if (op) this._setOp(op);
@@ -556,7 +569,7 @@ export class AmbienceStateExprAtom extends LitElement {
     /* v8 ignore stop */
     return html`<select
       data-field="op"
-      @change=${(e: Event) => this._setOp((e.target as HTMLSelectElement).value as "is" | "is_not")}>
+      @change=${(e: Event) => this._setOp((e.target as HTMLSelectElement).value as StateAtom["kind"])}>
       <option value="is" ?selected=${this.value.kind === "is"}>is</option>
       <option value="is_not" ?selected=${this.value.kind === "is_not"}>is not</option>
     </select>`;

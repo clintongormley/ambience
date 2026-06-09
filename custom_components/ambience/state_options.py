@@ -3,35 +3,92 @@ what-if simulator. Pure: reads `hass.states` only."""
 
 from __future__ import annotations
 
+import importlib
+
+from homeassistant.const import (
+    STATE_HOME,
+    STATE_NOT_HOME,
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import HomeAssistant
 
-# Domain-typical state sets. For domains not listed, we fall back to just the
-# entity's current state.
+
+def _enum_state_values(component: str, enum_name: str, fallback: list[str]) -> list[str]:
+    """Values of an HA state enum, resilient to the enum's import location
+    changing — or the enum being absent — across our supported HA version range.
+
+    HA moves these enums between a component's ``.const`` module and its package
+    root between releases (e.g. ``CoverState`` is in ``cover.const`` on some
+    versions, only ``homeassistant.components.cover`` on others), so a fixed
+    import would ImportError-crash the integration on part of the range. Try the
+    lightweight ``.const`` module first, then the package root, then fall back to
+    a known-good literal so a relocated enum can never break module import.
+    """
+    for module_name in (
+        f"homeassistant.components.{component}.const",
+        f"homeassistant.components.{component}",
+    ):
+        try:
+            enum = getattr(importlib.import_module(module_name), enum_name)
+        except (ImportError, AttributeError):
+            continue
+        return [member.value for member in enum]
+    return list(fallback)
+
+
+# Domain-typical state sets, derived from Home Assistant's own state enums so
+# they track core additions automatically (e.g. lock's `opening`/`open`, alarm's
+# `disarming`) rather than drifting out of a hand-maintained list. The fallback
+# literal beside each enum is used only if HA relocates/removes that enum (see
+# `_enum_state_values`); it mirrors the enum's current values. Domains whose
+# state is a plain on/off or a fixed pair of strings have no enum to enumerate.
+# For domains not listed, we fall back to just the entity's current state.
+_ON_OFF = [STATE_ON, STATE_OFF]
 _DOMAIN_KNOWN_STATES: dict[str, list[str]] = {
-    "binary_sensor": ["on", "off"],
-    "switch": ["on", "off"],
-    "light": ["on", "off"],
-    "fan": ["on", "off"],
-    "input_boolean": ["on", "off"],
-    "cover": ["open", "closed", "opening", "closing", "stopped"],
-    "lock": ["locked", "unlocked", "locking", "unlocking", "jammed"],
-    "media_player": ["playing", "paused", "idle", "off", "on", "standby", "buffering"],
-    "climate": ["heat", "cool", "off", "auto", "dry", "fan_only", "heat_cool"],
-    "vacuum": ["cleaning", "docked", "paused", "idle", "returning", "error"],
-    "person": ["home", "not_home"],
-    "device_tracker": ["home", "not_home"],
+    "binary_sensor": _ON_OFF,
+    "switch": _ON_OFF,
+    "light": _ON_OFF,
+    "fan": _ON_OFF,
+    "input_boolean": _ON_OFF,
+    "cover": _enum_state_values("cover", "CoverState", ["closed", "closing", "open", "opening"]),
+    "lock": _enum_state_values(
+        "lock",
+        "LockState",
+        ["jammed", "locked", "locking", "open", "opening", "unlocked", "unlocking"],
+    ),
+    "media_player": _enum_state_values(
+        "media_player",
+        "MediaPlayerState",
+        ["off", "on", "idle", "playing", "paused", "standby", "buffering"],
+    ),
+    "climate": _enum_state_values(
+        "climate", "HVACMode", ["off", "heat", "cool", "heat_cool", "auto", "dry", "fan_only"]
+    ),
+    "vacuum": _enum_state_values(
+        "vacuum", "VacuumActivity", ["cleaning", "docked", "idle", "paused", "returning", "error"]
+    ),
+    "person": [STATE_HOME, STATE_NOT_HOME],
+    "device_tracker": [STATE_HOME, STATE_NOT_HOME],
     "sun": ["above_horizon", "below_horizon"],
-    "alarm_control_panel": [
-        "disarmed",
-        "armed_home",
-        "armed_away",
-        "armed_night",
-        "armed_vacation",
-        "armed_custom_bypass",
-        "triggered",
-        "pending",
-        "arming",
-    ],
+    "alarm_control_panel": _enum_state_values(
+        "alarm_control_panel",
+        "AlarmControlPanelState",
+        [
+            "disarmed",
+            "armed_home",
+            "armed_away",
+            "armed_night",
+            "armed_vacation",
+            "armed_custom_bypass",
+            "pending",
+            "arming",
+            "disarming",
+            "triggered",
+        ],
+    ),
 }
 
 
@@ -122,7 +179,12 @@ def known_states_for(hass: HomeAssistant, entity_id: str) -> list[str]:
                 else:
                     _add(z.entity_id.split(".", 1)[1])
         # Always include the entity's current state so the user can pick it.
-        if state.state and state.state not in ("unavailable", "unknown"):
+        # `unavailable`/`unknown` are intentionally NOT offered as options
+        # (deferred until requested): HA's automation editor lists them for every
+        # entity, but here "is not <state>" covers those cases and a number field
+        # can't accept them. To re-enable, append STATE_UNAVAILABLE/STATE_UNKNOWN
+        # for any resolvable entity.
+        if state.state and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             _add(state.state)
 
     return states

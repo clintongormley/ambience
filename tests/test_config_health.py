@@ -1,0 +1,263 @@
+"""Tests for the config-health detector."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from homeassistant.core import HomeAssistant
+
+from custom_components.ambience.config_health import entity_exists, scan
+
+
+def _cfg(scenes: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"scenes": scenes}
+
+
+@pytest.fixture
+async def installed(hass: HomeAssistant, mock_config_entry) -> Any:
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    return mock_config_entry
+
+
+async def test_entity_exists_true_for_state(hass: HomeAssistant, installed) -> None:
+    hass.states.async_set("light.real", "on")
+    assert entity_exists(hass, "light.real") is True
+
+
+async def test_entity_exists_false_for_unknown(hass: HomeAssistant, installed) -> None:
+    assert entity_exists(hass, "light.nope") is False
+
+
+async def test_unavailable_entity_still_exists(hass: HomeAssistant, installed) -> None:
+    hass.states.async_set("binary_sensor.offline", "unavailable")
+    assert entity_exists(hass, "binary_sensor.offline") is True
+
+
+async def test_scan_flags_missing_action_entity(hass: HomeAssistant, installed) -> None:
+    cfg = _cfg(
+        [
+            {
+                "name": "go",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+            }
+        ]
+    )
+    problems = scan(hass, [("area", "a", cfg)])
+    p = next(p for p in problems if p.kind == "missing_entity")
+    assert p.entity_id == "light.ghost"
+    assert p.locations[0].scope_kind == "area"
+    assert p.locations[0].scene_name == "go"
+
+
+async def test_scan_flags_missing_condition_entity(hass: HomeAssistant, installed) -> None:
+    cfg = _cfg(
+        [
+            {
+                "name": "watch",
+                "when": {"occupancy": {"sensors": ["binary_sensor.ghost"]}},
+                "category": "c1",
+                "actions": [],
+            }
+        ]
+    )
+    problems = scan(hass, [("area", "a", cfg)])
+    kinds = {(p.kind, p.entity_id) for p in problems}
+    assert ("missing_entity", "binary_sensor.ghost") in kinds
+
+
+async def test_scan_does_not_flag_existing_entity(hass: HomeAssistant, installed) -> None:
+    hass.states.async_set("light.real", "on")
+    cfg = _cfg(
+        [
+            {
+                "name": "go",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.real"]}],
+            }
+        ]
+    )
+    assert scan(hass, [("area", "a", cfg)]) == []
+
+
+async def test_scan_skips_disabled_scene(hass: HomeAssistant, installed) -> None:
+    cfg = _cfg(
+        [
+            {
+                "name": "off",
+                "enabled": False,
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+            }
+        ]
+    )
+    assert scan(hass, [("area", "a", cfg)]) == []
+
+
+async def test_scan_flags_cross_category_overlap(hass: HomeAssistant, installed) -> None:
+    hass.states.async_set("light.shared", "on")
+    cfg = _cfg(
+        [
+            {
+                "name": "a",
+                "when": {},
+                "category": "cat1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.shared"]}],
+            },
+            {
+                "name": "b",
+                "when": {},
+                "category": "cat2",
+                "actions": [{"service": "light.turn_off", "entity_ids": ["light.shared"]}],
+            },
+        ]
+    )
+    problems = scan(hass, [("area", "a", cfg)])
+    overlap = [p for p in problems if p.kind == "action_overlap"]
+    assert len(overlap) == 1
+    assert overlap[0].entity_id == "light.shared"
+    assert {loc.category_id for loc in overlap[0].locations} == {"cat1", "cat2"}
+
+
+async def test_scan_no_overlap_within_one_category(hass: HomeAssistant, installed) -> None:
+    hass.states.async_set("light.shared", "on")
+    cfg = _cfg(
+        [
+            {
+                "name": "a",
+                "when": {},
+                "category": "cat1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.shared"]}],
+            },
+            {
+                "name": "b",
+                "when": {},
+                "category": "cat1",
+                "actions": [{"service": "light.turn_off", "entity_ids": ["light.shared"]}],
+            },
+        ]
+    )
+    assert [p for p in scan(hass, [("area", "a", cfg)]) if p.kind == "action_overlap"] == []
+
+
+async def test_scan_no_overlap_for_nonexistent_entity(hass: HomeAssistant, installed) -> None:
+    # A missing entity acted on by two groups: only the missing_entity problem is
+    # reported, never an action_overlap (overlap on a non-existent entity is moot).
+    cfg = _cfg(
+        [
+            {
+                "name": "a",
+                "when": {},
+                "category": "cat1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+            },
+            {
+                "name": "b",
+                "when": {},
+                "category": "cat2",
+                "actions": [{"service": "light.turn_off", "entity_ids": ["light.ghost"]}],
+            },
+        ]
+    )
+    problems = scan(hass, [("area", "a", cfg)])
+    assert [p for p in problems if p.kind == "action_overlap"] == []
+    assert any(p.kind == "missing_entity" and p.entity_id == "light.ghost" for p in problems)
+
+
+async def test_scan_dedups_same_scene_refs_and_skips_malformed(hass, installed) -> None:
+    # The same missing entity referenced by BOTH a condition and an action in one
+    # scene collapses to a single location; malformed entity_ids are ignored.
+    cfg = _cfg(
+        [
+            {
+                "name": "s",
+                "category": "c1",
+                "when": {"occupancy": {"sensors": ["binary_sensor.ghost"]}},
+                "actions": [
+                    {"service": "light.turn_on", "entity_ids": ["binary_sensor.ghost", "", 123]}
+                ],
+            }
+        ]
+    )
+    missing = [p for p in scan(hass, [("area", "a", cfg)]) if p.kind == "missing_entity"]
+    # "" and 123 are skipped; only the real id is a problem.
+    assert {p.entity_id for p in missing} == {"binary_sensor.ghost"}
+    # Condition + action references in the same scene dedup to one location.
+    ghost = next(p for p in missing if p.entity_id == "binary_sensor.ghost")
+    assert len(ghost.locations) == 1
+
+
+async def test_scan_empty_inputs(hass: HomeAssistant, installed) -> None:
+    assert scan(hass, []) == []
+    assert scan(hass, [("area", "a", {})]) == []  # no "scenes" key
+
+
+async def test_entity_exists_true_for_registry_only(hass: HomeAssistant, installed) -> None:
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    entry = registry.async_get_or_create("light", "demo", "abc123")
+    # Registered but no state set → entity_exists must still be True.
+    assert hass.states.get(entry.entity_id) is None
+    assert entity_exists(hass, entry.entity_id) is True
+
+
+async def test_scan_aggregates_one_entity_across_scenes(hass: HomeAssistant, installed) -> None:
+    cfg = _cfg(
+        [
+            {
+                "name": "s1",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+            },
+            {
+                "name": "s2",
+                "when": {"occupancy": {"sensors": ["light.ghost"]}},
+                "category": "c1",
+                "actions": [],
+            },
+        ]
+    )
+    problems = scan(hass, [("area", "a", cfg)])
+    missing = [p for p in problems if p.kind == "missing_entity" and p.entity_id == "light.ghost"]
+    assert len(missing) == 1  # aggregated into ONE Problem
+    scene_names = {loc.scene_name for loc in missing[0].locations}
+    assert scene_names == {"s1", "s2"}  # both referencing scenes recorded
+
+
+async def test_scan_flags_cross_scope_overlap(hass: HomeAssistant, installed) -> None:
+    hass.states.async_set("light.shared", "on")
+    area_cfg = _cfg(
+        [
+            {
+                "name": "a",
+                "when": {},
+                "category": "cat1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.shared"]}],
+            }
+        ]
+    )
+    house_cfg = _cfg(
+        [
+            {
+                "name": "h",
+                "when": {},
+                "category": "cat1",
+                "actions": [{"service": "light.turn_off", "entity_ids": ["light.shared"]}],
+            }
+        ]
+    )
+    problems = scan(hass, [("area", "a", area_cfg), ("house", None, house_cfg)])
+    overlap = [p for p in problems if p.kind == "action_overlap"]
+    assert len(overlap) == 1
+    assert {(loc.scope_kind, loc.scope_id) for loc in overlap[0].locations} == {
+        ("area", "a"),
+        ("house", None),
+    }

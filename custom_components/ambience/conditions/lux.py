@@ -152,7 +152,10 @@ class LuxCondition:
         parts: list[str] = []
         for eid in sensors:
             name = snapshot.names.get(eid, eid)
-            held = self._in_band(snapshot.sensors.get(eid), lo, hi)
+            if eid not in snapshot.sensors:
+                parts.append(f"{name}: not found ✗")
+                continue
+            held = self._in_band(snapshot.sensors[eid], lo, hi)
             if held is None:
                 parts.append(f"{name}: unavailable ✗")
                 continue

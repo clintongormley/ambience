@@ -129,7 +129,7 @@ class StateCondition:
         seconds = dur_seconds(atom.get("for"))
         cur = snap.states.get(entity_id) if isinstance(entity_id, str) else None
         if cur is None:
-            current = "missing"
+            current = "not found"
             elapsed = ""
         else:
             state, last_changed, last_updated = cur

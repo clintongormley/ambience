@@ -916,9 +916,9 @@ def test_describe_atom_unavailable() -> None:
     assert StateCondition().describe(snap, pred) == "Kitchen Light: unavailable ✗ (is on)"
 
 
-def test_describe_atom_missing_entity() -> None:
+def test_describe_atom_missing_entity_not_found() -> None:
     pred = {"kind": "is", "entity_id": "light.k", "states": ["on"]}
-    assert StateCondition().describe(_snap(), pred) == "light.k: missing ✗ (is on)"
+    assert StateCondition().describe(_snap(), pred) == "light.k: not found ✗ (is on)"
 
 
 def test_describe_and_group_lists_each() -> None:

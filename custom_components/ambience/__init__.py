@@ -39,6 +39,7 @@ from .conditions.sun import SunCondition
 from .conditions.template import TemplateCondition
 from .conditions.time_of_day import TimeOfDayCondition
 from .conditions.weather import WeatherCondition
+from .config_health_issues import reconcile_issues
 from .const import (
     CONF_SHOW_SIDEBAR_PANEL,
     DATA_CARD_RESOURCE_URL,
@@ -309,6 +310,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _on_config_changed))
     entry.async_on_unload(engine.async_shutdown)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
+    @callback
+    def _reconcile_health(*_args: object) -> None:
+        reconcile_issues(hass)
+
+    # Run once states have settled, then on every config change and whenever the
+    # entity registry changes (a fixed typo / a returned device clears its issue).
+    entry.async_on_unload(async_at_started(hass, _reconcile_health))
+    entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _reconcile_health))
+    entry.async_on_unload(
+        hass.bus.async_listen(er.EVENT_ENTITY_REGISTRY_UPDATED, _reconcile_health)
+    )
 
     return True
 

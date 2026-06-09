@@ -205,9 +205,16 @@ def test_describe_predicate_max_only_band() -> None:
     assert _cond().describe(snap, pred) == "want <500 lx; Lounge: 320 lx ✓"
 
 
-def test_describe_predicate_missing_sensor_is_unavailable() -> None:
+def test_describe_predicate_missing_sensor_not_found() -> None:
     pred = {"sensors": ["sensor.gone"], "min": 0, "max": 10}
-    assert _cond().describe(_snap(), pred) == "want 0-10 lx; sensor.gone: unavailable ✗"
+    assert _cond().describe(_snap(), pred) == "want 0-10 lx; sensor.gone: not found ✗"
+
+
+def test_describe_predicate_unavailable_sensor_says_unavailable() -> None:
+    # Sensor IS in the snapshot but its reading is non-finite (e.g. "unavailable").
+    snap = _snap({"sensor.dim": None}, names={"sensor.dim": "Dim"})
+    pred = {"sensors": ["sensor.dim"], "min": 0, "max": 10}
+    assert _cond().describe(snap, pred) == "want 0-10 lx; Dim: unavailable ✗"
 
 
 def test_describe_predicate_empty_sensors_is_wildcard() -> None:

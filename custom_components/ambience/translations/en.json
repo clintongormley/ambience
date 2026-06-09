@@ -29,5 +29,15 @@
         "name": "Ambience"
       }
     }
+  },
+  "issues": {
+    "missing_entity": {
+      "title": "Ambience: a scene references a missing entity",
+      "description": "The entity `{entity_id}` is referenced by scene(s) {scenes} but does not exist in Home Assistant. A condition referencing it will never match; an action targeting it will fail silently. Fix the entity id in the Ambience editor or remove the reference. This message clears automatically once the entity exists."
+    },
+    "action_overlap": {
+      "title": "Ambience: an entity is controlled by multiple groups",
+      "description": "`{entity_id}` is controlled by more than one category/scope group ({groups}). Each group is an independent control loop with its own state, so they can fight over this entity and produce stale or no-op applies. Consider moving it into a single group. This message clears automatically once the overlap is resolved."
+    }
   }
 }

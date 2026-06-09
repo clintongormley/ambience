@@ -10,6 +10,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -77,6 +78,13 @@ def scope_for_unique_id(unique_id: str) -> tuple[str, str | None] | None:
     return None
 
 
+def _device_identifiers(scope_kind: str, scope_id: str | None) -> set[tuple[str, str]]:
+    """Device-registry identifiers for a scope's device."""
+    if scope_kind == "house":
+        return {(DOMAIN, "ambience")}
+    return {(DOMAIN, f"{scope_kind}_{scope_id}")}
+
+
 def _entity_id_for(scope_kind: str, display_name: str) -> str:
     if scope_kind == "house":
         return "switch.house_ambience"
@@ -113,14 +121,6 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     _attr_should_poll = False
     _attr_has_entity_name = True
     _attr_icon = "mdi:lightbulb-multiple"
-    # All scope switches hang off one virtual "Ambience" service device so the
-    # integration card links to a single device page instead of the raw entity
-    # table. Single-instance integration, so a static identifier is safe.
-    _attr_device_info = DeviceInfo(
-        identifiers={(DOMAIN, "ambience")},
-        name="Ambience",
-        entry_type=DeviceEntryType.SERVICE,
-    )
 
     def __init__(self, scope_kind: str, scope_id: str | None, display_name: str) -> None:
         self._scope_kind = scope_kind
@@ -129,14 +129,30 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         # session. House always uses the literal "House".
         self._fallback_prefix = "House" if scope_kind == "house" else display_name
         self._attr_unique_id = switch_unique_id(scope_kind, scope_id)
-        # Area-bound switches show up under the area in HA UI; floor and house
-        # don't have an area.
-        if scope_kind == "area":
-            self._attr_area_id = scope_id
+        # Entity carries no name of its own: with has_entity_name the friendly
+        # name becomes the device name, avoiding the "<device> <entity>" doubling.
+        self._attr_name = None
+        # One device per scope. The device name carries the composed display name
+        # ("<scope> <default>"); it is kept in sync via the device registry in
+        # async_added_to_hass and on config/rename updates. Floor/area devices are
+        # sub-devices of the main "ambience" service device.
+        initial_name = f"{self._fallback_prefix} {DEFAULT_SWITCH_NAME}"
+        if scope_kind == "house":
+            self._attr_device_info = DeviceInfo(
+                identifiers=_device_identifiers(scope_kind, scope_id),
+                name=initial_name,
+                entry_type=DeviceEntryType.SERVICE,
+            )
+        else:
+            self._attr_device_info = DeviceInfo(
+                identifiers=_device_identifiers(scope_kind, scope_id),
+                name=initial_name,
+                entry_type=DeviceEntryType.SERVICE,
+                via_device=(DOMAIN, "ambience"),
+            )
         # Deterministic entity_id for clean installs; entity registry takes
         # over after first registration so user-renames stick.
         self.entity_id = _entity_id_for(scope_kind, display_name)
-        self._attr_name = f"{self._fallback_prefix} {DEFAULT_SWITCH_NAME}"
         self._attr_is_on = True
         self._timer: _CancellableTimer | None = None
 

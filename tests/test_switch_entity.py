@@ -63,7 +63,7 @@ async def test_one_switch_per_floor(hass, mock_config_entry):
     assert len(floor_switches) == 2
 
 
-async def test_all_switches_share_one_ambience_device(hass, mock_config_entry):
+async def test_each_scope_gets_its_own_device(hass, mock_config_entry):
     ar.async_get(hass).async_create("Living Room")
     fr.async_get(hass).async_create("Upstairs")
     await _setup(hass, mock_config_entry)
@@ -71,21 +71,29 @@ async def test_all_switches_share_one_ambience_device(hass, mock_config_entry):
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
 
-    # Exactly one device for the config entry, named "Ambience".
+    # One device per scope: house (main) + 1 floor + 1 area = 3.
     devices = dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)
-    assert len(devices) == 1
-    device = devices[0]
-    assert device.name == "Ambience"
+    assert len(devices) == 3
 
-    # Every ambience switch entity hangs off that single device.
-    switch_entities = [
-        e
-        for e in er.async_entries_for_config_entry(ent_reg, mock_config_entry.entry_id)
-        if e.domain == "switch"
-    ]
-    assert len(switch_entities) >= 3  # house + area + floor
-    for e in switch_entities:
-        assert e.device_id == device.id
+    main = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
+    assert main is not None
+    assert main.name == "House Ambience"
+
+    # Floor + area devices are sub-devices linked to the main device.
+    area_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "area")
+    floor_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "floor")
+    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area_id}")})
+    floor_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor_id}")})
+    assert area_dev is not None and area_dev.via_device_id == main.id
+    assert floor_dev is not None and floor_dev.via_device_id == main.id
+
+    # Each switch entity is on its own scope device.
+    house_eid = ent_reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house")
+    area_eid = ent_reg.async_get_entity_id("switch", DOMAIN, f"ambience_switch_area_{area_id}")
+    floor_eid = ent_reg.async_get_entity_id("switch", DOMAIN, f"ambience_switch_floor_{floor_id}")
+    assert ent_reg.async_get(house_eid).device_id == main.id
+    assert ent_reg.async_get(area_eid).device_id == area_dev.id
+    assert ent_reg.async_get(floor_eid).device_id == floor_dev.id
 
 
 # --- behavior (use house switch; logic identical across scopes) -------------

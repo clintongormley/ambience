@@ -322,6 +322,48 @@ async def test_engine_auto_applies_state_scene_on_config_change(
     assert len(calls) >= 1  # the engine auto-applied the matching state scene
 
 
+async def test_config_change_emits_reloaded_not_startup(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """Saving a scope after setup emits a RELOADED trace, not STARTUP."""
+    from custom_components.ambience.const import DATA_TRACE_BUFFER
+
+    async_mock_service(hass, "light", "turn_on")
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    hass.states.async_set("binary_sensor.motion", "on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {
+            "scenes": [
+                {
+                    "category": "lighting",
+                    "when": {
+                        "state": {
+                            "kind": "is",
+                            "entity_id": "binary_sensor.motion",
+                            "states": ["on"],
+                        }
+                    },
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                }
+            ]
+        },
+    )
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=1))
+    await hass.async_block_till_done()
+    buffer = hass.data[DOMAIN][DATA_TRACE_BUFFER]
+    causes = {r.cause.kind for r in buffer.records()}
+    assert "reloaded" in causes
+    assert "startup" not in causes
+
+
 async def test_engine_torn_down_on_unload(hass: HomeAssistant, installed: MockConfigEntry) -> None:
     hass.states.async_set("binary_sensor.motion", "on")
     store = hass.data[DOMAIN][DATA_STORE]

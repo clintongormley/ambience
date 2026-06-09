@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -2461,45 +2460,87 @@ async def test_categories_delete_plain_value_error_returns_validation_error(
     assert "something went wrong" in resp["error"]["message"]
 
 
+def _matching_scene_config() -> dict:
+    """A state scene that matches when binary_sensor.motion is on."""
+    return {
+        "scenes": [
+            {
+                "category": "lighting",
+                "when": {
+                    "state": {
+                        "kind": "is",
+                        "entity_id": "binary_sensor.motion",
+                        "states": ["on"],
+                    }
+                },
+                "actions": [
+                    {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                ],
+            }
+        ]
+    }
+
+
 async def test_area_save_reapplies_scope(
     hass: HomeAssistant, installed, hass_ws_client, area_id
 ) -> None:
     """Saving an area (e.g. toggling or editing a scene) re-evaluates that scope
-    immediately rather than waiting for the next trigger."""
-    with patch(
-        "custom_components.ambience.websocket.async_apply_scene", new_callable=AsyncMock
-    ) as apply:
-        resp = await _ws_send(
-            hass_ws_client,
-            type="ambience/area/save",
-            area_id=area_id,
-            config={"scenes": []},
-        )
-        assert resp["success"] is True
-        await hass.async_block_till_done()
-    assert apply.await_count >= 1
-    args = apply.await_args.args
-    assert args[1] == "area"
-    assert args[2] == area_id
+    via the engine's debounced reload refresh rather than waiting for the next
+    trigger."""
+    from datetime import UTC, datetime, timedelta
+
+    from pytest_homeassistant_custom_component.common import (
+        async_fire_time_changed,
+        async_mock_service,
+    )
+
+    calls = async_mock_service(hass, "light", "turn_on")
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    hass.states.async_set("binary_sensor.motion", "on")
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/area/save",
+        area_id=area_id,
+        config=_matching_scene_config(),
+    )
+    assert resp["success"] is True
+    await hass.async_block_till_done()
+    # The config-change refresh is debounced; advance past the cooldown.
+    async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=1))
+    await hass.async_block_till_done()
+    assert len(calls) >= 1  # the engine reload re-applied the matching state scene
 
 
 async def test_house_save_reapplies_house_scope(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
-    with patch(
-        "custom_components.ambience.websocket.async_apply_scene", new_callable=AsyncMock
-    ) as apply:
-        resp = await _ws_send(
-            hass_ws_client,
-            type="ambience/house/save",
-            config={"scenes": []},
-        )
-        assert resp["success"] is True
-        await hass.async_block_till_done()
-    assert apply.await_count >= 1
-    args = apply.await_args.args
-    assert args[1] == "house"
-    assert args[2] is None
+    """Saving the house scope re-evaluates it via the engine's debounced reload."""
+    from datetime import UTC, datetime, timedelta
+
+    from pytest_homeassistant_custom_component.common import (
+        async_fire_time_changed,
+        async_mock_service,
+    )
+
+    calls = async_mock_service(hass, "light", "turn_on")
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    hass.states.async_set("binary_sensor.motion", "on")
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/house/save",
+        config=_matching_scene_config(),
+    )
+    assert resp["success"] is True
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=1))
+    await hass.async_block_till_done()
+    assert len(calls) >= 1  # the engine reload re-applied the matching state scene
 
 
 # --- auto_triggers/list (read-only Auto-triggers display) -------------------

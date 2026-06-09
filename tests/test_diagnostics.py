@@ -91,6 +91,112 @@ async def test_config_entry_diagnostics_does_not_mutate_store(
     assert seeded_store.get_condition_config("day")["workday_sensor"] == "binary_sensor.workday"
 
 
+async def test_config_entry_diagnostics_includes_traces(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
+) -> None:
+    from custom_components.ambience.const import DATA_TRACE_BUFFER
+    from custom_components.ambience.trace import (
+        BufferSink,
+        Outcome,
+        TraceEvent,
+        TriggerCause,
+        UnitTrace,
+    )
+
+    buffer = BufferSink()
+    buffer.emit(
+        TraceEvent(
+            TriggerCause(kind="reloaded"),
+            [UnitTrace("area", "living_room", "general", "on", Outcome.ACTED, None)],
+            event_id="abc",
+            timestamp="2026-06-09T10:00:00+00:00",
+        )
+    )
+    hass.data[DOMAIN][DATA_TRACE_BUFFER] = buffer
+
+    result = await async_get_config_entry_diagnostics(hass, mock_config_entry)
+
+    assert "traces" in result
+    assert any(t["scope_id"] == "living_room" for t in result["traces"])
+    assert result["traces"][0]["cause"]["kind"] == "reloaded"
+
+
+async def test_scope_diagnostics_bundles_config_context_and_traces(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    from custom_components.ambience.const import DATA_TRACE_BUFFER
+    from custom_components.ambience.diagnostics import scope_diagnostics
+    from custom_components.ambience.trace import (
+        BufferSink,
+        Outcome,
+        TraceEvent,
+        TriggerCause,
+        UnitTrace,
+    )
+
+    buffer = BufferSink()
+    buffer.emit(
+        TraceEvent(
+            TriggerCause(kind="reloaded"),
+            [
+                UnitTrace("area", "living_room", "general", "on", Outcome.ACTED, None),
+                UnitTrace("area", "other", "general", "on", Outcome.ACTED, None),
+            ],
+            event_id="abc",
+            timestamp="2026-06-09T10:00:00+00:00",
+        )
+    )
+    hass.data[DOMAIN][DATA_TRACE_BUFFER] = buffer
+
+    result = scope_diagnostics(hass, "area", "living_room", "general")
+
+    assert result["scope"]["scope_kind"] == "area"
+    assert result["scope"]["scope_id"] == "living_room"
+    assert "scenes" in result["scope"]["config"]
+    assert "categories" in result["context"]
+    assert "conditions" in result["context"]
+    # Only this scope+category's traces are included.
+    assert len(result["traces"]) == 1
+    assert result["traces"][0]["scope_id"] == "living_room"
+
+
+async def test_scope_diagnostics_house_scope(
+    hass: HomeAssistant, seeded_store: AmbienceStore
+) -> None:
+    from custom_components.ambience.const import DATA_TRACE_BUFFER
+    from custom_components.ambience.diagnostics import scope_diagnostics
+    from custom_components.ambience.trace import (
+        BufferSink,
+        Outcome,
+        TraceEvent,
+        TriggerCause,
+        UnitTrace,
+    )
+
+    buffer = BufferSink()
+    buffer.emit(
+        TraceEvent(
+            TriggerCause(kind="reloaded"),
+            [
+                UnitTrace("house", None, "general", "on", Outcome.ACTED, None),
+                UnitTrace("area", "living_room", "general", "on", Outcome.ACTED, None),
+            ],
+            event_id="xyz",
+            timestamp="2026-06-09T10:00:00+00:00",
+        )
+    )
+    hass.data[DOMAIN][DATA_TRACE_BUFFER] = buffer
+
+    result = scope_diagnostics(hass, "house", None, "general")
+
+    assert result["scope"]["scope_kind"] == "house"
+    assert result["scope"]["scope_id"] is None
+    assert "scenes" in result["scope"]["config"]
+    # Only the house unit must be included — the area unit is filtered out.
+    assert len(result["traces"]) == 1
+    assert result["traces"][0]["scope_id"] is None
+
+
 async def test_device_diagnostics_dumps_redacted_store(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
 ) -> None:

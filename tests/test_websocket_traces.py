@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ambience.const import DATA_TRACE_BUFFER, DOMAIN
+from custom_components.ambience.const import DATA_STORE, DATA_TRACE_BUFFER, DOMAIN
 from custom_components.ambience.trace import BufferSink, TraceEvent, TriggerCause, UnitTrace
 from custom_components.ambience.websocket import async_register_commands
 
@@ -121,3 +121,28 @@ async def test_traces_clear_succeeds_when_no_buffer(hass, installed, hass_ws_cli
     hass.data.setdefault(DOMAIN, {}).pop(DATA_TRACE_BUFFER, None)
     resp = await _ws_send(hass_ws_client, type="ambience/traces/clear")
     assert resp["success"] is True
+
+
+async def test_ws_scope_diagnostics_returns_bundle(hass, installed, hass_ws_client) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area("a", {"scenes": []})
+    buffer = _seed_buffer(hass)
+    buffer.emit(
+        TraceEvent(
+            TriggerCause(kind="reloaded"),
+            [UnitTrace("area", "a", "general", "on", "acted", None)],
+            event_id="x",
+            timestamp="2026-06-09T10:00:00+00:00",
+        )
+    )
+
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/diagnostics/scope",
+        scope_kind="area",
+        scope_id="a",
+        category="general",
+    )
+    assert resp["success"] is True
+    assert resp["result"]["scope"]["scope_id"] == "a"
+    assert len(resp["result"]["traces"]) == 1

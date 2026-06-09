@@ -6,7 +6,7 @@ Every time Ambience evaluates a scope/category pair it records a *trace*: what t
 
 ### Opening the viewer
 
-In the Ambience panel, each category card has a small **Traces** button. Clicking it opens a modal filtered to that category within the current scope. The modal title shows the category name; a **Refresh** button appears highlighted (and labelled "● New traces — refresh") when Ambience has recorded newer entries since you opened the modal.
+In the Ambience panel, each category card has a small **Traces** button. Clicking it opens a modal filtered to that category within the current scope. The modal title shows the category name; a **Refresh** button appears highlighted (and labelled "● New traces — refresh") when Ambience has recorded newer entries since you opened the modal. A **Download diagnostics** button downloads a JSON file scoped to that one (scope, category): its configuration, the relevant global context (categories and conditions), and its recent traces — handy for attaching to a bug report. The traces include the entity ids that triggered and were acted on, so glance over the file before sharing it publicly.
 
 !!! info "📷 Screenshot"
 
@@ -15,7 +15,7 @@ In the Ambience panel, each category card has a small **Traces** button. Clickin
 Each entry shows four things across the top row:
 
 - **Outcome badge** — one of: `acted` (Ambience ran actions and something changed), `reapplied` (the current scene's actions were re-fired on a periodic reapply without re-resolving), `debounced` (a scene won but it is the same one already applied, so its identical actions were suppressed), `no op` (a scene won but it has no actions to run — e.g. a blocker scene), `no match` (no scene matched), or `skipped switch off` (the category's enable switch was off).
-- **Cause** — what triggered the evaluation. Entity causes read as `sensor.my_sensor off → on`; time-based causes read as `clock`, `sun`, or `duration recheck`.
+- **Cause** — what triggered the evaluation. Entity causes read as `sensor.my_sensor off → on`; time-based causes read as `clock`, `sun`, or `duration recheck`. `Reloaded` means a configuration save re-applied the scope (only the scope you changed is re-evaluated); `Startup` means Home Assistant restarted.
 - **Time** — the local time of the evaluation.
 
 Below the top row, if a scene won, its name is shown in green ("Won: *scene name*"). If any actions ran, a one-line summary follows showing the service called and the number of entities affected.
@@ -58,7 +58,7 @@ Click **Simulate ▸** to send the current inputs to Ambience. The result appear
 
 ## Troubleshooting with logs (advanced)
 
-The Traces viewer covers most questions about Ambience's behaviour. When it is not enough — for example, if you want to see raw evaluation detail for every scope at once, or if you suspect the problem is happening before the trace is stored — Ambience writes to two separate log streams in Home Assistant.
+The Traces viewer covers most questions about Ambience's behaviour. When it is not enough — for example, if you want to see raw evaluation detail for every scope at once, or if you suspect the problem is happening before the trace is stored — Ambience writes to two separate log streams in Home Assistant. (For a one-shot snapshot of everything at once, the integration's **Download diagnostics** link — Settings ▸ Devices & services ▸ Ambience — dumps the full configuration *and* all buffered traces in a single JSON file.)
 
 ### The two streams
 

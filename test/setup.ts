@@ -17,6 +17,18 @@ if (typeof window !== "undefined" && !("localStorage" in window && window.localS
   Object.defineProperty(window, "localStorage", { configurable: true, value: storage });
 }
 
+// jsdom doesn't implement URL.createObjectURL / revokeObjectURL. The diagnostics
+// download helper uses them to turn a Blob into a downloadable link, so provide
+// no-op stubs that tests can spy on.
+if (typeof URL !== "undefined") {
+  if (typeof URL.createObjectURL !== "function") {
+    URL.createObjectURL = () => "blob:stub";
+  }
+  if (typeof URL.revokeObjectURL !== "function") {
+    URL.revokeObjectURL = () => undefined;
+  }
+}
+
 // jsdom doesn't ship CSSStyleSheet.replaceSync used by Lit's adoptedStyleSheets.
 // Lit's polyfill kicks in when adoptedStyleSheets is undefined; force that path.
 // @ts-expect-error -- runtime-only shim

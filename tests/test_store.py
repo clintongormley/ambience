@@ -548,3 +548,36 @@ async def test_get_exposed_actions_with_missing_key_returns_empty(
     await store.async_load()
     del store._data["exposed_actions"]
     assert store.get_exposed_actions() == []
+
+
+async def test_save_area_signal_carries_scope(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    calls: list = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
+    await store.async_save_area("a", {"scenes": []})
+    await hass.async_block_till_done()
+    unsub()
+    assert calls == [(("area", "a"),)]
+
+
+async def test_save_house_signal_carries_house_scope(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    calls: list = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
+    await store.async_save_house({"scenes": []})
+    await hass.async_block_till_done()
+    unsub()
+    assert calls == [(("house", None),)]
+
+
+async def test_save_condition_config_signal_is_global(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    calls: list = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda *a: calls.append(a))
+    await store.async_save_condition_config("weather", {"entity": "weather.home"})
+    await hass.async_block_till_done()
+    unsub()
+    assert calls == [(None,)]

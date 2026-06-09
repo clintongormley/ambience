@@ -748,4 +748,10 @@ describe("trace-detail", () => {
     expect(scenes.some((t) => t?.includes("✗ no match"))).toBe(true); // Night lost
     expect(host.textContent).not.toContain("WON");
   });
+
+  test("formatCause renders the reloaded kind as 'Reloaded'", () => {
+    expect(
+      formatCause({ kind: "reloaded", entity_id: null, old: null, new: null, detail: null }),
+    ).toBe("Reloaded");
+  });
 });

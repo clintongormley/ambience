@@ -342,6 +342,7 @@ export type TraceCause = {
     | "switch"
     | "manual"
     | "startup"
+    | "reloaded"
     | "reapply"
     | "simulated"
     | "unknown";

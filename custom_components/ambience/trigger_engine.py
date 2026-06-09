@@ -15,7 +15,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.debounce import Debouncer
 
 from .const import (
@@ -94,6 +94,11 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._apply_locks: defaultdict[tuple[str, str | None, str], asyncio.Lock] = defaultdict(
             asyncio.Lock
         )
+        # What a config-changed signal touched, accumulated across the debounce
+        # window so the coalesced refresh re-applies only what changed. A global
+        # change (None) sets _pending_all, which wins over any per-scope entries.
+        self._pending_affected: set[tuple[str, str | None]] = set()
+        self._pending_all = False
         # Debounced full refresh, for coalescing rapid config-changed signals.
         self._refresh_debouncer = Debouncer(
             hass,
@@ -366,14 +371,36 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             )
 
     async def _async_refresh(self) -> None:
-        """Full (re)build: rebuild the index, resubscribe, and sync to reality."""
+        """Debounced config-reload: rebuild + resubscribe, then re-apply only what
+        changed (force, so edited scenes re-fire), labelling traces 'Reloaded'.
+        A global change re-applies every scope without force."""
+        pending_all = self._pending_all
+        affected = self._pending_affected
+        self._pending_all = False
+        self._pending_affected = set()
+        self.async_rebuild()
+        self.async_subscribe()
+        cause = TriggerCause(kind=CauseKind.RELOADED)
+        if pending_all:
+            await self._sync(self._all_units(), cause, force=False)
+        else:
+            await self._sync(self._units_for(affected), cause, force=True)
+
+    async def async_start(self) -> None:
+        """Build the index, subscribe, and run the startup sync pass (immediate)."""
         self.async_rebuild()
         self.async_subscribe()
         await self.async_initial_sync()
 
-    async def async_start(self) -> None:
-        """Build the index, subscribe, and run the startup sync pass (immediate)."""
-        await self._async_refresh()
+    @callback
+    def note_config_changed(self, affected: tuple[str, str | None] | None) -> None:
+        """Record what a config-changed signal touched, to narrow the next
+        debounced refresh. `affected` is a (scope_kind, scope_id) for a
+        scope-local change, or None for a global change (reapply everything)."""
+        if affected is None:
+            self._pending_all = True
+        else:
+            self._pending_affected.add(affected)
 
     async def async_request_refresh(self) -> None:
         """Request a full refresh, debounced to coalesce rapid config changes."""
@@ -384,16 +411,43 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._refresh_debouncer.async_shutdown()
         self._teardown()
 
-    async def async_initial_sync(self) -> None:
-        """Startup 'sync to reality': snapshot everything, seed flip state, and
-        apply each enabled scope's current winner."""
-        await self._refresh_all_snapshots()
-        self._recompute(set(self._index.all_predicates()), self._snapshots)
-        units = [
+    def _all_units(self) -> list[tuple[str, str | None, str]]:
+        """Every (scope_kind, scope_id, category) unit across all scopes, in scope
+        insertion order (deterministic)."""
+        return [
             (kind, sid, cid)
             for (kind, sid), cfg in self._scope_cfgs.items()
             for cid in category_ids(cfg)
         ]
-        traces = await self._apply_units(units)
+
+    def _units_for(self, scopes: set[tuple[str, str | None]]) -> list[tuple[str, str | None, str]]:
+        """The units for the given scopes, skipping any that no longer exist.
+        Scopes are ordered deterministically (a set has no stable iteration order),
+        so trace and apply ordering doesn't vary run to run."""
+        ordered = sorted(scopes, key=lambda key: (key[0], key[1] or ""))
+        return [
+            (kind, sid, cid)
+            for (kind, sid) in ordered
+            if (cfg := self._scope_cfgs.get((kind, sid))) is not None
+            for cid in category_ids(cfg)
+        ]
+
+    async def _sync(
+        self,
+        units: list[tuple[str, str | None, str]],
+        cause: TriggerCause,
+        *,
+        force: bool,
+    ) -> None:
+        """Snapshot all conditions, seed flip-state across every predicate, then
+        apply the given units and emit one TraceEvent for the batch."""
+        await self._refresh_all_snapshots()
+        self._recompute(set(self._index.all_predicates()), self._snapshots)
+        traces = await self._apply_units(units, force=force)
         if traces:
-            emit_trace(self._hass, TraceEvent(TriggerCause(kind=CauseKind.STARTUP), traces))
+            emit_trace(self._hass, TraceEvent(cause, traces))
+
+    async def async_initial_sync(self) -> None:
+        """Startup 'sync to reality': snapshot everything, seed flip state, and
+        apply each enabled scope's current winner, labelled 'Startup'."""
+        await self._sync(self._all_units(), TriggerCause(kind=CauseKind.STARTUP), force=False)

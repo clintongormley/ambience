@@ -190,8 +190,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         scene = call.data.get("scene")
         force = call.data.get("force", False)
         if scene is not None:
-            # Schema guarantees category is present whenever scene is.
-            await async_apply_named_scene(hass, scope_kind, scope_id, category, scene, force=force)
+            # Schema (_scene_requires_category) guarantees category is present here,
+            # so index call.data directly to keep the category argument non-optional.
+            await async_apply_named_scene(
+                hass, scope_kind, scope_id, call.data["category"], scene, force=force
+            )
         else:
             await async_apply_scene(hass, scope_kind, scope_id, category=category, force=force)
 

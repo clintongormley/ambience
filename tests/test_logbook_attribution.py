@@ -7,14 +7,31 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from homeassistant.const import EVENT_LOGBOOK_ENTRY
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_capture_events,
     async_mock_service,
 )
 
-from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
+from custom_components.ambience.const import (
+    DATA_EXPOSED_ACTIONS,
+    DATA_STORE,
+    DATA_SWITCHES,
+    DOMAIN,
+)
 from custom_components.ambience.service_logbook import compose_apply_message
+
+
+def _house_scope(hass: HomeAssistant) -> str:
+    return hass.data[DOMAIN][DATA_SWITCHES][("house", None)].entity_id
+
+
+async def _make_area_scope(hass: HomeAssistant, name: str) -> tuple[str, str]:
+    """Create a real HA area (spawning its scope switch) → (area_id, switch entity_id)."""
+    area = ar.async_get(hass).async_create(name)
+    await hass.async_block_till_done()
+    return area.id, hass.data[DOMAIN][DATA_SWITCHES][("area", area.id)].entity_id
 
 
 class _FakeExposedStorage:
@@ -178,8 +195,9 @@ async def test_apply_fires_ambience_entry_and_shares_context(
     await exposed_store.save(
         [{"id": "cover.open_cover", "label": "", "visible_fields": [], "defaults": {}}]
     )
+    area_id, scope = await _make_area_scope(hass, "Lounge")
     await store.async_save_area(
-        "lr",
+        area_id,
         {
             "scenes": [
                 {
@@ -198,16 +216,16 @@ async def test_apply_fires_ambience_entry_and_shares_context(
         },
     )
 
-    await hass.services.async_call(DOMAIN, "apply_scene", {"area": "lr"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "apply_scene", {"scope": scope}, blocking=True)
     await hass.async_block_till_done()
 
     ambience_entries = [e for e in entries if e.data.get("name") == "Ambience"]
     assert len(ambience_entries) == 1
     entry = ambience_entries[0]
     assert entry.data["domain"] == "ambience"
-    # Single configured category ⇒ no "(category)" suffix; "lr" is not a real area ⇒
-    # the scope label falls back to the raw id.
-    assert entry.data["message"] == "applied 'Evening' in lr"
+    # Single configured category ⇒ no "(category)" suffix; scope label is the
+    # real area's friendly name.
+    assert entry.data["message"] == "applied 'Evening' in Lounge"
     assert len(cover_calls) == 1
     assert cover_calls[0].context.id == entry.context.id
 
@@ -217,12 +235,13 @@ async def test_apply_with_empty_actions_logs_nothing(
 ) -> None:
     entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
     store = hass.data[DOMAIN][DATA_STORE]
+    area_id, scope = await _make_area_scope(hass, "Lounge")
     await store.async_save_area(
-        "lr",
+        area_id,
         {"scenes": [{"name": "Empty", "category": "general", "when": {}, "actions": []}]},
     )
 
-    await hass.services.async_call(DOMAIN, "apply_scene", {"area": "lr"}, blocking=True)
+    await hass.services.async_call(DOMAIN, "apply_scene", {"scope": scope}, blocking=True)
     await hass.async_block_till_done()
 
     assert [e for e in entries if e.data.get("name") == "Ambience"] == []
@@ -309,7 +328,9 @@ async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockC
         }
     )
 
-    await hass.services.async_call(DOMAIN, "apply_scene", {"house": True}, blocking=True)
+    await hass.services.async_call(
+        DOMAIN, "apply_scene", {"scope": _house_scope(hass)}, blocking=True
+    )
     await hass.async_block_till_done()
 
     msgs = [e.data["message"] for e in entries if e.data.get("name") == "Ambience"]

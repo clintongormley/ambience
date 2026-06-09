@@ -16,6 +16,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
@@ -61,8 +62,9 @@ from .const import (
 from .exposed_actions import ExposedActionsStore
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
-from .service import async_apply_scene, clear_last_applied
+from .service import async_apply_named_scene, async_apply_scene, clear_last_applied
 from .store import AmbienceStore
+from .switch import scope_for_unique_id
 from .trace import BufferSink, LogSink
 from .trigger_engine import AutoTriggerEngine
 from .websocket import async_register_commands, async_unregister_commands
@@ -77,30 +79,25 @@ _PANEL_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-panel.js"
 _CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
 
 
-def _exactly_one_scope(value: dict) -> dict:
-    """Validator: exactly one of {area, floor, house} must be present."""
-    present = [k for k in ("area", "floor", "house") if k in value]
-    if len(present) != 1:
-        raise vol.Invalid(f"apply_scene requires exactly one of area/floor/house, got: {present!r}")
-    return value
-
-
-def _house_must_be_true(value: object) -> bool:
-    """Validator: `house` must be exactly True (not False, not truthy-but-non-bool)."""
-    if value is not True:
-        raise vol.Invalid("house must be true")
+def _scene_requires_category(value: dict) -> dict:
+    """Validator: a `scene` name may only be given together with a `category`."""
+    if "scene" in value and "category" not in value:
+        raise vol.Invalid("apply_scene: 'scene' requires 'category'")
     return value
 
 
 _APPLY_SCENE_SCHEMA = vol.All(
     vol.Schema(
         {
-            vol.Optional("area"): cv.string,
-            vol.Optional("floor"): cv.string,
-            vol.Optional("house"): _house_must_be_true,
+            # The scope is chosen by its switch entity (house/floor/area each have
+            # one); the handler resolves it back to (scope_kind, scope_id).
+            vol.Required("scope"): cv.entity_id,
+            vol.Optional("category"): cv.string,
+            vol.Optional("scene"): cv.string,
+            vol.Optional("force"): cv.boolean,
         }
     ),
-    _exactly_one_scope,
+    _scene_requires_category,
 )
 
 
@@ -169,12 +166,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
-        if "area" in call.data:
-            await async_apply_scene(hass, "area", call.data["area"])
-        elif "floor" in call.data:
-            await async_apply_scene(hass, "floor", call.data["floor"])
-        else:  # house
-            await async_apply_scene(hass, "house", None)
+        scope_entity_id = call.data["scope"]
+        entry = er.async_get(hass).async_get(scope_entity_id)
+        scope = (
+            scope_for_unique_id(entry.unique_id)
+            if entry is not None and entry.platform == DOMAIN
+            else None
+        )
+        if scope is None:
+            raise ServiceValidationError(f"{scope_entity_id!r} is not an Ambience scope switch")
+        scope_kind, scope_id = scope
+        category = call.data.get("category")
+        scene = call.data.get("scene")
+        force = call.data.get("force", False)
+        if scene is not None:
+            # Schema (_scene_requires_category) guarantees category is present here,
+            # so index call.data directly to keep the category argument non-optional.
+            await async_apply_named_scene(
+                hass, scope_kind, scope_id, call.data["category"], scene, force=force
+            )
+        else:
+            await async_apply_scene(hass, scope_kind, scope_id, category=category, force=force)
 
     # Admin-only: applying a scene dispatches real device service calls, so it must
     # not be reachable by non-admin users (HA services are not admin-gated by default).

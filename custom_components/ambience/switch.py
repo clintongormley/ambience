@@ -60,6 +60,23 @@ def switch_unique_id(scope_kind: str, scope_id: str | None) -> str:
     return f"ambience_switch_{scope_kind}_{scope_id}"
 
 
+def scope_for_unique_id(unique_id: str) -> tuple[str, str | None] | None:
+    """Reverse switch_unique_id: map a scope switch's unique_id back to
+    (scope_kind, scope_id), or None if it isn't an Ambience scope switch.
+
+    The apply_scene service takes a scope switch entity_id; this resolves the
+    chosen entity to the scope it gates. scope_id may itself contain underscores,
+    so only the leading kind segment is split off.
+    """
+    if unique_id == "ambience_switch_house":
+        return ("house", None)
+    for scope_kind in ("area", "floor"):
+        prefix = f"ambience_switch_{scope_kind}_"
+        if unique_id.startswith(prefix):
+            return (scope_kind, unique_id[len(prefix) :])
+    return None
+
+
 def _entity_id_for(scope_kind: str, display_name: str) -> str:
     if scope_kind == "house":
         return "switch.house_ambience"

@@ -219,8 +219,9 @@ async def test_area_rename_updates_device_name(hass, mock_config_entry):
     area = ar.async_get(hass).async_create("Living Room")
     await _setup(hass, mock_config_entry)
 
+    # No manual signal dispatch: the area-registry 'update' event must drive the
+    # device-name resync on its own (see also test_init_switch_lifecycle).
     ar.async_get(hass).async_update(area.id, name="Lounge")
-    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
 
     dev_reg = dr.async_get(hass)

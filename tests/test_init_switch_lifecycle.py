@@ -184,3 +184,31 @@ async def test_floor_removal_drops_subdevice(hass, installed):
     fr.async_get(hass).async_delete(floor.floor_id)
     await hass.async_block_till_done()
     assert dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor.floor_id}")}) is None
+
+
+async def test_area_rename_updates_device_name_via_registry_event(hass, installed):
+    """Renaming an HA area updates the scope device name with no manual signal —
+    the area-registry 'update' event must drive the resync in production."""
+    area = ar.async_get(hass).async_create("Lounge")
+    await hass.async_block_till_done()
+    dev_reg = dr.async_get(hass)
+    ident = {(DOMAIN, f"area_{area.id}")}
+    assert dev_reg.async_get_device(identifiers=ident).name == "Lounge Ambience"
+
+    ar.async_get(hass).async_update(area.id, name="Den")
+    await hass.async_block_till_done()
+    assert dev_reg.async_get_device(identifiers=ident).name == "Den Ambience"
+
+
+async def test_floor_rename_updates_device_name_via_registry_event(hass, installed):
+    """Renaming an HA floor updates the scope device name with no manual signal."""
+    floor = fr.async_get(hass).async_create("Loft")
+    await hass.async_block_till_done()
+    dev_reg = dr.async_get(hass)
+    name = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor.floor_id}")}).name
+    assert name == "Loft Ambience"
+
+    fr.async_get(hass).async_update(floor.floor_id, name="Attic")
+    await hass.async_block_till_done()
+    name = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor.floor_id}")}).name
+    assert name == "Attic Ambience"

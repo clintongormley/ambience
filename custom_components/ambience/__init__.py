@@ -22,7 +22,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
@@ -62,6 +62,7 @@ from .const import (
     DEFAULT_SHOW_SIDEBAR_PANEL,
     DOMAIN,
     SIGNAL_CONFIG_CHANGED,
+    SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from .exposed_actions import ExposedActionsStore
 from .lux_ranges import LuxRangeStore
@@ -229,6 +230,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if add_entities is not None and area is not None:
                 add_entities([AmbienceScopeSwitch("area", area_id, area.name)])
             return
+        if action == "update":
+            # An area rename must refresh the scope device names. The global
+            # signal is a no-op for scopes whose name is unchanged.
+            async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
+            return
         if action == "remove":
             await store.async_delete_area(area_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("area", area_id), None)
@@ -255,6 +261,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             floor = floor_reg.async_get_floor(floor_id)
             if add_entities is not None and floor is not None:
                 add_entities([AmbienceScopeSwitch("floor", floor_id, floor.name)])
+            return
+        if action == "update":
+            # A floor rename must refresh the scope device names. The global
+            # signal is a no-op for scopes whose name is unchanged.
+            async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
             return
         if action == "remove":
             await store.async_delete_floor(floor_id)

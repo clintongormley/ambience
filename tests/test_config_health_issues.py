@@ -46,7 +46,12 @@ async def test_reconcile_creates_issue_for_missing_entity(hass, installed, area_
         },
     )
     reconcile_issues(hass)
-    assert any(iid.startswith("missing_entity_") for iid in _domain_issue_ids(hass))
+    issues = ir.async_get(hass).issues
+    iid = next(i for (dom, i) in issues if dom == DOMAIN and i.startswith("missing_entity:"))
+    issue = issues[(DOMAIN, iid)]
+    # Lock the translation contract so a key/placeholder rename can't silently drift.
+    assert issue.translation_key == "missing_entity"
+    assert issue.translation_placeholders == {"entity_id": "light.ghost", "scenes": "ghost"}
 
 
 async def test_reconcile_clears_issue_when_entity_appears(hass, installed, area_id) -> None:
@@ -115,4 +120,41 @@ async def test_reconcile_creates_overlap_issue(hass, installed, area_id) -> None
         },
     )
     reconcile_issues(hass)
-    assert "action_overlap_light.shared" in _domain_issue_ids(hass)
+    assert "action_overlap:light.shared" in _domain_issue_ids(hass)
+
+
+async def test_reconcile_leaves_foreign_domain_issues_untouched(hass, installed, area_id) -> None:
+    """A Repairs issue under DOMAIN with an id not owned by config-health must
+    not be deleted by the reconcile delete-pass."""
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        "some_other_issue",
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="some_other_issue",
+    )
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "ghost",
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+                }
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    assert "some_other_issue" in _domain_issue_ids(hass)  # not deleted
+    assert any(iid.startswith("missing_entity:") for iid in _domain_issue_ids(hass))
+
+
+async def test_reconcile_noops_when_domain_data_missing(hass, installed) -> None:
+    """reconcile_issues must not raise when hass.data[DOMAIN] has been removed
+    (e.g. during the unload race)."""
+    hass.data.pop(DOMAIN, None)
+    reconcile_issues(hass)  # must not raise

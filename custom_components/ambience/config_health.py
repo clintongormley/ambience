@@ -1,8 +1,8 @@
 """Detect config-health problems: scenes referencing non-existent entities, and
 entities acted on by more than one (scope, category) group.
 
-Pure detection: a single source of truth consumed by the save-warnings surface,
-the Repairs reconciler, and diagnostics. It reads the live entity universe via
+Pure detection: a single source of truth consumed by the Repairs reconciler
+(`config_health_issues.reconcile_issues`). It reads the live entity universe via
 `hass` (states + entity registry) but otherwise just walks plain config dicts.
 """
 
@@ -110,6 +110,11 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
             category = scene.get("category")
             group_key = (scope_kind, scope_id, category)
             for eid in _action_entities(scene):
+                # Overlap on a non-existent entity is moot — the missing_entity
+                # problem already covers it, and warning about a control conflict
+                # for an entity the user can't find is just confusing.
+                if not entity_exists(hass, eid):
+                    continue
                 per_entity = groups.setdefault(eid, {})
                 per_entity.setdefault(
                     group_key,

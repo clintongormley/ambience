@@ -146,6 +146,53 @@ async def test_scan_no_overlap_within_one_category(hass: HomeAssistant, installe
     assert [p for p in scan(hass, [("area", "a", cfg)]) if p.kind == "action_overlap"] == []
 
 
+async def test_scan_no_overlap_for_nonexistent_entity(hass: HomeAssistant, installed) -> None:
+    # A missing entity acted on by two groups: only the missing_entity problem is
+    # reported, never an action_overlap (overlap on a non-existent entity is moot).
+    cfg = _cfg(
+        [
+            {
+                "name": "a",
+                "when": {},
+                "category": "cat1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+            },
+            {
+                "name": "b",
+                "when": {},
+                "category": "cat2",
+                "actions": [{"service": "light.turn_off", "entity_ids": ["light.ghost"]}],
+            },
+        ]
+    )
+    problems = scan(hass, [("area", "a", cfg)])
+    assert [p for p in problems if p.kind == "action_overlap"] == []
+    assert any(p.kind == "missing_entity" and p.entity_id == "light.ghost" for p in problems)
+
+
+async def test_scan_dedups_same_scene_refs_and_skips_malformed(hass, installed) -> None:
+    # The same missing entity referenced by BOTH a condition and an action in one
+    # scene collapses to a single location; malformed entity_ids are ignored.
+    cfg = _cfg(
+        [
+            {
+                "name": "s",
+                "category": "c1",
+                "when": {"occupancy": {"sensors": ["binary_sensor.ghost"]}},
+                "actions": [
+                    {"service": "light.turn_on", "entity_ids": ["binary_sensor.ghost", "", 123]}
+                ],
+            }
+        ]
+    )
+    missing = [p for p in scan(hass, [("area", "a", cfg)]) if p.kind == "missing_entity"]
+    # "" and 123 are skipped; only the real id is a problem.
+    assert {p.entity_id for p in missing} == {"binary_sensor.ghost"}
+    # Condition + action references in the same scene dedup to one location.
+    ghost = next(p for p in missing if p.entity_id == "binary_sensor.ghost")
+    assert len(ghost.locations) == 1
+
+
 async def test_scan_empty_inputs(hass: HomeAssistant, installed) -> None:
     assert scan(hass, []) == []
     assert scan(hass, [("area", "a", {})]) == []  # no "scenes" key

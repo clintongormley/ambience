@@ -1,6 +1,6 @@
 # Config health
 
-Ambience validates your configuration automatically and surfaces problems in two places: as Home Assistant **Repairs** issues, and as inline warnings when you save a scope in the editor.
+Ambience validates your configuration automatically and surfaces problems as Home Assistant **Repairs** issues. The checks run on startup, whenever you change a scope, and whenever an entity is added or removed — so an issue appears as soon as a problem is introduced and clears as soon as it is fixed.
 
 ---
 
@@ -29,12 +29,6 @@ When two groups act on the same entity independently, they can fight each other:
 To resolve it, decide which group should own the entity and remove it from the actions of the other group.
 
 Both issue types are **warnings** — they do not stop Ambience from running. They clear automatically once the underlying problem is fixed.
-
----
-
-## Save warnings
-
-When you save a scope in the Ambience editor, the same checks run against that scope's configuration. The save always completes; if any missing-entity or action-overlap problems are found, they are returned as advisory warnings shown in the editor so you can fix them. The warnings are scoped to the scope you just saved (an action overlap with another scope is reported too).
 
 ---
 

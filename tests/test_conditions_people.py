@@ -455,6 +455,19 @@ def test_describe_predicate_missing_person_not_found() -> None:
     )
 
 
+def test_describe_predicate_present_but_unavailable_person() -> None:
+    """A person that IS in the snapshot but has state 'unavailable' renders as
+    'unavailable ✗' (not 'not found ✗'), because _loc_match returns None for
+    states in the UNAVAILABLE set."""
+    snap = _snap(
+        {"person.alice": _p("unavailable")},
+        names={"person.alice": "Alice"},
+    )
+    pred = {"who": ["person.alice"]}
+    result = PeopleCondition().describe(snap, pred)
+    assert result == "want anyone home: Alice: unavailable ✗"
+
+
 def test_describe_predicate_empty_who_lists_all_persons() -> None:
     snap = _snap({"person.a": _p("home")}, names={"person.a": "Alice"})
     assert PeopleCondition().describe(snap, {"who": []}) == "want anyone home: Alice: home ✓"

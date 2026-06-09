@@ -299,9 +299,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(async_at_started(hass, _engine_start))
 
     @callback
-    def _on_config_changed() -> None:
-        # Debounced full refresh (rebuild + resubscribe + re-sync) so an edit
-        # takes effect now, while a burst of saves coalesces into one rebuild.
+    def _on_config_changed(affected: tuple[str, str | None] | None = None) -> None:
+        # Record what changed so the debounced refresh re-applies only that, then
+        # request the (debounced) reload. A burst of saves coalesces into one
+        # rebuild; their affected scopes accumulate.
+        engine.note_config_changed(affected)
         hass.async_create_task(engine.async_request_refresh())
 
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _on_config_changed))

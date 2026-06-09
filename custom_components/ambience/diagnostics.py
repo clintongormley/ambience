@@ -16,7 +16,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
-from .const import DATA_STORE, DOMAIN
+from .const import DATA_STORE, DATA_TRACE_BUFFER, DOMAIN
+from .trace import buffered_unit_to_dict
 
 # Keys whose values can reveal where people live or go: the workday/calendar
 # sensors a household keys off, the configured weather entity, and the
@@ -32,9 +33,17 @@ TO_REDACT = {
 }
 
 
+def _traces_dump(hass: HomeAssistant) -> list[dict[str, Any]]:
+    buffer = hass.data.get(DOMAIN, {}).get(DATA_TRACE_BUFFER)
+    records = buffer.records() if buffer is not None else []
+    return async_redact_data([buffered_unit_to_dict(r) for r in records], TO_REDACT)
+
+
 def _store_dump(hass: HomeAssistant) -> dict[str, Any]:
     store = hass.data[DOMAIN][DATA_STORE]
-    return async_redact_data(store.as_dict(), TO_REDACT)
+    dump = async_redact_data(store.as_dict(), TO_REDACT)
+    dump["traces"] = _traces_dump(hass)
+    return dump
 
 
 async def async_get_config_entry_diagnostics(

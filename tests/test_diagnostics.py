@@ -91,6 +91,36 @@ async def test_config_entry_diagnostics_does_not_mutate_store(
     assert seeded_store.get_condition_config("day")["workday_sensor"] == "binary_sensor.workday"
 
 
+async def test_config_entry_diagnostics_includes_traces(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
+) -> None:
+    from custom_components.ambience.const import DATA_TRACE_BUFFER
+    from custom_components.ambience.trace import (
+        BufferSink,
+        Outcome,
+        TraceEvent,
+        TriggerCause,
+        UnitTrace,
+    )
+
+    buffer = BufferSink()
+    buffer.emit(
+        TraceEvent(
+            TriggerCause(kind="reloaded"),
+            [UnitTrace("area", "living_room", "general", "on", Outcome.ACTED, None)],
+            event_id="abc",
+            timestamp="2026-06-09T10:00:00+00:00",
+        )
+    )
+    hass.data[DOMAIN][DATA_TRACE_BUFFER] = buffer
+
+    result = await async_get_config_entry_diagnostics(hass, mock_config_entry)
+
+    assert "traces" in result
+    assert any(t["scope_id"] == "living_room" for t in result["traces"])
+    assert result["traces"][0]["cause"]["kind"] == "reloaded"
+
+
 async def test_device_diagnostics_dumps_redacted_store(
     hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
 ) -> None:

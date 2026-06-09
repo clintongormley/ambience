@@ -92,15 +92,26 @@ def _house_must_be_true(value: object) -> bool:
     return value
 
 
+def _scene_requires_category(value: dict) -> dict:
+    """Validator: a `scene` name may only be given together with a `category`."""
+    if "scene" in value and "category" not in value:
+        raise vol.Invalid("apply_scene: 'scene' requires 'category'")
+    return value
+
+
 _APPLY_SCENE_SCHEMA = vol.All(
     vol.Schema(
         {
             vol.Optional("area"): cv.string,
             vol.Optional("floor"): cv.string,
             vol.Optional("house"): _house_must_be_true,
+            vol.Optional("category"): cv.string,
+            vol.Optional("scene"): cv.string,
+            vol.Optional("force"): cv.boolean,
         }
     ),
     _exactly_one_scope,
+    _scene_requires_category,
 )
 
 

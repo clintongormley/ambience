@@ -1508,3 +1508,102 @@ async def test_note_config_changed_accumulates_pending(hass) -> None:
     # A global change upgrades the batch to "reapply all".
     engine.note_config_changed(None)
     assert engine._pending_all is True
+
+
+class _Capture:
+    def __init__(self) -> None:
+        self.events: list[TraceEvent] = []
+
+    def emit(self, event: TraceEvent) -> None:
+        self.events.append(event)
+
+
+async def test_initial_sync_still_emits_startup_cause(hass) -> None:
+    from custom_components.ambience.trace import CauseKind
+
+    engine, _tod = _apply_engine(hass)
+    cap = _Capture()
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [cap]
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        await engine.async_initial_sync()
+        assert cap.events[-1].cause.kind == CauseKind.STARTUP
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
+async def test_global_refresh_emits_reloaded_cause(hass) -> None:
+    from custom_components.ambience.trace import CauseKind
+
+    engine, _tod = _apply_engine(hass)
+    cap = _Capture()
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [cap]
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        engine.note_config_changed(None)  # global
+        await engine._async_refresh()
+        assert cap.events[-1].cause.kind == CauseKind.RELOADED
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
+def _two_area_engine(hass):
+    """Two areas, each with one always-matching action scene; switches on."""
+
+    def scene():
+        return {
+            "when": {},
+            "category": "g",
+            "actions": [{"service": "light.turn_on", "entity_ids": ["light.x"], "params": {}}],
+        }
+
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(
+            [
+                ("area", "a", {"scenes": [scene()]}),
+                ("area", "b", {"scenes": [scene()]}),
+            ]
+        ),
+        DATA_CONDITIONS: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_SWITCHES: {
+            ("area", "a"): SimpleNamespace(is_on=True),
+            ("area", "b"): SimpleNamespace(is_on=True),
+        },
+        DATA_LAST_APPLIED: {},
+        DATA_TRACE_SINKS: [],
+    }
+    hass.services.async_register("light", "turn_on", lambda call: None)
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine.async_subscribe()
+    return engine
+
+
+async def test_scope_local_refresh_applies_only_that_scope(hass) -> None:
+    engine = _two_area_engine(hass)
+    cap = _Capture()
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [cap]
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        engine.note_config_changed(("area", "a"))  # only area a changed
+        await engine._async_refresh()
+        units = {(u.scope_kind, u.scope_id) for ev in cap.events for u in ev.units}
+        assert units == {("area", "a")}  # area b not re-applied
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
+async def test_scope_local_refresh_reapplies_unchanged_winner(hass) -> None:
+    """A scope-local refresh force-applies, so an edited scene whose winning index
+    is unchanged still re-fires (last-applied tracks the index, not the content)."""
+    engine = _two_area_engine(hass)
+    # Both areas already at their current winner; without force every unit would
+    # be DEBOUNCED, so any service call proves the scope-local refresh forced.
+    hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] = 0
+    hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "b", "g")] = 0
+    calls: list = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    engine.note_config_changed(("area", "a"))
+    await engine._async_refresh()
+    assert calls, "force-applied scope a should have re-fired its action"

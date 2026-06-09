@@ -191,24 +191,26 @@ describe("ambience-state-expr-atom", () => {
     el2.remove();
   });
 
-  test("op dropdown for a numeric state shows ONLY the numeric ops (no is/is_not)", async () => {
+  test("op dropdown for a numeric state offers numeric ops AND is/is_not", async () => {
     const el2 = await mountWithHass(
       // Pre-flip to a numeric op so the dropdown matches the kind.
       { kind: ">", entity_id: "sensor.temp", states: ["10"] },
       { "sensor.temp": { state: "21.4", attributes: {} } },
     );
     const opts = el2._opSchema()[0].selector.select.options.map((o: any) => o.value);
-    expect(opts).toEqual([">", ">=", "<", "<="]);
+    // Numeric ops stay the default, but is/is_not are also offered so a numeric
+    // entity can be matched with "is not <state>" (e.g. a typed status value).
+    expect(opts).toEqual([">", ">=", "<", "<=", "is", "is_not"]);
     el2.remove();
   });
 
-  test("attribute mode: numeric ops only when the attribute is a number", async () => {
+  test("attribute mode: numeric attribute offers numeric ops AND is/is_not", async () => {
     const el2 = await mountWithHass(
       { kind: ">", entity_id: "light.x", attribute: "brightness", states: ["100"] },
       { "light.x": { state: "on", attributes: { brightness: 200 } } },
     );
     const opts = el2._opSchema()[0].selector.select.options.map((o: any) => o.value);
-    expect(opts).toEqual([">", ">=", "<", "<="]);
+    expect(opts).toEqual([">", ">=", "<", "<=", "is", "is_not"]);
     el2.remove();
   });
 
@@ -293,6 +295,71 @@ describe("ambience-state-expr-atom", () => {
     });
     el2._setAttribute("brightness");
     expect(captured.kind).toBe(">");
+    el2.remove();
+  });
+
+  test("re-editing an already-numeric target keeps a deliberately-chosen is/is_not", async () => {
+    // A numeric target can use is/is_not (e.g. "is not <typed status>"). Once the
+    // user picks it, re-editing the target while it stays numeric must NOT clobber
+    // their choice back to ">".
+    const el2 = await mountWithHass(
+      { kind: "is_not", entity_id: "sensor.temp", attribute: null, states: [] },
+      { "sensor.temp": { state: "21.4", attributes: { battery: 90, friendly_name: "Temp" } } },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el2._setAttribute("battery"); // another numeric target — stays numeric
+    expect(captured.kind).toBe("is_not");
+    el2.remove();
+  });
+
+  test("switching a numeric op to is/is_not clears the stale numeric threshold", async () => {
+    // For ">", states holds a single threshold; for is/is_not it's a list of match
+    // values. Switching category must drop the threshold so it isn't reinterpreted
+    // as a literal match value.
+    const el2 = await mountWithHass(
+      { kind: ">", entity_id: "sensor.temp", states: ["20"] },
+      { "sensor.temp": { state: "21.4", attributes: {} } },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el2._setOp("is_not");
+    expect(captured.kind).toBe("is_not");
+    expect(captured.states).toEqual([]);
+    el2.remove();
+  });
+
+  test("switching is/is_not to a numeric op clears stale match values", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "sensor.temp", states: ["foo", "bar"] },
+      { "sensor.temp": { state: "21.4", attributes: {} } },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el2._setOp(">");
+    expect(captured.kind).toBe(">");
+    expect(captured.states).toEqual([]);
+    el2.remove();
+  });
+
+  test("switching between is and is_not preserves the value list (same category)", async () => {
+    const el2 = await mountWithHass(
+      { kind: "is", entity_id: "binary_sensor.x", states: ["on"] },
+      { "binary_sensor.x": { state: "on", attributes: {} } },
+    );
+    let captured: any;
+    el2.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el2._setOp("is_not");
+    expect(captured.kind).toBe("is_not");
+    expect(captured.states).toEqual(["on"]);
     el2.remove();
   });
 

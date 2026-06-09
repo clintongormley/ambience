@@ -1,6 +1,7 @@
 """Plausible-states helper, shared by the websocket API and the simulator."""
 
 from custom_components.ambience.state_options import (
+    _enum_state_values,
     known_attribute_values_for,
     known_states_for,
 )
@@ -38,6 +39,24 @@ def test_unknown_domain_with_no_state_is_empty():
     assert known_states_for(hass, "sensor.temp") == []
 
 
+def test_enum_state_values_uses_enum_when_importable() -> None:
+    """When the enum resolves (from `.const` or the component package), its
+    member values are returned and the fallback is ignored."""
+    vals = _enum_state_values("lock", "LockState", ["fallback"])
+    assert "locked" in vals
+    assert "open" in vals
+    assert "fallback" not in vals
+
+
+def test_enum_state_values_falls_back_when_enum_absent() -> None:
+    """Resilience across the supported HA range: a relocated/renamed enum or a
+    missing component must NOT break module import — the literal fallback is used.
+    (HA has moved these enums between a component's `.const` and its package root;
+    importing the wrong one is an ImportError that would crash the integration.)"""
+    assert _enum_state_values("lock", "NoSuchEnumName", ["a", "b"]) == ["a", "b"]
+    assert _enum_state_values("no_such_component_xyz", "Whatever", ["a", "b"]) == ["a", "b"]
+
+
 def test_lock_derives_full_state_set_from_ha_enum() -> None:
     """A lock offers HA's full LockState set — including `opening`/`open`, which
     the old hardcoded list omitted (the reported bug). The universal
@@ -45,7 +64,9 @@ def test_lock_derives_full_state_set_from_ha_enum() -> None:
     known_states_for); "is not <state>" covers those cases instead."""
     hass = _Hass({"lock.front_door": _State("locked")})
     result = known_states_for(hass, "lock.front_door")
-    assert set(result) == {
+    # Superset (not exact) so a future core lock-state addition on the stable/dev
+    # HA channels doesn't break this — the point is opening/open are now present.
+    assert {
         "locked",
         "unlocked",
         "locking",
@@ -53,7 +74,7 @@ def test_lock_derives_full_state_set_from_ha_enum() -> None:
         "jammed",
         "opening",
         "open",
-    }
+    } <= set(result)
     assert "unavailable" not in result
     assert "unknown" not in result
 

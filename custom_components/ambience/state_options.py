@@ -3,13 +3,8 @@ what-if simulator. Pure: reads `hass.states` only."""
 
 from __future__ import annotations
 
-from homeassistant.components.alarm_control_panel.const import AlarmControlPanelState
-from homeassistant.components.climate.const import HVACMode
-from homeassistant.components.cover.const import CoverState
-from homeassistant.components.lock.const import LockState
-from homeassistant.components.media_player.const import MediaPlayerState
-from homeassistant.components.sun.const import STATE_ABOVE_HORIZON, STATE_BELOW_HORIZON
-from homeassistant.components.vacuum.const import VacuumActivity
+import importlib
+
 from homeassistant.const import (
     STATE_HOME,
     STATE_NOT_HOME,
@@ -20,11 +15,37 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 
+
+def _enum_state_values(component: str, enum_name: str, fallback: list[str]) -> list[str]:
+    """Values of an HA state enum, resilient to the enum's import location
+    changing — or the enum being absent — across our supported HA version range.
+
+    HA moves these enums between a component's ``.const`` module and its package
+    root between releases (e.g. ``CoverState`` is in ``cover.const`` on some
+    versions, only ``homeassistant.components.cover`` on others), so a fixed
+    import would ImportError-crash the integration on part of the range. Try the
+    lightweight ``.const`` module first, then the package root, then fall back to
+    a known-good literal so a relocated enum can never break module import.
+    """
+    for module_name in (
+        f"homeassistant.components.{component}.const",
+        f"homeassistant.components.{component}",
+    ):
+        try:
+            enum = getattr(importlib.import_module(module_name), enum_name)
+        except (ImportError, AttributeError):
+            continue
+        return [member.value for member in enum]
+    return list(fallback)
+
+
 # Domain-typical state sets, derived from Home Assistant's own state enums so
 # they track core additions automatically (e.g. lock's `opening`/`open`, alarm's
-# `disarming`) rather than drifting out of a hand-maintained list. Domains whose
-# state is a plain on/off or a module constant have no enum to enumerate. For
-# domains not listed, we fall back to just the entity's current state.
+# `disarming`) rather than drifting out of a hand-maintained list. The fallback
+# literal beside each enum is used only if HA relocates/removes that enum (see
+# `_enum_state_values`); it mirrors the enum's current values. Domains whose
+# state is a plain on/off or a fixed pair of strings have no enum to enumerate.
+# For domains not listed, we fall back to just the entity's current state.
 _ON_OFF = [STATE_ON, STATE_OFF]
 _DOMAIN_KNOWN_STATES: dict[str, list[str]] = {
     "binary_sensor": _ON_OFF,
@@ -32,15 +53,42 @@ _DOMAIN_KNOWN_STATES: dict[str, list[str]] = {
     "light": _ON_OFF,
     "fan": _ON_OFF,
     "input_boolean": _ON_OFF,
-    "cover": [s.value for s in CoverState],
-    "lock": [s.value for s in LockState],
-    "media_player": [s.value for s in MediaPlayerState],
-    "climate": [m.value for m in HVACMode],
-    "vacuum": [a.value for a in VacuumActivity],
+    "cover": _enum_state_values("cover", "CoverState", ["closed", "closing", "open", "opening"]),
+    "lock": _enum_state_values(
+        "lock",
+        "LockState",
+        ["jammed", "locked", "locking", "open", "opening", "unlocked", "unlocking"],
+    ),
+    "media_player": _enum_state_values(
+        "media_player",
+        "MediaPlayerState",
+        ["off", "on", "idle", "playing", "paused", "standby", "buffering"],
+    ),
+    "climate": _enum_state_values(
+        "climate", "HVACMode", ["off", "heat", "cool", "heat_cool", "auto", "dry", "fan_only"]
+    ),
+    "vacuum": _enum_state_values(
+        "vacuum", "VacuumActivity", ["cleaning", "docked", "idle", "paused", "returning", "error"]
+    ),
     "person": [STATE_HOME, STATE_NOT_HOME],
     "device_tracker": [STATE_HOME, STATE_NOT_HOME],
-    "sun": [STATE_ABOVE_HORIZON, STATE_BELOW_HORIZON],
-    "alarm_control_panel": [s.value for s in AlarmControlPanelState],
+    "sun": ["above_horizon", "below_horizon"],
+    "alarm_control_panel": _enum_state_values(
+        "alarm_control_panel",
+        "AlarmControlPanelState",
+        [
+            "disarmed",
+            "armed_home",
+            "armed_away",
+            "armed_night",
+            "armed_vacation",
+            "armed_custom_bypass",
+            "pending",
+            "arming",
+            "disarming",
+            "triggered",
+        ],
+    ),
 }
 
 

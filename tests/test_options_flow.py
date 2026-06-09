@@ -6,9 +6,11 @@ from unittest.mock import AsyncMock, patch
 
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
+    CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
     DOMAIN,
 )
@@ -33,6 +35,8 @@ async def test_options_flow_shows_form_and_saves(
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert mock_config_entry.options[CONF_SHOW_SIDEBAR_PANEL] is False
+    # The exposure map is always stored, defaulted from the schema defaults.
+    assert CONF_EXPOSED_ASSISTANTS in mock_config_entry.options
 
 
 async def test_panel_registered_by_default(
@@ -81,6 +85,41 @@ async def test_toggling_option_reloads_entry(
         )
         await hass.async_block_till_done()
     mock_reload.assert_called_once_with(mock_config_entry.entry_id)
+
+
+async def test_options_flow_exposes_assistant_toggles(hass, mock_config_entry):
+    assert await async_setup_component(hass, "homeassistant", {})
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    assert result["type"] == FlowResultType.FORM
+    schema_keys = {str(k) for k in result["data_schema"].schema}
+    assert {"expose_assist", "expose_google", "expose_alexa"} <= schema_keys
+    # With no stored exposure options, the form pre-populates the defaults
+    # (Assist on, Google/Alexa off).
+    defaults = {str(k): k.default() for k in result["data_schema"].schema}
+    assert defaults["expose_assist"] is True
+    assert defaults["expose_google"] is False
+    assert defaults["expose_alexa"] is False
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_SHOW_SIDEBAR_PANEL: True,
+            "expose_assist": False,
+            "expose_google": True,
+            "expose_alexa": False,
+        },
+    )
+    await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert mock_config_entry.options[CONF_EXPOSED_ASSISTANTS] == {
+        "conversation": False,
+        "cloud.google_assistant": True,
+        "cloud.alexa": False,
+    }
 
 
 async def test_card_resource_registered_on_setup(

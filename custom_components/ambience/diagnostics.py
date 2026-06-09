@@ -90,9 +90,10 @@ async def async_get_config_entry_diagnostics(
 async def async_get_device_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry, device: DeviceEntry
 ) -> dict[str, Any]:
-    """Return diagnostics for the Ambience device.
+    """Return diagnostics for an Ambience device.
 
-    Ambience exposes a single service device, so the device dump is the same
-    redacted store as the config-entry dump.
+    Ambience has one device per scope (the main service device plus per-floor and
+    per-area sub-devices), but they all share the one store, so every device dump
+    is the same redacted store as the config-entry dump.
     """
     return _store_dump(hass)

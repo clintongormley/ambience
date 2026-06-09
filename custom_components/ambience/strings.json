@@ -15,10 +15,16 @@
       "init": {
         "title": "Ambience options",
         "data": {
-          "show_sidebar_panel": "Show Ambience in the sidebar"
+          "show_sidebar_panel": "Show Ambience in the sidebar",
+          "expose_assist": "Expose switches to Assist",
+          "expose_google": "Expose switches to Google Assistant",
+          "expose_alexa": "Expose switches to Alexa"
         },
         "data_description": {
-          "show_sidebar_panel": "When off, Ambience is removed from the sidebar. You can still add the Ambience card to any dashboard."
+          "show_sidebar_panel": "When off, Ambience is removed from the sidebar. You can still add the Ambience card to any dashboard.",
+          "expose_assist": "Allow Home Assistant's built-in Assist voice agent to control the Ambience switches.",
+          "expose_google": "Expose the Ambience switches to Google Assistant (requires Home Assistant Cloud or a manual Google Assistant setup).",
+          "expose_alexa": "Expose the Ambience switches to Alexa (requires Home Assistant Cloud or a manual Alexa setup)."
         }
       }
     }

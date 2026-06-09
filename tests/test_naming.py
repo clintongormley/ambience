@@ -78,3 +78,15 @@ async def test_scope_display_name_floor_uses_registry(hass: HomeAssistant) -> No
 
 async def test_scope_display_name_floor_falls_back_to_id(hass: HomeAssistant) -> None:
     assert scope_display_name(hass, "floor", "ghost_floor") == "ghost_floor"
+
+
+async def test_scope_device_name_composes_prefix_and_default(hass):
+    from homeassistant.helpers import area_registry as ar
+
+    from custom_components.ambience.naming import scope_device_name
+
+    area = ar.async_get(hass).async_create("Living Room")
+    assert scope_device_name(hass, "house", None, "Ambience") == "House Ambience"
+    assert scope_device_name(hass, "area", area.id, "Ambience") == "Living Room Ambience"
+    # Falls back to the provided fallback when the registry entry is gone.
+    assert scope_device_name(hass, "area", "missing", "Mood", fallback="Garage") == "Garage Mood"

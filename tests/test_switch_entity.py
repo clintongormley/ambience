@@ -63,7 +63,7 @@ async def test_one_switch_per_floor(hass, mock_config_entry):
     assert len(floor_switches) == 2
 
 
-async def test_all_switches_share_one_ambience_device(hass, mock_config_entry):
+async def test_each_scope_gets_its_own_device(hass, mock_config_entry):
     ar.async_get(hass).async_create("Living Room")
     fr.async_get(hass).async_create("Upstairs")
     await _setup(hass, mock_config_entry)
@@ -71,21 +71,29 @@ async def test_all_switches_share_one_ambience_device(hass, mock_config_entry):
     dev_reg = dr.async_get(hass)
     ent_reg = er.async_get(hass)
 
-    # Exactly one device for the config entry, named "Ambience".
+    # One device per scope: house (main) + 1 floor + 1 area = 3.
     devices = dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)
-    assert len(devices) == 1
-    device = devices[0]
-    assert device.name == "Ambience"
+    assert len(devices) == 3
 
-    # Every ambience switch entity hangs off that single device.
-    switch_entities = [
-        e
-        for e in er.async_entries_for_config_entry(ent_reg, mock_config_entry.entry_id)
-        if e.domain == "switch"
-    ]
-    assert len(switch_entities) >= 3  # house + area + floor
-    for e in switch_entities:
-        assert e.device_id == device.id
+    main = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
+    assert main is not None
+    assert main.name == "House Ambience"
+
+    # Floor + area devices are sub-devices linked to the main device.
+    area_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "area")
+    floor_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "floor")
+    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area_id}")})
+    floor_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor_id}")})
+    assert area_dev is not None and area_dev.via_device_id == main.id
+    assert floor_dev is not None and floor_dev.via_device_id == main.id
+
+    # Each switch entity is on its own scope device.
+    house_eid = ent_reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house")
+    area_eid = ent_reg.async_get_entity_id("switch", DOMAIN, f"ambience_switch_area_{area_id}")
+    floor_eid = ent_reg.async_get_entity_id("switch", DOMAIN, f"ambience_switch_floor_{floor_id}")
+    assert ent_reg.async_get(house_eid).device_id == main.id
+    assert ent_reg.async_get(area_eid).device_id == area_dev.id
+    assert ent_reg.async_get(floor_eid).device_id == floor_dev.id
 
 
 # --- behavior (use house switch; logic identical across scopes) -------------
@@ -178,17 +186,21 @@ async def test_restore_off_expired_turns_on_immediately(hass, mock_config_entry,
 # --- dispatcher -------------------------------------------------------------
 
 
-async def test_default_display_names_include_scope_prefix(hass, mock_config_entry):
-    """Default display name is '<House|floor|area> <defaults.name>'."""
+def _friendly(hass: HomeAssistant, entity_id: str) -> str | None:
+    state = hass.states.get(entity_id)
+    return state.attributes.get("friendly_name") if state else None
+
+
+async def test_friendly_names_are_not_doubled(hass, mock_config_entry):
     ar.async_get(hass).async_create("Master Bedroom")
     fr.async_get(hass).async_create("Upstairs")
     await _setup(hass, mock_config_entry)
 
-    names = {ent.name for ent in hass.data[DOMAIN][DATA_SWITCHES].values()}
+    names = {_friendly(hass, s.entity_id) for s in hass.states.async_all("switch")}
     assert names == {"House Ambience", "Upstairs Ambience", "Master Bedroom Ambience"}
 
 
-async def test_dispatcher_signal_global_updates_all_names(hass, mock_config_entry):
+async def test_default_name_change_updates_device_names(hass, mock_config_entry):
     ar.async_get(hass).async_create("Living Room")
     fr.async_get(hass).async_create("Upstairs")
     await _setup(hass, mock_config_entry)
@@ -198,26 +210,40 @@ async def test_dispatcher_signal_global_updates_all_names(hass, mock_config_entr
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
 
-    names = {ent.name for ent in hass.data[DOMAIN][DATA_SWITCHES].values()}
+    dev_reg = dr.async_get(hass)
+    names = {d.name for d in dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)}
     assert names == {"House Master", "Upstairs Master", "Living Room Master"}
 
 
-async def test_name_ignores_legacy_per_scope_override(hass, mock_config_entry):
-    """Per-scope name overrides were removed: a legacy ``switch.name`` in stored
-    config is inert — the display name is always '<prefix> <defaults.name>'."""
-    ar.async_get(hass).async_create("Living Room")
+async def test_area_rename_updates_device_name(hass, mock_config_entry):
+    area = ar.async_get(hass).async_create("Living Room")
     await _setup(hass, mock_config_entry)
 
+    # No manual signal dispatch: the area-registry 'update' event must drive the
+    # device-name resync on its own (see also test_init_switch_lifecycle).
+    ar.async_get(hass).async_update(area.id, name="Lounge")
+    await hass.async_block_till_done()
+
+    dev_reg = dr.async_get(hass)
+    dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    assert dev.name == "Lounge Ambience"
+
+
+async def test_user_device_rename_is_preserved(hass, mock_config_entry):
+    area = ar.async_get(hass).async_create("Living Room")
+    await _setup(hass, mock_config_entry)
+
+    dev_reg = dr.async_get(hass)
+    dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    dev_reg.async_update_device(dev.id, name_by_user="My Lounge")
+
+    # A default-name change must not clobber the user's rename.
     store = hass.data[DOMAIN][DATA_STORE]
-    area_entries = [k for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "area"]
-    area_kind, area_id = area_entries[0]
-    # Inject a legacy override directly into stored config, then refresh.
-    store.scope_config(area_kind, area_id).setdefault("switch", {})["name"] = "Kitchen lights"
+    await store.async_save_switch_defaults({"name": "Master", "auto_on_delay_seconds": 7200})
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
 
-    assert _switch(hass, area_kind, area_id).name == "Living Room Ambience"
-    assert _switch(hass, "house", None).name == "House Ambience"
+    assert _friendly(hass, "switch.living_room_ambience") == "My Lounge"
 
 
 async def test_unload_cancels_pending_timers(hass, mock_config_entry, fixed_utcnow):
@@ -415,3 +441,52 @@ def test_switch_unique_id_helper() -> None:
     assert switch_unique_id("house", None) == "ambience_switch_house"
     assert switch_unique_id("area", "living_room") == "ambience_switch_area_living_room"
     assert switch_unique_id("floor", "ground") == "ambience_switch_floor_ground"
+
+
+# --- area device placement ---------------------------------------------------
+
+
+async def test_area_device_assigned_to_its_area(hass, mock_config_entry):
+    area = ar.async_get(hass).async_create("Living Room")
+    fr.async_get(hass).async_create("Upstairs")
+    await _setup(hass, mock_config_entry)
+
+    dev_reg = dr.async_get(hass)
+    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    assert area_dev.area_id == area.id
+
+    # Floor + house devices have no area.
+    floor_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "floor")
+    floor_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor_id}")})
+    main = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
+    assert floor_dev.area_id is None
+    assert main.area_id is None
+
+
+async def test_area_assignment_does_not_override_user_move(hass, mock_config_entry):
+    area = ar.async_get(hass).async_create("Living Room")
+    other = ar.async_get(hass).async_create("Garage")
+    await _setup(hass, mock_config_entry)
+
+    dev_reg = dr.async_get(hass)
+    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    # User moves the device to a different area.
+    dev_reg.async_update_device(area_dev.id, area_id=other.id)
+
+    # Re-running the assignment (e.g. via a reload) must not move it back.
+    sw = _switch(hass, "area", area.id)
+    sw._assign_area_device()
+    assert dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")}).area_id == other.id
+
+
+async def test_sync_device_name_no_device_is_noop(hass, mock_config_entry):
+    """When the scope's device is missing, _sync_device_name returns without
+    attempting a registry update (the `device is None` guard)."""
+    from unittest.mock import patch
+
+    await _setup(hass, mock_config_entry)
+    sw = _switch(hass, "house", None)
+    with patch("custom_components.ambience.switch.dr.async_get") as mock_get:
+        mock_get.return_value.async_get_device.return_value = None
+        sw._sync_device_name()  # must not raise
+        mock_get.return_value.async_update_device.assert_not_called()

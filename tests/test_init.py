@@ -296,3 +296,22 @@ async def test_update_listener_triggers_reload(
 
     # After the reload the entry should still be loaded.
     assert mock_config_entry.state is ConfigEntryState.LOADED
+
+
+def test_exposure_constants_shape():
+    from custom_components.ambience.const import (
+        ASSISTANT_FIELDS,
+        DEFAULT_EXPOSED_ASSISTANTS,
+        KNOWN_ASSISTANTS,
+    )
+
+    assert KNOWN_ASSISTANTS == ("conversation", "cloud.google_assistant", "cloud.alexa")
+    # Assist exposed by default; Google/Alexa off.
+    assert DEFAULT_EXPOSED_ASSISTANTS == {
+        "conversation": True,
+        "cloud.google_assistant": False,
+        "cloud.alexa": False,
+    }
+    # Every known assistant has a safe (dot-free) form field name.
+    assert set(ASSISTANT_FIELDS) == set(KNOWN_ASSISTANTS)
+    assert all("." not in field for field in ASSISTANT_FIELDS.values())

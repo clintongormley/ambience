@@ -19,9 +19,10 @@ from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
@@ -42,11 +43,13 @@ from .conditions.time_of_day import TimeOfDayCondition
 from .conditions.weather import WeatherCondition
 from .config_health_issues import reconcile_issues
 from .const import (
+    CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
     DATA_CARD_RESOURCE_URL,
     DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
+    DATA_EXPOSED_ASSISTANTS,
     DATA_LAST_APPLIED,
     DATA_LUX_RANGES,
     DATA_PERIODS,
@@ -55,9 +58,11 @@ from .const import (
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
     DATA_TRACE_SINKS,
+    DEFAULT_EXPOSED_ASSISTANTS,
     DEFAULT_SHOW_SIDEBAR_PANEL,
     DOMAIN,
     SIGNAL_CONFIG_CHANGED,
+    SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from .exposed_actions import ExposedActionsStore
 from .lux_ranges import LuxRangeStore
@@ -107,6 +112,16 @@ def _hash_bundle(bundle_path: Path) -> str:
         return hashlib.sha256(bundle_path.read_bytes()).hexdigest()[:12]
     except OSError:
         return "missing"
+
+
+def _remove_scope_device(hass: HomeAssistant, scope_kind: str, scope_id: str) -> None:
+    """Remove a floor/area scope's sub-device from the device registry."""
+    from .switch import _device_identifiers
+
+    dev_reg = dr.async_get(hass)
+    device = dev_reg.async_get_device(identifiers=_device_identifiers(scope_kind, scope_id))
+    if device is not None:
+        dev_reg.async_remove_device(device.id)
 
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
@@ -200,6 +215,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_register_commands(hass)
 
+    domain_data[DATA_EXPOSED_ASSISTANTS] = entry.options.get(
+        CONF_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS
+    )
+
     await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
 
     async def _handle_area_registry_update(event: Event) -> None:
@@ -213,16 +232,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if add_entities is not None and area is not None:
                 add_entities([AmbienceScopeSwitch("area", area_id, area.name)])
             return
+        if action == "update":
+            # An area rename must refresh the scope device names. The global
+            # signal is a no-op for scopes whose name is unchanged.
+            async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
+            return
         if action == "remove":
+            from .switch import switch_unique_id
+
             await store.async_delete_area(area_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("area", area_id), None)
             clear_last_applied(hass, "area", area_id)
             ent_reg = er.async_get(hass)
             ent_id = ent_reg.async_get_entity_id(
-                "switch", DOMAIN, f"ambience_switch_area_{area_id}"
+                "switch", DOMAIN, switch_unique_id("area", area_id)
             )
             if ent_id is not None:
                 ent_reg.async_remove(ent_id)
+            _remove_scope_device(hass, "area", area_id)
 
     entry.async_on_unload(
         hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _handle_area_registry_update)
@@ -239,16 +266,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if add_entities is not None and floor is not None:
                 add_entities([AmbienceScopeSwitch("floor", floor_id, floor.name)])
             return
+        if action == "update":
+            # A floor rename must refresh the scope device names. The global
+            # signal is a no-op for scopes whose name is unchanged.
+            async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
+            return
         if action == "remove":
+            from .switch import switch_unique_id
+
             await store.async_delete_floor(floor_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("floor", floor_id), None)
             clear_last_applied(hass, "floor", floor_id)
             ent_reg = er.async_get(hass)
             ent_id = ent_reg.async_get_entity_id(
-                "switch", DOMAIN, f"ambience_switch_floor_{floor_id}"
+                "switch", DOMAIN, switch_unique_id("floor", floor_id)
             )
             if ent_id is not None:
                 ent_reg.async_remove(ent_id)
+            _remove_scope_device(hass, "floor", floor_id)
 
     entry.async_on_unload(
         hass.bus.async_listen(fr.EVENT_FLOOR_REGISTRY_UPDATED, _handle_floor_registry_update)

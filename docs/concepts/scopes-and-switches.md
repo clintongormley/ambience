@@ -34,6 +34,10 @@ Every scope has one switch entity, named after the scope and ending in "Ambience
 
 Floor switches carry `_floor_` in their entity ID to avoid collisions with an area of the same name.
 
+Each switch lives on its own device. The House switch is the main **Ambience** device, and every floor and area switch is a sub-device linked to it. **Area** sub-devices are placed in their matching HA area automatically, so the switch shows up under that area and area-aware voice assistants can resolve it. If you move an area's device to a different area yourself, Ambience leaves your choice alone.
+
+You can choose which voice assistants the switches are exposed to in the integration's **Configure** dialog — see [Installation](../installation.md#voice-assistants).
+
 All three types of switch appear in the Ambience panel as a toggle on each scope row. You can also control them from HA's developer tools, automations, or dashboards like any other switch entity.
 
 !!! info "📷 Screenshot"

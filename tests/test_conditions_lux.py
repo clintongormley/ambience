@@ -300,3 +300,74 @@ def test_contains_empty_outer_is_wildcard() -> None:
     m = _cond()
     assert m.contains({"sensors": []}, {"sensors": ["sensor.a"], "range": "dark"}) is True
     assert m.contains({"sensors": ["sensor.a"], "range": "dark"}, {"sensors": []}) is False
+
+
+def test_matches_non_dict_is_false() -> None:
+    assert _cond().matches("not-a-dict", _snap()) is False
+
+
+def test_describe_non_dict_predicate_is_none() -> None:
+    assert _cond().describe(_snap(), "not-a-dict") is None
+
+
+def test_describe_predicate_unknown_range_reports_it() -> None:
+    snap = _snap({"sensor.a": 5.0}, names={"sensor.a": "Lounge"})
+    pred = {"sensors": ["sensor.a"], "range": "nope"}
+    assert _cond().describe(snap, pred) == "unknown lux range: 'nope'"
+
+
+def test_describe_predicate_unbounded_band_omits_want() -> None:
+    # No min/max/range: the band is open at both ends (_fmt_band -> ""), so there
+    # is nothing to state — describe shows just the reading.
+    snap = _snap({"sensor.a": 320.0}, names={"sensor.a": "Lounge"})
+    assert _cond().describe(snap, {"sensors": ["sensor.a"]}) == "Lounge: 320 lx ✓"
+
+
+def test_validate_non_dict_predicate_raises() -> None:
+    with pytest.raises(ValueError, match="lux predicate must be a dict"):
+        _cond().validate_predicate("not-a-dict")
+
+
+def test_validate_accepts_inline_band_without_sensors() -> None:
+    # `sensors` absent (None): the per-entry loop is skipped; the inline band
+    # still validates.
+    _cond().validate_predicate({"min": 10, "max": 50})
+
+
+def test_trigger_deps_non_dict_is_empty() -> None:
+    assert _cond().trigger_deps("not-a-dict").entities == frozenset()
+
+
+def test_is_constraining_only_when_sensors_present() -> None:
+    m = _cond()
+    assert m.is_constraining({"sensors": ["sensor.a"]}) is True
+    assert m.is_constraining({"sensors": []}) is False
+    assert m.is_constraining("not-a-dict") is False
+
+
+def test_contains_non_dict_is_false() -> None:
+    m = _cond()
+    assert m.contains("x", {"sensors": ["sensor.a"]}) is False
+    assert m.contains({"sensors": ["sensor.a"]}, "x") is False
+
+
+def test_contains_unknown_range_is_false() -> None:
+    # A referenced range that no longer resolves means containment can't be
+    # proven — be conservative.
+    m = _cond()
+    outer = {"sensors": ["sensor.a"], "range": "nope"}
+    inner = {"sensors": ["sensor.a"], "min": 0, "max": 10}
+    assert m.contains(outer, inner) is False
+
+
+def test_contains_all_over_more_sensors_within_all_over_fewer() -> None:
+    m = _cond()
+    outer = {"sensors": ["sensor.a", "sensor.b"], "min": 0, "max": 100, "quant": "all"}
+    inner = {
+        "sensors": ["sensor.a", "sensor.b", "sensor.c"],
+        "min": 0,
+        "max": 100,
+        "quant": "all",
+    }
+    assert m.contains(outer, inner) is True
+    assert m.contains(inner, outer) is False

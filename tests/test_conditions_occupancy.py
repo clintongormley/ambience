@@ -11,6 +11,7 @@ from custom_components.ambience.conditions.occupancy import (
     OccupancyCondition,
     OccupancySnapshot,
 )
+from custom_components.ambience.triggers import EMPTY
 
 
 def _snap(sensors=None, now=None, names=None) -> OccupancySnapshot:
@@ -346,6 +347,67 @@ def test_contains_longer_for_is_more_specific() -> None:
     m = OccupancyCondition()
     outer = {"sensors": ["binary_sensor.a"], "for": {"h": 0, "m": 1, "s": 0}}
     inner = {"sensors": ["binary_sensor.a"], "for": {"h": 0, "m": 5, "s": 0}}
+    assert m.contains(outer, inner) is True
+    assert m.contains(inner, outer) is False
+
+
+def test_matches_non_dict_is_false() -> None:
+    assert OccupancyCondition().matches("not-a-dict", _snap()) is False
+
+
+def test_matches_missing_sensor_is_unobservable_miss() -> None:
+    # A referenced sensor absent from the snapshot is unobservable (_holds -> None),
+    # which collapses to a miss rather than manufacturing a match.
+    assert OccupancyCondition().matches({"sensors": ["binary_sensor.gone"]}, _snap()) is False
+
+
+def test_describe_non_dict_predicate_is_none() -> None:
+    assert OccupancyCondition().describe(_snap(), "not-a-dict") is None
+
+
+def test_describe_snapshot_no_sensors() -> None:
+    assert OccupancyCondition().describe(_snap()) == "no occupancy sensors"
+
+
+def test_describe_snapshot_zero_active() -> None:
+    snap = _snap(
+        {"binary_sensor.a": _s("off"), "binary_sensor.b": _s("off")},
+        names={"binary_sensor.a": "Lounge", "binary_sensor.b": "Hall"},
+    )
+    assert OccupancyCondition().describe(snap) == "0 of 2 active"
+
+
+def test_validate_non_dict_predicate_raises() -> None:
+    with pytest.raises(ValueError, match="occupancy predicate must be a dict"):
+        OccupancyCondition().validate_predicate("not-a-dict")
+
+
+def test_trigger_deps_non_dict_is_empty() -> None:
+    assert OccupancyCondition().trigger_deps("not-a-dict") is EMPTY
+
+
+def test_is_constraining_only_when_sensors_present() -> None:
+    m = OccupancyCondition()
+    assert m.is_constraining({"sensors": ["binary_sensor.a"]}) is True
+    assert m.is_constraining({"sensors": []}) is False
+    assert m.is_constraining("not-a-dict") is False
+
+
+def test_contains_non_dict_is_false() -> None:
+    m = OccupancyCondition()
+    assert m.contains("x", {"sensors": ["binary_sensor.a"]}) is False
+    assert m.contains({"sensors": ["binary_sensor.a"]}, "x") is False
+
+
+def test_contains_all_over_more_sensors_within_all_over_fewer() -> None:
+    # all-(a,b) is implied by all-(a,b,c): the larger "all" set is the more
+    # specific match-set, so inner ⊆ outer.
+    m = OccupancyCondition()
+    outer = {"sensors": ["binary_sensor.a", "binary_sensor.b"], "quant": "all"}
+    inner = {
+        "sensors": ["binary_sensor.a", "binary_sensor.b", "binary_sensor.c"],
+        "quant": "all",
+    }
     assert m.contains(outer, inner) is True
     assert m.contains(inner, outer) is False
 

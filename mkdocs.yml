@@ -53,6 +53,7 @@ nav:
       - Scopes & switches: concepts/scopes-and-switches.md
       - Scenes & resolution: concepts/scenes-and-resolution.md
       - Categories: concepts/categories.md
+      - Config health: concepts/config-health.md
   - Conditions:
       - Overview: conditions/index.md
       - Time of day: conditions/time-of-day.md

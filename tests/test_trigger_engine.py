@@ -1497,3 +1497,14 @@ async def test_initial_sync_emits_startup_trace_when_tracing_active(hass) -> Non
         assert event.cause.kind == CauseKind.STARTUP
     finally:
         logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
+async def test_note_config_changed_accumulates_pending(hass) -> None:
+    engine = _engine(hass, [], {})
+    engine.note_config_changed(("area", "a"))
+    engine.note_config_changed(("floor", "f"))
+    assert engine._pending_affected == {("area", "a"), ("floor", "f")}
+    assert engine._pending_all is False
+    # A global change upgrades the batch to "reapply all".
+    engine.note_config_changed(None)
+    assert engine._pending_all is True

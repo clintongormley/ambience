@@ -15,7 +15,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.debounce import Debouncer
 
 from .const import (
@@ -94,6 +94,11 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._apply_locks: defaultdict[tuple[str, str | None, str], asyncio.Lock] = defaultdict(
             asyncio.Lock
         )
+        # What a config-changed signal touched, accumulated across the debounce
+        # window so the coalesced refresh re-applies only what changed. A global
+        # change (None) sets _pending_all, which wins over any per-scope entries.
+        self._pending_affected: set[tuple[str, str | None]] = set()
+        self._pending_all = False
         # Debounced full refresh, for coalescing rapid config-changed signals.
         self._refresh_debouncer = Debouncer(
             hass,
@@ -374,6 +379,16 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
     async def async_start(self) -> None:
         """Build the index, subscribe, and run the startup sync pass (immediate)."""
         await self._async_refresh()
+
+    @callback
+    def note_config_changed(self, affected: tuple[str, str | None] | None) -> None:
+        """Record what a config-changed signal touched, to narrow the next
+        debounced refresh. `affected` is a (scope_kind, scope_id) for a
+        scope-local change, or None for a global change (reapply everything)."""
+        if affected is None:
+            self._pending_all = True
+        else:
+            self._pending_affected.add(affected)
 
     async def async_request_refresh(self) -> None:
         """Request a full refresh, debounced to coalesce rapid config changes."""

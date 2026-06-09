@@ -524,8 +524,11 @@ async def test_lock_serializes_ordering_when_winner_changes_mid_apply(hass) -> N
     await engine._refresh_snapshots({"tod"})  # evening -> scene 0 wins
 
     task_a = asyncio.create_task(engine._resolve_and_apply("area", "a", "g"))
-    while "start0" not in events:  # let A resolve scene 0 and block mid-action
+    for _ in range(100):  # let A resolve scene 0 and reach its (blocking) action
+        if "start0" in events:
+            break
         await asyncio.sleep(0)
+    assert events == ["start0"], "scene 0's action never started"  # fail fast, don't hang
 
     tod.value = "morning"  # winner flips to scene 1 while A is still applying
     await engine._refresh_snapshots({"tod"})

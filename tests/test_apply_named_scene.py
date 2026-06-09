@@ -62,6 +62,55 @@ async def test_runs_named_scene_actions_bypassing_predicates(hass, mock_config_e
     assert len(calls) == 1
 
 
+async def test_skips_scenes_in_other_categories(hass, mock_config_entry):
+    # A scene with the same name in a different category must not be matched; the
+    # lookup skips it and finds the one in the requested category.
+    area_id = await _install(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "Bright",
+                    "category": "blinds",
+                    "when": {},
+                    "actions": [
+                        {"service": "cover.open_cover", "entity_ids": ["cover.b"], "params": {}}
+                    ],
+                },
+                {
+                    "name": "Bright",
+                    "category": "lighting",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.lamp"], "params": {}}
+                    ],
+                },
+            ]
+        },
+    )
+    light_calls = async_mock_service(hass, "light", "turn_on")
+    cover_calls = async_mock_service(hass, "cover", "open_cover")
+
+    await async_apply_named_scene(hass, "area", area_id, "lighting", "Bright")
+
+    assert len(light_calls) == 1
+    assert len(cover_calls) == 0
+
+
+async def test_runs_with_tracing_inactive(hass, mock_config_entry):
+    # When no trace buffer is registered, tracing_active() is False: the actions
+    # still run and no trace is emitted.
+    area_id = await _install(hass, mock_config_entry)
+    hass.data[DOMAIN].pop(DATA_TRACE_BUFFER, None)
+    calls = async_mock_service(hass, "light", "turn_on")
+
+    await async_apply_named_scene(hass, "area", area_id, "lighting", "Bright")
+
+    assert len(calls) == 1
+
+
 async def test_name_match_is_case_insensitive(hass, mock_config_entry):
     area_id = await _install(hass, mock_config_entry)
     calls = async_mock_service(hass, "light", "turn_on")

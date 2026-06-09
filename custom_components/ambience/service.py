@@ -438,6 +438,82 @@ async def async_run_scene_actions(
     return {"ran": len(actions), "scene_name": scene_name}
 
 
+async def async_apply_named_scene(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    category: str,
+    scene_name: str,
+    *,
+    force: bool = False,
+) -> None:
+    """Apply a single named scene's actions directly, bypassing predicate resolution.
+
+    Locates the scene by case-insensitive name within (scope, category) — names are
+    unique there by construction — and runs its actions. Always refuses when the
+    scope is permanently disabled. Honours the scope switch unless `force=True`.
+    Does NOT touch last_applied (an out-of-band manual override, like
+    async_run_scene_actions). Emits a MANUAL-cause trace.
+    """
+    if not _scope_enabled(hass, scope_kind, scope_id):
+        raise ServiceValidationError(f"scope {scope_kind}/{scope_id} is disabled")
+
+    switch_state = _switch_state(hass, scope_kind, scope_id)
+    if not force and switch_state == "off":
+        _LOGGER.info(
+            "ambience: scope=%s/%s switch is off; skipping apply_scene (named scene %r)",
+            scope_kind,
+            scope_id,
+            scene_name,
+        )
+        return
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = _scope_config(store, scope_kind, scope_id)
+    target = scene_name.strip().lower()
+    match: tuple[int, dict[str, Any]] | None = None
+    for index, scene in enumerate(cfg.get("scenes", [])):
+        if scene.get("category") != category:
+            continue
+        name = scene.get("name")
+        if isinstance(name, str) and name.strip().lower() == target:
+            match = (index, scene)
+            break
+    if match is None:
+        raise ServiceValidationError(
+            f"no scene named {scene_name!r} in scope {scope_kind}/{scope_id} category {category!r}"
+        )
+
+    index, scene = match
+    actions = scene.get("actions", [])
+    context = (
+        log_run_actions(hass, scope_kind, scope_id, scene.get("name"), index) if actions else None
+    )
+    await async_execute_actions(
+        hass, scope_kind, scope_id, actions, scene_index=index, context=context
+    )
+
+    if tracing_active(hass):
+        emit_trace(
+            hass,
+            TraceEvent(
+                TriggerCause(kind=CauseKind.MANUAL),
+                [
+                    UnitTrace(
+                        scope_kind,
+                        scope_id,
+                        category,
+                        switch_state,
+                        Outcome.ACTED,
+                        None,
+                        winner_name=scene.get("name"),
+                        actions=actions,
+                    )
+                ],
+            ),
+        )
+
+
 async def async_execute_plan(
     hass: HomeAssistant,
     scope_kind: str,

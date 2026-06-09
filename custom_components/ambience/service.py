@@ -461,15 +461,18 @@ async def async_execute_plan(
         if actions
         else None
     )
-    await async_execute_actions(
-        hass, scope_kind, scope_id, actions, scene_index=index, context=context
-    )
-    # A winner with no actions (a pure blocker) is transparent to last_applied: it
-    # neither records itself nor clears a prior real winner. Winners that DO carry
-    # actions record their selection even if every action is skipped (unexposed).
+    # Record the selection BEFORE running the actions. We don't track per-action
+    # success, so last_applied reflects the decision, not the outcome; recording
+    # it up front means a cascade re-triggered by these actions sees the unit as
+    # already applied and debounces instead of re-firing. A winner with no actions
+    # (a pure blocker) stays transparent: it neither records itself nor clears a
+    # prior real winner.
     if actions:
         domain_data = hass.data[DOMAIN]
         domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id, category_id)] = index
+    await async_execute_actions(
+        hass, scope_kind, scope_id, actions, scene_index=index, context=context
+    )
 
 
 def get_last_applied(

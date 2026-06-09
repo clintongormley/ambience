@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 from types import SimpleNamespace
@@ -410,6 +411,133 @@ async def test_resolve_and_apply_force_reapplies_unchanged_winner(hass) -> None:
     hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] = 0
     await engine._resolve_and_apply("area", "a", "g", force=True)
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
+async def _apply_engine_with_service(hass, handler) -> AutoTriggerEngine:
+    """Engine over one area 'a' (scene 'evening' in category 'g', switch on) with
+    `handler` registered as light.turn_on and the 'tod' snapshot populated — ready
+    for a direct _resolve_and_apply with last_applied still empty."""
+    hass.services.async_register("light", "turn_on", handler)
+    act = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}]
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    scopes = [
+        ("area", "a", {"scenes": [{"when": {"tod": "evening"}, "category": "g", "actions": act}]})
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    await engine._refresh_snapshots({"tod"})
+    return engine
+
+
+async def test_concurrent_apply_of_same_unit_runs_winner_once(hass) -> None:
+    """Two triggers re-evaluating the same (scope, category) concurrently must
+    coalesce: the winning scene's actions run once, not once per trigger.
+
+    Models the reported race — a burst of triggers (e.g. several lights flipping
+    on) lands on one unit, each spawning its own apply task. Without per-unit
+    serialization both tasks read the same stale last_applied, both pass the
+    debounce, and both fire the same scene.
+    """
+    calls = 0
+
+    async def _counting_turn_on(call) -> None:
+        nonlocal calls
+        calls += 1
+        # Yield mid-apply so the second task interleaves in the read->write gap.
+        await asyncio.sleep(0)
+
+    engine = await _apply_engine_with_service(hass, _counting_turn_on)
+
+    await asyncio.gather(
+        engine._resolve_and_apply("area", "a", "g"),
+        engine._resolve_and_apply("area", "a", "g"),
+    )
+
+    assert calls == 1
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
+async def test_last_applied_recorded_before_actions_run(hass) -> None:
+    """The winning scene is recorded as last-applied BEFORE its actions execute,
+    so a cascade that re-triggers the same unit mid-apply sees it as already
+    applied and debounces. (We don't track per-action success, so the record
+    reflects the decision, not action outcomes.)"""
+    seen: list[int | None] = []
+
+    async def _record_turn_on(call) -> None:
+        seen.append(hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).get(("area", "a", "g")))
+
+    engine = await _apply_engine_with_service(hass, _record_turn_on)
+
+    await engine._resolve_and_apply("area", "a", "g")
+
+    assert seen == [0]  # already recorded by the time the action fired
+
+
+async def test_lock_serializes_ordering_when_winner_changes_mid_apply(hass) -> None:
+    """The lock holds a second trigger off until the first apply's actions finish.
+    When the winner flips mid-apply, the two scenes' actions run in order rather
+    than interleaving — the guarantee that justifies holding the lock across the
+    action run. Fails if the lock is removed: the early last_applied write alone
+    prevents a duplicate same-scene fire but does NOT order overlapping applies.
+    """
+    events: list[str] = []
+    gate = asyncio.Event()
+
+    async def _ordered_turn_on(call) -> None:
+        marker = call.data["brightness"]
+        events.append(f"start{marker}")
+        if marker == 0:
+            await gate.wait()  # scene 0's action blocks, holding the unit lock
+        events.append(f"end{marker}")
+
+    hass.services.async_register("light", "turn_on", _ordered_turn_on)
+    a0 = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 0}}]
+    a1 = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {"brightness": 1}}]
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {"when": {"tod": "evening"}, "category": "g", "actions": a0},
+                    {"when": {"tod": "morning"}, "category": "g", "actions": a1},
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    await engine._refresh_snapshots({"tod"})  # evening -> scene 0 wins
+
+    task_a = asyncio.create_task(engine._resolve_and_apply("area", "a", "g"))
+    while "start0" not in events:  # let A resolve scene 0 and block mid-action
+        await asyncio.sleep(0)
+
+    tod.value = "morning"  # winner flips to scene 1 while A is still applying
+    await engine._refresh_snapshots({"tod"})
+    task_b = asyncio.create_task(engine._resolve_and_apply("area", "a", "g"))
+    for _ in range(5):  # B makes no progress: it is queued on the unit lock
+        await asyncio.sleep(0)
+    assert events == ["start0"]
+
+    gate.set()  # let scene 0 finish; B may now proceed
+    await asyncio.gather(task_a, task_b)
+
+    assert events == ["start0", "end0", "start1", "end1"]
 
 
 class RecordingCondition:

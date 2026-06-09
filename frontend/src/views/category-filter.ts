@@ -6,7 +6,7 @@
  * `ambience-categories-changed` event, so it needs no data plumbing from its
  * parent. It reports the chosen category up via an `ambience-filter-changed`
  * event ({ category }), and routes "Add category…" to the settings modal via
- * the existing `ambience-open-settings` event ({ tab: "ambience" }).
+ * the existing `ambience-open-settings` event ({ tab: "categories" }).
  */
 import { css, html, LitElement, nothing, type PropertyValues, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
@@ -207,7 +207,7 @@ export class AmbienceCategoryFilter extends LitElement {
     this._open = false;
     this.dispatchEvent(
       new CustomEvent("ambience-open-settings", {
-        detail: { tab: "ambience" },
+        detail: { tab: "categories" },
         bubbles: true,
         composed: true,
       }),
@@ -232,8 +232,8 @@ export class AmbienceCategoryFilter extends LitElement {
     `;
   }
 
-  /** The "add category" action: opens the Ambience settings tab where categories
-   *  are managed. `footer` adds a divider so it reads as a footer action below
+  /** The "add category" action: opens the Categories settings tab where
+   *  categories are managed. `footer` adds a divider so it reads as a footer action below
    *  the filter options; without it the link stands alone. */
   private _renderAddCategory(footer: boolean): TemplateResult {
     return html`

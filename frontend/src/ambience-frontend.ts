@@ -117,7 +117,7 @@ export class AmbienceFrontend extends LitElement {
 
   @property({ attribute: false }) hass!: HassConnection;
   @state() private _settingsOpen = false;
-  @state() private _settingsTab?: "ambience" | "conditions" | "actions";
+  @state() private _settingsTab?: "ambience" | "categories" | "conditions" | "actions";
   // Seeded from localStorage so scopes-view renders filtered on first paint
   // (no flash of "All") after a reload or HA's panel rebuild on reconnect. Kept
   // in sync thereafter by the ambience-filter-changed event from the header.
@@ -127,7 +127,8 @@ export class AmbienceFrontend extends LitElement {
   // to open Settings on a specific tab. Composed so it crosses the shadow
   // boundary up to this host.
   private _onOpenSettings = (e: Event) => {
-    const tab = (e as CustomEvent<{ tab?: "ambience" | "conditions" | "actions" }>).detail?.tab;
+    const tab = (e as CustomEvent<{ tab?: "ambience" | "categories" | "conditions" | "actions" }>)
+      .detail?.tab;
     this._settingsTab = tab;
     this._settingsOpen = true;
   };

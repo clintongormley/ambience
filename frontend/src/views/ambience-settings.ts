@@ -3,7 +3,6 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { getSwitchDefaults, type HassConnection, saveSwitchDefaults } from "../api.js";
 import { localize } from "../i18n.js";
-import "./categories-settings.js";
 import type { SwitchDefaults } from "../types.js";
 
 @customElement("ambience-ambience-settings")
@@ -131,15 +130,6 @@ export class AmbienceAmbienceSettings extends LitElement {
             ${localize(this.hass, "ui.settings_ambience_delay_help", "0 = never auto-on")}
           </div>
         </div>
-      </div>
-
-      <div class="card">
-        <h3>
-          ${localize(this.hass, "ui.settings_tab_categories", "Scene categories")}
-        </h3>
-        <ambience-categories-settings
-          .hass=${this.hass}
-        ></ambience-categories-settings>
       </div>
     `;
   }

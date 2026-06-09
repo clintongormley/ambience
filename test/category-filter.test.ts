@@ -109,7 +109,7 @@ describe("<ambience-category-filter>", () => {
     await el.updateComplete;
     (el.shadowRoot!.querySelector(".category-filter-add") as HTMLButtonElement).click();
     await el.updateComplete;
-    expect(tabs).toEqual(["ambience"]);
+    expect(tabs).toEqual(["categories"]);
     expect(el.shadowRoot!.querySelector(".category-filter-menu")).toBeNull();
   });
 

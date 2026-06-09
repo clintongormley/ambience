@@ -50,6 +50,26 @@ describe("ambience-categories-settings", () => {
     expect(input.value).toBe("");
   });
 
+  test("adding a category works without crypto.randomUUID (HA over plain HTTP)", async () => {
+    // Regression: crypto.randomUUID only exists in secure contexts; over http://
+    // it is undefined and the old code threw, making "+ Add category" do nothing
+    // (which looked like a hard cap on the number of categories).
+    const realCrypto = globalThis.crypto;
+    Object.defineProperty(globalThis, "crypto", {
+      value: { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) },
+      configurable: true,
+    });
+    try {
+      el = await mount();
+      (el.shadowRoot.querySelector("button.add") as HTMLButtonElement).click();
+      await el.updateComplete;
+      expect(el.shadowRoot.querySelector(".modal")).toBeTruthy();
+      expect(el._editing.id.length).toBeGreaterThan(0);
+    } finally {
+      Object.defineProperty(globalThis, "crypto", { value: realCrypto, configurable: true });
+    }
+  });
+
   test("saving a valid unique name calls saveCategories and closes the modal", async () => {
     el = await mount();
     el._addCategory();

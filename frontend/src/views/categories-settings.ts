@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { deleteCategory, type HassConnection, listCategories, saveCategories } from "../api.js";
 import { CATEGORY_COLORS, colorHex } from "../category-colors.js";
 import { localize } from "../i18n.js";
+import { randomId } from "../random-id.js";
 import type { SceneCategory } from "../types.js";
 
 @customElement("ambience-categories-settings")
@@ -168,7 +169,7 @@ export class AmbienceCategoriesSettings extends LitElement {
 
   _addCategory() {
     // New categories start blank; not persisted until given a valid, unique name.
-    const id = crypto.randomUUID().replace(/-/g, "");
+    const id = randomId();
     this._editing = { id, name: "" };
     this._modalError = "";
   }

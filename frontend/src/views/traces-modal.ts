@@ -179,8 +179,12 @@ export class AmbienceTracesModal extends LitElement {
     this._expanded = next;
   }
 
-  private _download(): void {
-    void downloadScopeDiagnostics(this.hass, this.scope, this.category);
+  private async _download(): Promise<void> {
+    try {
+      await downloadScopeDiagnostics(this.hass, this.scope, this.category);
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
+    }
   }
 
   private _onClose(): void {

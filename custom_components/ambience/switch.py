@@ -138,17 +138,12 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         # it is not set here, avoiding a stale name on restart when the user has
         # changed the default. Floor/area devices are sub-devices of the main
         # "ambience" service device.
-        if scope_kind == "house":
-            self._attr_device_info = DeviceInfo(
-                identifiers=_device_identifiers(scope_kind, scope_id),
-                entry_type=DeviceEntryType.SERVICE,
-            )
-        else:
-            self._attr_device_info = DeviceInfo(
-                identifiers=_device_identifiers(scope_kind, scope_id),
-                entry_type=DeviceEntryType.SERVICE,
-                via_device=(DOMAIN, "ambience"),
-            )
+        self._attr_device_info = DeviceInfo(
+            identifiers=_device_identifiers(scope_kind, scope_id),
+            entry_type=DeviceEntryType.SERVICE,
+        )
+        if scope_kind != "house":
+            self._attr_device_info["via_device"] = (DOMAIN, "ambience")
         # Deterministic entity_id for clean installs; entity registry takes
         # over after first registration so user-renames stick.
         self.entity_id = _entity_id_for(scope_kind, display_name)
@@ -270,12 +265,16 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
 
         suggested_area in DeviceInfo is removed in HA 2026.9, so set area_id
         directly. The "only when None" guard means the device is placed in its
-        area on first creation but a later user move is never overridden.
+        area on first creation and a later move to a *different* area is never
+        overridden. (A deliberate move to no area resets area_id to None, so it
+        is re-placed on the next reload — the area is the sensible default.)
         """
         if self._scope_kind != "area":
             return
         dev_reg = dr.async_get(self.hass)
-        device = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{self._scope_id}")})
+        device = dev_reg.async_get_device(
+            identifiers=_device_identifiers(self._scope_kind, self._scope_id)
+        )
         if device is not None and device.area_id is None:
             dev_reg.async_update_device(device.id, area_id=self._scope_id)
 

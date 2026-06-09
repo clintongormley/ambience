@@ -116,8 +116,10 @@ def _hash_bundle(bundle_path: Path) -> str:
 
 def _remove_scope_device(hass: HomeAssistant, scope_kind: str, scope_id: str) -> None:
     """Remove a floor/area scope's sub-device from the device registry."""
+    from .switch import _device_identifiers
+
     dev_reg = dr.async_get(hass)
-    device = dev_reg.async_get_device(identifiers={(DOMAIN, f"{scope_kind}_{scope_id}")})
+    device = dev_reg.async_get_device(identifiers=_device_identifiers(scope_kind, scope_id))
     if device is not None:
         dev_reg.async_remove_device(device.id)
 
@@ -236,12 +238,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
             return
         if action == "remove":
+            from .switch import switch_unique_id
+
             await store.async_delete_area(area_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("area", area_id), None)
             clear_last_applied(hass, "area", area_id)
             ent_reg = er.async_get(hass)
             ent_id = ent_reg.async_get_entity_id(
-                "switch", DOMAIN, f"ambience_switch_area_{area_id}"
+                "switch", DOMAIN, switch_unique_id("area", area_id)
             )
             if ent_id is not None:
                 ent_reg.async_remove(ent_id)
@@ -268,12 +272,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
             return
         if action == "remove":
+            from .switch import switch_unique_id
+
             await store.async_delete_floor(floor_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("floor", floor_id), None)
             clear_last_applied(hass, "floor", floor_id)
             ent_reg = er.async_get(hass)
             ent_id = ent_reg.async_get_entity_id(
-                "switch", DOMAIN, f"ambience_switch_floor_{floor_id}"
+                "switch", DOMAIN, switch_unique_id("floor", floor_id)
             )
             if ent_id is not None:
                 ent_reg.async_remove(ent_id)

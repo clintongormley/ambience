@@ -49,9 +49,9 @@ class AmbienceOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
+            # Every field is vol.Required with a default, so it is always present.
             exposed = {
-                assistant: bool(user_input.get(field, False))
-                for assistant, field in ASSISTANT_FIELDS.items()
+                assistant: user_input[field] for assistant, field in ASSISTANT_FIELDS.items()
             }
             return self.async_create_entry(
                 title="",

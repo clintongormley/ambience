@@ -13,7 +13,14 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 
-from .const import CONF_SHOW_SIDEBAR_PANEL, DEFAULT_SHOW_SIDEBAR_PANEL, DOMAIN
+from .const import (
+    ASSISTANT_FIELDS,
+    CONF_EXPOSED_ASSISTANTS,
+    CONF_SHOW_SIDEBAR_PANEL,
+    DEFAULT_EXPOSED_ASSISTANTS,
+    DEFAULT_SHOW_SIDEBAR_PANEL,
+    DOMAIN,
+)
 
 
 class AmbienceConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -42,8 +49,31 @@ class AmbienceOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            exposed = {
+                assistant: bool(user_input.get(field, False))
+                for assistant, field in ASSISTANT_FIELDS.items()
+            }
+            return self.async_create_entry(
+                title="",
+                data={
+                    CONF_SHOW_SIDEBAR_PANEL: user_input[CONF_SHOW_SIDEBAR_PANEL],
+                    CONF_EXPOSED_ASSISTANTS: exposed,
+                },
+            )
 
-        current = self.config_entry.options.get(CONF_SHOW_SIDEBAR_PANEL, DEFAULT_SHOW_SIDEBAR_PANEL)
-        schema = vol.Schema({vol.Required(CONF_SHOW_SIDEBAR_PANEL, default=current): bool})
-        return self.async_show_form(step_id="init", data_schema=schema)
+        current = self.config_entry.options.get(
+            CONF_SHOW_SIDEBAR_PANEL, DEFAULT_SHOW_SIDEBAR_PANEL
+        )
+        exposed = self.config_entry.options.get(
+            CONF_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS
+        )
+        fields: dict[Any, Any] = {
+            vol.Required(CONF_SHOW_SIDEBAR_PANEL, default=current): bool
+        }
+        for assistant, field in ASSISTANT_FIELDS.items():
+            # DEFAULT_EXPOSED_ASSISTANTS[assistant] (not .get) so a new assistant
+            # added to ASSISTANT_FIELDS but forgotten in DEFAULT_EXPOSED_ASSISTANTS
+            # fails loudly instead of silently defaulting to off.
+            default = exposed.get(assistant, DEFAULT_EXPOSED_ASSISTANTS[assistant])
+            fields[vol.Required(field, default=default)] = bool
+        return self.async_show_form(step_id="init", data_schema=vol.Schema(fields))

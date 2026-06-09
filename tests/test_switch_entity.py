@@ -186,17 +186,24 @@ async def test_restore_off_expired_turns_on_immediately(hass, mock_config_entry,
 # --- dispatcher -------------------------------------------------------------
 
 
-async def test_default_display_names_include_scope_prefix(hass, mock_config_entry):
-    """Default display name is '<House|floor|area> <defaults.name>'."""
+def _friendly(hass: HomeAssistant, entity_id: str) -> str | None:
+    state = hass.states.get(entity_id)
+    return state.attributes.get("friendly_name") if state else None
+
+
+async def test_friendly_names_are_not_doubled(hass, mock_config_entry):
     ar.async_get(hass).async_create("Master Bedroom")
     fr.async_get(hass).async_create("Upstairs")
     await _setup(hass, mock_config_entry)
 
-    names = {ent.name for ent in hass.data[DOMAIN][DATA_SWITCHES].values()}
+    names = {
+        _friendly(hass, s.entity_id)
+        for s in hass.states.async_all("switch")
+    }
     assert names == {"House Ambience", "Upstairs Ambience", "Master Bedroom Ambience"}
 
 
-async def test_dispatcher_signal_global_updates_all_names(hass, mock_config_entry):
+async def test_default_name_change_updates_device_names(hass, mock_config_entry):
     ar.async_get(hass).async_create("Living Room")
     fr.async_get(hass).async_create("Upstairs")
     await _setup(hass, mock_config_entry)
@@ -206,26 +213,42 @@ async def test_dispatcher_signal_global_updates_all_names(hass, mock_config_entr
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
 
-    names = {ent.name for ent in hass.data[DOMAIN][DATA_SWITCHES].values()}
+    dev_reg = dr.async_get(hass)
+    names = {
+        d.name
+        for d in dr.async_entries_for_config_entry(dev_reg, mock_config_entry.entry_id)
+    }
     assert names == {"House Master", "Upstairs Master", "Living Room Master"}
 
 
-async def test_name_ignores_legacy_per_scope_override(hass, mock_config_entry):
-    """Per-scope name overrides were removed: a legacy ``switch.name`` in stored
-    config is inert — the display name is always '<prefix> <defaults.name>'."""
-    ar.async_get(hass).async_create("Living Room")
+async def test_area_rename_updates_device_name(hass, mock_config_entry):
+    area = ar.async_get(hass).async_create("Living Room")
     await _setup(hass, mock_config_entry)
 
-    store = hass.data[DOMAIN][DATA_STORE]
-    area_entries = [k for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "area"]
-    area_kind, area_id = area_entries[0]
-    # Inject a legacy override directly into stored config, then refresh.
-    store.scope_config(area_kind, area_id).setdefault("switch", {})["name"] = "Kitchen lights"
+    ar.async_get(hass).async_update(area.id, name="Lounge")
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
 
-    assert _switch(hass, area_kind, area_id).name == "Living Room Ambience"
-    assert _switch(hass, "house", None).name == "House Ambience"
+    dev_reg = dr.async_get(hass)
+    dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    assert dev.name == "Lounge Ambience"
+
+
+async def test_user_device_rename_is_preserved(hass, mock_config_entry):
+    area = ar.async_get(hass).async_create("Living Room")
+    await _setup(hass, mock_config_entry)
+
+    dev_reg = dr.async_get(hass)
+    dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    dev_reg.async_update_device(dev.id, name_by_user="My Lounge")
+
+    # A default-name change must not clobber the user's rename.
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Master", "auto_on_delay_seconds": 7200})
+    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
+    await hass.async_block_till_done()
+
+    assert _friendly(hass, "switch.living_room_ambience") == "My Lounge"
 
 
 async def test_unload_cancels_pending_timers(hass, mock_config_entry, fixed_utcnow):

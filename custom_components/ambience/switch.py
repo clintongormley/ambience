@@ -24,11 +24,10 @@ from .const import (
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
-    DEFAULT_SWITCH_NAME,
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
-from .naming import scope_display_name
+from .naming import scope_device_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -132,21 +131,20 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         # Entity carries no name of its own: with has_entity_name the friendly
         # name becomes the device name, avoiding the "<device> <entity>" doubling.
         self._attr_name = None
-        # One device per scope. The device name carries the composed display name
-        # ("<scope> <default>"); it is kept in sync via the device registry in
-        # async_added_to_hass and on config/rename updates. Floor/area devices are
-        # sub-devices of the main "ambience" service device.
-        initial_name = f"{self._fallback_prefix} {DEFAULT_SWITCH_NAME}"
+        # One device per scope. The device name (the composed "<scope> <default>"
+        # string) is set entirely by _sync_device_name, called from
+        # async_added_to_hass and whenever SIGNAL_SWITCH_CONFIG_UPDATED fires — so
+        # it is not set here, avoiding a stale name on restart when the user has
+        # changed the default. Floor/area devices are sub-devices of the main
+        # "ambience" service device.
         if scope_kind == "house":
             self._attr_device_info = DeviceInfo(
                 identifiers=_device_identifiers(scope_kind, scope_id),
-                name=initial_name,
                 entry_type=DeviceEntryType.SERVICE,
             )
         else:
             self._attr_device_info = DeviceInfo(
                 identifiers=_device_identifiers(scope_kind, scope_id),
-                name=initial_name,
                 entry_type=DeviceEntryType.SERVICE,
                 via_device=(DOMAIN, "ambience"),
             )
@@ -192,7 +190,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
                 self.hass, SIGNAL_SWITCH_CONFIG_UPDATED, self._handle_config_updated
             )
         )
-        self._refresh_name_from_store()
+        self._sync_device_name()
         last = await self.async_get_last_state()
         if last is not None and last.state == "off":
             self._attr_is_on = False
@@ -254,26 +252,31 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             "auto_on_delay_seconds": self._resolved_delay(),
         }
 
-    def _scope_prefix(self) -> str:
-        """Live name of the scope: 'House' / floor name / area name.
-
-        Read from the HA registry so renames are reflected on the next
-        refresh. Falls back to the construction-time name if the registry
-        entry has been removed.
-        """
-        return scope_display_name(
-            self.hass, self._scope_kind, self._scope_id, fallback=self._fallback_prefix
+    def _composed_device_name(self) -> str:
+        default_name = self._store().get_switch_defaults()["name"]
+        return scope_device_name(
+            self.hass,
+            self._scope_kind,
+            self._scope_id,
+            default_name,
+            fallback=self._fallback_prefix,
         )
 
-    def _refresh_name_from_store(self) -> None:
-        """Compose the display name as `<prefix> <default>`.
+    def _sync_device_name(self) -> None:
+        """Update the scope device's registry name to the composed name.
 
-        The displayed name is the scope context (House / floor / area name)
-        followed by the global default switch name ("Ambience" unless changed in
-        the defaults).
+        Writes the integration-provided `name`; HA always displays a user's
+        `name_by_user` in preference, so manual device renames are preserved.
         """
-        default_name = self._store().get_switch_defaults()["name"]
-        self._attr_name = f"{self._scope_prefix()} {default_name}"
+        dev_reg = dr.async_get(self.hass)
+        device = dev_reg.async_get_device(
+            identifiers=_device_identifiers(self._scope_kind, self._scope_id)
+        )
+        if device is None:
+            return
+        new_name = self._composed_device_name()
+        if device.name != new_name:
+            dev_reg.async_update_device(device.id, name=new_name)
 
     def _schedule_auto_on(self, seconds: int) -> None:
         if self._timer is not None:
@@ -311,10 +314,8 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
 
     @callback
     def _handle_config_updated(self, _payload: None = None) -> None:
-        # Fired when the global switch defaults change — refresh every entity.
-        old_name = self._attr_name
-        self._refresh_name_from_store()
+        # Fired when the global switch defaults change or a scope is renamed —
+        # refresh every device's name.
+        self._sync_device_name()
         if not self._attr_is_on:
             self._schedule_auto_on_from_store(turn_on_if_expired=True)
-        if old_name != self._attr_name:
-            self.async_write_ha_state()

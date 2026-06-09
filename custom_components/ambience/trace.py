@@ -98,6 +98,8 @@ class TriggerCause:
             return "manual apply_scene"
         if self.kind == CauseKind.STARTUP:
             return "startup sync"
+        if self.kind == CauseKind.RELOADED:
+            return "config reload"
         if self.kind == CauseKind.REAPPLY:
             return f"reapply ({self.detail})" if self.detail else "reapply"
         if self.kind == CauseKind.SIMULATED:

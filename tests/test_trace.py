@@ -533,6 +533,11 @@ def test_cause_describe_simulated_without_detail():
     assert cause.describe() == "simulated"
 
 
+def test_cause_describe_reloaded():
+    cause = TriggerCause(kind=CauseKind.RELOADED)
+    assert cause.describe() == "config reload"
+
+
 def test_cause_describe_unknown_falls_back_to_string():
     # CauseKind.UNKNOWN has no dedicated branch — it falls through to str(self.kind).
     cause = TriggerCause(kind=CauseKind.UNKNOWN)

@@ -40,6 +40,21 @@ def scope_display_name(
     return fallback if fallback is not None else (scope_id or "area")
 
 
+def scope_device_name(
+    hass: HomeAssistant,
+    scope_kind: str,
+    scope_id: str | None,
+    default_name: str,
+    fallback: str | None = None,
+) -> str:
+    """Composed device name for a scope: '<House|floor|area name> <default>'.
+
+    `default_name` is the configurable switch-defaults name (e.g. "Ambience").
+    """
+    prefix = scope_display_name(hass, scope_kind, scope_id, fallback=fallback)
+    return f"{prefix} {default_name}"
+
+
 def category_names(hass: HomeAssistant) -> dict[str | None, str | None]:
     """Map of category id -> configured category name, from the store.
 

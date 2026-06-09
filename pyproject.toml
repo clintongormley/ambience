@@ -33,9 +33,11 @@ source = ["custom_components.ambience"]
 branch = true
 
 [tool.coverage.report]
-# Locked to ~the achieved branch-coverage level (99.95%), 1 point of headroom.
-# Only two genuinely-unreachable lines remain (config_flow.py:28 dead abort
-# guard behind single_config_entry, trace.py import-time setLevel).
+# Backend is at 100.00% branch+line coverage; fail_under keeps 1 point of
+# headroom. The only two genuinely-unreachable spots carry `# pragma: no cover`
+# / `no branch` inline: time_of_day._clamp_emptied's endpoint-count guard
+# (callers always pass _resolve_range first, which guarantees 2 endpoints) and
+# trace.py's import-time logger-level one-shot.
 fail_under = 99
 show_missing = true
 exclude_also = [

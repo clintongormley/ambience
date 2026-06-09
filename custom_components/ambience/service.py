@@ -494,6 +494,10 @@ async def async_apply_named_scene(
     )
 
     if tracing_active(hass):
+        outcome = Outcome.ACTED if actions else Outcome.NO_OP
+        unit_kwargs: dict[str, Any] = {"winner_name": scene.get("name")}
+        if actions:
+            unit_kwargs["actions"] = actions
         emit_trace(
             hass,
             TraceEvent(
@@ -504,10 +508,9 @@ async def async_apply_named_scene(
                         scope_id,
                         category,
                         switch_state,
-                        Outcome.ACTED,
+                        outcome,
                         None,
-                        winner_name=scene.get("name"),
-                        actions=actions,
+                        **unit_kwargs,
                     )
                 ],
             ),

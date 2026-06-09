@@ -8,8 +8,16 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
 
-from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DATA_SWITCHES, DOMAIN
+from custom_components.ambience.const import (
+    DATA_EXPOSED_ACTIONS,
+    DATA_STORE,
+    DATA_SWITCHES,
+    DATA_TRACE_BUFFER,
+    DATA_TRACE_SINKS,
+    DOMAIN,
+)
 from custom_components.ambience.service import async_apply_named_scene, get_last_applied
+from custom_components.ambience.trace import BufferSink, CauseKind, Outcome
 
 
 async def _install(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> str:
@@ -117,3 +125,56 @@ async def test_blocked_when_scope_disabled(hass, mock_config_entry):
         await async_apply_named_scene(hass, "area", area_id, "lighting", "Bright")
 
     assert len(calls) == 0
+
+
+def _activate_tracing(hass) -> BufferSink:
+    """Register a BufferSink so tracing_active() returns True and emit_trace() captures records."""
+    buffer = BufferSink()
+    hass.data.setdefault(DOMAIN, {})[DATA_TRACE_SINKS] = [buffer]
+    hass.data[DOMAIN][DATA_TRACE_BUFFER] = buffer
+    return buffer
+
+
+async def test_emits_manual_acted_trace(hass, mock_config_entry):
+    area_id = await _install(hass, mock_config_entry)
+    async_mock_service(hass, "light", "turn_on")
+    buffer = _activate_tracing(hass)
+
+    await async_apply_named_scene(hass, "area", area_id, "lighting", "Bright")
+
+    records = buffer.records()
+    assert len(records) == 1
+    record = records[0]
+    assert record.cause.kind == CauseKind.MANUAL
+    assert record.unit.outcome == Outcome.ACTED
+    assert record.unit.winner_name == "Bright"
+
+
+async def test_named_scene_without_actions_emits_no_op(hass, mock_config_entry):
+    area_id = await _install(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    # Seed a scene with empty actions in the same area.
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "Blocker",
+                    "category": "lighting",
+                    "when": {},
+                    "actions": [],
+                }
+            ]
+        },
+    )
+    async_mock_service(hass, "light", "turn_on")
+    buffer = _activate_tracing(hass)
+
+    await async_apply_named_scene(hass, "area", area_id, "lighting", "Blocker")
+
+    records = buffer.records()
+    assert len(records) == 1
+    record = records[0]
+    assert record.cause.kind == CauseKind.MANUAL
+    assert record.unit.outcome == Outcome.NO_OP
+    assert record.unit.winner_name == "Blocker"

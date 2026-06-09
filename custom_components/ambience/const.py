@@ -63,8 +63,9 @@ DEFAULT_SHOW_SIDEBAR_PANEL = True
 
 # Voice-assistant exposure (options flow).
 CONF_EXPOSED_ASSISTANTS = "exposed_assistants"
-# Mirrors homeassistant.components.homeassistant.exposed_entities.KNOWN_ASSISTANTS,
-# ordered Assist-first for the options form.
+# Pinned copy of homeassistant.components.homeassistant.exposed_entities.
+# KNOWN_ASSISTANTS, ordered Assist-first for the options form. Update this if HA
+# adds a new assistant (otherwise it would silently never be exposed).
 KNOWN_ASSISTANTS = ("conversation", "cloud.google_assistant", "cloud.alexa")
 # Default: switches exposed to local Assist only.
 DEFAULT_EXPOSED_ASSISTANTS = {

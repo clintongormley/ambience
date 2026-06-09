@@ -4,7 +4,7 @@
   "after_dependencies": ["logbook"],
   "codeowners": ["@clintongormley"],
   "config_flow": true,
-  "dependencies": ["http"],
+  "dependencies": ["homeassistant", "http"],
   "documentation": "https://clintongormley.github.io/ambience",
   "integration_type": "service",
   "iot_class": "calculated",

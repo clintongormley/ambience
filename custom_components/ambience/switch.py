@@ -27,6 +27,7 @@ from .const import (
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
+from .exposure import async_apply_switch_exposure
 from .naming import scope_device_name
 
 _LOGGER = logging.getLogger(__name__)
@@ -196,6 +197,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         if last is not None and last.state == "off":
             self._attr_is_on = False
             self._schedule_auto_on_from_store(turn_on_if_expired=True)
+        async_apply_switch_exposure(self.hass, self.entity_id)
 
     async def async_will_remove_from_hass(self) -> None:
         if self._timer is not None:

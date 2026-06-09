@@ -28,12 +28,25 @@ Let a caller of `ambience.apply_scene` choose how broad or narrow the apply is:
 
 The action takes:
 
-- **scope** (required): exactly one of `area` (HA area id), `floor` (HA floor id),
-  or `house: true`.
+- **scope** (required): the scope's Ambience switch entity_id. Each scope —
+  house, every floor, every area — has its own switch (`switch.house_ambience`,
+  `switch.<floor>_floor_ambience`, `switch.<area>_ambience`), so a single entity
+  selector (filtered to integration `ambience`, domain `switch`) lets the user
+  pick house/floor/area from one dropdown. The handler resolves the chosen
+  entity back to `(scope_kind, scope_id)` from its `unique_id`
+  (`switch_unique_id` is deterministic; `scope_for_unique_id` reverses it). A
+  well-formed entity_id that isn't an Ambience scope switch raises
+  `ServiceValidationError`.
 - **category** (optional): a category id. Omitted ⇒ all categories in the scope.
 - **scene** (optional): a scene name. Requires `category` (see validation below).
 - **force** (optional, default `false`): when `true`, apply even if the scope
   switch is `off`.
+
+> Earlier drafts took three separate scope fields (`area` / `floor` /
+> `house: true`) guarded by an exactly-one-of validator. That was replaced with
+> the single `scope` switch-entity field above: it removes the `house` boolean
+> wart and the exactly-one-scope validator, and unifies all three scope kinds
+> into one native dropdown.
 
 ## Behavior matrix
 
@@ -90,24 +103,36 @@ The existing `async_apply_scene` already handles the predicate paths (it accepts
 
 ### `__init__.py`
 
-- Extend `_APPLY_SCENE_SCHEMA`:
-  - add `vol.Optional("category")`, `vol.Optional("scene")`, `vol.Optional("force")`;
-  - add a validator: if `scene` is present, `category` is required.
+- Replace `_APPLY_SCENE_SCHEMA` with:
+  - `vol.Required("scope")` (a `cv.entity_id`), plus `vol.Optional("category")`,
+    `vol.Optional("scene")`, `vol.Optional("force")`;
+  - the validator: if `scene` is present, `category` is required.
+  - drop the old `_exactly_one_scope` and `_house_must_be_true` validators.
 - Update `_handle_apply_scene` to:
-  - parse the scope (`area`/`floor`/`house`) as today;
+  - resolve `scope` (a switch entity_id) to `(scope_kind, scope_id)` via the
+    entity registry + `scope_for_unique_id`; raise `ServiceValidationError` if it
+    isn't an Ambience scope switch;
   - if `scene` is present ⇒ `async_apply_named_scene(..., category, scene, force=...)`;
   - else ⇒ `async_apply_scene(..., category=category, force=force)`.
 
+### `switch.py`
+
+Add `scope_for_unique_id(unique_id)` — the deterministic reverse of
+`switch_unique_id` — so the handler can map a chosen scope switch back to its
+`(scope_kind, scope_id)`.
+
 ### `services.yaml`
 
-Expose all fields: `area`, `floor`, `house`, `category`, `scene`, `force`, with
-appropriate selectors and descriptions (currently only `area` and `scene` are
-listed, and `floor`/`house` are undocumented despite being handled).
+Expose `scope` (an `entity` selector filtered to integration `ambience`, domain
+`switch`), plus `category`, `scene`, `force`.
 
 ## Testing (TDD — tests written first)
 
-- **Schema validator:** `scene` without `category` rejected; valid combinations
-  accepted; exactly-one-scope still enforced.
+- **Schema validator:** `scope` required (a valid entity_id); `scene` without
+  `category` rejected; valid combinations accepted.
+- **`scope_for_unique_id`:** house/area/floor unique_ids parse back to the right
+  `(scope_kind, scope_id)`; unknown prefixes return `None`; round-trips with
+  `switch_unique_id`.
 - **`async_apply_named_scene`:**
   - runs the matched scene's actions (case-insensitive name match);
   - raises when the name is not found in the `(scope, category)`;

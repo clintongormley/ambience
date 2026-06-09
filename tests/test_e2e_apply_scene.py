@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -16,9 +17,24 @@ from custom_components.ambience.const import (
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_STORE,
+    DATA_SWITCHES,
     DOMAIN,
 )
 from custom_components.ambience.service import async_resolve_only
+
+
+def _house_scope(hass: HomeAssistant) -> str:
+    """entity_id of the always-present house scope switch."""
+    return hass.data[DOMAIN][DATA_SWITCHES][("house", None)].entity_id
+
+
+async def _make_area_scope(hass: HomeAssistant, name: str = "E2E Room") -> tuple[str, str]:
+    """Create a real HA area (which spawns its scope switch via the registry
+    listener) and return (area_id, scope_switch_entity_id)."""
+    area = ar.async_get(hass).async_create(name)
+    await hass.async_block_till_done()
+    switch = hass.data[DOMAIN][DATA_SWITCHES][("area", area.id)]
+    return area.id, switch.entity_id
 
 
 async def _setup_with_sun(hass: HomeAssistant) -> None:
@@ -50,7 +66,6 @@ async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> 
 async def test_service_call_invokes_light_turn_on(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    on_calls = async_mock_service(hass, "light", "turn_on")
     store = hass.data[DOMAIN][DATA_STORE]
     # Pre-expose the service the scene will reference.
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
@@ -64,8 +79,9 @@ async def test_service_call_invokes_light_turn_on(
             }
         ]
     )
+    area_id, scope = await _make_area_scope(hass)
     await store.async_save_area(
-        "lr",
+        area_id,
         {
             "conditions": [],
             "scenes": [
@@ -83,11 +99,14 @@ async def test_service_call_invokes_light_turn_on(
             ],
         },
     )
+    # Register the mock after seeding so a debounced engine auto-apply (if any)
+    # isn't counted; only the explicit service call below should fire it.
+    on_calls = async_mock_service(hass, "light", "turn_on")
 
     await hass.services.async_call(
         DOMAIN,
         "apply_scene",
-        {"area": "lr"},
+        {"scope": scope},
         blocking=True,
     )
 
@@ -188,26 +207,29 @@ async def test_time_of_day_scene_matches_for_area_without_conditions_field(
     assert result["scene_name"] == "all-day"
 
 
-async def test_apply_scene_accepts_floor_field(
+async def test_apply_scene_accepts_scope_switch(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """`floor:` is a valid scope field."""
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_floor(
-        "upstairs",
-        {"scenes": [{"name": "x", "when": {}, "actions": []}]},
+    """A scope switch entity_id is a valid scope; applying it resolves and runs
+    (no scenes configured ⇒ a clean no-op)."""
+    await hass.services.async_call(
+        DOMAIN, "apply_scene", {"scope": _house_scope(hass)}, blocking=True
     )
-    await hass.services.async_call(DOMAIN, "apply_scene", {"floor": "upstairs"}, blocking=True)
 
 
-async def test_apply_scene_accepts_house_true(
+async def test_apply_scene_rejects_unknown_scope_entity(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """`house: true` is a valid scope field."""
-    await hass.services.async_call(DOMAIN, "apply_scene", {"house": True}, blocking=True)
+    """A well-formed entity_id that isn't an Ambience scope switch is rejected."""
+    from homeassistant.exceptions import ServiceValidationError
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "apply_scene", {"scope": "switch.not_ambience"}, blocking=True
+        )
 
 
-async def test_apply_scene_rejects_zero_scope_fields(
+async def test_apply_scene_rejects_missing_scope(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
     import voluptuous as vol
@@ -224,7 +246,7 @@ async def test_apply_scene_rejects_scene_without_category(
 
     with pytest.raises(vol.Invalid):
         await hass.services.async_call(
-            DOMAIN, "apply_scene", {"area": "lr", "scene": "movie"}, blocking=True
+            DOMAIN, "apply_scene", {"scope": _house_scope(hass), "scene": "movie"}, blocking=True
         )
 
 
@@ -239,7 +261,7 @@ async def test_apply_scene_rejects_non_admin_user(
         await hass.services.async_call(
             DOMAIN,
             "apply_scene",
-            {"house": True},
+            {"scope": _house_scope(hass)},
             blocking=True,
             context=Context(user_id=hass_read_only_user.id),
         )
@@ -254,33 +276,10 @@ async def test_apply_scene_allows_admin_user(
     await hass.services.async_call(
         DOMAIN,
         "apply_scene",
-        {"house": True},
+        {"scope": _house_scope(hass)},
         blocking=True,
         context=Context(user_id=hass_admin_user.id),
     )
-
-
-async def test_apply_scene_rejects_multiple_scope_fields(
-    hass: HomeAssistant, installed: MockConfigEntry
-) -> None:
-    import voluptuous as vol
-
-    with pytest.raises(vol.Invalid):
-        await hass.services.async_call(
-            DOMAIN,
-            "apply_scene",
-            {"area": "a", "floor": "f"},
-            blocking=True,
-        )
-
-
-async def test_apply_scene_rejects_house_false(
-    hass: HomeAssistant, installed: MockConfigEntry
-) -> None:
-    import voluptuous as vol
-
-    with pytest.raises(vol.Invalid):
-        await hass.services.async_call(DOMAIN, "apply_scene", {"house": False}, blocking=True)
 
 
 async def test_engine_auto_applies_state_scene_on_config_change(
@@ -395,14 +394,14 @@ async def test_engine_torn_down_on_unload(hass: HomeAssistant, installed: MockCo
 async def test_service_call_named_scene_runs_actions_bypassing_predicates(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    on_calls = async_mock_service(hass, "light", "turn_on")
     store = hass.data[DOMAIN][DATA_STORE]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
     await exposed_store.save(
         [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
     )
+    area_id, scope = await _make_area_scope(hass)
     await store.async_save_area(
-        "lr",
+        area_id,
         {
             "scenes": [
                 {
@@ -423,11 +422,12 @@ async def test_service_call_named_scene_runs_actions_bypassing_predicates(
             ],
         },
     )
+    on_calls = async_mock_service(hass, "light", "turn_on")
 
     await hass.services.async_call(
         DOMAIN,
         "apply_scene",
-        {"area": "lr", "category": "lighting", "scene": "Bright"},
+        {"scope": scope, "category": "lighting", "scene": "Bright"},
         blocking=True,
     )
 
@@ -437,8 +437,6 @@ async def test_service_call_named_scene_runs_actions_bypassing_predicates(
 async def test_service_call_category_limits_to_one_category(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    light_calls = async_mock_service(hass, "light", "turn_on")
-    cover_calls = async_mock_service(hass, "cover", "open_cover")
     store = hass.data[DOMAIN][DATA_STORE]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
     await exposed_store.save(
@@ -447,8 +445,9 @@ async def test_service_call_category_limits_to_one_category(
             {"id": "cover.open_cover", "label": "", "visible_fields": [], "defaults": {}},
         ]
     )
+    area_id, scope = await _make_area_scope(hass)
     await store.async_save_area(
-        "lr",
+        area_id,
         {
             "scenes": [
                 {
@@ -468,11 +467,13 @@ async def test_service_call_category_limits_to_one_category(
             ],
         },
     )
+    light_calls = async_mock_service(hass, "light", "turn_on")
+    cover_calls = async_mock_service(hass, "cover", "open_cover")
 
     await hass.services.async_call(
         DOMAIN,
         "apply_scene",
-        {"area": "lr", "category": "lighting"},
+        {"scope": scope, "category": "lighting"},
         blocking=True,
     )
 

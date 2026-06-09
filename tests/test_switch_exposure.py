@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from homeassistant.components.homeassistant.exposed_entities import async_should_expose
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import area_registry as ar
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ambience.const import CONF_EXPOSED_ASSISTANTS, DOMAIN
+from custom_components.ambience.const import (
+    CONF_EXPOSED_ASSISTANTS,
+    CONF_SHOW_SIDEBAR_PANEL,
+    DOMAIN,
+)
 
 
 async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
@@ -67,3 +72,25 @@ async def test_partial_option_map_defaults_to_unexposed(hass):
     assert async_should_expose(hass, "conversation", "switch.house_ambience") is True
     assert async_should_expose(hass, "cloud.google_assistant", "switch.house_ambience") is False
     assert async_should_expose(hass, "cloud.alexa", "switch.house_ambience") is False
+
+
+async def test_options_change_reapplies_exposure(hass, mock_config_entry):
+    # Changing the exposure option reloads the entry, which re-stashes the map
+    # and re-applies exposure to every switch on re-add.
+    await _setup(hass, mock_config_entry)
+    assert async_should_expose(hass, "cloud.google_assistant", "switch.house_ambience") is False
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    assert result["type"] == FlowResultType.FORM
+    await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_SHOW_SIDEBAR_PANEL: True,
+            "expose_assist": True,
+            "expose_google": True,
+            "expose_alexa": False,
+        },
+    )
+    await hass.async_block_till_done()
+
+    assert async_should_expose(hass, "cloud.google_assistant", "switch.house_ambience") is True

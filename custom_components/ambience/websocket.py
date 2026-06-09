@@ -26,6 +26,7 @@ from .const import (
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
+from .diagnostics import scope_diagnostics
 from .exposed_actions import ExposedActionsStore
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
@@ -99,6 +100,7 @@ _WS_COMMANDS = (
     "ambience/auto_triggers/list",
     "ambience/traces/list",
     "ambience/traces/clear",
+    "ambience/diagnostics/scope",
     "ambience/simulate/inputs",
     "ambience/simulate",
 )
@@ -144,6 +146,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, _ws_categories_delete)
     websocket_api.async_register_command(hass, _ws_traces_list)
     websocket_api.async_register_command(hass, _ws_traces_clear)
+    websocket_api.async_register_command(hass, _ws_scope_diagnostics)
     websocket_api.async_register_command(hass, _ws_simulate_inputs)
     websocket_api.async_register_command(hass, _ws_simulate)
 
@@ -1126,6 +1129,27 @@ async def _ws_traces_clear(
     if buffer is not None:
         buffer.clear()
     connection.send_result(msg["id"])
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/diagnostics/scope",
+        vol.Required("scope_kind"): str,
+        vol.Optional("scope_id"): vol.Any(str, None),
+        vol.Required("category"): str,
+    }
+)
+@websocket_api.async_response
+async def _ws_scope_diagnostics(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    connection.send_result(
+        msg["id"],
+        scope_diagnostics(hass, msg["scope_kind"], msg.get("scope_id"), msg["category"]),
+    )
 
 
 @websocket_api.require_admin

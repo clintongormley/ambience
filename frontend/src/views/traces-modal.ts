@@ -1,7 +1,12 @@
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { getServiceSchema, type HassConnection, listTraces } from "../api.js";
+import {
+  downloadScopeDiagnostics,
+  getServiceSchema,
+  type HassConnection,
+  listTraces,
+} from "../api.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import type { BufferedUnit, ServiceSchema } from "../types.js";
 
@@ -44,6 +49,12 @@ export class AmbienceTracesModal extends LitElement {
       }
       .header h3 { margin: 0; flex: 1; }
       .refresh {
+        padding: 0.25rem 0.75rem; cursor: pointer;
+        border: 1px solid var(--divider-color, #ccc);
+        border-radius: 4px; background: none; color: inherit;
+        font-size: 0.85rem;
+      }
+      .download {
         padding: 0.25rem 0.75rem; cursor: pointer;
         border: 1px solid var(--divider-color, #ccc);
         border-radius: 4px; background: none; color: inherit;
@@ -174,6 +185,10 @@ export class AmbienceTracesModal extends LitElement {
     this._expanded = next;
   }
 
+  private _download(): void {
+    void downloadScopeDiagnostics(this.hass, this.scope, this.category);
+  }
+
   private _onClose(): void {
     this.dispatchEvent(new CustomEvent("close", { bubbles: true, composed: true }));
   }
@@ -188,6 +203,7 @@ export class AmbienceTracesModal extends LitElement {
           <button class="refresh ${this._hasNew ? "has-new" : ""}" @click=${() => this._load()}>
             ${this._hasNew ? "● New traces — refresh" : "Refresh"}
           </button>
+          <button class="download" @click=${this._download}>Download diagnostics</button>
           <button class="close" @click=${this._onClose} aria-label="Close">✕</button>
         </div>
         <div class="body">

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-vi.mock("../frontend/src/api", () => ({ listTraces: vi.fn(), getServiceSchema: vi.fn() }));
+vi.mock("../frontend/src/api", () => ({
+  listTraces: vi.fn(),
+  getServiceSchema: vi.fn(),
+  downloadScopeDiagnostics: vi.fn(),
+}));
 
 import "../frontend/src/views/traces-modal";
 import * as api from "../frontend/src/api";
@@ -198,6 +202,18 @@ describe("ambience-traces-modal", () => {
     await new Promise((r) => setTimeout(r, 0));
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("h3")!.textContent).toContain("cat-fallback-id");
+  });
+
+  test("download button calls downloadScopeDiagnostics with this scope+category", async () => {
+    el = await mount([unit()]);
+    const btn = el.shadowRoot.querySelector(".download");
+    expect(btn).toBeTruthy();
+    btn.click();
+    expect(api.downloadScopeDiagnostics).toHaveBeenCalledWith(
+      el.hass,
+      { scope_kind: "area", scope_id: "kitchen" },
+      "g1",
+    );
   });
 
   test("close button dispatches the close event", async () => {

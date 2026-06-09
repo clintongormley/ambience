@@ -153,7 +153,7 @@ class OccupancyCondition:
             name = snapshot.names.get(eid, eid)
             cur = snapshot.sensors.get(eid)
             if cur is None:
-                parts.append(f"{name}: unavailable ✗")
+                parts.append(f"{name}: not found ✗")
                 continue
             state, changed = cur
             # With a `for` gate, show how long the sensor has held its state so a

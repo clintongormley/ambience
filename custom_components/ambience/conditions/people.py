@@ -242,12 +242,11 @@ class PeopleCondition:
         for pid in person_ids:
             name = snapshot.names.get(pid, pid)
             cur = snapshot.persons.get(pid)
-            at = (
-                self._loc_match(cur[0], snapshot.in_zones.get(pid), where, snapshot)
-                if cur is not None
-                else None
-            )
-            if at is None:  # absent / unavailable / unknown zone
+            if cur is None:  # person referenced but has no state → does not exist
+                parts.append(f"{name}: not found ✗")
+                continue
+            at = self._loc_match(cur[0], snapshot.in_zones.get(pid), where, snapshot)
+            if at is None:  # present but unavailable / unknown zone
                 parts.append(f"{name}: unavailable ✗")
                 continue
             held = self._holds_at(

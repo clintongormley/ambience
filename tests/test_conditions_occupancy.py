@@ -248,10 +248,10 @@ def test_describe_predicate_vacant_inverts_marks() -> None:
     assert OccupancyCondition().describe(snap, pred) == "Lounge: off ✓"
 
 
-def test_describe_predicate_missing_sensor_is_unavailable() -> None:
+def test_describe_predicate_missing_sensor_not_found() -> None:
     snap = _snap({}, names={})
     pred = {"sensors": ["binary_sensor.gone"]}
-    assert OccupancyCondition().describe(snap, pred) == "binary_sensor.gone: unavailable ✗"
+    assert OccupancyCondition().describe(snap, pred) == "binary_sensor.gone: not found ✗"
 
 
 def test_describe_predicate_empty_sensors_is_wildcard() -> None:

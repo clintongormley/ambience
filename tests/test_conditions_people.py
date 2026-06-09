@@ -448,10 +448,10 @@ def test_describe_predicate_zone_where() -> None:
     assert PeopleCondition().describe(snap, pred) == "want anyone in Work: Alice: in Work ✓"
 
 
-def test_describe_predicate_missing_person_is_unavailable() -> None:
+def test_describe_predicate_missing_person_not_found() -> None:
     pred = {"who": ["person.ghost"]}
     assert (
-        PeopleCondition().describe(_snap(), pred) == "want anyone home: person.ghost: unavailable ✗"
+        PeopleCondition().describe(_snap(), pred) == "want anyone home: person.ghost: not found ✗"
     )
 
 

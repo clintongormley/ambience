@@ -52,9 +52,11 @@ class AmbienceStore:
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data: dict[str, Any] = self._empty()
 
-    def _notify_config_changed(self) -> None:
-        """Tell the auto-trigger engine to rebuild its watch-set."""
-        async_dispatcher_send(self._hass, SIGNAL_CONFIG_CHANGED)
+    def _notify_config_changed(self, affected: tuple[str, str | None] | None = None) -> None:
+        """Tell the auto-trigger engine a config save happened, and narrow the
+        follow-up re-apply: pass a (scope_kind, scope_id) for a scope-local
+        change, or None for a global change (reapply everything)."""
+        async_dispatcher_send(self._hass, SIGNAL_CONFIG_CHANGED, affected)
 
     @staticmethod
     def _empty() -> dict[str, Any]:
@@ -132,13 +134,13 @@ class AmbienceStore:
         existing = self._data["areas"].get(area_id, {})
         self._data["areas"][area_id] = {**existing, **config}
         await self._store.async_save(self._data)
-        self._notify_config_changed()
+        self._notify_config_changed(("area", area_id))
 
     async def async_delete_area(self, area_id: str) -> None:
         if area_id in self._data["areas"]:
             del self._data["areas"][area_id]
             await self._store.async_save(self._data)
-            self._notify_config_changed()
+            self._notify_config_changed(("area", area_id))
 
     def floors(self) -> dict[str, dict[str, Any]]:
         return dict(self._data["floors"])
@@ -150,13 +152,13 @@ class AmbienceStore:
         existing = self._data["floors"].get(floor_id, {})
         self._data["floors"][floor_id] = {**existing, **config}
         await self._store.async_save(self._data)
-        self._notify_config_changed()
+        self._notify_config_changed(("floor", floor_id))
 
     async def async_delete_floor(self, floor_id: str) -> None:
         if floor_id in self._data["floors"]:
             del self._data["floors"][floor_id]
             await self._store.async_save(self._data)
-            self._notify_config_changed()
+            self._notify_config_changed(("floor", floor_id))
 
     def get_house(self) -> dict[str, Any]:
         return dict(self._data["house"])
@@ -165,7 +167,7 @@ class AmbienceStore:
         existing = self._data.get("house", {})
         self._data["house"] = {**existing, **config}
         await self._store.async_save(self._data)
-        self._notify_config_changed()
+        self._notify_config_changed(("house", None))
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict[str, Any]]]:
         """Yield (kind, scope_id, config) for every configured scope.

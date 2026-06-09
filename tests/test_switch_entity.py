@@ -446,3 +446,39 @@ def test_switch_unique_id_helper() -> None:
     assert switch_unique_id("house", None) == "ambience_switch_house"
     assert switch_unique_id("area", "living_room") == "ambience_switch_area_living_room"
     assert switch_unique_id("floor", "ground") == "ambience_switch_floor_ground"
+
+
+# --- area device placement ---------------------------------------------------
+
+
+async def test_area_device_assigned_to_its_area(hass, mock_config_entry):
+    area = ar.async_get(hass).async_create("Living Room")
+    fr.async_get(hass).async_create("Upstairs")
+    await _setup(hass, mock_config_entry)
+
+    dev_reg = dr.async_get(hass)
+    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    assert area_dev.area_id == area.id
+
+    # Floor + house devices have no area.
+    floor_id = next(k[1] for k in hass.data[DOMAIN][DATA_SWITCHES] if k[0] == "floor")
+    floor_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor_id}")})
+    main = dev_reg.async_get_device(identifiers={(DOMAIN, "ambience")})
+    assert floor_dev.area_id is None
+    assert main.area_id is None
+
+
+async def test_area_assignment_does_not_override_user_move(hass, mock_config_entry):
+    area = ar.async_get(hass).async_create("Living Room")
+    other = ar.async_get(hass).async_create("Garage")
+    await _setup(hass, mock_config_entry)
+
+    dev_reg = dr.async_get(hass)
+    area_dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    # User moves the device to a different area.
+    dev_reg.async_update_device(area_dev.id, area_id=other.id)
+
+    # Re-running the assignment (e.g. via a reload) must not move it back.
+    sw = _switch(hass, "area", area.id)
+    sw._assign_area_device()
+    assert dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")}).area_id == other.id

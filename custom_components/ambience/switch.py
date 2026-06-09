@@ -191,6 +191,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             )
         )
         self._sync_device_name()
+        self._assign_area_device()
         last = await self.async_get_last_state()
         if last is not None and last.state == "off":
             self._attr_is_on = False
@@ -261,6 +262,22 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             default_name,
             fallback=self._fallback_prefix,
         )
+
+    def _assign_area_device(self) -> None:
+        """Place an area scope's device in its HA area, only when it has none.
+
+        suggested_area in DeviceInfo is removed in HA 2026.9, so set area_id
+        directly. The "only when None" guard means the device is placed in its
+        area on first creation but a later user move is never overridden.
+        """
+        if self._scope_kind != "area":
+            return
+        dev_reg = dr.async_get(self.hass)
+        device = dev_reg.async_get_device(
+            identifiers={(DOMAIN, f"area_{self._scope_id}")}
+        )
+        if device is not None and device.area_id is None:
+            dev_reg.async_update_device(device.id, area_id=self._scope_id)
 
     def _sync_device_name(self) -> None:
         """Update the scope device's registry name to the composed name.

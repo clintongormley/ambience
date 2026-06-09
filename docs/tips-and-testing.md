@@ -6,7 +6,7 @@ Every time Ambience evaluates a scope/category pair it records a *trace*: what t
 
 ### Opening the viewer
 
-In the Ambience panel, each category card has a small **Traces** button. Clicking it opens a modal filtered to that category within the current scope. The modal title shows the category name; a **Refresh** button appears highlighted (and labelled "● New traces — refresh") when Ambience has recorded newer entries since you opened the modal. A **Download diagnostics** button downloads a JSON file scoped to that one (scope, category): its configuration, the relevant global context (categories and conditions), and its recent traces — handy for attaching to a bug report.
+In the Ambience panel, each category card has a small **Traces** button. Clicking it opens a modal filtered to that category within the current scope. The modal title shows the category name; a **Refresh** button appears highlighted (and labelled "● New traces — refresh") when Ambience has recorded newer entries since you opened the modal. A **Download diagnostics** button downloads a JSON file scoped to that one (scope, category): its configuration, the relevant global context (categories and conditions), and its recent traces — handy for attaching to a bug report. The traces include the entity ids that triggered and were acted on, so glance over the file before sharing it publicly.
 
 !!! info "📷 Screenshot"
 

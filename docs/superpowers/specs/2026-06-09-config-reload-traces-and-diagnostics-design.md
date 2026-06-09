@@ -193,10 +193,16 @@ Frontend:
 
 ## Known limitation
 
-Redaction is key-based (`async_redact_data` over `TO_REDACT`). Free-form entity
-ids embedded in predicate `detail` strings inside trace explanations are not
-scrubbed. Acceptable: both the traces WS API and diagnostics are already
-admin-only.
+Redaction is key-based (`async_redact_data` over `TO_REDACT`). A serialized trace
+carries entity ids that the key set does not cover: `cause.entity_id` (the entity
+that triggered the evaluation), each action's `entity_ids` (the entities acted
+on), and any free-form ids inside predicate `detail` strings. These are not
+scrubbed, so they appear in both the main diagnostics dump and the per-scope
+bundle. Accepted: the traces WS API and diagnostics are admin-only, and the
+pre-existing store dump already carries action `entity_ids` unredacted. Because
+the per-scope bundle is downloadable as a file, the docs warn the user to review
+it before sharing publicly. Tightening redaction to mask entity ids (which would
+also affect the existing store dump) is deferred.
 
 ## Out of scope
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 
@@ -152,3 +153,34 @@ async def test_floor_removal_without_registered_entity_is_safe(hass, installed):
     await hass.async_block_till_done()
 
     assert ("floor", floor.floor_id) not in hass.data[DOMAIN][DATA_SWITCHES]
+
+
+async def test_area_added_creates_subdevice_in_area(hass, installed):
+    area = ar.async_get(hass).async_create("Garage")
+    await hass.async_block_till_done()
+    dev_reg = dr.async_get(hass)
+    dev = dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")})
+    assert dev is not None
+    assert dev.area_id == area.id
+
+
+async def test_area_removal_drops_subdevice(hass, installed):
+    area = ar.async_get(hass).async_create("Garage")
+    await hass.async_block_till_done()
+    dev_reg = dr.async_get(hass)
+    assert dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")}) is not None
+
+    ar.async_get(hass).async_delete(area.id)
+    await hass.async_block_till_done()
+    assert dev_reg.async_get_device(identifiers={(DOMAIN, f"area_{area.id}")}) is None
+
+
+async def test_floor_removal_drops_subdevice(hass, installed):
+    floor = fr.async_get(hass).async_create("Loft")
+    await hass.async_block_till_done()
+    dev_reg = dr.async_get(hass)
+    assert dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor.floor_id}")}) is not None
+
+    fr.async_get(hass).async_delete(floor.floor_id)
+    await hass.async_block_till_done()
+    assert dev_reg.async_get_device(identifiers={(DOMAIN, f"floor_{floor.floor_id}")}) is None

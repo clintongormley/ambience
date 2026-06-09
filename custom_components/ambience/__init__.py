@@ -19,6 +19,7 @@ from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -107,6 +108,14 @@ def _hash_bundle(bundle_path: Path) -> str:
         return hashlib.sha256(bundle_path.read_bytes()).hexdigest()[:12]
     except OSError:
         return "missing"
+
+
+def _remove_scope_device(hass: HomeAssistant, scope_kind: str, scope_id: str) -> None:
+    """Remove a floor/area scope's sub-device from the device registry."""
+    dev_reg = dr.async_get(hass)
+    device = dev_reg.async_get_device(identifiers={(DOMAIN, f"{scope_kind}_{scope_id}")})
+    if device is not None:
+        dev_reg.async_remove_device(device.id)
 
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
@@ -223,6 +232,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             if ent_id is not None:
                 ent_reg.async_remove(ent_id)
+            _remove_scope_device(hass, "area", area_id)
 
     entry.async_on_unload(
         hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _handle_area_registry_update)
@@ -249,6 +259,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             if ent_id is not None:
                 ent_reg.async_remove(ent_id)
+            _remove_scope_device(hass, "floor", floor_id)
 
     entry.async_on_unload(
         hass.bus.async_listen(fr.EVENT_FLOOR_REGISTRY_UPDATED, _handle_floor_registry_update)

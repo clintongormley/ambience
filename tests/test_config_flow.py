@@ -29,3 +29,23 @@ async def test_user_step_aborts_when_already_configured(
 
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "single_instance_allowed"
+
+
+async def test_async_step_user_guard_aborts_when_called_directly(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Defense-in-depth: the step's own single-instance guard aborts even when
+    reached directly. HA's single_config_entry manager check normally aborts
+    before the step runs, so this exercises the in-step guard explicitly."""
+    from custom_components.ambience.config_flow import AmbienceConfigFlow
+
+    mock_config_entry.add_to_hass(hass)
+    flow = AmbienceConfigFlow()
+    flow.hass = hass
+    flow.handler = DOMAIN
+
+    result = await flow.async_step_user()
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "single_instance_allowed"

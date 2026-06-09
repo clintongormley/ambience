@@ -114,8 +114,8 @@ class TimeOfDayCondition:
         real wrap. Works for named periods too, since `_dep_endpoints` resolves
         the period definition's endpoints."""
         endpoints = self._dep_endpoints(item)
-        if len(endpoints) != 2:
-            return False
+        if len(endpoints) != 2:  # pragma: no cover - defensive; callers reach here only
+            return False  # after _resolve_range succeeded, which guarantees 2 endpoints
         from_ep, to_ep = endpoints
         if not _endpoint_has_clamp(from_ep) and not _endpoint_has_clamp(to_ep):
             return False

@@ -1155,6 +1155,42 @@ async def test_apply_scene_no_action_winner_is_no_op_transparent(hass: HomeAssis
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 5
 
 
+async def test_apply_scene_no_action_winner_no_op_without_trace(hass: HomeAssistant) -> None:
+    """Line 323: a blocker winner (no actions) with tracing inactive returns None
+    silently (no trace) and leaves last_applied untouched."""
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "blocker",
+                    "category": "lighting",
+                    "when": {"tod": "evening"},
+                    "actions": [],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {("area", "a", "lighting"): 5},
+    }
+    # Trace logger left at NOTSET → tracing inactive → active=False branch.
+    await async_apply_scene(hass, "area", "a")
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 5
+
+
+async def test_scope_enabled_true_when_store_missing(hass: HomeAssistant) -> None:
+    """Line 87: with no store in hass.data, a scope is treated as enabled (the
+    disabled-check fails open rather than blocking the manual force path)."""
+    from custom_components.ambience.service import _scope_enabled
+
+    hass.data.pop(DOMAIN, None)
+    assert _scope_enabled(hass, "area", "a") is True
+
+
 async def test_apply_scene_no_match_clears_last_applied(hass: HomeAssistant) -> None:
     """A manual apply matching no scene clears last_applied, consistent with the
     engine's no-match handling, so a later win of the same scene re-applies."""

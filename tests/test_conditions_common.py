@@ -9,9 +9,32 @@ from custom_components.ambience.conditions._common import (
     as_float,
     dur_seconds,
     fmt_duration,
+    kleene_all,
+    kleene_any,
+    kleene_not,
     merge_intervals,
     validate_for,
 )
+
+
+def test_kleene_any_truth_table() -> None:
+    assert kleene_any([False, True, None]) is True  # any True wins
+    assert kleene_any([False, None, False]) is None  # no True, an unobservable
+    assert kleene_any([False, False]) is False  # all observably false
+    assert kleene_any([]) is False  # vacuous
+
+
+def test_kleene_all_truth_table() -> None:
+    assert kleene_all([True, False, None]) is False  # any False wins
+    assert kleene_all([True, None, True]) is None  # no False, an unobservable
+    assert kleene_all([True, True]) is True  # all observably true
+    assert kleene_all([]) is True  # vacuous
+
+
+def test_kleene_not_preserves_unobservable() -> None:
+    assert kleene_not(True) is False
+    assert kleene_not(False) is True
+    assert kleene_not(None) is None
 
 
 def test_fmt_duration_compact_hms() -> None:

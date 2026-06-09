@@ -187,6 +187,37 @@ async def test_set_scope_enabled_heals_legacy_disabled(hass, installed, hass_ws_
     assert reg.async_get(entity_id).disabled_by is None
 
 
+async def test_set_scope_enabled_noop_when_switch_unregistered(hass, installed, hass_ws_client):
+    # A scope with no ambience switch entity registered (an area id that has no
+    # switch): the hide/heal block is skipped (entity_id is None) and the call
+    # still succeeds + persists the flag.
+    ghost = "ghost_area_without_switch"
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/set_scope_enabled", area_id=ghost, enabled=False
+    )
+    assert resp["success"]
+    assert hass.data[DOMAIN][DATA_STORE].get_scope_enabled("area", ghost) is False
+
+
+async def test_set_scope_enabled_enable_already_enabled_applies_no_heal(
+    hass, installed, hass_ws_client
+):
+    # Enabling a scope whose switch was never hidden/disabled: there are no
+    # integration flags to heal (the updates dict stays empty), and the call still
+    # succeeds and leaves the switch visible.
+    from homeassistant.helpers import entity_registry as er
+
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=True
+    )
+    assert resp["success"]
+    await hass.async_block_till_done()
+    reg = er.async_get(hass)
+    entity_id = reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house")
+    assert reg.async_get(entity_id).hidden_by is None
+    assert reg.async_get(entity_id).disabled_by is None
+
+
 async def test_set_scope_enabled_requires_one_scope(hass, installed, hass_ws_client):
     resp = await _ws_send(hass_ws_client, type="ambience/set_scope_enabled", enabled=False)
     assert not resp["success"]

@@ -636,3 +636,13 @@ def test_subset_all_is_not_subset_of_explicit() -> None:
     # Line 274: _subset(None, explicit_set) → False (ALL ⊈ any finite set).
     result = PeopleCondition._subset(None, frozenset({"person.a"}))
     assert result is False
+
+
+def test_describe_non_dict_predicate_is_none() -> None:
+    assert PeopleCondition().describe(_snap(), "not-a-dict") is None
+
+
+def test_describe_no_people_tracked() -> None:
+    # Empty `who` means "all persons"; with an empty snapshot there are none, so
+    # describe reports that rather than an empty body.
+    assert PeopleCondition().describe(_snap(), {"who": []}) == "no people tracked"

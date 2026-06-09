@@ -47,6 +47,8 @@ class CauseKind(StrEnum):
     SWITCH = "switch"
     MANUAL = "manual"
     STARTUP = "startup"
+    # A config save (not an HA restart) triggered the rerun.
+    RELOADED = "reloaded"
     REAPPLY = "reapply"
     SIMULATED = "simulated"
     UNKNOWN = "unknown"

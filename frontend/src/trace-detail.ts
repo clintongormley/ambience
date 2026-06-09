@@ -79,6 +79,7 @@ const CAUSE_LABELS_FIXED: Record<string, string> = {
   switch: "Switch turned on",
   manual: "Manual apply",
   startup: "Startup",
+  reloaded: "Reloaded",
   reapply: "Periodic refresh",
   simulated: "Simulation",
 };

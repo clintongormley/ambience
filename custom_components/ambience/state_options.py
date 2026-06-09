@@ -3,35 +3,44 @@ what-if simulator. Pure: reads `hass.states` only."""
 
 from __future__ import annotations
 
+from homeassistant.components.alarm_control_panel.const import AlarmControlPanelState
+from homeassistant.components.climate.const import HVACMode
+from homeassistant.components.cover.const import CoverState
+from homeassistant.components.lock.const import LockState
+from homeassistant.components.media_player.const import MediaPlayerState
+from homeassistant.components.sun.const import STATE_ABOVE_HORIZON, STATE_BELOW_HORIZON
+from homeassistant.components.vacuum.const import VacuumActivity
+from homeassistant.const import (
+    STATE_HOME,
+    STATE_NOT_HOME,
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import HomeAssistant
 
-# Domain-typical state sets. For domains not listed, we fall back to just the
-# entity's current state.
+# Domain-typical state sets, derived from Home Assistant's own state enums so
+# they track core additions automatically (e.g. lock's `opening`/`open`, alarm's
+# `disarming`) rather than drifting out of a hand-maintained list. Domains whose
+# state is a plain on/off or a module constant have no enum to enumerate. For
+# domains not listed, we fall back to just the entity's current state.
+_ON_OFF = [STATE_ON, STATE_OFF]
 _DOMAIN_KNOWN_STATES: dict[str, list[str]] = {
-    "binary_sensor": ["on", "off"],
-    "switch": ["on", "off"],
-    "light": ["on", "off"],
-    "fan": ["on", "off"],
-    "input_boolean": ["on", "off"],
-    "cover": ["open", "closed", "opening", "closing", "stopped"],
-    "lock": ["locked", "unlocked", "locking", "unlocking", "jammed"],
-    "media_player": ["playing", "paused", "idle", "off", "on", "standby", "buffering"],
-    "climate": ["heat", "cool", "off", "auto", "dry", "fan_only", "heat_cool"],
-    "vacuum": ["cleaning", "docked", "paused", "idle", "returning", "error"],
-    "person": ["home", "not_home"],
-    "device_tracker": ["home", "not_home"],
-    "sun": ["above_horizon", "below_horizon"],
-    "alarm_control_panel": [
-        "disarmed",
-        "armed_home",
-        "armed_away",
-        "armed_night",
-        "armed_vacation",
-        "armed_custom_bypass",
-        "triggered",
-        "pending",
-        "arming",
-    ],
+    "binary_sensor": _ON_OFF,
+    "switch": _ON_OFF,
+    "light": _ON_OFF,
+    "fan": _ON_OFF,
+    "input_boolean": _ON_OFF,
+    "cover": [s.value for s in CoverState],
+    "lock": [s.value for s in LockState],
+    "media_player": [s.value for s in MediaPlayerState],
+    "climate": [m.value for m in HVACMode],
+    "vacuum": [a.value for a in VacuumActivity],
+    "person": [STATE_HOME, STATE_NOT_HOME],
+    "device_tracker": [STATE_HOME, STATE_NOT_HOME],
+    "sun": [STATE_ABOVE_HORIZON, STATE_BELOW_HORIZON],
+    "alarm_control_panel": [s.value for s in AlarmControlPanelState],
 }
 
 
@@ -122,7 +131,12 @@ def known_states_for(hass: HomeAssistant, entity_id: str) -> list[str]:
                 else:
                     _add(z.entity_id.split(".", 1)[1])
         # Always include the entity's current state so the user can pick it.
-        if state.state and state.state not in ("unavailable", "unknown"):
+        # `unavailable`/`unknown` are intentionally NOT offered as options
+        # (deferred until requested): HA's automation editor lists them for every
+        # entity, but here "is not <state>" covers those cases and a number field
+        # can't accept them. To re-enable, append STATE_UNAVAILABLE/STATE_UNKNOWN
+        # for any resolvable entity.
+        if state.state and state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
             _add(state.state)
 
     return states

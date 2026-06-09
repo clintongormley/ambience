@@ -38,6 +38,41 @@ def test_unknown_domain_with_no_state_is_empty():
     assert known_states_for(hass, "sensor.temp") == []
 
 
+def test_lock_derives_full_state_set_from_ha_enum() -> None:
+    """A lock offers HA's full LockState set — including `opening`/`open`, which
+    the old hardcoded list omitted (the reported bug). The universal
+    unavailable/unknown are intentionally NOT offered (deferred — see
+    known_states_for); "is not <state>" covers those cases instead."""
+    hass = _Hass({"lock.front_door": _State("locked")})
+    result = known_states_for(hass, "lock.front_door")
+    assert set(result) == {
+        "locked",
+        "unlocked",
+        "locking",
+        "unlocking",
+        "jammed",
+        "opening",
+        "open",
+    }
+    assert "unavailable" not in result
+    assert "unknown" not in result
+
+
+def test_alarm_control_panel_includes_disarming() -> None:
+    """Enum-derived list picks up `disarming`, which the old hardcoded list omitted."""
+    hass = _Hass({"alarm_control_panel.home": _State("disarmed")})
+    assert "disarming" in known_states_for(hass, "alarm_control_panel.home")
+
+
+def test_cover_states_match_ha_enum_without_bogus_stopped() -> None:
+    """Cover offers exactly HA's CoverState set; the old list's invalid `stopped`
+    (never a real cover state) is gone now that the list comes from the enum."""
+    hass = _Hass({"cover.garage": _State("open")})
+    result = known_states_for(hass, "cover.garage")
+    assert "stopped" not in result
+    assert {"open", "closed", "opening", "closing"} <= set(result)
+
+
 def test_person_includes_zone_names():
     hass = _Hass(
         {
@@ -98,16 +133,15 @@ def test_zone_without_friendly_name_uses_entity_id_suffix() -> None:
     assert "countryside" in result
 
 
-def test_unavailable_state_is_not_added_to_options() -> None:
-    """Line 69->72: when the entity's current state is 'unavailable' or
-    'unknown', it is not appended to the options list."""
-    hass_unavailable = _Hass({"binary_sensor.door": _State("unavailable")})
-    result_unavailable = known_states_for(hass_unavailable, "binary_sensor.door")
-    assert "unavailable" not in result_unavailable
+def test_unavailable_unknown_are_not_offered() -> None:
+    """`unavailable`/`unknown` are intentionally not surfaced as options (deferred
+    until requested) — not from the domain map, and not even when the entity's own
+    current state is one of them. "is not <state>" covers those cases instead."""
+    hass = _Hass({"binary_sensor.door": _State("unavailable")})
+    assert known_states_for(hass, "binary_sensor.door") == ["on", "off"]
 
     hass_unknown = _Hass({"binary_sensor.door": _State("unknown")})
-    result_unknown = known_states_for(hass_unknown, "binary_sensor.door")
-    assert "unknown" not in result_unknown
+    assert known_states_for(hass_unknown, "binary_sensor.door") == ["on", "off"]
 
 
 # --- known_attribute_values_for -------------------------------------------

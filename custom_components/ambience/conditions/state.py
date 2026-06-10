@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -9,7 +10,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from ..triggers import EMPTY, TriggerSpec
+from ..triggers import EMPTY, DurationGate, TriggerSpec
 from ._common import (
     UNAVAILABLE,
     dur_seconds,
@@ -18,6 +19,7 @@ from ._common import (
     kleene_any,
     kleene_not,
     state_sources,
+    tenure_held,
     validate_for,
 )
 
@@ -37,6 +39,11 @@ class StateSnapshot:
     # entity_id -> attribute dict. Populated alongside states for atoms that
     # compare an attribute instead of the state itself.
     attributes: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Engine-injected per-gate tenure: gate fingerprint -> the time its instant
+    # test last became true. When present, `for:` atoms gate off predicate
+    # tenure (surviving in-set flips); when None (the simulator and direct
+    # callers without an engine) they fall back to the legacy exact-state clock.
+    tenure: Mapping[str, datetime] | None = None
 
 
 class StateCondition:
@@ -145,10 +152,15 @@ class StateCondition:
             else:
                 current = state
             # With a `for` gate, show how long the value has held so a
-            # recently-changed atom's ✗ is self-explanatory. Clock matches
-            # _eval_atom: attribute-mode off last_updated, state-mode off
-            # last_changed.
-            if seconds > 0:
+            # recently-changed atom's ✗ is self-explanatory. In tenure mode the
+            # elapsed is how long the *gate* has held (from the engine tenure
+            # map, surviving in-set flips); in the legacy fallback it clocks off
+            # last_updated (attribute mode) / last_changed (state mode), matching
+            # _eval_atom.
+            if seconds > 0 and snap.tenure is not None:
+                since = snap.tenure.get(self._atom_gate_key(atom))
+                elapsed = f" {fmt_duration((snap.now - since).total_seconds())}" if since else ""
+            elif seconds > 0:
                 since = last_updated if attribute else last_changed
                 elapsed = f" {fmt_duration((snap.now - since).total_seconds())}"
             else:
@@ -190,14 +202,26 @@ class StateCondition:
             return kleene_not(self._eval(expr.get("item"), snap))
         return False
 
-    def _eval_atom(self, atom: dict, snap: StateSnapshot) -> bool | None:
+    @staticmethod
+    def _atom_gate_key(atom: dict) -> str:
+        """Canonical fingerprint of an atom's *instant* test (sans `for`).
+
+        States are sorted so `is [A, B]` and `is [B, A]` share one tenure clock.
+        The same fingerprint anywhere in the config maps to the same engine
+        tenure entry."""
+        states = "|".join(sorted(str(s) for s in (atom.get("states") or [])))
+        return f"{atom.get('kind')}:{atom.get('entity_id')}:{atom.get('attribute') or ''}:{states}"
+
+    def _atom_instant(self, atom: dict, snap: StateSnapshot) -> bool | None:
+        """The atom's instant (un-`for`ed) truth: True/False, or None when the
+        entity is unobservable (absent / unavailable)."""
         entity_id = atom.get("entity_id")
         if not isinstance(entity_id, str):
             return False
         cur = snap.states.get(entity_id)
         if cur is None:
             return None  # entity doesn't exist -> unobservable
-        state, last_changed, last_updated = cur
+        state, _last_changed, _last_updated = cur
         if state in UNAVAILABLE:
             return None  # unobservable
         # When `attribute` is set, swap the LHS from entity.state to
@@ -213,29 +237,67 @@ class StateCondition:
         kind = atom.get("kind")
         rhs = atom.get("states") or []
         if kind in self._NUMERIC_KINDS:
-            if not self._numeric_op(kind, value, rhs):
-                return False
-        else:
-            in_set = value in rhs
-            if kind == "is_not":
-                in_set = not in_set
-            if not in_set:
-                return False
-        dur = atom.get("for")
-        if dur:
-            seconds = dur_seconds(dur)
-            if seconds > 0:
-                # State-mode atoms clock off last_changed (the state string has
-                # been stable that long); attribute-mode atoms clock off
-                # last_updated (an attribute change should reset its own clock).
-                # Note: `for` therefore means "in the current exact state that
-                # long" — an `is [A, B] for` atom resets when the entity flips
-                # A→B, even though membership held throughout.
-                since = last_updated if attribute else last_changed
-                elapsed = (snap.now - since).total_seconds()
-                if elapsed < seconds:
-                    return False
-        return True
+            return self._numeric_op(kind, value, rhs)
+        in_set = value in rhs
+        if kind == "is_not":
+            in_set = not in_set
+        return in_set
+
+    def _eval_atom(self, atom: dict, snap: StateSnapshot) -> bool | None:
+        instant = self._atom_instant(atom, snap)
+        if instant is not True:
+            return instant  # False or None (unobservable) carry through
+        seconds = dur_seconds(atom.get("for"))
+        if seconds <= 0:
+            return True
+        if snap.tenure is not None:
+            # Engine-tracked predicate tenure: the instant test (set membership
+            # / comparison) has held this long, surviving in-set state flips
+            # (an `is [A, B] for` atom no longer resets when the entity flips
+            # A→B, since the gate fingerprint ignores which of A/B is current).
+            return tenure_held(snap.tenure, self._atom_gate_key(atom), snap.now, seconds)
+        # Legacy exact-state clock (the simulator / direct callers with no
+        # engine): state-mode atoms clock off last_changed (the state string has
+        # been stable that long); attribute-mode atoms off last_updated (an
+        # attribute change resets its own clock). This means "in the current
+        # exact state that long" — only used where no tenure history exists.
+        _state, last_changed, last_updated = snap.states[atom["entity_id"]]
+        since = last_updated if atom.get("attribute") else last_changed
+        return (snap.now - since).total_seconds() >= seconds
+
+    def gate_states(self, predicate: Any, snap: StateSnapshot) -> dict[str, tuple[bool, datetime]]:
+        """For each `for:`-bearing atom in the tree, report `(instant_truth,
+        anchor)`: the un-`for`ed verdict and the timestamp the engine should
+        seed tenure from at startup/reload (a provable lower bound — the atom's
+        last state/attribute change). Atoms without a `for:` are omitted; the
+        engine only tracks tenure for gates it will re-check."""
+        out: dict[str, tuple[bool, datetime]] = {}
+        self._collect_gate_states(predicate, snap, out)
+        return out
+
+    def _collect_gate_states(
+        self, expr: Any, snap: StateSnapshot, out: dict[str, tuple[bool, datetime]]
+    ) -> None:
+        if not isinstance(expr, dict):
+            return
+        kind = expr.get("kind")
+        if kind in self._ATOM_KINDS:
+            if dur_seconds(expr.get("for")) <= 0:
+                return
+            instant = self._atom_instant(expr, snap) is True
+            cur = snap.states.get(expr.get("entity_id"))
+            if cur is None:
+                anchor = snap.now  # no real change time to clock from
+            else:
+                _state, last_changed, last_updated = cur
+                anchor = last_updated if expr.get("attribute") else last_changed
+            out[self._atom_gate_key(expr)] = (instant, anchor)
+            return
+        if kind in ("and", "or"):
+            for item in expr.get("items") or []:
+                self._collect_gate_states(item, snap, out)
+        if kind == "not":
+            self._collect_gate_states(expr.get("item"), snap, out)
 
     @staticmethod
     def _numeric_op(kind: str, value: str, rhs: list) -> bool:
@@ -348,18 +410,18 @@ class StateCondition:
         if predicate is None:
             return EMPTY
         entities: set[str] = set()
-        durations: set[tuple[str, float]] = set()
-        self._collect_deps(predicate, entities, durations)
+        gates: set[DurationGate] = set()
+        self._collect_deps(predicate, entities, gates)
         return TriggerSpec(
             entities=frozenset(entities),
-            entity_durations=frozenset(durations),
+            duration_gates=frozenset(gates),
         )
 
     def _collect_deps(
         self,
         expr: Any,
         entities: set[str],
-        durations: set[tuple[str, float]],
+        gates: set[DurationGate],
     ) -> None:
         if not isinstance(expr, dict):
             return
@@ -370,10 +432,17 @@ class StateCondition:
                 entities.add(entity_id)
                 seconds = dur_seconds(expr.get("for"))
                 if seconds > 0:
-                    durations.add((entity_id, seconds))
+                    gates.add(
+                        DurationGate(
+                            key=self._atom_gate_key(expr),
+                            seconds=seconds,
+                            label=f"{entity_id} {self._describe_comparison(expr)}",
+                            entity_id=entity_id,
+                        )
+                    )
             return
         if kind in ("and", "or"):
             for item in expr.get("items") or []:
-                self._collect_deps(item, entities, durations)
+                self._collect_deps(item, entities, gates)
         if kind == "not":
-            self._collect_deps(expr.get("item"), entities, durations)
+            self._collect_deps(expr.get("item"), entities, gates)

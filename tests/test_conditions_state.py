@@ -8,12 +8,14 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.ambience.conditions.state import StateCondition, StateSnapshot
+from custom_components.ambience.triggers import DurationGate
 
 
 def _snap(
     states: dict[str, tuple] | None = None,
     now: datetime | None = None,
     attributes: dict[str, dict[str, object]] | None = None,
+    tenure: dict[str, datetime] | None = None,
 ) -> StateSnapshot:
     # Snapshot stores (state, last_changed, last_updated). Callers may pass a
     # 2-tuple (state, ts) when last_changed == last_updated; normalise it here.
@@ -28,6 +30,7 @@ def _snap(
         now=now or datetime(2026, 5, 25, 12, 0, tzinfo=UTC),
         states=norm,
         attributes=attributes or {},
+        tenure=tenure,
     )
 
 
@@ -682,7 +685,24 @@ def test_trigger_deps_collects_entities_and_durations() -> None:
     }
     spec = m.trigger_deps(pred)
     assert spec.entities == frozenset({"person.bob", "binary_sensor.motion", "light.x"})
-    assert spec.entity_durations == frozenset({("binary_sensor.motion", 600.0)})
+    # One gate for the single `for:`-bearing atom; its key fingerprints the
+    # instant test so an in-set flip can't reset its clock.
+    motion_atom = {
+        "kind": "is",
+        "entity_id": "binary_sensor.motion",
+        "states": ["off"],
+        "for": {"h": 0, "m": 10, "s": 0},
+    }
+    assert spec.duration_gates == frozenset(
+        {
+            DurationGate(
+                key=m._atom_gate_key(motion_atom),
+                seconds=600.0,
+                label="binary_sensor.motion is off",
+                entity_id="binary_sensor.motion",
+            )
+        }
+    )
     assert spec.clock_times == frozenset()
     assert spec.date_rollover is False
     assert spec.opaque is False
@@ -705,7 +725,117 @@ def test_trigger_deps_collects_from_or_group() -> None:
     }
     spec = m.trigger_deps(pred)
     assert spec.entities == frozenset({"person.alice", "person.bob"})
-    assert spec.entity_durations == frozenset()
+    assert spec.duration_gates == frozenset()
+
+
+# --- predicate tenure (engine-tracked `for:` clock) --------------------
+
+
+def test_atom_for_does_not_reset_on_in_set_flip_with_tenure() -> None:
+    """is [A, B] for 10m: an A→B flip mid-window must NOT reset the clock when
+    the engine supplies tenure (the headline bug). The exact-state clock would
+    reset because last_changed is fresh; predicate tenure survives."""
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    atom = {"kind": "is", "entity_id": "media.x", "states": ["A", "B"], "for": {"m": 10}}
+    key = m._atom_gate_key(atom)
+    # Entity flipped A→B 1m ago (fresh last_changed) but the gate held 10m.
+    states = {"media.x": ("B", now - timedelta(minutes=1), now - timedelta(minutes=1))}
+    assert m.matches(atom, _snap(states, now, tenure={key: now - timedelta(minutes=10)})) is True
+    # Same snapshot WITHOUT tenure falls back to the exact-state clock → no match.
+    assert m.matches(atom, _snap(states, now, tenure=None)) is False
+
+
+def test_atom_tenure_not_yet_held_or_absent() -> None:
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    atom = {"kind": "is", "entity_id": "media.x", "states": ["A", "B"], "for": {"m": 10}}
+    key = m._atom_gate_key(atom)
+    states = {"media.x": ("A", now - timedelta(minutes=30), now - timedelta(minutes=30))}
+    # Tenure recorded only 5m ago → not yet held for 10m.
+    assert m.matches(atom, _snap(states, now, tenure={key: now - timedelta(minutes=5)})) is False
+    # No tenure entry at all (engine never saw the gate true) → not held.
+    assert m.matches(atom, _snap(states, now, tenure={})) is False
+
+
+def test_atom_gate_key_is_order_insensitive_in_states() -> None:
+    m = StateCondition()
+    a = {"kind": "is", "entity_id": "media.x", "states": ["A", "B"], "for": {"m": 10}}
+    b = {"kind": "is", "entity_id": "media.x", "states": ["B", "A"], "for": {"m": 10}}
+    assert m._atom_gate_key(a) == m._atom_gate_key(b)
+    # A different kind / entity / attribute yields a different key.
+    c = {"kind": "is_not", "entity_id": "media.x", "states": ["A", "B"]}
+    assert m._atom_gate_key(c) != m._atom_gate_key(a)
+
+
+def test_gate_states_reports_instant_and_anchor() -> None:
+    """gate_states: instant truth ignores `for`; anchor is last_changed for a
+    state-mode atom, last_updated for an attribute-mode atom."""
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    lc = now - timedelta(minutes=10)
+    lu = now - timedelta(minutes=1)
+    states = {"media.x": ("A", lc, lu)}
+    state_atom = {"kind": "is", "entity_id": "media.x", "states": ["A", "B"], "for": {"m": 10}}
+    gs = m.gate_states(state_atom, _snap(states, now))
+    assert gs == {m._atom_gate_key(state_atom): (True, lc)}
+    # Attribute-mode anchors off last_updated.
+    attr_atom = {
+        "kind": "is",
+        "entity_id": "media.x",
+        "attribute": "source",
+        "states": ["Spotify"],
+        "for": {"m": 10},
+    }
+    gs_attr = m.gate_states(
+        attr_atom, _snap(states, now, attributes={"media.x": {"source": "Spotify"}})
+    )
+    assert gs_attr == {m._atom_gate_key(attr_atom): (True, lu)}
+
+
+def test_gate_states_only_includes_for_bearing_atoms() -> None:
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "kind": "and",
+        "items": [
+            {"kind": "is", "entity_id": "light.a", "states": ["on"]},  # no for
+            {"kind": "is", "entity_id": "sensor.b", "states": ["off"], "for": {"m": 5}},
+        ],
+    }
+    states = {
+        "light.a": ("on", now, now),
+        "sensor.b": ("off", now - timedelta(minutes=2), now - timedelta(minutes=2)),
+    }
+    gs = m.gate_states(pred, _snap(states, now))
+    only = {"kind": "is", "entity_id": "sensor.b", "states": ["off"], "for": {"m": 5}}
+    assert set(gs) == {m._atom_gate_key(only)}
+
+
+def test_gate_states_unobservable_atom_is_instant_false() -> None:
+    """An unavailable/absent entity makes the instant test False; the anchor
+    falls back to snapshot.now (no real change time to clock from)."""
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    atom = {"kind": "is", "entity_id": "sensor.gone", "states": ["on"], "for": {"m": 5}}
+    gs = m.gate_states(atom, _snap({}, now))  # entity absent
+    assert gs == {m._atom_gate_key(atom): (False, now)}
+
+
+def test_describe_atom_shows_tenure_elapsed() -> None:
+    """In tenure mode the elapsed shown is how long the gate has held, from the
+    engine tenure map (not the entity's last_changed)."""
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    atom = {"kind": "is", "entity_id": "media.x", "states": ["A", "B"], "for": {"m": 10}}
+    key = m._atom_gate_key(atom)
+    # Entity flipped 1m ago, but tenure says the gate has held 12m.
+    states = {"media.x": ("B", now - timedelta(minutes=1), now - timedelta(minutes=1))}
+    line = m.describe(_snap(states, now, tenure={key: now - timedelta(minutes=12)}), atom)
+    assert "12m" in line and "✓" in line
+    # Absent tenure entry in tenure mode → no elapsed suffix, and a miss.
+    line2 = m.describe(_snap(states, now, tenure={}), atom)
+    assert "✗" in line2
 
 
 # --- new coverage tests ------------------------------------------------
@@ -808,7 +938,7 @@ def test_collect_deps_ignores_non_dict_expr() -> None:
     # trigger_deps only short-circuits on None; any other value falls into _collect_deps
     spec = m.trigger_deps("not-a-dict")
     assert spec.entities == frozenset()
-    assert spec.entity_durations == frozenset()
+    assert spec.duration_gates == frozenset()
 
 
 def test_collect_deps_skips_atom_with_invalid_entity_id() -> None:
@@ -819,7 +949,7 @@ def test_collect_deps_skips_atom_with_invalid_entity_id() -> None:
     pred = {"kind": "is", "entity_id": None, "states": ["on"]}
     spec = m.trigger_deps(pred)
     assert spec.entities == frozenset()
-    assert spec.entity_durations == frozenset()
+    assert spec.duration_gates == frozenset()
 
 
 # --- describe() — per-predicate trace detail ---------------------------------

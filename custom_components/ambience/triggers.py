@@ -12,13 +12,40 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class DurationGate:
+    """One ``for:`` duration gate inside a predicate.
+
+    A predicate's ``for:`` clause measures how long the predicate's *instant*
+    (un-``for``ed) test has held continuously true. That tenure history lives in
+    the long-lived engine; this gate is how a condition tells the engine which
+    instant test to clock and for how long.
+
+    - ``key``: canonical fingerprint of the gated instant sub-predicate. The
+      same content anywhere in the config produces the same key, so identical
+      tests share one tenure clock (and the resolve path gets tenure without
+      threading per-scene identity through the engine).
+    - ``seconds``: the ``for:`` duration the instant test must hold.
+    - ``label``: human-readable instant description, used for a DURATION trace
+      cause when the gate spans more than one entity (e.g. "nobody home").
+    - ``entity_id``: the single entity the gate reads, or ``None`` when it spans
+      several — the recheck trace then names ``label`` instead of an entity.
+    """
+
+    key: str
+    seconds: float
+    label: str
+    entity_id: str | None = None
+
+
+@dataclass(frozen=True)
 class TriggerSpec:
     """What a predicate depends on, for auto re-evaluation.
 
     - ``entities``: entity_ids to watch via state-change events.
-    - ``entity_durations``: ``(entity_id, for_seconds)`` pairs — after that
-      entity changes, re-check again at ``change_time + for_seconds`` (the
-      state condition's ``for:`` clause).
+    - ``duration_gates``: the predicate's ``for:`` gates (see ``DurationGate``).
+      The engine tracks each gate's instant-truth tenure and re-checks the
+      predicate at ``since + seconds`` so a condition that only becomes true
+      after the delay is still caught.
     - ``clock_times``: ``(hour, minute)`` local wall-clock boundaries.
     - ``sun_events``: ``(anchor, offset_min)`` — anchor is one of
       sunrise/sunset/noon/midnight/dawn/dusk.
@@ -31,7 +58,7 @@ class TriggerSpec:
     """
 
     entities: frozenset[str] = frozenset()
-    entity_durations: frozenset[tuple[str, float]] = frozenset()
+    duration_gates: frozenset[DurationGate] = frozenset()
     clock_times: frozenset[tuple[int, int]] = frozenset()
     sun_events: frozenset[tuple[str, int]] = frozenset()
     date_rollover: bool = False
@@ -45,7 +72,7 @@ EMPTY = TriggerSpec()
 def merge(specs: Iterable[TriggerSpec]) -> TriggerSpec:
     """Union all set fields and OR all boolean fields across ``specs``."""
     entities: set[str] = set()
-    entity_durations: set[tuple[str, float]] = set()
+    duration_gates: set[DurationGate] = set()
     clock_times: set[tuple[int, int]] = set()
     sun_events: set[tuple[str, int]] = set()
     date_rollover = False
@@ -53,7 +80,7 @@ def merge(specs: Iterable[TriggerSpec]) -> TriggerSpec:
     opaque = False
     for spec in specs:
         entities |= spec.entities
-        entity_durations |= spec.entity_durations
+        duration_gates |= spec.duration_gates
         clock_times |= spec.clock_times
         sun_events |= spec.sun_events
         date_rollover = date_rollover or spec.date_rollover
@@ -61,7 +88,7 @@ def merge(specs: Iterable[TriggerSpec]) -> TriggerSpec:
         opaque = opaque or spec.opaque
     return TriggerSpec(
         entities=frozenset(entities),
-        entity_durations=frozenset(entity_durations),
+        duration_gates=frozenset(duration_gates),
         clock_times=frozenset(clock_times),
         sun_events=frozenset(sun_events),
         date_rollover=date_rollover,

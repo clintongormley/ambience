@@ -11,14 +11,15 @@ from custom_components.ambience.conditions.occupancy import (
     OccupancyCondition,
     OccupancySnapshot,
 )
-from custom_components.ambience.triggers import EMPTY
+from custom_components.ambience.triggers import EMPTY, DurationGate
 
 
-def _snap(sensors=None, now=None, names=None) -> OccupancySnapshot:
+def _snap(sensors=None, now=None, names=None, tenure=None) -> OccupancySnapshot:
     return OccupancySnapshot(
         now=now or datetime(2026, 5, 25, 12, 0, tzinfo=UTC),
         sensors=sensors or {},
         names=names or {},
+        tenure=tenure,
     )
 
 
@@ -319,10 +320,29 @@ def test_validate_rejects(bad) -> None:
 
 
 def test_trigger_deps_watches_sensors_and_durations() -> None:
+    m = OccupancyCondition()
     pred = {"sensors": ["binary_sensor.a"], "for": {"h": 0, "m": 5, "s": 0}}
-    spec = OccupancyCondition().trigger_deps(pred)
+    spec = m.trigger_deps(pred)
     assert spec.entities == frozenset({"binary_sensor.a"})
-    assert spec.entity_durations == frozenset({("binary_sensor.a", 300.0)})
+    # Single predicate-level gate; entity named because there's one sensor.
+    assert spec.duration_gates == frozenset(
+        {DurationGate(key=m._gate_key(pred), seconds=300.0, label=m._gate_label(pred),
+                      entity_id="binary_sensor.a")}
+    )
+
+
+def test_trigger_deps_multi_sensor_gate_has_no_single_entity() -> None:
+    m = OccupancyCondition()
+    pred = {"sensors": ["binary_sensor.a", "binary_sensor.b"], "for": {"m": 5}}
+    spec = m.trigger_deps(pred)
+    gate = next(iter(spec.duration_gates))
+    assert gate.entity_id is None
+    assert gate.key == m._gate_key(pred)
+
+
+def test_trigger_deps_no_for_has_no_gates() -> None:
+    spec = OccupancyCondition().trigger_deps({"sensors": ["binary_sensor.a"]})
+    assert spec.duration_gates == frozenset()
 
 
 def test_contains_any_subset_is_more_specific() -> None:
@@ -391,6 +411,129 @@ def test_is_constraining_only_when_sensors_present() -> None:
     assert m.is_constraining({"sensors": ["binary_sensor.a"]}) is True
     assert m.is_constraining({"sensors": []}) is False
     assert m.is_constraining("not-a-dict") is False
+
+
+# --- predicate tenure (engine-tracked `for:` clock) --------------------
+
+
+def test_occupancy_for_survives_sensor_handover_with_tenure() -> None:
+    """any-of [s1, s2] occupied for 20m: a handover (s1 off, s2 on) keeps the
+    gate's tenure because 'any occupied' held continuously."""
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"sensors": ["binary_sensor.s1", "binary_sensor.s2"], "quant": "any", "for": {"m": 20}}
+    key = m._gate_key(pred)
+    # s2 just turned on 1m ago (s1 off); 'any occupied' has held 20m per tenure.
+    snap = _snap(
+        {
+            "binary_sensor.s1": ("off", now - timedelta(minutes=1)),
+            "binary_sensor.s2": ("on", now - timedelta(minutes=1)),
+        },
+        now=now,
+        tenure={key: now - timedelta(minutes=20)},
+    )
+    assert m.matches(pred, snap) is True
+    # Legacy clock (no tenure): s2 only on 1m → not held → miss.
+    snap_legacy = _snap(
+        {
+            "binary_sensor.s1": ("off", now - timedelta(minutes=1)),
+            "binary_sensor.s2": ("on", now - timedelta(minutes=1)),
+        },
+        now=now,
+    )
+    assert m.matches(pred, snap_legacy) is False
+
+
+def test_occupancy_negate_wraps_the_gated_match() -> None:
+    """negate inverts the *gated* inner verdict: NOT(vacant for 20m) is False
+    once the vacancy tenure matures, True before it does."""
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"sensors": ["binary_sensor.a"], "occupied": False, "for": {"m": 20}, "negate": True}
+    key = m._gate_key(pred)
+    snap_off = {"binary_sensor.a": ("off", now - timedelta(minutes=1))}
+    # Vacancy has matured (tenure 20m): inner 'vacant for 20m' True → negate False.
+    assert m.matches(pred, _snap(snap_off, now, tenure={key: now - timedelta(minutes=20)})) is False
+    # Vacancy not matured (tenure 5m): inner False → negate True.
+    assert m.matches(pred, _snap(snap_off, now, tenure={key: now - timedelta(minutes=5)})) is True
+
+
+def test_occupancy_gate_key_excludes_negate() -> None:
+    m = OccupancyCondition()
+    base = {"sensors": ["binary_sensor.a"], "occupied": False, "for": {"m": 20}}
+    assert m._gate_key(base) == m._gate_key({**base, "negate": True})
+    # But polarity and quant DO change the key.
+    assert m._gate_key(base) != m._gate_key({**base, "occupied": True})
+    assert m._gate_key(base) != m._gate_key({**base, "quant": "all"})
+
+
+def test_occupancy_gate_states_pre_negate_instant_and_anchor() -> None:
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"sensors": ["binary_sensor.a", "binary_sensor.b"], "quant": "any",
+            "for": {"m": 20}, "negate": True}
+    key = m._gate_key(pred)
+    snap = _snap(
+        {
+            "binary_sensor.a": ("on", now - timedelta(minutes=50)),
+            "binary_sensor.b": ("off", now - timedelta(minutes=10)),
+        },
+        now=now,
+    )
+    gs = m.gate_states(pred, snap)
+    # Pre-negate 'any occupied' is True; anchor = latest referenced change (10m).
+    assert gs == {key: (True, now - timedelta(minutes=10))}
+
+
+def test_occupancy_gate_states_empty_without_for_or_sensors() -> None:
+    m = OccupancyCondition()
+    assert m.gate_states({"sensors": ["binary_sensor.a"]}, _snap()) == {}  # no for
+    assert m.gate_states({"sensors": [], "for": {"m": 5}}, _snap()) == {}  # wildcard
+
+
+def test_occupancy_unobservable_stays_unobservable_under_tenure() -> None:
+    """A None inner verdict (unavailable sensor) must stay a miss through the
+    gate and negate, never inverting into a spurious match."""
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"sensors": ["binary_sensor.a"], "for": {"m": 5}, "negate": True}
+    key = m._gate_key(pred)
+    snap = _snap({"binary_sensor.a": ("unavailable", now)}, now=now,
+                 tenure={key: now - timedelta(minutes=10)})
+    assert m.matches(pred, snap) is False
+
+
+def test_occupancy_describe_tenure_mode() -> None:
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"sensors": ["binary_sensor.a"], "occupied": True, "for": {"m": 20}}
+    key = m._gate_key(pred)
+    snap = _snap(
+        {"binary_sensor.a": ("on", now - timedelta(minutes=1))},
+        now=now,
+        names={"binary_sensor.a": "Lounge"},
+        tenure={key: now - timedelta(minutes=25)},
+    )
+    line = m.describe(snap, pred)
+    assert "held 25m" in line
+    # Not-held variant.
+    snap2 = _snap(
+        {"binary_sensor.a": ("off", now - timedelta(minutes=1))},
+        now=now,
+        names={"binary_sensor.a": "Lounge"},
+        tenure={},
+    )
+    assert "not held" in m.describe(snap2, pred)
 
 
 def test_contains_non_dict_is_false() -> None:

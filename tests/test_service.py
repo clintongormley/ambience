@@ -28,6 +28,7 @@ from custom_components.ambience.service import (
     async_resolve_only,
     async_resolve_with_snapshots,
     async_run_scene_actions,
+    attach_tenure,
     category_ids,
     clear_last_applied,
     effective_reapply_seconds,
@@ -573,6 +574,77 @@ class FakeScopeStore:
 
     def categories(self):
         return []
+
+
+def test_attach_tenure_injects_live_view_and_skips_non_gate_conditions() -> None:
+    """attach_tenure replaces gate-capable snapshots with a tenure-bearing copy
+    (the inner dict shared by reference), and leaves gateless / None snapshots
+    untouched."""
+    from dataclasses import dataclass
+
+    @dataclass(frozen=True)
+    class _Snap:
+        value: str
+        tenure: dict | None = None
+
+    class _Gated:
+        def gate_states(self, predicate, snap):
+            return {}
+
+    class _Plain:
+        pass  # no gate_states
+
+    registry = {"g": _Gated(), "p": _Plain()}
+    tenure_by_condition: dict[str, dict] = {}
+    snaps = {"g": _Snap(value="x"), "p": _Snap(value="y"), "fail": None}
+    out = attach_tenure(registry, tenure_by_condition, snaps)
+    # Gate-capable: tenure attached, sharing the engine's inner dict by reference.
+    assert out["g"].tenure is tenure_by_condition["g"]
+    # Gateless and failed snapshots pass through untouched.
+    assert out["p"].tenure is None
+    assert out["fail"] is None
+
+
+async def test_async_snapshot_all_enriches_when_engine_present(hass: HomeAssistant) -> None:
+    """async_snapshot_all injects the engine's gate tenure into gate-capable
+    snapshots when an engine is registered."""
+    from dataclasses import dataclass
+
+    from custom_components.ambience.const import DATA_ENGINE
+    from custom_components.ambience.service import async_snapshot_all
+
+    @dataclass(frozen=True)
+    class _Snap:
+        tenure: dict | None = None
+
+    class _Gated:
+        name = "g"
+
+        async def snapshot(self, hass, *, now=None, entities=None):
+            return _Snap()
+
+        def matches(self, predicate, snapshot):
+            return predicate is None
+
+        def describe(self, snapshot, predicate=None):
+            return None
+
+        def validate_predicate(self, predicate):
+            return
+
+        def gate_states(self, predicate, snap):
+            return {}
+
+        def trigger_deps(self, predicate):
+            return TriggerSpec()
+
+    areas = {"a": {"scenes": [{"name": "s", "when": {"g": {}}, "actions": []}]}}
+    _install(hass, areas=areas, conditions={"g": _Gated()})
+    engine_tenure = {"g": {"gate:k": object()}}
+    hass.data[DOMAIN][DATA_ENGINE] = SimpleNamespace(tenure=engine_tenure)
+
+    snaps = await async_snapshot_all(hass)
+    assert snaps["g"].tenure is engine_tenure["g"]
 
 
 async def test_snapshot_all_passes_referenced_entities_per_condition(

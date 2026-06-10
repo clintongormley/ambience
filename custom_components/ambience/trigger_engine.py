@@ -12,10 +12,12 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable
+from datetime import datetime
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.debounce import Debouncer
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DATA_CONDITIONS,
@@ -30,6 +32,7 @@ from .service import (
     apply_lock,
     async_execute_plan,
     async_resolve_with_snapshots,
+    attach_tenure,
     category_ids,
     forget_last_applied,
     gather_unit_traces,
@@ -72,6 +75,13 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._hass = hass
         # Per-predicate last-known boolean; the flip detector compares against it.
         self._predicate_state: dict[PredKey, bool] = {}
+        # Per-condition gate tenure: condition_key -> {gate fingerprint -> the
+        # time that gate's instant test last became true}. This is the history a
+        # `for:` clause measures against (predicate tenure, not exact-state
+        # tenure). The inner dicts are shared by reference into enriched
+        # snapshots, so the engine MUTATES them in place — never replaces — to
+        # keep already-attached snapshots seeing live updates.
+        self._tenure: dict[str, dict[str, datetime]] = {}
         # Scope configs captured at the last rebuild, for predicate lookup.
         self._scope_cfgs: dict[tuple[str, str | None], dict[str, Any]] = {}
         # Per-condition union of referenced entity_ids, captured at the last
@@ -84,8 +94,8 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # separate from _unsubs because they re-arm on each fire — the slot is
         # replaced rather than appended, so dead handles never accumulate.
         self._sun_unsubs: dict[tuple[str, int], Callable[[], None]] = {}
-        # Per predicate, one recheck timer per `(entity, seconds)` `for:` pair,
-        # keyed by that pair so a fired timer drops only its own handle.
+        # Per predicate, one recheck timer per `for:` gate, keyed by
+        # `(gate_key, seconds)` so a fired timer drops only its own handle.
         self._for_handles: dict[PredKey, dict[tuple[str, float], Callable[[], None]]] = {}
         self._switch_scopes: dict[str, tuple[str, str | None]] = {}
         self._reapply_intervals: dict[int, set[tuple[str, str | None]]] = {}
@@ -111,6 +121,12 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
     def index(self) -> TriggerIndex:
         return self._index
 
+    @property
+    def tenure(self) -> dict[str, dict[str, datetime]]:
+        """The per-condition gate tenure map, shared by reference into enriched
+        snapshots (manual apply / resolve-only read it via ``attach_tenure``)."""
+        return self._tenure
+
     def _store(self) -> Any:
         return self._hass.data[DOMAIN][DATA_STORE]
 
@@ -131,6 +147,17 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._predicate_state = {
             key: value for key, value in self._predicate_state.items() if key in live
         }
+        # Prune dead gate fingerprints from tenure, mutating the inner dicts IN
+        # PLACE so any snapshot already holding a reference still sees the same
+        # object (a fresh dict would orphan it). A condition_key with no live
+        # gates keeps an empty dict — harmless and reused on the next edit.
+        live_gates: dict[str, set[str]] = {}
+        for key, gates in self._index.durations.items():
+            live_gates.setdefault(key[3], set()).update(g.key for g in gates)
+        for cond_key, entries in self._tenure.items():
+            keep = live_gates.get(cond_key, set())
+            for gate_key in [k for k in entries if k not in keep]:
+                del entries[gate_key]
         self._reapply_intervals = self._build_reapply_intervals()
 
     def _build_entries(self) -> list[tuple[PredKey, TriggerSpec]]:
@@ -182,14 +209,20 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         return None
 
     def _recompute(
-        self, fired: set[PredKey], snapshots: dict[str, Any]
+        self, fired: set[PredKey], snapshots: dict[str, Any], *, seed: bool = False
     ) -> set[tuple[str, str | None, str]]:
         """Re-evaluate the fired predicates against `snapshots`; return the
         (scope_kind, scope_id, category) units whose boolean changed. Updates
-        `predicate_state`. A missing/None snapshot evaluates the predicate to
-        False; a first-seen predicate counts as a flip."""
+        `predicate_state` and per-gate `tenure`, and re-arms `for:` rechecks for
+        every fired predicate that carries a gate. A missing/None snapshot
+        evaluates the predicate to False; a first-seen predicate counts as a
+        flip. `seed=True` (startup/reload) seeds a newly-true gate's tenure from
+        the condition's anchor (a provable lower bound like last_changed) rather
+        than now, so a rule whose entity was already in-state fires at
+        anchor+for, not restart+for."""
         conditions = self._conditions()
         dirty: set[tuple[str, str | None, str]] = set()
+        gated: list[PredKey] = []
         for key in fired:
             predicate = self._predicate_for(key)
             if predicate is None:
@@ -198,6 +231,12 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             if condition is None:
                 continue
             snap = snapshots.get(key[3])
+            # Track tenure BEFORE matching so a tenure-aware match (which reads
+            # snapshot.tenure) sees this evaluation's freshly-recorded flips.
+            if key in self._index.durations:
+                gated.append(key)
+                if snap is not None:
+                    self._update_tenure(key, condition, predicate, snap, seed=seed)
             if snap is None:
                 new_value = False
             else:
@@ -214,16 +253,50 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                 category = self._category_for(key[0], key[1], key[2])
                 if category is not None:
                     dirty.add((key[0], key[1], category))
+        # Re-arm rechecks off the freshly-updated tenure so a gate that is true
+        # but not yet matured will still fire at since+seconds with no further
+        # event. (Was previously driven by per-entity `last_*` heuristics.)
+        if gated:
+            self._schedule_for_rechecks(gated)
         return dirty
+
+    def _update_tenure(
+        self, key: PredKey, condition: Any, predicate: Any, snap: Any, *, seed: bool
+    ) -> None:
+        """Record instant-truth flips for `key`'s duration gates into tenure.
+
+        A gate seen true for the first time gets `since = now` (a live flip) or
+        its condition-provided anchor (seed mode). A gate seen false is dropped,
+        so its clock restarts the next time it becomes true. A condition without
+        `gate_states`, or a `gate_states` that raises, is skipped — stale tenure
+        self-heals on the next successful evaluation rather than being wiped."""
+        gate_states = getattr(condition, "gate_states", None)
+        if gate_states is None:
+            return
+        tenure = self._tenure.setdefault(key[3], {})
+        try:
+            readings = gate_states(predicate, snap)
+        except Exception as exc:  # noqa: BLE001 — mirror the match-failure policy
+            _LOGGER.warning("ambience: condition %r gate_states failed: %s", key[3], exc)
+            return
+        now = dt_util.utcnow()
+        for gate_key, (instant, anchor) in readings.items():
+            if not instant:
+                tenure.pop(gate_key, None)
+            elif gate_key not in tenure:
+                tenure[gate_key] = anchor if seed else now
 
     async def _refresh_snapshots(self, condition_keys: set[str]) -> None:
         """Re-snapshot the given conditions into the cache, concurrently
-        (None on failure) — one slow condition doesn't delay the rest."""
-        self._snapshots.update(
-            await snapshot_conditions(
-                self._hass, self._conditions(), self._referenced, keys=condition_keys
-            )
+        (None on failure) — one slow condition doesn't delay the rest. Each
+        gate-capable snapshot is enriched with a live view of this engine's gate
+        tenure so `for:` clauses gate off predicate tenure, not the exact-state
+        clock."""
+        conditions = self._conditions()
+        fresh = await snapshot_conditions(
+            self._hass, conditions, self._referenced, keys=condition_keys
         )
+        self._snapshots.update(attach_tenure(conditions, self._tenure, fresh))
 
     async def _refresh_all_snapshots(self) -> None:
         await self._refresh_snapshots(set(self._conditions()))
@@ -448,12 +521,15 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         silently lost. They don't inherit `force` — only the requested units
         were explicitly edited/reloaded."""
         await self._refresh_all_snapshots()
-        seeded_dirty = self._recompute(set(self._index.all_predicates()), self._snapshots)
-        # Re-arm `for:` rechecks: async_subscribe() tore down every timer, and a
-        # plain re-evaluation won't re-create them. Without this, a duration rule
-        # whose entity was already in-state before a startup/reload (e.g. a switch
-        # on for 2h) never fires until some unrelated event wakes its category.
-        self._schedule_for_rechecks(self._index.durations.keys())
+        # Seed mode: a gate already instant-true at startup/reload has its tenure
+        # seeded from the condition's anchor (e.g. last_changed), and _recompute
+        # re-arms every gate's recheck off that tenure. So a duration rule whose
+        # entity was already in-state before a startup/reconfigure (e.g. a switch
+        # on for 2h) still fires at anchor+for rather than restart+for — and
+        # isn't silently dropped until some unrelated event wakes its category.
+        seeded_dirty = self._recompute(
+            set(self._index.all_predicates()), self._snapshots, seed=True
+        )
         traces = await self._apply_units(units, force=force)
         extra = sorted(seeded_dirty - set(units), key=lambda u: (u[0], u[1] or "", u[2]))
         if extra:

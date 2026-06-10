@@ -1217,7 +1217,7 @@ describe("ambience-scopes-view", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(api.saveHouse).not.toHaveBeenCalled();
-    const stored = el._getConfig({ kind: "house" });
+    const stored = el._store.getConfig({ kind: "house" });
     expect(stored.scenes.map((r: Scene) => r.name)).toEqual(["a", "b"]);
   });
 
@@ -1648,14 +1648,14 @@ describe("ambience-scopes-view", () => {
 
     // The scope's config changes while the modal is open — it must reflect the
     // new scenes (a frozen snapshot taken at open time would still show ["A"]).
-    const next = new Map(el._areaConfigs);
+    const next = new Map(el._store.areaConfigs);
     next.set("living_room", {
       scenes: [
         { name: "A", when: {}, actions: [] },
         { name: "B", when: {}, actions: [] },
       ],
     });
-    el._areaConfigs = next;
+    el._store.areaConfigs = next;
     await el.updateComplete;
     expect(modal.scenes.map((s: Scene) => s.name)).toEqual(["A", "B"]);
   });
@@ -2214,7 +2214,7 @@ describe("ambience-scopes-view", () => {
     vi.mocked(api.getHouse).mockResolvedValueOnce({} as any);
     el = await mount();
     // The house scope should have an empty scenes array, not crash
-    const cfg = el._getConfig({ kind: "house" });
+    const cfg = el._store.getConfig({ kind: "house" });
     expect(cfg.scenes).toEqual([]);
   });
 
@@ -2330,7 +2330,7 @@ describe("ambience-scopes-view", () => {
     localEl.remove();
     resolveAreas(baseAreas);
     await new Promise((r) => setTimeout(r, 0));
-    expect(localEl._areas).toEqual([]);
+    expect(localEl._store.areas).toEqual([]);
   });
 
   test("_refreshHouse: bails out silently when element is removed before response", async () => {
@@ -2348,7 +2348,7 @@ describe("ambience-scopes-view", () => {
     resolveHouse(baseConfig);
     await new Promise((r) => setTimeout(r, 0));
     // House remains at default empty config
-    expect(localEl._house).toEqual({ scenes: [] });
+    expect(localEl._store.house).toEqual({ scenes: [] });
   });
 
   test("_onExposedActionsChanged: bails out when element is removed before listExposedActions resolves", async () => {
@@ -2410,7 +2410,7 @@ describe("ambience-scopes-view", () => {
     localEl.remove();
     resolveSwitches([]);
     await new Promise((r) => setTimeout(r, 0));
-    expect(localEl._switchEntityIds.size).toBe(0);
+    expect(localEl._store.switchEntityIds.size).toBe(0);
   });
 
   // --- _mutate || String(e) branch -----------------------------------------

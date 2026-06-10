@@ -6,12 +6,6 @@ import { repeat } from "lit/directives/repeat.js";
 import type { AreaRegistryEvent, FloorRegistryEvent, HassConnection } from "../api.js";
 import {
   applyScenes,
-  getArea,
-  getFloor,
-  getHouse,
-  listAreas,
-  listFloors,
-  listSwitches,
   runSceneActions,
   saveArea,
   saveFloor,
@@ -22,22 +16,14 @@ import { sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { localize } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
 import { scopeIcon } from "../scope-icon.js";
-import type {
-  AreaListItem,
-  ConditionInfo,
-  FloorListItem,
-  Scene,
-  Scope,
-  ScopeConfig,
-  ScopeOption,
-} from "../types.js";
+import type { ConditionInfo, Scene, Scope, ScopeConfig, ScopeOption } from "../types.js";
 import {
   getConditionsHintDismissed,
   getExpandedScopes,
   setConditionsHintDismissed,
   setExpandedScopes,
 } from "../ui-state.js";
-import { ScopeStore } from "./scope-store.js";
+import { normalizeConfig, ScopeStore } from "./scope-store.js";
 import "./scenes-list.js";
 import "./scene-editor.js";
 import "./kebab-menu.js";
@@ -72,15 +58,6 @@ function formatRemaining(total: number): string {
   const s = total % 60;
   const pad = (n: number) => String(n).padStart(2, "0");
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
-}
-
-function _normalize(cfg: ScopeConfig): ScopeConfig {
-  // Preserve the permanent per-scope `enabled` flag (absent ⇒ enabled) so the
-  // header toggle reflects the persisted value; only drop it when it's the
-  // default (true/absent) to keep configs minimal.
-  return cfg.enabled === false
-    ? { scenes: cfg.scenes ?? [], enabled: false }
-    : { scenes: cfg.scenes ?? [] };
 }
 
 // Must stay in sync with GAP in custom_components/ambience/sorting.py — the
@@ -327,21 +304,10 @@ export class AmbienceScopesView extends LitElement {
   // the store; this element renders straight off its fields.
   private _store = new ScopeStore(this);
 
-  @state() private _areas: AreaListItem[] = [];
-  @state() private _floors: FloorListItem[] = [];
-  @state() private _areaConfigs = new Map<string, ScopeConfig>();
-  @state() private _floorConfigs = new Map<string, ScopeConfig>();
-  @state() private _house: ScopeConfig = { scenes: [] };
-  // scopeKey(scope) -> Ambience switch entity_id. Resolved by the backend
-  // because user/registry renames make the entity_id non-derivable.
-  @state() private _switchEntityIds = new Map<string, string>();
   // _expanded keys: "area:<id>" | "floor:<id>" | "house". Seeded from
   // localStorage so a reload (or HA's panel rebuild on reconnect) restores which
   // rows were open; persisted on every change via _setExpanded.
   @state() private _expanded = new Set<string>(getExpandedScopes());
-  // True once the first areas fetch settles, so the "No areas found" empty state
-  // doesn't flash a false negative on a slow connection before areas arrive.
-  @state() private _areasLoaded = false;
   @state() private _conditionsHintDismissed = false;
   @state() private _editing: EditingState | null = null;
   // A failed scene save's message, shown inside the (still-open) editor.
@@ -360,7 +326,7 @@ export class AmbienceScopesView extends LitElement {
     categoryName: string | null;
   } | null = null;
   // The scope whose read-only Auto-triggers modal is open (null = closed). Only
-  // scope identity is stored; the live scenes are read from `_getConfig` at
+  // scope identity is stored; the live scenes are read from `_store.getConfig` at
   // render time so the modal re-fetches if that scope's config changes.
   @state() private _autoTriggers: { scope: Scope; name: string } | null = null;
   // Global category filter, driven by the header's <ambience-category-filter>:
@@ -377,7 +343,7 @@ export class AmbienceScopesView extends LitElement {
     super.connectedCallback();
     this._conditionsHintDismissed = getConditionsHintDismissed();
     this._tick = setInterval(() => {
-      for (const id of this._switchEntityIds.values()) {
+      for (const id of this._store.switchEntityIds.values()) {
         if (this.hass.states?.[id]?.state === "off") {
           this.requestUpdate();
           return;
@@ -386,10 +352,10 @@ export class AmbienceScopesView extends LitElement {
     }, 1000);
     await this._store.loadStatic();
     await Promise.all([
-      this._refreshAreas(),
-      this._refreshFloors(),
-      this._refreshHouse(),
-      this._refreshSwitches(),
+      this._store.refreshAreas(),
+      this._store.refreshFloors(),
+      this._store.refreshHouse(),
+      this._store.refreshSwitches(),
     ]);
     await this._subscribe();
   }
@@ -404,93 +370,7 @@ export class AmbienceScopesView extends LitElement {
     this._unsubFloor = undefined;
   }
 
-  // --- loading -------------------------------------------------------------
-
-  private async _refreshAreas() {
-    try {
-      const areas = await listAreas(this.hass);
-      // Ambience configs only change when WE call saveArea — never via
-      // area_registry_updated events. Reuse existing config references and
-      // only fetch for newly-discovered areas, to keep Scene references
-      // stable across rename/add/remove events.
-      const previous = this._areaConfigs;
-      const configs = new Map<string, ScopeConfig>();
-      await Promise.all(
-        areas.map(async (a) => {
-          const existing = previous.get(a.area_id);
-          if (existing) {
-            configs.set(a.area_id, existing);
-            return;
-          }
-          configs.set(a.area_id, _normalize(await getArea(this.hass, a.area_id)));
-        }),
-      );
-      if (!this.isConnected) return;
-      this._areas = areas;
-      this._areaConfigs = configs;
-    } catch (e) {
-      this._store.error = (e as Error).message || String(e);
-    } finally {
-      // The fetch has settled (success or failure) — replace the loading spinner
-      // with the areas, the empty state, or (on error) the error banner. Skip
-      // when disconnected (matching the early-return above) so a stale fetch
-      // resolving after teardown can't mark a torn-down element "loaded".
-      if (this.isConnected) this._areasLoaded = true;
-    }
-  }
-
-  private async _refreshFloors() {
-    try {
-      const floors = (await listFloors(this.hass))
-        .slice()
-        .sort((a, b) => a.name.localeCompare(b.name));
-      const previous = this._floorConfigs;
-      const configs = new Map<string, ScopeConfig>();
-      await Promise.all(
-        floors.map(async (f) => {
-          const existing = previous.get(f.floor_id);
-          if (existing) {
-            configs.set(f.floor_id, existing);
-            return;
-          }
-          configs.set(f.floor_id, _normalize(await getFloor(this.hass, f.floor_id)));
-        }),
-      );
-      if (!this.isConnected) return;
-      this._floors = floors;
-      this._floorConfigs = configs;
-    } catch (e) {
-      this._store.error = (e as Error).message || String(e);
-    }
-  }
-
-  private async _refreshHouse() {
-    try {
-      const house = _normalize(await getHouse(this.hass));
-      if (!this.isConnected) return;
-      this._house = house;
-    } catch (e) {
-      this._store.error = (e as Error).message || String(e);
-    }
-  }
-
-  private async _refreshSwitches() {
-    try {
-      const switches = await listSwitches(this.hass);
-      if (!this.isConnected) return;
-      this._switchEntityIds = new Map(
-        switches.map((s) => {
-          // Route through scopeKey() — the single source of truth for scope
-          // identity — rather than re-deriving its string format here.
-          const scope: Scope =
-            s.scope_kind === "house" ? { kind: "house" } : { kind: s.scope_kind, id: s.scope_id! };
-          return [scopeKey(scope), s.entity_id];
-        }),
-      );
-    } catch (e) {
-      this._store.error = (e as Error).message || String(e);
-    }
-  }
+  // --- registry subscriptions ----------------------------------------------
 
   private async _subscribe() {
     const subArea = this.hass.connection.subscribeEvents<AreaRegistryEvent>((event) => {
@@ -503,9 +383,9 @@ export class AmbienceScopesView extends LitElement {
           this._editing = null;
         }
       }
-      void this._refreshAreas();
+      void this._store.refreshAreas();
       // The switch set only changes when an area is added or removed.
-      if (event.data.action !== "update") void this._refreshSwitches();
+      if (event.data.action !== "update") void this._store.refreshSwitches();
     }, "area_registry_updated");
     const subFloor = this.hass.connection.subscribeEvents<FloorRegistryEvent>((event) => {
       if (event.data.action === "remove") {
@@ -517,9 +397,9 @@ export class AmbienceScopesView extends LitElement {
           this._editing = null;
         }
       }
-      void this._refreshFloors();
+      void this._store.refreshFloors();
       // The switch set only changes when a floor is added or removed.
-      if (event.data.action !== "update") void this._refreshSwitches();
+      if (event.data.action !== "update") void this._store.refreshSwitches();
     }, "floor_registry_updated");
     const [unsubArea, unsubFloor] = await Promise.all([subArea, subFloor]);
     if (this.isConnected) {
@@ -528,28 +408,6 @@ export class AmbienceScopesView extends LitElement {
     } else {
       unsubArea();
       unsubFloor();
-    }
-  }
-
-  // --- config getter / setter ----------------------------------------------
-
-  private _getConfig(scope: Scope): ScopeConfig | undefined {
-    if (scope.kind === "house") return this._house;
-    if (scope.kind === "area") return this._areaConfigs.get(scope.id);
-    return this._floorConfigs.get(scope.id);
-  }
-
-  private _setConfig(scope: Scope, config: ScopeConfig) {
-    if (scope.kind === "house") {
-      this._house = config;
-    } else if (scope.kind === "area") {
-      const next = new Map(this._areaConfigs);
-      next.set(scope.id, config);
-      this._areaConfigs = next;
-    } else {
-      const next = new Map(this._floorConfigs);
-      next.set(scope.id, config);
-      this._floorConfigs = next;
     }
   }
 
@@ -563,18 +421,18 @@ export class AmbienceScopesView extends LitElement {
    *   the optimistic update has been reverted and `_error` set).
    */
   private async _mutate(scope: Scope, next: ScopeConfig): Promise<boolean> {
-    const prev = this._getConfig(scope);
-    this._setConfig(scope, next);
+    const prev = this._store.getConfig(scope);
+    this._store.setConfig(scope, next);
     this._store.error = "";
     try {
       let result: { ok: true; config: ScopeConfig };
       if (scope.kind === "house") result = await saveHouse(this.hass, next);
       else if (scope.kind === "area") result = await saveArea(this.hass, scope.id, next);
       else result = await saveFloor(this.hass, scope.id, next);
-      this._setConfig(scope, _normalize(result.config));
+      this._store.setConfig(scope, normalizeConfig(result.config));
       return true;
     } catch (e) {
-      if (prev) this._setConfig(scope, prev);
+      if (prev) this._store.setConfig(scope, prev);
       this._store.error = (e as Error).message || String(e);
       return false;
     }
@@ -600,7 +458,7 @@ export class AmbienceScopesView extends LitElement {
   // --- scenes ---------------------------------------------------------------
 
   private _addScene(scope: Scope, category?: string) {
-    const cfg = this._getConfig(scope);
+    const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     this._sceneEditorError = "";
     this._editing = { scope, index: cfg.scenes.length, isNew: true, category };
@@ -612,7 +470,7 @@ export class AmbienceScopesView extends LitElement {
   }
 
   private _duplicateScene(scope: Scope, e: CustomEvent<{ index: number }>) {
-    const cfg = this._getConfig(scope);
+    const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const original = cfg.scenes[e.detail.index];
     if (!original) return;
@@ -624,14 +482,14 @@ export class AmbienceScopesView extends LitElement {
   }
 
   private _deleteScene(scope: Scope, e: CustomEvent<{ index: number }>) {
-    const cfg = this._getConfig(scope);
+    const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const scenes = cfg.scenes.filter((_, i) => i !== e.detail.index);
     void this._mutate(scope, { ...cfg, scenes });
   }
 
   private _reorderScenes(scope: Scope, e: CustomEvent<{ from: number; to: number }>) {
-    const cfg = this._getConfig(scope);
+    const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const { from, to } = e.detail;
     const moved = cfg.scenes[from];
@@ -662,14 +520,14 @@ export class AmbienceScopesView extends LitElement {
   }
 
   private _unpinScene(scope: Scope, e: CustomEvent<{ index: number }>) {
-    const cfg = this._getConfig(scope);
+    const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const scenes = cfg.scenes.map((r, i) => (i === e.detail.index ? { ...r, pinned: false } : r));
     void this._mutate(scope, { ...cfg, scenes });
   }
 
   private _toggleSceneEnabled(scope: Scope, e: CustomEvent<{ index: number; enabled: boolean }>) {
-    const cfg = this._getConfig(scope);
+    const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const scenes = cfg.scenes.map((r, i) => {
       if (i !== e.detail.index) return r;
@@ -698,7 +556,7 @@ export class AmbienceScopesView extends LitElement {
     try {
       if (scopeKey(target) === scopeKey(editing.scope)) {
         // Same scope: replace in place, or append a new scene.
-        const cfg = this._getConfig(target);
+        const cfg = this._store.getConfig(target);
         if (!cfg) return;
         const scenes = [...cfg.scenes];
         if (editing.isNew) scenes.push(scene);
@@ -713,7 +571,7 @@ export class AmbienceScopesView extends LitElement {
       // Different scope: the scene lands fresh. Strip ordering metadata so the
       // backend assigns a new priority.
       const fresh = stripPositionMetadata(scene);
-      const targetCfg = this._getConfig(target);
+      const targetCfg = this._store.getConfig(target);
       if (!targetCfg) return;
       const added = await this._mutate(target, {
         ...targetCfg,
@@ -730,7 +588,7 @@ export class AmbienceScopesView extends LitElement {
       // successful add merely leaves a duplicate, which is the accepted
       // non-atomic outcome.)
       if (!editing.isNew) {
-        const srcCfg = this._getConfig(editing.scope);
+        const srcCfg = this._store.getConfig(editing.scope);
         if (srcCfg) {
           const scenes = srcCfg.scenes.filter((_, i) => i !== editing.index);
           await this._mutate(editing.scope, { ...srcCfg, scenes });
@@ -821,7 +679,7 @@ export class AmbienceScopesView extends LitElement {
         actions: [],
         category: this._editing.category ?? this._defaultCategoryId(),
       };
-    const cfg = this._getConfig(this._editing.scope);
+    const cfg = this._store.getConfig(this._editing.scope);
     return cfg?.scenes[this._editing.index] ?? null;
   }
 
@@ -854,12 +712,12 @@ export class AmbienceScopesView extends LitElement {
         set.add(name);
       });
     };
-    addScope({ kind: "house" }, this._house);
-    for (const f of this._floors) {
-      addScope({ kind: "floor", id: f.floor_id }, this._floorConfigs.get(f.floor_id));
+    addScope({ kind: "house" }, this._store.house);
+    for (const f of this._store.floors) {
+      addScope({ kind: "floor", id: f.floor_id }, this._store.floorConfigs.get(f.floor_id));
     }
-    for (const a of this._areas) {
-      addScope({ kind: "area", id: a.area_id }, this._areaConfigs.get(a.area_id));
+    for (const a of this._store.areas) {
+      addScope({ kind: "area", id: a.area_id }, this._store.areaConfigs.get(a.area_id));
     }
     return map;
   }
@@ -873,11 +731,11 @@ export class AmbienceScopesView extends LitElement {
         scope: { kind: "house" },
         label: localize(this.hass, "ui.scope_house", "House"),
       },
-      ...this._floors.map((f) => ({
+      ...this._store.floors.map((f) => ({
         scope: { kind: "floor" as const, id: f.floor_id },
         label: f.name,
       })),
-      ...this._areas.map((a) => ({
+      ...this._store.areas.map((a) => ({
         scope: { kind: "area" as const, id: a.area_id },
         label: a.name,
       })),
@@ -1050,12 +908,12 @@ export class AmbienceScopesView extends LitElement {
       {
         scope: { kind: "house" },
         name: localize(this.hass, "ui.scope_house", "House"),
-        cfg: this._house,
+        cfg: this._store.house,
         rowClass: "house",
       },
     ];
-    for (const f of this._floors) {
-      const cfg = this._floorConfigs.get(f.floor_id);
+    for (const f of this._store.floors) {
+      const cfg = this._store.floorConfigs.get(f.floor_id);
       if (cfg) {
         rows.push({
           scope: { kind: "floor", id: f.floor_id },
@@ -1065,8 +923,8 @@ export class AmbienceScopesView extends LitElement {
         });
       }
     }
-    for (const a of this._areas) {
-      const cfg = this._areaConfigs.get(a.area_id);
+    for (const a of this._store.areas) {
+      const cfg = this._store.areaConfigs.get(a.area_id);
       if (cfg) {
         rows.push({
           scope: { kind: "area", id: a.area_id },
@@ -1089,7 +947,7 @@ export class AmbienceScopesView extends LitElement {
   /** True only when the scope's Ambience switch is resolved AND currently off.
    *  An unresolved/unknown switch is treated as "not off" so it stays in place. */
   private _isSwitchedOff(scope: Scope): boolean {
-    const entityId = this._switchEntityIds.get(scopeKey(scope));
+    const entityId = this._store.switchEntityIds.get(scopeKey(scope));
     if (!entityId) return false;
     return this.hass.states?.[entityId]?.state === "off";
   }
@@ -1100,7 +958,7 @@ export class AmbienceScopesView extends LitElement {
    *  banner speaks for the failed load, so the empty state is suppressed —
    *  "No areas found" would be a false negative when the fetch didn't succeed. */
   private _renderAreasPlaceholder() {
-    if (!this._areasLoaded) {
+    if (!this._store.areasLoaded) {
       return html`<li>
         <p class="empty" data-test="areas-loading">
           <span class="spinner" aria-hidden="true"></span>
@@ -1108,7 +966,7 @@ export class AmbienceScopesView extends LitElement {
         </p>
       </li>`;
     }
-    if (!this._store.error && this._areas.length === 0) {
+    if (!this._store.error && this._store.areas.length === 0) {
       return html`<li>
         <p class="empty">
           ${localize(this.hass, "ui.no_areas", "No areas found in Home Assistant.")}
@@ -1176,7 +1034,7 @@ export class AmbienceScopesView extends LitElement {
         .scope=${this._autoTriggers?.scope ?? { kind: "house" }}
         .scopeName=${this._autoTriggers?.name ?? ""}
         .scenes=${
-          this._autoTriggers ? (this._getConfig(this._autoTriggers.scope)?.scenes ?? []) : []
+          this._autoTriggers ? (this._store.getConfig(this._autoTriggers.scope)?.scenes ?? []) : []
         }
         @close=${() => {
           this._autoTriggers = null;
@@ -1312,7 +1170,7 @@ export class AmbienceScopesView extends LitElement {
    *  or resumes (switch on); shows a live countdown while paused. */
   private _renderPauseIcon(scope: Scope, cfg: ScopeConfig) {
     if (cfg.enabled === false) return "";
-    const entityId = this._switchEntityIds.get(scopeKey(scope));
+    const entityId = this._store.switchEntityIds.get(scopeKey(scope));
     if (!entityId) return "";
     const paused = this.hass.states?.[entityId]?.state === "off";
     const onClick = (e: Event) => {
@@ -1355,7 +1213,7 @@ export class AmbienceScopesView extends LitElement {
       e.stopPropagation();
       try {
         await setScopeEnabled(this.hass, scope, !enabled);
-        await this._reloadScope(scope);
+        await this._store.reloadScope(scope);
       } catch (err) {
         this._store.error = (err as Error).message || String(err);
       }
@@ -1377,20 +1235,5 @@ export class AmbienceScopesView extends LitElement {
       @click=${stop}
       @change=${onChange}
     />`;
-  }
-
-  /** Re-fetch just this scope's config and update the relevant store, so the
-   *  header toggle reflects the persisted `enabled` value after a write. */
-  private async _reloadScope(scope: Scope) {
-    try {
-      let cfg: ScopeConfig;
-      if (scope.kind === "house") cfg = _normalize(await getHouse(this.hass));
-      else if (scope.kind === "area") cfg = _normalize(await getArea(this.hass, scope.id));
-      else cfg = _normalize(await getFloor(this.hass, scope.id));
-      if (!this.isConnected) return;
-      this._setConfig(scope, cfg);
-    } catch (e) {
-      this._store.error = (e as Error).message || String(e);
-    }
   }
 }

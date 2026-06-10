@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type {
+  AreaListItem,
   ConditionInfo,
   ExposedAction,
+  FloorListItem,
   PeriodStoreView,
   SceneCategory,
+  ScopeConfig,
 } from "../frontend/src/types";
 
 // Mock the api module — same shape as test/scopes-view.test.ts, so the store
@@ -71,6 +74,25 @@ function makeStore(host: Host = makeHost()): { store: ScopeStore; host: Host } {
 /** Flush pending microtasks plus one macrotask tick. */
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
+const baseAreas: AreaListItem[] = [
+  { area_id: "living_room", name: "Living Room" },
+  { area_id: "bedroom", name: "Bedroom" },
+];
+
+const baseFloors: FloorListItem[] = [
+  { floor_id: "upstairs", name: "Upstairs" },
+  { floor_id: "ground", name: "Ground" },
+];
+
+function mockScopes() {
+  vi.mocked(api.listAreas).mockResolvedValue(baseAreas);
+  vi.mocked(api.getArea).mockImplementation(async () => ({ scenes: [] }));
+  vi.mocked(api.listFloors).mockResolvedValue(baseFloors);
+  vi.mocked(api.getFloor).mockImplementation(async () => ({ scenes: [] }));
+  vi.mocked(api.getHouse).mockResolvedValue({ scenes: [] });
+  vi.mocked(api.listSwitches).mockResolvedValue([]);
+}
+
 function mockStatic() {
   vi.mocked(api.listConditions).mockResolvedValue(conditions);
   vi.mocked(api.listExposedActions).mockResolvedValue(actions);
@@ -88,6 +110,7 @@ describe("ScopeStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockStatic();
+    mockScopes();
     connected = [];
   });
 
@@ -270,6 +293,157 @@ describe("ScopeStore", () => {
       window.dispatchEvent(new Event("ambience-categories-changed"));
       await tick();
       expect(vi.mocked(api.listCategories).mock.calls.length).toBe(calls);
+    });
+  });
+
+  describe("per-scope config refreshes", () => {
+    test("refreshAreas loads each area's normalized config and marks areasLoaded", async () => {
+      const { store } = makeStore();
+      await store.refreshAreas();
+      expect(store.areas).toEqual(baseAreas);
+      expect(store.areaConfigs.get("living_room")).toEqual({ scenes: [] });
+      expect(store.areaConfigs.get("bedroom")).toEqual({ scenes: [] });
+      expect(store.areasLoaded).toBe(true);
+    });
+
+    test("refreshAreas reuses existing config references and only fetches new areas", async () => {
+      const { store } = makeStore();
+      await store.refreshAreas();
+      const existing = store.areaConfigs.get("living_room");
+      vi.mocked(api.listAreas).mockResolvedValue([
+        ...baseAreas,
+        { area_id: "attic", name: "Attic" },
+      ]);
+      vi.mocked(api.getArea).mockClear();
+      await store.refreshAreas();
+      expect(store.areaConfigs.get("living_room")).toBe(existing);
+      expect(vi.mocked(api.getArea).mock.calls.map((c) => c[1])).toEqual(["attic"]);
+    });
+
+    test("refreshAreas failure surfaces the error but still settles areasLoaded", async () => {
+      vi.mocked(api.listAreas).mockRejectedValue(new Error("areas down"));
+      const { store } = makeStore();
+      await store.refreshAreas();
+      expect(store.error).toBe("areas down");
+      expect(store.areasLoaded).toBe(true);
+    });
+
+    test("refreshAreas bails out when the host disconnects mid-fetch (areasLoaded stays false)", async () => {
+      const { store, host } = makeStore();
+      const pending = store.refreshAreas();
+      host.isConnected = false;
+      await pending;
+      expect(store.areas).toEqual([]);
+      expect(store.areasLoaded).toBe(false);
+    });
+
+    test("refreshFloors sorts floors by name and loads their configs", async () => {
+      const { store } = makeStore();
+      await store.refreshFloors();
+      expect(store.floors.map((f) => f.floor_id)).toEqual(["ground", "upstairs"]);
+      expect(store.floorConfigs.get("ground")).toEqual({ scenes: [] });
+    });
+
+    test("refreshFloors reuses existing config references across refreshes", async () => {
+      const { store } = makeStore();
+      await store.refreshFloors();
+      const existing = store.floorConfigs.get("ground");
+      vi.mocked(api.getFloor).mockClear();
+      await store.refreshFloors();
+      expect(store.floorConfigs.get("ground")).toBe(existing);
+      expect(vi.mocked(api.getFloor)).not.toHaveBeenCalled();
+    });
+
+    test("refreshHouse normalizes a sparse config (missing scenes becomes [])", async () => {
+      vi.mocked(api.getHouse).mockResolvedValue({} as ScopeConfig);
+      const { store } = makeStore();
+      await store.refreshHouse();
+      expect(store.house).toEqual({ scenes: [] });
+    });
+
+    test("refreshHouse preserves a persisted enabled:false flag", async () => {
+      vi.mocked(api.getHouse).mockResolvedValue({ scenes: [], enabled: false });
+      const { store } = makeStore();
+      await store.refreshHouse();
+      expect(store.house).toEqual({ scenes: [], enabled: false });
+    });
+
+    test("refreshSwitches maps scope keys to switch entity ids", async () => {
+      vi.mocked(api.listSwitches).mockResolvedValue([
+        { scope_kind: "house", scope_id: null, entity_id: "switch.ambience_house" },
+        { scope_kind: "area", scope_id: "living_room", entity_id: "switch.ambience_lr" },
+        { scope_kind: "floor", scope_id: "ground", entity_id: "switch.ambience_ground" },
+      ]);
+      const { store } = makeStore();
+      await store.refreshSwitches();
+      expect(store.switchEntityIds.get("house")).toBe("switch.ambience_house");
+      expect(store.switchEntityIds.get("area:living_room")).toBe("switch.ambience_lr");
+      expect(store.switchEntityIds.get("floor:ground")).toBe("switch.ambience_ground");
+    });
+
+    test("refreshSwitches failure surfaces the error", async () => {
+      vi.mocked(api.listSwitches).mockRejectedValue(new Error("switches down"));
+      const { store } = makeStore();
+      await store.refreshSwitches();
+      expect(store.error).toBe("switches down");
+    });
+  });
+
+  describe("getConfig / setConfig / reloadScope", () => {
+    test("getConfig routes house, area and floor scopes to their stores", async () => {
+      const { store } = makeStore();
+      await Promise.all([store.refreshAreas(), store.refreshFloors(), store.refreshHouse()]);
+      expect(store.getConfig({ kind: "house" })).toBe(store.house);
+      expect(store.getConfig({ kind: "area", id: "living_room" })).toBe(
+        store.areaConfigs.get("living_room"),
+      );
+      expect(store.getConfig({ kind: "floor", id: "ground" })).toBe(
+        store.floorConfigs.get("ground"),
+      );
+    });
+
+    test("setConfig replaces only the targeted scope's entry", async () => {
+      const { store } = makeStore();
+      await store.refreshAreas();
+      const untouched = store.areaConfigs.get("bedroom");
+      const next: ScopeConfig = { scenes: [{ name: "S", when: {}, actions: [], category: "g" }] };
+      store.setConfig({ kind: "area", id: "living_room" }, next);
+      expect(store.areaConfigs.get("living_room")).toBe(next);
+      expect(store.areaConfigs.get("bedroom")).toBe(untouched);
+    });
+
+    test("setConfig on the house replaces the house config", () => {
+      const { store } = makeStore();
+      const next: ScopeConfig = { scenes: [], enabled: false };
+      store.setConfig({ kind: "house" }, next);
+      expect(store.house).toBe(next);
+    });
+
+    test("reloadScope re-fetches a single scope's config and normalizes it", async () => {
+      const { store } = makeStore();
+      await store.refreshAreas();
+      vi.mocked(api.getArea).mockResolvedValue({ enabled: false } as ScopeConfig);
+      await store.reloadScope({ kind: "area", id: "living_room" });
+      expect(store.areaConfigs.get("living_room")).toEqual({ scenes: [], enabled: false });
+      expect(store.areaConfigs.get("bedroom")).toEqual({ scenes: [] });
+    });
+
+    test("reloadScope failure surfaces the error", async () => {
+      vi.mocked(api.getHouse).mockRejectedValue(new Error("house down"));
+      const { store } = makeStore();
+      await store.reloadScope({ kind: "house" });
+      expect(store.error).toBe("house down");
+    });
+
+    test("reloadScope resolving after disconnect is not applied", async () => {
+      const { store, host } = makeStore();
+      await store.refreshHouse();
+      vi.mocked(api.getHouse).mockImplementation(async () => {
+        host.isConnected = false;
+        return { scenes: [], enabled: false };
+      });
+      await store.reloadScope({ kind: "house" });
+      expect(store.house).toEqual({ scenes: [] });
     });
   });
 });

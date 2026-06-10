@@ -321,9 +321,12 @@ async def test_unload_aborts_when_platform_unload_fails(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
 ) -> None:
-    """If the switch platform fails to unload, the entry must report a failed
-    unload and keep its data — tearing down hass.data[DOMAIN] anyway would
-    leave live entities referencing a missing store."""
+    """If the switch platform fails to unload, async_unload_entry must return
+    False (so it does NOT tear down hass.data[DOMAIN]) — that would leave live
+    entities referencing a missing store. We assert what our code controls
+    (data + the service survive); the resulting ConfigEntryState is HA-internal
+    bookkeeping that differs across versions (FAILED_UNLOAD on recent, LOADED on
+    the min pin), so we only require the entry was NOT cleanly unloaded."""
     from unittest.mock import AsyncMock, patch
 
     mock_config_entry.add_to_hass(hass)
@@ -336,7 +339,7 @@ async def test_unload_aborts_when_platform_unload_fails(
         await hass.config_entries.async_unload(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    assert mock_config_entry.state is ConfigEntryState.FAILED_UNLOAD
+    assert mock_config_entry.state is not ConfigEntryState.NOT_LOADED
     assert DOMAIN in hass.data
     assert hass.services.has_service(DOMAIN, "apply_scene")
 

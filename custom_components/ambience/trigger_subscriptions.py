@@ -59,11 +59,17 @@ class TriggerSubscriptionsMixin:
 
     def _fire(self, fired: set[PredKey], cause: TriggerCause | None = None) -> None:
         """Schedule a re-evaluation of the given predicates (callback-safe)."""
+        if not self._running:
+            # A handler already in the loop's ready queue can run after
+            # teardown; after unload hass.data[DOMAIN] is gone, so evaluating
+            # would only produce KeyError task noise.
+            return
         if fired:
             self._hass.async_create_task(self.async_evaluate(fired, cause))
 
     def _teardown(self) -> None:
         """Cancel all subscriptions and pending timers."""
+        self._running = False
         while self._unsubs:
             self._unsubs.pop()()
         for cancel in self._sun_unsubs.values():
@@ -78,6 +84,7 @@ class TriggerSubscriptionsMixin:
     def async_subscribe(self) -> None:
         """(Re)create one subscription per distinct dependency in the index."""
         self._teardown()
+        self._running = True
         index = self._index
         if index.entities:
             self._unsubs.append(
@@ -293,19 +300,33 @@ class TriggerSubscriptionsMixin:
         )
 
     def _for_recheck_delay(self, entity: str, seconds: float, now: Any) -> float | None:
-        """Seconds until `entity` will have held its current value for `seconds`,
-        clocked from its `last_updated`. None when it already has (don't arm a
-        timer for the past). An unknown entity has no clock to measure from, so it
-        falls back to the full delay — the same as a fresh state change would."""
+        """Seconds until `entity` will have held its current value for `seconds`.
+
+        State-clocked conditions (state-mode atoms, people, occupancy) measure
+        from `last_changed`; attribute-mode atoms from `last_updated`. The
+        durations spec doesn't carry the clock source, so arm for the earliest
+        still-pending window — the recheck handler re-arms for any later one,
+        and an early fire is just a no-op evaluation. (Clocking only off
+        `last_updated` meant every attribute-only update — e.g. GPS churn on a
+        person — pushed the timer out, firing a "home for 30m" rule late.)
+        None when both windows have passed (don't arm a timer for the past).
+        An unknown entity has no clock to measure from, so it falls back to
+        the full delay — the same as a fresh state change would."""
         state = self._hass.states.get(entity)
         if state is None:
             return seconds
-        remaining = seconds - (now - state.last_updated).total_seconds()
-        return remaining if remaining > 0 else None
+        pending = [
+            remaining
+            for clock in (state.last_changed, state.last_updated)
+            if (remaining := seconds - (now - clock).total_seconds()) > 0
+        ]
+        return min(pending) if pending else None
 
     def _make_for_recheck(self, key: PredKey, entity: str, seconds: float) -> Callable[[Any], None]:
         @callback
         def _recheck(_now: Any) -> None:
+            if not self._running:
+                return  # fired after teardown — don't evaluate or re-arm
             # Drop only this timer's handle; sibling rechecks for the same
             # predicate (other entities/durations) stay tracked and cancellable.
             handles = self._for_handles.get(key)
@@ -324,6 +345,10 @@ class TriggerSubscriptionsMixin:
                 detail=fmt_duration(seconds),
             )
             self._fire({key}, cause)
+            # Re-arm: the consumed delay may have targeted the earlier of the
+            # two clock windows (see _for_recheck_delay) — pick up any later
+            # still-pending one.
+            self._schedule_for_rechecks([key])
 
         return _recheck
 
@@ -360,14 +385,28 @@ class TriggerSubscriptionsMixin:
             )
 
     def _next_sun_fire(self, anchor: str, offset_min: int) -> Any:
-        """Next fire time for a sun anchor (+offset), from sun.sun, or None."""
+        """Next fire time for a sun anchor (+offset), from sun.sun, or None.
+
+        sun.sun's `next_*` attribute only rolls over when the un-offset event
+        fires, so with a negative offset the computed time is already in the
+        past once the handler has fired — arming it would fire again on the
+        next loop iteration and spin until the anchor advances. Fall forward
+        to just after the un-offset anchor instead; once that passes, `next_*`
+        has rolled over and the real next occurrence is computable. If even
+        the anchor is stale (attribute-update race), poll again shortly.
+        """
         state = self._hass.states.get("sun.sun")
         attr = ANCHOR_ATTR.get(anchor)
         raw = state.attributes.get(attr) if (state and attr) else None
         parsed = dt_util.parse_datetime(raw) if raw else None
         if parsed is None:
             return None
-        return parsed + timedelta(minutes=offset_min)
+        fire_at = parsed + timedelta(minutes=offset_min)
+        now = dt_util.utcnow()
+        if fire_at > now:
+            return fire_at
+        retry_at = parsed + timedelta(seconds=1)
+        return retry_at if retry_at > now else now + timedelta(seconds=60)
 
     def _schedule_sun(self, sun_event: tuple[str, int]) -> None:
         """Schedule the next firing of a sun event, rescheduling on fire.
@@ -381,6 +420,8 @@ class TriggerSubscriptionsMixin:
 
         @callback
         def _handler(_now: Any) -> None:
+            if not self._running:
+                return  # fired after teardown — don't re-arm into a dead engine
             preds = self._index.by_sun.get(sun_event)
             if preds:
                 self._fire(

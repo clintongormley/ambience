@@ -37,11 +37,14 @@ from custom_components.ambience.trace import TraceEvent
 from custom_components.ambience.triggers import TriggerSpec
 
 
-def test_category_ids_returns_only_real_ids():
-    assert category_ids({"scenes": [{"category": "a"}, {"category": "b"}, {"category": "a"}]}) == {
-        "a",
+def test_category_ids_returns_scene_order_deduplicated():
+    """Scene order, deduplicated — a set would vary with hash randomisation,
+    making engine apply/trace ordering differ run to run."""
+    assert category_ids({"scenes": [{"category": "b"}, {"category": "a"}, {"category": "b"}]}) == [
         "b",
-    }
+        "a",
+    ]
+    assert category_ids({"scenes": []}) == []
 
 
 class FixedCondition:
@@ -1603,3 +1606,43 @@ def test_clear_last_applied_is_noop_when_key_absent(hass: HomeAssistant) -> None
 
     hass.data[DOMAIN][DATA_LAST_APPLIED] = {}
     clear_last_applied(hass, "area", "lr")  # must not raise
+
+
+async def test_manual_apply_serialises_with_engine_apply_lock(hass: HomeAssistant) -> None:
+    """The manual apply path shares the engine's per-(scope, category) lock,
+    so it cannot interleave action dispatch with an in-flight engine apply of
+    the same unit."""
+    import asyncio
+
+    from custom_components.ambience.service import apply_lock
+
+    calls = async_mock_service(hass, "light", "turn_on")
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "r",
+                    "category": "lighting",
+                    "when": {"tod": "evening"},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}
+                    ],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage([_exposed("light.turn_on")])),
+    }
+    lock = apply_lock(hass, "area", "a", "lighting")
+    await lock.acquire()
+    task = asyncio.get_running_loop().create_task(async_apply_scene(hass, "area", "a"))
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert not calls  # blocked on the lock — nothing dispatched yet
+    lock.release()
+    await task
+    assert len(calls) == 1

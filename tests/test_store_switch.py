@@ -220,3 +220,21 @@ async def test_set_scope_enabled_rejects_unknown_kind(hass: HomeAssistant) -> No
     await store.async_load()
     with pytest.raises(ValueError, match="unknown scope_kind"):
         await store.async_set_scope_enabled("planet", None, False)
+
+
+async def test_set_off_at_uses_delayed_save(hass: HomeAssistant) -> None:
+    """off_at is loss-tolerant runtime state written once per switch in a
+    cascade — a house toggle would otherwise serialise N+1 immediate full-store
+    disk writes (and the post-pause auto-on storm multiplies that)."""
+    from unittest.mock import patch
+
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with (
+        patch.object(store._store, "async_save") as save,
+        patch.object(store._store, "async_delay_save") as delay_save,
+    ):
+        await store.async_set_scope_switch_off_at("house", None, "2026-01-01T00:00:00+00:00")
+    save.assert_not_called()
+    delay_save.assert_called_once()
+    assert store.get_scope_switch_off_at("house", None) == "2026-01-01T00:00:00+00:00"

@@ -23,9 +23,13 @@ DATA_STORE = "store"
 DATA_SWITCHES = "switches"
 DATA_SWITCH_ADD_ENTITIES = "switch_add_entities"
 
-# Per-scope last-applied scene index: {(scope_kind, scope_id): scene_index}.
+# Last-applied scene index: {(scope_kind, scope_id, category_id): scene_index}.
 # Written by apply_scene; read by the auto-trigger engine's unchanged-scene guard.
 DATA_LAST_APPLIED = "last_applied"
+
+# Per-(scope_kind, scope_id, category_id) asyncio.Lock registry, shared by the
+# trigger engine and the manual apply path (see service.apply_lock).
+DATA_APPLY_LOCKS = "apply_locks"
 
 # Auto-trigger engine instance.
 DATA_ENGINE = "engine"
@@ -38,9 +42,9 @@ TRACE_BUFFER_SIZE = 5
 # Dispatcher signal — payload: tuple (scope_kind, scope_id) or None (global defaults changed)
 SIGNAL_SWITCH_CONFIG_UPDATED = "ambience_switch_config_updated"
 
-# Dispatcher signal — fired when scenes / condition config / a scope's
-# auto_triggers flag change, so the auto-trigger engine rebuilds its watch-set.
-# No payload.
+# Dispatcher signal — fired when scenes / condition config change, so the
+# auto-trigger engine rebuilds its watch-set. Payload: the affected
+# (scope_kind, scope_id) tuple, or None for a global change (reapply all).
 SIGNAL_CONFIG_CHANGED = "ambience_config_changed"
 
 # Defaults

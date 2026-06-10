@@ -456,11 +456,18 @@ async def test_for_recheck_callback_fires_and_clears_handle(hass) -> None:
     fake_cancel = MagicMock()
     engine._for_handles[key] = {("binary_sensor.x", 30.0): fake_cancel}
 
-    recheck_cb = engine._make_for_recheck(key, "binary_sensor.x", 30.0)
-    recheck_cb(None)  # invoke as if the timer fired
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
 
-    # After the only timer fires, the key is cleared from _for_handles.
-    assert key not in engine._for_handles
+    rearmed = MagicMock(name="rearmed-cancel")
+    with patch.object(_ts_mod, "async_call_later", return_value=rearmed):
+        recheck_cb = engine._make_for_recheck(key, "binary_sensor.x", 30.0)
+        recheck_cb(None)  # invoke as if the timer fired
+
+    # The consumed handle is dropped (not cancelled), then — because the
+    # entity's hold window is still pending — a fresh recheck is re-armed in
+    # its place (the dual-clock re-arm; see _for_recheck_delay).
+    fake_cancel.assert_not_called()
+    assert engine._for_handles[key] == {("binary_sensor.x", 30.0): rearmed}
 
 
 async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
@@ -506,8 +513,11 @@ async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
     engine._fire = spy_fire  # type: ignore[method-assign]
 
     hass.states.async_set("binary_sensor.x", "on")
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
     recheck_cb = engine._make_for_recheck(key, "binary_sensor.x", 300.0)
-    recheck_cb(None)
+    with patch.object(_ts_mod, "async_call_later", return_value=MagicMock()):
+        recheck_cb(None)
 
     assert any(key in f for f, _cause in fired_keys)
     duration_causes = [c for _f, c in fired_keys if c is not None and c.kind == CauseKind.DURATION]
@@ -557,15 +567,20 @@ async def test_for_recheck_fire_does_not_orphan_sibling_timers(hass) -> None:
     with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
         engine._schedule_for_rechecks(frozenset({key}))
 
-    assert len(captured) == 2
-    assert len(engine._for_handles[key]) == 2
+        assert len(captured) == 2
+        assert len(engine._for_handles[key]) == 2
 
-    # Fire the first timer's callback.
-    captured[0][1](None)
+        # Fire the first timer's callback.
+        captured[0][1](None)
 
-    # Its own handle is gone, but the sibling stays tracked and cancellable.
+    # Its own handle was dropped (not cancelled) before the re-arm replaced
+    # the set; the sibling stays tracked and cancellable throughout — no
+    # handle is orphaned.
     assert key in engine._for_handles
-    assert len(engine._for_handles[key]) == 1
+    assert set(engine._for_handles[key]) == {
+        ("binary_sensor.x", 30.0),
+        ("binary_sensor.y", 60.0),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1186,3 +1201,133 @@ async def test_schedule_sun_cancels_existing_handle_on_rearm(hass) -> None:
     assert sun_event in engine._sun_unsubs
     assert engine._sun_unsubs[sun_event] is not fake_cancel
     engine._teardown()
+
+
+# ---------------------------------------------------------------------------
+# _next_sun_fire: negative offsets must not arm a past time (busy-spin)
+# ---------------------------------------------------------------------------
+
+
+async def test_next_sun_fire_negative_offset_past_falls_forward_to_anchor(hass) -> None:
+    """With a negative offset, once the offset moment has fired, sun.sun's
+    next_* attribute hasn't rolled over yet — re-arming at the (past) offset
+    time would fire on the next loop iteration and spin until the anchor
+    advances. The next fire must fall forward to just after the un-offset
+    anchor instead."""
+    anchor = dt_util.utcnow() + timedelta(minutes=10)
+    hass.states.async_set("sun.sun", "above_horizon", {"next_setting": anchor.isoformat()})
+    engine = _minimal_engine(hass, [])
+    result = engine._next_sun_fire("sunset", -30)  # offset moment is 20m in the past
+    assert result == anchor + timedelta(seconds=1)
+
+
+async def test_next_sun_fire_stale_anchor_polls_instead_of_past(hass) -> None:
+    """If even the anchor itself is in the past (attribute-update race), poll
+    again shortly rather than arming a past time."""
+    anchor = dt_util.utcnow() - timedelta(minutes=5)
+    hass.states.async_set("sun.sun", "above_horizon", {"next_setting": anchor.isoformat()})
+    engine = _minimal_engine(hass, [])
+    result = engine._next_sun_fire("sunset", 0)
+    assert result is not None
+    assert result > dt_util.utcnow()
+
+
+# ---------------------------------------------------------------------------
+# _for_recheck_delay: clock source
+# ---------------------------------------------------------------------------
+
+
+async def test_for_recheck_delay_clocks_off_last_changed(hass) -> None:
+    """Attribute-only updates advance last_updated but not last_changed; the
+    recheck must honour the state-tenure clock (last_changed) or GPS churn on
+    a person pushes a "home for 30m" recheck out indefinitely."""
+    engine = _minimal_engine(hass, [])
+    now = dt_util.utcnow()
+    state = SimpleNamespace(
+        last_changed=now - timedelta(seconds=60),
+        last_updated=now - timedelta(seconds=10),
+    )
+    engine._hass = SimpleNamespace(states=SimpleNamespace(get=lambda _e: state))
+    delay = engine._for_recheck_delay("person.alice", 100.0, now)
+    assert delay is not None and abs(delay - 40.0) < 1e-6
+
+
+async def test_for_recheck_delay_falls_back_to_last_updated_window(hass) -> None:
+    """When the last_changed window has already passed but the last_updated
+    window is still pending (attribute-mode atoms clock off last_updated),
+    arm for that later moment instead of skipping."""
+    engine = _minimal_engine(hass, [])
+    now = dt_util.utcnow()
+    state = SimpleNamespace(
+        last_changed=now - timedelta(seconds=120),
+        last_updated=now - timedelta(seconds=10),
+    )
+    engine._hass = SimpleNamespace(states=SimpleNamespace(get=lambda _e: state))
+    delay = engine._for_recheck_delay("sensor.x", 100.0, now)
+    assert delay is not None and abs(delay - 90.0) < 1e-6
+
+
+async def test_for_recheck_fire_rearms_for_later_pending_window(hass) -> None:
+    """The armed delay may target the earlier (last_changed) window; after
+    firing, the handler must re-arm so a later still-pending last_updated
+    window is honoured too."""
+    engine = _minimal_engine(hass, [])
+    key = ("area", "a", 0, "state")
+    recheck = engine._make_for_recheck(key, "sensor.x", 100.0)
+    rearmed: list = []
+    with (
+        patch.object(
+            engine,
+            "_schedule_for_rechecks",
+            side_effect=lambda preds: rearmed.append(list(preds)),
+        ),
+        patch.object(engine, "_fire"),
+    ):
+        recheck(None)
+    assert rearmed == [[key]]
+
+
+# ---------------------------------------------------------------------------
+# teardown: queued handlers must not fire/re-arm into a dead engine
+# ---------------------------------------------------------------------------
+
+
+async def test_fire_noop_after_teardown(hass) -> None:
+    """A handler already queued when teardown runs must not spawn evaluate
+    tasks into a dead engine (after unload, hass.data[DOMAIN] is gone)."""
+    engine = _minimal_engine(hass, [])
+    engine.async_subscribe()
+    engine._teardown()
+    created: list = []
+    with patch.object(hass, "async_create_task", side_effect=lambda c: created.append(c)):
+        engine._fire({("area", "a", 0, "state")})
+    assert created == []
+
+
+async def test_schedule_sun_handler_noop_after_teardown(hass) -> None:
+    """A sun handler in the loop's ready queue at teardown must not insert a
+    fresh live timer into the torn-down engine."""
+    hass.states.async_set(
+        "sun.sun",
+        "above_horizon",
+        {"next_setting": (dt_util.utcnow() + timedelta(hours=2)).isoformat()},
+    )
+    engine = _minimal_engine(hass, [])
+    engine.async_subscribe()
+
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    captured: list = []
+
+    def fake_atpit(_hass, action, _point):
+        captured.append(action)
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_track_point_in_time", side_effect=fake_atpit):
+        engine._schedule_sun(("sunset", 0))
+    assert len(captured) == 1
+    engine._teardown()
+    with patch.object(_ts_mod, "async_track_point_in_time", side_effect=fake_atpit):
+        captured[0](None)  # the already-queued handler runs after teardown
+    assert engine._sun_unsubs == {}
+    assert len(captured) == 1  # no re-arm happened

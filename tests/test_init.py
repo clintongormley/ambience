@@ -315,3 +315,27 @@ def test_exposure_constants_shape():
     # Every known assistant has a safe (dot-free) form field name.
     assert set(ASSISTANT_FIELDS) == set(KNOWN_ASSISTANTS)
     assert all("." not in field for field in ASSISTANT_FIELDS.values())
+
+
+async def test_unload_aborts_when_platform_unload_fails(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """If the switch platform fails to unload, the entry must report a failed
+    unload and keep its data — tearing down hass.data[DOMAIN] anyway would
+    leave live entities referencing a missing store."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with patch.object(
+        hass.config_entries, "async_unload_platforms", new=AsyncMock(return_value=False)
+    ):
+        await hass.config_entries.async_unload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.FAILED_UNLOAD
+    assert DOMAIN in hass.data
+    assert hass.services.has_service(DOMAIN, "apply_scene")

@@ -182,10 +182,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
         scope_entity_id = call.data["scope"]
-        entry = er.async_get(hass).async_get(scope_entity_id)
+        reg_entry = er.async_get(hass).async_get(scope_entity_id)
         scope = (
-            scope_for_unique_id(entry.unique_id)
-            if entry is not None and entry.platform == DOMAIN
+            scope_for_unique_id(reg_entry.unique_id)
+            if reg_entry is not None and reg_entry.platform == DOMAIN
             else None
         )
         if scope is None:
@@ -379,7 +379,11 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    await hass.config_entries.async_unload_platforms(entry, [Platform.SWITCH])
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, [Platform.SWITCH])
+    if not unload_ok:
+        # Entities are still live and reference hass.data[DOMAIN] — tearing the
+        # rest down anyway would leave them pointing at a missing store.
+        return False
     async_remove_panel(hass, _PANEL_URL, warn_if_unknown=False)
     card_url = hass.data.get(DOMAIN, {}).get(DATA_CARD_RESOURCE_URL, "")
     await async_unregister_card_resource(hass, card_url)

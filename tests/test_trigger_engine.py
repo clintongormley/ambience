@@ -1645,3 +1645,79 @@ async def test_scope_local_refresh_reapplies_unchanged_winner(hass) -> None:
     engine.note_config_changed(("area", "a"))
     await engine._async_refresh()
     assert calls, "force-applied scope a should have re-fired its action"
+
+
+async def test_recompute_contains_matches_exception(hass, caplog) -> None:
+    """One raising predicate must not kill the whole fire-and-forget evaluate
+    task — treat it as False (mirroring the snapshot-failure policy) and keep
+    evaluating the other fired predicates."""
+
+    class BoomCondition:
+        def trigger_deps(self, predicate):
+            return TriggerSpec(entities=frozenset({"sensor.boom"}))
+
+        def matches(self, predicate, snapshot):
+            raise ValueError("malformed predicate")
+
+    class OkCondition:
+        def trigger_deps(self, predicate):
+            return TriggerSpec(entities=frozenset({"sensor.ok"}))
+
+        def matches(self, predicate, snapshot):
+            return True
+
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {"when": {"boom": "p"}, "category": "g"},
+                    {"when": {"ok": "q"}, "category": "g2"},
+                ]
+            },
+        )
+    ]
+    engine = _engine(hass, scopes, {"boom": BoomCondition(), "ok": OkCondition()})
+    engine.async_rebuild()
+    fired = {("area", "a", 0, "boom"), ("area", "a", 1, "ok")}
+    dirty = engine._recompute(fired, {"boom": "snap", "ok": "snap"})
+    assert ("area", "a", "g2") in dirty  # the healthy predicate still evaluates
+    assert engine._predicate_state[("area", "a", 0, "boom")] is False
+    assert "match failed" in caplog.text
+
+
+async def test_sync_applies_units_flipped_by_seeding_recompute(hass) -> None:
+    """A flip consumed by _sync's seeding recompute (it runs over ALL
+    predicates and discards the result) must still be applied even when its
+    unit isn't in the passed list — otherwise a flip landing during the
+    debounce window for an unaffected scope is silently lost."""
+    from unittest.mock import AsyncMock
+
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    scopes = [
+        ("area", "a", {"scenes": [{"when": {"state": "x"}, "category": "g"}]}),
+        ("area", "b", {"scenes": [{"when": {"state": "y"}, "category": "h"}]}),
+    ]
+    conditions = {"state": DepsCondition(TriggerSpec(entities=frozenset({"sensor.a"})))}
+    engine = _engine(hass, scopes, conditions)
+    engine.async_rebuild()
+
+    applied: list = []
+
+    async def fake_apply(units, *, force=False):
+        applied.append((list(units), force))
+        return []
+
+    with (
+        patch.object(engine, "_apply_units", side_effect=fake_apply),
+        patch.object(engine, "_refresh_all_snapshots", new=AsyncMock()),
+        patch.object(engine, "_recompute", return_value={("area", "b", "h")}),
+        patch.object(engine, "_schedule_for_rechecks"),
+    ):
+        await engine._sync([("area", "a", "g")], TriggerCause(kind=CauseKind.RELOADED), force=True)
+
+    forced = {u: force for units, force in applied for u in units}
+    assert forced.get(("area", "a", "g")) is True  # the requested unit keeps force
+    assert forced.get(("area", "b", "h")) is False  # the seeded flip is applied, unforced

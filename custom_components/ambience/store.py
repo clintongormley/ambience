@@ -320,7 +320,10 @@ class AmbienceStore:
         container = self._scope_container(scope_kind, scope_id)
         sw = container.setdefault("switch", {})
         sw["off_at"] = off_at
-        await self._store.async_save(self._data)
+        # off_at is loss-tolerant runtime state, and a house toggle writes it
+        # once per descendant switch — delay_save coalesces those N+1 writes
+        # into one instead of serialising full-store saves.
+        self._store.async_delay_save(lambda: self._data, 1.0)
 
     def get_scope_enabled(self, scope_kind: str, scope_id: str | None) -> bool:
         """Whether a scope is permanently enabled (default ``True``).

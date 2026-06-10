@@ -307,6 +307,11 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     def _schedule_auto_on_from_store(self, *, turn_on_if_expired: bool) -> None:
         delay = self._resolved_delay()
         if delay <= 0:
+            # 0 = never auto-on: drop any timer armed under a previous delay,
+            # or the switch still turns itself on at the old scheduled time.
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
             return
         off_at_iso = self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id)
         if not off_at_iso:

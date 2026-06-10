@@ -70,7 +70,46 @@ export const traceDetailStyles = css`
   .action-block { font-family: monospace; font-size: 0.8rem; line-height: 1.6; margin-bottom: 0.3rem; }
   .action-head { color: var(--primary-text-color, #ddd); }
   .action-block .entity { padding-left: 1rem; color: var(--secondary-text-color, #aaa); }
+  .entity-link { cursor: pointer; color: var(--primary-color, #03a9f4); }
+  .entity-link:hover { text-decoration: underline; }
+  .entity-link:focus-visible { outline: 2px solid var(--primary-color, #03a9f4); outline-offset: 2px; }
 `;
+
+// Open HA's more-info dialog for an entity. The `hass-more-info` event bubbles
+// (composed) up to the <home-assistant> root, which owns the dialog. stopPropagation
+// keeps a click on an entity from also toggling the surrounding evaluation card.
+function openMoreInfo(e: Event, entityId: string): void {
+  e.stopPropagation();
+  (e.currentTarget as HTMLElement).dispatchEvent(
+    new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }),
+  );
+}
+
+// `label` text rendered as a keyboard-operable button that opens the more-info
+// dialog for `entityId`. Guard e.repeat so a held Space/Enter fires once, like
+// <button>. Callers choose the label: the friendly name, or the raw entity_id.
+function entityLink(entityId: string, label: string): TemplateResult {
+  const onKey = (e: KeyboardEvent) => {
+    if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
+      e.preventDefault();
+      openMoreInfo(e, entityId);
+    }
+  };
+  return html`<span
+    class="entity-link"
+    role="button"
+    tabindex="0"
+    title="Show more info"
+    @click=${(e: Event) => openMoreInfo(e, entityId)}
+    @keydown=${onKey}
+    >${label}</span
+  >`;
+}
+
+// An entity's friendly display name as a more-info button.
+function clickableEntity(hass: HassLike | undefined, entityId: string): TemplateResult {
+  return entityLink(entityId, entityDisplayName(hass, entityId));
+}
 
 // Causes whose label is a fixed phrase — the `detail` (a timestamp, an interval,
 // "for", …) is internal and not worth showing to the user.
@@ -90,15 +129,34 @@ const CAUSE_LABELS_WITH_DETAIL: Record<string, string> = {
   sun: "Sun position",
 };
 
+// A raw value or "?" when the backend sent null (e.g. an entity with no prior
+// state). Keeps the raw-trigger line from showing the literal "null" (string
+// form) or a confusing blank gap (Lit `html` renders null as empty content).
+function rawOrUnknown(v: string | null): string {
+  return v ?? "?";
+}
+
 export function formatCause(c: TraceCause): string {
-  if (c.kind === "entity") return `${c.entity_id} ${c.old} → ${c.new}`;
+  if (c.kind === "entity") return `${c.entity_id} ${rawOrUnknown(c.old)} → ${rawOrUnknown(c.new)}`;
   // A `for:` duration recheck: name the entity, the state it has held, and how
   // long (the detail), e.g. "binary_sensor.motion off for 5m".
-  if (c.kind === "duration") return `${c.entity_id} ${c.new} for ${c.detail}`;
+  if (c.kind === "duration")
+    return `${c.entity_id} ${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`;
   const fixed = CAUSE_LABELS_FIXED[c.kind];
   if (fixed) return fixed;
   const name = CAUSE_LABELS_WITH_DETAIL[c.kind] ?? humanizeId(c.kind);
   return c.detail ? `${name} ${c.detail}` : name;
+}
+
+// Same as {@link formatCause}, but the raw entity_id is a clickable button that
+// opens the more-info dialog. Only entity/duration causes carry an entity_id;
+// other kinds fall back to the plain-text label.
+export function renderCause(c: TraceCause): TemplateResult {
+  if (!causeHasRawValues(c) || !c.entity_id) return html`${formatCause(c)}`;
+  const name = entityLink(c.entity_id, c.entity_id);
+  if (c.kind === "duration")
+    return html`${name} ${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`;
+  return html`${name} ${rawOrUnknown(c.old)} → ${rawOrUnknown(c.new)}`;
 }
 
 // Cause kinds that carry a raw entity_id + old/new values worth showing
@@ -107,18 +165,33 @@ function causeHasRawValues(c: TraceCause): boolean {
   return c.kind === "entity" || c.kind === "duration";
 }
 
-// Friendly trigger line: entity by name, state values via HA's formatter
-// (falls back to the raw value when hass/stateObj is absent). Non-entity causes
-// have no entity/values, so they reuse formatCause's friendly fixed labels.
-export function formatCauseFriendly(c: TraceCause, hass?: HassLike): string {
-  if (!causeHasRawValues(c)) return formatCause(c);
-  const name = c.entity_id ? entityDisplayName(hass, c.entity_id) : "?";
+// Format an entity/duration cause's old/new state values via HA's formatter
+// (falling back to the raw value when hass/stateObj is absent).
+function causeStateValues(c: TraceCause, hass?: HassLike): { old: string; new: string } {
   const stateObj = c.entity_id
     ? (hass as HassWithStates | undefined)?.states?.[c.entity_id]
     : undefined;
   const fmt = (v: string | null) => (v === null ? "?" : stateValueLabel(hass, stateObj, null, v));
-  if (c.kind === "duration") return `${name}: ${fmt(c.new)} for ${c.detail ?? "?"}`;
-  return `${name}: ${fmt(c.old)} → ${fmt(c.new)}`;
+  return { old: fmt(c.old), new: fmt(c.new) };
+}
+
+export function formatCauseFriendly(c: TraceCause, hass?: HassLike): string {
+  if (!causeHasRawValues(c)) return formatCause(c);
+  const name = c.entity_id ? entityDisplayName(hass, c.entity_id) : "?";
+  const v = causeStateValues(c, hass);
+  if (c.kind === "duration") return `${name}: ${v.new} for ${c.detail ?? "?"}`;
+  return `${name}: ${v.old} → ${v.new}`;
+}
+
+// Same as {@link formatCauseFriendly}, but the entity name is a clickable button
+// that opens the more-info dialog. Causes without an entity (manual, clock, …)
+// fall back to the plain-text friendly label.
+export function renderCauseFriendly(c: TraceCause, hass?: HassLike): TemplateResult {
+  if (!causeHasRawValues(c) || !c.entity_id) return html`${formatCauseFriendly(c, hass)}`;
+  const name = clickableEntity(hass, c.entity_id);
+  const v = causeStateValues(c, hass);
+  if (c.kind === "duration") return html`${name}: ${v.new} for ${c.detail ?? "?"}`;
+  return html`${name}: ${v.old} → ${v.new}`;
 }
 
 // Friendly badge text for each outcome. The internal id stays the CSS class
@@ -262,7 +335,7 @@ export function renderEvaluation(
         <span class="ts">${u.timestamp ? new Date(u.timestamp).toLocaleTimeString() : ""}</span>
       </div>
       <div class="eval-body">
-        <div class="cause-line">Trigger: ${formatCauseFriendly(u.cause, hass)}</div>
+        <div class="cause-line">Trigger: ${renderCauseFriendly(u.cause, hass)}</div>
         ${u.winner_name ? html`<div class="won">Won: <span class="name">${u.winner_name}</span></div>` : nothing}
         ${
           u.actions.length
@@ -293,7 +366,7 @@ function renderExpansion(
   const showRawTrigger = causeHasRawValues(u.cause);
   return html`
     <div class="why">
-      ${showRawTrigger ? html`<div class="raw-trigger">Trigger: ${formatCause(u.cause)}</div>` : nothing}
+      ${showRawTrigger ? html`<div class="raw-trigger">Trigger: ${renderCause(u.cause)}</div>` : nothing}
       ${summary ? html`<div class="outcome-summary">${summary}</div>` : nothing}
       ${
         u.explanation
@@ -311,7 +384,7 @@ function renderExpansion(
               (a) => html`<div class="action-block">
                 <div class="action-head">${formatActionHeader(a, hass, schemas)}</div>
                 ${(a.entity_ids ?? []).map(
-                  (e) => html`<div class="entity">${entityDisplayName(hass, e)}</div>`,
+                  (e) => html`<div class="entity">${clickableEntity(hass, e)}</div>`,
                 )}
               </div>`,
             )}

@@ -43,7 +43,7 @@ export type ScopeStoreHost = ReactiveControllerHost & {
   isConnected: boolean;
 };
 
-export function normalizeConfig(cfg: ScopeConfig): ScopeConfig {
+function normalizeConfig(cfg: ScopeConfig): ScopeConfig {
   // Preserve the permanent per-scope `enabled` flag (absent ⇒ enabled) so the
   // header toggle reflects the persisted value; only drop it when it's the
   // default (true/absent) to keep configs minimal.

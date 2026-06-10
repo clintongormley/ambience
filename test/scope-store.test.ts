@@ -35,6 +35,7 @@ vi.mock("../frontend/src/api", () => ({
 }));
 
 import * as api from "../frontend/src/api";
+import type { Scope } from "../frontend/src/types";
 import { ScopeStore } from "../frontend/src/views/scope-store";
 
 const conditions: ConditionInfo[] = [
@@ -444,6 +445,168 @@ describe("ScopeStore", () => {
       });
       await store.reloadScope({ kind: "house" });
       expect(store.house).toEqual({ scenes: [] });
+    });
+  });
+
+  describe("registry subscriptions", () => {
+    type Captured = { area?: (e: any) => void; floor?: (e: any) => void };
+
+    /** Host whose subscribeEvents captures the area/floor callbacks and hands
+     *  back per-type unsubscribe spies. */
+    function subscribingHost() {
+      const captured: Captured = {};
+      const unsubArea = vi.fn();
+      const unsubFloor = vi.fn();
+      const host = makeHost();
+      host.hass.connection.subscribeEvents = vi.fn(async (cb: (e: any) => void, type: string) => {
+        if (type === "area_registry_updated") {
+          captured.area = cb;
+          return unsubArea;
+        }
+        captured.floor = cb;
+        return unsubFloor;
+      }) as any;
+      return { host, captured, unsubArea, unsubFloor };
+    }
+
+    test("subscribes to both registries", async () => {
+      const { host } = subscribingHost();
+      const { store } = makeStore(host);
+      await store.subscribe(() => {});
+      const types = vi.mocked(host.hass.connection.subscribeEvents).mock.calls.map((c) => c[1]);
+      expect(types).toEqual(
+        expect.arrayContaining(["area_registry_updated", "floor_registry_updated"]),
+      );
+    });
+
+    test("an area remove fires onRemove with the area scope, then refreshes areas + switches", async () => {
+      const { host, captured } = subscribingHost();
+      const { store } = makeStore(host);
+      await store.subscribe(onRemove);
+      const removed: Scope[] = [];
+      function onRemove(s: Scope) {
+        removed.push(s);
+      }
+      vi.mocked(api.listAreas).mockClear();
+      vi.mocked(api.listSwitches).mockClear();
+      captured.area?.({ data: { action: "remove", area_id: "living_room" } });
+      await tick();
+      expect(removed).toEqual([{ kind: "area", id: "living_room" }]);
+      expect(api.listAreas).toHaveBeenCalledTimes(1);
+      expect(api.listSwitches).toHaveBeenCalledTimes(1);
+    });
+
+    test("an area update refreshes areas but not switches and does not fire onRemove", async () => {
+      const { host, captured } = subscribingHost();
+      const { store } = makeStore(host);
+      const onRemove = vi.fn();
+      await store.subscribe(onRemove);
+      vi.mocked(api.listAreas).mockClear();
+      vi.mocked(api.listSwitches).mockClear();
+      captured.area?.({ data: { action: "update", area_id: "living_room" } });
+      await tick();
+      expect(onRemove).not.toHaveBeenCalled();
+      expect(api.listAreas).toHaveBeenCalledTimes(1);
+      expect(api.listSwitches).not.toHaveBeenCalled();
+    });
+
+    test("a floor remove fires onRemove with the floor scope, then refreshes floors + switches", async () => {
+      const { host, captured } = subscribingHost();
+      const { store } = makeStore(host);
+      const removed: Scope[] = [];
+      await store.subscribe((s) => removed.push(s));
+      vi.mocked(api.listFloors).mockClear();
+      vi.mocked(api.listSwitches).mockClear();
+      captured.floor?.({ data: { action: "remove", floor_id: "ground" } });
+      await tick();
+      expect(removed).toEqual([{ kind: "floor", id: "ground" }]);
+      expect(api.listFloors).toHaveBeenCalledTimes(1);
+      expect(api.listSwitches).toHaveBeenCalledTimes(1);
+    });
+
+    test("a floor update refreshes floors but not switches", async () => {
+      const { host, captured } = subscribingHost();
+      const { store } = makeStore(host);
+      await store.subscribe(() => {});
+      vi.mocked(api.listFloors).mockClear();
+      vi.mocked(api.listSwitches).mockClear();
+      captured.floor?.({ data: { action: "update", floor_id: "ground" } });
+      await tick();
+      expect(api.listFloors).toHaveBeenCalledTimes(1);
+      expect(api.listSwitches).not.toHaveBeenCalled();
+    });
+
+    test("hostDisconnected unsubscribes from both registries", async () => {
+      const { host, unsubArea, unsubFloor } = subscribingHost();
+      const { store } = makeStore(host);
+      await store.subscribe(() => {});
+      store.hostDisconnected();
+      expect(unsubArea).toHaveBeenCalledTimes(1);
+      expect(unsubFloor).toHaveBeenCalledTimes(1);
+    });
+
+    test("subscribe resolving after disconnect unsubscribes immediately", async () => {
+      const unsubArea = vi.fn();
+      const unsubFloor = vi.fn();
+      const deferred: { area?: (v: any) => void; floor?: (v: any) => void } = {};
+      const host = makeHost();
+      host.hass.connection.subscribeEvents = vi.fn((_cb: any, type: string) => {
+        if (type === "area_registry_updated") {
+          return new Promise((r) => {
+            deferred.area = r;
+          });
+        }
+        return new Promise((r) => {
+          deferred.floor = r;
+        });
+      }) as any;
+      const { store } = makeStore(host);
+      const pending = store.subscribe(() => {});
+      host.isConnected = false;
+      deferred.area?.(unsubArea);
+      deferred.floor?.(unsubFloor);
+      await pending;
+      expect(unsubArea).toHaveBeenCalledTimes(1);
+      expect(unsubFloor).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("pause-countdown tick", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    test("requests a host update each second while a tracked switch is off", () => {
+      const host = makeHost();
+      host.hass.states = { "switch.lr": { state: "off" } };
+      const { store } = makeStore(host);
+      store.switchEntityIds = new Map([["area:living_room", "switch.lr"]]);
+      const before = host.requestUpdate.mock.calls.length;
+      store.hostConnected();
+      vi.advanceTimersByTime(1000);
+      expect(host.requestUpdate.mock.calls.length).toBe(before + 1);
+    });
+
+    test("does not request updates while all tracked switches are on", () => {
+      const host = makeHost();
+      host.hass.states = { "switch.lr": { state: "on" } };
+      const { store } = makeStore(host);
+      store.switchEntityIds = new Map([["area:living_room", "switch.lr"]]);
+      store.hostConnected();
+      const before = host.requestUpdate.mock.calls.length;
+      vi.advanceTimersByTime(3000);
+      expect(host.requestUpdate.mock.calls.length).toBe(before);
+    });
+
+    test("hostDisconnected stops the tick", () => {
+      const host = makeHost();
+      host.hass.states = { "switch.lr": { state: "off" } };
+      const { store } = makeStore(host);
+      store.switchEntityIds = new Map([["area:living_room", "switch.lr"]]);
+      store.hostConnected();
+      store.hostDisconnected();
+      const before = host.requestUpdate.mock.calls.length;
+      vi.advanceTimersByTime(5000);
+      expect(host.requestUpdate.mock.calls.length).toBe(before);
     });
   });
 });

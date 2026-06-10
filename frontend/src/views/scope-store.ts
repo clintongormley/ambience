@@ -1,5 +1,5 @@
 import type { ReactiveController, ReactiveControllerHost } from "lit";
-import type { HassConnection } from "../api.js";
+import type { AreaRegistryEvent, FloorRegistryEvent, HassConnection } from "../api.js";
 import {
   getArea,
   getDayConfig,
@@ -107,6 +107,12 @@ export class ScopeStore implements ReactiveController {
   // banner. Assigning via the host (e.g. from its own api calls) re-renders too.
   @tracked() error = "";
 
+  // Registry-event unsubscribers, set once subscribe() resolves.
+  private _unsubArea?: () => void;
+  private _unsubFloor?: () => void;
+  // 1s tick that drives the live pause countdown while any scope switch is off.
+  private _tick?: ReturnType<typeof setInterval>;
+
   constructor(private readonly _host: ScopeStoreHost) {
     _host.addController(this);
   }
@@ -119,12 +125,59 @@ export class ScopeStore implements ReactiveController {
     window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.addEventListener("ambience-categories-changed", this._onCategoriesChanged);
     window.addEventListener("ambience-conditions-changed", this._onConditionsChanged);
+    this._tick = setInterval(() => {
+      for (const id of this.switchEntityIds.values()) {
+        if (this._hass.states?.[id]?.state === "off") {
+          this._host.requestUpdate();
+          return;
+        }
+      }
+    }, 1000);
   }
 
   hostDisconnected(): void {
     window.removeEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
     window.removeEventListener("ambience-categories-changed", this._onCategoriesChanged);
     window.removeEventListener("ambience-conditions-changed", this._onConditionsChanged);
+    if (this._tick) clearInterval(this._tick);
+    this._tick = undefined;
+    this._unsubArea?.();
+    this._unsubArea = undefined;
+    this._unsubFloor?.();
+    this._unsubFloor = undefined;
+  }
+
+  /**
+   * Subscribe to HA's area/floor registry events and re-fetch on change. A
+   * `remove` additionally calls `onRemove(scope)` so the host can drop the
+   * scope from its own view state (expanded rows, the open editor) before the
+   * refetch lands. The switch set only changes on add/remove, so an `update`
+   * skips the switch refetch. Idempotent on disconnect: if the host tears down
+   * before the subscriptions resolve, they're unsubscribed immediately.
+   */
+  async subscribe(onRemove: (scope: Scope) => void): Promise<void> {
+    const subArea = this._hass.connection.subscribeEvents<AreaRegistryEvent>((event) => {
+      if (event.data.action === "remove") {
+        onRemove({ kind: "area", id: event.data.area_id });
+      }
+      void this.refreshAreas();
+      if (event.data.action !== "update") void this.refreshSwitches();
+    }, "area_registry_updated");
+    const subFloor = this._hass.connection.subscribeEvents<FloorRegistryEvent>((event) => {
+      if (event.data.action === "remove") {
+        onRemove({ kind: "floor", id: event.data.floor_id });
+      }
+      void this.refreshFloors();
+      if (event.data.action !== "update") void this.refreshSwitches();
+    }, "floor_registry_updated");
+    const [unsubArea, unsubFloor] = await Promise.all([subArea, subFloor]);
+    if (this._host.isConnected) {
+      this._unsubArea = unsubArea;
+      this._unsubFloor = unsubFloor;
+    } else {
+      unsubArea();
+      unsubFloor();
+    }
   }
 
   private _onExposedActionsChanged = async () => {

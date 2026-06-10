@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { live } from "lit/directives/live.js";
 import { repeat } from "lit/directives/repeat.js";
 
-import type { AreaRegistryEvent, FloorRegistryEvent, HassConnection } from "../api.js";
+import type { HassConnection } from "../api.js";
 import {
   applyScenes,
   runSceneActions,
@@ -333,23 +333,10 @@ export class AmbienceScopesView extends LitElement {
   // "" = All, else a category id. Set via Lit property binding only (never an
   // HTML attribute), matching how scenes-list declares the same input.
   @property({ attribute: false }) filterCategory = "";
-  private _unsubArea?: () => void;
-  private _unsubFloor?: () => void;
-
-  // 1s tick that drives the live pause countdown while any scope switch is off.
-  private _tick?: ReturnType<typeof setInterval>;
 
   override async connectedCallback() {
     super.connectedCallback();
     this._conditionsHintDismissed = getConditionsHintDismissed();
-    this._tick = setInterval(() => {
-      for (const id of this._store.switchEntityIds.values()) {
-        if (this.hass.states?.[id]?.state === "off") {
-          this.requestUpdate();
-          return;
-        }
-      }
-    }, 1000);
     await this._store.loadStatic();
     await Promise.all([
       this._store.refreshAreas(),
@@ -357,57 +344,21 @@ export class AmbienceScopesView extends LitElement {
       this._store.refreshHouse(),
       this._store.refreshSwitches(),
     ]);
-    await this._subscribe();
+    // The store owns the registry subscriptions (and tears them down in
+    // hostDisconnected); it calls back here so the view can drop a removed
+    // scope from its own expanded/editing state.
+    await this._store.subscribe((scope) => this._onScopeRemoved(scope));
   }
 
-  override disconnectedCallback() {
-    super.disconnectedCallback();
-    if (this._tick) clearInterval(this._tick);
-    this._tick = undefined;
-    this._unsubArea?.();
-    this._unsubArea = undefined;
-    this._unsubFloor?.();
-    this._unsubFloor = undefined;
-  }
-
-  // --- registry subscriptions ----------------------------------------------
-
-  private async _subscribe() {
-    const subArea = this.hass.connection.subscribeEvents<AreaRegistryEvent>((event) => {
-      if (event.data.action === "remove") {
-        const id = event.data.area_id;
-        const expanded = new Set(this._expanded);
-        expanded.delete(`area:${id}`);
-        this._setExpanded(expanded);
-        if (this._editing?.scope.kind === "area" && this._editing.scope.id === id) {
-          this._editing = null;
-        }
-      }
-      void this._store.refreshAreas();
-      // The switch set only changes when an area is added or removed.
-      if (event.data.action !== "update") void this._store.refreshSwitches();
-    }, "area_registry_updated");
-    const subFloor = this.hass.connection.subscribeEvents<FloorRegistryEvent>((event) => {
-      if (event.data.action === "remove") {
-        const id = event.data.floor_id;
-        const expanded = new Set(this._expanded);
-        expanded.delete(`floor:${id}`);
-        this._setExpanded(expanded);
-        if (this._editing?.scope.kind === "floor" && this._editing.scope.id === id) {
-          this._editing = null;
-        }
-      }
-      void this._store.refreshFloors();
-      // The switch set only changes when a floor is added or removed.
-      if (event.data.action !== "update") void this._store.refreshSwitches();
-    }, "floor_registry_updated");
-    const [unsubArea, unsubFloor] = await Promise.all([subArea, subFloor]);
-    if (this.isConnected) {
-      this._unsubArea = unsubArea;
-      this._unsubFloor = unsubFloor;
-    } else {
-      unsubArea();
-      unsubFloor();
+  /** Drop a just-removed scope from the view's own state: collapse its row
+   *  (persisted) and close the editor if it was editing that scope. */
+  private _onScopeRemoved(scope: Scope) {
+    const key = scopeKey(scope);
+    const expanded = new Set(this._expanded);
+    expanded.delete(key);
+    this._setExpanded(expanded);
+    if (this._editing && scopeKey(this._editing.scope) === key) {
+      this._editing = null;
     }
   }
 

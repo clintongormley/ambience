@@ -578,7 +578,7 @@ class FakeScopeStore:
 async def test_snapshot_all_passes_referenced_entities_per_condition(
     hass: HomeAssistant,
 ) -> None:
-    """_snapshot_all hands each condition the union of the entities its scenes
+    """async_snapshot_all hands each condition the union of the entities its scenes
     reference (via trigger_deps), so sensor-backed conditions can target instead
     of scanning the whole domain. Two scenes naming different sensors -> union."""
 

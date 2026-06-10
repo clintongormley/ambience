@@ -39,11 +39,20 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
         raise ValueError("config must be an object")
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    # Shape guards: the ws schema only requires `config` to be a dict, so the
+    # nested shapes must be checked here — an AttributeError on hand-edited /
+    # corrupted data would escape the handlers' `except ValueError` and surface
+    # as an opaque unknown_error plus a logged traceback.
+    scenes = config.get("scenes", [])
+    if not isinstance(scenes, list):
+        raise ValueError("`scenes` must be a list")
     # Server-side backstop for the frontend's per (scope, category) scene-name
     # uniqueness rule: a non-empty name must be unique (case-insensitively,
     # trimmed) within its category. Empty/unnamed scenes are exempt.
     seen_names: dict[tuple[Any, str], int] = {}
-    for scene_idx, scene in enumerate(config.get("scenes", [])):
+    for scene_idx, scene in enumerate(scenes):
+        if not isinstance(scene, dict):
+            raise ValueError(f"scene {scene_idx}: must be an object")
         name = scene.get("name")
         if isinstance(name, str) and name.strip():
             category = scene.get("category")
@@ -61,13 +70,20 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
                 )
             seen_names[name_key] = scene_idx
         when = scene.get("when", {})
+        if not isinstance(when, dict):
+            raise ValueError(f"scene {scene_idx}: `when` must be an object")
         for key, predicate in when.items():
             if predicate is None:
                 continue
             if key not in conditions_registry:
                 raise ValueError(f"scene {scene_idx}: unknown condition {key}")
             conditions_registry[key].validate_predicate(predicate)
-        for action_idx, action_spec in enumerate(scene.get("actions", [])):
+        actions = scene.get("actions", [])
+        if not isinstance(actions, list):
+            raise ValueError(f"scene {scene_idx}: `actions` must be a list")
+        for action_idx, action_spec in enumerate(actions):
+            if not isinstance(action_spec, dict):
+                raise ValueError(f"scene {scene_idx} action {action_idx}: must be an object")
             service_id = action_spec.get("service")
             if not isinstance(service_id, str) or "." not in service_id:
                 raise ValueError(
@@ -142,6 +158,31 @@ def coerce_scene_categories(store, config: dict) -> None:
 
 
 # --- dangling-reference warnings --------------------------------------------
+
+
+def collect_dangling_ref_warnings(
+    store: Any,
+    condition_key: str,
+    missing_fn: Any,
+    effective_ids: set[str],
+) -> list[dict[str, Any]]:
+    """Walk every persisted scene and flag `condition_key` predicates whose
+    named references (via `missing_fn(pred, effective_ids)`) are dangling.
+    Shared by the period and lux-range save handlers."""
+    warnings: list[dict[str, Any]] = []
+    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
+        for scene in scope_cfg.get("scenes", []):
+            pred = scene.get("when", {}).get(condition_key)
+            for missing in missing_fn(pred, effective_ids):
+                warnings.append(
+                    {
+                        "scope_kind": scope_kind,
+                        "scope_id": scope_id,
+                        "scene_name": scene.get("name", ""),
+                        "missing_id": missing,
+                    }
+                )
+    return warnings
 
 
 def missing_period_refs(predicate: Any, effective_ids: set[str]) -> list[str]:

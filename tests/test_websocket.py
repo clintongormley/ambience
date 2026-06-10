@@ -2616,3 +2616,132 @@ async def test_auto_triggers_list_rejects_unknown_scope_kind(
 ) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/auto_triggers/list", scope_kind="galaxy")
     assert resp["success"] is False
+
+
+async def test_categories_save_rejects_empty_list(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """An empty list would wipe every category (the at-least-one invariant is
+    only restored by _ensure_categories on the next restart) — mirror the
+    delete path's last-category guard."""
+    resp = await _ws_send(hass_ws_client, type="ambience/categories/save", categories=[])
+    assert not resp["success"]
+    assert resp["error"]["code"] == "category_last"
+
+
+async def test_categories_save_rejects_removing_in_use_category(
+    hass: HomeAssistant, installed, hass_ws_client, area_id
+) -> None:
+    """A stale-tab save must not silently drop a category that still has
+    scenes (orphaning them) — mirror the delete path's in-use guard."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id, {"scenes": [{"name": "r", "category": "general", "actions": []}]}
+    )
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/categories/save",
+        categories=[{"id": "other", "name": "Other"}],
+    )
+    assert not resp["success"]
+    assert resp["error"]["code"] == "category_in_use"
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"scenes": "abc"},
+        {"scenes": ["not-a-dict"]},
+        {"scenes": [{"when": []}]},
+        {"scenes": [{"when": None, "actions": []}]},
+        {"scenes": [{"actions": "nope"}]},
+        {"scenes": [{"actions": [None]}]},
+    ],
+)
+async def test_validate_rejects_malformed_shapes_cleanly(
+    hass: HomeAssistant, installed, hass_ws_client, config
+) -> None:
+    """Malformed nested shapes must produce a clean validation_error, not an
+    AttributeError that surfaces as unknown_error plus a logged traceback."""
+    resp = await _ws_send(hass_ws_client, type="ambience/validate", config=config)
+    assert not resp["success"]
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_unload_unregisters_every_ws_command(hass: HomeAssistant, installed) -> None:
+    """The unregister list is derived from the registration table, so it can't
+    drift (it once missed ambience/state/known_attribute_values)."""
+    from homeassistant.components import websocket_api
+
+    registered = {k for k in hass.data[websocket_api.const.DOMAIN] if k.startswith("ambience/")}
+    assert registered  # sanity: commands were registered
+
+    await hass.config_entries.async_unload(installed.entry_id)
+    await hass.async_block_till_done()
+
+    leftover = {
+        k for k in hass.data.get(websocket_api.const.DOMAIN, {}) if k.startswith("ambience/")
+    }
+    assert leftover == set()
+
+
+async def test_scope_diagnostics_invalid_kind_is_validation_error(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """An unknown scope_kind raises ValueError in the store — surface it as a
+    validation_error like the sibling (scope_kind, scope_id) commands do."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/diagnostics/scope",
+        scope_kind="garbage",
+        category="general",
+    )
+    assert not resp["success"]
+    assert resp["error"]["code"] == "validation_error"
+
+
+async def test_set_scope_enabled_rejects_unknown_area(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    """A typo'd/stale id must not setdefault a permanent junk scope bucket
+    into storage — validate against the registry like the save handlers do."""
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/set_scope_enabled", area_id="nope", enabled=False
+    )
+    assert not resp["success"]
+    assert resp["error"]["code"] == "validation_error"
+    assert hass.data[DOMAIN][DATA_STORE].get_area("nope") is None
+
+
+async def test_dry_run_snapshots_each_condition_once(
+    hass: HomeAssistant, installed, hass_ws_client, area_id
+) -> None:
+    """dry_run resolves the whole-scope and per-category views from ONE
+    snapshot sweep — two passes were pure waste and could produce inconsistent
+    snapshots between the two halves of the same response."""
+    calls: list[str] = []
+
+    class CountingCondition:
+        name = "counting"
+
+        async def snapshot(self, hass, **_):
+            calls.append("snap")
+            return "v"
+
+        def matches(self, predicate, snapshot):
+            return True
+
+        def describe(self, snapshot, predicate=None):
+            return None
+
+        def validate_predicate(self, predicate):
+            return
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id, {"scenes": [{"name": "r", "category": "general", "actions": []}]}
+    )
+    hass.data[DOMAIN][DATA_CONDITIONS]["counting"] = CountingCondition()
+    resp = await _ws_send(hass_ws_client, type="ambience/dry_run", area_id=area_id)
+    assert resp["success"]
+    assert len(calls) == 1

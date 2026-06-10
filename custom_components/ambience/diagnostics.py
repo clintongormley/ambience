@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.diagnostics import async_redact_data
+from homeassistant.components.diagnostics import REDACTED, async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
@@ -32,6 +32,43 @@ TO_REDACT = {
     "template",
 }
 
+# Presence PII also rides in trace free text outside the structured keys above:
+# a person/device_tracker cause carries zone names in old/new, and the people/
+# template predicate `detail` strings render each person's location / the
+# rendered template. Scrubbed by _redact_trace below.
+_PRESENCE_PREFIXES = ("person.", "device_tracker.")
+_DETAIL_REDACTED_CONDITIONS = {"people", "template"}
+
+
+def _redact_trace(trace: dict[str, Any]) -> dict[str, Any]:
+    """Scrub presence PII from one serialised trace record (see above)."""
+    out = dict(trace)
+    cause = dict(trace.get("cause") or {})
+    entity_id = cause.get("entity_id")
+    if isinstance(entity_id, str) and entity_id.startswith(_PRESENCE_PREFIXES):
+        for key in ("entity_id", "old", "new"):
+            if cause.get(key) is not None:
+                cause[key] = REDACTED
+    out["cause"] = cause
+    explanation = trace.get("explanation")
+    if isinstance(explanation, dict):
+        out["explanation"] = {
+            **explanation,
+            "scenes": [
+                {
+                    **scene,
+                    "predicates": [
+                        {**p, "detail": REDACTED}
+                        if p.get("condition_key") in _DETAIL_REDACTED_CONDITIONS and p.get("detail")
+                        else p
+                        for p in scene.get("predicates", [])
+                    ],
+                }
+                for scene in explanation.get("scenes", [])
+            ],
+        }
+    return out
+
 
 def _buffer_records(hass: HomeAssistant) -> list[BufferedUnit]:
     """The buffered trace records, or [] when no buffer has been populated."""
@@ -40,7 +77,9 @@ def _buffer_records(hass: HomeAssistant) -> list[BufferedUnit]:
 
 
 def _traces_dump(hass: HomeAssistant) -> list[dict[str, Any]]:
-    return async_redact_data([buffered_unit_to_dict(r) for r in _buffer_records(hass)], TO_REDACT)
+    return async_redact_data(
+        [_redact_trace(buffered_unit_to_dict(r)) for r in _buffer_records(hass)], TO_REDACT
+    )
 
 
 def _store_dump(hass: HomeAssistant) -> dict[str, Any]:
@@ -75,7 +114,7 @@ def scope_diagnostics(
             "categories": store.categories(),
             "conditions": store.get_conditions(),
         },
-        "traces": [buffered_unit_to_dict(r) for r in mine],
+        "traces": [_redact_trace(buffered_unit_to_dict(r)) for r in mine],
     }
     return async_redact_data(payload, TO_REDACT)
 

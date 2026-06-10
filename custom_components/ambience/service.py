@@ -246,7 +246,7 @@ async def gather_unit_traces(coros: Iterable[Any]) -> list[UnitTrace]:
     return traces
 
 
-async def _snapshot_all(hass: HomeAssistant) -> dict[str, Any]:
+async def async_snapshot_all(hass: HomeAssistant) -> dict[str, Any]:
     """Snapshot every registered condition fresh; failures become None."""
     conditions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
     store = hass.data[DOMAIN][DATA_STORE]
@@ -261,13 +261,16 @@ async def async_resolve_only(
     scope_kind: str,
     scope_id: str | None,
     category: str | None = None,
+    snapshots: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Like apply_scene, but does not execute actions.
 
-    Snapshots every condition fresh, then delegates. Return shape:
+    Snapshots every condition fresh (unless the caller supplies `snapshots`),
+    then delegates. Return shape:
     {matched_scene_index, scene_name, actions, snapshots_described, switch_state}.
     """
-    snapshots = await _snapshot_all(hass)
+    if snapshots is None:
+        snapshots = await async_snapshot_all(hass)
     return await async_resolve_with_snapshots(
         hass, scope_kind, scope_id, snapshots, category=category
     )
@@ -293,9 +296,12 @@ async def async_resolve_categories_only(
     hass: HomeAssistant,
     scope_kind: str,
     scope_id: str | None,
+    snapshots: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Per-category dry-run: snapshot once, resolve every category. {category_id: plan}."""
-    snapshots = await _snapshot_all(hass)
+    """Per-category dry-run: snapshot once (unless the caller supplies
+    `snapshots`), resolve every category. {category_id: plan}."""
+    if snapshots is None:
+        snapshots = await async_snapshot_all(hass)
     return await _resolve_all_categories(hass, scope_kind, scope_id, snapshots)
 
 
@@ -334,7 +340,7 @@ async def async_apply_scene(
     # Snapshot once, then apply every category's winner concurrently (categories are
     # independent by construction).
     active = tracing_active(hass)
-    snapshots = await _snapshot_all(hass)
+    snapshots = await async_snapshot_all(hass)
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = _scope_config(store, scope_kind, scope_id)
 

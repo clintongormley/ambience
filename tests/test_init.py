@@ -339,3 +339,13 @@ async def test_unload_aborts_when_platform_unload_fails(
     assert mock_config_entry.state is ConfigEntryState.FAILED_UNLOAD
     assert DOMAIN in hass.data
     assert hass.services.has_service(DOMAIN, "apply_scene")
+
+
+def test_manifest_orders_setup_after_frontend() -> None:
+    """The integration registers a sidebar panel, websocket commands, and a
+    Lovelace resource — frontend must be set up first when it is present.
+    after_dependencies (not dependencies) so a stripped/minimal install
+    without hass_frontend can still load the integration."""
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    assert "frontend" in manifest["after_dependencies"]
+    assert "frontend" not in manifest["dependencies"]

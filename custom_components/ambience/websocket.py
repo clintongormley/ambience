@@ -10,6 +10,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -35,6 +36,7 @@ from .service import (
     async_resolve_categories_only,
     async_resolve_only,
     async_run_scene_actions,
+    async_snapshot_all,
     scope_reapply_intervals,
 )
 from .simulate import SimulatedWorld, run_simulation, simulate_inputs
@@ -46,6 +48,7 @@ from .trace import buffered_unit_to_dict
 from .websocket_helpers import (
     canonicalise,
     coerce_scene_categories,
+    collect_dangling_ref_warnings,
     dangling_day_entity_warnings,
     dangling_weather_warnings,
     missing_lux_refs,
@@ -62,94 +65,11 @@ _LOGGER = logging.getLogger(__name__)
 # from materialising an unbounded number of State objects on the event loop.
 MAX_SIMULATE_ENTRIES = 1000
 
-_WS_COMMANDS = (
-    "ambience/areas/list",
-    "ambience/area/get",
-    "ambience/area/save",
-    "ambience/floors/list",
-    "ambience/floor/get",
-    "ambience/floor/save",
-    "ambience/house/get",
-    "ambience/house/save",
-    "ambience/conditions/list",
-    "ambience/services/list",
-    "ambience/services/get_schema",
-    "ambience/exposed_actions/list",
-    "ambience/exposed_actions/save",
-    "ambience/validate",
-    "ambience/dry_run",
-    "ambience/apply",
-    "ambience/scene/run_actions",
-    "ambience/time_of_day_periods/list",
-    "ambience/time_of_day_periods/save",
-    "ambience/time_of_day_periods/reset",
-    "ambience/lux_ranges/list",
-    "ambience/lux_ranges/save",
-    "ambience/lux_ranges/reset",
-    "ambience/conditions/day/config/list",
-    "ambience/conditions/day/config/save",
-    "ambience/conditions/weather/config/list",
-    "ambience/conditions/weather/config/save",
-    "ambience/state/known_states",
-    "ambience/switch_defaults/list",
-    "ambience/switch_defaults/save",
-    "ambience/switches/list",
-    "ambience/set_scope_enabled",
-    "ambience/categories/list",
-    "ambience/categories/save",
-    "ambience/categories/delete",
-    "ambience/auto_triggers/list",
-    "ambience/traces/list",
-    "ambience/traces/clear",
-    "ambience/diagnostics/scope",
-    "ambience/simulate/inputs",
-    "ambience/simulate",
-)
-
 
 def async_register_commands(hass: HomeAssistant) -> None:
-    websocket_api.async_register_command(hass, _ws_areas_list)
-    websocket_api.async_register_command(hass, _ws_floors_list)
-    websocket_api.async_register_command(hass, _ws_conditions_list)
-    websocket_api.async_register_command(hass, _ws_services_list)
-    websocket_api.async_register_command(hass, _ws_services_get_schema)
-    websocket_api.async_register_command(hass, _ws_exposed_actions_list)
-    websocket_api.async_register_command(hass, _ws_exposed_actions_save)
-    websocket_api.async_register_command(hass, _ws_area_get)
-    websocket_api.async_register_command(hass, _ws_area_save)
-    websocket_api.async_register_command(hass, _ws_floor_get)
-    websocket_api.async_register_command(hass, _ws_floor_save)
-    websocket_api.async_register_command(hass, _ws_house_get)
-    websocket_api.async_register_command(hass, _ws_house_save)
-    websocket_api.async_register_command(hass, _ws_validate)
-    websocket_api.async_register_command(hass, _ws_dry_run)
-    websocket_api.async_register_command(hass, _ws_apply)
-    websocket_api.async_register_command(hass, _ws_run_scene_actions)
-    websocket_api.async_register_command(hass, _ws_periods_list)
-    websocket_api.async_register_command(hass, _ws_periods_save)
-    websocket_api.async_register_command(hass, _ws_periods_reset)
-    websocket_api.async_register_command(hass, _ws_lux_ranges_list)
-    websocket_api.async_register_command(hass, _ws_lux_ranges_save)
-    websocket_api.async_register_command(hass, _ws_lux_ranges_reset)
-    websocket_api.async_register_command(hass, _ws_day_config_list)
-    websocket_api.async_register_command(hass, _ws_day_config_save)
-    websocket_api.async_register_command(hass, _ws_weather_config_list)
-    websocket_api.async_register_command(hass, _ws_weather_config_save)
-    websocket_api.async_register_command(hass, _ws_state_known_states)
-    websocket_api.async_register_command(hass, _ws_state_known_attribute_values)
-    websocket_api.async_register_command(hass, _ws_switch_defaults_list)
-    websocket_api.async_register_command(hass, _ws_switch_defaults_save)
-    websocket_api.async_register_command(hass, _ws_switches_list)
-    websocket_api.async_register_command(hass, _ws_set_scope_enabled)
-    websocket_api.async_register_command(hass, _ws_categories_list)
-    websocket_api.async_register_command(hass, _ws_categories_save)
-    websocket_api.async_register_command(hass, _ws_auto_triggers_list)
-    websocket_api.async_register_command(hass, _ws_categories_delete)
-    websocket_api.async_register_command(hass, _ws_traces_list)
-    websocket_api.async_register_command(hass, _ws_traces_clear)
-    websocket_api.async_register_command(hass, _ws_scope_diagnostics)
-    websocket_api.async_register_command(hass, _ws_simulate_inputs)
-    websocket_api.async_register_command(hass, _ws_simulate)
+    """Register every Ambience ws command (see _WS_HANDLERS at module bottom)."""
+    for handler in _WS_HANDLERS:
+        websocket_api.async_register_command(hass, handler)
 
 
 @websocket_api.require_admin
@@ -353,6 +273,29 @@ async def _ws_area_get(
     connection.send_result(msg["id"], with_shadows(hass, area))
 
 
+async def _save_scope(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+    save_fn: Any,
+) -> None:
+    """The shared validate → coerce → canonicalise → save → respond pipeline
+    behind the three scope-save commands (the caller has already verified the
+    scope exists in the relevant registry). `save_fn(store, config)` persists."""
+    try:
+        validate_scope_config(hass, msg["config"])
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    # Coerce categories BEFORE canonicalising so each scene is ordered in its final
+    # (post-coercion) category bucket, not a transient unknown/empty one.
+    store = hass.data[DOMAIN][DATA_STORE]
+    coerce_scene_categories(store, msg["config"])
+    config = canonicalise(hass, msg["config"])
+    await save_fn(store, config)
+    connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
@@ -375,18 +318,7 @@ async def _ws_area_save(
             f"unknown area: {area_id}",
         )
         return
-    try:
-        validate_scope_config(hass, msg["config"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
-        return
-    # Coerce categories BEFORE canonicalising so each scene is ordered in its final
-    # (post-coercion) category bucket, not a transient unknown/empty one.
-    store = hass.data[DOMAIN][DATA_STORE]
-    coerce_scene_categories(store, msg["config"])
-    config = canonicalise(hass, msg["config"])
-    await store.async_save_area(area_id, config)
-    connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
+    await _save_scope(hass, connection, msg, lambda store, cfg: store.async_save_area(area_id, cfg))
 
 
 @websocket_api.require_admin
@@ -433,18 +365,9 @@ async def _ws_floor_save(
             f"unknown floor: {floor_id}",
         )
         return
-    try:
-        validate_scope_config(hass, msg["config"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
-        return
-    # Coerce categories BEFORE canonicalising so each scene is ordered in its final
-    # (post-coercion) category bucket, not a transient unknown/empty one.
-    store = hass.data[DOMAIN][DATA_STORE]
-    coerce_scene_categories(store, msg["config"])
-    config = canonicalise(hass, msg["config"])
-    await store.async_save_floor(floor_id, config)
-    connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
+    await _save_scope(
+        hass, connection, msg, lambda store, cfg: store.async_save_floor(floor_id, cfg)
+    )
 
 
 @websocket_api.require_admin
@@ -473,18 +396,7 @@ async def _ws_house_save(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    try:
-        validate_scope_config(hass, msg["config"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
-        return
-    # Coerce categories BEFORE canonicalising so each scene is ordered in its final
-    # (post-coercion) category bucket, not a transient unknown/empty one.
-    store = hass.data[DOMAIN][DATA_STORE]
-    coerce_scene_categories(store, msg["config"])
-    config = canonicalise(hass, msg["config"])
-    await store.async_save_house(config)
-    connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
+    await _save_scope(hass, connection, msg, lambda store, cfg: store.async_save_house(cfg))
 
 
 @websocket_api.require_admin
@@ -587,8 +499,14 @@ async def _ws_dry_run(
 ) -> None:
     try:
         scope_kind, scope_id = _parse_scope(msg, "dry_run")
-        result = await async_resolve_only(hass, scope_kind, scope_id)
-        result["categories"] = await async_resolve_categories_only(hass, scope_kind, scope_id)
+        # One snapshot sweep feeds both views — a second pass would re-run
+        # state scans / script calls / template renders and could disagree
+        # with the first within the same response.
+        snapshots = await async_snapshot_all(hass)
+        result = await async_resolve_only(hass, scope_kind, scope_id, snapshots=snapshots)
+        result["categories"] = await async_resolve_categories_only(
+            hass, scope_kind, scope_id, snapshots=snapshots
+        )
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
@@ -680,23 +598,12 @@ async def _ws_periods_save(
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
 
-    # Walk every persisted scene and collect dangling-period warnings.
-    store = hass.data[DOMAIN][DATA_STORE]
-    effective_ids = set(period_store.effective())
-    warnings: list[dict[str, Any]] = []
-    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for scene in scope_cfg.get("scenes", []):
-            pred = scene.get("when", {}).get("time_of_day")
-            for missing in missing_period_refs(pred, effective_ids):
-                warnings.append(
-                    {
-                        "scope_kind": scope_kind,
-                        "scope_id": scope_id,
-                        "scene_name": scene.get("name", ""),
-                        "missing_id": missing,
-                    }
-                )
-
+    warnings = collect_dangling_ref_warnings(
+        hass.data[DOMAIN][DATA_STORE],
+        "time_of_day",
+        missing_period_refs,
+        set(period_store.effective()),
+    )
     connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
 
 
@@ -746,23 +653,12 @@ async def _ws_lux_ranges_save(
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
 
-    # Walk every persisted scene and collect dangling-range warnings.
-    store = hass.data[DOMAIN][DATA_STORE]
-    effective_ids = set(lux_store.effective())
-    warnings: list[dict[str, Any]] = []
-    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for scene in scope_cfg.get("scenes", []):
-            pred = scene.get("when", {}).get("lux")
-            for missing in missing_lux_refs(pred, effective_ids):
-                warnings.append(
-                    {
-                        "scope_kind": scope_kind,
-                        "scope_id": scope_id,
-                        "scene_name": scene.get("name", ""),
-                        "missing_id": missing,
-                    }
-                )
-
+    warnings = collect_dangling_ref_warnings(
+        hass.data[DOMAIN][DATA_STORE],
+        "lux",
+        missing_lux_refs,
+        set(lux_store.effective()),
+    )
     connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
 
 
@@ -969,6 +865,14 @@ async def _ws_set_scope_enabled(
     except ServiceValidationError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
+    # Validate the id against the registry (like the save handlers): the store
+    # setdefaults a scope bucket, so a typo'd/stale id would persist junk.
+    if scope_kind == "area" and ar.async_get(hass).async_get_area(scope_id) is None:
+        connection.send_error(msg["id"], "validation_error", f"unknown area: {scope_id}")
+        return
+    if scope_kind == "floor" and fr.async_get(hass).async_get_floor(scope_id) is None:
+        connection.send_error(msg["id"], "validation_error", f"unknown floor: {scope_id}")
+        return
     enabled = msg["enabled"]
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_set_scope_enabled(scope_kind, scope_id, enabled)
@@ -1040,6 +944,26 @@ async def _ws_categories_save(
     msg: dict[str, Any],
 ) -> None:
     categories = msg["categories"]
+    store = hass.data[DOMAIN][DATA_STORE]
+    # Mirror the delete path's guards: a save replaces the whole list, so it
+    # can wipe everything or silently drop an in-use category (stale tab).
+    if not categories:
+        connection.send_error(msg["id"], "category_last", "at least one category is required")
+        return
+    new_ids = {c["id"] for c in categories}
+    in_use = {
+        scene.get("category")
+        for _kind, _id, cfg in store.all_scope_configs()
+        for scene in cfg.get("scenes", [])
+    }
+    removed_in_use = sorted(cid for cid in in_use - new_ids if isinstance(cid, str))
+    if removed_in_use:
+        connection.send_error(
+            msg["id"],
+            "category_in_use",
+            f"categories still have scenes: {', '.join(removed_in_use)}",
+        )
+        return
     seen_ids: set[str] = set()
     seen_names: set[str] = set()
     for category in categories:
@@ -1068,7 +992,6 @@ async def _ws_categories_save(
             )
             return
         seen_names.add(key)
-    store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_categories(categories)
     connection.send_result(msg["id"])
 
@@ -1151,10 +1074,12 @@ async def _ws_scope_diagnostics(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    connection.send_result(
-        msg["id"],
-        scope_diagnostics(hass, msg["scope_kind"], msg.get("scope_id"), msg["category"]),
-    )
+    try:
+        result = scope_diagnostics(hass, msg["scope_kind"], msg.get("scope_id"), msg["category"])
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    connection.send_result(msg["id"], result)
 
 
 @websocket_api.require_admin
@@ -1191,11 +1116,19 @@ async def _ws_simulate_inputs(
         vol.Optional("scope_id"): vol.Any(str, None),
         vol.Required("category"): str,
         vol.Required("now"): str,
-        # Each override is {state?: str, attributes?: dict}; require dict values
-        # so a malformed payload is rejected at the schema layer, not mid-resolve.
+        # Each override is {state?: str, attributes?: dict, for?: dict}, keyed
+        # by a valid entity_id — rejected at the schema layer, not mid-resolve
+        # (a bad key/state would otherwise raise inside State()).
         # Length-capped so an oversized map can't stall the event loop.
         vol.Optional("overrides", default=dict): vol.All(
-            {str: dict}, vol.Length(max=MAX_SIMULATE_ENTRIES)
+            {
+                cv.entity_id: {
+                    vol.Optional("state"): str,
+                    vol.Optional("attributes"): dict,
+                    vol.Optional("for"): dict,
+                }
+            },
+            vol.Length(max=MAX_SIMULATE_ENTRIES),
         ),
         # Per opaque-condition verdicts: condition_key -> {result_key: bool}.
         vol.Optional("verdicts", default=dict): vol.All(
@@ -1213,6 +1146,13 @@ async def _ws_simulate(
     now = dt_util.parse_datetime(msg["now"])
     if now is None:
         connection.send_error(msg["id"], "validation_error", f"unparseable now: {msg['now']!r}")
+        return
+    if now.tzinfo is None:
+        # A naive now produces naive-vs-aware TypeErrors inside condition
+        # snapshots, which silently distort results (per-condition None).
+        connection.send_error(
+            msg["id"], "validation_error", f"`now` must be timezone-aware: {msg['now']!r}"
+        )
         return
     world = SimulatedWorld(
         now=now,
@@ -1232,5 +1172,54 @@ async def _ws_simulate(
 def async_unregister_commands(hass: HomeAssistant) -> None:
     """Remove Ambience WS commands from HA's websocket_api handler registry."""
     handlers = hass.data.get(websocket_api.const.DOMAIN, {})
-    for cmd in _WS_COMMANDS:
-        handlers.pop(cmd, None)
+    for handler in _WS_HANDLERS:
+        handlers.pop(handler._ws_command, None)  # noqa: SLF001 — set by @websocket_command
+
+
+# The single registration table — register and unregister both derive from it
+# (each handler carries its command string as `_ws_command`), so the two can't
+# drift. Defined last so every handler above is in scope.
+_WS_HANDLERS = (
+    _ws_areas_list,
+    _ws_floors_list,
+    _ws_conditions_list,
+    _ws_services_list,
+    _ws_services_get_schema,
+    _ws_exposed_actions_list,
+    _ws_exposed_actions_save,
+    _ws_area_get,
+    _ws_area_save,
+    _ws_floor_get,
+    _ws_floor_save,
+    _ws_house_get,
+    _ws_house_save,
+    _ws_validate,
+    _ws_dry_run,
+    _ws_apply,
+    _ws_run_scene_actions,
+    _ws_periods_list,
+    _ws_periods_save,
+    _ws_periods_reset,
+    _ws_lux_ranges_list,
+    _ws_lux_ranges_save,
+    _ws_lux_ranges_reset,
+    _ws_day_config_list,
+    _ws_day_config_save,
+    _ws_weather_config_list,
+    _ws_weather_config_save,
+    _ws_state_known_states,
+    _ws_state_known_attribute_values,
+    _ws_switch_defaults_list,
+    _ws_switch_defaults_save,
+    _ws_switches_list,
+    _ws_set_scope_enabled,
+    _ws_categories_list,
+    _ws_categories_save,
+    _ws_categories_delete,
+    _ws_auto_triggers_list,
+    _ws_traces_list,
+    _ws_traces_clear,
+    _ws_scope_diagnostics,
+    _ws_simulate_inputs,
+    _ws_simulate,
+)

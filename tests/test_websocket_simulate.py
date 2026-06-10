@@ -197,3 +197,55 @@ async def test_simulate_unknown_scope_kind_returns_validation_error(
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
+
+
+async def test_simulate_rejects_malformed_override_entity_id(
+    hass: HomeAssistant, hass_ws_client, seeded_area
+) -> None:
+    """A non-entity-id override key must be rejected at the schema layer, not
+    raise InvalidEntityFormatError mid-resolve (→ unknown_error + traceback)."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        category="g1",
+        now="2026-12-21T17:30:00+00:00",
+        overrides={"not an entity id": {"state": "on"}},
+    )
+    assert not resp["success"]
+    assert resp["error"]["code"] == "invalid_format"
+
+
+async def test_simulate_rejects_non_string_override_state(
+    hass: HomeAssistant, hass_ws_client, seeded_area
+) -> None:
+    """A non-string `state` raises TypeError in State() mid-resolve unless the
+    schema rejects it first."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        category="g1",
+        now="2026-12-21T17:30:00+00:00",
+        overrides={"binary_sensor.motion": {"state": 5}},
+    )
+    assert not resp["success"]
+    assert resp["error"]["code"] == "invalid_format"
+
+
+async def test_simulate_rejects_naive_now(hass: HomeAssistant, hass_ws_client, seeded_area) -> None:
+    """A timezone-naive `now` produces naive-vs-aware TypeErrors inside
+    condition snapshots, silently distorting results — reject it up front."""
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/simulate",
+        scope_kind="area",
+        scope_id=seeded_area,
+        category="g1",
+        now="2026-12-21T17:30:00",
+        overrides={},
+    )
+    assert not resp["success"]
+    assert resp["error"]["code"] == "validation_error"

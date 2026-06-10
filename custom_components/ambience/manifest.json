@@ -1,10 +1,18 @@
 {
   "domain": "ambience",
   "name": "Ambience",
-  "after_dependencies": ["logbook"],
-  "codeowners": ["@clintongormley"],
+  "after_dependencies": [
+    "frontend",
+    "logbook"
+  ],
+  "codeowners": [
+    "@clintongormley"
+  ],
   "config_flow": true,
-  "dependencies": ["homeassistant", "http"],
+  "dependencies": [
+    "homeassistant",
+    "http"
+  ],
   "documentation": "https://clintongormley.github.io/ambience",
   "integration_type": "service",
   "iot_class": "calculated",

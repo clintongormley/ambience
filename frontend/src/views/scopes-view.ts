@@ -524,7 +524,7 @@ export class AmbienceScopesView extends LitElement {
     return msg;
   }
 
-  /** Run an api call, surfacing any failure in `_error`. */
+  /** Run an api call, surfacing any failure in `_store.error`. */
   private async _callApi(fn: () => Promise<unknown>) {
     this._store.error = "";
     try {

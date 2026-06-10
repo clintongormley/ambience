@@ -306,7 +306,7 @@ export class AmbienceSimulatorModal extends LitElement {
                 : nothing
             }
             <div class="run-row"><button class="runbtn" @click=${() => void this._run()}>Simulate ▸</button></div>
-            ${this._result ? html`<div class="result">${renderEvaluation(this._result, this._expanded, () => (this._expanded = !this._expanded))}</div>` : nothing}
+            ${this._result ? html`<div class="result">${renderEvaluation(this._result, this._expanded, () => (this._expanded = !this._expanded), this.hass)}</div>` : nothing}
           `
           }
         </div>

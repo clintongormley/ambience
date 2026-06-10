@@ -237,6 +237,39 @@ describe("ambience-simulator-modal", () => {
     expect(el.shadowRoot.querySelector(".eval")).toBeTruthy();
   });
 
+  test("result entities are clickable and friendly-named (hass passed through)", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as any);
+    vi.mocked(api.simulate).mockResolvedValue({
+      ...RESULT,
+      actions: [{ service: "light.turn_on", entity_ids: ["binary_sensor.motion"], params: {} }],
+    } as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = {
+      callWS: vi.fn(),
+      states: { "binary_sensor.motion": { attributes: { friendly_name: "Hall motion" } } },
+    };
+    el.scope = { scope_kind: "area", scope_id: "kitchen" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    // Expand the result so the "Actions taken" section (with entities) renders.
+    el.shadowRoot.querySelector(".result .outcome").click();
+    await el.updateComplete;
+    const link = el.shadowRoot.querySelector(".result .action-block .entity .entity-link");
+    // Friendly name (not the raw id) proves hass was threaded into renderEvaluation.
+    expect(link.textContent).toBe("Hall motion");
+    let detail: unknown;
+    el.addEventListener("hass-more-info", (e: Event) => (detail = (e as CustomEvent).detail));
+    link.click();
+    expect(detail).toEqual({ entityId: "binary_sensor.motion" });
+  });
+
   // --- render guard: open=false returns nothing ----------------------------
 
   test("renders nothing when open is false", async () => {

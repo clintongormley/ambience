@@ -755,3 +755,103 @@ describe("trace-detail", () => {
     ).toBe("Reloaded");
   });
 });
+
+describe("trace-detail clickable entities", () => {
+  test("clicking the trigger entity opens more-info for the cause entity", () => {
+    const host = renderToHost({}, false);
+    let detail: unknown;
+    host.addEventListener("hass-more-info", (e) => (detail = (e as CustomEvent).detail));
+    const link = host.querySelector(".cause-line .entity-link") as HTMLElement;
+    link.click();
+    expect(detail).toEqual({ entityId: "binary_sensor.motion" });
+  });
+
+  test("clicking an action entity opens more-info for that entity", () => {
+    const host = renderToHost({}, true); // expanded so "Actions taken" is rendered
+    let detail: unknown;
+    host.addEventListener("hass-more-info", (e) => (detail = (e as CustomEvent).detail));
+    const link = [...host.querySelectorAll(".action-block .entity .entity-link")].find((el) =>
+      el.textContent?.includes("light.counter"),
+    ) as HTMLElement;
+    link.click();
+    expect(detail).toEqual({ entityId: "light.counter" });
+  });
+
+  test("pressing Enter on an entity opens more-info", () => {
+    const host = renderToHost({}, false);
+    let detail: unknown;
+    host.addEventListener("hass-more-info", (e) => (detail = (e as CustomEvent).detail));
+    const link = host.querySelector(".cause-line .entity-link") as HTMLElement;
+    link.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(detail).toEqual({ entityId: "binary_sensor.motion" });
+  });
+
+  test("clicking the raw-trigger entity opens more-info", () => {
+    const host = renderToHost({}, true); // expanded so the raw-trigger line is rendered
+    let detail: unknown;
+    host.addEventListener("hass-more-info", (e) => (detail = (e as CustomEvent).detail));
+    const link = host.querySelector(".raw-trigger .entity-link") as HTMLElement;
+    link.click();
+    expect(detail).toEqual({ entityId: "binary_sensor.motion" });
+  });
+
+  test("the raw-trigger shows the raw entity_id even when a friendly name exists", () => {
+    const hass = {
+      states: { "binary_sensor.motion": { attributes: { friendly_name: "Hall Motion" } } },
+    };
+    const host = renderToHost({}, true, hass);
+    const link = host.querySelector(".raw-trigger .entity-link") as HTMLElement;
+    expect(link.textContent).toBe("binary_sensor.motion");
+  });
+
+  test("a non-entity cause renders no clickable entity in the trigger line", () => {
+    const host = renderToHost(
+      { cause: { kind: "manual", entity_id: null, old: null, new: null, detail: null } },
+      false,
+    );
+    expect(host.querySelector(".cause-line .entity-link")).toBeNull();
+    expect(host.querySelector(".cause-line")?.textContent).toContain("Manual apply");
+  });
+
+  test("the clickable entity is keyboard-focusable with a button role", () => {
+    const host = renderToHost({}, false);
+    const link = host.querySelector(".cause-line .entity-link") as HTMLElement;
+    expect(link.getAttribute("role")).toBe("button");
+    expect(link.getAttribute("tabindex")).toBe("0");
+  });
+
+  test("pressing Space on an entity opens more-info", () => {
+    const host = renderToHost({}, false);
+    let detail: unknown;
+    host.addEventListener("hass-more-info", (e) => (detail = (e as CustomEvent).detail));
+    const link = host.querySelector(".cause-line .entity-link") as HTMLElement;
+    link.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    expect(detail).toEqual({ entityId: "binary_sensor.motion" });
+  });
+
+  test("a duration cause renders clickable entities in both the trigger and raw-trigger lines", () => {
+    const host = renderToHost(
+      {
+        cause: {
+          kind: "duration",
+          entity_id: "binary_sensor.motion",
+          old: null,
+          new: "off",
+          detail: "5m",
+        },
+      },
+      true, // expanded so the raw-trigger line is rendered too
+    );
+    const causeLink = host.querySelector(".cause-line .entity-link") as HTMLElement;
+    const rawLink = host.querySelector(".raw-trigger .entity-link") as HTMLElement;
+    expect(host.querySelector(".cause-line")?.textContent).toContain("for 5m");
+    expect(host.querySelector(".raw-trigger")?.textContent).toContain("off for 5m");
+    let detail: unknown;
+    host.addEventListener("hass-more-info", (e) => (detail = (e as CustomEvent).detail));
+    causeLink.click();
+    expect(detail).toEqual({ entityId: "binary_sensor.motion" });
+    detail = undefined;
+    rawLink.click();
+    expect(detail).toEqual({ entityId: "binary_sensor.motion" });
+  });
+});

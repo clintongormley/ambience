@@ -320,6 +320,11 @@ def test_validate_predicate_accepts_valid(pred: Any) -> None:
         _range(_sun("zenith"), _sun("sunset")),
         [],
         [{"period": "evening"}, "garbage"],
+        # clamp must be an object — runtime _apply_clamp guard (not the period-store
+        # validator), reached because validate_predicate evaluates inline endpoints.
+        _range(
+            {"kind": "sun", "anchor": "sunrise", "offset_min": 0, "clamp": "nope"}, _sun("dusk")
+        ),
     ],
 )
 def test_validate_predicate_rejects_invalid(pred: Any) -> None:
@@ -403,6 +408,25 @@ def test_contains_full_day_predicate() -> None:
     full = _range(_time(0, 0), _time(0, 0))
     assert m.contains(full, _range(_time(12, 0), _time(13, 0))) is True
     assert m.contains(_range(_time(12, 0), _time(13, 0)), full) is False
+
+
+def test_contains_degenerate_clamp_period_yields_empty_intervals() -> None:
+    # A clamp that empties a forward range contributes no interval in _intervals
+    # (the wrap is skipped rather than split), so the period is vacuously
+    # contained by anything and is satisfied by no instant.
+    custom = {
+        "bad": {
+            "from": {
+                "kind": "sun",
+                "anchor": "sunrise",
+                "offset_min": 0,
+                "clamp": {"dir": "not_before", "hh": 20, "mm": 0},
+            },
+            "to": {"kind": "time", "hh": 18, "mm": 0},
+        }
+    }
+    m = _condition(custom)
+    assert m.contains(_range(_time(0, 0), _time(0, 0)), {"period": "bad"}) is True
 
 
 # ── order_key ──────────────────────────────────────────────────────────────

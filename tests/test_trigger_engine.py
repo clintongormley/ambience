@@ -1306,6 +1306,23 @@ async def test_disabled_scope_skips_with_trace(hass) -> None:
         logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
 
 
+async def test_disabled_scope_returns_none_without_trace(hass) -> None:
+    """Line 247: disabled scope and tracing NOT active → silent skip (None)."""
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_set_scope_enabled("area", "a", False)
+    # Pin tracing inactive (logger below DEBUG) so active=False regardless of any
+    # ancestor logger level — the disabled-scope-with-trace sibling sets DEBUG.
+    trace_logger = logging.getLogger("custom_components.ambience.trace")
+    original_level = trace_logger.level
+    trace_logger.setLevel(logging.WARNING)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g")
+    finally:
+        trace_logger.setLevel(original_level)
+    assert result is None
+
+
 # ---------------------------------------------------------------------------
 # Line 239 — _resolve_and_apply: no match AND tracing active → NO_MATCH UnitTrace
 # ---------------------------------------------------------------------------

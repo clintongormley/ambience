@@ -24,6 +24,7 @@ from custom_components.ambience.websocket_helpers import (
     coerce_scene_categories,
     dangling_day_entity_warnings,
     dangling_weather_warnings,
+    missing_lux_refs,
     missing_period_refs,
     validate_scope_config,
     validate_weather_groups,
@@ -366,6 +367,30 @@ class TestMissingPeriodRefs:
         assert "missing1" in result
         assert "missing2" in result
         assert "morning" not in result
+
+
+# ---------------------------------------------------------------------------
+# missing_lux_refs
+# ---------------------------------------------------------------------------
+
+
+class TestMissingLuxRefs:
+    def test_dict_with_unknown_range_returns_id(self) -> None:
+        assert missing_lux_refs({"range": "ghost"}, {"dark", "bright"}) == ["ghost"]
+
+    def test_dict_with_known_range_returns_empty(self) -> None:
+        # Range present and resolvable → fall through to the empty return.
+        assert missing_lux_refs({"range": "dark"}, {"dark"}) == []
+
+    def test_dict_without_range_key_returns_empty(self) -> None:
+        assert missing_lux_refs({"min": 0, "max": 10}, {"dark"}) == []
+
+    def test_non_string_range_value_returns_empty(self) -> None:
+        assert missing_lux_refs({"range": 42}, {"dark"}) == []
+
+    def test_non_dict_predicate_returns_empty(self) -> None:
+        assert missing_lux_refs("nope", {"dark"}) == []
+        assert missing_lux_refs(None, {"dark"}) == []
 
 
 # ---------------------------------------------------------------------------

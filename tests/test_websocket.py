@@ -2571,6 +2571,38 @@ async def test_auto_triggers_list_returns_derived_rows(
     } in resp["result"]["triggers"]
 
 
+async def test_auto_triggers_list_includes_reapply_intervals(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    # An action with a re-apply interval surfaces a periodic "reapply" trigger row.
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_house(
+        {
+            "scenes": [
+                {
+                    "name": "S",
+                    "when": {},
+                    "actions": [
+                        {
+                            "service": "light.turn_on",
+                            "entity_ids": [],
+                            "params": {},
+                            "reapply_seconds": 300,
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+    resp = await _ws_send(hass_ws_client, type="ambience/auto_triggers/list", scope_kind="house")
+    assert resp["success"] is True
+    assert {
+        "key": "reapply:300",
+        "kind": "reapply",
+        "interval_seconds": 300,
+    } in resp["result"]["triggers"]
+
+
 async def test_auto_triggers_list_empty_scope_has_no_triggers(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:

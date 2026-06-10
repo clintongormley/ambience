@@ -143,6 +143,21 @@ def test_validate_definition_accepts_sun_endpoints() -> None:
             "to": {"kind": "sun", "anchor": "sunrise", "offset_min": 0},
         },
         {"from": {"kind": "bogus"}, "to": {"kind": "time", "hh": 10, "mm": 0}},
+        # clamp must be an object (_validate_clamp non-dict guard)
+        {
+            "from": {"kind": "sun", "anchor": "sunset", "offset_min": 0, "clamp": "nope"},
+            "to": {"kind": "time", "hh": 10, "mm": 0},
+        },
+        # clamp hh out of range (_validate_clamp hh guard)
+        {
+            "from": {
+                "kind": "sun",
+                "anchor": "sunset",
+                "offset_min": 0,
+                "clamp": {"dir": "not_before", "hh": 99, "mm": 0},
+            },
+            "to": {"kind": "time", "hh": 10, "mm": 0},
+        },
     ],
 )
 def test_validate_definition_rejects_invalid(bad: dict) -> None:

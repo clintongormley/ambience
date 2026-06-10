@@ -26,7 +26,7 @@ _LOGGER = logging.getLogger(f"{__package__}.trace")
 # "all" stream — no-op evaluations. Defaulted quiet so the parent going DEBUG
 # does NOT switch it on; the user raises this logger explicitly to opt in.
 _NOOP_LOGGER = logging.getLogger(f"{__package__}.trace.noop")
-if _NOOP_LOGGER.level == logging.NOTSET:
+if _NOOP_LOGGER.level == logging.NOTSET:  # pragma: no branch - import-time one-shot
     _NOOP_LOGGER.setLevel(logging.WARNING)
 
 

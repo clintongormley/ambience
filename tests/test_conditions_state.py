@@ -969,3 +969,13 @@ def test_describe_not_wraps() -> None:
     )
     pred = {"kind": "not", "item": {"kind": "is", "entity_id": "light.k", "states": ["on"]}}
     assert StateCondition().describe(snap, pred) == "not(Kitchen Light: on ✓ (is on))"
+
+
+def test_describe_expr_non_dict_child_is_placeholder() -> None:
+    # A malformed (non-dict) item inside a group renders as "?" rather than crashing.
+    assert StateCondition().describe(_snap(), {"kind": "and", "items": ["garbage"]}) == "all of: ?"
+
+
+def test_describe_expr_unknown_kind_is_placeholder() -> None:
+    # An unrecognised expression kind renders as "?".
+    assert StateCondition().describe(_snap(), {"kind": "frobnicate"}) == "?"

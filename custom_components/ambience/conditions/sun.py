@@ -179,6 +179,11 @@ class SunCondition:
                     raise ValueError(f"sun azimuth range {key} must be a number: {val!r}")
                 if not 0 <= val < 360:
                     raise ValueError(f"sun azimuth {key} out of range [0, 360): {val!r}")
+            if rng.get("from") == rng.get("to"):
+                # A half-open arc with from == to is empty — it can never match.
+                raise ValueError(
+                    f"sun azimuth range endpoints must not be identical: {rng.get('from')!r}"
+                )
 
     @staticmethod
     def _elevation_ok(constraint: Any, elevation: float | None) -> bool:

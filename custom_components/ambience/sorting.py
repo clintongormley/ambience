@@ -46,9 +46,16 @@ def _constrains(condition: Any, predicate: Any) -> bool:
     return checker(predicate) if callable(checker) else True
 
 
-def _constrained(scene: Scene) -> dict[str, Any]:
-    """The `when` entries that actually constrain — non-None predicates."""
-    return {k: v for k, v in scene.get("when", {}).items() if v is not None}
+def _constrained(scene: Scene, conditions: dict[str, Any]) -> dict[str, Any]:
+    """The `when` entries that actually constrain — non-None predicates the
+    condition itself doesn't declare vacuous (see `_constrains`). A vacuous
+    predicate (e.g. empty sensors) matches everything, so for containment and
+    shadow detection it must behave exactly like an absent one."""
+    return {
+        k: v
+        for k, v in scene.get("when", {}).items()
+        if v is not None and _constrains(conditions.get(k), v)
+    }
 
 
 def sort_scenes(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
@@ -57,7 +64,7 @@ def sort_scenes(scenes: list[Scene], conditions: dict[str, Any]) -> list[Scene]:
     if count < 2:
         return list(scenes)
 
-    constrained = [_constrained(scene) for scene in scenes]
+    constrained = [_constrained(scene, conditions) for scene in scenes]
 
     # --- linearisation key per scene --------------------------------------
     # One slot per condition named anywhere in a `when`, ordered by `priority`
@@ -250,7 +257,7 @@ def shadowed_by(ordered_scenes: list[Scene], conditions: dict[str, Any]) -> dict
     shadows it. Categories resolve independently, so a scene can only be shadowed by
     an earlier scene in its own category. Disabled scenes (``enabled: False``) are
     ignored — they neither shadow others nor are reported as shadowed."""
-    constrained = [_constrained(r) for r in ordered_scenes]
+    constrained = [_constrained(r, conditions) for r in ordered_scenes]
     result: dict[int, int] = {}
     for j in range(len(ordered_scenes)):
         if not scene_enabled(ordered_scenes[j]):

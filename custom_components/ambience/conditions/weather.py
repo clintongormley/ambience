@@ -209,6 +209,15 @@ class WeatherCondition:
         if (groups or thresholds) and self._hass is not None and not self._entity():
             raise ValueError("weather predicate requires the weather entity to be configured")
 
+    # --- sorting (containment lattice) ----------------------------------
+
+    def is_constraining(self, predicate: Any) -> bool:
+        """{groups: [], thresholds: []} matches everything (see matches()) — a
+        sorting wildcard, not a real constraint (mirrors lux/occupancy)."""
+        return isinstance(predicate, dict) and bool(
+            predicate.get("groups") or predicate.get("thresholds")
+        )
+
     # --- trigger dependencies -------------------------------------------
 
     def trigger_deps(self, predicate: Any) -> TriggerSpec:

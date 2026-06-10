@@ -281,6 +281,15 @@ class DayCondition:
         if not isinstance(day, int) or not 1 <= day <= 31:
             raise ValueError(f"day item: invalid day {day!r}")
 
+    # --- sorting (containment lattice) ----------------------------------
+
+    def is_constraining(self, predicate: Any) -> bool:
+        """{include: [], exclude: []} matches everything (see matches()) — a
+        sorting wildcard, not a real constraint (mirrors lux/occupancy)."""
+        return isinstance(predicate, dict) and bool(
+            predicate.get("include") or predicate.get("exclude")
+        )
+
     # --- trigger dependencies -------------------------------------------
 
     def trigger_deps(self, predicate: Any) -> TriggerSpec:

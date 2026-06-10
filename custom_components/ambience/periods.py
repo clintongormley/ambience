@@ -63,9 +63,9 @@ def _validate_endpoint(ep: Any) -> None:
     kind = ep["kind"]
     if kind == "time":
         hh, mm = ep.get("hh"), ep.get("mm")
-        if not isinstance(hh, int) or not 0 <= hh <= 23:
+        if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
             raise ValueError(f"invalid hh: {hh!r}")
-        if not isinstance(mm, int) or not 0 <= mm <= 59:
+        if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
             raise ValueError(f"invalid mm: {mm!r}")
     elif kind == "sun":
         if ep.get("anchor") not in _VALID_ANCHORS:
@@ -102,3 +102,6 @@ class PeriodStore(NamedDefStore):
             raise ValueError(f"period definition needs 'from' and 'to': {defn!r}")
         _validate_endpoint(defn["from"])
         _validate_endpoint(defn["to"])
+        if defn["from"] == defn["to"]:
+            # from == to would silently mean "all day" at match time.
+            raise ValueError("period endpoints must not be identical")

@@ -13,6 +13,14 @@ class _State:
         self.attributes = attributes or {}
 
 
+class _StateWithId(_State):
+    """_State extended with entity_id, matching real HA state objects."""
+
+    def __init__(self, entity_id, state, attributes=None):
+        super().__init__(state, attributes)
+        self.entity_id = entity_id
+
+
 class _States:
     def __init__(self, by_id):
         self._by_id = by_id
@@ -98,11 +106,28 @@ def test_person_includes_zone_names():
     hass = _Hass(
         {
             "person.alice": _State("home"),
-            "zone.work": _State("0", {"friendly_name": "Work"}),
+            "zone.work": _StateWithId("zone.work", "0", {"friendly_name": "Work"}),
         }
     )
     result = known_states_for(hass, "person.alice")
     assert "home" in result and "not_home" in result and "Work" in result
+
+
+def test_person_excludes_home_zone_friendly_name() -> None:
+    """HA always reports the home zone as the literal state `home`, so the home
+    zone's friendly name can never match — offering it would let a user save a
+    scene that silently never fires."""
+    hass = _Hass(
+        {
+            "person.alice": _State("home"),
+            "zone.home": _StateWithId("zone.home", "0", {"friendly_name": "Casa"}),
+            "zone.work": _StateWithId("zone.work", "0", {"friendly_name": "Work"}),
+        }
+    )
+    result = known_states_for(hass, "person.alice")
+    assert "Casa" not in result
+    assert "Work" in result
+    assert "home" in result
 
 
 def test_select_entity_options_are_included() -> None:
@@ -136,14 +161,6 @@ def test_select_entity_non_string_options_are_skipped() -> None:
 def test_zone_without_friendly_name_uses_entity_id_suffix() -> None:
     """Line 67: when a zone has no friendly_name attribute, the part after the
     dot in its entity_id is used as the zone label."""
-
-    class _StateWithId(_State):
-        """_State extended with entity_id, matching real HA state objects."""
-
-        def __init__(self, entity_id, state, attributes=None):
-            super().__init__(state, attributes)
-            self.entity_id = entity_id
-
     hass = _Hass(
         {
             "person.bob": _StateWithId("person.bob", "home"),

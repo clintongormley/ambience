@@ -96,13 +96,31 @@ class TimeOfDayCondition:
 
     def matches(self, predicate: Any, snapshot: TimeOfDaySnapshot) -> bool:
         if isinstance(predicate, list):
-            return any(self._match_one(item, snapshot) for item in predicate)
-        return self._match_one(predicate, snapshot)
+            return any(self._match_tolerant(item, snapshot) for item in predicate)
+        return self._match_tolerant(predicate, snapshot)
+
+    def _match_tolerant(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
+        """A period hidden/deleted after save (or a malformed item) fails this
+        scene rather than aborting the whole scope-category — mirrors lux.
+        Save-time validation still raises via _match_one."""
+        try:
+            return self._match_one(item, snapshot)
+        except ValueError:
+            return False
 
     def _match_one(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
         start, end = self._resolve_range(item, snapshot)
         if start >= end and self._clamp_emptied(item, snapshot):
             return False
+        # `from` and `to` resolve independently (sun → within ±12h of now,
+        # time → on now's local date), so they can land more than a day apart:
+        # {sunset, 23:00} evaluated at 00:30 spans 29h and would swallow the
+        # small hours. Fold `end` back to within a day of `start`; end <= start
+        # then keeps its usual overnight-wrap meaning in _in_range.
+        while end - start > _DAY:
+            end -= _DAY
+        while start - end >= _DAY:
+            end += _DAY
         return _in_range(snapshot.now, start, end)
 
     def _clamp_emptied(self, item: Any, snapshot: TimeOfDaySnapshot) -> bool:
@@ -153,9 +171,9 @@ class TimeOfDayCondition:
         kind = ep.get("kind")
         if kind == "time":
             hh, mm = ep.get("hh"), ep.get("mm")
-            if not isinstance(hh, int) or not 0 <= hh <= 23:
+            if not isinstance(hh, int) or isinstance(hh, bool) or not 0 <= hh <= 23:
                 raise ValueError(f"invalid hh: {hh!r}")
-            if not isinstance(mm, int) or not 0 <= mm <= 59:
+            if not isinstance(mm, int) or isinstance(mm, bool) or not 0 <= mm <= 59:
                 raise ValueError(f"invalid mm: {mm!r}")
             # The absolute time the user entered is HA's local clock time; convert
             # snapshot.now (UTC) to local first so DST is honoured for the date.
@@ -205,13 +223,17 @@ class TimeOfDayCondition:
         if isinstance(predicate, list):
             if not predicate:
                 raise ValueError("time_of_day predicate list must not be empty")
-            synthetic = _synthetic_snapshot()
-            for item in predicate:
-                self._match_one(item, synthetic)
-            return
-        if not isinstance(predicate, dict):
+            items = predicate
+        elif isinstance(predicate, dict):
+            items = [predicate]
+        else:
             raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
-        self._match_one(predicate, _synthetic_snapshot())
+        synthetic = _synthetic_snapshot()
+        for item in items:
+            # from == to would silently mean "all day" at match time.
+            if isinstance(item, dict) and "from" in item and item.get("from") == item.get("to"):
+                raise ValueError(f"time_of_day range endpoints must not be identical: {item!r}")
+            self._match_one(item, synthetic)
 
     def describe(self, snapshot: TimeOfDaySnapshot, predicate: Any = None) -> str | None:
         periods = self._period_lookup()
@@ -241,8 +263,11 @@ class TimeOfDayCondition:
         return result
 
     def contains(self, outer: Any, inner: Any) -> bool:
-        outer_intervals = merge_intervals(self._intervals(outer))
-        inner_intervals = self._intervals(inner)
+        try:
+            outer_intervals = merge_intervals(self._intervals(outer))
+            inner_intervals = self._intervals(inner)
+        except ValueError:
+            return False  # dangling period — containment can't be proven
         return all(
             any(o_start <= i_start and i_end <= o_end for o_start, o_end in outer_intervals)
             for i_start, i_end in inner_intervals
@@ -251,7 +276,13 @@ class TimeOfDayCondition:
     def order_key(self, predicate: Any) -> float:
         items = predicate if isinstance(predicate, list) else [predicate]
         snapshot = _synthetic_snapshot()
-        return min(_minute_of_day(self._resolve_range(item, snapshot)[0]) for item in items)
+        keys: list[float] = []
+        for item in items:
+            try:
+                keys.append(_minute_of_day(self._resolve_range(item, snapshot)[0]))
+            except ValueError:
+                continue  # dangling period / malformed item — no ordering signal
+        return min(keys) if keys else float("inf")
 
     # --- trigger dependencies -------------------------------------------
 

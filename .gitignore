@@ -24,8 +24,6 @@ CLAUDE.local.md
 .ha-changes-state.json
 HA_CHANGES_REPORT.md
 docs/handoffs/
-docs/plans/
-docs/superpowers/
 
 # Frontend build
 node_modules/

@@ -629,3 +629,14 @@ def test_trigger_deps_workday_kind_no_sensor_configured_yields_empty_entities() 
     spec = m.trigger_deps({"include": [{"kind": "workday"}]})
     assert spec.date_rollover is True
     assert spec.entities == frozenset()
+
+
+def test_is_constraining_only_with_items() -> None:
+    """{include: [], exclude: []} matches everything — a sorting wildcard, not
+    a real constraint (mirrors lux/occupancy)."""
+    m = DayCondition()
+    assert m.is_constraining({"include": [{"kind": "last_day"}], "exclude": []}) is True
+    assert m.is_constraining({"include": [], "exclude": [{"kind": "workday"}]}) is True
+    assert m.is_constraining({"include": [], "exclude": []}) is False
+    assert m.is_constraining({}) is False
+    assert m.is_constraining("not-a-dict") is False

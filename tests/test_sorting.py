@@ -538,3 +538,15 @@ def test_state_rule_outranks_occupancy_rule() -> None:
         _scene("watch-tv", {"state": {"kind": "is", "entity_id": "remote.cine"}}),
     ]
     assert _names(sort_scenes(scenes, conditions)) == ["watch-tv", "presence"]
+
+
+def test_shadowed_by_treats_vacuous_predicate_as_wildcard() -> None:
+    """A scene whose only predicate is vacuous (matches everything, e.g. empty
+    sensors) shadows a later constrained scene exactly like a scene with no
+    predicate at all — `is_constraining` must apply to shadow detection too."""
+    conditions = {"q": QuantCondition()}
+    ordered = [
+        _scene("wildcard-in-disguise", {"q": {"sensors": []}}),
+        _scene("constrained", {"q": {"sensors": ["a"]}}),
+    ]
+    assert shadowed_by(ordered, conditions) == {1: 0}

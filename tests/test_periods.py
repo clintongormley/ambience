@@ -363,3 +363,26 @@ def test_view_for_ui_returns_builtins_custom_hidden() -> None:
     assert view["builtins"] == BUILTIN_PERIODS
     assert view["custom"] == storage.get_periods()["custom"]
     assert view["hidden"] == ["daytime"]
+
+
+def test_validate_definition_rejects_bool_clock() -> None:
+    """bool is an int subclass; `hh: true` must not validate as hour 1 (the
+    trigger scheduler rejects bools, so the boundary would never fire)."""
+    with pytest.raises(ValueError):
+        PeriodStore(_FakeStorage()).validate_definition(
+            {
+                "from": {"kind": "time", "hh": True, "mm": 0},
+                "to": {"kind": "time", "hh": 10, "mm": 0},
+            }
+        )
+
+
+def test_validate_definition_rejects_identical_endpoints() -> None:
+    """from == to would silently mean "all day" at match time — reject it."""
+    with pytest.raises(ValueError, match="identical"):
+        PeriodStore(_FakeStorage()).validate_definition(
+            {
+                "from": {"kind": "time", "hh": 10, "mm": 0},
+                "to": {"kind": "time", "hh": 10, "mm": 0},
+            }
+        )

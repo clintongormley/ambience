@@ -449,3 +449,21 @@ def test_sector_label_fallback_returns_N() -> None:
     finally:
         sun_module.SECTORS = original
     assert result == "N"
+
+
+def test_validate_predicate_rejects_identical_azimuth_range_endpoints() -> None:
+    """from == to is a half-open empty arc that never matches — reject at save
+    time (time_of_day rejects the same mistake, where it meant "full day")."""
+    with pytest.raises(ValueError, match="identical"):
+        SunCondition().validate_predicate({"azimuth": {"ranges": [{"from": 90, "to": 90}]}})
+
+
+async def test_snapshot_treats_non_finite_angles_as_unobservable(hass: HomeAssistant) -> None:
+    """A NaN elevation would pass a min-only constraint (nan < lo is False →
+    falls through); non-finite readings must snapshot as None instead."""
+    hass.states.async_set(
+        "sun.sun", "above_horizon", {"elevation": float("nan"), "azimuth": float("inf")}
+    )
+    snap = await SunCondition().snapshot(hass)
+    assert snap.elevation is None
+    assert snap.azimuth is None

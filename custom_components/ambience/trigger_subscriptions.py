@@ -12,7 +12,7 @@ build + flip detection + resolve/apply). The methods reference engine state
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import timedelta
 from typing import Any
 
@@ -245,25 +245,63 @@ class TriggerSubscriptionsMixin:
                 TraceEvent(TriggerCause(kind=CauseKind.REAPPLY, detail=f"{interval}s"), traces),
             )
 
-    def _schedule_for_rechecks(self, preds: frozenset[PredKey]) -> None:
+    def _schedule_for_rechecks(self, preds: Iterable[PredKey]) -> None:
         """For predicates with a `for:` duration, (re)schedule a recheck so a
         condition that only becomes true after the delay is still caught.
 
         A predicate may carry several `(entity, seconds)` rechecks; each gets its
         own timer, keyed by its pair so a fired timer can drop only its own handle
-        (siblings mark distinct future flip points and must stay armed)."""
+        (siblings mark distinct future flip points and must stay armed).
+
+        Each recheck is armed for the time still *remaining* until the entity will
+        have held its current value for `seconds`, clocked from its `last_updated`.
+        On a live state change that is the full `seconds` (the value just changed,
+        so nothing has elapsed); on a startup/reload resync of an entity already
+        in-state it is the shortened remainder, so a switch that has been on for
+        1h59m still fires its "on for 2h" rule a minute later rather than a fresh
+        2h from the reload. A recheck whose window has already passed is skipped —
+        the resync's immediate evaluation already covered that case, and a timer
+        for a moment in the past would only fire instantly for nothing."""
+        now = dt_util.utcnow()
         for key in preds:
             durations = self._index.durations.get(key)
             if not durations:
                 continue
             for cancel in self._for_handles.pop(key, {}).values():
                 cancel()
-            self._for_handles[key] = {
-                (entity, seconds): async_call_later(
-                    self._hass, seconds, self._make_for_recheck(key, entity, seconds)
+            handles: dict[tuple[str, float], Callable[[], None]] = {}
+            for entity, seconds in durations:
+                delay = self._for_recheck_delay(entity, seconds, now)
+                if delay is None:
+                    continue
+                handles[(entity, seconds)] = async_call_later(
+                    self._hass, delay, self._make_for_recheck(key, entity, seconds)
                 )
-                for entity, seconds in durations
-            }
+            if handles:
+                self._for_handles[key] = handles
+
+    def rearm_scope_rechecks(self, scope_kind: str, scope_id: str | None) -> None:
+        """(Re)arm just this scope's `for:` rechecks. Used by paths that resume a
+        scope without the full teardown/rebuild of a reload — a switch off->on
+        resync, and scope re-enable. A duration timer is a one-shot: if it matured
+        while the scope was inactive it fired as a no-op and was consumed, so
+        without this a "switch on for 2h" rule whose timer elapsed during the
+        inactive window would never fire again. `_schedule_for_rechecks` cancels
+        and replaces any still-live handles, so calling this is idempotent."""
+        self._schedule_for_rechecks(
+            key for key in self._index.durations if (key[0], key[1]) == (scope_kind, scope_id)
+        )
+
+    def _for_recheck_delay(self, entity: str, seconds: float, now: Any) -> float | None:
+        """Seconds until `entity` will have held its current value for `seconds`,
+        clocked from its `last_updated`. None when it already has (don't arm a
+        timer for the past). An unknown entity has no clock to measure from, so it
+        falls back to the full delay — the same as a fresh state change would."""
+        state = self._hass.states.get(entity)
+        if state is None:
+            return seconds
+        remaining = seconds - (now - state.last_updated).total_seconds()
+        return remaining if remaining > 0 else None
 
     def _make_for_recheck(self, key: PredKey, entity: str, seconds: float) -> Callable[[Any], None]:
         @callback
@@ -307,6 +345,7 @@ class TriggerSubscriptionsMixin:
     ) -> None:
         """Force-apply every category of a scope (used on a switch off->on)."""
         scope_kind, scope_id = scope
+        self.rearm_scope_rechecks(scope_kind, scope_id)
         cfg = self._scope_cfgs.get(scope)
         traces = await self._apply_units(
             [(scope_kind, scope_id, cid) for cid in category_ids(cfg or {})], force=True

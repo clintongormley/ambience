@@ -569,6 +569,211 @@ async def test_for_recheck_fire_does_not_orphan_sibling_timers(hass) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Startup / reload sync must (re)arm `for:` rechecks for entities already
+# in-state — otherwise a "switch on for 2h" rule whose timer was armed before a
+# restart/reconfigure is silently dropped and only re-evaluates when some
+# unrelated event happens to wake the category. (radiator-left-on bug.)
+# ---------------------------------------------------------------------------
+
+
+class _ForCondition:
+    """Condition with one `(entity, seconds)` for-duration; matches on value."""
+
+    def __init__(self, entity_id: str, seconds: float) -> None:
+        self._entity_id = entity_id
+        self._seconds = seconds
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        return TriggerSpec(
+            entities=frozenset({self._entity_id}),
+            entity_durations=frozenset({(self._entity_id, self._seconds)}),
+        )
+
+    async def snapshot(self, hass: Any, entities: Any = None) -> Any:
+        state = hass.states.get(self._entity_id)
+        return state.state if state else None
+
+    def matches(self, predicate: Any, snapshot: Any) -> bool:
+        return snapshot == predicate
+
+    def describe(self, snapshot: Any, predicate=None) -> str | None:
+        return snapshot
+
+
+def _for_engine(hass, seconds: float):
+    scopes = [("area", "a", {"scenes": [{"when": {"rad": "on"}, "category": "g", "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"rad": _ForCondition("switch.radiator", seconds)},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine.async_subscribe()
+    return engine
+
+
+def _age_switch_state(hass, monkeypatch, age: timedelta) -> None:
+    """Set switch.radiator on, then pin dt_util.utcnow() `age` past the state's
+    real last_updated so the engine sees the switch as having been on that long.
+    (hass.states.get is read-only, so we move the clock rather than the state.)"""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    hass.states.async_set("switch.radiator", "on")
+    last_updated = hass.states.get("switch.radiator").last_updated
+    monkeypatch.setattr(_ts_mod.dt_util, "utcnow", lambda: last_updated + age)
+
+
+async def test_startup_sync_arms_for_recheck_for_remaining_time(hass, monkeypatch) -> None:
+    """A `for: 2h` whose switch is ALREADY on at startup gets a recheck armed for
+    the REMAINING time (2h minus how long it has been on), not a fresh 2h."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    # Switch has been on for 26 minutes when the integration starts.
+    _age_switch_state(hass, monkeypatch, timedelta(minutes=26))
+    engine = _for_engine(hass, 7200.0)
+
+    captured: list[float] = []
+
+    def fake_call_later(_hass, seconds, cb):
+        captured.append(seconds)
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        await engine.async_initial_sync()
+
+    key = ("area", "a", 0, "rad")
+    # A recheck WAS armed (the bug left _for_handles empty here)...
+    assert key in engine._for_handles
+    # ...for the remaining 2h - 26m = 5640s, not the full 7200s.
+    assert captured == [5640.0]
+    engine._teardown()
+
+
+async def test_reload_sync_arms_for_recheck(hass, monkeypatch) -> None:
+    """A config reload (RELOADED) must also re-arm `for:` rechecks it tore down."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    _age_switch_state(hass, monkeypatch, timedelta(minutes=10))
+    engine = _for_engine(hass, 7200.0)
+
+    captured: list[float] = []
+
+    def fake_call_later(_hass, seconds, cb):
+        captured.append(seconds)
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        engine.note_config_changed(None)  # global reload
+        await engine._async_refresh()
+
+    key = ("area", "a", 0, "rad")
+    assert key in engine._for_handles
+    assert captured == [6600.0]  # 7200 - 600
+    engine._teardown()
+
+
+async def test_startup_sync_skips_recheck_when_duration_already_elapsed(hass, monkeypatch) -> None:
+    """When the entity has already held its state past the `for:` window, no
+    recheck is armed — the sync's immediate evaluation already covers it, and a
+    timer for a moment in the past would fire instantly for nothing."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    _age_switch_state(hass, monkeypatch, timedelta(hours=3))  # past the 2h window
+    engine = _for_engine(hass, 7200.0)
+
+    captured: list[float] = []
+
+    def fake_call_later(_hass, seconds, cb):
+        captured.append(seconds)
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        await engine.async_initial_sync()
+
+    key = ("area", "a", 0, "rad")
+    assert captured == []  # nothing armed (delay would be negative)
+    assert key not in engine._for_handles
+    engine._teardown()
+
+
+async def test_for_recheck_delay_unknown_entity_falls_back_to_full(hass) -> None:
+    """An unknown entity has no clock to measure from, so the recheck is armed for
+    the full duration — same as a fresh state change would."""
+    engine = _for_engine(hass, 7200.0)
+    assert hass.states.get("switch.radiator") is None  # entity never set
+    assert engine._for_recheck_delay("switch.radiator", 7200.0, dt_util.utcnow()) == 7200.0
+
+
+async def test_switch_resync_rearms_for_rechecks(hass, monkeypatch) -> None:
+    """A scope switch off→on resync must re-arm the scope's `for:` rechecks. A
+    duration timer that matured while the switch was off was consumed as a no-op,
+    so without re-arming on switch-on the rule would never fire again."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    _age_switch_state(hass, monkeypatch, timedelta(minutes=26))
+    engine = _for_engine(hass, 7200.0)
+    # Simulate the timer having fired (been consumed) while the switch was off.
+    assert engine._for_handles == {}
+
+    captured: list[float] = []
+
+    def fake_call_later(_hass, seconds, cb):
+        captured.append(seconds)
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        await engine._force_resync_scope(("area", "a"), "switch.ambience_a")
+
+    key = ("area", "a", 0, "rad")
+    assert key in engine._for_handles  # re-armed for the remaining 2h - 26m
+    assert captured == [5640.0]
+    engine._teardown()
+
+
+async def test_rearm_scope_rechecks_only_touches_its_own_scope(hass, monkeypatch) -> None:
+    """rearm_scope_rechecks (used by switch-on resync and scope re-enable) must
+    re-arm only the named scope's duration predicates, leaving other scopes' live
+    timers untouched."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+    from custom_components.ambience.trigger_index import TriggerIndex
+
+    _age_switch_state(hass, monkeypatch, timedelta(minutes=26))
+    engine = _for_engine(hass, 7200.0)
+
+    key_a = ("area", "a", 0, "rad")
+    key_b = ("area", "b", 0, "rad")
+    engine._index = TriggerIndex(
+        by_entity={"switch.radiator": frozenset({key_a, key_b})},
+        by_clock={},
+        by_sun={},
+        midnight=frozenset(),
+        has_time=frozenset(),
+        durations={
+            key_a: frozenset({("switch.radiator", 7200.0)}),
+            key_b: frozenset({("switch.radiator", 7200.0)}),
+        },
+        opaque=frozenset(),
+    )
+
+    armed: list = []
+
+    def fake_call_later(_hass, seconds, cb):
+        armed.append(seconds)
+        return MagicMock()
+
+    with patch.object(_ts_mod, "async_call_later", side_effect=fake_call_later):
+        engine.rearm_scope_rechecks("area", "a")
+
+    assert key_a in engine._for_handles  # only area a re-armed
+    assert key_b not in engine._for_handles  # area b untouched
+    assert armed == [5640.0]
+    engine._teardown()
+
+
+# ---------------------------------------------------------------------------
 # _on_switch_event: new_state is None / not "on" (line 273)
 # ---------------------------------------------------------------------------
 

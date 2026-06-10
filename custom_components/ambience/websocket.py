@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DATA_CONDITIONS,
+    DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_LUX_RANGES,
     DATA_PERIODS,
@@ -995,8 +996,12 @@ async def _ws_set_scope_enabled(
             # the frontend pause-timer icon. Hidden entities are just kept out of
             # HA's default views.
             registry.async_update_entity(entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION)
-    # Re-enabling resyncs the scope (mirrors switch turn-on's force resync).
+    # Re-enabling resyncs the scope (mirrors switch turn-on's force resync). Re-arm
+    # the scope's `for:` rechecks too — a duration timer that matured while the
+    # scope was disabled was consumed as a no-op, so without this a "switch on for
+    # 2h" rule whose timer elapsed during the disabled window would never fire.
     if enabled:
+        hass.data[DOMAIN][DATA_ENGINE].rearm_scope_rechecks(scope_kind, scope_id)
         await async_apply_scene(hass, scope_kind, scope_id)
 
     connection.send_result(msg["id"], {"ok": True})

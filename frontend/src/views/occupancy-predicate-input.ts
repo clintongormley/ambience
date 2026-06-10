@@ -5,7 +5,8 @@ import type { HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { localize } from "../i18n.js";
-import type { OccupancyPredicate, OccupancyQuant } from "../types.js";
+import type { OccupancyPredicate, OccupancyQuant, StateForDuration } from "../types.js";
+import "./for-duration.js";
 import { renderSelect, renderSensorField } from "./form-controls.js";
 
 /**
@@ -123,19 +124,6 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
     ];
   }
 
-  _forSchema(): HaFormSchema[] {
-    return [{ name: "duration", selector: { duration: { enable_day: false } } }];
-  }
-
-  _forData(): { duration: { hours: number; minutes: number; seconds: number } } {
-    const d = this._cur().for ?? { h: 0, m: 0, s: 0 };
-    return { duration: { hours: d.h, minutes: d.m, seconds: d.s } };
-  }
-
-  _setForFromHaForm(d: { hours?: number; minutes?: number; seconds?: number } | undefined) {
-    this._setFor({ h: d?.hours ?? 0, m: d?.minutes ?? 0, s: d?.seconds ?? 0 });
-  }
-
   // --- render --------------------------------------------------------------
 
   private _renderSensors() {
@@ -191,36 +179,16 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
   }
 
   private _renderFor() {
-    /* v8 ignore start -- ha-form path (real HA only) */
-    if (customElements.get("ha-form")) {
-      return html`<ha-form
-        data-field="for"
-        .hass=${this.hass}
-        .schema=${this._forSchema()}
-        .data=${this._forData()}
-        .computeLabel=${() => ""}
-        @value-changed=${(
-          e: CustomEvent<{
-            value: { duration?: { hours?: number; minutes?: number; seconds?: number } };
-          }>,
-        ) => {
-          e.stopPropagation();
-          this._setForFromHaForm(e.detail.value.duration);
-        }}
-      ></ha-form>`;
-    }
-    /* v8 ignore stop */
-    const d = this._cur().for ?? { h: 0, m: 0, s: 0 };
-    return html`<div class="for-row" data-field="for">
-      <input type="number" min="0" .value=${String(d.h)}
-        @change=${(e: Event) => this._setFor({ ...d, h: Number((e.target as HTMLInputElement).value) || 0 })} />
-      <span>:</span>
-      <input type="number" min="0" .value=${String(d.m)}
-        @change=${(e: Event) => this._setFor({ ...d, m: Number((e.target as HTMLInputElement).value) || 0 })} />
-      <span>:</span>
-      <input type="number" min="0" .value=${String(d.s)}
-        @change=${(e: Event) => this._setFor({ ...d, s: Number((e.target as HTMLInputElement).value) || 0 })} />
-    </div>`;
+    // Shared h:m:s editor (see for-duration.ts).
+    return html`<ambience-for-duration
+      data-field="for"
+      .hass=${this.hass}
+      .value=${this._cur().for ?? null}
+      @value-changed=${(e: CustomEvent<{ value: StateForDuration }>) => {
+        e.stopPropagation();
+        this._setFor(e.detail.value);
+      }}
+    ></ambience-for-duration>`;
   }
 
   override render() {

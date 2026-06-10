@@ -384,3 +384,22 @@ describe("ambience-time-of-day-input", () => {
     expect(anyChipLabel.textContent!.trim()).toBe("(any)");
   });
 });
+
+describe("value echo (review fix)", () => {
+  test("the parent's echo of an emitted value doesn't reset the open entry", async () => {
+    const el = await mount([{ period: "morning" }, { period: "evening" }]);
+    el._openIdx = 0; // user is editing the FIRST entry
+    await el.updateComplete;
+    let echoed: unknown;
+    el.addEventListener("value-changed", (e: any) => {
+      echoed = e.detail.value;
+    });
+    el._emit(el._entries); // a no-op edit of entry 0 emits a new value object
+    el.value = echoed; // the parent re-binds .value with what was emitted
+    await el.updateComplete;
+    // Without assigning this.value before dispatch, the echo looked like an
+    // external change and collapsed entry 0, expanding the last entry.
+    expect(el._openIdx).toBe(0);
+    el.remove();
+  });
+});

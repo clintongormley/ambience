@@ -102,18 +102,26 @@ export class AmbienceScriptPredicateInput extends LitElement {
       return;
     }
     if (typeof parsed !== "object" || Array.isArray(parsed)) {
-      this._yamlError = "Expected an object";
+      this._yamlError = localize(this.hass, "ui.yaml_expect_object", "Expected an object");
       return;
     }
     const obj = parsed as Record<string, unknown>;
     const script = obj.script;
     if (typeof script !== "string" || !script.startsWith("script.")) {
-      this._yamlError = "`script` must be a 'script.<name>' string";
+      this._yamlError = localize(
+        this.hass,
+        "ui.yaml_script_string",
+        "`script` must be a 'script.<name>' string",
+      );
       return;
     }
     const args = obj.args;
     if (args !== undefined && (typeof args !== "object" || Array.isArray(args) || args === null)) {
-      this._yamlError = "`args` must be an object if present";
+      this._yamlError = localize(
+        this.hass,
+        "ui.yaml_args_object",
+        "`args` must be an object if present",
+      );
       return;
     }
     const triggers = obj.triggers;
@@ -121,7 +129,11 @@ export class AmbienceScriptPredicateInput extends LitElement {
       triggers !== undefined &&
       (!Array.isArray(triggers) || !triggers.every((t) => typeof t === "string"))
     ) {
-      this._yamlError = "`triggers` must be a list of entity_id strings if present";
+      this._yamlError = localize(
+        this.hass,
+        "ui.yaml_triggers_list",
+        "`triggers` must be a list of entity_id strings if present",
+      );
       return;
     }
     this._yamlError = null;
@@ -344,7 +356,7 @@ export class AmbienceScriptPredicateInput extends LitElement {
             : current.map(
                 (eid) => html`<span class="chip" data-test=${`trigger-${eid}`}>
                 ${eid}
-                <button type="button" class="x" title="Remove" @click=${() => this._removeTrigger(eid)}>×</button>
+                <button type="button" class="x" title=${localize(this.hass, "ui.remove", "Remove")} @click=${() => this._removeTrigger(eid)}>×</button>
               </span>`,
               )
         }
@@ -365,6 +377,10 @@ export class AmbienceScriptPredicateInput extends LitElement {
   /* v8 ignore start -- ha-code-editor path (real HA only) */
   private _renderYaml() {
     const onInput = (e: Event) => {
+      // ha-code-editor's own `value-changed` is composed and bubbles: without
+      // stopping it here, condition-input re-emits the raw YAML STRING as the
+      // predicate, clobbering the parsed object on every keystroke.
+      e.stopPropagation();
       const raw = ((e.target as HTMLTextAreaElement).value ??
         (e as unknown as CustomEvent<{ value: string }>).detail?.value ??
         "") as string;

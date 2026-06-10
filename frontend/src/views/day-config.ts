@@ -2,6 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { getDayConfig, type HassConnection, saveDayConfig } from "../api.js";
+import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
 import { scopeLabel } from "../scope-label.js";
 import type { DayConfig } from "../types.js";
@@ -29,6 +30,8 @@ export class AmbienceDayConfig extends LitElement {
 
   override async connectedCallback() {
     super.connectedCallback();
+    // Re-render when ha-form registers so the native fallback upgrades.
+    watchHaComponents(this);
     try {
       this._config = await getDayConfig(this.hass);
     } catch (e) {
@@ -81,33 +84,57 @@ export class AmbienceDayConfig extends LitElement {
       ${errorBanner}
       <div class="row">
         <label>${localize(this.hass, "ui.workday_sensor", "Workday sensor")}</label>
-        <ha-form
-          .hass=${this.hass as any}
-          .schema=${sensorSchema}
-          .data=${{ workday_sensor: this._config.workday_sensor ?? "" }}
-          .computeLabel=${() => ""}
-          @value-changed=${(e: CustomEvent) => {
-            e.stopPropagation();
-            this._onSensorChange({
-              detail: { value: (e.detail.value?.workday_sensor as string) || null },
-            });
-          }}
-        ></ha-form>
+        ${
+          customElements.get("ha-form")
+            ? html`<ha-form
+                .hass=${this.hass as any}
+                .schema=${sensorSchema}
+                .data=${{ workday_sensor: this._config.workday_sensor ?? "" }}
+                .computeLabel=${() => ""}
+                @value-changed=${(e: CustomEvent) => {
+                  e.stopPropagation();
+                  this._onSensorChange({
+                    detail: { value: (e.detail.value?.workday_sensor as string) || null },
+                  });
+                }}
+              ></ha-form>`
+            : html`<input
+                type="text"
+                placeholder="binary_sensor.workday"
+                .value=${this._config.workday_sensor ?? ""}
+                @change=${(e: Event) =>
+                  this._onSensorChange({
+                    detail: { value: (e.target as HTMLInputElement).value || null },
+                  })}
+              />`
+        }
       </div>
       <div class="row">
         <label>${localize(this.hass, "ui.workday_calendar", "Workday calendar")}</label>
-        <ha-form
-          .hass=${this.hass as any}
-          .schema=${calendarSchema}
-          .data=${{ workday_calendar: this._config.workday_calendar ?? "" }}
-          .computeLabel=${() => ""}
-          @value-changed=${(e: CustomEvent) => {
-            e.stopPropagation();
-            this._onCalendarChange({
-              detail: { value: (e.detail.value?.workday_calendar as string) || null },
-            });
-          }}
-        ></ha-form>
+        ${
+          customElements.get("ha-form")
+            ? html`<ha-form
+                .hass=${this.hass as any}
+                .schema=${calendarSchema}
+                .data=${{ workday_calendar: this._config.workday_calendar ?? "" }}
+                .computeLabel=${() => ""}
+                @value-changed=${(e: CustomEvent) => {
+                  e.stopPropagation();
+                  this._onCalendarChange({
+                    detail: { value: (e.detail.value?.workday_calendar as string) || null },
+                  });
+                }}
+              ></ha-form>`
+            : html`<input
+                type="text"
+                placeholder="calendar.workday"
+                .value=${this._config.workday_calendar ?? ""}
+                @change=${(e: Event) =>
+                  this._onCalendarChange({
+                    detail: { value: (e.target as HTMLInputElement).value || null },
+                  })}
+              />`
+        }
       </div>
       ${
         this._warnings.length

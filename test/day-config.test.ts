@@ -8,6 +8,12 @@ vi.mock("../frontend/src/api.js", () => ({
 import "../frontend/src/views/day-config";
 import { saveDayConfig } from "../frontend/src/api.js";
 
+// day-config guards its pickers on customElements.get("ha-form"); define a
+// stub so the ha-form path (what real HA renders) is the one under test.
+if (!customElements.get("ha-form")) {
+  customElements.define("ha-form", class extends HTMLElement {});
+}
+
 describe("ambience-day-config", () => {
   let el: any;
   beforeEach(() => {

@@ -556,7 +556,9 @@ describe("ambience-people-predicate-input", () => {
   test("round-trips a non-zero `for` into the native h/m/s inputs and emits {h,m,s}", async () => {
     el = await mount({ quant: "everyone", where: "home", for: { h: 0, m: 10, s: 0 } });
     const inputs = Array.from(
-      el.shadowRoot.querySelectorAll<HTMLInputElement>("[data-field=for] input[type=number]"),
+      el.shadowRoot
+        .querySelector("ambience-for-duration")!
+        .shadowRoot!.querySelectorAll<HTMLInputElement>("input[type=number]"),
     );
     expect(inputs).toHaveLength(3);
     const [h, m, s] = inputs as HTMLInputElement[];

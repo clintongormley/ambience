@@ -24,6 +24,26 @@ const CUSTOM = "__custom__";
  * Mirrors `occupancy-predicate-input.ts` for the controls and emit pattern, and
  * `time-of-day-input.ts` for the named-range dropdown. Emits `value-changed`.
  */
+/**
+ * Structural validity for a stored lux predicate (mirrors statePredicateError):
+ * the widget only mounts when its slot is expanded, so the save gate needs a
+ * pure check for never-opened slots. The backend rejects min >= max and
+ * negative bounds. Returns a user-facing error or null.
+ */
+export function luxPredicateError(pred: unknown, hass?: HassConnection): string | null {
+  if (pred === null || pred === undefined || typeof pred !== "object") return null;
+  const p = pred as { range?: unknown; min?: unknown; max?: unknown };
+  if (typeof p.range === "string") return null; // named ranges validate server-side
+  const { min, max } = p;
+  if ((typeof min === "number" && min < 0) || (typeof max === "number" && max < 0)) {
+    return localize(hass, "ui.lux_error_negative", "Bounds must be 0 or greater.");
+  }
+  if (typeof min === "number" && typeof max === "number" && min >= max) {
+    return localize(hass, "ui.lux_error_order", "Min must be less than max.");
+  }
+  return null;
+}
+
 @customElement("ambience-lux-input")
 export class AmbienceLuxInput extends LitElement {
   static override styles = css`

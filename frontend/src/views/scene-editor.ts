@@ -22,6 +22,8 @@ import type {
 } from "../types.js";
 import "./action-slot.js";
 import "./condition-input.js";
+import { dayPredicateError } from "./day-predicate-input.js";
+import { luxPredicateError } from "./lux-input.js";
 import { statePredicateError } from "./state-predicate-input.js";
 
 type OpenSlot =
@@ -329,6 +331,9 @@ export class AmbienceSceneEditor extends LitElement {
       this._open = null;
       this._showError = false;
       this._addOrder = [];
+      // Stale errors from a previous (cancelled) session would block the
+      // first Save on a different scene until its widgets re-validate.
+      this._conditionError = new Map();
     }
   }
 
@@ -585,6 +590,17 @@ export class AmbienceSceneEditor extends LitElement {
       // rejected by the backend with a cryptic ValueError.
       const stateErr = statePredicateError(pred, this.hass);
       if (stateErr) return stateErr;
+      // Day and lux predicates can be saved invalid by construction (an empty
+      // weekday list, a bad day-of-month spec, min >= max) — same structural-
+      // validator treatment as state for never-opened slots.
+      if (slot.id === "day") {
+        const dayErr = dayPredicateError(pred, this.hass);
+        if (dayErr) return dayErr;
+      }
+      if (slot.id === "lux") {
+        const luxErr = luxPredicateError(pred, this.hass);
+        if (luxErr) return luxErr;
+      }
       // A condition whose input widget reports an error (e.g. a `template` whose
       // Jinja throws) must not be left in the scene.
       if (this._conditionError.has(slot.id)) {

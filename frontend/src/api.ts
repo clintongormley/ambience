@@ -371,6 +371,11 @@ export async function listTraces(hass: HassConnection): Promise<BufferedUnit[]> 
   return res.traces;
 }
 
+export async function clearTraces(hass: HassConnection): Promise<void> {
+  // The backend sends no result payload for this command.
+  await hass.callWS({ type: "ambience/traces/clear" });
+}
+
 export async function downloadScopeDiagnostics(
   hass: HassConnection,
   scope: { scope_kind: string; scope_id: string | null },

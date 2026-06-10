@@ -6,6 +6,7 @@ import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { localize, stateAttributeLabel, stateOpLabel, stateValueLabel } from "../i18n.js";
 import type { StateAtom, StateForDuration } from "../types.js";
+import "./for-duration.js";
 import { type StateObj, statesMap } from "./hass-states.js";
 
 /** Minimal shape of an HA state object as read from `hass.states`. */
@@ -70,28 +71,33 @@ export class AmbienceStateExprAtom extends LitElement {
   @state() private _knownStates: string[] = [];
   @state() private _knownAttributeValues: string[] = [];
 
+  // Bumped per fetch pass so two rapid value changes can't land their
+  // responses out of order (the same hazard _entitySeq guards in _setEntity).
+  private _fetchSeq = 0;
+
   override async updated(changed: Map<string, unknown>): Promise<void> {
     if (!changed.has("value")) return;
     const prev = changed.get("value") as StateAtom | undefined;
-    const curId = this.value.entity_id;
+    // Capture once: `this.value` may move on while we await below.
+    const { entity_id: curId, attribute: attr } = this.value;
+    const seq = ++this._fetchSeq;
     if (curId && curId !== prev?.entity_id && this.hass) {
       try {
-        this._knownStates = (await getKnownStates(this.hass, curId)).states;
+        const states = (await getKnownStates(this.hass, curId)).states;
+        if (seq === this._fetchSeq) this._knownStates = states;
       } catch {
-        this._knownStates = [];
+        if (seq === this._fetchSeq) this._knownStates = [];
       }
     }
     // Attribute values are fetched from the backend (single source of truth with
     // known states) whenever the entity or the chosen attribute changes.
-    const attr = this.value.attribute;
     if (curId !== prev?.entity_id || attr !== prev?.attribute) {
       if (curId && attr && this.hass) {
         try {
-          this._knownAttributeValues = (
-            await getKnownAttributeValues(this.hass, curId, attr)
-          ).values;
+          const values = (await getKnownAttributeValues(this.hass, curId, attr)).values;
+          if (seq === this._fetchSeq) this._knownAttributeValues = values;
         } catch {
-          this._knownAttributeValues = [];
+          if (seq === this._fetchSeq) this._knownAttributeValues = [];
         }
       } else if (this._knownAttributeValues.length) {
         this._knownAttributeValues = [];
@@ -304,7 +310,8 @@ export class AmbienceStateExprAtom extends LitElement {
             options: [
               {
                 value: AmbienceStateExprAtom._STATE_SENTINEL,
-                label: AmbienceStateExprAtom._STATE_SENTINEL,
+                // The wire sentinel stays constant; only the display localizes.
+                label: localize(this.hass, "ui.state_sentinel", "State"),
               },
               ...[...keyToLabel.values()].map((label) => ({ value: label, label })),
             ],
@@ -471,31 +478,6 @@ export class AmbienceStateExprAtom extends LitElement {
     this._addValue(this._labelToRaw(v));
   }
 
-  /** ha-form schema for the optional "for" duration. Blank by default; we
-   *  treat `{h:0,m:0,s:0}` as null on the way out via _normalize. */
-  _forSchema(): HaFormSchema[] {
-    return [
-      {
-        name: "duration",
-        selector: { duration: { enable_day: false } },
-      },
-    ];
-  }
-
-  /** Storage `{h,m,s}` → ha-form `{hours,minutes,seconds}`. */
-  _forData(): { duration: { hours: number; minutes: number; seconds: number } } {
-    const d = this.value.for ?? { h: 0, m: 0, s: 0 };
-    return { duration: { hours: d.h, minutes: d.m, seconds: d.s } };
-  }
-
-  _setForFromHaForm(d: { hours?: number; minutes?: number; seconds?: number } | undefined) {
-    this._setForDuration({
-      h: d?.hours ?? 0,
-      m: d?.minutes ?? 0,
-      s: d?.seconds ?? 0,
-    });
-  }
-
   // --- render -----------------------------------------------------------
 
   private _renderEntity() {
@@ -628,38 +610,17 @@ export class AmbienceStateExprAtom extends LitElement {
   }
 
   private _renderForRow() {
-    /* v8 ignore start -- ha-form path (real HA only) */
-    if (customElements.get("ha-form")) {
-      return html`<ha-form
-        data-field="for"
-        .hass=${this.hass}
-        .schema=${this._forSchema()}
-        .data=${this._forData()}
-        .computeLabel=${() => ""}
-        @value-changed=${(
-          e: CustomEvent<{
-            value: { duration?: { hours?: number; minutes?: number; seconds?: number } };
-          }>,
-        ) => {
-          e.stopPropagation();
-          this._setForFromHaForm(e.detail.value.duration);
-        }}
-      ></ha-form>`;
-    }
-    /* v8 ignore stop */
-    const d = this.value.for ?? { h: 0, m: 0, s: 0 };
-    return html`
-      <div class="for-row" data-field="for">
-        <input type="number" min="0" .value=${String(d.h)}
-          @change=${(e: Event) => this._setForDuration({ ...d, h: Number((e.target as HTMLInputElement).value) || 0 })} />
-        <span>:</span>
-        <input type="number" min="0" .value=${String(d.m)}
-          @change=${(e: Event) => this._setForDuration({ ...d, m: Number((e.target as HTMLInputElement).value) || 0 })} />
-        <span>:</span>
-        <input type="number" min="0" .value=${String(d.s)}
-          @change=${(e: Event) => this._setForDuration({ ...d, s: Number((e.target as HTMLInputElement).value) || 0 })} />
-      </div>
-    `;
+    // Shared h:m:s editor; `{h:0,m:0,s:0}` becomes null on the way out via
+    // _normalize.
+    return html`<ambience-for-duration
+      data-field="for"
+      .hass=${this.hass}
+      .value=${this.value.for ?? null}
+      @value-changed=${(e: CustomEvent<{ value: StateForDuration }>) => {
+        e.stopPropagation();
+        this._setForDuration(e.detail.value);
+      }}
+    ></ambience-for-duration>`;
   }
 
   override render() {

@@ -1,8 +1,8 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-
 import type { HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
+import { localize } from "../i18n.js";
 import { resultAsBoolean } from "../truthiness.js";
 import type { TemplatePredicate } from "../types.js";
 
@@ -221,16 +221,20 @@ export class AmbienceTemplatePredicateInput extends LitElement {
     if ("error" in p) {
       return html`<div class="preview error">
         <div class="body">
-          <span class="label">Result</span><span class="value">${p.error}</span>
+          <span class="label">${localize(this.hass, "ui.template_result", "Result")}</span><span class="value">${p.error}</span>
         </div>
       </div>`;
     }
     return html`<div class="preview">
       <div class="body">
-        <span class="label">Result</span><span class="value">${p.value}</span>
+        <span class="label">${localize(this.hass, "ui.template_result", "Result")}</span><span class="value">${p.value}</span>
       </div>
       <span class="bool ${p.truthy ? "true" : "false"}"
-        >${p.truthy ? "true — matches" : "false — no match"}</span
+        >${
+          p.truthy
+            ? localize(this.hass, "ui.template_truthy", "true — matches")
+            : localize(this.hass, "ui.template_falsy", "false — no match")
+        }</span
       >
     </div>`;
   }

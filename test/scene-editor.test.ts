@@ -2484,3 +2484,80 @@ describe("ambience-scene-editor — unique name per scope + category", () => {
     expect(saved.detail.scene.category).toBe("b");
   });
 });
+
+describe("save gate structural validators (review fixes)", () => {
+  const condsWithDayLux: ConditionInfo[] = [
+    ...conditions,
+    { name: "day", description: "", predicate_help: "", input: "day_predicate", priority: 90 },
+    { name: "lux", description: "", predicate_help: "", input: "lux", priority: 80 },
+  ];
+
+  async function mountWith(when: Record<string, unknown>): Promise<any> {
+    const el: any = document.createElement("ambience-scene-editor");
+    el.conditions = condsWithDayLux;
+    el.availableActions = availableActions;
+    el.periods = periods;
+    el.hass = hass;
+    el.scope = { kind: "area", id: "living_room" };
+    el.scene = { name: "Test", category: "general", when, actions: [] };
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    return el;
+  }
+
+  test("an invalid day predicate in a never-opened slot blocks save", async () => {
+    // Backend day.py silently evaluates an empty weekday list as 'never
+    // fires'; the gate must catch it like statePredicateError does for state.
+    const el = await mountWith({ day: { include: [{ kind: "weekday", days: [] }], exclude: [] } });
+    let saved = false;
+    el.addEventListener("save-scene", () => {
+      saved = true;
+    });
+    el._save();
+    await el.updateComplete;
+    expect(saved).toBe(false);
+    expect(el._open).toEqual({ kind: "condition", id: "day" });
+    el.remove();
+  });
+
+  test("an invalid day-of-month spec in a never-opened slot blocks save", async () => {
+    const el = await mountWith({
+      day: { include: [{ kind: "day_of_month", days: "abc" }], exclude: [] },
+    });
+    let saved = false;
+    el.addEventListener("save-scene", () => {
+      saved = true;
+    });
+    el._save();
+    await el.updateComplete;
+    expect(saved).toBe(false);
+    el.remove();
+  });
+
+  test("a lux predicate with min >= max in a never-opened slot blocks save", async () => {
+    const el = await mountWith({ lux: { sensors: ["sensor.lx"], min: 100, max: 50 } });
+    let saved = false;
+    el.addEventListener("save-scene", () => {
+      saved = true;
+    });
+    el._save();
+    await el.updateComplete;
+    expect(saved).toBe(false);
+    expect(el._open).toEqual({ kind: "condition", id: "lux" });
+    el.remove();
+  });
+
+  test("opening the editor clears stale condition errors from a previous session", async () => {
+    const el = await mountWith({});
+    el._conditionError.set("template", "stale error from a cancelled session");
+    el.open = false;
+    await el.updateComplete;
+    el.open = true;
+    await el.updateComplete;
+    expect(el._conditionError.size).toBe(0);
+    el.remove();
+  });
+});

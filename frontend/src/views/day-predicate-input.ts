@@ -49,6 +49,38 @@ function _defaultItem(kind: DayItem["kind"]): DayItem {
   }
 }
 
+/**
+ * Structural validity for a stored day predicate (mirrors statePredicateError):
+ * the input widget only mounts when its slot is expanded, so the scene
+ * editor's save gate needs a pure check that covers never-opened slots. The
+ * backend rejects an invalid day-of-month spec and silently evaluates an
+ * empty weekday list to "never fires". Returns a user-facing error or null.
+ */
+export function dayPredicateError(pred: unknown, hass?: HassConnection): string | null {
+  if (pred === null || pred === undefined || typeof pred !== "object") return null;
+  const p = pred as { include?: unknown; exclude?: unknown };
+  for (const section of [p.include, p.exclude]) {
+    if (!Array.isArray(section)) continue;
+    for (const raw of section) {
+      const item = raw as DayItem;
+      if (item?.kind === "weekday" && (!Array.isArray(item.days) || item.days.length === 0)) {
+        return localize(hass, "ui.day_pick_weekday", "Pick at least one day of the week.");
+      }
+      if (
+        item?.kind === "day_of_month" &&
+        (typeof item.days !== "string" || !isValidDaySpec(item.days))
+      ) {
+        return localize(
+          hass,
+          "ui.day_spec_error",
+          "Use days 1–31 and ranges like 1-10, separated by commas",
+        );
+      }
+    }
+  }
+  return null;
+}
+
 @customElement("ambience-day-predicate-input")
 export class AmbienceDayPredicateInput extends LitElement {
   static override styles = css`

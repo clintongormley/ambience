@@ -262,6 +262,12 @@ export class AmbienceScenesList extends LitElement {
   // Scene indices whose action list is expanded inline.
   @state() private _expanded = new Set<number>();
 
+  override willUpdate(changed: Map<string, unknown>): void {
+    // _expanded is keyed by scene index; a scenes change (delete/reorder)
+    // shifts indices, silently moving the expansion onto a different scene.
+    if (changed.has("scenes")) this._expanded = new Set();
+  }
+
   /** A full-width coloured header bar for a category's section: the category's
    *  colour as background (auto-contrast text), its icon, then its name. Falls
    *  back to neutral theme colours when the category has no colour. */

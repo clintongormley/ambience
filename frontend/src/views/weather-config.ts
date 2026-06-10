@@ -2,6 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { getWeatherConfig, type HassConnection, saveWeatherConfig } from "../api.js";
+import { watchHaComponents } from "../ha-components.js";
 import { localize, weatherConditionLabel } from "../i18n.js";
 import { scopeLabel } from "../scope-label.js";
 import type { WeatherConfig, WeatherGroup } from "../types.js";
@@ -92,6 +93,8 @@ export class AmbienceWeatherConfig extends LitElement {
 
   override async connectedCallback() {
     super.connectedCallback();
+    // Re-render when ha-form registers so the native fallback upgrades.
+    watchHaComponents(this);
     this._config = await getWeatherConfig(this.hass);
   }
 
@@ -229,21 +232,39 @@ export class AmbienceWeatherConfig extends LitElement {
     `;
   }
 
-  override render() {
+  /* v8 ignore start -- ha-form path (real HA only) */
+  private _renderEntityPicker() {
     const schema = [{ name: "entity", selector: { entity: { domain: "weather" } } }];
+    return html`<ha-form
+      .hass=${this.hass as any}
+      .schema=${schema}
+      .data=${{ entity: this._config.entity ?? "" }}
+      .computeLabel=${() => ""}
+      @value-changed=${(e: CustomEvent) => {
+        e.stopPropagation();
+        this._onEntityChange({ detail: { value: (e.detail.value?.entity as string) || null } });
+      }}
+    ></ha-form>`;
+  }
+  /* v8 ignore stop */
+
+  override render() {
     return html`
       <div class="row">
         <label class="section">${localize(this.hass, "ui.weather_entity", "Weather entity")}</label>
-        <ha-form
-          .hass=${this.hass as any}
-          .schema=${schema}
-          .data=${{ entity: this._config.entity ?? "" }}
-          .computeLabel=${() => ""}
-          @value-changed=${(e: CustomEvent) => {
-            e.stopPropagation();
-            this._onEntityChange({ detail: { value: (e.detail.value?.entity as string) || null } });
-          }}
-        ></ha-form>
+        ${
+          customElements.get("ha-form")
+            ? this._renderEntityPicker()
+            : html`<input
+                type="text"
+                placeholder="weather.home"
+                .value=${this._config.entity ?? ""}
+                @change=${(e: Event) =>
+                  this._onEntityChange({
+                    detail: { value: (e.target as HTMLInputElement).value || null },
+                  })}
+              />`
+        }
       </div>
 
       <h4>${localize(this.hass, "ui.groups", "Groups")}</h4>

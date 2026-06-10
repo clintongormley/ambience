@@ -2,6 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
+import { ModalDismissController } from "./modal-shell.js";
 import "./settings-view.js";
 
 /**
@@ -58,26 +59,10 @@ export class AmbienceSettingsModal extends LitElement {
   /** Tab to open on (forwarded to the settings view). Absent → "ambience". */
   @property({ attribute: false }) initialTab?: "ambience" | "categories" | "conditions" | "actions";
 
-  private _onKeydown = (e: KeyboardEvent): void => {
-    if (this.open && e.key === "Escape") this._close();
-  };
-
-  // A click that reaches the host is a backdrop click — clicks inside .modal
-  // stop propagation before they get here.
-  private _onBackdrop = (): void => {
-    if (this.open) this._close();
-  };
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    document.addEventListener("keydown", this._onKeydown);
-    this.addEventListener("click", this._onBackdrop);
-  }
-
-  override disconnectedCallback(): void {
-    super.disconnectedCallback();
-    document.removeEventListener("keydown", this._onKeydown);
-    this.removeEventListener("click", this._onBackdrop);
+  constructor() {
+    super();
+    // Escape / backdrop-click close (shared with the traces and simulator modals).
+    new ModalDismissController(this, () => this._close());
   }
 
   private _close(): void {
@@ -95,7 +80,7 @@ export class AmbienceSettingsModal extends LitElement {
       >
         <div class="header">
           <h3>${localize(this.hass, "ui.tab_settings", "Settings")}</h3>
-          <button class="close" @click=${this._close} aria-label="Close">✕</button>
+          <button class="close" @click=${this._close} aria-label=${localize(this.hass, "ui.close", "Close")}>✕</button>
         </div>
         <div class="body">
           <ambience-settings-view

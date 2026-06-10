@@ -1039,3 +1039,27 @@ describe("ambience-scenes-list", () => {
     expect(get()).toEqual({ category: "g1" });
   });
 });
+
+describe("expanded-state reconciliation (review fix)", () => {
+  test("changing the scenes prop clears index-keyed expansion state", async () => {
+    const el: any = document.createElement("ambience-scenes-list");
+    el.hass = {};
+    el.scenes = [
+      { name: "A", category: "g", when: {}, actions: [] },
+      { name: "B", category: "g", when: {}, actions: [] },
+      { name: "C", category: "g", when: {}, actions: [] },
+    ];
+    el.categories = [{ id: "g", name: "General" }];
+    document.body.appendChild(el);
+    await el.updateComplete;
+    el._toggleScene(1);
+    await el.updateComplete;
+    expect(el._expanded.has(1)).toBe(true);
+    // Delete scene 0: indices shift, so the stale entry would move the
+    // expansion onto a different scene.
+    el.scenes = el.scenes.slice(1);
+    await el.updateComplete;
+    expect(el._expanded.size).toBe(0);
+    el.remove();
+  });
+});

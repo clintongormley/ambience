@@ -945,25 +945,6 @@ async def _ws_categories_save(
 ) -> None:
     categories = msg["categories"]
     store = hass.data[DOMAIN][DATA_STORE]
-    # Mirror the delete path's guards: a save replaces the whole list, so it
-    # can wipe everything or silently drop an in-use category (stale tab).
-    if not categories:
-        connection.send_error(msg["id"], "category_last", "at least one category is required")
-        return
-    new_ids = {c["id"] for c in categories}
-    in_use = {
-        scene.get("category")
-        for _kind, _id, cfg in store.all_scope_configs()
-        for scene in cfg.get("scenes", [])
-    }
-    removed_in_use = sorted(cid for cid in in_use - new_ids if isinstance(cid, str))
-    if removed_in_use:
-        connection.send_error(
-            msg["id"],
-            "category_in_use",
-            f"categories still have scenes: {', '.join(removed_in_use)}",
-        )
-        return
     seen_ids: set[str] = set()
     seen_names: set[str] = set()
     for category in categories:
@@ -992,7 +973,16 @@ async def _ws_categories_save(
             )
             return
         seen_names.add(key)
-    await store.async_save_categories(categories)
+    # The store owns the last-category / in-use invariants (shared with the
+    # delete path) — map its typed errors like _ws_categories_delete does.
+    try:
+        await store.async_save_categories(categories)
+    except LastCategoryError as exc:
+        connection.send_error(msg["id"], "category_last", str(exc))
+        return
+    except CategoryInUseError as exc:
+        connection.send_error(msg["id"], "category_in_use", str(exc))
+        return
     connection.send_result(msg["id"])
 
 

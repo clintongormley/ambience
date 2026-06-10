@@ -17,6 +17,7 @@ from ._common import (
     kleene_all,
     kleene_any,
     kleene_not,
+    state_sources,
     validate_for,
 )
 
@@ -80,12 +81,7 @@ class StateCondition:
         # those; None (the simulator path) means a full scan. This runs on the
         # hottest path in the system — every motion/door event — so copying
         # every entity's attributes would be thousands of dict copies per tick.
-        sources = (
-            (hass.states.get(eid) for eid in entities)
-            if entities is not None
-            else hass.states.async_all()
-        )
-        for s in sources:
+        for s in state_sources(hass, entities):
             if s is None:
                 continue  # referenced entity that doesn't exist
             states[s.entity_id] = (s.state, s.last_changed, s.last_updated)

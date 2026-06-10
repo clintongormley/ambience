@@ -99,6 +99,23 @@ def validate_for(dur: Any) -> None:
             raise ValueError(f"`for.{k}` must be a non-negative int")
 
 
+def predicate_has_any(predicate: Any, *keys: str) -> bool:
+    """Whether a predicate dict carries at least one non-empty value among
+    `keys` — the shared body behind the conditions' ``is_constraining`` hooks
+    (a predicate with none of them matches everything: a sorting wildcard)."""
+    return isinstance(predicate, dict) and any(bool(predicate.get(k)) for k in keys)
+
+
+def state_sources(hass: Any, entities: frozenset[str] | None, domain: str | None = None) -> Any:
+    """The states a snapshot should read: just the referenced `entities` when
+    the trigger engine supplies them, else a full (optionally domain-filtered)
+    scan — the simulator path. Entries may be None (referenced entity that
+    doesn't exist); callers skip those."""
+    if entities is not None:
+        return (hass.states.get(eid) for eid in entities)
+    return hass.states.async_all(domain) if domain else hass.states.async_all()
+
+
 def merge_intervals(intervals: list[tuple[float, float]]) -> list[tuple[float, float]]:
     """Merge overlapping/touching closed intervals into a minimal sorted list."""
     if not intervals:

@@ -26,6 +26,8 @@ from ._common import (
     kleene_all,
     kleene_any,
     kleene_not,
+    predicate_has_any,
+    state_sources,
     validate_for,
 )
 
@@ -78,11 +80,7 @@ class OccupancyCondition:
         names: dict[str, str] = {}
         # `entities` (the sensors scenes actually reference) lets us read those
         # directly; None means scan the whole binary_sensor domain (back-compat).
-        states = (
-            [hass.states.get(eid) for eid in entities]
-            if entities is not None
-            else hass.states.async_all("binary_sensor")
-        )
+        states = state_sources(hass, entities, domain="binary_sensor")
         for s in states:
             if s is None:
                 continue  # referenced entity that doesn't exist
@@ -221,7 +219,7 @@ class OccupancyCondition:
     def is_constraining(self, predicate: Any) -> bool:
         """Empty/absent `sensors` is match-anything (see matches()), so it is a
         wildcard for sorting, not a real constraint."""
-        return isinstance(predicate, dict) and bool(predicate.get("sensors"))
+        return predicate_has_any(predicate, "sensors")
 
     # --- sorting (containment lattice) ----------------------------------
     # No order_key: there is no meaningful total order among occupancy

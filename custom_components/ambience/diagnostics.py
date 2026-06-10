@@ -40,6 +40,14 @@ _PRESENCE_PREFIXES = ("person.", "device_tracker.")
 _DETAIL_REDACTED_CONDITIONS = {"people", "template"}
 
 
+def _redact_predicate(predicate: dict[str, Any]) -> dict[str, Any]:
+    """Blank a people/template predicate's free-text detail (it renders each
+    person's location / the rendered template)."""
+    if predicate.get("condition_key") in _DETAIL_REDACTED_CONDITIONS and predicate.get("detail"):
+        return {**predicate, "detail": REDACTED}
+    return predicate
+
+
 def _redact_trace(trace: dict[str, Any]) -> dict[str, Any]:
     """Scrub presence PII from one serialised trace record (see above)."""
     out = dict(trace)
@@ -52,21 +60,11 @@ def _redact_trace(trace: dict[str, Any]) -> dict[str, Any]:
     out["cause"] = cause
     explanation = trace.get("explanation")
     if isinstance(explanation, dict):
-        out["explanation"] = {
-            **explanation,
-            "scenes": [
-                {
-                    **scene,
-                    "predicates": [
-                        {**p, "detail": REDACTED}
-                        if p.get("condition_key") in _DETAIL_REDACTED_CONDITIONS and p.get("detail")
-                        else p
-                        for p in scene.get("predicates", [])
-                    ],
-                }
-                for scene in explanation.get("scenes", [])
-            ],
-        }
+        scenes = []
+        for scene in explanation.get("scenes", []):
+            predicates = [_redact_predicate(p) for p in scene.get("predicates", [])]
+            scenes.append({**scene, "predicates": predicates})
+        out["explanation"] = {**explanation, "scenes": scenes}
     return out
 
 

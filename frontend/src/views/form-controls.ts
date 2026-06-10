@@ -87,3 +87,37 @@ export function renderSensorField(
       )}
   />`;
 }
+
+/** A single-entity picker (ha-form entity selector → native text `<input>`
+ *  fallback). `selector` is the ha-form entity selector spec; the fallback is
+ *  a free-text entity-id input. Emits null when cleared. */
+export function renderEntityPicker(
+  hass: HassConnection | undefined,
+  field: string,
+  value: string | null,
+  selector: Record<string, unknown>,
+  placeholder: string,
+  onChange: (v: string | null) => void,
+): TemplateResult {
+  /* v8 ignore start -- ha-form path (real HA only) */
+  if (customElements.get("ha-form")) {
+    const schema: HaFormSchema[] = [{ name: field, selector }];
+    return html`<ha-form
+      .hass=${hass}
+      .schema=${schema}
+      .data=${{ [field]: value ?? "" }}
+      .computeLabel=${() => ""}
+      @value-changed=${(e: CustomEvent<{ value: Record<string, string | undefined> }>) => {
+        e.stopPropagation();
+        onChange(e.detail.value[field] || null);
+      }}
+    ></ha-form>`;
+  }
+  /* v8 ignore stop */
+  return html`<input
+    type="text"
+    placeholder=${placeholder}
+    .value=${value ?? ""}
+    @change=${(e: Event) => onChange((e.target as HTMLInputElement).value || null)}
+  />`;
+}

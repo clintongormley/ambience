@@ -13,7 +13,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
-from .conditions.weather import WEATHER_CONDITIONS
+from .conditions.weather import WEATHER_CONDITIONS, weather_predicate_active
 from .const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -270,10 +270,6 @@ def validate_weather_groups(groups: Any) -> list[dict[str, Any]]:
             raise ValueError(f"group {gid!r} has invalid condition(s)")
         cleaned.append({"id": gid, "label": label, "conditions": list(conds)})
     return cleaned
-
-
-def weather_predicate_active(pred: Any) -> bool:
-    return isinstance(pred, dict) and bool(pred.get("groups") or pred.get("thresholds"))
 
 
 def dangling_weather_warnings(

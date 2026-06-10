@@ -57,7 +57,7 @@ function _defaultItem(kind: DayItem["kind"]): DayItem {
  * empty weekday list to "never fires". Returns a user-facing error or null.
  */
 export function dayPredicateError(pred: unknown, hass?: HassConnection): string | null {
-  if (pred === null || pred === undefined || typeof pred !== "object") return null;
+  if (pred == null || typeof pred !== "object") return null;
   const p = pred as { include?: unknown; exclude?: unknown };
   for (const section of [p.include, p.exclude]) {
     if (!Array.isArray(section)) continue;

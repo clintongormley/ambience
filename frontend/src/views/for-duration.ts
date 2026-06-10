@@ -14,6 +14,12 @@ import type { StateForDuration } from "../types.js";
  * Extracted from the three line-for-line copies in state-expr-atom,
  * people-predicate-input, and occupancy-predicate-input so a fix lands once.
  */
+// Module-level so ha-form sees a stable schema identity across re-renders and
+// doesn't re-initialise the duration selector mid-edit.
+const FOR_SCHEMA: HaFormSchema[] = [
+  { name: "duration", selector: { duration: { enable_day: false } } },
+];
+
 @customElement("ambience-for-duration")
 export class AmbienceForDuration extends LitElement {
   static override styles = css`
@@ -37,14 +43,11 @@ export class AmbienceForDuration extends LitElement {
   override render() {
     /* v8 ignore start -- ha-form path (real HA only) */
     if (customElements.get("ha-form")) {
-      const schema: HaFormSchema[] = [
-        { name: "duration", selector: { duration: { enable_day: false } } },
-      ];
       const d = this._d;
       return html`<ha-form
         data-field="for"
         .hass=${this.hass}
-        .schema=${schema}
+        .schema=${FOR_SCHEMA}
         .data=${{ duration: { hours: d.h, minutes: d.m, seconds: d.s } }}
         .computeLabel=${() => ""}
         @value-changed=${(

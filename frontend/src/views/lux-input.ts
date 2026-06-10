@@ -31,7 +31,7 @@ const CUSTOM = "__custom__";
  * negative bounds. Returns a user-facing error or null.
  */
 export function luxPredicateError(pred: unknown, hass?: HassConnection): string | null {
-  if (pred === null || pred === undefined || typeof pred !== "object") return null;
+  if (pred == null || typeof pred !== "object") return null;
   const p = pred as { range?: unknown; min?: unknown; max?: unknown };
   if (typeof p.range === "string") return null; // named ranges validate server-side
   const { min, max } = p;

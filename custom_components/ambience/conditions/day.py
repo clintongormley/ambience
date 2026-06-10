@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 
 from ..const import get_store
 from ..triggers import TriggerSpec
+from ._common import predicate_has_any
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -286,9 +287,7 @@ class DayCondition:
     def is_constraining(self, predicate: Any) -> bool:
         """{include: [], exclude: []} matches everything (see matches()) — a
         sorting wildcard, not a real constraint (mirrors lux/occupancy)."""
-        return isinstance(predicate, dict) and bool(
-            predicate.get("include") or predicate.get("exclude")
-        )
+        return predicate_has_any(predicate, "include", "exclude")
 
     # --- trigger dependencies -------------------------------------------
 

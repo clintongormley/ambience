@@ -20,6 +20,13 @@ default_base() {
   echo "HEAD~1"  # last resort: just the tip commit
 }
 
+# Changed files for a range; falls back to `HEAD~1..HEAD` (committed changes
+# only — a bare working-tree diff would gate uncommitted files that aren't
+# being pushed at all).
+diff_names() {
+  git diff --name-only "$1" 2>/dev/null || git diff --name-only HEAD~1..HEAD
+}
+
 # Read the ref updates git feeds us on stdin and accumulate the changed files
 # across EVERY pushed ref (a `git push origin a b` must gate both, not just
 # the last one read).
@@ -34,16 +41,14 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     range="${remote_sha}..${local_sha}"
   fi
   ranges="${ranges}${ranges:+ }${range}"
-  # `HEAD~1..HEAD` (committed changes only) as the fallback — a bare working-
-  # tree diff would gate uncommitted files that aren't being pushed at all.
   changed="${changed}
-$(git diff --name-only "$range" 2>/dev/null || git diff --name-only HEAD~1..HEAD)"
+$(diff_names "$range")"
 done
 
 # Fallback when stdin gave us nothing (e.g. a manual invocation).
 if [ -z "$ranges" ]; then
   ranges="$(default_base)...HEAD"
-  changed="$(git diff --name-only "$ranges" 2>/dev/null || git diff --name-only HEAD~1..HEAD)"
+  changed="$(diff_names "$ranges")"
 fi
 
 echo "pre-push: inspecting $(printf '%s\n' "$changed" | grep -c . || true) changed file(s) in range(s) $ranges"

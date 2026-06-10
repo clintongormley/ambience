@@ -9,8 +9,6 @@ import type { StateAtom, StateForDuration } from "../types.js";
 import "./for-duration.js";
 import { type StateObj, statesMap } from "./hass-states.js";
 
-/** Minimal shape of an HA state object as read from `hass.states`. */
-
 type AttrLabelMaps = { keyToLabel: Map<string, string>; labelToKey: Map<string, string> };
 type ValueLabelMaps = { rawToLabel: Map<string, string>; labelToRaw: Map<string, string> };
 

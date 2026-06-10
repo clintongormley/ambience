@@ -36,9 +36,9 @@ export function pickHaTextInput(): HaTextInputTag | null {
  * detached component trees without bound.
  */
 export function watchHaComponents(host: ReactiveControllerHost): void {
+  const ref = new WeakRef(host);
   for (const name of HA_COMPONENTS) {
     if (!customElements.get(name)) {
-      const ref = new WeakRef(host);
       void customElements.whenDefined(name).then(() => ref.deref()?.requestUpdate());
     }
   }

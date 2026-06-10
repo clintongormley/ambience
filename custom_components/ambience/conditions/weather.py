@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 
 from ..const import get_store
 from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE
+from ._common import UNAVAILABLE, predicate_has_any
 
 WEATHER_CONDITIONS = (
     "clear-night",
@@ -81,6 +81,13 @@ DEFAULT_WEATHER_GROUPS: list[dict[str, Any]] = [
 class WeatherSnapshot:
     condition: str | None
     attributes: dict[str, float]
+
+
+def weather_predicate_active(pred: Any) -> bool:
+    """Whether a weather predicate actually constrains (non-empty groups or
+    thresholds). The single home of this rule — shared by sorting/shadow
+    detection (via is_constraining) and the dangling-weather-warning walk."""
+    return predicate_has_any(pred, "groups", "thresholds")
 
 
 def _op_satisfied(actual: float, op: str, value: float) -> bool:
@@ -214,9 +221,7 @@ class WeatherCondition:
     def is_constraining(self, predicate: Any) -> bool:
         """{groups: [], thresholds: []} matches everything (see matches()) — a
         sorting wildcard, not a real constraint (mirrors lux/occupancy)."""
-        return isinstance(predicate, dict) and bool(
-            predicate.get("groups") or predicate.get("thresholds")
-        )
+        return weather_predicate_active(predicate)
 
     # --- trigger dependencies -------------------------------------------
 

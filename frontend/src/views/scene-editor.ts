@@ -64,6 +64,20 @@ function sameScope(a?: Scope, b?: Scope): boolean {
   return !!a && !!b && scopeKey(a) === scopeKey(b);
 }
 
+// Pure structural validators for predicates whose editors can emit shapes the
+// backend rejects (or silently never matches). The input widgets only mount
+// when their slot is expanded, so the save gate must catch never-opened slots
+// here — `render-invalid-changed` can't see them. One entry per condition
+// that needs it; everything else is valid by construction.
+const STRUCTURAL_VALIDATORS: Record<
+  string,
+  (pred: unknown, hass?: HassConnection) => string | null
+> = {
+  state: statePredicateError,
+  day: dayPredicateError,
+  lux: luxPredicateError,
+};
+
 @customElement("ambience-scene-editor")
 export class AmbienceSceneEditor extends LitElement {
   static override styles = [
@@ -588,19 +602,8 @@ export class AmbienceSceneEditor extends LitElement {
       // report via `render-invalid-changed`. Without this, a scene loaded from
       // storage with a half-filled state atom would pass the save gate and be
       // rejected by the backend with a cryptic ValueError.
-      const stateErr = statePredicateError(pred, this.hass);
-      if (stateErr) return stateErr;
-      // Day and lux predicates can be saved invalid by construction (an empty
-      // weekday list, a bad day-of-month spec, min >= max) — same structural-
-      // validator treatment as state for never-opened slots.
-      if (slot.id === "day") {
-        const dayErr = dayPredicateError(pred, this.hass);
-        if (dayErr) return dayErr;
-      }
-      if (slot.id === "lux") {
-        const luxErr = luxPredicateError(pred, this.hass);
-        if (luxErr) return luxErr;
-      }
+      const structuralErr = STRUCTURAL_VALIDATORS[slot.id]?.(pred, this.hass);
+      if (structuralErr) return structuralErr;
       // A condition whose input widget reports an error (e.g. a `template` whose
       // Jinja throws) must not be left in the scene.
       if (this._conditionError.has(slot.id)) {

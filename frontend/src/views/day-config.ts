@@ -6,6 +6,7 @@ import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
 import { scopeLabel } from "../scope-label.js";
 import type { DayConfig } from "../types.js";
+import { renderEntityPicker } from "./form-controls.js";
 
 type Warning = { scope_kind: string; scope_id: string | null; scene_name: string; reason: string };
 
@@ -63,78 +64,34 @@ export class AmbienceDayConfig extends LitElement {
   }
 
   override render() {
-    // Filter both pickers to entities provided by the Workday integration so
-    // the lists stay short (not every binary_sensor / calendar).
-    const sensorSchema = [
-      {
-        name: "workday_sensor",
-        selector: { entity: { integration: "workday", domain: "binary_sensor" } },
-      },
-    ];
-    const calendarSchema = [
-      {
-        name: "workday_calendar",
-        selector: { entity: { integration: "workday", domain: "calendar" } },
-      },
-    ];
     const errorBanner = this._error
       ? html`<p style="color: var(--error-color, #d32f2f)">${this._error}</p>`
       : "";
+    // Filter both pickers to entities provided by the Workday integration so
+    // the lists stay short (not every binary_sensor / calendar).
     return html`
       ${errorBanner}
       <div class="row">
         <label>${localize(this.hass, "ui.workday_sensor", "Workday sensor")}</label>
-        ${
-          customElements.get("ha-form")
-            ? html`<ha-form
-                .hass=${this.hass as any}
-                .schema=${sensorSchema}
-                .data=${{ workday_sensor: this._config.workday_sensor ?? "" }}
-                .computeLabel=${() => ""}
-                @value-changed=${(e: CustomEvent) => {
-                  e.stopPropagation();
-                  this._onSensorChange({
-                    detail: { value: (e.detail.value?.workday_sensor as string) || null },
-                  });
-                }}
-              ></ha-form>`
-            : html`<input
-                type="text"
-                placeholder="binary_sensor.workday"
-                .value=${this._config.workday_sensor ?? ""}
-                @change=${(e: Event) =>
-                  this._onSensorChange({
-                    detail: { value: (e.target as HTMLInputElement).value || null },
-                  })}
-              />`
-        }
+        ${renderEntityPicker(
+          this.hass,
+          "workday_sensor",
+          this._config.workday_sensor,
+          { entity: { integration: "workday", domain: "binary_sensor" } },
+          "binary_sensor.workday",
+          (value) => this._onSensorChange({ detail: { value } }),
+        )}
       </div>
       <div class="row">
         <label>${localize(this.hass, "ui.workday_calendar", "Workday calendar")}</label>
-        ${
-          customElements.get("ha-form")
-            ? html`<ha-form
-                .hass=${this.hass as any}
-                .schema=${calendarSchema}
-                .data=${{ workday_calendar: this._config.workday_calendar ?? "" }}
-                .computeLabel=${() => ""}
-                @value-changed=${(e: CustomEvent) => {
-                  e.stopPropagation();
-                  this._onCalendarChange({
-                    detail: { value: (e.detail.value?.workday_calendar as string) || null },
-                  });
-                }}
-              ></ha-form>`
-            : html`<input
-                type="text"
-                placeholder="calendar.workday"
-                .value=${this._config.workday_calendar ?? ""}
-                @change=${(e: Event) =>
-                  this._onCalendarChange({
-                    detail: { value: (e.target as HTMLInputElement).value || null },
-                  })}
-              />`
-        }
+        ${renderEntityPicker(
+          this.hass,
+          "workday_calendar",
+          this._config.workday_calendar,
+          { entity: { integration: "workday", domain: "calendar" } },
+          "calendar.workday",
+          (value) => this._onCalendarChange({ detail: { value } }),
+        )}
       </div>
       ${
         this._warnings.length

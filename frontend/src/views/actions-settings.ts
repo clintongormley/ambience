@@ -375,6 +375,9 @@ export class AmbienceActionsSettings extends LitElement {
   private static readonly _OVERLAY_TAG_RE = /vaadin|combo-box|overlay|listbox|menu|mwc-|md-/i;
 
   private _onDocPointerDown = (e: PointerEvent) => {
+    // Common case: nothing open — skip the composedPath walk and overlay
+    // regex scan that run on every document pointerdown otherwise.
+    if (!this._adding && this._editingDefault === null) return;
     const path = e.composedPath();
     // HA-form selectors (select/entity/color) and the service picker render
     // their dropdowns in document-level vaadin/md overlays; a pointerdown on

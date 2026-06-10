@@ -6,6 +6,7 @@ import { watchHaComponents } from "../ha-components.js";
 import { localize, weatherConditionLabel } from "../i18n.js";
 import { scopeLabel } from "../scope-label.js";
 import type { WeatherConfig, WeatherGroup } from "../types.js";
+import { renderEntityPicker } from "./form-controls.js";
 
 const ALL_CONDITIONS = [
   "clear-night",
@@ -232,39 +233,18 @@ export class AmbienceWeatherConfig extends LitElement {
     `;
   }
 
-  /* v8 ignore start -- ha-form path (real HA only) */
-  private _renderEntityPicker() {
-    const schema = [{ name: "entity", selector: { entity: { domain: "weather" } } }];
-    return html`<ha-form
-      .hass=${this.hass as any}
-      .schema=${schema}
-      .data=${{ entity: this._config.entity ?? "" }}
-      .computeLabel=${() => ""}
-      @value-changed=${(e: CustomEvent) => {
-        e.stopPropagation();
-        this._onEntityChange({ detail: { value: (e.detail.value?.entity as string) || null } });
-      }}
-    ></ha-form>`;
-  }
-  /* v8 ignore stop */
-
   override render() {
     return html`
       <div class="row">
         <label class="section">${localize(this.hass, "ui.weather_entity", "Weather entity")}</label>
-        ${
-          customElements.get("ha-form")
-            ? this._renderEntityPicker()
-            : html`<input
-                type="text"
-                placeholder="weather.home"
-                .value=${this._config.entity ?? ""}
-                @change=${(e: Event) =>
-                  this._onEntityChange({
-                    detail: { value: (e.target as HTMLInputElement).value || null },
-                  })}
-              />`
-        }
+        ${renderEntityPicker(
+          this.hass,
+          "entity",
+          this._config.entity,
+          { entity: { domain: "weather" } },
+          "weather.home",
+          (value) => this._onEntityChange({ detail: { value } }),
+        )}
       </div>
 
       <h4>${localize(this.hass, "ui.groups", "Groups")}</h4>

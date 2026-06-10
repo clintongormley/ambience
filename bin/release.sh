@@ -54,16 +54,21 @@ if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
   echo "error: tag $TAG already exists locally" >&2
   exit 1
 fi
-# Capture ls-remote first and abort on failure: inside `if`, a network/auth
-# error (stderr discarded) is indistinguishable from "tag not found" and the
-# guard would silently pass. Repos without an origin (tests) skip the check.
-if git remote get-url origin >/dev/null 2>&1; then
-  REMOTE_TAGS=$(git ls-remote --tags origin) \
-    || { echo "error: cannot reach origin to check tags" >&2; exit 1; }
-  if printf '%s\n' "$REMOTE_TAGS" | awk '{print $2}' | grep -qx "refs/tags/$TAG"; then
-    echo "error: tag $TAG already exists on origin" >&2
-    exit 1
-  fi
+# True (0) when the full ref path $1 exists on origin. Captures ls-remote
+# first and aborts on failure: inside `if`, a network/auth error is
+# indistinguishable from "ref not found" and the guard would silently pass.
+# Repos without an origin (tests) report "absent".
+remote_ref_exists() {
+  git remote get-url origin >/dev/null 2>&1 || return 1
+  local refs
+  refs=$(git ls-remote origin "$1") \
+    || { echo "error: cannot reach origin while checking $1" >&2; exit 1; }
+  printf '%s\n' "$refs" | awk '{print $2}' | grep -qx "$1"
+}
+
+if remote_ref_exists "refs/tags/$TAG"; then
+  echo "error: tag $TAG already exists on origin" >&2
+  exit 1
 fi
 
 # Local main must be up to date with origin/main.
@@ -90,14 +95,10 @@ if git rev-parse -q --verify "refs/heads/$BRANCH" >/dev/null; then
   echo "  git branch -D $BRANCH" >&2
   exit 1
 fi
-if git remote get-url origin >/dev/null 2>&1; then
-  REMOTE_HEADS=$(git ls-remote --heads origin "$BRANCH") \
-    || { echo "error: cannot reach origin to check branches" >&2; exit 1; }
-  if printf '%s\n' "$REMOTE_HEADS" | awk '{print $2}' | grep -qx "refs/heads/$BRANCH"; then
-    echo "error: branch $BRANCH already exists on origin; delete it first:" >&2
-    echo "  git push origin --delete $BRANCH" >&2
-    exit 1
-  fi
+if remote_ref_exists "refs/heads/$BRANCH"; then
+  echo "error: branch $BRANCH already exists on origin; delete it first:" >&2
+  echo "  git push origin --delete $BRANCH" >&2
+  exit 1
 fi
 
 # Optional --no-push flag for tests.

@@ -312,7 +312,7 @@ export class AmbienceSceneEditor extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    watchHaComponents(this, this.hass);
+    watchHaComponents(this);
   }
 
   override willUpdate(changed: Map<string, unknown>) {

@@ -1,7 +1,7 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { deriveActionLabel, localize } from "../i18n.js";
+import { deriveActionLabel, humanizeId, localize } from "../i18n.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
 // existing importers of this view keep working.
@@ -17,7 +17,7 @@ import {
 import { DragReorderController } from "../drag-reorder.js";
 import type { HaFormSchemaEntry } from "../ha-form.js";
 import { DEFAULT_REAPPLY_SECONDS, parseReapplyConfigSeconds } from "../reapply.js";
-import { humanizeFieldId, selectorUnit } from "../summary.js";
+import { selectorUnit } from "../summary.js";
 import type {
   ExposedAction,
   ExposedActionWarning,
@@ -821,7 +821,7 @@ export class AmbienceActionsSettings extends LitElement {
             />
           </div>
           <span class="name">
-            ${field.name || humanizeFieldId(name)}
+            ${field.name || humanizeId(name)}
             ${field.name ? html` <small class="field-id">(${name})</small>` : ""}
             ${field.description ? html` <small>— ${field.description}</small>` : ""}
           </span>

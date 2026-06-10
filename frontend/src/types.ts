@@ -122,14 +122,6 @@ export type ConditionInfo = {
   priority: number;
 };
 
-export type DryRunResult = {
-  matched_scene_index: number | null;
-  scene_name: string | null;
-  actions: ActionSpec[];
-  snapshots_described: Record<string, string | null>;
-  switch_state: "on" | "off" | "unknown";
-};
-
 export type SunAnchor = "sunrise" | "sunset" | "noon" | "midnight" | "dawn" | "dusk";
 
 export type SunClamp = { dir: "not_before" | "not_after"; hh: number; mm: number };
@@ -351,6 +343,14 @@ export type TraceCause = {
   new: string | null;
   detail: string | null;
 };
+// Backend traces serialise raw stored action dicts and treat entity_ids/params
+// as optional (trace.py reads them with .get) — looser than ActionSpec, which
+// is the save-path shape with both required.
+export type TraceAction = {
+  service: string;
+  entity_ids?: string[];
+  params?: Record<string, unknown>;
+};
 export type TracePredicate = { condition_key: string; passed: boolean; detail: string | null };
 export type TraceSceneEval = {
   index: number;
@@ -381,8 +381,7 @@ export type BufferedUnit = {
   switch_state: string;
   outcome: TraceOutcome;
   winner_name: string | null;
-  // Backend serialises raw engine action dicts, which match ActionSpec's shape.
-  actions: ActionSpec[];
+  actions: TraceAction[];
   explanation: TraceExplanation | null;
 };
 

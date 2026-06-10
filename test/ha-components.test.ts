@@ -34,12 +34,6 @@ describe("watchHaComponents", () => {
     expect(() => watchHaComponents(mockHost as any)).not.toThrow();
   });
 
-  test("accepts and ignores hass object parameter", () => {
-    const mockHost = { requestUpdate: vi.fn() };
-    const fakeHass = { loadForm: vi.fn(), someOtherKey: "value" };
-    expect(() => watchHaComponents(mockHost as any, fakeHass)).not.toThrow();
-  });
-
   test("triggers requestUpdate when a watched component is defined after the call", async () => {
     const uniqueName = `ha-textfield-watch-test-${Date.now()}`;
     const _mockHost = { requestUpdate: vi.fn() };

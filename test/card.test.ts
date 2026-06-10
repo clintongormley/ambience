@@ -98,3 +98,26 @@ describe("<ambience-card>", () => {
     expect(el.getCardSize()).toBe(12);
   });
 });
+
+describe("<ambience-card> lazy-load failure", () => {
+  test("a failed load is caught, shows a hint, and a later setConfig retries", async () => {
+    vi.mocked(loadFrontend).mockRejectedValueOnce(new Error("network boom"));
+    const el = document.createElement("ambience-card") as HTMLElement & {
+      setConfig: (c: object) => void;
+    };
+    document.body.appendChild(el);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    // The rejection was handled (no inner element, a visible hint instead).
+    expect(el.querySelector("ambience-frontend")).toBeNull();
+    expect(el.textContent ?? "").not.toBe("");
+
+    // lazy-frontend un-memoises failures; the next setConfig retries cleanly.
+    el.setConfig({ type: "custom:ambience-card" });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(el.querySelector("ambience-frontend")).not.toBeNull();
+    el.remove();
+  });
+});

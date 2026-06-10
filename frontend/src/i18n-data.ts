@@ -301,4 +301,17 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     wind_speed: "Wind speed",
     pressure: "Pressure",
   },
+  state_op: {
+    is: "is",
+    is_not: "is not",
+    ">": ">",
+    ">=": "≥",
+    "<": "<",
+    "<=": "≤",
+    and: "AND",
+    or: "OR",
+    and_not: "AND NOT",
+    or_not: "OR NOT",
+    not: "NOT",
+  },
 };

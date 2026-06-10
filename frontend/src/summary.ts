@@ -75,7 +75,7 @@ export function paramLabel(
       if (typeof name === "string" && name) return name;
     }
   }
-  return humanizeFieldId(fieldId);
+  return humanizeId(fieldId);
 }
 
 /**
@@ -172,7 +172,7 @@ export function scriptFieldLabel(
       | undefined
   )?.services;
   const alias = services?.script?.[name]?.fields?.[fieldId]?.name;
-  return typeof alias === "string" && alias ? alias : humanizeFieldId(fieldId);
+  return typeof alias === "string" && alias ? alias : humanizeId(fieldId);
 }
 
 /** Display name for an entity from a domain-prefixed id, falling back to a
@@ -296,19 +296,6 @@ function _fmtDayItem(item: DayItem, ctx: ConditionContext): string {
   }
 }
 
-const _OP_LABEL: Record<string, string> = {
-  "<": "<",
-  "<=": "≤",
-  ">": ">",
-  ">=": "≥",
-};
-
-/** Humanize a field id: replace underscores with spaces and capitalize first letter.
- *  "brightness_pct" → "Brightness pct", "transition" → "Transition" */
-export function humanizeFieldId(fieldId: string): string {
-  return humanizeId(fieldId);
-}
-
 /** Format a param value for display: primitives as-is, arrays/objects via
  *  JSON.stringify so arrays render with [ ] brackets — e.g.
  *  [210, 81, 81] → "[210,81,81]". */
@@ -383,7 +370,10 @@ export function summariseWeather(pred: WeatherPredicate, ctx: ConditionContext =
     .map((id) => groupMap.get(id) ?? _humaniseGroupId(id))
     .join("/");
   const thr = (pred.thresholds ?? [])
-    .map((t) => `${weatherAttrLabel(ctx.hass, t.attribute)} ${_OP_LABEL[t.op] ?? t.op} ${t.value}`)
+    .map(
+      (t) =>
+        `${weatherAttrLabel(ctx.hass, t.attribute)} ${stateOpLabel(ctx.hass, t.op)} ${t.value}`,
+    )
     .join(", ");
   const parts = [groups, thr].filter((s) => s !== "");
   return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");

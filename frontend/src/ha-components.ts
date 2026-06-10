@@ -29,15 +29,17 @@ export function pickHaTextInput(): HaTextInputTag | null {
  * case where HA registers a component lazily as the user navigates.
  *
  * On HA 2026.05+ the components we care about (`ha-input`, `ha-form`) are
- * eagerly registered, so this is effectively a no-op. The `hass` parameter
- * is accepted for backward compatibility with existing call sites but no
- * longer used — we no longer attempt to drive HA's `loadCardHelpers`
- * machinery (it was removed in 2026.05).
+ * eagerly registered, so this is effectively a no-op there. The host is held
+ * via WeakRef: `whenDefined` for a component that never registers (e.g.
+ * `ha-textfield` on 2026.05+) stays pending forever, and HA rebuilds the
+ * panel on every websocket reconnect — a strong reference would accumulate
+ * detached component trees without bound.
  */
-export function watchHaComponents(host: ReactiveControllerHost, _hass?: unknown): void {
+export function watchHaComponents(host: ReactiveControllerHost): void {
   for (const name of HA_COMPONENTS) {
     if (!customElements.get(name)) {
-      void customElements.whenDefined(name).then(() => host.requestUpdate());
+      const ref = new WeakRef(host);
+      void customElements.whenDefined(name).then(() => ref.deref()?.requestUpdate());
     }
   }
 }

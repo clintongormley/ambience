@@ -39,8 +39,7 @@ function _resolve(hass: HassLike | undefined, key: string, fallback: string): st
  *   "light.turn_on" → "Light.turn on"  (dots are preserved)
  *
  * The shared humanisation primitive: used wherever a raw id needs a readable
- * label — field ids (via {@link humanizeFieldId} in summary.ts), condition/action
- * ids (here), and so on.
+ * label — field ids, condition/action ids, and so on.
  */
 export function humanizeId(id: string): string {
   const spaced = id.replaceAll("_", " ").toLowerCase();
@@ -172,8 +171,7 @@ export function periodLabel(
   const custom_label = custom[id]?.label;
   if (custom_label) return custom_label;
 
-  const fallback = id.charAt(0).toUpperCase() + id.slice(1);
-  return _resolve(hass, `component.ambience.time_of_day_period.${id}`, fallback);
+  return _resolve(hass, `component.ambience.time_of_day_period.${id}`, humanizeId(id));
 }
 
 /** Resolve a lux-range id to a display name. Mirrors {@link periodLabel}:
@@ -196,97 +194,29 @@ export function localize(hass: HassLike | undefined, subKey: string, fallback: s
 }
 
 const _WEEKDAY_IDS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const _WEEKDAY_FALLBACKS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-/** index: 0=Mon … 6=Sun (matches Python date.weekday()). */
+/** index: 0=Mon … 6=Sun (matches Python date.weekday()). The English strings
+ *  live in i18n-data.ts (the bundle); no duplicate fallback table here. */
 export function weekdayLabel(hass: HassLike | undefined, index: number): string {
-  return _resolve(
-    hass,
-    `component.ambience.weekday.${_WEEKDAY_IDS[index]}`,
-    _WEEKDAY_FALLBACKS[index] ?? String(index),
-  );
+  const id = _WEEKDAY_IDS[index];
+  return _resolve(hass, `component.ambience.weekday.${id}`, id ?? String(index));
 }
-
-const _DAY_ITEM_FALLBACKS: Record<string, string> = {
-  weekday: "Day of week",
-  day_of_month: "Day of month",
-  date: "Date (annual)",
-  date_range: "Date range (annual)",
-  last_day: "Last day of month",
-  workday: "Workday",
-  holiday: "Holiday",
-  first_workday: "First workday of month",
-  last_workday: "Last workday of month",
-};
 
 export function dayItemKindLabel(hass: HassLike | undefined, kind: string): string {
-  return _resolve(hass, `component.ambience.day_item.${kind}`, _DAY_ITEM_FALLBACKS[kind] ?? kind);
+  return _resolve(hass, `component.ambience.day_item.${kind}`, humanizeId(kind));
 }
 
-const _MONTH_FALLBACKS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-/** month: 1=January … 12=December. */
+/** month: 1=January … 12=December. The English names live in i18n-data.ts. */
 export function monthLabel(hass: HassLike | undefined, month: number): string {
-  return _resolve(
-    hass,
-    `component.ambience.month.${month}`,
-    _MONTH_FALLBACKS[month - 1] ?? String(month),
-  );
+  return _resolve(hass, `component.ambience.month.${month}`, String(month));
 }
-
-const _WEATHER_CONDITION_FALLBACKS: Record<string, string> = {
-  "clear-night": "Clear (night)",
-  cloudy: "Cloudy",
-  fog: "Fog",
-  hail: "Hail",
-  lightning: "Lightning",
-  "lightning-rainy": "Lightning-rainy",
-  partlycloudy: "Partly cloudy",
-  pouring: "Pouring",
-  rainy: "Rainy",
-  snowy: "Snowy",
-  "snowy-rainy": "Snowy-rainy",
-  sunny: "Sunny",
-  windy: "Windy",
-  "windy-variant": "Windy (variant)",
-  exceptional: "Exceptional",
-};
 
 export function weatherConditionLabel(hass: HassLike | undefined, cond: string): string {
-  return _resolve(
-    hass,
-    `component.ambience.weather_condition.${cond}`,
-    _WEATHER_CONDITION_FALLBACKS[cond] ?? cond,
-  );
+  return _resolve(hass, `component.ambience.weather_condition.${cond}`, humanizeId(cond));
 }
 
-const _WEATHER_ATTR_FALLBACKS: Record<string, string> = {
-  temperature: "Temperature",
-  apparent_temperature: "Apparent temperature",
-  humidity: "Humidity",
-  wind_speed: "Wind speed",
-  pressure: "Pressure",
-};
-
 export function weatherAttrLabel(hass: HassLike | undefined, attr: string): string {
-  return _resolve(
-    hass,
-    `component.ambience.weather_attr.${attr}`,
-    _WEATHER_ATTR_FALLBACKS[attr] ?? attr,
-  );
+  return _resolve(hass, `component.ambience.weather_attr.${attr}`, humanizeId(attr));
 }
 
 // Metric defaults — used when hass.config.unit_system is unavailable or doesn't
@@ -353,21 +283,8 @@ export function weatherAttrUnit(
 
 // --- state condition --------------------------------------------------------
 
-const _STATE_OP_FALLBACKS: Record<string, string> = {
-  is: "is",
-  is_not: "is not",
-  ">": ">",
-  ">=": "≥",
-  "<": "<",
-  "<=": "≤",
-  and: "AND",
-  or: "OR",
-  and_not: "AND NOT",
-  or_not: "OR NOT",
-  not: "NOT",
-};
-
-/** Label for a state-condition operator (`is`, `is_not`, `and`, `or`, `not`). */
+/** Label for a state-condition operator (`is`, `is_not`, `>=`, `and`, …).
+ *  The glyph map (≥/≤ etc.) lives in i18n-data.ts. */
 export function stateOpLabel(hass: HassLike | undefined, op: string): string {
-  return _resolve(hass, `component.ambience.state_op.${op}`, _STATE_OP_FALLBACKS[op] ?? op);
+  return _resolve(hass, `component.ambience.state_op.${op}`, op);
 }

@@ -94,36 +94,29 @@ export function filterEntities(entityIds: readonly string[], target: HaTarget): 
  * Returned list is sorted for stable rendering. When `domains` is empty or
  * omitted, no domain filter is applied (every in-scope entity is returned).
  */
+// Structural view of the hass registry maps we read — avoids `as any` while
+// staying agnostic of the full HomeAssistant interface (see scope-icon.ts for
+// the same pattern).
+type RegistryHass = {
+  entities?: Record<
+    string,
+    { entity_id: string; area_id?: string | null; device_id?: string | null }
+  >;
+  devices?: Record<string, { id: string; area_id?: string | null }>;
+  areas?: Record<string, { area_id: string; floor_id?: string | null }>;
+};
+
 export function entitiesForScope(
   hass: HassConnection,
   scope: Scope,
   domains: readonly string[] = [],
 ): string[] {
-  const anyHass = hass as any;
-  if (!anyHass?.entities) return [];
+  const reg = hass as unknown as RegistryHass;
+  if (!reg?.entities) return [];
 
-  const entities = anyHass.entities as Record<
-    string,
-    {
-      entity_id: string;
-      area_id?: string | null;
-      device_id?: string | null;
-    }
-  >;
-  const devices = (anyHass.devices ?? {}) as Record<
-    string,
-    {
-      id: string;
-      area_id?: string | null;
-    }
-  >;
-  const areas = (anyHass.areas ?? {}) as Record<
-    string,
-    {
-      area_id: string;
-      floor_id?: string | null;
-    }
-  >;
+  const entities = reg.entities;
+  const devices = reg.devices ?? {};
+  const areas = reg.areas ?? {};
 
   // Resolve scope to a predicate over an entity's effective area_id (own or via device).
   const targetAreaIds: Set<string> | null =

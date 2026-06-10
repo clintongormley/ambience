@@ -4,8 +4,8 @@ import { customElement, property, state } from "lit/decorators.js";
 import { getServiceSchema, type HassConnection } from "../api.js";
 import { entitiesForScope, type HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
-import { localize } from "../i18n.js";
-import { formatArgValue, humanizeFieldId, selectorUnit } from "../summary.js";
+import { humanizeId, localize } from "../i18n.js";
+import { formatArgValue, selectorUnit } from "../summary.js";
 import type { ExposedAction, Scope, ServiceSchema } from "../types.js";
 import "./target-picker.js";
 import type { HaFormSchemaEntry } from "../ha-form.js";
@@ -132,7 +132,7 @@ export class AmbienceActionSlot extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    watchHaComponents(this, this.hass);
+    watchHaComponents(this);
   }
 
   override willUpdate(changed: Map<string, unknown>) {
@@ -305,7 +305,7 @@ export class AmbienceActionSlot extends LitElement {
     const field = this._schema?.fields[fieldName];
     if (field?.name) return field.name;
     // Humanize: "brightness_pct" → "Brightness pct", "transition" → "Transition"
-    return humanizeFieldId(fieldName);
+    return humanizeId(fieldName);
   }
 
   private _clearField(name: string) {

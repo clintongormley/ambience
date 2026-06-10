@@ -882,3 +882,41 @@ describe("trace-detail clickable entities", () => {
     expect(detail).toEqual({ entityId: "binary_sensor.motion" });
   });
 });
+
+describe("review fixes", () => {
+  test("custom time-of-day period labels resolve via the supplied periods map", () => {
+    const host = document.createElement("div");
+    render(
+      renderEvaluation(
+        unit({
+          explanation: {
+            winner_index: 0,
+            scenes: [
+              {
+                index: 0,
+                name: "Wind down",
+                matched: true,
+                evaluated: true,
+                predicates: [{ condition_key: "time_of_day", passed: true, detail: "wind_down" }],
+              },
+            ],
+          },
+        }),
+        true,
+        () => {},
+        undefined,
+        undefined,
+        {
+          wind_down: {
+            label: "Calmer evenings",
+            from: { kind: "time", hh: 20, mm: 0 },
+            to: { kind: "time", hh: 22, mm: 0 },
+          },
+        },
+      ),
+      host,
+    );
+    expect(host.textContent).toContain("Calmer evenings");
+    expect(host.textContent).not.toContain("wind_down");
+  });
+});

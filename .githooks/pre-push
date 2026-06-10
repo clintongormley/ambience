@@ -20,8 +20,11 @@ default_base() {
   echo "HEAD~1"  # last resort: just the tip commit
 }
 
-# Read the ref updates git feeds us on stdin to compute a precise diff range.
-range=""
+# Read the ref updates git feeds us on stdin and accumulate the changed files
+# across EVERY pushed ref (a `git push origin a b` must gate both, not just
+# the last one read).
+changed=""
+ranges=""
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$ZERO" ] && continue          # branch deletion: nothing to test
   if [ "$remote_sha" = "$ZERO" ]; then            # new branch on the remote
@@ -30,13 +33,20 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   else
     range="${remote_sha}..${local_sha}"
   fi
+  ranges="${ranges}${ranges:+ }${range}"
+  # `HEAD~1..HEAD` (committed changes only) as the fallback — a bare working-
+  # tree diff would gate uncommitted files that aren't being pushed at all.
+  changed="${changed}
+$(git diff --name-only "$range" 2>/dev/null || git diff --name-only HEAD~1..HEAD)"
 done
 
 # Fallback when stdin gave us nothing (e.g. a manual invocation).
-[ -n "$range" ] || range="$(default_base)...HEAD"
+if [ -z "$ranges" ]; then
+  ranges="$(default_base)...HEAD"
+  changed="$(git diff --name-only "$ranges" 2>/dev/null || git diff --name-only HEAD~1..HEAD)"
+fi
 
-changed="$(git diff --name-only "$range" 2>/dev/null || git diff --name-only HEAD~1)"
-echo "pre-push: inspecting $(printf '%s\n' "$changed" | grep -c . || true) changed file(s) in range $range"
+echo "pre-push: inspecting $(printf '%s\n' "$changed" | grep -c . || true) changed file(s) in range(s) $ranges"
 
 py_changed=$(printf '%s\n' "$changed" | grep -E '\.py$' || true)
 js_changed=$(printf '%s\n' "$changed" | grep -E '^(frontend/src|test)/.*\.ts$' || true)
@@ -49,6 +59,7 @@ if [ -n "$js_changed" ]; then echo "› biome+tsc";   make lint-js; fi
 
 # --- Step 2: always-cheap drift checks ---
 if [ -n "$py_changed$trans_changed" ]; then echo "› translations"; make translations; fi
+if [ -n "$bundle_src_changed" ]; then echo "› ui strings"; make ui-strings; fi
 
 # --- Step 3: changed-language tests + coverage ---
 if [ -n "$py_changed" ];          then echo "› backend tests+coverage";  make coverage-py; fi

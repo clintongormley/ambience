@@ -26,6 +26,7 @@ Leave the duration at zero (the default) to match immediately as soon as the tes
 | [Weather](weather.md) | The current weather condition (sunny, cloudy, rainy, and so on) and numeric attributes such as temperature, humidity, and wind speed. |
 | [People](people.md) | Whether everybody, anybody, nobody, or specific people are at home or in a named zone. |
 | [Occupancy](occupancy.md) | Whether presence/occupancy/motion sensors report a room as occupied or vacant, with optional dwell time. |
+| [Lux](lux.md) | Whether ambient-light (illuminance) sensors fall inside a named or custom lux range. |
 | [Day](day.md) | The day of the week, day of the month, a specific annual date or date range, and workday or holiday status. |
 | [Template](template.md) | A Home Assistant Jinja2 template evaluated to a yes/no result — a flexible escape hatch for anything the other conditions do not cover. |
 | [Script](script.md) | A Home Assistant script that runs your own logic and reports back whether the condition is met. |

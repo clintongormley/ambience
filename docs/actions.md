@@ -70,3 +70,43 @@ Ambience re-evaluates your scenes continuously. Whenever the winning scene chang
 Which scopes Ambience evaluates is controlled by a toggle switch on each scope row. If you switch a scope off, Ambience stops applying scenes there. See [Scopes & switches](concepts/scopes-and-switches.md) for details.
 
 If you want to test a scene's actions without waiting for its conditions to match, use the **Run actions** option in the scene's action menu. This runs that scene's actions once, independently of the normal evaluation cycle.
+
+---
+
+## Calling Ambience from automations
+
+Everything above happens automatically, but the same machinery is available
+to your own automations and scripts via the `ambience.apply_scene` action
+(admin-only). It takes the **scope switch entity** as its target — every
+scope (house, floor, area) has one.
+
+```yaml
+# Re-resolve and apply every category in the living room:
+action: ambience.apply_scene
+data:
+  scope: switch.living_room_ambience
+
+# Apply only the lighting category, even if the scope is paused:
+action: ambience.apply_scene
+data:
+  scope: switch.living_room_ambience
+  category: lighting
+  force: true
+
+# Run one named scene directly, skipping condition resolution:
+action: ambience.apply_scene
+data:
+  scope: switch.living_room_ambience
+  category: lighting
+  scene: Movie night
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `scope` | Yes | The scope's Ambience switch entity. |
+| `category` | No | Limit the apply to one category (default: all). |
+| `scene` | No | Apply this named scene directly. Requires `category`. |
+| `force` | No | Apply even while the scope's switch is off. |
+
+Without `force`, the call is a no-op while the scope's switch is off. A scope
+that has been permanently **disabled** never applies, even with `force`.

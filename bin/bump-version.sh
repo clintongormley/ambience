@@ -15,6 +15,7 @@
 #   - custom_components/ambience/manifest.json   (the HA/HACS version of record)
 #   - package.json                               (npm panel ships with the integration)
 #   - package-lock.json                          (root version: top-level + packages[""])
+#   - pyproject.toml                             ([project] version)
 #
 # Every write is verified; an edit that fails to land is a hard error rather
 # than a silently stale version.
@@ -56,6 +57,7 @@ MANIFEST="custom_components/ambience/manifest.json"
 require_file "$MANIFEST"
 require_file package.json
 require_file package-lock.json
+require_file pyproject.toml
 
 # manifest.json and package.json each carry the version exactly once. Use sed
 # (not a JSON reserialiser) so manifest's required key order is preserved.
@@ -68,6 +70,12 @@ sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" package.json
 rm -f package.json.bak
 grep -q "\"version\": \"$VERSION\"" package.json \
   || { echo "error: failed to bump version in package.json" >&2; exit 1; }
+
+# pyproject's [project] version (never published, but a stale number misleads).
+sed -i.bak "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" pyproject.toml
+rm -f pyproject.toml.bak
+grep -q "^version = \"$VERSION\"" pyproject.toml \
+  || { echo "error: failed to bump version in pyproject.toml" >&2; exit 1; }
 
 # package-lock.json carries the root version twice (top-level + packages[""]).
 # Restrict the edit to the header block before the first "node_modules/" entry

@@ -13,6 +13,9 @@ lint-js:        ## Fast: biome lint+format check + tsc type-check
 translations:   ## strings.json <-> translations key parity
 	python -m bin.check_translations
 
+ui-strings:     ## frontend ui.* localize keys <-> i18n-data.ts bundle parity
+	python -m bin.check_ui_strings
+
 coverage-py:    ## backend tests + coverage gate (fail_under in pyproject.toml)
 	python -m pytest tests/ --cov=custom_components.ambience --cov-report=term-missing
 

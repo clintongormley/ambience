@@ -82,40 +82,45 @@ The bundler is configured in `esbuild.config.mjs`. TypeScript settings live in `
 
 ## WebSocket API
 
-All commands require admin privileges. The frontend communicates exclusively over this API; there are no REST endpoints.
+All commands require admin privileges. The frontend communicates exclusively
+over this API; there are no REST endpoints.
 
-| Command | Payload | Returns |
+The authoritative command list lives in `custom_components/ambience/websocket.py`
+(`_WS_HANDLERS` at the bottom of the file — registration and unregistration both
+derive from it, and each handler's `@websocket_command` schema documents its
+payload). The ~40 commands fall into these families:
+
+| Family | Commands (representative) | Purpose |
 |---|---|---|
-| `ambience/areas/list` | – | `[{area_id, name}]` |
-| `ambience/area/get` | `{area_id}` | full area config |
-| `ambience/area/save` | `{area_id, config}` | `{ok: true}` or error |
-| `ambience/area/delete` | `{area_id}` | `{ok: true}` |
-| `ambience/conditions/list` | – | conditions + descriptions + predicate help |
-| `ambience/services/list` | – | HA services available for use as actions |
-| `ambience/exposed_actions/list` | – | configured action definitions (id, label, service, …) |
-| `ambience/exposed_actions/save` | `{actions}` | `{ok: true}` |
-| `ambience/validate` | `{config}` | `{ok: true}` or error |
-| `ambience/dry_run` | `{area_id, scene}` | resolved-scene preview |
-| `ambience/switch_defaults/list` | – | `{name, auto_on_delay_seconds}` |
-| `ambience/switch_defaults/save` | `{name, auto_on_delay_seconds}` | `{ok: true}` |
-| `ambience/house/switch/save` | `{name\|null, auto_on_delay_seconds\|null}` | `{ok: true}` |
-| `ambience/floor/switch/save` | `{floor_id, name\|null, auto_on_delay_seconds\|null}` | `{ok: true}` |
-| `ambience/area/switch/save` | `{area_id, name\|null, auto_on_delay_seconds\|null}` | `{ok: true}` |
+| Registry lists | `ambience/areas/list`, `ambience/floors/list` | HA areas/floors for the scope pickers |
+| Scope config | `ambience/area/get`, `ambience/area/save` (+ `floor/*`, `house/*`), `ambience/validate` | Load/validate/save a scope's scenes (save canonicalises order and returns shadow hints) |
+| Resolution | `ambience/dry_run`, `ambience/apply`, `ambience/scene/run_actions` | Preview / force-apply / run one scene's actions |
+| Conditions | `ambience/conditions/list`, `ambience/conditions/day/config/*`, `ambience/conditions/weather/config/*`, `ambience/time_of_day_periods/*`, `ambience/lux_ranges/*` | Condition metadata and the global condition settings |
+| Actions | `ambience/services/list`, `ambience/services/get_schema`, `ambience/exposed_actions/*` | The exposed-actions catalogue behind the scene editor |
+| State helpers | `ambience/state/known_states`, `ambience/state/known_attribute_values` | Plausible-value suggestions for the state condition editor |
+| Categories | `ambience/categories/list|save|delete` | Scene-category CRUD (guarded: can't drop the last or an in-use category) |
+| Switches | `ambience/switches/list`, `ambience/switch_defaults/*`, `ambience/set_scope_enabled` | Scope switch entity ids, global defaults, permanent enable/disable |
+| Observability | `ambience/traces/list|clear`, `ambience/auto_triggers/list`, `ambience/diagnostics/scope`, `ambience/simulate`, `ambience/simulate/inputs` | Trace buffer, derived watch-list, focused diagnostics, what-if simulator |
 
 ---
 
 ## Service: `ambience.apply_scene`
 
-Defined in `custom_components/ambience/services.yaml`. Admin-only.
+Defined in `custom_components/ambience/services.yaml`; schema in
+`custom_components/ambience/__init__.py` (`_APPLY_SCENE_SCHEMA`). Admin-only.
 
-Resolves the scenes for a given scope and applies the matching scene's actions across every category in that scope.
+Resolves the scenes for a given scope and applies each category's winning
+scene's actions — or, with `scene`, runs one named scene directly.
 
 | Field | Required | Description |
 |---|---|---|
-| `area` | Yes | HA area ID to apply the scene in. |
-| `scene` | No | Scene name filter. When omitted, scene-name predicates in scenes are treated as wildcards. |
+| `scope` | Yes | Entity id of an Ambience scope switch (house/floor/area each have one); the handler maps it back to the scope it gates. |
+| `category` | No | Limit the apply to this single category id (default: every category in the scope). |
+| `scene` | No | A scene name to apply directly, bypassing condition resolution. Requires `category` (names are unique per scope + category). |
+| `force` | No | Boolean. Apply even when the scope's switch is off (the manual-override semantics the panel's Apply buttons use). |
 
-The call is a no-op if the target scope's switch is currently off.
+Without `force`, the call is a no-op if the target scope's switch is off; a
+permanently disabled scope never applies, even with `force`.
 
 ---
 

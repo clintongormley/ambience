@@ -61,7 +61,7 @@ Move or delete those scenes first, then try again.
 
 ## Conditions tab
 
-The Conditions tab lists the conditions that have configurable settings. Currently that means **Time of day**, **Day**, and **Weather** — other conditions (Entity state, Sun, Script, Template) are configured per-scene and have no global settings here.
+The Conditions tab lists the conditions that have configurable settings. Currently that means **Time of day**, **Day**, **Weather**, and **Lux** — other conditions (Entity state, Occupancy, People, Sun, Script, Template) are configured per-scene and have no global settings here.
 
 !!! info "📷 Screenshot"
 
@@ -117,6 +117,17 @@ Groups map one or more HA weather condition codes to a single label. For example
 To add a group, click **+ Add group**. A collapsed row appears. Click it to expand, enter a label, and select one or more condition codes from the dropdown. Changes are saved automatically.
 
 To remove a group, click the ✕ on the collapsed row. If any scenes reference a group or entity that is no longer configured, Ambience shows a warning listing the affected scenes.
+
+### Lux ranges
+
+Scenes can match a **named lux range** (Dark, Dim, Normal, Bright, Very
+bright) instead of a raw min/max band. The Conditions tab lets you adjust the
+built-in ranges' boundaries, hide them, or add your own custom ranges — the
+same model as time-of-day periods. See [Lux](conditions/lux.md) for how the
+condition itself works.
+
+If you remove a range that a scene still references, the save warns you and
+that scene stops matching until it is repointed.
 
 ---
 

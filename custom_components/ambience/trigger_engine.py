@@ -443,6 +443,11 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         apply the given units and emit one TraceEvent for the batch."""
         await self._refresh_all_snapshots()
         self._recompute(set(self._index.all_predicates()), self._snapshots)
+        # Re-arm `for:` rechecks: async_subscribe() tore down every timer, and a
+        # plain re-evaluation won't re-create them. Without this, a duration rule
+        # whose entity was already in-state before a startup/reload (e.g. a switch
+        # on for 2h) never fires until some unrelated event wakes its category.
+        self._schedule_for_rechecks(self._index.durations.keys())
         traces = await self._apply_units(units, force=force)
         if traces:
             emit_trace(self._hass, TraceEvent(cause, traces))

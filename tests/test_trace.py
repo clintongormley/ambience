@@ -518,6 +518,13 @@ def test_cause_describe_duration_names_entity_state_and_duration():
     assert cause.describe() == "binary_sensor.motion off for 5m"
 
 
+def test_cause_describe_duration_multi_entity_uses_label():
+    # A multi-entity gate has no single entity/state; `new` carries the gate
+    # label, entity_id is None — render "<label> for <duration>".
+    cause = TriggerCause(kind=CauseKind.DURATION, new="nobody home", detail="30m")
+    assert cause.describe() == "nobody home for 30m"
+
+
 def test_cause_describe_switch():
     cause = TriggerCause(kind=CauseKind.SWITCH, entity_id="switch.ambience_living_room")
     assert cause.describe() == "switch switch.ambience_living_room on"

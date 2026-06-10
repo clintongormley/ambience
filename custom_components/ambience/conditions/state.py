@@ -208,9 +208,18 @@ class StateCondition:
 
         States are sorted so `is [A, B]` and `is [B, A]` share one tenure clock.
         The same fingerprint anywhere in the config maps to the same engine
-        tenure entry."""
-        states = "|".join(sorted(str(s) for s in (atom.get("states") or [])))
-        return f"{atom.get('kind')}:{atom.get('entity_id')}:{atom.get('attribute') or ''}:{states}"
+        tenure entry. The components are `repr`-encoded into a tuple rather than
+        string-joined so an arbitrary state value (which may itself contain any
+        delimiter) can never collide with a different atom — e.g. the single
+        value `"a|b"` must not fingerprint the same as the set `["a", "b"]`."""
+        return repr(
+            (
+                atom.get("kind"),
+                atom.get("entity_id"),
+                atom.get("attribute") or "",
+                tuple(sorted(str(s) for s in (atom.get("states") or []))),
+            )
+        )
 
     def _atom_instant(self, atom: dict, snap: StateSnapshot) -> bool | None:
         """The atom's instant (un-`for`ed) truth: True/False, or None when the

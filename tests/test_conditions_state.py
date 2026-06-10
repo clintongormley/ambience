@@ -768,6 +768,16 @@ def test_atom_gate_key_is_order_insensitive_in_states() -> None:
     assert m._atom_gate_key(c) != m._atom_gate_key(a)
 
 
+def test_atom_gate_key_no_collision_on_delimiter_in_value() -> None:
+    """A single state value that literally contains the old '|' delimiter must
+    NOT fingerprint the same as the two-element set — otherwise two different
+    predicates would share (and clobber) one tenure clock."""
+    m = StateCondition()
+    single = {"kind": "is", "entity_id": "light.x", "states": ["a|b"]}
+    pair = {"kind": "is", "entity_id": "light.x", "states": ["a", "b"]}
+    assert m._atom_gate_key(single) != m._atom_gate_key(pair)
+
+
 def test_gate_states_reports_instant_and_anchor() -> None:
     """gate_states: instant truth ignores `for`; anchor is last_changed for a
     state-mode atom, last_updated for an attribute-mode atom."""

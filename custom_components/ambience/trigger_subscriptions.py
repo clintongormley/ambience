@@ -347,8 +347,12 @@ class TriggerSubscriptionsMixin:
             self._fire({key}, cause)
             # Re-arm: the consumed delay may have targeted the earlier of the
             # two clock windows (see _for_recheck_delay) — pick up any later
-            # still-pending one.
-            self._schedule_for_rechecks([key])
+            # still-pending one. Only while the entity exists: a deleted entity
+            # falls back to the full delay, so an unconditional re-arm would
+            # fire-and-re-arm forever (a state-change event re-arms it if it
+            # comes back).
+            if self._hass.states.get(entity) is not None:
+                self._schedule_for_rechecks([key])
 
         return _recheck
 

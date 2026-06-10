@@ -451,6 +451,7 @@ async def test_for_recheck_callback_fires_and_clears_handle(hass) -> None:
     engine.async_rebuild()
 
     key = ("area", "a", 0, "fc")
+    hass.states.async_set("binary_sensor.x", "off")  # entity exists → re-arm runs
     # Manually plant a fake cancel handle (keyed by its pair) so we can test the
     # self-removal without spawning a real async_call_later timer.
     fake_cancel = MagicMock()
@@ -547,6 +548,8 @@ async def test_for_recheck_fire_does_not_orphan_sibling_timers(hass) -> None:
     engine.async_rebuild()
 
     key = ("area", "a", 0, "fc")
+    hass.states.async_set("binary_sensor.x", "off")  # entities exist → re-arm runs
+    hass.states.async_set("binary_sensor.y", "off")
     # Two entities sharing the predicate, each with its own `for:` duration.
     engine._index = TriggerIndex(
         by_entity={"binary_sensor.x": frozenset({key}), "binary_sensor.y": frozenset({key})},
@@ -1271,6 +1274,7 @@ async def test_for_recheck_fire_rearms_for_later_pending_window(hass) -> None:
     """The armed delay may target the earlier (last_changed) window; after
     firing, the handler must re-arm so a later still-pending last_updated
     window is honoured too."""
+    hass.states.async_set("sensor.x", "on")
     engine = _minimal_engine(hass, [])
     key = ("area", "a", 0, "state")
     recheck = engine._make_for_recheck(key, "sensor.x", 100.0)
@@ -1285,6 +1289,26 @@ async def test_for_recheck_fire_rearms_for_later_pending_window(hass) -> None:
     ):
         recheck(None)
     assert rearmed == [[key]]
+
+
+async def test_for_recheck_does_not_rearm_for_deleted_entity(hass) -> None:
+    """A deleted entity falls back to the full delay in _for_recheck_delay, so
+    an unconditional re-arm would fire-and-re-arm forever — the handler must
+    stop re-arming once the entity is gone."""
+    engine = _minimal_engine(hass, [])  # sensor.x intentionally absent from states
+    key = ("area", "a", 0, "state")
+    recheck = engine._make_for_recheck(key, "sensor.x", 100.0)
+    rearmed: list = []
+    with (
+        patch.object(
+            engine,
+            "_schedule_for_rechecks",
+            side_effect=lambda preds: rearmed.append(list(preds)),
+        ),
+        patch.object(engine, "_fire"),
+    ):
+        recheck(None)
+    assert rearmed == []
 
 
 # ---------------------------------------------------------------------------

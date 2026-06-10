@@ -792,7 +792,7 @@ describe("ambience-scopes-view", () => {
   test("per-category add-scene opens a new scene defaulting to that category", async () => {
     const scenes: Scene[] = [{ name: "X", when: {}, actions: [], category: "a" }];
     el = await mount({ areaConfigs: { living_room: { scenes } } });
-    el._categories = [
+    el._store.categories = [
       { id: "a", name: "Awnings" },
       { id: "b", name: "Blinds" },
     ];
@@ -815,7 +815,7 @@ describe("ambience-scopes-view", () => {
   test("add-scene without a category falls back to the first category alphabetically", async () => {
     const scenes: Scene[] = [{ name: "X", when: {}, actions: [], category: "b" }];
     el = await mount({ areaConfigs: { living_room: { scenes } } });
-    el._categories = [
+    el._store.categories = [
       { id: "b", name: "Blinds" },
       { id: "a", name: "Awnings" },
     ];
@@ -1134,7 +1134,7 @@ describe("ambience-scopes-view", () => {
     await el.updateComplete;
 
     expect(vi.mocked(api.listCategories).mock.calls.length).toBe(initialCallCount + 1);
-    expect(el._categories).toEqual(updated);
+    expect(el._store.categories).toEqual(updated);
   });
 
   test("ambience-categories-changed listener is removed on disconnect", async () => {
@@ -1180,7 +1180,7 @@ describe("ambience-scopes-view", () => {
 
   test("a new scene defaults to the active filtered category", async () => {
     el = await mount();
-    el._categories = [
+    el._store.categories = [
       { id: "a", name: "Awn" },
       { id: "b", name: "Bee" },
     ] as SceneCategory[];
@@ -1192,7 +1192,7 @@ describe("ambience-scopes-view", () => {
 
   test("a new scene under All defaults to the alphabetically-first category", async () => {
     el = await mount();
-    el._categories = [
+    el._store.categories = [
       { id: "z", name: "Zed" },
       { id: "a", name: "Awn" },
     ] as SceneCategory[];
@@ -1817,7 +1817,9 @@ describe("ambience-scopes-view", () => {
 
   test("show-traces event opens the traces modal with correct props", async () => {
     el = await mount();
-    el._categories = [{ id: "lights", name: "Lights", color: null, icon: null }] as SceneCategory[];
+    el._store.categories = [
+      { id: "lights", name: "Lights", color: null, icon: null },
+    ] as SceneCategory[];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
@@ -1841,7 +1843,7 @@ describe("ambience-scopes-view", () => {
 
   test("show-traces with unknown category passes null categoryName", async () => {
     el = await mount();
-    el._categories = [] as SceneCategory[];
+    el._store.categories = [] as SceneCategory[];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
@@ -1863,7 +1865,9 @@ describe("ambience-scopes-view", () => {
 
   test("closing the traces modal sets _viewingTraces to null", async () => {
     el = await mount();
-    el._categories = [{ id: "lights", name: "Lights", color: null, icon: null }] as SceneCategory[];
+    el._store.categories = [
+      { id: "lights", name: "Lights", color: null, icon: null },
+    ] as SceneCategory[];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(
       ".scope-row.area[data-id='living_room']",
@@ -1887,7 +1891,9 @@ describe("ambience-scopes-view", () => {
 
   test("show-simulator event opens the simulator modal with correct props", async () => {
     el = await mount();
-    el._categories = [{ id: "lights", name: "Lights", color: null, icon: null }] as SceneCategory[];
+    el._store.categories = [
+      { id: "lights", name: "Lights", color: null, icon: null },
+    ] as SceneCategory[];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();
@@ -1909,7 +1915,7 @@ describe("ambience-scopes-view", () => {
 
   test("closing the simulator modal sets _viewingSimulator to null", async () => {
     el = await mount();
-    el._categories = [{ id: "g1", name: "G1", color: null, icon: null }] as SceneCategory[];
+    el._store.categories = [{ id: "g1", name: "G1", color: null, icon: null }] as SceneCategory[];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();
@@ -2064,7 +2070,7 @@ describe("ambience-scopes-view", () => {
 
   test("_defaultCategoryId returns empty string when no categories exist", async () => {
     el = await mount();
-    el._categories = [] as SceneCategory[];
+    el._store.categories = [] as SceneCategory[];
     expect(el._defaultCategoryId()).toBe("");
   });
 
@@ -2307,7 +2313,7 @@ describe("ambience-scopes-view", () => {
     resolveConditions(conditions);
     await new Promise((r) => setTimeout(r, 0));
     // No error, no crash — just silently aborted
-    expect(localEl._conditions).toEqual([]);
+    expect(localEl._store.conditions).toEqual([]);
   });
 
   test("_refreshAreas: bails out silently when element is removed before response", async () => {
@@ -2364,7 +2370,7 @@ describe("ambience-scopes-view", () => {
     resolveActions(newActions);
     await new Promise((r) => setTimeout(r, 0));
     // _actions should NOT have been updated to newActions (isConnected=false bail)
-    expect(el._actions).not.toBe(newActions);
+    expect(el._store.actions).not.toBe(newActions);
     el = null; // already removed
   });
 
@@ -2382,11 +2388,11 @@ describe("ambience-scopes-view", () => {
     await el.updateComplete;
     // Remove before schema resolves
     el.remove();
-    const prevSchemas = el._schemas;
+    const prevSchemas = el._store.schemas;
     resolveSchema({ fields: {} });
     await new Promise((r) => setTimeout(r, 0));
     // _schemas should NOT have been updated
-    expect(el._schemas).toBe(prevSchemas);
+    expect(el._store.schemas).toBe(prevSchemas);
     el = null;
   });
 
@@ -2561,7 +2567,7 @@ describe("ambience-scopes-view", () => {
 
   test("show-traces on the house scope sets scope_id to null", async () => {
     el = await mount();
-    el._categories = [{ id: "g", name: "G", color: null, icon: null }] as SceneCategory[];
+    el._store.categories = [{ id: "g", name: "G", color: null, icon: null }] as SceneCategory[];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();
@@ -2580,7 +2586,7 @@ describe("ambience-scopes-view", () => {
 
   test("show-simulator on the house scope sets scope_id to null", async () => {
     el = await mount();
-    el._categories = [{ id: "g", name: "G", color: null, icon: null }] as SceneCategory[];
+    el._store.categories = [{ id: "g", name: "G", color: null, icon: null }] as SceneCategory[];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();
@@ -2599,7 +2605,7 @@ describe("ambience-scopes-view", () => {
 
   test("show-simulator with unknown category passes null categoryName", async () => {
     el = await mount();
-    el._categories = [] as SceneCategory[];
+    el._store.categories = [] as SceneCategory[];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(".scope-row.house") as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();
@@ -2805,7 +2811,7 @@ describe("ambience-scopes-view", () => {
 
   test("show-simulator on a floor scope sets scope_kind to floor", async () => {
     el = await mount();
-    el._categories = [{ id: "g1", name: "G1", color: null, icon: null }] as SceneCategory[];
+    el._store.categories = [{ id: "g1", name: "G1", color: null, icon: null }] as SceneCategory[];
     await el.updateComplete;
     const row = el.shadowRoot.querySelector(".scope-row.floor[data-id='ground']") as HTMLElement;
     (row.querySelector(".scope-header") as HTMLElement).click();

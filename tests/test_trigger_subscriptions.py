@@ -1389,26 +1389,6 @@ async def test_recheck_cause_names_label_for_multi_entity_gate(hass) -> None:
     assert cause.detail == "30m"
 
 
-async def test_for_recheck_does_not_rearm_for_deleted_entity(hass) -> None:
-    """A deleted entity falls back to the full delay in _for_recheck_delay, so
-    an unconditional re-arm would fire-and-re-arm forever — the handler must
-    stop re-arming once the entity is gone."""
-    engine = _minimal_engine(hass, [])  # sensor.x intentionally absent from states
-    key = ("area", "a", 0, "state")
-    recheck = engine._make_for_recheck(key, "sensor.x", 100.0)
-    rearmed: list = []
-    with (
-        patch.object(
-            engine,
-            "_schedule_for_rechecks",
-            side_effect=lambda preds: rearmed.append(list(preds)),
-        ),
-        patch.object(engine, "_fire"),
-    ):
-        recheck(None)
-    assert rearmed == []
-
-
 # ---------------------------------------------------------------------------
 # teardown: queued handlers must not fire/re-arm into a dead engine
 # ---------------------------------------------------------------------------

@@ -812,6 +812,19 @@ def test_gate_states_only_includes_for_bearing_atoms() -> None:
     assert set(gs) == {m._atom_gate_key(only)}
 
 
+def test_gate_states_non_dict_and_not_branch() -> None:
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    # Non-dict predicate → empty (the _collect_gate_states guard).
+    assert m.gate_states("not-a-dict", _snap({}, now)) == {}
+    # A `not` wrapping a for-bearing atom recurses into the child.
+    inner = {"kind": "is", "entity_id": "light.a", "states": ["on"], "for": {"m": 5}}
+    pred = {"kind": "not", "item": inner}
+    states = {"light.a": ("on", now - timedelta(minutes=2), now - timedelta(minutes=2))}
+    gs = m.gate_states(pred, _snap(states, now))
+    assert set(gs) == {m._atom_gate_key(inner)}
+
+
 def test_gate_states_unobservable_atom_is_instant_false() -> None:
     """An unavailable/absent entity makes the instant test False; the anchor
     falls back to snapshot.now (no real change time to clock from)."""

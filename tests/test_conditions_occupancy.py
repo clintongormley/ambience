@@ -495,6 +495,7 @@ def test_occupancy_gate_states_empty_without_for_or_sensors() -> None:
     m = OccupancyCondition()
     assert m.gate_states({"sensors": ["binary_sensor.a"]}, _snap()) == {}  # no for
     assert m.gate_states({"sensors": [], "for": {"m": 5}}, _snap()) == {}  # wildcard
+    assert m.gate_states("not-a-dict", _snap()) == {}  # non-dict guard
 
 
 def test_occupancy_unobservable_stays_unobservable_under_tenure() -> None:

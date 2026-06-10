@@ -448,6 +448,86 @@ describe("ScopeStore", () => {
     });
   });
 
+  describe("mutate (optimistic save with revert)", () => {
+    const scene: ScopeConfig = {
+      scenes: [{ name: "S", when: {}, actions: [], category: "g" }],
+    };
+
+    test("house mutate calls saveHouse and stores the normalized result", async () => {
+      vi.mocked(api.saveHouse).mockResolvedValue({ ok: true, config: { scenes: scene.scenes } });
+      const { store } = makeStore();
+      await store.refreshHouse();
+      const ok = await store.mutate({ kind: "house" }, scene);
+      expect(ok).toBe(true);
+      expect(api.saveHouse).toHaveBeenCalledWith(expect.anything(), scene);
+      expect(store.house).toEqual({ scenes: scene.scenes });
+    });
+
+    test("area mutate calls saveArea with the area id", async () => {
+      vi.mocked(api.saveArea).mockResolvedValue({ ok: true, config: { scenes: scene.scenes } });
+      const { store } = makeStore();
+      await store.refreshAreas();
+      const ok = await store.mutate({ kind: "area", id: "living_room" }, scene);
+      expect(ok).toBe(true);
+      expect(api.saveArea).toHaveBeenCalledWith(expect.anything(), "living_room", scene);
+      expect(store.areaConfigs.get("living_room")).toEqual({ scenes: scene.scenes });
+    });
+
+    test("floor mutate calls saveFloor with the floor id", async () => {
+      vi.mocked(api.saveFloor).mockResolvedValue({ ok: true, config: { scenes: scene.scenes } });
+      const { store } = makeStore();
+      await store.refreshFloors();
+      const ok = await store.mutate({ kind: "floor", id: "ground" }, scene);
+      expect(ok).toBe(true);
+      expect(api.saveFloor).toHaveBeenCalledWith(expect.anything(), "ground", scene);
+    });
+
+    test("applies the new config optimistically before the save resolves", async () => {
+      let resolveSave!: (v: { ok: true; config: ScopeConfig }) => void;
+      vi.mocked(api.saveHouse).mockReturnValue(
+        new Promise((r) => {
+          resolveSave = r;
+        }),
+      );
+      const { store } = makeStore();
+      await store.refreshHouse();
+      const pending = store.mutate({ kind: "house" }, scene);
+      // Optimistic: the list already shows the new scenes while the save is in
+      // flight (the editor closes before the save resolves and relies on this).
+      expect(store.house).toBe(scene);
+      resolveSave({ ok: true, config: { scenes: scene.scenes } });
+      await pending;
+    });
+
+    test("clears a prior error when a mutate starts", async () => {
+      vi.mocked(api.saveHouse).mockResolvedValue({ ok: true, config: { scenes: [] } });
+      const { store } = makeStore();
+      store.error = "stale";
+      await store.mutate({ kind: "house" }, scene);
+      expect(store.error).toBe("");
+    });
+
+    test("reverts to the prior config and surfaces the error on save failure", async () => {
+      vi.mocked(api.saveArea).mockRejectedValue(new Error("save failed"));
+      const { store } = makeStore();
+      await store.refreshAreas();
+      const before = store.areaConfigs.get("living_room");
+      const ok = await store.mutate({ kind: "area", id: "living_room" }, scene);
+      expect(ok).toBe(false);
+      expect(store.areaConfigs.get("living_room")).toBe(before);
+      expect(store.error).toBe("save failed");
+    });
+
+    test("stringifies a non-Error thrown value on failure", async () => {
+      vi.mocked(api.saveHouse).mockRejectedValue("nope");
+      const { store } = makeStore();
+      await store.refreshHouse();
+      const ok = await store.mutate({ kind: "house" }, scene);
+      expect(ok).toBe(false);
+      expect(store.error).toBe("nope");
+    });
+  });
+
   describe("registry subscriptions", () => {
     type Captured = { area?: (e: any) => void; floor?: (e: any) => void };
 

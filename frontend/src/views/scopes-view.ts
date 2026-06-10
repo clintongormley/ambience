@@ -4,14 +4,7 @@ import { live } from "lit/directives/live.js";
 import { repeat } from "lit/directives/repeat.js";
 
 import type { HassConnection } from "../api.js";
-import {
-  applyScenes,
-  runSceneActions,
-  saveArea,
-  saveFloor,
-  saveHouse,
-  setScopeEnabled,
-} from "../api.js";
+import { applyScenes, runSceneActions, setScopeEnabled } from "../api.js";
 import { sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { localize } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
@@ -23,7 +16,7 @@ import {
   setConditionsHintDismissed,
   setExpandedScopes,
 } from "../ui-state.js";
-import { normalizeConfig, ScopeStore } from "./scope-store.js";
+import { ScopeStore } from "./scope-store.js";
 import "./scenes-list.js";
 import "./scene-editor.js";
 import "./kebab-menu.js";
@@ -362,33 +355,6 @@ export class AmbienceScopesView extends LitElement {
     }
   }
 
-  /**
-   * Apply `next` optimistically, persist, reconcile with the stored config.
-   * Not serialised per scope: overlapping saves could revert to a stale
-   * intermediate config on error. In practice the UI serialises mutations
-   * (one modal / one interaction at a time), so this is acceptable.
-   *
-   * @returns `true` if the save succeeded, `false` if it errored (in which case
-   *   the optimistic update has been reverted and `_error` set).
-   */
-  private async _mutate(scope: Scope, next: ScopeConfig): Promise<boolean> {
-    const prev = this._store.getConfig(scope);
-    this._store.setConfig(scope, next);
-    this._store.error = "";
-    try {
-      let result: { ok: true; config: ScopeConfig };
-      if (scope.kind === "house") result = await saveHouse(this.hass, next);
-      else if (scope.kind === "area") result = await saveArea(this.hass, scope.id, next);
-      else result = await saveFloor(this.hass, scope.id, next);
-      this._store.setConfig(scope, normalizeConfig(result.config));
-      return true;
-    } catch (e) {
-      if (prev) this._store.setConfig(scope, prev);
-      this._store.error = (e as Error).message || String(e);
-      return false;
-    }
-  }
-
   // --- expand --------------------------------------------------------------
 
   /** Update the expanded set and persist it, so the open/collapsed rows survive
@@ -436,7 +402,7 @@ export class AmbienceScopesView extends LitElement {
     const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const scenes = cfg.scenes.filter((_, i) => i !== e.detail.index);
-    void this._mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(scope, { ...cfg, scenes });
   }
 
   private _reorderScenes(scope: Scope, e: CustomEvent<{ from: number; to: number }>) {
@@ -467,14 +433,14 @@ export class AmbienceScopesView extends LitElement {
       cfg.scenes.filter((r) => r.category === moved.category),
     );
     scenes[to] = { ...moved, priority, pinned: true };
-    void this._mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(scope, { ...cfg, scenes });
   }
 
   private _unpinScene(scope: Scope, e: CustomEvent<{ index: number }>) {
     const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const scenes = cfg.scenes.map((r, i) => (i === e.detail.index ? { ...r, pinned: false } : r));
-    void this._mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(scope, { ...cfg, scenes });
   }
 
   private _toggleSceneEnabled(scope: Scope, e: CustomEvent<{ index: number; enabled: boolean }>) {
@@ -491,7 +457,7 @@ export class AmbienceScopesView extends LitElement {
       }
       return { ...r, enabled: false };
     });
-    void this._mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(scope, { ...cfg, scenes });
   }
 
   private async _saveScene(e: CustomEvent<{ scene: Scene; scope: Scope }>) {
@@ -514,7 +480,7 @@ export class AmbienceScopesView extends LitElement {
         else scenes[editing.index] = scene;
         // Close the editor only on success; on failure keep it open with the
         // draft intact and show why the save was rejected.
-        if (await this._mutate(target, { ...cfg, scenes })) this._editing = null;
+        if (await this._store.mutate(target, { ...cfg, scenes })) this._editing = null;
         else this._sceneEditorError = this._takeError();
         return;
       }
@@ -524,7 +490,7 @@ export class AmbienceScopesView extends LitElement {
       const fresh = stripPositionMetadata(scene);
       const targetCfg = this._store.getConfig(target);
       if (!targetCfg) return;
-      const added = await this._mutate(target, {
+      const added = await this._store.mutate(target, {
         ...targetCfg,
         scenes: [...targetCfg.scenes, fresh],
       });
@@ -542,7 +508,7 @@ export class AmbienceScopesView extends LitElement {
         const srcCfg = this._store.getConfig(editing.scope);
         if (srcCfg) {
           const scenes = srcCfg.scenes.filter((_, i) => i !== editing.index);
-          await this._mutate(editing.scope, { ...srcCfg, scenes });
+          await this._store.mutate(editing.scope, { ...srcCfg, scenes });
         }
       }
     } finally {
@@ -550,8 +516,8 @@ export class AmbienceScopesView extends LitElement {
     }
   }
 
-  /** Move the page-level error (set by `_mutate`) into the scene editor, where
-   *  it shows in the open modal rather than behind it, and clear the banner. */
+  /** Move the page-level error (set by `_store.mutate`) into the scene editor,
+   *  where it shows in the open modal rather than behind it, and clear the banner. */
   private _takeError(): string {
     const msg = this._store.error;
     this._store.error = "";

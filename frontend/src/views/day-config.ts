@@ -25,16 +25,28 @@ export class AmbienceDayConfig extends LitElement {
   @property({ attribute: false }) hass!: HassConnection;
   @state() private _config: DayConfig = { workday_sensor: null, workday_calendar: null };
   @state() private _warnings: Warning[] = [];
+  @state() private _error = "";
 
   override async connectedCallback() {
     super.connectedCallback();
-    this._config = await getDayConfig(this.hass);
+    try {
+      this._config = await getDayConfig(this.hass);
+    } catch (e) {
+      // A failed fetch must not leave a blank panel + unhandled rejection.
+      this._error = (e as Error).message || String(e);
+    }
   }
 
   private async _save(next: DayConfig) {
     this._config = next;
-    const res = await saveDayConfig(this.hass, next.workday_sensor, next.workday_calendar);
-    this._warnings = res.warnings ?? [];
+    try {
+      const res = await saveDayConfig(this.hass, next.workday_sensor, next.workday_calendar);
+      this._warnings = res.warnings ?? [];
+      this._error = "";
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
+      return;
+    }
     // Tell the scopes view to re-evaluate its conditions hint against live state.
     window.dispatchEvent(new CustomEvent("ambience-conditions-changed"));
   }
@@ -62,7 +74,11 @@ export class AmbienceDayConfig extends LitElement {
         selector: { entity: { integration: "workday", domain: "calendar" } },
       },
     ];
+    const errorBanner = this._error
+      ? html`<p style="color: var(--error-color, #d32f2f)">${this._error}</p>`
+      : "";
     return html`
+      ${errorBanner}
       <div class="row">
         <label>${localize(this.hass, "ui.workday_sensor", "Workday sensor")}</label>
         <ha-form

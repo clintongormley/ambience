@@ -72,8 +72,14 @@ export class AmbienceAmbienceSettings extends LitElement {
   }
 
   private _onDefaultName(e: Event) {
-    const value = (e.target as HTMLInputElement).value.trim();
-    if (!value) return;
+    const input = e.target as HTMLInputElement;
+    const value = input.value.trim();
+    if (!value) {
+      // Rejected edit: restore the stored value — Lit won't re-commit the
+      // unchanged binding, so the input would keep showing the rejected text.
+      input.value = this._defaults.name;
+      return;
+    }
     this._defaults = { ...this._defaults, name: value };
     void this._safeSave(() =>
       saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds),
@@ -81,8 +87,12 @@ export class AmbienceAmbienceSettings extends LitElement {
   }
 
   private _onDefaultDelay(e: Event) {
-    const raw = (e.target as HTMLInputElement).value;
-    if (raw === "" || !Number.isFinite(Number(raw)) || Number(raw) < 0) return;
+    const input = e.target as HTMLInputElement;
+    const raw = input.value;
+    if (raw === "" || !Number.isFinite(Number(raw)) || Number(raw) < 0) {
+      input.value = String(this._defaults.auto_on_delay_seconds);
+      return;
+    }
     this._defaults = {
       ...this._defaults,
       auto_on_delay_seconds: Math.floor(Number(raw)),

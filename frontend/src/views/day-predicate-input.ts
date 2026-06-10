@@ -198,8 +198,11 @@ export class AmbienceDayPredicateInput extends LitElement {
    * (e.g. ha-form's clear button sending `undefined` → NaN) is ignored so the
    * item is never written with NaN. */
   _setDatePart(item: DayItem, part: DatePart, raw: unknown): DayItem {
-    const n = Number(raw);
+    let n = Number(raw);
     if (!Number.isFinite(n) || n < 1) return item;
+    // Native number inputs don't enforce max= on typed values — clamp months
+    // here (days are already clamped to the month's length below).
+    if (part.endsWith("month")) n = Math.min(n, 12);
     if (item.kind === "date") {
       let { month, day } = item;
       if (part === "month") month = n;
@@ -336,14 +339,19 @@ export class AmbienceDayPredicateInput extends LitElement {
     return html`
       <select
         class="kind"
-        .value=${item.kind}
         @change=${(e: Event) => {
           const kind = (e.target as HTMLSelectElement).value as DayItem["kind"];
           if (this._kindDisabled(kind) || kind === item.kind) return;
           this._updateItem(section, idx, _defaultItem(kind));
         }}
       >
-        ${KINDS.map((k) => html`<option value=${k} ?disabled=${this._kindDisabled(k)}>${dayItemKindLabel(this.hass, k)}</option>`)}
+        ${KINDS.map(
+          (k) =>
+            // ?selected (not <select .value>): lit commits .value before the
+            // option children exist, so the browser falls back to the first
+            // option and never re-checks (see form-controls.renderSelect).
+            html`<option value=${k} ?selected=${k === item.kind} ?disabled=${this._kindDisabled(k)}>${dayItemKindLabel(this.hass, k)}</option>`,
+        )}
       </select>
     `;
   }

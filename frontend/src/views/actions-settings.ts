@@ -2,6 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { deriveActionLabel, humanizeId, localize } from "../i18n.js";
+import { scopeLabel } from "../scope-label.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
 // existing importers of this view keep working.
@@ -375,31 +376,35 @@ export class AmbienceActionsSettings extends LitElement {
 
   private _onDocPointerDown = (e: PointerEvent) => {
     const path = e.composedPath();
-    this._collapseAddFormOnClickAway(path);
-    this._cancelEditingDefaultOnClickAway(path);
-  };
-
-  /** Collapse the open "add action" form when clicking outside it — but not
-   *  inside the picker's document-level overlay dropdown. */
-  private _collapseAddFormOnClickAway(path: EventTarget[]) {
-    if (!this._adding) return;
-    const addRow = this.shadowRoot?.querySelector(".add-row");
-    const insideAddRow = !!addRow && path.includes(addRow);
+    // HA-form selectors (select/entity/color) and the service picker render
+    // their dropdowns in document-level vaadin/md overlays; a pointerdown on
+    // an option fires before the selection commits, so neither click-away
+    // check may treat an overlay click as "outside".
     const inOverlay = path.some(
       (n) => n instanceof Element && AmbienceActionsSettings._OVERLAY_TAG_RE.test(n.localName),
     );
+    this._collapseAddFormOnClickAway(path, inOverlay);
+    this._cancelEditingDefaultOnClickAway(path, inOverlay);
+  };
+
+  /** Collapse the open "add action" form when clicking outside it. */
+  private _collapseAddFormOnClickAway(path: EventTarget[], inOverlay: boolean) {
+    if (!this._adding) return;
+    const addRow = this.shadowRoot?.querySelector(".add-row");
+    const insideAddRow = !!addRow && path.includes(addRow);
     if (!insideAddRow && !inOverlay) {
       this._adding = false;
     }
   }
 
-  /** Cancel the open default-value editor when clicking outside its row. */
-  private _cancelEditingDefaultOnClickAway(path: EventTarget[]) {
+  /** Cancel the open default-value editor when clicking outside its row —
+   *  cancelling on an overlay click would silently revert the user's pick. */
+  private _cancelEditingDefaultOnClickAway(path: EventTarget[], inOverlay: boolean) {
     if (this._editingDefault === null) return;
     const editorRow = this.shadowRoot?.querySelector(
       `.field-row-editor[data-editing-key="${this._editingDefault}"]`,
     );
-    if (!editorRow || !path.includes(editorRow as EventTarget)) {
+    if ((!editorRow || !path.includes(editorRow as EventTarget)) && !inOverlay) {
       this._cancelEditingDefault();
     }
   }
@@ -619,7 +624,13 @@ export class AmbienceActionsSettings extends LitElement {
     // The searchable combobox can emit partial free text — only accept a real,
     // known service id.
     if (!this._services.some((s) => s.id === serviceId)) return;
-    if (this._actions.some((a) => a.id === serviceId)) return;
+    if (this._actions.some((a) => a.id === serviceId)) {
+      // Already exposed (the HA service picker lists every service): expand
+      // the existing card so the pick isn't a silent no-op.
+      this._expanded = new Set([serviceId]);
+      this._adding = false;
+      return;
+    }
     await this._ensureSchema(serviceId);
     this._actions = [
       ...this._actions,
@@ -814,7 +825,7 @@ export class AmbienceActionsSettings extends LitElement {
             <input
               type="checkbox"
               data-show-in-editor=${name}
-              title="Show in scene editor"
+              title=${localize(this.hass, "ui.show_in_scene_editor", "Show in scene editor")}
               .checked=${shown}
               @change=${(e: Event) =>
                 this._setShowInEditor(action.id, name, (e.target as HTMLInputElement).checked)}
@@ -828,7 +839,7 @@ export class AmbienceActionsSettings extends LitElement {
           <div class="summary-cell">
             ${
               isEditing
-                ? html`<span class="summary-cell-editing">Editing…</span>`
+                ? html`<span class="summary-cell-editing">${localize(this.hass, "ui.editing", "Editing…")}</span>`
                 : hasDefault
                   ? html`<button
                     class="default-summary"
@@ -837,7 +848,7 @@ export class AmbienceActionsSettings extends LitElement {
                       e.stopPropagation();
                       this._startEditingDefault(action.id, name);
                     }}
-                  >Default: ${this._formatDefaultSummary(action.defaults?.[name])}${this._defaultUnitSuffix(action.id, name)}</button>`
+                  >${localize(this.hass, "ui.default_prefix", "Default: ")}${this._formatDefaultSummary(action.defaults?.[name])}${this._defaultUnitSuffix(action.id, name)}</button>`
                   : html`<button
                     class="set-default-btn"
                     data-set-default=${name}
@@ -1045,7 +1056,7 @@ export class AmbienceActionsSettings extends LitElement {
     return html`<ul class="warning">
       ${this._warnings.map(
         (w) => html`<li>
-          ${w.scope_kind}${w.scope_id ? `/${w.scope_id}` : ""}${w.scene_name ? html` — <em>${w.scene_name}</em>` : ""}: ${w.reason}
+          ${scopeLabel(w)}${w.scene_name ? html` — <em>${w.scene_name}</em>` : ""}: ${w.reason}
         </li>`,
       )}
     </ul>`;

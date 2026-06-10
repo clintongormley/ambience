@@ -624,3 +624,23 @@ describe("ambience-day-predicate-input", () => {
     expect(el.value.include[1]).toEqual({ kind: "last_day" });
   });
 });
+
+describe("review fixes", () => {
+  test("native kind picker selects the item's kind, not the first option", async () => {
+    const el = await mount({
+      value: { include: [{ kind: "date", month: 5, day: 13 }], exclude: [] },
+    });
+    const select = el.shadowRoot.querySelector("select.kind") as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    // lit commits .value before the option children exist, so the browser fell
+    // back to the first option ("weekday") — ?selected on the matching option
+    // is the reliable form (see form-controls.renderSelect).
+    expect(select.value).toBe("date");
+  });
+
+  test("a typed month above 12 clamps instead of storing an invalid date", async () => {
+    const el = await mount({});
+    const out = el._setDatePart({ kind: "date", month: 5, day: 31 }, "month", "13");
+    expect(out).toEqual({ kind: "date", month: 12, day: 31 });
+  });
+});

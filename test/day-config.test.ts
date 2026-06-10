@@ -175,4 +175,20 @@ describe("ambience-day-config", () => {
     expect(txt).toContain("House"); // house scope renders the literal label
     expect(txt).not.toContain("undefined");
   });
+
+  test("a failed load shows an error instead of a blank panel", async () => {
+    const { getDayConfig } = await import("../frontend/src/api.js");
+    vi.mocked(getDayConfig).mockRejectedValueOnce(new Error("day list boom"));
+    el = await mount();
+    expect(el.shadowRoot.textContent).toContain("day list boom");
+  });
+
+  test("a failed save shows an error", async () => {
+    el = await mount();
+    vi.mocked(saveDayConfig).mockRejectedValueOnce(new Error("day save boom"));
+    el._onSensorChange({ detail: { value: "binary_sensor.workday" } });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).toContain("day save boom");
+  });
 });

@@ -139,7 +139,12 @@ export class AmbienceActionSlot extends LitElement {
     if (
       (changed.has("exposed") &&
         (changed.get("exposed") as ExposedAction | undefined)?.id !== this.exposed?.id) ||
-      (changed.has("hass") && this._schema === undefined)
+      // hass is replaced on every HA state change; without the _schemaServiceId
+      // guard each update fired another identical get_schema call while the
+      // first was still in flight.
+      (changed.has("hass") &&
+        this._schema === undefined &&
+        this._schemaServiceId !== this.exposed?.id)
     ) {
       void this._loadSchema();
     }
@@ -356,7 +361,8 @@ export class AmbienceActionSlot extends LitElement {
     if (!(entry.name in defaults)) return "";
     const unit = selectorUnit(entry.selector);
     const value = formatArgValue(this.hass, defaults[entry.name]);
-    return ` (Default: ${value}${unit ? ` ${unit}` : ""})`;
+    const prefix = localize(this.hass, "ui.default_prefix", "Default: ");
+    return ` (${prefix}${value}${unit ? ` ${unit}` : ""})`;
   }
 
   /** Whether to show the per-field ✕ clear button.
@@ -418,7 +424,7 @@ export class AmbienceActionSlot extends LitElement {
                         class="field-clear"
                         data-clear=${entry.name}
                         @click=${() => this._clearField(entry.name)}
-                        title="Clear"
+                        title=${localize(this.hass, "ui.clear_default", "Clear default")}
                       >✕</button>`
                       : ""
                   }
@@ -460,7 +466,7 @@ export class AmbienceActionSlot extends LitElement {
                         class="field-clear"
                         data-clear=${entry.name}
                         @click=${() => this._clearField(entry.name)}
-                        title="Clear"
+                        title=${localize(this.hass, "ui.clear_default", "Clear default")}
                       >✕</button>`
                       : ""
                   }

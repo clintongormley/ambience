@@ -60,6 +60,14 @@ export class AmbienceConditionInput extends LitElement {
     emitValueChanged(this, value);
   }
 
+  /** One shared child `value-changed` handler for every predicate widget —
+   *  stop the (composed) child event and re-emit, so a behavioural fix here
+   *  lands once instead of ten times. */
+  private _onChild = (e: CustomEvent<{ value: unknown }>) => {
+    e.stopPropagation();
+    this._emit(e.detail.value);
+  };
+
   private _onText(e: InputEvent) {
     const raw = (e.target as HTMLInputElement).value;
     this._emit(raw.trim() === "" ? null : raw);
@@ -72,10 +80,7 @@ export class AmbienceConditionInput extends LitElement {
           .value=${this.value as any}
           .periods=${this.periods}
           .hass=${this.hass as any}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
+          @value-changed=${this._onChild}
         ></ambience-time-of-day-input>
       `;
     }
@@ -84,10 +89,7 @@ export class AmbienceConditionInput extends LitElement {
         <ambience-script-predicate-input
           .hass=${this.hass}
           .value=${this.value as any}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
+          @value-changed=${this._onChild}
         ></ambience-script-predicate-input>
       `;
     }
@@ -97,10 +99,7 @@ export class AmbienceConditionInput extends LitElement {
           .hass=${this.hass}
           .value=${this.value as any}
           .dayConfig=${this.dayConfig ?? { workday_sensor: null, workday_calendar: null }}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
+          @value-changed=${this._onChild}
         ></ambience-day-predicate-input>
       `;
     }
@@ -111,10 +110,7 @@ export class AmbienceConditionInput extends LitElement {
           .value=${this.value as any}
           .groups=${this.weatherConfig?.groups ?? []}
           .weatherEntity=${this.weatherConfig?.entity ?? undefined}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
+          @value-changed=${this._onChild}
         ></ambience-weather-predicate-input>
       `;
     }
@@ -123,10 +119,7 @@ export class AmbienceConditionInput extends LitElement {
         <ambience-sun-predicate-input
           .hass=${this.hass}
           .value=${this.value as any}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
+          @value-changed=${this._onChild}
         ></ambience-sun-predicate-input>
       `;
     }
@@ -135,10 +128,7 @@ export class AmbienceConditionInput extends LitElement {
         <ambience-template-predicate-input
           .hass=${this.hass}
           .value=${this.value as any}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
+          @value-changed=${this._onChild}
         ></ambience-template-predicate-input>
       `;
     }
@@ -147,10 +137,7 @@ export class AmbienceConditionInput extends LitElement {
         <ambience-state-predicate-input
           .hass=${this.hass}
           .value=${this.value as any}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
+          @value-changed=${this._onChild}
         ></ambience-state-predicate-input>
       `;
     }
@@ -159,10 +146,7 @@ export class AmbienceConditionInput extends LitElement {
         <ambience-people-predicate-input
           .hass=${this.hass}
           .value=${this.value as any}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
+          @value-changed=${this._onChild}
         ></ambience-people-predicate-input>
       `;
     }
@@ -172,10 +156,7 @@ export class AmbienceConditionInput extends LitElement {
           .hass=${this.hass}
           .value=${this.value as any}
           .luxRanges=${this.luxRanges}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
+          @value-changed=${this._onChild}
         ></ambience-lux-input>
       `;
     }
@@ -184,10 +165,7 @@ export class AmbienceConditionInput extends LitElement {
         <ambience-occupancy-predicate-input
           .hass=${this.hass}
           .value=${this.value as any}
-          @value-changed=${(e: CustomEvent<{ value: unknown }>) => {
-            e.stopPropagation();
-            this._emit(e.detail.value);
-          }}
+          @value-changed=${this._onChild}
         ></ambience-occupancy-predicate-input>
       `;
     }

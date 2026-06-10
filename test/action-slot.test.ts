@@ -1399,4 +1399,18 @@ describe("ambience-action-slot", () => {
     // No " s" or " %" or similar unit suffix.
     expect(hint!.textContent).not.toMatch(/Default: hello\s+\S/);
   });
+
+  test("hass updates while a schema fetch is in flight don't spawn duplicates", async () => {
+    vi.mocked(api.getServiceSchema).mockReturnValue(new Promise(() => {}));
+    el = await mount({
+      exposed: { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
+    });
+    // hass is replaced on every HA state change; while _schema is still
+    // undefined each update used to fire another identical ws call.
+    el.hass = makeHass();
+    await el.updateComplete;
+    el.hass = makeHass();
+    await el.updateComplete;
+    expect(vi.mocked(api.getServiceSchema)).toHaveBeenCalledTimes(1);
+  });
 });

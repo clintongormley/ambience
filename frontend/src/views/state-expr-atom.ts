@@ -6,10 +6,9 @@ import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { localize, stateAttributeLabel, stateOpLabel, stateValueLabel } from "../i18n.js";
 import type { StateAtom, StateForDuration } from "../types.js";
-import { statesMap } from "./hass-states.js";
+import { type StateObj, statesMap } from "./hass-states.js";
 
 /** Minimal shape of an HA state object as read from `hass.states`. */
-type StateObj = { state?: string; attributes?: Record<string, unknown> };
 
 type AttrLabelMaps = { keyToLabel: Map<string, string>; labelToKey: Map<string, string> };
 type ValueLabelMaps = { rawToLabel: Map<string, string>; labelToRaw: Map<string, string> };
@@ -273,7 +272,7 @@ export class AmbienceStateExprAtom extends LitElement {
     const lang = (this.hass as { language?: string } | undefined)?.language ?? "";
     const key = `${lang}|${this.value.entity_id}|${attrs.join(",")}`;
     if (this._attrMapsCache?.key === key) return this._attrMapsCache.maps;
-    const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
+    const stateObj: StateObj | undefined = statesMap(this.hass)[this.value.entity_id];
     const keyToLabel = new Map<string, string>();
     const labelToKey = new Map<string, string>();
     for (const a of attrs) {
@@ -436,7 +435,7 @@ export class AmbienceStateExprAtom extends LitElement {
     const lang = (this.hass as { language?: string } | undefined)?.language ?? "";
     const key = `${lang}|${this.value.entity_id}|${attr ?? ""}|${options.join(",")}`;
     if (this._valueMapsCache?.key === key) return this._valueMapsCache.maps;
-    const stateObj = statesMap(this.hass)[this.value.entity_id] as StateObj | undefined;
+    const stateObj: StateObj | undefined = statesMap(this.hass)[this.value.entity_id];
     const rawToLabel = new Map<string, string>();
     const labelToRaw = new Map<string, string>();
     for (const raw of options) {

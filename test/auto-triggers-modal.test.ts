@@ -177,4 +177,19 @@ describe("ambience-auto-triggers-modal", () => {
     el.shadowRoot.querySelector(".close").click();
     expect(fired).toBe(true);
   });
+
+  test("reopening for a different scope does not flash the previous scope's rows", async () => {
+    el = await mount({ open: true });
+    expect(el.shadowRoot.textContent).toContain("binary_sensor.motion");
+
+    // Close, switch scope, and re-open with a fetch that never resolves —
+    // the stale rows from scope A must already be gone.
+    el.open = false;
+    await el.updateComplete;
+    (api.listAutoTriggers as any).mockImplementation(() => new Promise(() => {}));
+    el.scope = { kind: "area", id: "kitchen" };
+    el.open = true;
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).not.toContain("binary_sensor.motion");
+  });
 });

@@ -1644,5 +1644,5 @@ async def test_manual_apply_serialises_with_engine_apply_lock(hass: HomeAssistan
         await asyncio.sleep(0)
     assert not calls  # blocked on the lock — nothing dispatched yet
     lock.release()
-    await task
+    await asyncio.wait_for(task, 1)  # bounded so a hung task fails, not hangs
     assert len(calls) == 1

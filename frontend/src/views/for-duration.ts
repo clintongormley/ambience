@@ -63,10 +63,15 @@ export class AmbienceForDuration extends LitElement {
     }
     /* v8 ignore stop */
     const d = this._d;
-    const cell = (part: "h" | "m" | "s") => html`<input type="number" min="0"
+    // type=number's min="0" only constrains the spinner, not typed input, so
+    // clamp to a non-negative integer — the backend `for` is {h,m,s}: ints >= 0.
+    const cell = (part: "h" | "m" | "s") => html`<input type="number" min="0" step="1"
       .value=${String(d[part])}
       @change=${(e: Event) =>
-        this._set({ ...d, [part]: Number((e.target as HTMLInputElement).value) || 0 })} />`;
+        this._set({
+          ...d,
+          [part]: Math.max(0, Math.trunc(Number((e.target as HTMLInputElement).value) || 0)),
+        })} />`;
     return html`<div class="for-row" data-field="for">
       ${cell("h")}<span>:</span>${cell("m")}<span>:</span>${cell("s")}
     </div>`;

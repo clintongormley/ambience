@@ -40,6 +40,32 @@ describe("ambience-for-duration", () => {
     el.remove();
   });
 
+  test("a negative typed value clamps to 0", async () => {
+    const el = await mount({ h: 1, m: 1, s: 1 });
+    let detail: { value: StateForDuration } | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    const h = el.shadowRoot.querySelectorAll("input[type='number']")[0] as HTMLInputElement;
+    h.value = "-3";
+    h.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(detail?.value).toEqual({ h: 0, m: 1, s: 1 });
+    el.remove();
+  });
+
+  test("a decimal typed value truncates to an integer", async () => {
+    const el = await mount({ h: 1, m: 1, s: 1 });
+    let detail: { value: StateForDuration } | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      detail = (e as CustomEvent).detail;
+    });
+    const m = el.shadowRoot.querySelectorAll("input[type='number']")[1] as HTMLInputElement;
+    m.value = "2.7";
+    m.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(detail?.value).toEqual({ h: 1, m: 2, s: 1 });
+    el.remove();
+  });
+
   test("a non-numeric part coerces to 0", async () => {
     const el = await mount({ h: 1, m: 1, s: 1 });
     let detail: { value: StateForDuration } | undefined;

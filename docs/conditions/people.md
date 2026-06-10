@@ -48,10 +48,13 @@ Combining scope and direction gives you expressions such as:
 ### Requiring it to have been true for a duration
 
 Below the location row is a **for** duration field (hours, minutes, seconds).
-When set, the condition only matches if the location test has been continuously
-true for at least that long. This prevents a scene from firing the moment
-someone briefly crosses a zone boundary, which can happen when a phone wanders
-in and out of a geofence.
+When set, the condition only matches if the location *test* has been continuously
+true for at least that long. Because it tracks the test rather than the exact
+zone, a "nobody home" duration keeps counting when a person moves between two
+away zones (work to the shops) — "not home" never stopped being true — and only
+resets when someone actually comes home. This prevents a scene from firing the
+moment someone briefly crosses a zone boundary, which can happen when a phone
+wanders in and out of a geofence.
 
 Leave the duration at zero (the default) to match immediately on any location
 change.

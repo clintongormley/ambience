@@ -24,7 +24,7 @@ For numeric states and numeric attributes, the UI switches automatically to nume
 
 For an **is** or **is not** test you can list several values — the condition matches if any one of them applies (so "is on, is playing" behaves like "is on OR is playing").
 
-You can also set a **For** duration. When you do, the state or attribute must have held the tested value continuously for at least that long before the condition passes. This is useful for avoiding brief flickers — for example, requiring that a motion sensor has been clear for five minutes before a scene takes effect.
+You can also set a **For** duration. When you do, the *test* must have stayed true continuously for at least that long before the condition passes. This is useful for avoiding brief flickers — for example, requiring that a motion sensor has been clear for five minutes before a scene takes effect. When the test lists several states ("is *playing* or *paused*"), the clock keeps running as the entity flips between those listed states, because set membership never lapsed; it only resets when the entity moves to a state outside the list.
 
 When a scene needs more than one condition on a single entity state check, you combine individual conditions into a tree using **AND** and **OR** groups. Use the **"Wrap in group"** button on any condition to place it inside a new group, then add sibling conditions to the same group. You can nest groups to arbitrary depth. Each condition and each group can also be negated with the **NOT** toggle on its header — turning it on inverts the result of that condition or group.
 

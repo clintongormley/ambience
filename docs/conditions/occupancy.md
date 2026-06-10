@@ -21,7 +21,7 @@ When you add an Occupancy condition to a scene, the editor shows:
 - **Any of / All of** — shown only when you pick more than one sensor. "Any of"
   passes when at least one sensor is in the chosen state; "All of" requires
   every sensor to be.
-- **for** — an optional duration (see [the *for* duration](index.md#the-for-duration)).
+- **for** — an optional duration (see [the *for* duration](index.md#the-for-duration)). With "Any of", the clock tracks the combined test, so it keeps running through a handover from one sensor to another as long as *some* chosen sensor stays in the wanted state.
 
 ### Examples
 

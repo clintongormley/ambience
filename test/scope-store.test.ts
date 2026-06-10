@@ -274,6 +274,16 @@ describe("ScopeStore", () => {
       expect(store.error).toBe("");
     });
 
+    test("a conditions-changed refetch failure is silently swallowed", async () => {
+      const { store } = makeStore();
+      connect(store);
+      await store.loadStatic();
+      vi.mocked(api.getDayConfig).mockRejectedValue(new Error("transient"));
+      window.dispatchEvent(new Event("ambience-conditions-changed"));
+      await tick();
+      expect(store.error).toBe("");
+    });
+
     test("a change event resolving after disconnect is not applied", async () => {
       const { store, host } = makeStore();
       connect(store);
@@ -427,6 +437,14 @@ describe("ScopeStore", () => {
       await store.reloadScope({ kind: "area", id: "living_room" });
       expect(store.areaConfigs.get("living_room")).toEqual({ scenes: [], enabled: false });
       expect(store.areaConfigs.get("bedroom")).toEqual({ scenes: [] });
+    });
+
+    test("reloadScope re-fetches a floor scope's config", async () => {
+      const { store } = makeStore();
+      await store.refreshFloors();
+      vi.mocked(api.getFloor).mockResolvedValue({ enabled: false } as ScopeConfig);
+      await store.reloadScope({ kind: "floor", id: "ground" });
+      expect(store.floorConfigs.get("ground")).toEqual({ scenes: [], enabled: false });
     });
 
     test("reloadScope failure surfaces the error", async () => {

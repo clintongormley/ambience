@@ -129,11 +129,19 @@ const CAUSE_LABELS_WITH_DETAIL: Record<string, string> = {
   sun: "Sun position",
 };
 
+// A raw value or "?" when the backend sent null (e.g. an entity with no prior
+// state). Keeps the raw-trigger line from showing the literal "null" (string
+// form) or a confusing blank gap (Lit `html` renders null as empty content).
+function rawOrUnknown(v: string | null): string {
+  return v ?? "?";
+}
+
 export function formatCause(c: TraceCause): string {
-  if (c.kind === "entity") return `${c.entity_id} ${c.old} → ${c.new}`;
+  if (c.kind === "entity") return `${c.entity_id} ${rawOrUnknown(c.old)} → ${rawOrUnknown(c.new)}`;
   // A `for:` duration recheck: name the entity, the state it has held, and how
   // long (the detail), e.g. "binary_sensor.motion off for 5m".
-  if (c.kind === "duration") return `${c.entity_id} ${c.new} for ${c.detail}`;
+  if (c.kind === "duration")
+    return `${c.entity_id} ${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`;
   const fixed = CAUSE_LABELS_FIXED[c.kind];
   if (fixed) return fixed;
   const name = CAUSE_LABELS_WITH_DETAIL[c.kind] ?? humanizeId(c.kind);
@@ -146,8 +154,9 @@ export function formatCause(c: TraceCause): string {
 export function renderCause(c: TraceCause): TemplateResult {
   if (!causeHasRawValues(c) || !c.entity_id) return html`${formatCause(c)}`;
   const name = entityLink(c.entity_id, c.entity_id);
-  if (c.kind === "duration") return html`${name} ${c.new} for ${c.detail}`;
-  return html`${name} ${c.old} → ${c.new}`;
+  if (c.kind === "duration")
+    return html`${name} ${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`;
+  return html`${name} ${rawOrUnknown(c.old)} → ${rawOrUnknown(c.new)}`;
 }
 
 // Cause kinds that carry a raw entity_id + old/new values worth showing

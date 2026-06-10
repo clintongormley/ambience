@@ -83,6 +83,15 @@ describe("trace-detail", () => {
     ).toContain("20:00");
   });
 
+  test("formatCause normalizes null state values to '?' (not the string 'null')", () => {
+    expect(
+      formatCause({ kind: "entity", entity_id: "x", old: null, new: null, detail: null }),
+    ).toBe("x ? → ?");
+    expect(
+      formatCause({ kind: "duration", entity_id: "x", old: null, new: null, detail: null }),
+    ).toBe("x ? for ?");
+  });
+
   test("formatCauseFriendly uses friendly name + formatted values for entity causes", () => {
     const hass = {
       states: { "binary_sensor.motion": { attributes: { friendly_name: "Master Bath Presence" } } },
@@ -827,6 +836,24 @@ describe("trace-detail clickable entities", () => {
     const link = host.querySelector(".cause-line .entity-link") as HTMLElement;
     link.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
     expect(detail).toEqual({ entityId: "binary_sensor.motion" });
+  });
+
+  test("the raw-trigger normalizes null state values to '?' rather than blanks", () => {
+    const host = renderToHost(
+      {
+        cause: {
+          kind: "entity",
+          entity_id: "binary_sensor.motion",
+          old: null,
+          new: "on",
+          detail: null,
+        },
+      },
+      true, // expanded so the raw-trigger line is rendered
+    );
+    expect(host.querySelector(".raw-trigger")?.textContent).toContain(
+      "binary_sensor.motion ? → on",
+    );
   });
 
   test("a duration cause renders clickable entities in both the trigger and raw-trigger lines", () => {

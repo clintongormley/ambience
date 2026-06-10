@@ -7,18 +7,10 @@ import type { AreaRegistryEvent, FloorRegistryEvent, HassConnection } from "../a
 import {
   applyScenes,
   getArea,
-  getDayConfig,
   getFloor,
   getHouse,
-  getServiceSchema,
-  getWeatherConfig,
   listAreas,
-  listCategories,
-  listConditions,
-  listExposedActions,
   listFloors,
-  listLuxRanges,
-  listPeriods,
   listSwitches,
   runSceneActions,
   saveArea,
@@ -33,18 +25,11 @@ import { scopeIcon } from "../scope-icon.js";
 import type {
   AreaListItem,
   ConditionInfo,
-  DayConfig,
-  ExposedAction,
   FloorListItem,
-  LuxRangeStoreView,
-  PeriodStoreView,
   Scene,
-  SceneCategory,
   Scope,
   ScopeConfig,
   ScopeOption,
-  ServiceSchema,
-  WeatherConfig,
 } from "../types.js";
 import {
   getConditionsHintDismissed,
@@ -52,6 +37,7 @@ import {
   setConditionsHintDismissed,
   setExpandedScopes,
 } from "../ui-state.js";
+import { ScopeStore } from "./scope-store.js";
 import "./scenes-list.js";
 import "./scene-editor.js";
 import "./kebab-menu.js";
@@ -337,6 +323,10 @@ export class AmbienceScopesView extends LitElement {
 
   @property({ attribute: false }) hass!: HassConnection;
 
+  // Data layer: static config, loaded scope configs, and their mutators live in
+  // the store; this element renders straight off its fields.
+  private _store = new ScopeStore(this);
+
   @state() private _areas: AreaListItem[] = [];
   @state() private _floors: FloorListItem[] = [];
   @state() private _areaConfigs = new Map<string, ScopeConfig>();
@@ -345,25 +335,10 @@ export class AmbienceScopesView extends LitElement {
   // scopeKey(scope) -> Ambience switch entity_id. Resolved by the backend
   // because user/registry renames make the entity_id non-derivable.
   @state() private _switchEntityIds = new Map<string, string>();
-  @state() private _conditions: ConditionInfo[] = [];
-  @state() private _actions: ExposedAction[] = [];
-  @state() private _categories: SceneCategory[] = [];
-  // Per-service schemas, keyed by service id. Loaded after _actions so the
-  // summary functions can show HA's `field.name` instead of the humanized
-  // field id. Best-effort: services whose schema fetch fails are omitted.
-  @state() private _schemas: Record<string, ServiceSchema> = {};
-  @state() private _periods?: PeriodStoreView;
-  @state() private _luxRanges?: LuxRangeStoreView;
-  @state() private _dayConfig?: DayConfig;
-  @state() private _weatherConfig?: WeatherConfig;
   // _expanded keys: "area:<id>" | "floor:<id>" | "house". Seeded from
   // localStorage so a reload (or HA's panel rebuild on reconnect) restores which
   // rows were open; persisted on every change via _setExpanded.
   @state() private _expanded = new Set<string>(getExpandedScopes());
-  @state() private _error = "";
-  // True once the initial static load (actions, weather, workday, …) finishes,
-  // so the empty-state banners don't flash during loading.
-  @state() private _staticLoaded = false;
   // True once the first areas fetch settles, so the "No areas found" empty state
   // doesn't flash a false negative on a slow connection before areas arrive.
   @state() private _areasLoaded = false;
@@ -395,77 +370,12 @@ export class AmbienceScopesView extends LitElement {
   private _unsubArea?: () => void;
   private _unsubFloor?: () => void;
 
-  private _onExposedActionsChanged = async () => {
-    try {
-      const actions = await listExposedActions(this.hass);
-      if (!this.isConnected) return;
-      this._actions = actions;
-      await this._refreshSchemas(actions);
-    } catch {
-      // Silent — the user just saw a successful save; transient refetch failures
-      // are not worth surfacing here. The next manual reload will re-fetch.
-    }
-  };
-
-  private _onCategoriesChanged = async () => {
-    try {
-      const categories = await listCategories(this.hass);
-      if (!this.isConnected) return;
-      this._categories = categories;
-    } catch {
-      // Silent — same rationale as exposed-actions: a transient refetch failure
-      // after a successful save isn't worth surfacing; next reload re-fetches.
-    }
-  };
-
-  // Workday/Weather are configured in the settings modal, which stays mounted
-  // alongside this view — so without this refetch the conditions hint would keep
-  // showing (or stay hidden) until a full reload. Re-pull both configs on change
-  // so the hint reflects live state.
-  private _onConditionsChanged = async () => {
-    try {
-      const [dayConfig, weatherConfig] = await Promise.all([
-        getDayConfig(this.hass),
-        getWeatherConfig(this.hass),
-      ]);
-      if (!this.isConnected) return;
-      this._dayConfig = dayConfig;
-      this._weatherConfig = weatherConfig;
-    } catch {
-      // Silent — same rationale as the other change handlers.
-    }
-  };
-
-  /** Fetch the service schema for each exposed action. Failures per-service
-   *  are silently skipped (the summary just falls back to humanized ids). */
-  private async _refreshSchemas(actions: ExposedAction[]): Promise<void> {
-    const results = await Promise.all(
-      actions.map(async (a) => {
-        try {
-          const schema = await getServiceSchema(this.hass, a.id);
-          return [a.id, schema] as const;
-        } catch {
-          return [a.id, null] as const;
-        }
-      }),
-    );
-    if (!this.isConnected) return;
-    const next: Record<string, ServiceSchema> = {};
-    for (const [id, schema] of results) {
-      if (schema) next[id] = schema;
-    }
-    this._schemas = next;
-  }
-
   // 1s tick that drives the live pause countdown while any scope switch is off.
   private _tick?: ReturnType<typeof setInterval>;
 
   override async connectedCallback() {
     super.connectedCallback();
     this._conditionsHintDismissed = getConditionsHintDismissed();
-    window.addEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
-    window.addEventListener("ambience-categories-changed", this._onCategoriesChanged);
-    window.addEventListener("ambience-conditions-changed", this._onConditionsChanged);
     this._tick = setInterval(() => {
       for (const id of this._switchEntityIds.values()) {
         if (this.hass.states?.[id]?.state === "off") {
@@ -474,7 +384,7 @@ export class AmbienceScopesView extends LitElement {
         }
       }
     }, 1000);
-    await this._loadStatic();
+    await this._store.loadStatic();
     await Promise.all([
       this._refreshAreas(),
       this._refreshFloors(),
@@ -488,9 +398,6 @@ export class AmbienceScopesView extends LitElement {
     super.disconnectedCallback();
     if (this._tick) clearInterval(this._tick);
     this._tick = undefined;
-    window.removeEventListener("ambience-exposed-actions-changed", this._onExposedActionsChanged);
-    window.removeEventListener("ambience-categories-changed", this._onCategoriesChanged);
-    window.removeEventListener("ambience-conditions-changed", this._onConditionsChanged);
     this._unsubArea?.();
     this._unsubArea = undefined;
     this._unsubFloor?.();
@@ -498,33 +405,6 @@ export class AmbienceScopesView extends LitElement {
   }
 
   // --- loading -------------------------------------------------------------
-
-  private async _loadStatic() {
-    try {
-      const [conditions, actions, periods, luxRanges, dayConfig, weatherConfig, categories] =
-        await Promise.all([
-          listConditions(this.hass),
-          listExposedActions(this.hass),
-          listPeriods(this.hass),
-          listLuxRanges(this.hass),
-          getDayConfig(this.hass),
-          getWeatherConfig(this.hass),
-          listCategories(this.hass),
-        ]);
-      if (!this.isConnected) return;
-      this._conditions = conditions;
-      this._actions = actions;
-      this._periods = periods;
-      this._luxRanges = luxRanges;
-      this._dayConfig = dayConfig;
-      this._weatherConfig = weatherConfig;
-      this._categories = categories;
-      this._staticLoaded = true;
-      await this._refreshSchemas(actions);
-    } catch (e) {
-      this._error = (e as Error).message || String(e);
-    }
-  }
 
   private async _refreshAreas() {
     try {
@@ -549,7 +429,7 @@ export class AmbienceScopesView extends LitElement {
       this._areas = areas;
       this._areaConfigs = configs;
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._store.error = (e as Error).message || String(e);
     } finally {
       // The fetch has settled (success or failure) — replace the loading spinner
       // with the areas, the empty state, or (on error) the error banner. Skip
@@ -580,7 +460,7 @@ export class AmbienceScopesView extends LitElement {
       this._floors = floors;
       this._floorConfigs = configs;
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._store.error = (e as Error).message || String(e);
     }
   }
 
@@ -590,7 +470,7 @@ export class AmbienceScopesView extends LitElement {
       if (!this.isConnected) return;
       this._house = house;
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._store.error = (e as Error).message || String(e);
     }
   }
 
@@ -608,7 +488,7 @@ export class AmbienceScopesView extends LitElement {
         }),
       );
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._store.error = (e as Error).message || String(e);
     }
   }
 
@@ -685,7 +565,7 @@ export class AmbienceScopesView extends LitElement {
   private async _mutate(scope: Scope, next: ScopeConfig): Promise<boolean> {
     const prev = this._getConfig(scope);
     this._setConfig(scope, next);
-    this._error = "";
+    this._store.error = "";
     try {
       let result: { ok: true; config: ScopeConfig };
       if (scope.kind === "house") result = await saveHouse(this.hass, next);
@@ -695,7 +575,7 @@ export class AmbienceScopesView extends LitElement {
       return true;
     } catch (e) {
       if (prev) this._setConfig(scope, prev);
-      this._error = (e as Error).message || String(e);
+      this._store.error = (e as Error).message || String(e);
       return false;
     }
   }
@@ -864,18 +744,18 @@ export class AmbienceScopesView extends LitElement {
   /** Move the page-level error (set by `_mutate`) into the scene editor, where
    *  it shows in the open modal rather than behind it, and clear the banner. */
   private _takeError(): string {
-    const msg = this._error;
-    this._error = "";
+    const msg = this._store.error;
+    this._store.error = "";
     return msg;
   }
 
   /** Run an api call, surfacing any failure in `_error`. */
   private async _callApi(fn: () => Promise<unknown>) {
-    this._error = "";
+    this._store.error = "";
     try {
       await fn();
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._store.error = (e as Error).message || String(e);
     }
   }
 
@@ -899,7 +779,7 @@ export class AmbienceScopesView extends LitElement {
   }
 
   private _showTraces(scope: Scope, category: string) {
-    const g = this._categories.find((x) => x.id === category);
+    const g = this._store.categories.find((x) => x.id === category);
     this._viewingTraces = {
       scope: {
         scope_kind: scope.kind,
@@ -911,7 +791,7 @@ export class AmbienceScopesView extends LitElement {
   }
 
   private _showSimulator(scope: Scope, category: string) {
-    const g = this._categories.find((x) => x.id === category);
+    const g = this._store.categories.find((x) => x.id === category);
     this._viewingSimulator = {
       scope: {
         scope_kind: scope.kind,
@@ -928,7 +808,7 @@ export class AmbienceScopesView extends LitElement {
    *  single category is selected, otherwise the alphabetically-first category. */
   private _defaultCategoryId(): string {
     if (this.filterCategory !== "") return this.filterCategory;
-    const sorted = [...this._categories].sort((a, b) => a.name.localeCompare(b.name));
+    const sorted = [...this._store.categories].sort((a, b) => a.name.localeCompare(b.name));
     return sorted[0]?.id ?? "";
   }
 
@@ -948,7 +828,7 @@ export class AmbienceScopesView extends LitElement {
   /** Condition rows for the scene editor — sorted by `priority` (higher first). */
   private get _editorConditions(): ConditionInfo[] {
     if (!this._editing) return [];
-    return this._conditions.slice().sort((a, b) => b.priority - a.priority);
+    return this._store.conditions.slice().sort((a, b) => b.priority - a.priority);
   }
 
   /** Lowercased scene names taken in each (scope, category) pair, for the scene
@@ -1030,12 +910,12 @@ export class AmbienceScopesView extends LitElement {
 
   /** True when Weather has no entity picked — it can't be used as a condition. */
   private get _weatherUnconfigured(): boolean {
-    return !this._weatherConfig || this._weatherConfig.entity == null;
+    return !this._store.weatherConfig || this._store.weatherConfig.entity == null;
   }
 
   /** True when neither a Workday sensor nor calendar is picked. */
   private get _workdayUnconfigured(): boolean {
-    const day = this._dayConfig;
+    const day = this._store.dayConfig;
     return !day || (day.workday_sensor == null && day.workday_calendar == null);
   }
 
@@ -1101,8 +981,8 @@ export class AmbienceScopesView extends LitElement {
    *  - else an optional, dismissible hint to configure Workday/Weather.
    *  Sequenced: the optional hint only appears once at least one action exists. */
   private _renderBanners() {
-    if (!this._staticLoaded) return "";
-    if (this._actions.length === 0) {
+    if (!this._store.staticLoaded) return "";
+    if (this._store.actions.length === 0) {
       return html`
         <div class="banner banner-required" data-test="no-actions-banner" role="alert">
           <ha-icon class="banner-icon" icon="mdi:alert-circle-outline"></ha-icon>
@@ -1228,7 +1108,7 @@ export class AmbienceScopesView extends LitElement {
         </p>
       </li>`;
     }
-    if (!this._error && this._areas.length === 0) {
+    if (!this._store.error && this._areas.length === 0) {
       return html`<li>
         <p class="empty">
           ${localize(this.hass, "ui.no_areas", "No areas found in Home Assistant.")}
@@ -1240,7 +1120,7 @@ export class AmbienceScopesView extends LitElement {
 
   override render() {
     return html`
-      ${this._error ? html`<p class="error">${this._error}</p>` : ""}
+      ${this._store.error ? html`<p class="error">${this._store.error}</p>` : ""}
       ${this._renderBanners()}
       <ul>
         ${repeat(
@@ -1264,13 +1144,13 @@ export class AmbienceScopesView extends LitElement {
         .saveError=${this._sceneEditorError}
         .scene=${this._editingScene}
         .conditions=${this._editorConditions}
-        .periods=${this._periods}
-        .luxRanges=${this._luxRanges}
-        .dayConfig=${this._dayConfig}
-        .weatherConfig=${this._weatherConfig}
-        .availableActions=${this._actions}
-        .schemas=${this._schemas}
-        .categories=${this._categories}
+        .periods=${this._store.periods}
+        .luxRanges=${this._store.luxRanges}
+        .dayConfig=${this._store.dayConfig}
+        .weatherConfig=${this._store.weatherConfig}
+        .availableActions=${this._store.actions}
+        .schemas=${this._store.schemas}
+        .categories=${this._store.categories}
         @save-scene=${this._saveScene}
         @cancel-scene=${this._cancelScene}
       ></ambience-scene-editor>
@@ -1378,13 +1258,13 @@ export class AmbienceScopesView extends LitElement {
               <div class="scope-body">
                 <ambience-scenes-list
                   .scenes=${cfg.scenes}
-                  .periods=${this._periods}
-                  .luxRanges=${this._luxRanges}
-                  .weatherConfig=${this._weatherConfig}
-                  .conditions=${this._conditions}
-                  .availableActions=${this._actions}
-                  .schemas=${this._schemas}
-                  .categories=${this._categories}
+                  .periods=${this._store.periods}
+                  .luxRanges=${this._store.luxRanges}
+                  .weatherConfig=${this._store.weatherConfig}
+                  .conditions=${this._store.conditions}
+                  .availableActions=${this._store.actions}
+                  .schemas=${this._store.schemas}
+                  .categories=${this._store.categories}
                   .filterCategory=${this.filterCategory}
                   .hass=${this.hass}
                   @add-scene=${(e: CustomEvent<{ category?: string }>) =>
@@ -1477,7 +1357,7 @@ export class AmbienceScopesView extends LitElement {
         await setScopeEnabled(this.hass, scope, !enabled);
         await this._reloadScope(scope);
       } catch (err) {
-        this._error = (err as Error).message || String(err);
+        this._store.error = (err as Error).message || String(err);
       }
     };
     if (customElements.get("ha-switch")) {
@@ -1510,7 +1390,7 @@ export class AmbienceScopesView extends LitElement {
       if (!this.isConnected) return;
       this._setConfig(scope, cfg);
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._store.error = (e as Error).message || String(e);
     }
   }
 }

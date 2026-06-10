@@ -15,6 +15,9 @@ import {
   listLuxRanges,
   listPeriods,
   listSwitches,
+  saveArea,
+  saveFloor,
+  saveHouse,
 } from "../api.js";
 import { scopeKey } from "../entities-for-scope.js";
 import type {
@@ -372,6 +375,33 @@ export class ScopeStore implements ReactiveController {
       const next = new Map(this.floorConfigs);
       next.set(scope.id, config);
       this.floorConfigs = next;
+    }
+  }
+
+  /**
+   * Apply `next` optimistically, persist, reconcile with the stored config.
+   * Not serialised per scope: overlapping saves could revert to a stale
+   * intermediate config on error. In practice the UI serialises mutations
+   * (one modal / one interaction at a time), so this is acceptable.
+   *
+   * @returns `true` if the save succeeded, `false` if it errored (in which case
+   *   the optimistic update has been reverted and `error` set).
+   */
+  async mutate(scope: Scope, next: ScopeConfig): Promise<boolean> {
+    const prev = this.getConfig(scope);
+    this.setConfig(scope, next);
+    this.error = "";
+    try {
+      let result: { ok: true; config: ScopeConfig };
+      if (scope.kind === "house") result = await saveHouse(this._hass, next);
+      else if (scope.kind === "area") result = await saveArea(this._hass, scope.id, next);
+      else result = await saveFloor(this._hass, scope.id, next);
+      this.setConfig(scope, normalizeConfig(result.config));
+      return true;
+    } catch (e) {
+      if (prev) this.setConfig(scope, prev);
+      this.error = (e as Error).message || String(e);
+      return false;
     }
   }
 

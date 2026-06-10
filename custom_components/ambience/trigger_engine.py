@@ -223,6 +223,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         conditions = self._conditions()
         dirty: set[tuple[str, str | None, str]] = set()
         gated: list[PredKey] = []
+        # One clock read for the whole batch: every live-flip tenure stamp in
+        # this recompute shares it, avoiding skew between predicates evaluated
+        # together.
+        now = dt_util.utcnow()
         for key in fired:
             predicate = self._predicate_for(key)
             if predicate is None:
@@ -236,7 +240,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             if key in self._index.durations:
                 gated.append(key)
                 if snap is not None:
-                    self._update_tenure(key, condition, predicate, snap, seed=seed)
+                    self._update_tenure(key, condition, predicate, snap, now=now, seed=seed)
             if snap is None:
                 new_value = False
             else:
@@ -261,7 +265,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         return dirty
 
     def _update_tenure(
-        self, key: PredKey, condition: Any, predicate: Any, snap: Any, *, seed: bool
+        self, key: PredKey, condition: Any, predicate: Any, snap: Any, *, now: datetime, seed: bool
     ) -> None:
         """Record instant-truth flips for `key`'s duration gates into tenure.
 
@@ -279,7 +283,6 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         except Exception as exc:  # noqa: BLE001 — mirror the match-failure policy
             _LOGGER.warning("ambience: condition %r gate_states failed: %s", key[3], exc)
             return
-        now = dt_util.utcnow()
         for gate_key, (instant, anchor) in readings.items():
             if not instant:
                 tenure.pop(gate_key, None)

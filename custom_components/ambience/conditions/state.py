@@ -10,7 +10,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from ..triggers import EMPTY, DurationGate, TriggerSpec
+from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
     UNAVAILABLE,
     dur_seconds,
@@ -265,18 +265,18 @@ class StateCondition:
         since = last_updated if atom.get("attribute") else last_changed
         return (snap.now - since).total_seconds() >= seconds
 
-    def gate_states(self, predicate: Any, snap: StateSnapshot) -> dict[str, tuple[bool, datetime]]:
+    def gate_states(self, predicate: Any, snap: StateSnapshot) -> dict[str, GateReading]:
         """For each `for:`-bearing atom in the tree, report `(instant_truth,
         anchor)`: the un-`for`ed verdict and the timestamp the engine should
         seed tenure from at startup/reload (a provable lower bound — the atom's
         last state/attribute change). Atoms without a `for:` are omitted; the
         engine only tracks tenure for gates it will re-check."""
-        out: dict[str, tuple[bool, datetime]] = {}
+        out: dict[str, GateReading] = {}
         self._collect_gate_states(predicate, snap, out)
         return out
 
     def _collect_gate_states(
-        self, expr: Any, snap: StateSnapshot, out: dict[str, tuple[bool, datetime]]
+        self, expr: Any, snap: StateSnapshot, out: dict[str, GateReading]
     ) -> None:
         if not isinstance(expr, dict):
             return

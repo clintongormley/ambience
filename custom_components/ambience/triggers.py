@@ -9,6 +9,13 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import datetime
+
+# A condition's `gate_states()` reading for one duration gate: the gate's
+# *instant* (un-`for`ed) truth right now, and an `anchor` timestamp the engine
+# seeds tenure from at startup/reload (a provable lower bound on how long the
+# instant test has held — typically the entity's last state change).
+GateReading = tuple[bool, datetime]
 
 
 @dataclass(frozen=True)

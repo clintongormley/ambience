@@ -19,7 +19,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from ..triggers import EMPTY, DurationGate, TriggerSpec
+from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import (
     UNAVAILABLE,
     dur_seconds,
@@ -176,9 +176,7 @@ class OccupancyCondition:
         quant = predicate.get("quant") or "any"
         return f"{quant} of {len(sensors)} sensors {state_word}"
 
-    def gate_states(
-        self, predicate: Any, snapshot: OccupancySnapshot
-    ) -> dict[str, tuple[bool, datetime]]:
+    def gate_states(self, predicate: Any, snapshot: OccupancySnapshot) -> dict[str, GateReading]:
         """`{gate_key: (instant_truth, anchor)}` for a constraining `for:`
         predicate, else empty. `instant_truth` is the PRE-negate combined
         verdict (negate wraps the gate, not the tenure). The anchor (startup

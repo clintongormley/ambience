@@ -10,7 +10,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from ..triggers import EMPTY, DurationGate, TriggerSpec
+from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
 from ._common import UNAVAILABLE, dur_seconds, fmt_duration, tenure_held, validate_for
 
 _HOME = "home"
@@ -187,9 +187,7 @@ class PeopleCondition:
         place = "home" if where == _HOME else f"in {where}"
         return f"{self._quant_word(quant)} {'not ' if negate else ''}{place}"
 
-    def gate_states(
-        self, predicate: Any, snapshot: PeopleSnapshot
-    ) -> dict[str, tuple[bool, datetime]]:
+    def gate_states(self, predicate: Any, snapshot: PeopleSnapshot) -> dict[str, GateReading]:
         """`{gate_key: (instant_truth, anchor)}` for a `for:`-bearing predicate,
         else empty. The anchor (startup/reload tenure seed) is the most recent
         person state change among the referenced persons — a provable lower

@@ -194,9 +194,7 @@ class OccupancyCondition:
         quant = predicate.get("quant") or "any"
         verdicts = (self._holds(e, snapshot, want_on=want_on, seconds=0.0) for e in sensors)
         result = kleene_all(verdicts) if quant == "all" else kleene_any(verdicts)
-        changes = [
-            cur[1] for e in sensors if (cur := snapshot.sensors.get(e)) is not None
-        ]
+        changes = [cur[1] for e in sensors if (cur := snapshot.sensors.get(e)) is not None]
         anchor = max(changes) if changes else snapshot.now
         return {self._gate_key(predicate): (result is True, anchor)}
 

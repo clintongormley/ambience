@@ -130,9 +130,7 @@ class PeopleCondition:
             # survives a person moving between two away zones, etc.
             if not self._quantified(who, quant, where, negate, 0.0, snapshot):
                 return False
-            return tenure_held(
-                snapshot.tenure, self._gate_key(predicate), snapshot.now, seconds
-            )
+            return tenure_held(snapshot.tenure, self._gate_key(predicate), snapshot.now, seconds)
         return self._quantified(who, quant, where, negate, seconds, snapshot)
 
     def _quantified(
@@ -208,9 +206,7 @@ class PeopleCondition:
         negate = bool(predicate.get("negate"))
         instant = self._quantified(who, quant, where, negate, 0.0, snapshot)
         person_ids = list(who) if who else list(snapshot.persons)
-        changes = [
-            cur[1] for pid in person_ids if (cur := snapshot.persons.get(pid)) is not None
-        ]
+        changes = [cur[1] for pid in person_ids if (cur := snapshot.persons.get(pid)) is not None]
         anchor = max(changes) if changes else snapshot.now
         return {self._gate_key(predicate): (instant, anchor)}
 

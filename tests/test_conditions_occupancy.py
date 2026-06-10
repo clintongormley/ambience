@@ -326,8 +326,14 @@ def test_trigger_deps_watches_sensors_and_durations() -> None:
     assert spec.entities == frozenset({"binary_sensor.a"})
     # Single predicate-level gate; entity named because there's one sensor.
     assert spec.duration_gates == frozenset(
-        {DurationGate(key=m._gate_key(pred), seconds=300.0, label=m._gate_label(pred),
-                      entity_id="binary_sensor.a")}
+        {
+            DurationGate(
+                key=m._gate_key(pred),
+                seconds=300.0,
+                label=m._gate_label(pred),
+                entity_id="binary_sensor.a",
+            )
+        }
     )
 
 
@@ -476,8 +482,12 @@ def test_occupancy_gate_states_pre_negate_instant_and_anchor() -> None:
 
     m = OccupancyCondition()
     now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
-    pred = {"sensors": ["binary_sensor.a", "binary_sensor.b"], "quant": "any",
-            "for": {"m": 20}, "negate": True}
+    pred = {
+        "sensors": ["binary_sensor.a", "binary_sensor.b"],
+        "quant": "any",
+        "for": {"m": 20},
+        "negate": True,
+    }
     key = m._gate_key(pred)
     snap = _snap(
         {
@@ -507,8 +517,11 @@ def test_occupancy_unobservable_stays_unobservable_under_tenure() -> None:
     now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
     pred = {"sensors": ["binary_sensor.a"], "for": {"m": 5}, "negate": True}
     key = m._gate_key(pred)
-    snap = _snap({"binary_sensor.a": ("unavailable", now)}, now=now,
-                 tenure={key: now - timedelta(minutes=10)})
+    snap = _snap(
+        {"binary_sensor.a": ("unavailable", now)},
+        now=now,
+        tenure={key: now - timedelta(minutes=10)},
+    )
     assert m.matches(pred, snap) is False
 
 

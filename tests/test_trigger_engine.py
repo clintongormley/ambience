@@ -17,7 +17,6 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 from custom_components.ambience.conditions._common import tenure_held
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
-    DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_LAST_APPLIED,
     DATA_STORE,
@@ -883,7 +882,9 @@ async def test_recompute_records_tenure_on_flip_and_clears_on_drop(hass) -> None
     key = ("area", "a", 0, "x")
     now = dt_util.utcnow()
     # Instant true → tenure recorded at ~now (live flip, not seeded).
-    engine._recompute({key}, {"x": _GateSnap(value="on", changed=now - timedelta(minutes=5), now=now)})
+    engine._recompute(
+        {key}, {"x": _GateSnap(value="on", changed=now - timedelta(minutes=5), now=now)}
+    )
     since = engine.tenure["x"]["gate:binary_sensor.x"]
     assert abs((dt_util.utcnow() - since).total_seconds()) < 2  # ~now, NOT 5m ago
     # Instant false → tenure dropped.
@@ -909,9 +910,7 @@ async def test_recompute_keeps_existing_since_across_reseeds(hass) -> None:
     first_anchor = now - timedelta(minutes=5)
     engine._recompute({key}, {"x": _GateSnap(value="on", changed=first_anchor, now=now)}, seed=True)
     # A later seed with a newer anchor must NOT overwrite an existing entry.
-    engine._recompute(
-        {key}, {"x": _GateSnap(value="on", changed=now, now=now)}, seed=True
-    )
+    engine._recompute({key}, {"x": _GateSnap(value="on", changed=now, now=now)}, seed=True)
     assert engine.tenure["x"]["gate:binary_sensor.x"] == first_anchor
     engine._teardown()  # cancel the recheck timer _recompute armed
 
@@ -945,7 +944,9 @@ async def test_zone_hop_does_not_reset_tenure_end_to_end(hass) -> None:
     from custom_components.ambience.conditions.people import PeopleCondition
 
     pred = {"quant": "nobody", "where": "home", "for": {"h": 0, "m": 30, "s": 0}}
-    scopes = [("area", "a", {"scenes": [{"when": {"people": pred}, "category": "g", "actions": []}]})]
+    scopes = [
+        ("area", "a", {"scenes": [{"when": {"people": pred}, "category": "g", "actions": []}]})
+    ]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
         DATA_CONDITIONS: {"people": PeopleCondition(hass)},

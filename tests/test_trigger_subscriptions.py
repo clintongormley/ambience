@@ -47,6 +47,7 @@ def _gate(entity_id: str, seconds: float) -> DurationGate:
         key=f"gate:{entity_id}", seconds=seconds, label=entity_id, entity_id=entity_id
     )
 
+
 # ---------------------------------------------------------------------------
 # Shared test doubles (from test_trigger_engine.py patterns)
 # ---------------------------------------------------------------------------
@@ -1268,7 +1269,9 @@ async def test_schedule_for_rechecks_arms_remaining_tenure(hass) -> None:
 
     captured: list[float] = []
     with patch.object(
-        _ts_mod, "async_call_later", side_effect=lambda _h, s, _cb: captured.append(s) or MagicMock()
+        _ts_mod,
+        "async_call_later",
+        side_effect=lambda _h, s, _cb: captured.append(s) or MagicMock(),
     ):
         engine._schedule_for_rechecks([key])
     assert len(captured) == 1 and abs(captured[0] - 40.0) < 1.0
@@ -1302,7 +1305,9 @@ async def test_schedule_for_rechecks_skips_matured_and_untracked_gates(hass) -> 
 
     captured: list[float] = []
     with patch.object(
-        _ts_mod, "async_call_later", side_effect=lambda _h, s, _cb: captured.append(s) or MagicMock()
+        _ts_mod,
+        "async_call_later",
+        side_effect=lambda _h, s, _cb: captured.append(s) or MagicMock(),
     ):
         engine._schedule_for_rechecks([matured, untracked])
     assert captured == []
@@ -1326,7 +1331,9 @@ async def test_attribute_churn_does_not_move_the_recheck(hass) -> None:
 
     captured: list[float] = []
     with patch.object(
-        _ts_mod, "async_call_later", side_effect=lambda _h, s, _cb: captured.append(s) or MagicMock()
+        _ts_mod,
+        "async_call_later",
+        side_effect=lambda _h, s, _cb: captured.append(s) or MagicMock(),
     ):
         # Re-arming after an attribute churn (tenure unchanged) → same ~40s.
         engine._schedule_for_rechecks([key])

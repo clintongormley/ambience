@@ -30,7 +30,6 @@ from homeassistant.util import dt as dt_util
 from .conditions._common import fmt_duration
 from .conditions.time_of_day import ANCHOR_ATTR
 from .const import DATA_EXPOSED_ACTIONS, DATA_SWITCHES, DOMAIN
-from .triggers import DurationGate
 from .service import (
     _scope_enabled,
     _switch_state,
@@ -50,6 +49,7 @@ from .trace import (
     tracing_active,
 )
 from .trigger_index import PredKey
+from .triggers import DurationGate
 
 # How often wall-clock-dependent (has_time) predicates are recomputed.
 _HAS_TIME_INTERVAL = timedelta(seconds=60)

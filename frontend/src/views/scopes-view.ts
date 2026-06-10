@@ -932,7 +932,7 @@ export class AmbienceScopesView extends LitElement {
       <ambience-traces-modal
         ?open=${this._viewingTraces !== null}
         .hass=${this.hass}
-        .periods=${this._periods}
+        .periods=${this._store.periods}
         .scope=${
           this._viewingTraces?.scope ?? {
             scope_kind: "house",
@@ -960,7 +960,7 @@ export class AmbienceScopesView extends LitElement {
       <ambience-simulator-modal
         ?open=${this._viewingSimulator !== null}
         .hass=${this.hass}
-        .periods=${this._periods}
+        .periods=${this._store.periods}
         .scope=${
           this._viewingSimulator?.scope ?? {
             scope_kind: "house",

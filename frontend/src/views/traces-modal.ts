@@ -10,7 +10,7 @@ import {
 } from "../api.js";
 import { localize } from "../i18n.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
-import type { BufferedUnit, ServiceSchema } from "../types.js";
+import type { BufferedUnit, PeriodStoreView, ServiceSchema } from "../types.js";
 import { ModalDismissController } from "./modal-shell.js";
 
 /**
@@ -76,6 +76,9 @@ export class AmbienceTracesModal extends LitElement {
   ];
 
   @property({ attribute: false }) hass!: HassConnection;
+  // Custom time-of-day periods, so a custom period id in a trace detail
+  // resolves to its configured label rather than a humanized id.
+  @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) scope!: { scope_kind: string; scope_id: string | null };
   @property() category = "";
   @property() categoryName: string | null = null;
@@ -259,6 +262,7 @@ export class AmbienceTracesModal extends LitElement {
                         () => this._toggle(key),
                         this.hass,
                         this._schemas,
+                        this.periods?.custom ?? {},
                       );
                     })}</div>`
           }

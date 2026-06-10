@@ -308,9 +308,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         if delay <= 0:
             # 0 = never auto-on: drop any timer armed under a previous delay,
             # or the switch still turns itself on at the old scheduled time.
-            if self._timer is not None:
-                self._timer.cancel()
-                self._timer = None
+            self._cancel_timer()
             return
         off_at_iso = self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id)
         if not off_at_iso:

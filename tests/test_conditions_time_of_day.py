@@ -391,18 +391,10 @@ def test_validate_predicate_rejects_missing_period() -> None:
         _condition().validate_predicate({"period": "nonexistent"})
 
 
-@pytest.mark.parametrize(
-    "pred",
-    [
-        _range(_time(10, 0), _time(10, 0)),
-        _range(_sun("sunset"), _sun("sunset")),
-    ],
-)
-def test_validate_predicate_rejects_identical_endpoints(pred: Any) -> None:
-    """from == to is ambiguous (full day in time_of_day, empty arc in sun
-    azimuth) — reject it at save time rather than guessing."""
-    with pytest.raises(ValueError, match="identical"):
-        _condition().validate_predicate(pred)
+def test_validate_predicate_accepts_identical_endpoints() -> None:
+    """from == to is harmless (matches all day at runtime) and must stay
+    valid — rejecting it would block saving scopes with such a config."""
+    _condition().validate_predicate(_range(_time(10, 0), _time(10, 0)))
 
 
 def test_validate_predicate_rejects_bool_clock() -> None:

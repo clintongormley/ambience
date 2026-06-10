@@ -346,9 +346,12 @@ async def async_apply_scene(
 
     # Mirrors trigger_engine._resolve_and_apply but deliberately simpler: the
     # manual path always executes matched categories (no switch-off/no-op/last-applied
-    # gating), so the two are intentionally not unified. It DOES share the
-    # engine's per-unit lock, so a manual apply can't interleave with an
-    # in-flight engine apply of the same unit.
+    # gating), so the two are intentionally not unified. It shares the engine's
+    # per-unit lock, so the two never interleave action *dispatch* on one unit;
+    # the manual snapshot is taken before the lock, so a concurrent engine apply
+    # that resolves a newer winner could still be followed by this stale apply —
+    # acceptable for a user-initiated one-shot, and strictly better than the
+    # pre-lock free-for-all.
     async def _apply_category(category_id: str) -> UnitTrace | None:
         async with apply_lock(hass, scope_kind, scope_id, category_id):
             plan = await async_resolve_with_snapshots(
@@ -404,7 +407,9 @@ async def async_apply_scene(
             )
         return None
 
-    gids = [category] if category is not None else sorted(category_ids(cfg))
+    # category_ids already returns categories in scene order (deterministic);
+    # the engine apply path consumes it raw, so don't re-sort here.
+    gids = [category] if category is not None else category_ids(cfg)
     traces = await gather_unit_traces(_apply_category(cid) for cid in gids)
     if traces:
         emit_trace(hass, TraceEvent(TriggerCause(kind=CauseKind.MANUAL), traces))

@@ -69,22 +69,20 @@ export class AmbienceStateExprAtom extends LitElement {
   @state() private _knownStates: string[] = [];
   @state() private _knownAttributeValues: string[] = [];
 
-  // Bumped per fetch pass so two rapid value changes can't land their
-  // responses out of order (the same hazard _entitySeq guards in _setEntity).
-  private _fetchSeq = 0;
-
   override async updated(changed: Map<string, unknown>): Promise<void> {
     if (!changed.has("value")) return;
     const prev = changed.get("value") as StateAtom | undefined;
-    // Capture once: `this.value` may move on while we await below.
+    // Capture the entity/attribute this pass fetched for; discard the response
+    // only if `this.value` has since moved to a *different* entity/attribute.
+    // (A global per-pass counter would wrongly drop an in-flight fetch when an
+    // unrelated edit — op, NOT, `for` — bumped it for the same entity.)
     const { entity_id: curId, attribute: attr } = this.value;
-    const seq = ++this._fetchSeq;
     if (curId && curId !== prev?.entity_id && this.hass) {
       try {
         const states = (await getKnownStates(this.hass, curId)).states;
-        if (seq === this._fetchSeq) this._knownStates = states;
+        if (this.value.entity_id === curId) this._knownStates = states;
       } catch {
-        if (seq === this._fetchSeq) this._knownStates = [];
+        if (this.value.entity_id === curId) this._knownStates = [];
       }
     }
     // Attribute values are fetched from the backend (single source of truth with
@@ -93,9 +91,13 @@ export class AmbienceStateExprAtom extends LitElement {
       if (curId && attr && this.hass) {
         try {
           const values = (await getKnownAttributeValues(this.hass, curId, attr)).values;
-          if (seq === this._fetchSeq) this._knownAttributeValues = values;
+          if (this.value.entity_id === curId && this.value.attribute === attr) {
+            this._knownAttributeValues = values;
+          }
         } catch {
-          if (seq === this._fetchSeq) this._knownAttributeValues = [];
+          if (this.value.entity_id === curId && this.value.attribute === attr) {
+            this._knownAttributeValues = [];
+          }
         }
       } else if (this._knownAttributeValues.length) {
         this._knownAttributeValues = [];

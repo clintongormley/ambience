@@ -451,11 +451,10 @@ def test_sector_label_fallback_returns_N() -> None:
     assert result == "N"
 
 
-def test_validate_predicate_rejects_identical_azimuth_range_endpoints() -> None:
-    """from == to is a half-open empty arc that never matches — reject at save
-    time (time_of_day rejects the same mistake, where it meant "full day")."""
-    with pytest.raises(ValueError, match="identical"):
-        SunCondition().validate_predicate({"azimuth": {"ranges": [{"from": 90, "to": 90}]}})
+def test_validate_predicate_accepts_identical_azimuth_range_endpoints() -> None:
+    """from == to (an empty arc) is left valid — harmless at runtime, and
+    rejecting it would block saving a scope holding such a config."""
+    SunCondition().validate_predicate({"azimuth": {"ranges": [{"from": 90, "to": 90}]}})
 
 
 async def test_snapshot_treats_non_finite_angles_as_unobservable(hass: HomeAssistant) -> None:

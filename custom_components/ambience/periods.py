@@ -102,6 +102,6 @@ class PeriodStore(NamedDefStore):
             raise ValueError(f"period definition needs 'from' and 'to': {defn!r}")
         _validate_endpoint(defn["from"])
         _validate_endpoint(defn["to"])
-        if defn["from"] == defn["to"]:
-            # from == to would silently mean "all day" at match time.
-            raise ValueError("period endpoints must not be identical")
+        # from == to (matches all day at runtime) is left valid: rejecting it
+        # would block saving the periods store whenever any period holds such a
+        # previously-valid definition.

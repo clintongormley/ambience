@@ -156,6 +156,42 @@ describe("API: getServiceSchema", () => {
   });
 });
 
+describe("API: floor + house wrappers", () => {
+  test("listFloors calls ambience/floors/list", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await listFloors({ callWS } as any);
+    expect(sent[0]).toEqual({ type: "ambience/floors/list" });
+  });
+
+  test("getFloor passes floor_id", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await getFloor({ callWS } as any, "upstairs");
+    expect(sent[0]).toEqual({ type: "ambience/floor/get", floor_id: "upstairs" });
+  });
+
+  test("saveFloor sends config", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await saveFloor({ callWS } as any, "upstairs", { scenes: [] });
+    expect(sent[0]).toEqual({
+      type: "ambience/floor/save",
+      floor_id: "upstairs",
+      config: { scenes: [] },
+    });
+  });
+
+  test("getHouse calls ambience/house/get", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await getHouse({ callWS } as any);
+    expect(sent[0]).toEqual({ type: "ambience/house/get" });
+  });
+
+  test("saveHouse sends config", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await saveHouse({ callWS } as any, { scenes: [] });
+    expect(sent[0]).toEqual({ type: "ambience/house/save", config: { scenes: [] } });
+  });
+});
+
 describe("API: applyScenes", () => {
   test("applyScenes without categoryId sends no category_id field", async () => {
     const { callWS, sent } = makeFakeHass();

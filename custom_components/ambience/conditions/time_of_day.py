@@ -228,11 +228,11 @@ class TimeOfDayCondition:
             items = [predicate]
         else:
             raise ValueError(f"invalid time_of_day predicate: {predicate!r}")
+        # Note: from == to is left valid — it matches all day at runtime (the
+        # `end <= start` wrap in _in_range), harmless, and rejecting it here
+        # would block saving any scope holding such a previously-valid config.
         synthetic = _synthetic_snapshot()
         for item in items:
-            # from == to would silently mean "all day" at match time.
-            if isinstance(item, dict) and "from" in item and item.get("from") == item.get("to"):
-                raise ValueError(f"time_of_day range endpoints must not be identical: {item!r}")
             self._match_one(item, synthetic)
 
     def describe(self, snapshot: TimeOfDaySnapshot, predicate: Any = None) -> str | None:

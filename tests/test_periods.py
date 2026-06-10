@@ -377,12 +377,12 @@ def test_validate_definition_rejects_bool_clock() -> None:
         )
 
 
-def test_validate_definition_rejects_identical_endpoints() -> None:
-    """from == to would silently mean "all day" at match time — reject it."""
-    with pytest.raises(ValueError, match="identical"):
-        PeriodStore(_FakeStorage()).validate_definition(
-            {
-                "from": {"kind": "time", "hh": 10, "mm": 0},
-                "to": {"kind": "time", "hh": 10, "mm": 0},
-            }
-        )
+def test_validate_definition_accepts_identical_endpoints() -> None:
+    """from == to (matches all day at runtime) is left valid — rejecting it
+    would block saving the periods store for an existing such definition."""
+    PeriodStore(_FakeStorage()).validate_definition(
+        {
+            "from": {"kind": "time", "hh": 10, "mm": 0},
+            "to": {"kind": "time", "hh": 10, "mm": 0},
+        }
+    )

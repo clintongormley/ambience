@@ -1177,8 +1177,15 @@ async def test_apply_scene_no_action_winner_no_op_without_trace(hass: HomeAssist
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
         DATA_LAST_APPLIED: {("area", "a", "lighting"): 5},
     }
-    # Trace logger left at NOTSET → tracing inactive → active=False branch.
-    await async_apply_scene(hass, "area", "a")
+    # Pin tracing inactive (no DATA_TRACE_BUFFER, logger below DEBUG) so active=False
+    # regardless of any ancestor logger level — mirrors the no-match-no-trace test.
+    trace_logger = logging.getLogger("custom_components.ambience.trace")
+    original_level = trace_logger.level
+    trace_logger.setLevel(logging.WARNING)
+    try:
+        await async_apply_scene(hass, "area", "a")
+    finally:
+        trace_logger.setLevel(original_level)
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 5
 
 

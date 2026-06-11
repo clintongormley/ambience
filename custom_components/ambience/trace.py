@@ -216,7 +216,12 @@ def _explanation_to_dict(explanation: Explanation | None) -> dict[str, Any] | No
                 "evaluated": scene.evaluated,
                 "disabled": scene.disabled,
                 "predicates": [
-                    {"condition_key": p.condition_key, "passed": p.passed, "detail": p.detail}
+                    {
+                        "condition_key": p.condition_key,
+                        "passed": p.passed,
+                        "detail": p.detail,
+                        "entity_ids": list(p.entity_ids),
+                    }
                     for p in scene.predicates
                 ],
             }

@@ -120,6 +120,70 @@ function clickableEntity(hass: HassLike | undefined, entityId: string): Template
   return entityLink(entityId, entityDisplayName(hass, entityId));
 }
 
+// Conditions whose `describe()` renders each referenced entity's friendly name
+// as a named subject ("Zone Shower: on ✓"), where wrapping that name in a
+// more-info link is meaningful. Ambient conditions are deliberately excluded:
+// their detail is prose or a localized label (e.g. sun → "Sun 12° elevation",
+// weather → "Partly cloudy"), so a name match there would be coincidental — the
+// word "Sun" happens to equal sun.sun's friendly name. The backend still
+// reports entity_ids for those predicates (a truthful, general fact); this set
+// is the presentation policy for where inline links read as intentional.
+const LINKABLE_DETAIL_CONDITIONS: ReadonlySet<string> = new Set([
+  "occupancy",
+  "people",
+  "lux",
+  "state",
+]);
+
+// A predicate's detail string with each referenced entity's name turned into an
+// inline more-info link. The backend bakes the friendly name into the detail
+// ("Zone Shower: on ✓"); we resolve each entity_id to that same name and wrap
+// its occurrence. Longest names first so a short name ("Hall") can't claim a
+// slice of a longer one ("Hall Light"); each entity links at most once. A name
+// that isn't present (entity renamed/removed since the trace) is simply skipped
+// — the text renders verbatim, so links degrade to plain text, never break.
+function renderDetailWithLinks(
+  hass: HassLike | undefined,
+  conditionKey: string,
+  detail: string,
+  periods: CustomPeriods,
+  entityIds: string[] | undefined,
+): TemplateResult | string {
+  const text = formatDetail(hass, conditionKey, detail, periods);
+  if (!entityIds?.length || !LINKABLE_DETAIL_CONDITIONS.has(conditionKey)) return text;
+
+  const hits: Array<{ start: number; end: number; id: string; name: string }> = [];
+  // entityDisplayName falls back to the (non-empty) entity_id, so a name is
+  // never blank — a blank one would match (and wrap) everywhere.
+  const named = entityIds
+    .map((id) => ({ id, name: entityDisplayName(hass, id) }))
+    .sort((a, b) => b.name.length - a.name.length);
+  for (const { id, name } of named) {
+    for (let from = 0; from <= text.length; ) {
+      const start = text.indexOf(name, from);
+      if (start === -1) break;
+      const end = start + name.length;
+      if (!hits.some((h) => start < h.end && h.start < end)) {
+        hits.push({ start, end, id, name });
+        break;
+      }
+      from = start + 1;
+    }
+  }
+  if (hits.length === 0) return text;
+  hits.sort((a, b) => a.start - b.start);
+
+  const parts: Array<TemplateResult | string> = [];
+  let cursor = 0;
+  for (const h of hits) {
+    if (h.start > cursor) parts.push(text.slice(cursor, h.start));
+    parts.push(entityLink(h.id, h.name));
+    cursor = h.end;
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor));
+  return html`${parts}`;
+}
+
 // Causes whose label is a fixed phrase — the `detail` (a timestamp, an interval,
 // "for", …) is internal and not worth showing to the user.
 const CAUSE_LABELS_FIXED: Record<string, string> = {
@@ -309,7 +373,7 @@ function renderScene(
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
           ${p.passed ? "✓" : "✗"} ${conditionLabel(hass, p.condition_key)}${
             p.detail
-              ? html` <span class="dim">[${formatDetail(hass, p.condition_key, p.detail, periods)}]</span>`
+              ? html` <span class="dim">[${renderDetailWithLinks(hass, p.condition_key, p.detail, periods, p.entity_ids)}]</span>`
               : nothing
           }
         </div>`,

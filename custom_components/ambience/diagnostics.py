@@ -42,10 +42,20 @@ _DETAIL_REDACTED_CONDITIONS = {"people", "template"}
 
 def _redact_predicate(predicate: dict[str, Any]) -> dict[str, Any]:
     """Blank a people/template predicate's free-text detail (it renders each
-    person's location / the rendered template)."""
-    if predicate.get("condition_key") in _DETAIL_REDACTED_CONDITIONS and predicate.get("detail"):
-        return {**predicate, "detail": REDACTED}
-    return predicate
+    person's location / the rendered template), and scrub presence-revealing
+    entity_ids (person./device_tracker.) from the predicate's `entity_ids` —
+    the same identifiers _redact_trace removes from causes. A people predicate
+    carries person.* ids there; any predicate may reference a device_tracker."""
+    out = predicate
+    if out.get("condition_key") in _DETAIL_REDACTED_CONDITIONS and out.get("detail"):
+        out = {**out, "detail": REDACTED}
+    eids = out.get("entity_ids")
+    if eids and any(e.startswith(_PRESENCE_PREFIXES) for e in eids):
+        out = {
+            **out,
+            "entity_ids": [REDACTED if e.startswith(_PRESENCE_PREFIXES) else e for e in eids],
+        }
+    return out
 
 
 def _redact_trace(trace: dict[str, Any]) -> dict[str, Any]:

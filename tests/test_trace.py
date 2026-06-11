@@ -456,7 +456,9 @@ def test_buffered_unit_to_dict_acted_with_explanation():
         "matched": True,
         "evaluated": True,
         "disabled": False,
-        "predicates": [{"condition_key": "tod", "passed": True, "detail": "evening"}],
+        "predicates": [
+            {"condition_key": "tod", "passed": True, "detail": "evening", "entity_ids": []}
+        ],
     }
 
 
@@ -493,6 +495,34 @@ def test_explanation_to_dict_includes_disabled():
     )
     result = _explanation_to_dict(explanation)
     assert result["scenes"][0]["disabled"] is True
+
+
+def test_explanation_to_dict_serialises_predicate_entity_ids():
+    """Each predicate's entity_ids are emitted as a JSON list so the trace UI
+    can link them to more-info; an empty tuple becomes an empty list."""
+    explanation = Explanation(
+        winner_index=0,
+        scenes=[
+            SceneEval(
+                0,
+                "shower",
+                [
+                    PredicateResult(
+                        "occupancy", True, "Zone Shower: on ✓", ("binary_sensor.zone_1",)
+                    ),
+                    PredicateResult("tod", True, "evening"),
+                ],
+                True,
+                True,
+            )
+        ],
+    )
+    result = _explanation_to_dict(explanation)
+    preds = result["scenes"][0]["predicates"]
+    assert preds[0]["entity_ids"] == ["binary_sensor.zone_1"]
+    assert preds[1]["entity_ids"] == []
+    # Still JSON-serializable.
+    assert json.loads(json.dumps(result)) == result
 
 
 # ---------------------------------------------------------------------------

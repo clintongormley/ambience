@@ -10,7 +10,10 @@ from custom_components.ambience.engine import evaluate_explained, resolve
 
 
 class FakeCondition:
-    """Matches when predicate == snapshot; describe echoes the snapshot."""
+    """Matches when predicate == snapshot; describe echoes the snapshot.
+
+    Deliberately omits the optional `trigger_deps` — tracing must tolerate that
+    (see test_condition_without_trigger_deps_yields_empty_entity_ids)."""
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -83,6 +86,101 @@ def test_detail_is_scoped_to_the_scene_predicate_not_the_shared_snapshot() -> No
     detail = explanation.scenes[0].predicates[0].detail
     # Only the referenced sensor — no "1 of 3 active (Lounge, Bathroom)" pool dump.
     assert detail == "Bedroom 1 Bed Presence: off ✗"
+
+
+def test_records_entity_ids_from_trigger_deps_when_describing() -> None:
+    """Each described predicate carries the entity_ids its condition references,
+    sourced from the condition's own trigger_deps — so the trace can link them."""
+    from datetime import UTC, datetime
+
+    from custom_components.ambience.conditions.occupancy import (
+        OccupancyCondition,
+        OccupancySnapshot,
+    )
+
+    changed = datetime(2026, 5, 25, 11, 0, tzinfo=UTC)
+    snap = OccupancySnapshot(
+        now=datetime(2026, 5, 25, 12, 0, tzinfo=UTC),
+        sensors={
+            "binary_sensor.bed": ("off", changed),
+            "binary_sensor.bath": ("on", changed),
+        },
+        names={"binary_sensor.bed": "Bed", "binary_sensor.bath": "Bath"},
+    )
+    scenes = [
+        {
+            "name": "Two sensors",
+            "when": {"occupancy": {"sensors": ["binary_sensor.bath", "binary_sensor.bed"]}},
+        }
+    ]
+    explanation = evaluate_explained(
+        scenes, {"occupancy": snap}, {"occupancy": OccupancyCondition()}, describe=True
+    )
+    pred = explanation.scenes[0].predicates[0]
+    # Sorted for deterministic output (trigger_deps returns an unordered set).
+    assert pred.entity_ids == ("binary_sensor.bath", "binary_sensor.bed")
+
+
+def test_condition_without_trigger_deps_yields_empty_entity_ids() -> None:
+    """`trigger_deps` is an optional condition method (see protocols.py); a
+    condition that omits it must trace as having no linkable entities, not crash."""
+
+    class NoDeps:
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return predicate == snapshot
+
+        def describe(self, snapshot: Any, predicate: Any = None) -> str | None:
+            return f"value={snapshot}"
+
+    scenes = [{"name": "a", "when": {"mode": "day"}}]
+    explanation = evaluate_explained(scenes, {"mode": "day"}, {"mode": NoDeps()}, describe=True)
+    pred = explanation.scenes[0].predicates[0]
+    assert pred.passed is True
+    assert pred.entity_ids == ()
+
+
+def test_skips_trigger_deps_lookup_when_predicate_has_no_detail() -> None:
+    """A predicate with no detail has nothing to link, so the (sometimes
+    expensive — e.g. a template re-render) trigger_deps lookup is skipped even
+    while tracing. The always-on trace path makes this matter in production."""
+    from custom_components.ambience.triggers import TriggerSpec
+
+    calls: list[Any] = []
+
+    class NoDetail:
+        def matches(self, predicate: Any, snapshot: Any) -> bool:
+            return True
+
+        def describe(self, snapshot: Any, predicate: Any = None) -> str | None:
+            return None  # like template/script — never rendered
+
+        def trigger_deps(self, predicate: Any) -> TriggerSpec:
+            calls.append(predicate)  # would be the expensive call
+            return TriggerSpec(entities=frozenset({"sensor.x"}))
+
+    scenes = [{"name": "a", "when": {"tmpl": {"template": "{{ true }}"}}}]
+    explanation = evaluate_explained(
+        scenes, {"tmpl": object()}, {"tmpl": NoDetail()}, describe=True
+    )
+    pred = explanation.scenes[0].predicates[0]
+    assert pred.entity_ids == ()
+    assert calls == []  # trigger_deps never invoked — nothing to link
+
+
+def test_entity_ids_empty_when_not_describing(conditions: dict[str, FakeCondition]) -> None:
+    """entity_ids is trace-only; the hot path (describe=False) leaves it empty
+    and never calls trigger_deps."""
+    scenes = [{"name": "a", "when": {"mode": "day"}}]
+    explanation = evaluate_explained(scenes, {"mode": "day"}, conditions)
+    assert explanation.scenes[0].predicates[0].entity_ids == ()
+
+
+def test_unavailable_predicate_has_no_entity_ids(conditions: dict[str, FakeCondition]) -> None:
+    scenes = [{"name": "a", "when": {"absent": "x"}}]
+    explanation = evaluate_explained(scenes, {"absent": None}, conditions, describe=True)
+    pred = explanation.scenes[0].predicates[0]
+    assert pred.detail == "unavailable"
+    assert pred.entity_ids == ()
 
 
 def test_short_circuits_predicates_and_scenes(conditions: dict[str, FakeCondition]) -> None:

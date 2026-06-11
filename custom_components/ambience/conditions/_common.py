@@ -10,7 +10,8 @@ fix-it-in-one-place drift that crept in when each condition carried its own.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from datetime import datetime
 from typing import Any
 
 # States that mean "no real value" — treated as a miss by every condition that
@@ -64,6 +65,19 @@ def dur_seconds(dur: Any) -> float:
             return 0.0
 
     return _num("h") * 3600 + _num("m") * 60 + _num("s")
+
+
+def tenure_held(tenure: Mapping[str, datetime], key: str, now: datetime, seconds: float) -> bool:
+    """Whether the duration gate ``key``'s instant predicate has held true for at
+    least ``seconds``, per the engine-recorded tenure map.
+
+    ``tenure`` maps a gate fingerprint to the time its instant test last became
+    true; an absent key means the gate has never been observed true (so it has
+    held for zero time). Unlike the legacy exact-state clock, this survives
+    state flips that keep the instant test true (a person hopping between two
+    away zones, an entity flipping between two listed states)."""
+    since = tenure.get(key)
+    return since is not None and (now - since).total_seconds() >= seconds
 
 
 def fmt_duration(seconds: float) -> str:

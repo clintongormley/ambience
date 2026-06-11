@@ -49,6 +49,7 @@ from .trace import (
     tracing_active,
 )
 from .trigger_index import PredKey
+from .triggers import DurationGate
 
 # How often wall-clock-dependent (has_time) predicates are recomputed.
 _HAS_TIME_INTERVAL = timedelta(seconds=60)
@@ -165,8 +166,11 @@ class TriggerSubscriptionsMixin:
             old=old_state.state if old_state else None,
             new=new_state.state if new_state else None,
         )
+        # Re-arming the `for:` rechecks is the evaluation's job now: async_evaluate
+        # refreshes snapshots, updates gate tenure, then _recompute arms the
+        # timers off that tenure. Arming here (pre-evaluation) would use stale
+        # tenure and double-arm.
         self._fire(set(preds), cause)
-        self._schedule_for_rechecks(preds)
 
     def _make_keys_handler(
         self, preds: frozenset[PredKey], cause: TriggerCause | None = None
@@ -253,106 +257,88 @@ class TriggerSubscriptionsMixin:
             )
 
     def _schedule_for_rechecks(self, preds: Iterable[PredKey]) -> None:
-        """For predicates with a `for:` duration, (re)schedule a recheck so a
-        condition that only becomes true after the delay is still caught.
+        """(Re)arm one timer per *pending* `for:` gate of each predicate.
 
-        A predicate may carry several `(entity, seconds)` rechecks; each gets its
-        own timer, keyed by its pair so a fired timer can drop only its own handle
-        (siblings mark distinct future flip points and must stay armed).
+        A gate whose instant test is currently true (so the engine has recorded
+        its tenure) but hasn't yet held for `seconds` will flip the predicate at
+        `since + seconds` with no further event — so wake it exactly then. Each
+        gate gets its own timer, keyed by `(gate_key, seconds)` so a fired timer
+        drops only its own handle (siblings mark distinct future flips).
 
-        Each recheck is armed for the time still *remaining* until the entity will
-        have held its current value for `seconds`, clocked from its `last_updated`.
-        On a live state change that is the full `seconds` (the value just changed,
-        so nothing has elapsed); on a startup/reload resync of an entity already
-        in-state it is the shortened remainder, so a switch that has been on for
-        1h59m still fires its "on for 2h" rule a minute later rather than a fresh
-        2h from the reload. A recheck whose window has already passed is skipped —
-        the resync's immediate evaluation already covered that case, and a timer
-        for a moment in the past would only fire instantly for nothing."""
+        Gates that are NOT in tenure (instant test currently false) need no
+        timer: they re-arm event-driven via the flip that records their tenure.
+        A gate already matured (delay <= 0) needs none either: the evaluation
+        that armed this pass already saw it true. Cancels and replaces any prior
+        handles per predicate, so calling this is idempotent."""
         now = dt_util.utcnow()
         for key in preds:
-            durations = self._index.durations.get(key)
-            if not durations:
+            gates = self._index.durations.get(key)
+            if not gates:
                 continue
             for cancel in self._for_handles.pop(key, {}).values():
                 cancel()
+            tenure = self._tenure.get(key[3], {})
             handles: dict[tuple[str, float], Callable[[], None]] = {}
-            for entity, seconds in durations:
-                delay = self._for_recheck_delay(entity, seconds, now)
-                if delay is None:
-                    continue
-                handles[(entity, seconds)] = async_call_later(
-                    self._hass, delay, self._make_for_recheck(key, entity, seconds)
+            for gate in gates:
+                since = tenure.get(gate.key)
+                if since is None:
+                    continue  # instant test not currently true → no pending flip
+                delay = gate.seconds - (now - since).total_seconds()
+                if delay <= 0:
+                    continue  # already matured; this evaluation covered it
+                handles[(gate.key, gate.seconds)] = async_call_later(
+                    self._hass, delay, self._make_for_recheck(key, gate)
                 )
             if handles:
                 self._for_handles[key] = handles
 
     def rearm_scope_rechecks(self, scope_kind: str, scope_id: str | None) -> None:
-        """(Re)arm just this scope's `for:` rechecks. Used by paths that resume a
-        scope without the full teardown/rebuild of a reload — a switch off->on
-        resync, and scope re-enable. A duration timer is a one-shot: if it matured
-        while the scope was inactive it fired as a no-op and was consumed, so
-        without this a "switch on for 2h" rule whose timer elapsed during the
-        inactive window would never fire again. `_schedule_for_rechecks` cancels
-        and replaces any still-live handles, so calling this is idempotent."""
+        """(Re)arm just this scope's pending `for:` rechecks. Used by paths that
+        resume a scope without the full teardown/rebuild of a reload — a switch
+        off->on resync, and scope re-enable. A duration timer is a one-shot: if
+        it matured while the scope was inactive it fired as a no-op and was
+        consumed, so without this a still-pending gate whose timer elapsed during
+        the inactive window would never re-arm. `_schedule_for_rechecks` reads the
+        live tenure and cancels/replaces any still-live handles, so calling this
+        is idempotent."""
         self._schedule_for_rechecks(
             key for key in self._index.durations if (key[0], key[1]) == (scope_kind, scope_id)
         )
 
-    def _for_recheck_delay(self, entity: str, seconds: float, now: Any) -> float | None:
-        """Seconds until `entity` will have held its current value for `seconds`.
-
-        State-clocked conditions (state-mode atoms, people, occupancy) measure
-        from `last_changed`; attribute-mode atoms from `last_updated`. The
-        durations spec doesn't carry the clock source, so arm for the earliest
-        still-pending window — the recheck handler re-arms for any later one,
-        and an early fire is just a no-op evaluation. (Clocking only off
-        `last_updated` meant every attribute-only update — e.g. GPS churn on a
-        person — pushed the timer out, firing a "home for 30m" rule late.)
-        None when both windows have passed (don't arm a timer for the past).
-        An unknown entity has no clock to measure from, so it falls back to
-        the full delay — the same as a fresh state change would."""
-        state = self._hass.states.get(entity)
-        if state is None:
-            return seconds
-        pending = [
-            remaining
-            for clock in (state.last_changed, state.last_updated)
-            if (remaining := seconds - (now - clock).total_seconds()) > 0
-        ]
-        return min(pending) if pending else None
-
-    def _make_for_recheck(self, key: PredKey, entity: str, seconds: float) -> Callable[[Any], None]:
+    def _make_for_recheck(self, key: PredKey, gate: DurationGate) -> Callable[[Any], None]:
         @callback
         def _recheck(_now: Any) -> None:
             if not self._running:
-                return  # fired after teardown — don't evaluate or re-arm
-            # Drop only this timer's handle; sibling rechecks for the same
-            # predicate (other entities/durations) stay tracked and cancellable.
+                return  # fired after teardown — don't evaluate
+            # Drop only this timer's handle; sibling gate rechecks for the same
+            # predicate stay tracked and cancellable.
             handles = self._for_handles.get(key)
             if handles is not None:
-                handles.pop((entity, seconds), None)
+                handles.pop((gate.key, gate.seconds), None)
                 if not handles:
                     self._for_handles.pop(key, None)
-            # Name the entity, the state it has held, and for how long, so the
-            # trace reads e.g. "binary_sensor.motion off for 5m".
-            state = self._hass.states.get(entity)
-            held = state.state if state is not None else STATE_UNKNOWN
-            cause = TriggerCause(
-                kind=CauseKind.DURATION,
-                entity_id=entity,
-                new=held,
-                detail=fmt_duration(seconds),
-            )
+            # Name what is being waited on. A single-entity gate names the entity
+            # and the state it has held ("binary_sensor.motion off for 5m"); a
+            # multi-entity gate has no single state to read, so it names the
+            # gate's label ("nobody home for 30m").
+            if gate.entity_id is not None:
+                state = self._hass.states.get(gate.entity_id)
+                held = state.state if state is not None else STATE_UNKNOWN
+                cause = TriggerCause(
+                    kind=CauseKind.DURATION,
+                    entity_id=gate.entity_id,
+                    new=held,
+                    detail=fmt_duration(gate.seconds),
+                )
+            else:
+                cause = TriggerCause(
+                    kind=CauseKind.DURATION,
+                    new=gate.label,
+                    detail=fmt_duration(gate.seconds),
+                )
+            # Re-arming happens inside the evaluation this fires (it refreshes
+            # snapshots, updates tenure, then _recompute re-arms) — not here.
             self._fire({key}, cause)
-            # Re-arm: the consumed delay may have targeted the earlier of the
-            # two clock windows (see _for_recheck_delay) — pick up any later
-            # still-pending one. Only while the entity exists: a deleted entity
-            # falls back to the full delay, so an unconditional re-arm would
-            # fire-and-re-arm forever (a state-change event re-arms it if it
-            # comes back).
-            if self._hass.states.get(entity) is not None:
-                self._schedule_for_rechecks([key])
 
         return _recheck
 

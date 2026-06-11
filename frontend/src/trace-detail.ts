@@ -147,10 +147,15 @@ function rawOrUnknown(v: string | null): string {
 
 export function formatCause(c: TraceCause): string {
   if (c.kind === "entity") return `${c.entity_id} ${rawOrUnknown(c.old)} → ${rawOrUnknown(c.new)}`;
-  // A `for:` duration recheck: name the entity, the state it has held, and how
-  // long (the detail), e.g. "binary_sensor.motion off for 5m".
-  if (c.kind === "duration")
-    return `${c.entity_id} ${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`;
+  // A `for:` duration recheck: a single-entity gate names the entity, the state
+  // it has held, and how long ("binary_sensor.motion off for 5m"); a
+  // multi-entity gate (entity_id null) carries its label in `new`
+  // ("nobody home for 30m").
+  if (c.kind === "duration") {
+    return c.entity_id
+      ? `${c.entity_id} ${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`
+      : `${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`;
+  }
   const fixed = CAUSE_LABELS_FIXED[c.kind];
   if (fixed) return fixed;
   const name = CAUSE_LABELS_WITH_DETAIL[c.kind] ?? humanizeId(c.kind);
@@ -170,8 +175,10 @@ export function renderCause(c: TraceCause): TemplateResult {
 
 // Cause kinds that carry a raw entity_id + old/new values worth showing
 // separately — the only kinds whose friendly label differs from their raw form.
+// A multi-entity duration cause (entity_id null) has no raw entity to show, so
+// it reuses formatCause's label form.
 function causeHasRawValues(c: TraceCause): boolean {
-  return c.kind === "entity" || c.kind === "duration";
+  return c.kind === "entity" || (c.kind === "duration" && !!c.entity_id);
 }
 
 // Format an entity/duration cause's old/new state values via HA's formatter

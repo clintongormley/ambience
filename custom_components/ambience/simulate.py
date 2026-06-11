@@ -114,6 +114,11 @@ def _build_override_states(hass: HomeAssistant, world: SimulatedWorld) -> dict[s
         # as having held this state that long; absent (0s) it reads just-changed
         # at the simulated `now`. Set both timestamps: state-mode `for:` atoms
         # clock off last_changed, attribute-mode atoms off last_updated.
+        # Simulated snapshots carry NO engine tenure, so conditions fall back to
+        # this legacy exact-state clock — which is exactly what these backdated
+        # timestamps drive. (A consequence: multi-entity tenure scenarios — a
+        # person hopping away zones, a sensor handover — can't be expressed in
+        # the simulator, which approximates by backdating each entity's clock.)
         # Clamp negatives (never backdate into the future) and guard an absurd
         # duration that would underflow datetime — that just reads as "forever".
         seconds = max(0.0, dur_seconds(spec.get("for")))

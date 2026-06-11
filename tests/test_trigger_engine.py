@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
@@ -12,6 +14,7 @@ from unittest.mock import patch
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
+from custom_components.ambience.conditions._common import tenure_held
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -24,7 +27,67 @@ from custom_components.ambience.const import (
 from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.trace import TraceEvent
 from custom_components.ambience.trigger_engine import AutoTriggerEngine
-from custom_components.ambience.triggers import EMPTY, TriggerSpec
+from custom_components.ambience.triggers import EMPTY, DurationGate, TriggerSpec
+
+
+@dataclass(frozen=True)
+class _GateSnap:
+    """A gate-aware fake snapshot: an instant value + an anchor (last change),
+    plus the engine-injected tenure. Mirrors the real condition snapshots so
+    `attach_tenure`/`dataclasses.replace` work against it."""
+
+    value: str | None
+    changed: Any = None
+    now: Any = None
+    tenure: Mapping[str, datetime] | None = None
+
+
+class GateCondition:
+    """Fake with one predicate-level `for:` gate over a single entity. Matches
+    when the entity's state equals the predicate; gates off engine tenure when
+    attached, else (legacy) matches the instant value."""
+
+    def __init__(self, entity_id: str, seconds: float) -> None:
+        self._entity_id = entity_id
+        self._seconds = seconds
+        self._key = f"gate:{entity_id}"
+
+    def trigger_deps(self, predicate: Any) -> TriggerSpec:
+        return TriggerSpec(
+            entities=frozenset({self._entity_id}),
+            duration_gates=frozenset(
+                {
+                    DurationGate(
+                        key=self._key,
+                        seconds=self._seconds,
+                        label=f"{self._entity_id} is {predicate}",
+                        entity_id=self._entity_id,
+                    )
+                }
+            ),
+        )
+
+    async def snapshot(self, hass: Any, **_: Any) -> _GateSnap:
+        state = hass.states.get(self._entity_id)
+        return _GateSnap(
+            value=state.state if state else None,
+            changed=state.last_changed if state else None,
+            now=dt_util.utcnow(),
+        )
+
+    def gate_states(self, predicate: Any, snap: _GateSnap) -> dict[str, tuple[bool, Any]]:
+        anchor = snap.changed if snap.changed is not None else snap.now
+        return {self._key: (snap.value == predicate, anchor)}
+
+    def matches(self, predicate: Any, snap: _GateSnap) -> bool:
+        if snap.value != predicate:
+            return False
+        if snap.tenure is None:
+            return True  # legacy: no engine tenure → instant value match
+        return tenure_held(snap.tenure, self._key, snap.now, self._seconds)
+
+    def describe(self, snap: _GateSnap, predicate: Any = None) -> str | None:
+        return snap.value
 
 
 class FakeStore:
@@ -775,27 +838,10 @@ async def test_sun_event_scheduled_when_sun_available(hass) -> None:
 async def test_for_recheck_scheduled_on_state_change(hass) -> None:
     hass.states.async_set("binary_sensor.x", "off")
 
-    class ForCondition:
-        def trigger_deps(self, predicate):
-            return TriggerSpec(
-                entities=frozenset({"binary_sensor.x"}),
-                entity_durations=frozenset({("binary_sensor.x", 600.0)}),
-            )
-
-        async def snapshot(self, hass, **_):
-            state = hass.states.get("binary_sensor.x")
-            return state.state if state else None
-
-        def matches(self, predicate, snapshot):
-            return snapshot == "on"
-
-        def describe(self, snapshot, predicate=None):
-            return snapshot
-
     scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_CONDITIONS: {"x": ForCondition()},
+        DATA_CONDITIONS: {"x": GateCondition("binary_sensor.x", 600.0)},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -807,6 +853,190 @@ async def test_for_recheck_scheduled_on_state_change(hass) -> None:
     await hass.async_block_till_done()
     key = ("area", "a", 0, "x")
     assert key in engine._for_handles  # a +600s recheck was scheduled for the for: predicate
+    engine._teardown()
+
+
+# ---------------------------------------------------------------------------
+# Predicate tenure: the engine records instant-flips, seeds from anchors at
+# startup, prunes dead gates in place, and injects a live tenure view into the
+# snapshot cache so `for:` clocks off predicate tenure.
+# ---------------------------------------------------------------------------
+
+
+def _gate_engine(hass, seconds: float = 600.0) -> AutoTriggerEngine:
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"x": GateCondition("binary_sensor.x", seconds)},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    return engine
+
+
+async def test_recompute_records_tenure_on_flip_and_clears_on_drop(hass) -> None:
+    engine = _gate_engine(hass)
+    key = ("area", "a", 0, "x")
+    now = dt_util.utcnow()
+    # Instant true → tenure recorded at ~now (live flip, not seeded).
+    engine._recompute(
+        {key}, {"x": _GateSnap(value="on", changed=now - timedelta(minutes=5), now=now)}
+    )
+    since = engine.tenure["x"]["gate:binary_sensor.x"]
+    assert abs((dt_util.utcnow() - since).total_seconds()) < 2  # ~now, NOT 5m ago
+    # Instant false → tenure dropped.
+    engine._recompute({key}, {"x": _GateSnap(value="off", changed=now, now=now)})
+    assert "gate:binary_sensor.x" not in engine.tenure["x"]
+
+
+async def test_recompute_seed_mode_uses_anchor(hass) -> None:
+    engine = _gate_engine(hass)
+    key = ("area", "a", 0, "x")
+    now = dt_util.utcnow()
+    anchor = now - timedelta(minutes=5)
+    engine._recompute({key}, {"x": _GateSnap(value="on", changed=anchor, now=now)}, seed=True)
+    # Seeded from the anchor (last_changed), not now.
+    assert engine.tenure["x"]["gate:binary_sensor.x"] == anchor
+    engine._teardown()  # cancel the recheck timer _recompute armed
+
+
+async def test_recompute_keeps_existing_since_across_reseeds(hass) -> None:
+    engine = _gate_engine(hass)
+    key = ("area", "a", 0, "x")
+    now = dt_util.utcnow()
+    first_anchor = now - timedelta(minutes=5)
+    engine._recompute({key}, {"x": _GateSnap(value="on", changed=first_anchor, now=now)}, seed=True)
+    # A later seed with a newer anchor must NOT overwrite an existing entry.
+    engine._recompute({key}, {"x": _GateSnap(value="on", changed=now, now=now)}, seed=True)
+    assert engine.tenure["x"]["gate:binary_sensor.x"] == first_anchor
+    engine._teardown()  # cancel the recheck timer _recompute armed
+
+
+async def test_rebuild_prunes_dead_gate_keys_in_place(hass) -> None:
+    engine = _gate_engine(hass)
+    tenure_obj = engine.tenure.setdefault("x", {})
+    tenure_obj["gate:binary_sensor.x"] = dt_util.utcnow()
+    tenure_obj["gate:stale"] = dt_util.utcnow()  # no longer in the index
+    engine.async_rebuild()
+    # Same dict object (in-place prune so attached snapshots keep their ref)...
+    assert engine.tenure["x"] is tenure_obj
+    # ...with the dead fingerprint dropped, the live one kept.
+    assert "gate:stale" not in tenure_obj
+    assert "gate:binary_sensor.x" in tenure_obj
+
+
+async def test_refresh_snapshots_attaches_live_tenure_view(hass) -> None:
+    hass.states.async_set("binary_sensor.x", "on")
+    engine = _gate_engine(hass)
+    await engine._refresh_snapshots({"x"})
+    snap = engine._snapshots["x"]
+    # The snapshot's tenure IS the engine's inner dict (shared by reference).
+    assert snap.tenure is engine.tenure["x"]
+
+
+async def test_zone_hop_does_not_reset_tenure_end_to_end(hass) -> None:
+    """End-to-end with the real PeopleCondition: a person moving zone.a → zone.b
+    while a 'nobody home for 30m' window is open must NOT reset the tenure — the
+    recorded `since` is unchanged across the two evaluations (the headline bug)."""
+    from custom_components.ambience.conditions.people import PeopleCondition
+
+    pred = {"quant": "nobody", "where": "home", "for": {"h": 0, "m": 30, "s": 0}}
+    scopes = [
+        ("area", "a", {"scenes": [{"when": {"people": pred}, "category": "g", "actions": []}]})
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"people": PeopleCondition(hass)},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine.async_subscribe()
+    key = ("area", "a", 0, "people")
+    gate_key = PeopleCondition._gate_key(pred)
+
+    # Bob is in zone.a (away from home).
+    hass.states.async_set("person.bob", "ZoneA", {"in_zones": ["zone.a"]})
+    await engine.async_evaluate({key})
+    since_before = engine.tenure["people"][gate_key]
+
+    # Bob hops zone.a → zone.b (still not home). 'nobody home' held throughout.
+    hass.states.async_set("person.bob", "ZoneB", {"in_zones": ["zone.b"]})
+    await engine.async_evaluate({key})
+    since_after = engine.tenure["people"][gate_key]
+
+    assert since_after == since_before  # clock did NOT reset on the zone hop
+    engine._teardown()
+
+
+async def test_recompute_gated_key_with_none_snapshot_skips_tenure(hass) -> None:
+    """A gated predicate whose snapshot failed (None) must not touch tenure, but
+    still counts toward the recheck re-arm pass."""
+    engine = _gate_engine(hass)
+    key = ("area", "a", 0, "x")
+    dirty = engine._recompute({key}, {"x": None})
+    assert "x" not in engine.tenure or engine.tenure["x"] == {}
+    # None snapshot → predicate evaluates False; first-seen so it flips.
+    assert dirty == {("area", "a", "g")}
+    engine._teardown()
+
+
+async def test_update_tenure_skips_condition_without_gate_states(hass) -> None:
+    """A duration-gated condition lacking gate_states (defensive) is skipped."""
+
+    class _NoGateStates:
+        def trigger_deps(self, predicate):
+            return TriggerSpec(
+                entities=frozenset({"binary_sensor.x"}),
+                duration_gates=frozenset({DurationGate(key="k", seconds=60.0, label="x")}),
+            )
+
+        def matches(self, predicate, snap):
+            return True
+
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"x": _NoGateStates()},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    key = ("area", "a", 0, "x")
+    engine._recompute({key}, {"x": "on"})  # must not raise; tenure stays empty
+    assert engine.tenure.get("x", {}) == {}
+    engine._teardown()
+
+
+async def test_update_tenure_swallows_gate_states_error(hass) -> None:
+    """A gate_states that raises is logged and skipped (mirrors the match policy)."""
+
+    class _BoomGateStates(GateCondition):
+        def gate_states(self, predicate, snap):
+            raise RuntimeError("boom")
+
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": []}]})]
+    cond = _BoomGateStates("binary_sensor.x", 60.0)
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"x": cond},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    key = ("area", "a", 0, "x")
+    now = dt_util.utcnow()
+    engine._recompute({key}, {"x": _GateSnap(value="on", changed=now, now=now)})
+    assert engine.tenure.get("x", {}) == {}  # nothing recorded
     engine._teardown()
 
 

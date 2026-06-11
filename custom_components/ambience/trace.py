@@ -37,9 +37,10 @@ class CauseKind(StrEnum):
     ENTITY = "entity"
     CLOCK = "clock"
     SUN = "sun"
-    # A `for:` duration recheck fired: an entity has now held its state long
-    # enough for a duration condition. Carries the entity, its held state, and
-    # the human duration.
+    # A `for:` duration recheck fired: a predicate's instant test has now held
+    # long enough. A single-entity gate carries the entity, its held state, and
+    # the human duration; a multi-entity gate has no single state to read, so it
+    # carries the gate's label in `new` and leaves `entity_id` None.
     DURATION = "duration"
     # A periodic clock sweep re-rendered a wall-clock-dependent template (no
     # discrete boundary to schedule, no single entity to name).
@@ -89,6 +90,10 @@ class TriggerCause:
         if self.kind == CauseKind.SUN:
             return f"sun {self.detail}"
         if self.kind == CauseKind.DURATION:
+            # A single-entity gate names the entity and its held state; a
+            # multi-entity gate (entity_id None) carries its label in `new`.
+            if self.entity_id is None:
+                return f"{self.new} for {self.detail}"
             return f"{self.entity_id} {self.new} for {self.detail}"
         if self.kind == CauseKind.HAS_TIME:
             return "periodic time check"

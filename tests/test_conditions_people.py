@@ -8,6 +8,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.ambience.conditions.people import PeopleCondition, PeopleSnapshot
+from custom_components.ambience.triggers import DurationGate
 
 
 def _snap(
@@ -16,6 +17,7 @@ def _snap(
     names: dict[str, str] | None = None,
     zone_labels: dict[str, str] | None = None,
     in_zones: dict[str, list[str] | None] | None = None,
+    tenure: dict[str, datetime] | None = None,
 ) -> PeopleSnapshot:
     return PeopleSnapshot(
         now=now or datetime(2026, 5, 25, 12, 0, tzinfo=UTC),
@@ -23,6 +25,7 @@ def _snap(
         names=names or {},
         zone_labels=zone_labels or {},
         in_zones=in_zones or {},
+        tenure=tenure,
     )
 
 
@@ -600,14 +603,34 @@ def test_trigger_deps_explicit_who_with_for() -> None:
     pred = {"who": ["person.alice", "person.bob"], "for": {"h": 0, "m": 5, "s": 0}}
     spec = m.trigger_deps(pred)
     assert spec.entities == frozenset({"person.alice", "person.bob"})
-    assert spec.entity_durations == frozenset({("person.alice", 300.0), ("person.bob", 300.0)})
+    # One predicate-level gate (entity_id None for a multi-person who), so the
+    # tenure clock spans the whole quantified test rather than per-person.
+    assert spec.duration_gates == frozenset(
+        {
+            DurationGate(
+                key=m._gate_key(pred),
+                seconds=300.0,
+                label=m._gate_label(pred),
+                entity_id=None,
+            )
+        }
+    )
+
+
+def test_trigger_deps_single_who_with_for_names_the_entity() -> None:
+    m = PeopleCondition()
+    pred = {"who": ["person.alice"], "for": {"m": 5}}
+    spec = m.trigger_deps(pred)
+    gate = next(iter(spec.duration_gates))
+    assert gate.entity_id == "person.alice"
+    assert gate.key == m._gate_key(pred)
 
 
 def test_trigger_deps_explicit_who_no_for() -> None:
     m = PeopleCondition()
     spec = m.trigger_deps({"who": ["person.alice"], "quant": "nobody"})
     assert spec.entities == frozenset({"person.alice"})
-    assert spec.entity_durations == frozenset()
+    assert spec.duration_gates == frozenset()
 
 
 def test_trigger_deps_none_is_empty() -> None:
@@ -623,13 +646,154 @@ async def test_trigger_deps_empty_who_watches_all_persons(hass: HomeAssistant) -
     m = PeopleCondition(hass=hass)
     spec = m.trigger_deps({"quant": "everyone"})  # who absent → all current persons
     assert spec.entities == frozenset({"person.alice", "person.bob"})
-    assert spec.entity_durations == frozenset()
+    assert spec.duration_gates == frozenset()
 
 
 def test_all_person_ids_returns_empty_without_hass() -> None:
     # Line 146: _all_person_ids() early-exits with [] when hass is None.
     m = PeopleCondition(hass=None)
     assert m._all_person_ids() == []
+
+
+# ── predicate tenure (engine-tracked `for:` clock) ─────────────────────────────
+
+
+def test_nobody_home_for_does_not_reset_on_zone_hop_with_tenure() -> None:
+    """Headline bug: a person moving zone A → zone B keeps the 'nobody home'
+    clock running, because 'not home' held continuously."""
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"quant": "nobody", "where": "home", "for": {"m": 30}}
+    key = m._gate_key(pred)
+    # Bob hopped to ZoneB 1m ago (fresh last_changed) but 'nobody home' held 30m.
+    snap = _snap(
+        persons={"person.bob": ("ZoneB", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": ["zone.b"]},
+        tenure={key: now - timedelta(minutes=30)},
+    )
+    assert m.matches(pred, snap) is True
+    # Without tenure (the legacy clock) the same snapshot resets → miss.
+    snap_legacy = _snap(
+        persons={"person.bob": ("ZoneB", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": ["zone.b"]},
+        tenure=None,
+    )
+    assert m.matches(pred, snap_legacy) is False
+
+
+def test_people_tenure_requires_instant_truth() -> None:
+    """A stale tenure entry must not win once the instant test stops holding:
+    someone is home now, so 'nobody home' is instantly false regardless of an
+    old tenure timestamp."""
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"quant": "nobody", "where": "home", "for": {"m": 30}}
+    key = m._gate_key(pred)
+    snap = _snap(
+        persons={"person.bob": ("home", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": ["zone.home"]},
+        tenure={key: now - timedelta(minutes=60)},  # stale
+    )
+    assert m.matches(pred, snap) is False
+
+
+def test_people_tenure_not_yet_held() -> None:
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"quant": "nobody", "where": "home", "for": {"m": 30}}
+    key = m._gate_key(pred)
+    snap = _snap(
+        persons={"person.bob": ("away", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": []},
+        tenure={key: now - timedelta(minutes=5)},  # only 5m, need 30m
+    )
+    assert m.matches(pred, snap) is False
+
+
+def test_people_gate_key_distinguishes_quant_where_negate_who() -> None:
+    m = PeopleCondition()
+    base = {"quant": "nobody", "where": "home", "for": {"m": 30}}
+    assert m._gate_key(base) != m._gate_key({**base, "quant": "any"})
+    assert m._gate_key(base) != m._gate_key({**base, "where": "zone.work"})
+    assert m._gate_key(base) != m._gate_key({**base, "negate": True})
+    assert m._gate_key(base) != m._gate_key({**base, "who": ["person.bob"]})
+
+
+def test_people_gate_states_instant_and_anchor() -> None:
+    """gate_states: pre-`for` truth, anchor = the most recent person change."""
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"quant": "nobody", "where": "home", "for": {"m": 30}}
+    key = m._gate_key(pred)
+    snap = _snap(
+        persons={
+            "person.a": ("away", now - timedelta(minutes=50)),
+            "person.b": ("away", now - timedelta(minutes=10)),
+        },
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.a": [], "person.b": []},
+    )
+    gs = m.gate_states(pred, snap)
+    # Instant 'nobody home' is true; anchor is the latest person change (10m ago).
+    assert gs == {key: (True, now - timedelta(minutes=10))}
+
+
+def test_people_gate_states_empty_persons_anchor_is_now() -> None:
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"quant": "nobody", "where": "home", "for": {"m": 30}}
+    key = m._gate_key(pred)
+    gs = m.gate_states(pred, _snap(persons={}, now=now))
+    # 'nobody home' over zero tracked persons is vacuously true; anchor = now.
+    assert gs == {key: (True, now)}
+
+
+def test_people_gate_states_empty_without_for() -> None:
+    m = PeopleCondition()
+    assert m.gate_states({"quant": "nobody", "where": "home"}, _snap()) == {}
+    assert m.gate_states(None, _snap()) == {}
+
+
+def test_people_describe_tenure_mode_shows_held() -> None:
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"quant": "nobody", "where": "home", "for": {"m": 30}}
+    key = m._gate_key(pred)
+    snap = _snap(
+        persons={"person.bob": ("away", now - timedelta(minutes=1))},
+        now=now,
+        names={"person.bob": "Bob"},
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": []},
+        tenure={key: now - timedelta(minutes=40)},
+    )
+    line = m.describe(snap, pred)
+    assert "held 40m" in line and "✓" in line
+
+
+def test_people_describe_tenure_mode_not_held() -> None:
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {"quant": "nobody", "where": "home", "for": {"m": 30}}
+    snap = _snap(
+        persons={"person.bob": ("home", now - timedelta(minutes=1))},
+        now=now,
+        names={"person.bob": "Bob"},
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": ["zone.home"]},
+        tenure={},  # gate not currently held
+    )
+    line = m.describe(snap, pred)
+    assert "not held" in line and "✗" in line
 
 
 def test_subset_all_is_not_subset_of_explicit() -> None:

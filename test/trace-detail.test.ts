@@ -136,6 +136,19 @@ describe("trace-detail", () => {
     ).toBe("Hall: Clear for 5m");
   });
 
+  test("formatCauseFriendly renders a multi-entity duration cause via its label", () => {
+    // No entity_id → no name/state lookup; render the label directly.
+    expect(
+      formatCauseFriendly({
+        kind: "duration",
+        entity_id: null,
+        old: null,
+        new: "nobody home",
+        detail: "30m",
+      }),
+    ).toBe("nobody home for 30m");
+  });
+
   test("formatCauseFriendly delegates non-entity causes to formatCause", () => {
     expect(
       formatCauseFriendly({ kind: "manual", entity_id: null, old: null, new: null, detail: null }),
@@ -748,6 +761,18 @@ describe("trace-detail", () => {
         detail: "5m",
       }),
     ).toBe("binary_sensor.motion off for 5m");
+  });
+
+  test("formatCause renders a multi-entity duration cause as '<label> for duration'", () => {
+    expect(
+      formatCause({
+        kind: "duration",
+        entity_id: null,
+        old: null,
+        new: "nobody home",
+        detail: "30m",
+      }),
+    ).toBe("nobody home for 30m");
   });
 
   test("per-scene marks read '✓ matched' / '✗ no match'", () => {

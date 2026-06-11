@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
+from homeassistant.util import dt as dt_util
 
 from custom_components.ambience.conditions._common import (
     UNAVAILABLE,
@@ -13,8 +16,23 @@ from custom_components.ambience.conditions._common import (
     kleene_any,
     kleene_not,
     merge_intervals,
+    tenure_held,
     validate_for,
 )
+
+
+def test_tenure_held_requires_recorded_since_at_or_past_window() -> None:
+    now = dt_util.utcnow()
+    # Gate never seen true -> not held.
+    assert tenure_held({}, "k", now, 60.0) is False
+    # Recorded, but not held long enough yet.
+    assert tenure_held({"k": now - timedelta(seconds=59)}, "k", now, 60.0) is False
+    # Held for exactly the window -> held.
+    assert tenure_held({"k": now - timedelta(seconds=60)}, "k", now, 60.0) is True
+    # Held well past the window -> held.
+    assert tenure_held({"k": now - timedelta(seconds=600)}, "k", now, 60.0) is True
+    # A different gate key is absent -> not held.
+    assert tenure_held({"other": now - timedelta(seconds=600)}, "k", now, 60.0) is False
 
 
 def test_kleene_any_truth_table() -> None:

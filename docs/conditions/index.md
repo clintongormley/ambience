@@ -10,9 +10,13 @@ A condition you leave unset, or do not add at all, is treated as a **wildcard**:
 
 ## The "for" duration
 
-Several conditions offer an optional **for** duration (expressed as hours, minutes, and seconds). When you set a duration, the condition only counts as met once the underlying test has been continuously true for at least that long.
+Several conditions offer an optional **for** duration (expressed as hours, minutes, and seconds). When you set a duration, the condition only counts as met once the **condition's own test** has been continuously true for at least that long.
 
-For example: a People condition set to "nobody is at home" with a *for* of ten minutes will not pass the moment the last person leaves. It waits until the house has been empty for ten continuous minutes. If someone returns during that window, the clock resets. This prevents brief interruptions — a phone wandering out of a geofence, a GPS hiccup — from triggering scenes they should not.
+What matters is the *test*, not the exact state. A People condition set to "nobody is at home" with a *for* of ten minutes waits until the house has been empty for ten continuous minutes — and it keeps counting even if someone moves from one away zone to another (work to the shops, say), because "not home" stayed true the whole time. Likewise an Entity-state condition that matches any of several states (for example "media player is *playing* or *paused*") keeps counting when the entity flips between those listed states, because the test never stopped being true. The clock only resets the moment the test actually becomes false.
+
+This prevents brief interruptions — a phone wandering out of a geofence, a GPS hiccup, a sensor flicker — from triggering scenes they should not.
+
+After a Home Assistant restart the clock resumes from the last change Home Assistant can prove (an entity's last state change), so a "switch on for 2 hours" rule that was already an hour in still fires an hour after the restart rather than starting a fresh two hours. It never counts time during a window Home Assistant did not observe.
 
 Leave the duration at zero (the default) to match immediately as soon as the test becomes true.
 

@@ -354,7 +354,7 @@ def test_order_key_absent_elevation_min_is_neg_inf() -> None:
 def test_trigger_deps_watches_sun_entity_for_elevation() -> None:
     spec = SunCondition().trigger_deps({"elevation": {"min": 10}})
     assert spec.entities == frozenset({"sun.sun"})
-    assert spec.entity_durations == frozenset()
+    assert spec.duration_gates == frozenset()
 
 
 def test_trigger_deps_watches_sun_entity_for_azimuth() -> None:

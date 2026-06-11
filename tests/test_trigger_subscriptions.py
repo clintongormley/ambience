@@ -6,13 +6,16 @@ Covers the subscription/timer plumbing layer only — no source changes.
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 from homeassistant.util import dt as dt_util
 
+from custom_components.ambience.conditions._common import tenure_held
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -25,7 +28,25 @@ from custom_components.ambience.const import (
 from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.trace import CauseKind, TraceEvent
 from custom_components.ambience.trigger_engine import AutoTriggerEngine
-from custom_components.ambience.triggers import TriggerSpec
+from custom_components.ambience.triggers import DurationGate, TriggerSpec
+
+
+@dataclass(frozen=True)
+class _ForSnap:
+    """Gate-aware fake snapshot (mirrors the real condition snapshots so
+    `attach_tenure`/`dataclasses.replace` work)."""
+
+    value: str | None
+    changed: Any = None
+    now: Any = None
+    tenure: Mapping[str, datetime] | None = None
+
+
+def _gate(entity_id: str, seconds: float) -> DurationGate:
+    return DurationGate(
+        key=f"gate:{entity_id}", seconds=seconds, label=entity_id, entity_id=entity_id
+    )
+
 
 # ---------------------------------------------------------------------------
 # Shared test doubles (from test_trigger_engine.py patterns)
@@ -347,23 +368,26 @@ async def test_schedule_for_rechecks_cancels_existing_handles(hass) -> None:
     engine.async_rebuild()
 
     key = ("area", "a", 0, "fc")
-    # Inject a duration directly into the index so _schedule_for_rechecks sees it.
+    # Inject a gate directly into the index, and seed its tenure so the gate is
+    # pending (instant true, not yet matured) — the precondition for arming.
     from custom_components.ambience.trigger_index import TriggerIndex
 
+    gate = _gate("binary_sensor.x", 10.0)
     engine._index = TriggerIndex(
         by_entity={"binary_sensor.x": frozenset({key})},
         by_clock={},
         by_sun={},
         midnight=frozenset(),
         has_time=frozenset(),
-        durations={key: frozenset({("binary_sensor.x", 10.0)})},
+        durations={key: frozenset({gate})},
         opaque=frozenset(),
     )
+    engine._tenure["fc"] = {gate.key: dt_util.utcnow()}  # just became true → ~10s pending
 
-    # Plant an existing cancel handle, keyed by its (entity, seconds) pair.
+    # Plant an existing cancel handle, keyed by its (gate_key, seconds) pair.
     cancelled: list[bool] = []
     fake_cancel = MagicMock(side_effect=lambda: cancelled.append(True))
-    engine._for_handles[key] = {("binary_sensor.x", 10.0): fake_cancel}
+    engine._for_handles[key] = {(gate.key, 10.0): fake_cancel}
 
     fake_unsub = MagicMock()
     with patch.object(_ts_mod, "async_call_later", return_value=fake_unsub):
@@ -371,9 +395,9 @@ async def test_schedule_for_rechecks_cancels_existing_handles(hass) -> None:
 
     # Old handle was cancelled before rescheduling.
     assert cancelled == [True]
-    # New handle was registered under its pair.
+    # New handle was registered under its (gate_key, seconds) pair.
     assert key in engine._for_handles
-    assert engine._for_handles[key] == {("binary_sensor.x", 10.0): fake_unsub}
+    assert engine._for_handles[key] == {(gate.key, 10.0): fake_unsub}
 
 
 async def test_schedule_for_rechecks_skips_pred_without_durations(hass) -> None:
@@ -417,33 +441,13 @@ async def test_schedule_for_rechecks_skips_pred_without_durations(hass) -> None:
 
 
 async def test_for_recheck_callback_fires_and_clears_handle(hass) -> None:
-    """When the for-recheck timer fires, it removes the handle and fires the pred.
-
-    We don't trigger a real state change (which would schedule a live
-    async_call_later timer and leave it lingering). Instead we directly call
-    _schedule_for_rechecks with a fake handle and then invoke the callback.
-    """
-
-    class ForCondition:
-        def trigger_deps(self, predicate: Any) -> TriggerSpec:
-            return TriggerSpec(
-                entities=frozenset({"binary_sensor.x"}),
-                entity_durations=frozenset({("binary_sensor.x", 30.0)}),
-            )
-
-        async def snapshot(self, hass: Any) -> Any:
-            return "off"
-
-        def matches(self, predicate: Any, snapshot: Any) -> bool:
-            return snapshot == "on"
-
-        def describe(self, snapshot: Any, predicate=None) -> str | None:
-            return snapshot
-
+    """When the for-recheck timer fires, it removes its own handle and fires the
+    pred. It does NOT self-re-arm — re-arming happens inside the evaluation the
+    fire triggers (which refreshes snapshots and updates tenure first)."""
     scopes = [("area", "a", {"scenes": [{"when": {"fc": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_CONDITIONS: {"fc": ForCondition()},
+        DATA_CONDITIONS: {"fc": _ForCondition("binary_sensor.x", 30.0)},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -451,50 +455,30 @@ async def test_for_recheck_callback_fires_and_clears_handle(hass) -> None:
     engine.async_rebuild()
 
     key = ("area", "a", 0, "fc")
-    hass.states.async_set("binary_sensor.x", "off")  # entity exists → re-arm runs
-    # Manually plant a fake cancel handle (keyed by its pair) so we can test the
-    # self-removal without spawning a real async_call_later timer.
+    gate = _gate("binary_sensor.x", 30.0)
+    # Plant a fake cancel handle (keyed by its (gate_key, seconds) pair).
     fake_cancel = MagicMock()
-    engine._for_handles[key] = {("binary_sensor.x", 30.0): fake_cancel}
+    engine._for_handles[key] = {(gate.key, 30.0): fake_cancel}
 
     import custom_components.ambience.trigger_subscriptions as _ts_mod
 
-    rearmed = MagicMock(name="rearmed-cancel")
-    with patch.object(_ts_mod, "async_call_later", return_value=rearmed):
-        recheck_cb = engine._make_for_recheck(key, "binary_sensor.x", 30.0)
+    with patch.object(_ts_mod, "async_call_later", return_value=MagicMock()):
+        recheck_cb = engine._make_for_recheck(key, gate)
         recheck_cb(None)  # invoke as if the timer fired
 
-    # The consumed handle is dropped (not cancelled), then — because the
-    # entity's hold window is still pending — a fresh recheck is re-armed in
-    # its place (the dual-clock re-arm; see _for_recheck_delay).
+    # The consumed handle is dropped (not cancelled), and — since it was the only
+    # one — the whole key is removed. No self-re-arm here.
     fake_cancel.assert_not_called()
-    assert engine._for_handles[key] == {("binary_sensor.x", 30.0): rearmed}
+    assert key not in engine._for_handles
 
 
 async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
     """The for-recheck callback fires a DURATION evaluation for the key, naming
     the entity and how long it has held its state."""
-
-    class ForCondition:
-        def trigger_deps(self, predicate: Any) -> TriggerSpec:
-            return TriggerSpec(
-                entities=frozenset({"binary_sensor.x"}),
-                entity_durations=frozenset({("binary_sensor.x", 30.0)}),
-            )
-
-        async def snapshot(self, hass: Any) -> Any:
-            return "on"
-
-        def matches(self, predicate: Any, snapshot: Any) -> bool:
-            return snapshot == "on"
-
-        def describe(self, snapshot: Any, predicate=None) -> str | None:
-            return snapshot
-
     scopes = [("area", "a", {"scenes": [{"when": {"fc": "on"}, "category": "g", "actions": []}]})]
     hass.data[DOMAIN] = {
         DATA_STORE: FakeStore(scopes),
-        DATA_CONDITIONS: {"fc": ForCondition()},
+        DATA_CONDITIONS: {"fc": _ForCondition("binary_sensor.x", 300.0)},
         DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
         DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
     }
@@ -502,9 +486,10 @@ async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
     engine.async_rebuild()
 
     key = ("area", "a", 0, "fc")
+    gate = _gate("binary_sensor.x", 300.0)
     fired_keys: list = []
 
-    # Spy on _fire to confirm it receives the correct pred key with HAS_TIME cause.
+    # Spy on _fire to confirm it receives the correct pred key with DURATION cause.
     original_fire = engine._fire
 
     def spy_fire(fired_set, cause=None):
@@ -516,9 +501,12 @@ async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
     hass.states.async_set("binary_sensor.x", "on")
     import custom_components.ambience.trigger_subscriptions as _ts_mod
 
-    recheck_cb = engine._make_for_recheck(key, "binary_sensor.x", 300.0)
+    recheck_cb = engine._make_for_recheck(key, gate)
     with patch.object(_ts_mod, "async_call_later", return_value=MagicMock()):
         recheck_cb(None)
+        # The fire spawns an evaluate task that re-arms; drain it under the mock
+        # so no real timer lingers, then tear down.
+        await hass.async_block_till_done()
 
     assert any(key in f for f, _cause in fired_keys)
     duration_causes = [c for _f, c in fired_keys if c is not None and c.kind == CauseKind.DURATION]
@@ -527,6 +515,7 @@ async def test_for_recheck_callback_schedules_evaluate(hass) -> None:
     assert cause.entity_id == "binary_sensor.x"
     assert cause.new == "on"  # the held state, read at recheck time
     assert cause.detail == "5m"  # 300s humanised (compact, matching occupancy/people traces)
+    engine._teardown()
 
 
 async def test_for_recheck_fire_does_not_orphan_sibling_timers(hass) -> None:
@@ -548,18 +537,20 @@ async def test_for_recheck_fire_does_not_orphan_sibling_timers(hass) -> None:
     engine.async_rebuild()
 
     key = ("area", "a", 0, "fc")
-    hass.states.async_set("binary_sensor.x", "off")  # entities exist → re-arm runs
-    hass.states.async_set("binary_sensor.y", "off")
-    # Two entities sharing the predicate, each with its own `for:` duration.
+    gate_x = _gate("binary_sensor.x", 30.0)
+    gate_y = _gate("binary_sensor.y", 60.0)
+    # Two gates on the same predicate, both pending (tenure seeded just now).
     engine._index = TriggerIndex(
         by_entity={"binary_sensor.x": frozenset({key}), "binary_sensor.y": frozenset({key})},
         by_clock={},
         by_sun={},
         midnight=frozenset(),
         has_time=frozenset(),
-        durations={key: frozenset({("binary_sensor.x", 30.0), ("binary_sensor.y", 60.0)})},
+        durations={key: frozenset({gate_x, gate_y})},
         opaque=frozenset(),
     )
+    now = dt_util.utcnow()
+    engine._tenure["fc"] = {gate_x.key: now, gate_y.key: now}
 
     captured: list = []  # (seconds, callback)
 
@@ -573,17 +564,15 @@ async def test_for_recheck_fire_does_not_orphan_sibling_timers(hass) -> None:
         assert len(captured) == 2
         assert len(engine._for_handles[key]) == 2
 
-        # Fire the first timer's callback.
+        # Fire the first timer's callback (whichever gate it was for).
         captured[0][1](None)
 
-    # Its own handle was dropped (not cancelled) before the re-arm replaced
-    # the set; the sibling stays tracked and cancellable throughout — no
-    # handle is orphaned.
+    # The fired timer drops ONLY its own handle (no self-re-arm); the sibling
+    # stays tracked and cancellable — no handle is orphaned.
     assert key in engine._for_handles
-    assert set(engine._for_handles[key]) == {
-        ("binary_sensor.x", 30.0),
-        ("binary_sensor.y", 60.0),
-    }
+    assert len(engine._for_handles[key]) == 1
+    remaining = set(engine._for_handles[key])
+    assert remaining < {(gate_x.key, 30.0), (gate_y.key, 60.0)}
 
 
 # ---------------------------------------------------------------------------
@@ -595,27 +584,42 @@ async def test_for_recheck_fire_does_not_orphan_sibling_timers(hass) -> None:
 
 
 class _ForCondition:
-    """Condition with one `(entity, seconds)` for-duration; matches on value."""
+    """Condition with one predicate-level `for:` gate over one entity. Seeds
+    tenure from the entity's last_changed; matches off engine tenure when
+    attached, else the instant value."""
 
     def __init__(self, entity_id: str, seconds: float) -> None:
         self._entity_id = entity_id
         self._seconds = seconds
+        self._key = f"gate:{entity_id}"
 
     def trigger_deps(self, predicate: Any) -> TriggerSpec:
         return TriggerSpec(
             entities=frozenset({self._entity_id}),
-            entity_durations=frozenset({(self._entity_id, self._seconds)}),
+            duration_gates=frozenset({_gate(self._entity_id, self._seconds)}),
         )
 
-    async def snapshot(self, hass: Any, entities: Any = None) -> Any:
+    async def snapshot(self, hass: Any, entities: Any = None) -> _ForSnap:
         state = hass.states.get(self._entity_id)
-        return state.state if state else None
+        return _ForSnap(
+            value=state.state if state else None,
+            changed=state.last_changed if state else None,
+            now=dt_util.utcnow(),
+        )
 
-    def matches(self, predicate: Any, snapshot: Any) -> bool:
-        return snapshot == predicate
+    def gate_states(self, predicate: Any, snap: _ForSnap) -> dict[str, tuple[bool, Any]]:
+        anchor = snap.changed if snap.changed is not None else snap.now
+        return {self._key: (snap.value == predicate, anchor)}
 
-    def describe(self, snapshot: Any, predicate=None) -> str | None:
-        return snapshot
+    def matches(self, predicate: Any, snap: _ForSnap) -> bool:
+        if snap.value != predicate:
+            return False
+        if snap.tenure is None:
+            return True
+        return tenure_held(snap.tenure, self._key, snap.now, self._seconds)
+
+    def describe(self, snap: _ForSnap, predicate=None) -> str | None:
+        return snap.value
 
 
 def _for_engine(hass, seconds: float):
@@ -717,23 +721,20 @@ async def test_startup_sync_skips_recheck_when_duration_already_elapsed(hass, mo
     engine._teardown()
 
 
-async def test_for_recheck_delay_unknown_entity_falls_back_to_full(hass) -> None:
-    """An unknown entity has no clock to measure from, so the recheck is armed for
-    the full duration — same as a fresh state change would."""
-    engine = _for_engine(hass, 7200.0)
-    assert hass.states.get("switch.radiator") is None  # entity never set
-    assert engine._for_recheck_delay("switch.radiator", 7200.0, dt_util.utcnow()) == 7200.0
-
-
 async def test_switch_resync_rearms_for_rechecks(hass, monkeypatch) -> None:
-    """A scope switch off→on resync must re-arm the scope's `for:` rechecks. A
-    duration timer that matured while the switch was off was consumed as a no-op,
-    so without re-arming on switch-on the rule would never fire again."""
+    """A scope switch off→on resync must re-arm the scope's pending `for:`
+    rechecks from the live tenure. A duration timer that matured while the switch
+    was off was consumed as a no-op, so without re-arming on switch-on the rule
+    would never fire again — but the tenure (in-memory) persists, so the re-arm
+    uses the original since."""
     import custom_components.ambience.trigger_subscriptions as _ts_mod
 
     _age_switch_state(hass, monkeypatch, timedelta(minutes=26))
     engine = _for_engine(hass, 7200.0)
-    # Simulate the timer having fired (been consumed) while the switch was off.
+    # Tenure persists across the switch-off window (kept live by state events and
+    # the last sync); only the one-shot timer was consumed.
+    since = hass.states.get("switch.radiator").last_changed
+    engine._tenure["rad"] = {"gate:switch.radiator": since}
     assert engine._for_handles == {}
 
     captured: list[float] = []
@@ -753,8 +754,8 @@ async def test_switch_resync_rearms_for_rechecks(hass, monkeypatch) -> None:
 
 async def test_rearm_scope_rechecks_only_touches_its_own_scope(hass, monkeypatch) -> None:
     """rearm_scope_rechecks (used by switch-on resync and scope re-enable) must
-    re-arm only the named scope's duration predicates, leaving other scopes' live
-    timers untouched."""
+    re-arm only the named scope's pending duration predicates, leaving other
+    scopes' live timers untouched."""
     import custom_components.ambience.trigger_subscriptions as _ts_mod
     from custom_components.ambience.trigger_index import TriggerIndex
 
@@ -763,18 +764,18 @@ async def test_rearm_scope_rechecks_only_touches_its_own_scope(hass, monkeypatch
 
     key_a = ("area", "a", 0, "rad")
     key_b = ("area", "b", 0, "rad")
+    gate = _gate("switch.radiator", 7200.0)
     engine._index = TriggerIndex(
         by_entity={"switch.radiator": frozenset({key_a, key_b})},
         by_clock={},
         by_sun={},
         midnight=frozenset(),
         has_time=frozenset(),
-        durations={
-            key_a: frozenset({("switch.radiator", 7200.0)}),
-            key_b: frozenset({("switch.radiator", 7200.0)}),
-        },
+        durations={key_a: frozenset({gate}), key_b: frozenset({gate})},
         opaque=frozenset(),
     )
+    # Both predicates share the gate fingerprint (same entity); seed its tenure.
+    engine._tenure["rad"] = {gate.key: hass.states.get("switch.radiator").last_changed}
 
     armed: list = []
 
@@ -1236,79 +1237,156 @@ async def test_next_sun_fire_stale_anchor_polls_instead_of_past(hass) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _for_recheck_delay: clock source
+# _schedule_for_rechecks: arms off gate tenure (since + seconds)
 # ---------------------------------------------------------------------------
 
 
-async def test_for_recheck_delay_clocks_off_last_changed(hass) -> None:
-    """Attribute-only updates advance last_updated but not last_changed; the
-    recheck must honour the state-tenure clock (last_changed) or GPS churn on
-    a person pushes a "home for 30m" recheck out indefinitely."""
-    engine = _minimal_engine(hass, [])
-    now = dt_util.utcnow()
-    state = SimpleNamespace(
-        last_changed=now - timedelta(seconds=60),
-        last_updated=now - timedelta(seconds=10),
+def _index_with_gate(key, gate):
+    from custom_components.ambience.trigger_index import TriggerIndex
+
+    return TriggerIndex(
+        by_entity={gate.entity_id: frozenset({key})} if gate.entity_id else {},
+        by_clock={},
+        by_sun={},
+        midnight=frozenset(),
+        has_time=frozenset(),
+        durations={key: frozenset({gate})},
+        opaque=frozenset(),
     )
-    engine._hass = SimpleNamespace(states=SimpleNamespace(get=lambda _e: state))
-    delay = engine._for_recheck_delay("person.alice", 100.0, now)
-    assert delay is not None and abs(delay - 40.0) < 1e-6
 
 
-async def test_for_recheck_delay_falls_back_to_last_updated_window(hass) -> None:
-    """When the last_changed window has already passed but the last_updated
-    window is still pending (attribute-mode atoms clock off last_updated),
-    arm for that later moment instead of skipping."""
-    engine = _minimal_engine(hass, [])
-    now = dt_util.utcnow()
-    state = SimpleNamespace(
-        last_changed=now - timedelta(seconds=120),
-        last_updated=now - timedelta(seconds=10),
-    )
-    engine._hass = SimpleNamespace(states=SimpleNamespace(get=lambda _e: state))
-    delay = engine._for_recheck_delay("sensor.x", 100.0, now)
-    assert delay is not None and abs(delay - 90.0) < 1e-6
+async def test_schedule_for_rechecks_arms_remaining_tenure(hass) -> None:
+    """A pending gate (instant true, not matured) arms for since+seconds minus
+    elapsed — e.g. recorded 60s ago with a 100s gate → ~40s remaining."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
 
-
-async def test_for_recheck_fire_rearms_for_later_pending_window(hass) -> None:
-    """The armed delay may target the earlier (last_changed) window; after
-    firing, the handler must re-arm so a later still-pending last_updated
-    window is honoured too."""
-    hass.states.async_set("sensor.x", "on")
     engine = _minimal_engine(hass, [])
     key = ("area", "a", 0, "state")
-    recheck = engine._make_for_recheck(key, "sensor.x", 100.0)
+    gate = _gate("sensor.x", 100.0)
+    engine._index = _index_with_gate(key, gate)
+    now = dt_util.utcnow()
+    engine._tenure["state"] = {gate.key: now - timedelta(seconds=60)}
+
+    captured: list[float] = []
+    with patch.object(
+        _ts_mod,
+        "async_call_later",
+        side_effect=lambda _h, s, _cb: captured.append(s) or MagicMock(),
+    ):
+        engine._schedule_for_rechecks([key])
+    assert len(captured) == 1 and abs(captured[0] - 40.0) < 1.0
+    engine._teardown()
+
+
+async def test_schedule_for_rechecks_skips_matured_and_untracked_gates(hass) -> None:
+    """A gate already matured (since+seconds in the past) and a gate with no
+    tenure entry (instant test currently false) both arm no timer."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    engine = _minimal_engine(hass, [])
+    matured = ("area", "a", 0, "state")
+    untracked = ("area", "b", 0, "state")
+    g_matured = _gate("sensor.x", 100.0)
+    g_untracked = _gate("sensor.y", 100.0)
+    from custom_components.ambience.trigger_index import TriggerIndex
+
+    engine._index = TriggerIndex(
+        by_entity={},
+        by_clock={},
+        by_sun={},
+        midnight=frozenset(),
+        has_time=frozenset(),
+        durations={matured: frozenset({g_matured}), untracked: frozenset({g_untracked})},
+        opaque=frozenset(),
+    )
+    now = dt_util.utcnow()
+    # matured gate's window has fully elapsed; untracked gate has no tenure.
+    engine._tenure["state"] = {g_matured.key: now - timedelta(seconds=200)}
+
+    captured: list[float] = []
+    with patch.object(
+        _ts_mod,
+        "async_call_later",
+        side_effect=lambda _h, s, _cb: captured.append(s) or MagicMock(),
+    ):
+        engine._schedule_for_rechecks([matured, untracked])
+    assert captured == []
+    assert engine._for_handles == {}
+
+
+async def test_attribute_churn_does_not_move_the_recheck(hass) -> None:
+    """An attribute-only update fires an evaluation; the gate's instant stays
+    true, so its tenure `since` is untouched and the re-armed delay still targets
+    the ORIGINAL since+seconds (replaces the old last_changed/last_updated
+    dual-clock heuristic)."""
+    import custom_components.ambience.trigger_subscriptions as _ts_mod
+
+    engine = _minimal_engine(hass, [])
+    key = ("area", "a", 0, "state")
+    gate = _gate("person.alice", 100.0)
+    engine._index = _index_with_gate(key, gate)
+    now = dt_util.utcnow()
+    # Tenure recorded 60s ago (the predicate became true then).
+    engine._tenure["state"] = {gate.key: now - timedelta(seconds=60)}
+
+    captured: list[float] = []
+    with patch.object(
+        _ts_mod,
+        "async_call_later",
+        side_effect=lambda _h, s, _cb: captured.append(s) or MagicMock(),
+    ):
+        # Re-arming after an attribute churn (tenure unchanged) → same ~40s.
+        engine._schedule_for_rechecks([key])
+        engine._schedule_for_rechecks([key])  # a second churn must not push it out
+    assert len(captured) == 2
+    assert all(abs(s - 40.0) < 1.0 for s in captured)
+    engine._teardown()
+
+
+async def test_recheck_fire_does_not_self_rearm(hass) -> None:
+    """The recheck callback fires the predicate but does NOT call
+    _schedule_for_rechecks itself — re-arming is the triggered evaluation's job
+    (it refreshes snapshots and updates tenure first)."""
+    engine = _minimal_engine(hass, [])
+    key = ("area", "a", 0, "state")
+    recheck = engine._make_for_recheck(key, _gate("sensor.x", 100.0))
     rearmed: list = []
     with (
         patch.object(
-            engine,
-            "_schedule_for_rechecks",
-            side_effect=lambda preds: rearmed.append(list(preds)),
+            engine, "_schedule_for_rechecks", side_effect=lambda preds: rearmed.append(list(preds))
         ),
         patch.object(engine, "_fire"),
     ):
         recheck(None)
-    assert rearmed == [[key]]
+    assert rearmed == []  # no self-re-arm
 
 
-async def test_for_recheck_does_not_rearm_for_deleted_entity(hass) -> None:
-    """A deleted entity falls back to the full delay in _for_recheck_delay, so
-    an unconditional re-arm would fire-and-re-arm forever — the handler must
-    stop re-arming once the entity is gone."""
-    engine = _minimal_engine(hass, [])  # sensor.x intentionally absent from states
-    key = ("area", "a", 0, "state")
-    recheck = engine._make_for_recheck(key, "sensor.x", 100.0)
-    rearmed: list = []
-    with (
-        patch.object(
-            engine,
-            "_schedule_for_rechecks",
-            side_effect=lambda preds: rearmed.append(list(preds)),
-        ),
-        patch.object(engine, "_fire"),
-    ):
+async def test_recheck_callback_noop_after_teardown(hass) -> None:
+    """A recheck timer that fires after teardown must not evaluate."""
+    engine = _minimal_engine(hass, [])
+    engine._running = False
+    recheck = engine._make_for_recheck(("area", "a", 0, "state"), _gate("sensor.x", 100.0))
+    fired: list = []
+    with patch.object(engine, "_fire", side_effect=lambda *a, **k: fired.append(a)):
         recheck(None)
-    assert rearmed == []
+    assert fired == []  # short-circuited on not self._running
+
+
+async def test_recheck_cause_names_label_for_multi_entity_gate(hass) -> None:
+    """A multi-entity gate (entity_id None) names the gate's label in the
+    DURATION cause instead of a single entity/state."""
+    engine = _minimal_engine(hass, [])
+    key = ("area", "a", 0, "people")
+    gate = DurationGate(key="nobody:home:0:*", seconds=1800.0, label="nobody home", entity_id=None)
+    fired: list = []
+    with patch.object(engine, "_fire", side_effect=lambda f, c=None: fired.append(c)):
+        engine._make_for_recheck(key, gate)(None)
+    assert len(fired) == 1
+    cause = fired[0]
+    assert cause.kind == CauseKind.DURATION
+    assert cause.entity_id is None
+    assert cause.new == "nobody home"
+    assert cause.detail == "30m"
 
 
 # ---------------------------------------------------------------------------

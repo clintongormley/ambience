@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -9,8 +10,8 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from ..triggers import EMPTY, TriggerSpec
-from ._common import UNAVAILABLE, dur_seconds, fmt_duration, validate_for
+from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
+from ._common import UNAVAILABLE, dur_seconds, fmt_duration, tenure_held, validate_for
 
 _HOME = "home"
 _QUANTS = ("any", "everyone", "nobody")
@@ -37,6 +38,12 @@ class PeopleSnapshot:
     # overlap, so this can name several zones at once where `state` resolves to
     # only one. Preferred over `state` for location matching.
     in_zones: dict[str, list[str] | None] = field(default_factory=dict)
+    # Engine-injected per-gate tenure: gate fingerprint -> the time the
+    # predicate's instant test last became true. When present, a `for:` clause
+    # gates off this shared tenure (so moving between two away zones doesn't
+    # reset "nobody home"); when None (the simulator / direct callers) it falls
+    # back to the legacy per-person last_changed clock.
+    tenure: Mapping[str, datetime] | None = None
 
 
 class PeopleCondition:
@@ -117,6 +124,26 @@ class PeopleCondition:
         negate = bool(predicate.get("negate"))
         seconds = dur_seconds(predicate.get("for"))
 
+        if seconds > 0 and snapshot.tenure is not None:
+            # Engine-tracked predicate tenure: evaluate the instant test
+            # (seconds=0), then gate on how long that test has held — which
+            # survives a person moving between two away zones, etc.
+            if not self._quantified(who, quant, where, negate, 0.0, snapshot):
+                return False
+            return tenure_held(snapshot.tenure, self._gate_key(predicate), snapshot.now, seconds)
+        return self._quantified(who, quant, where, negate, seconds, snapshot)
+
+    def _quantified(
+        self,
+        who: list,
+        quant: str,
+        where: str,
+        negate: bool,
+        seconds: float,
+        snapshot: PeopleSnapshot,
+    ) -> bool:
+        """The quantified location test, clocked off `seconds` of per-person
+        tenure (the legacy/fallback clock). `seconds=0` yields the instant test."""
         person_ids = list(who) if who else list(snapshot.persons)
 
         def holds(pid: str, want_at: bool) -> bool:
@@ -138,6 +165,49 @@ class PeopleCondition:
         # "any" (default)
         return any(holds(p, True) for p in person_ids)
 
+    @staticmethod
+    def _gate_key(predicate: dict) -> str:
+        """Canonical fingerprint of the predicate's instant (un-`for`ed) test.
+
+        Same quantifier / location / negate / who-set anywhere in the config →
+        same key → shared tenure clock."""
+        quant = predicate.get("quant") or "any"
+        where = predicate.get("where") or _HOME
+        negate = int(bool(predicate.get("negate")))
+        who = predicate.get("who") or []
+        who_part = "|".join(sorted(who)) if who else "*"
+        return f"{quant}:{where}:{negate}:{who_part}"
+
+    def _gate_label(self, predicate: dict) -> str:
+        """Human-readable instant description, for a multi-person DURATION trace
+        cause (e.g. "nobody home", "anyone not in Work")."""
+        quant = predicate.get("quant") or "any"
+        where = predicate.get("where") or _HOME
+        negate = bool(predicate.get("negate"))
+        place = "home" if where == _HOME else f"in {where}"
+        return f"{self._quant_word(quant)} {'not ' if negate else ''}{place}"
+
+    def gate_states(self, predicate: Any, snapshot: PeopleSnapshot) -> dict[str, GateReading]:
+        """`{gate_key: (instant_truth, anchor)}` for a `for:`-bearing predicate,
+        else empty. The anchor (startup/reload tenure seed) is the most recent
+        person state change among the referenced persons — a provable lower
+        bound on how long the instant test has held — falling back to
+        `snapshot.now` when no referenced person is present."""
+        if not isinstance(predicate, dict):
+            return {}
+        seconds = dur_seconds(predicate.get("for"))
+        if seconds <= 0:
+            return {}
+        who = predicate.get("who") or []
+        quant = predicate.get("quant") or "any"
+        where = predicate.get("where") or _HOME
+        negate = bool(predicate.get("negate"))
+        instant = self._quantified(who, quant, where, negate, 0.0, snapshot)
+        person_ids = list(who) if who else list(snapshot.persons)
+        changes = [cur[1] for pid in person_ids if (cur := snapshot.persons.get(pid)) is not None]
+        anchor = max(changes) if changes else snapshot.now
+        return {self._gate_key(predicate): (instant, anchor)}
+
     # --- trigger dependencies -------------------------------------------
 
     def trigger_deps(self, predicate: Any) -> TriggerSpec:
@@ -148,8 +218,21 @@ class PeopleCondition:
         # entities the same way snapshot() does.
         persons = [p for p in who if isinstance(p, str) and p] if who else self._all_person_ids()
         seconds = dur_seconds(predicate.get("for"))
-        durations = frozenset((p, seconds) for p in persons) if seconds > 0 else frozenset()
-        return TriggerSpec(entities=frozenset(persons), entity_durations=durations)
+        gates = (
+            frozenset(
+                {
+                    DurationGate(
+                        key=self._gate_key(predicate),
+                        seconds=seconds,
+                        label=self._gate_label(predicate),
+                        entity_id=(persons[0] if len(persons) == 1 else None),
+                    )
+                }
+            )
+            if seconds > 0
+            else frozenset()
+        )
+        return TriggerSpec(entities=frozenset(persons), duration_gates=gates)
 
     def _all_person_ids(self) -> list[str]:
         hass = self._hass
@@ -209,15 +292,12 @@ class PeopleCondition:
     ) -> bool:
         """Apply negate/want_at/`for` to an observable location test `at`.
 
-        NOTE: the `for` clock uses `last_changed`, which advances on STATE
-        changes only — so `for` means "in the current exact state that long",
-        not "the predicate has held that long". Two consequences:
-        * a `negate`/`nobody` test resets when the person moves between two
-          away zones (zone A → zone B), even though "not home" held throughout;
-        * because zones can overlap, entering/leaving an overlapping zone can
-          change `in_zones` without changing `state`, so a zone-membership
-          `for` is approximate in that edge case.
-        We do not track history.
+        NOTE: this is the LEGACY/fallback clock, used only when no engine tenure
+        is attached to the snapshot (the simulator and direct callers). It uses
+        per-person `last_changed`, which advances on STATE changes only — so here
+        `for` means "in the current exact state that long". The engine path
+        (see `matches`/`gate_states`) instead tracks predicate tenure, which
+        survives a person moving between two away zones (zone A → zone B).
         """
         if negate:  # "not at <where>" -> invert the observable location test
             at = not at
@@ -242,6 +322,11 @@ class PeopleCondition:
         if not person_ids:
             return "no people tracked"
         want_at = quant != "nobody"
+        # In tenure mode the per-person marks show the *instant* location test
+        # (seconds=0); how long the predicate as a whole has held is summarised
+        # once in the prefix, off the engine tenure map.
+        tenure_mode = seconds > 0 and snapshot.tenure is not None
+        per_person_seconds = 0.0 if tenure_mode else seconds
         parts: list[str] = []
         for pid in person_ids:
             name = snapshot.names.get(pid, pid)
@@ -254,16 +339,27 @@ class PeopleCondition:
                 parts.append(f"{name}: unavailable ✗")
                 continue
             held = self._holds_at(
-                at, cur[1], snapshot.now, want_at=want_at, negate=negate, seconds=seconds
+                at, cur[1], snapshot.now, want_at=want_at, negate=negate, seconds=per_person_seconds
             )
             loc = self._loc_word(at, where, snapshot)
-            # With a `for` gate, show how long they've held this location so a
-            # recently-arrived person's ✗ is self-explanatory.
-            elapsed = f" {fmt_duration((snapshot.now - cur[1]).total_seconds())}" if seconds else ""
+            # In the legacy clock, show how long each person has held this
+            # location so a recently-arrived person's ✗ is self-explanatory.
+            elapsed = (
+                f" {fmt_duration((snapshot.now - cur[1]).total_seconds())}"
+                if seconds and not tenure_mode
+                else ""
+            )
             parts.append(f"{name}: {loc}{elapsed} {'✓' if held else '✗'}")
         prefix = f"want {self._quant_word(quant)} {self._where_word(where, negate, snapshot)}"
         if seconds:
             prefix += f" for ≥{fmt_duration(seconds)}"
+        if tenure_mode:
+            since = snapshot.tenure.get(self._gate_key(predicate))
+            prefix += (
+                f" (held {fmt_duration((snapshot.now - since).total_seconds())})"
+                if since
+                else " (not held)"
+            )
         return f"{prefix}: {', '.join(parts)}"
 
     @staticmethod

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from custom_components.ambience.trigger_index import build_index
-from custom_components.ambience.triggers import TriggerSpec
+from custom_components.ambience.triggers import DurationGate, TriggerSpec
 
 
 def test_empty_entries_build_empty_index() -> None:
@@ -64,20 +64,20 @@ def test_clock_sun_midnight_has_time_opaque_collected() -> None:
 
 def test_durations_collected_per_predicate() -> None:
     p = ("area", "hall", 0, "state")
+    g1 = DurationGate(key="g1", seconds=600.0, label="motion on", entity_id="binary_sensor.motion")
+    g2 = DurationGate(key="g2", seconds=300.0, label="bob home", entity_id="person.bob")
     idx = build_index(
         [
             (
                 p,
                 TriggerSpec(
                     entities=frozenset({"binary_sensor.motion", "person.bob"}),
-                    entity_durations=frozenset(
-                        {("binary_sensor.motion", 600.0), ("person.bob", 300.0)}
-                    ),
+                    duration_gates=frozenset({g1, g2}),
                 ),
             )
         ]
     )
-    assert idx.durations[p] == frozenset({("binary_sensor.motion", 600.0), ("person.bob", 300.0)})
+    assert idx.durations[p] == frozenset({g1, g2})
 
 
 def test_predicate_with_no_durations_absent_from_durations_map() -> None:
@@ -157,7 +157,9 @@ def test_all_predicates_unions_every_bucket() -> None:
                 d,
                 TriggerSpec(
                     entities=frozenset({"sensor.z"}),
-                    entity_durations=frozenset({("sensor.z", 60.0)}),
+                    duration_gates=frozenset(
+                        {DurationGate(key="gz", seconds=60.0, label="z on", entity_id="sensor.z")}
+                    ),
                 ),
             ),
         ]

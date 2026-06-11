@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Iterable
+from dataclasses import replace
 from typing import Any
 
 from homeassistant.core import Context, HomeAssistant
@@ -17,6 +18,7 @@ from homeassistant.exceptions import ServiceValidationError
 from .const import (
     DATA_APPLY_LOCKS,
     DATA_CONDITIONS,
+    DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_LAST_APPLIED,
     DATA_STORE,
@@ -246,14 +248,47 @@ async def gather_unit_traces(coros: Iterable[Any]) -> list[UnitTrace]:
     return traces
 
 
+def attach_tenure(
+    conditions_registry: dict[str, Any],
+    tenure_by_condition: dict[str, dict[str, Any]],
+    snapshots: dict[str, Any],
+) -> dict[str, Any]:
+    """Inject a LIVE view of the engine's per-condition gate tenure into each
+    gate-capable condition's snapshot.
+
+    The inner dict is shared by reference, so an engine update is visible to a
+    snapshot that was enriched earlier (the engine mutates, never replaces). A
+    condition without `gate_states`, and a failed (None) snapshot, pass through
+    untouched — they have no `for:` tenure to gate on. With the tenure attached,
+    the condition's `for:` clauses measure predicate tenure instead of the
+    legacy exact-state clock."""
+    out = dict(snapshots)
+    for name, snap in snapshots.items():
+        condition = conditions_registry.get(name)
+        if snap is None or condition is None or not hasattr(condition, "gate_states"):
+            continue
+        out[name] = replace(snap, tenure=tenure_by_condition.setdefault(name, {}))
+    return out
+
+
 async def async_snapshot_all(hass: HomeAssistant) -> dict[str, Any]:
-    """Snapshot every registered condition fresh; failures become None."""
+    """Snapshot every registered condition fresh; failures become None.
+
+    When the trigger engine exists, the snapshots are enriched with its live
+    gate tenure so the manual apply / resolve-only paths evaluate `for:` clauses
+    with the same predicate-tenure semantics as the engine. Without an engine
+    (unit tests, early startup) the conditions fall back to the legacy
+    exact-state clock."""
     conditions_registry: dict[str, Any] = hass.data[DOMAIN][DATA_CONDITIONS]
     store = hass.data[DOMAIN][DATA_STORE]
     referenced = referenced_entities(
         conditions_registry, [cfg for _kind, _scope_id, cfg in store.all_scope_configs()]
     )
-    return await snapshot_conditions(hass, conditions_registry, referenced)
+    snapshots = await snapshot_conditions(hass, conditions_registry, referenced)
+    engine = hass.data[DOMAIN].get(DATA_ENGINE)
+    if engine is not None:
+        snapshots = attach_tenure(conditions_registry, engine.tenure, snapshots)
+    return snapshots
 
 
 async def async_resolve_only(

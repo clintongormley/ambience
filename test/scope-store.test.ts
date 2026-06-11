@@ -274,6 +274,17 @@ describe("ScopeStore", () => {
       expect(store.error).toBe("");
     });
 
+    test("an exposed-actions-changed refetch failure is silently swallowed", async () => {
+      const { store } = makeStore();
+      connect(store);
+      await store.loadStatic();
+      vi.mocked(api.listExposedActions).mockRejectedValue(new Error("transient"));
+      window.dispatchEvent(new Event("ambience-exposed-actions-changed"));
+      await tick();
+      expect(store.actions).toEqual(actions);
+      expect(store.error).toBe("");
+    });
+
     test("a conditions-changed refetch failure is silently swallowed", async () => {
       const { store } = makeStore();
       connect(store);
@@ -353,6 +364,20 @@ describe("ScopeStore", () => {
       await store.refreshFloors();
       expect(store.floors.map((f) => f.floor_id)).toEqual(["ground", "upstairs"]);
       expect(store.floorConfigs.get("ground")).toEqual({ scenes: [] });
+    });
+
+    test("refreshFloors failure surfaces the error", async () => {
+      vi.mocked(api.listFloors).mockRejectedValue(new Error("floors down"));
+      const { store } = makeStore();
+      await store.refreshFloors();
+      expect(store.error).toBe("floors down");
+    });
+
+    test("refreshHouse failure surfaces the error", async () => {
+      vi.mocked(api.getHouse).mockRejectedValue(new Error("house down"));
+      const { store } = makeStore();
+      await store.refreshHouse();
+      expect(store.error).toBe("house down");
     });
 
     test("refreshFloors reuses existing config references across refreshes", async () => {

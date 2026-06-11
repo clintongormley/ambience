@@ -156,7 +156,7 @@ async def build_simulated_snapshots(
     Entity-reading conditions snapshot against the overlay (with injected `now`);
     opaque conditions (script/template) are built from `world.verdicts` so no real
     script runs and overrides are honoured. A live condition whose snapshot raises
-    degrades to None (same policy as `_snapshot_all`).
+    degrades to None (same policy as `async_snapshot_all`).
 
     `referenced` (condition_key -> entity_ids the simulated scenes use, from
     `scope_triggers.referenced_entities`) narrows sensor-backed conditions to

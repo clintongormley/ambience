@@ -279,9 +279,9 @@ describe("ambience-people-predicate-input — branch coverage", () => {
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
     });
-    const [hInput] = el.shadowRoot.querySelectorAll<HTMLInputElement>(
-      "[data-field=for] input[type=number]",
-    );
+    const [hInput] = el.shadowRoot
+      .querySelector("ambience-for-duration")!
+      .shadowRoot!.querySelectorAll<HTMLInputElement>("input[type=number]");
     hInput.value = "1";
     hInput.dispatchEvent(new Event("change"));
     expect(emitted?.quant).toBe("everyone"); // default
@@ -295,9 +295,9 @@ describe("ambience-people-predicate-input — branch coverage", () => {
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
     });
-    const inputs = el.shadowRoot.querySelectorAll<HTMLInputElement>(
-      "[data-field=for] input[type=number]",
-    );
+    const inputs = el.shadowRoot
+      .querySelector("ambience-for-duration")!
+      .shadowRoot!.querySelectorAll<HTMLInputElement>("input[type=number]");
     const [, mInput] = inputs;
     mInput.value = "10";
     mInput.dispatchEvent(new Event("change"));
@@ -311,9 +311,9 @@ describe("ambience-people-predicate-input — branch coverage", () => {
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
     });
-    const [hInput] = el.shadowRoot.querySelectorAll<HTMLInputElement>(
-      "[data-field=for] input[type=number]",
-    );
+    const [hInput] = el.shadowRoot
+      .querySelector("ambience-for-duration")!
+      .shadowRoot!.querySelectorAll<HTMLInputElement>("input[type=number]");
     hInput.value = "2";
     hInput.dispatchEvent(new Event("change"));
     expect(emitted?.who).toEqual(["person.alice"]);
@@ -345,9 +345,9 @@ describe("ambience-people-predicate-input — branch coverage", () => {
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
     });
-    const [hInput] = el.shadowRoot.querySelectorAll<HTMLInputElement>(
-      "[data-field=for] input[type=number]",
-    );
+    const [hInput] = el.shadowRoot
+      .querySelector("ambience-for-duration")!
+      .shadowRoot!.querySelectorAll<HTMLInputElement>("input[type=number]");
     // Simulate a non-numeric value (e.g. an empty field) which produces NaN → || 0.
     hInput.value = "";
     hInput.dispatchEvent(new Event("change"));
@@ -356,59 +356,29 @@ describe("ambience-people-predicate-input — branch coverage", () => {
   });
 
   // -------------------------------------------------------------------------
-  // _setForFromHaForm() — lines 262-272: public helper not exercised yet
-  // These are the uncovered statement lines.
+  // _setFor() — the host-side handler behind <ambience-for-duration>
+  // (the h:m:s editor itself is covered in test/for-duration.test.ts)
   // -------------------------------------------------------------------------
 
-  test("_setForFromHaForm() emits the correct {h,m,s} predicate", async () => {
+  test("_setFor() emits the correct {h,m,s} predicate", async () => {
     el = await mount({ quant: "everyone", where: "home" });
     let emitted: PeoplePredicate | undefined;
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
     });
-    el._setForFromHaForm({ hours: 1, minutes: 30, seconds: 0 });
+    el._setFor({ h: 1, m: 30, s: 0 });
     expect(emitted?.for).toEqual({ h: 1, m: 30, s: 0 });
   });
 
-  test("_setForFromHaForm() uses 0 for missing fields", async () => {
+  test("_setFor() with all zeros emits no for key", async () => {
     el = await mount({ quant: "everyone", where: "home" });
     let emitted: PeoplePredicate | undefined;
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
     });
-    el._setForFromHaForm({ minutes: 5 });
-    expect(emitted?.for).toEqual({ h: 0, m: 5, s: 0 });
-  });
-
-  test("_setForFromHaForm() with undefined argument uses all zeros (no for emitted)", async () => {
-    el = await mount({ quant: "everyone", where: "home" });
-    let emitted: PeoplePredicate | undefined;
-    el.addEventListener("value-changed", (e: Event) => {
-      emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
-    });
-    el._setForFromHaForm(undefined);
+    el._setFor({ h: 0, m: 0, s: 0 });
     // all-zero → _hasFor false → for key absent
     expect(emitted?.for).toBeUndefined();
-  });
-
-  test("_forData() returns correct hours/minutes/seconds shape from a value with for", async () => {
-    el = await mount({ quant: "everyone", where: "home", for: { h: 2, m: 15, s: 30 } });
-    const d = el._forData();
-    expect(d).toEqual({ duration: { hours: 2, minutes: 15, seconds: 30 } });
-  });
-
-  test("_forData() returns zeros when for is absent", async () => {
-    el = await mount({ quant: "everyone", where: "home" });
-    const d = el._forData();
-    expect(d).toEqual({ duration: { hours: 0, minutes: 0, seconds: 0 } });
-  });
-
-  test("_forSchema() returns a duration selector schema with enable_day:false", async () => {
-    el = await mount({ quant: "everyone", where: "home" });
-    const schema = el._forSchema();
-    expect(schema).toHaveLength(1);
-    expect(schema[0].name).toBe("duration");
-    expect(schema[0].selector.duration.enable_day).toBe(false);
   });
 
   // -------------------------------------------------------------------------
@@ -566,9 +536,9 @@ describe("ambience-people-predicate-input — branch coverage", () => {
     el.addEventListener("value-changed", (e: Event) => {
       emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
     });
-    const [, mInput] = el.shadowRoot.querySelectorAll<HTMLInputElement>(
-      "[data-field=for] input[type=number]",
-    );
+    const [, mInput] = el.shadowRoot
+      .querySelector("ambience-for-duration")!
+      .shadowRoot!.querySelectorAll<HTMLInputElement>("input[type=number]");
     mInput.value = "abc"; // non-numeric → NaN → || 0
     mInput.dispatchEvent(new Event("change"));
     // m becomes 0; h is preserved from existing `d`.

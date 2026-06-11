@@ -9,7 +9,6 @@ import type {
   BufferedUnit,
   ConditionInfo,
   DayConfig,
-  DryRunResult,
   ExposedAction,
   ExposedActionWarning,
   FloorListItem,
@@ -154,23 +153,12 @@ export async function getServiceSchema(
   return hass.callWS({ type: "ambience/services/get_schema", service });
 }
 
-export async function validateConfig(
-  hass: HassConnection,
-  config: AreaConfig,
-): Promise<{ ok: true }> {
-  return hass.callWS({ type: "ambience/validate", config });
-}
-
 /** The websocket scope selector for a scope: `{area_id}`, `{floor_id}`, or
  *  `{house: true}`. Spread into a command message. */
 function scopeFields(scope: Scope): Record<string, unknown> {
   if (scope.kind === "area") return { area_id: scope.id };
   if (scope.kind === "floor") return { floor_id: scope.id };
   return { house: true };
-}
-
-export async function dryRun(hass: HassConnection, scope: Scope): Promise<DryRunResult> {
-  return hass.callWS({ type: "ambience/dry_run", ...scopeFields(scope) });
 }
 
 export async function applyScenes(
@@ -366,15 +354,14 @@ export async function listCategories(hass: HassConnection): Promise<SceneCategor
 export async function saveCategories(
   hass: HassConnection,
   categories: SceneCategory[],
-): Promise<{ ok: true }> {
-  return hass.callWS({ type: "ambience/categories/save", categories });
+): Promise<void> {
+  // The backend sends no result payload for this command.
+  await hass.callWS({ type: "ambience/categories/save", categories });
 }
 
-export async function deleteCategory(
-  hass: HassConnection,
-  category_id: string,
-): Promise<{ ok: true }> {
-  return hass.callWS({ type: "ambience/categories/delete", category_id });
+export async function deleteCategory(hass: HassConnection, category_id: string): Promise<void> {
+  // The backend sends no result payload for this command.
+  await hass.callWS({ type: "ambience/categories/delete", category_id });
 }
 
 export async function listTraces(hass: HassConnection): Promise<BufferedUnit[]> {
@@ -382,6 +369,11 @@ export async function listTraces(hass: HassConnection): Promise<BufferedUnit[]> 
     type: "ambience/traces/list",
   });
   return res.traces;
+}
+
+export async function clearTraces(hass: HassConnection): Promise<void> {
+  // The backend sends no result payload for this command.
+  await hass.callWS({ type: "ambience/traces/clear" });
 }
 
 export async function downloadScopeDiagnostics(

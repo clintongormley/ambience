@@ -9,7 +9,6 @@ top of these methods.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable
@@ -28,12 +27,15 @@ from .scope_triggers import iter_predicate_specs, referenced_entities
 from .service import (
     _scope_enabled,
     _switch_state,
+    apply_lock,
     async_execute_plan,
     async_resolve_with_snapshots,
     category_ids,
     forget_last_applied,
+    gather_unit_traces,
     get_last_applied,
     scope_reapply_intervals,
+    snapshot_conditions,
 )
 from .trace import (
     CauseKind,
@@ -87,13 +89,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         self._for_handles: dict[PredKey, dict[tuple[str, float], Callable[[], None]]] = {}
         self._switch_scopes: dict[str, tuple[str, str | None]] = {}
         self._reapply_intervals: dict[int, set[tuple[str, str | None]]] = {}
-        # One lock per (scope_kind, scope_id, category) unit, so a burst of
-        # triggers on the same unit queues through resolve+apply one at a time
-        # rather than racing (each would otherwise read a stale last_applied and
-        # re-fire the same scene). Bounded by scopes×categories; tiny and stable.
-        self._apply_locks: defaultdict[tuple[str, str | None, str], asyncio.Lock] = defaultdict(
-            asyncio.Lock
-        )
+        # False after teardown: handlers already queued in the event loop when
+        # the engine is torn down must not evaluate or re-arm timers (after
+        # unload, hass.data[DOMAIN] is gone).
+        self._running = True
         # What a config-changed signal touched, accumulated across the debounce
         # window so the coalesced refresh re-applies only what changed. A global
         # change (None) sets _pending_all, which wins over any per-scope entries.
@@ -199,7 +198,16 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             if condition is None:
                 continue
             snap = snapshots.get(key[3])
-            new_value = bool(condition.matches(predicate, snap)) if snap is not None else False
+            if snap is None:
+                new_value = False
+            else:
+                try:
+                    new_value = bool(condition.matches(predicate, snap))
+                except Exception as exc:  # noqa: BLE001 — mirror the snapshot-failure policy
+                    # A raise here would kill the whole fire-and-forget evaluate
+                    # task, silently losing every other fired predicate.
+                    _LOGGER.warning("ambience: condition %r match failed: %s", key[3], exc)
+                    new_value = False
             old_value = self._predicate_state.get(key)
             self._predicate_state[key] = new_value
             if old_value != new_value:
@@ -209,19 +217,13 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         return dirty
 
     async def _refresh_snapshots(self, condition_keys: set[str]) -> None:
-        """Re-snapshot the given conditions into the cache (None on failure)."""
-        conditions = self._conditions()
-        for key in condition_keys:
-            condition = conditions.get(key)
-            if condition is None:
-                continue
-            try:
-                self._snapshots[key] = await condition.snapshot(
-                    self._hass, entities=self._referenced.get(key, frozenset())
-                )
-            except Exception as exc:  # noqa: BLE001 — any condition error => None snapshot
-                _LOGGER.warning("ambience: condition %r snapshot failed: %s", key, exc)
-                self._snapshots[key] = None
+        """Re-snapshot the given conditions into the cache, concurrently
+        (None on failure) — one slow condition doesn't delay the rest."""
+        self._snapshots.update(
+            await snapshot_conditions(
+                self._hass, self._conditions(), self._referenced, keys=condition_keys
+            )
+        )
 
     async def _refresh_all_snapshots(self) -> None:
         await self._refresh_snapshots(set(self._conditions()))
@@ -264,7 +266,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # resolve+apply makes a waiting task proceed only once the first has
         # recorded last_applied and finished, so it either debounces (same winner)
         # or applies in order (new winner) instead of interleaving mid-apply.
-        async with self._apply_locks[(scope_kind, scope_id, category_id)]:
+        async with apply_lock(self._hass, scope_kind, scope_id, category_id):
             plan = await async_resolve_with_snapshots(
                 self._hass,
                 scope_kind,
@@ -346,15 +348,11 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             by_tier[_TIER[unit[0]]].append(unit)
         traces: list[UnitTrace] = []
         for tier in sorted(by_tier):
-            results = await asyncio.gather(
-                *(self._resolve_and_apply(*u, force=force) for u in by_tier[tier]),
-                return_exceptions=True,
+            traces.extend(
+                await gather_unit_traces(
+                    self._resolve_and_apply(*u, force=force) for u in by_tier[tier]
+                )
             )
-            for res in results:
-                if isinstance(res, BaseException):
-                    _LOGGER.warning("ambience: category apply failed: %s", res)
-                elif res is not None:
-                    traces.append(res)
         return traces
 
     async def async_evaluate(self, fired: set[PredKey], cause: TriggerCause | None = None) -> None:
@@ -440,15 +438,26 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         force: bool,
     ) -> None:
         """Snapshot all conditions, seed flip-state across every predicate, then
-        apply the given units and emit one TraceEvent for the batch."""
+        apply the given units — plus any unit the seeding pass itself found
+        dirty — and emit one TraceEvent for the batch.
+
+        The seeding recompute runs over ALL predicates and records their new
+        booleans; a flip that landed during the debounce window for a scope
+        outside `units` is consumed by it (the later evaluate task sees
+        old == new), so those dirty units must be applied here or they are
+        silently lost. They don't inherit `force` — only the requested units
+        were explicitly edited/reloaded."""
         await self._refresh_all_snapshots()
-        self._recompute(set(self._index.all_predicates()), self._snapshots)
+        seeded_dirty = self._recompute(set(self._index.all_predicates()), self._snapshots)
         # Re-arm `for:` rechecks: async_subscribe() tore down every timer, and a
         # plain re-evaluation won't re-create them. Without this, a duration rule
         # whose entity was already in-state before a startup/reload (e.g. a switch
         # on for 2h) never fires until some unrelated event wakes its category.
         self._schedule_for_rechecks(self._index.durations.keys())
         traces = await self._apply_units(units, force=force)
+        extra = sorted(seeded_dirty - set(units), key=lambda u: (u[0], u[1] or "", u[2]))
+        if extra:
+            traces.extend(await self._apply_units(extra, force=False))
         if traces:
             emit_trace(self._hass, TraceEvent(cause, traces))
 

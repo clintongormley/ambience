@@ -105,6 +105,8 @@ def _init_repo(tmp_path: Path, *, branch: str = "main", dirty: bool = False) -> 
     (tmp_path / "package.json").write_text(
         '{\n  "name": "ambience-panel",\n  "version": "0.1.0",\n  "private": true\n}\n'
     )
+    # pyproject's [project] version is bumped too (a stale number misleads).
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "ambience"\nversion = "0.1.0"\n')
     (tmp_path / "package-lock.json").write_text(
         "{\n"
         '  "name": "ambience-panel",\n'
@@ -179,6 +181,7 @@ def test_bump_version_bumps_all_files_and_verifies(tmp_path: Path):
     assert lock["version"] == "0.2.0"
     assert lock["packages"][""]["version"] == "0.2.0"
     assert lock["packages"]["node_modules/esbuild"]["version"] == "0.1.0"
+    assert 'version = "0.2.0"' in (tmp_path / "pyproject.toml").read_text()
 
 
 def test_bump_version_rejects_invalid_semver(tmp_path: Path):

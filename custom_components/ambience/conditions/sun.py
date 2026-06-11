@@ -179,6 +179,9 @@ class SunCondition:
                     raise ValueError(f"sun azimuth range {key} must be a number: {val!r}")
                 if not 0 <= val < 360:
                     raise ValueError(f"sun azimuth {key} out of range [0, 360): {val!r}")
+            # from == to (an empty arc that never matches) is left valid: harmless
+            # at runtime, and rejecting it would block saving a scope that holds
+            # such a previously-valid config.
 
     @staticmethod
     def _elevation_ok(constraint: Any, elevation: float | None) -> bool:

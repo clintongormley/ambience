@@ -188,7 +188,21 @@ class AmbienceStore:
         return [dict(c) for c in self._data.get("categories", [])]
 
     async def async_save_categories(self, categories: list[dict[str, Any]]) -> None:
-        """Replace the whole categories list. Caller (websocket) validates shape."""
+        """Replace the whole categories list. Caller (websocket) validates shape;
+        the store owns the same invariants the delete path enforces — at least
+        one category must always exist, and a category with scenes can't be
+        dropped (a stale-tab save would silently orphan them)."""
+        if not categories:
+            raise LastCategoryError("at least one category is required")
+        new_ids = {c.get("id") for c in categories}
+        in_use = {
+            scene.get("category")
+            for _kind, _id, cfg in self.all_scope_configs()
+            for scene in cfg.get("scenes", [])
+        }
+        removed_in_use = sorted(cid for cid in in_use - new_ids if isinstance(cid, str))
+        if removed_in_use:
+            raise CategoryInUseError(f"categories still have scenes: {', '.join(removed_in_use)}")
         self._data["categories"] = [dict(c) for c in categories]
         await self._store.async_save(self._data)
         self._notify_config_changed()
@@ -320,7 +334,10 @@ class AmbienceStore:
         container = self._scope_container(scope_kind, scope_id)
         sw = container.setdefault("switch", {})
         sw["off_at"] = off_at
-        await self._store.async_save(self._data)
+        # off_at is loss-tolerant runtime state, and a house toggle writes it
+        # once per descendant switch — delay_save coalesces those N+1 writes
+        # into one instead of serialising full-store saves.
+        self._store.async_delay_save(lambda: self._data, 1.0)
 
     def get_scope_enabled(self, scope_kind: str, scope_id: str | None) -> bool:
         """Whether a scope is permanently enabled (default ``True``).

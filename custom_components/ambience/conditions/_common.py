@@ -9,6 +9,7 @@ fix-it-in-one-place drift that crept in when each condition carried its own.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from typing import Any
 
@@ -88,10 +89,31 @@ def validate_for(dur: Any) -> None:
         return
     if not isinstance(dur, dict):
         raise ValueError("`for` must be a dict {h,m,s} or null")
+    unknown = set(dur) - {"h", "m", "s"}
+    if unknown:
+        # e.g. {"hours": 1} — dur_seconds would silently read it as 0 seconds.
+        raise ValueError(f"`for` keys must be h/m/s, got {sorted(unknown)!r}")
     for k in ("h", "m", "s"):
         v = dur.get(k, 0)
         if not isinstance(v, int) or isinstance(v, bool) or v < 0:
             raise ValueError(f"`for.{k}` must be a non-negative int")
+
+
+def predicate_has_any(predicate: Any, *keys: str) -> bool:
+    """Whether a predicate dict carries at least one non-empty value among
+    `keys` — the shared body behind the conditions' ``is_constraining`` hooks
+    (a predicate with none of them matches everything: a sorting wildcard)."""
+    return isinstance(predicate, dict) and any(bool(predicate.get(k)) for k in keys)
+
+
+def state_sources(hass: Any, entities: frozenset[str] | None, domain: str | None = None) -> Any:
+    """The states a snapshot should read: just the referenced `entities` when
+    the trigger engine supplies them, else a full (optionally domain-filtered)
+    scan — the simulator path. Entries may be None (referenced entity that
+    doesn't exist); callers skip those."""
+    if entities is not None:
+        return (hass.states.get(eid) for eid in entities)
+    return hass.states.async_all(domain) if domain else hass.states.async_all()
 
 
 def merge_intervals(intervals: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -110,7 +132,10 @@ def merge_intervals(intervals: list[tuple[float, float]]) -> list[tuple[float, f
 
 
 def as_float(value: Any) -> float | None:
-    """Coerce a numeric value to float, rejecting bools and non-numbers (→ None)."""
+    """Coerce a numeric value to float, rejecting bools, non-numbers and
+    non-finite values (→ None). NaN compares uselessly against bounds (nan < lo
+    and nan >= hi are both False), so it must read as unobservable."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return float(value)
+    result = float(value)
+    return result if math.isfinite(result) else None

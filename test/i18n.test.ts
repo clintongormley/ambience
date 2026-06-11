@@ -26,7 +26,7 @@ describe("periodLabel", () => {
   });
 
   test("ignores empty/null custom label", () => {
-    expect(periodLabel(undefined, "wind_down", { wind_down: def(null) })).toBe("Wind_down");
+    expect(periodLabel(undefined, "wind_down", { wind_down: def(null) })).toBe("Wind down");
   });
 
   test("uses hass.localize when available and key resolves", () => {

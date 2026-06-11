@@ -195,9 +195,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         async_apply_switch_exposure(self.hass, self.entity_id)
 
     async def async_will_remove_from_hass(self) -> None:
-        if self._timer is not None:
-            self._timer.cancel()
-            self._timer = None
+        self._cancel_timer()
         self.hass.data[DOMAIN].get(DATA_SWITCHES, {}).pop(self.scope_key, None)
         await super().async_will_remove_from_hass()
 
@@ -217,9 +215,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
 
     async def _apply_on(self) -> None:
         """Turn this switch on locally (no cascade)."""
-        if self._timer is not None:
-            self._timer.cancel()
-            self._timer = None
+        self._cancel_timer()
         self._attr_is_on = True
         await self._store().async_set_scope_switch_off_at(self._scope_kind, self._scope_id, None)
         self.async_write_ha_state()
@@ -234,6 +230,11 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
         self.async_write_ha_state()
 
     # ---- internals ----
+
+    def _cancel_timer(self) -> None:
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
 
     def _store(self) -> Any:
         return self.hass.data[DOMAIN][DATA_STORE]
@@ -295,9 +296,7 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
             dev_reg.async_update_device(device.id, name=new_name)
 
     def _schedule_auto_on(self, seconds: int) -> None:
-        if self._timer is not None:
-            self._timer.cancel()
-            self._timer = None
+        self._cancel_timer()
         if seconds <= 0:
             return
         fire_at = dt_util.utcnow() + timedelta(seconds=seconds)
@@ -307,6 +306,9 @@ class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
     def _schedule_auto_on_from_store(self, *, turn_on_if_expired: bool) -> None:
         delay = self._resolved_delay()
         if delay <= 0:
+            # 0 = never auto-on: drop any timer armed under a previous delay,
+            # or the switch still turns itself on at the old scheduled time.
+            self._cancel_timer()
             return
         off_at_iso = self._store().get_scope_switch_off_at(self._scope_kind, self._scope_id)
         if not off_at_iso:

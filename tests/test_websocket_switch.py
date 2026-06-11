@@ -188,15 +188,36 @@ async def test_set_scope_enabled_heals_legacy_disabled(hass, installed, hass_ws_
 
 
 async def test_set_scope_enabled_noop_when_switch_unregistered(hass, installed, hass_ws_client):
-    # A scope with no ambience switch entity registered (an area id that has no
-    # switch): the hide/heal block is skipped (entity_id is None) and the call
-    # still succeeds + persists the flag.
-    ghost = "ghost_area_without_switch"
+    # A real registry area whose ambience switch entity has been removed from
+    # the entity registry: the hide/heal block is skipped (entity_id is None)
+    # and the call still succeeds + persists the flag.
+    from homeassistant.helpers import area_registry as ar
+    from homeassistant.helpers import entity_registry as er
+
+    area = ar.async_get(hass).async_create("Switchless Room")
+    await hass.async_block_till_done()
+    reg = er.async_get(hass)
+    entity_id = reg.async_get_entity_id("switch", DOMAIN, f"ambience_switch_area_{area.id}")
+    if entity_id is not None:
+        reg.async_remove(entity_id)
     resp = await _ws_send(
-        hass_ws_client, type="ambience/set_scope_enabled", area_id=ghost, enabled=False
+        hass_ws_client, type="ambience/set_scope_enabled", area_id=area.id, enabled=False
     )
     assert resp["success"]
-    assert hass.data[DOMAIN][DATA_STORE].get_scope_enabled("area", ghost) is False
+    assert hass.data[DOMAIN][DATA_STORE].get_scope_enabled("area", area.id) is False
+
+
+async def test_set_scope_enabled_rejects_unregistered_area_id(hass, installed, hass_ws_client):
+    # A typo'd/stale area id must be rejected before the store setdefaults a
+    # permanent junk scope bucket.
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/set_scope_enabled",
+        area_id="ghost_area_without_switch",
+        enabled=False,
+    )
+    assert not resp["success"]
+    assert resp["error"]["code"] == "validation_error"
 
 
 async def test_set_scope_enabled_enable_already_enabled_applies_no_heal(

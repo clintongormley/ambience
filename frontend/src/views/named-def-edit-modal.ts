@@ -6,7 +6,7 @@ const ID_RE = /^[a-z][a-z0-9_]*$/;
 
 /** Derive a stable id from a free-text label: lowercase, runs of non-[a-z0-9]
  *  collapse to `_`, leading/trailing underscores trimmed. */
-export function labelToId(label: string): string {
+function labelToId(label: string): string {
   return label
     .toLowerCase()
     .trim()

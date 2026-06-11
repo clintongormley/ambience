@@ -71,7 +71,15 @@ class AmbienceCard extends HTMLElement {
       };
       el.hass = this._hass;
       this._inner = el;
-      this.appendChild(el);
+      // replaceChildren (not appendChild) clears any failure hint from an
+      // earlier attempt.
+      this.replaceChildren(el);
+    } catch (err) {
+      // lazy-frontend un-memoises failures so a later setConfig retries;
+      // surface a hint instead of dying as an unhandled rejection (the card
+      // would otherwise just stay blank with a console error).
+      console.error("ambience-card: failed to load the Ambience frontend", err);
+      this.textContent = "Ambience card failed to load — check the connection and refresh.";
     } finally {
       this._loading = false;
     }

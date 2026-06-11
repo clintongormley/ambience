@@ -1,13 +1,12 @@
 /**
  * Tests for the remaining api.ts functions not covered by api.test.ts
- * (listAreas, getArea, saveArea, listConditions, listActions, validateConfig, dryRun,
+ * (listAreas, getArea, saveArea, listConditions, listActions,
  *  applyScenes, runSceneActions, getDayConfig, saveDayConfig,
  *  getWeatherConfig, saveWeatherConfig, getKnownStates)
  */
 import { describe, expect, test, vi } from "vitest";
 import {
   applyScenes,
-  dryRun,
   getArea,
   getDayConfig,
   getFloor,
@@ -27,7 +26,6 @@ import {
   saveFloor,
   saveHouse,
   saveWeatherConfig,
-  validateConfig,
 } from "../frontend/src/api";
 import type { AreaConfig, WeatherGroup } from "../frontend/src/types";
 
@@ -158,145 +156,41 @@ describe("API: getServiceSchema", () => {
   });
 });
 
-describe("API: validateConfig", () => {
-  test("sends config to validate endpoint", async () => {
+describe("API: floor + house wrappers", () => {
+  test("listFloors calls ambience/floors/list", async () => {
     const { callWS, sent } = makeFakeHass();
-    const config: AreaConfig = { scenes: [] };
-    const res = await validateConfig({ callWS } as any, config);
-    expect(sent[0]).toEqual({ type: "ambience/validate", config });
-    expect(res.ok).toBe(true);
+    await listFloors({ callWS } as any);
+    expect(sent[0]).toEqual({ type: "ambience/floors/list" });
   });
-});
 
-describe("API: dryRun", () => {
-  test("sends area_id to dry_run endpoint", async () => {
+  test("getFloor passes floor_id", async () => {
     const { callWS, sent } = makeFakeHass();
-    const res = await dryRun({ callWS } as any, { kind: "area", id: "living_room" });
+    await getFloor({ callWS } as any, "upstairs");
+    expect(sent[0]).toEqual({ type: "ambience/floor/get", floor_id: "upstairs" });
+  });
+
+  test("saveFloor sends config", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await saveFloor({ callWS } as any, "upstairs", { scenes: [] });
     expect(sent[0]).toEqual({
-      type: "ambience/dry_run",
-      area_id: "living_room",
-    });
-    expect(res).toEqual({ matched_scene_index: null, scene_name: null, actions: [] });
-  });
-
-  test("dryRun area sends area_id", async () => {
-    const calls: any[] = [];
-    const hass = {
-      callWS: async (msg: any) => {
-        calls.push(msg);
-        return {};
-      },
-      connection: {} as any,
-    };
-    await dryRun(hass as any, { kind: "area", id: "kitchen" });
-    expect(calls[0]).toEqual({ type: "ambience/dry_run", area_id: "kitchen" });
-  });
-
-  test("dryRun floor sends floor_id", async () => {
-    const calls: any[] = [];
-    const hass = {
-      callWS: async (msg: any) => {
-        calls.push(msg);
-        return {};
-      },
-      connection: {} as any,
-    };
-    await dryRun(hass as any, { kind: "floor", id: "upstairs" });
-    expect(calls[0]).toEqual({
-      type: "ambience/dry_run",
+      type: "ambience/floor/save",
       floor_id: "upstairs",
+      config: { scenes: [] },
     });
   });
 
-  test("dryRun house sends house:true", async () => {
-    const calls: any[] = [];
-    const hass = {
-      callWS: async (msg: any) => {
-        calls.push(msg);
-        return {};
-      },
-      connection: {} as any,
-    };
-    await dryRun(hass as any, { kind: "house" });
-    expect(calls[0]).toEqual({ type: "ambience/dry_run", house: true });
+  test("getHouse calls ambience/house/get", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await getHouse({ callWS } as any);
+    expect(sent[0]).toEqual({ type: "ambience/house/get" });
+  });
+
+  test("saveHouse sends config", async () => {
+    const { callWS, sent } = makeFakeHass();
+    await saveHouse({ callWS } as any, { scenes: [] });
+    expect(sent[0]).toEqual({ type: "ambience/house/save", config: { scenes: [] } });
   });
 });
-
-test("listFloors calls ambience/floors/list", async () => {
-  const calls: any[] = [];
-  const hass = {
-    callWS: async (msg: any) => {
-      calls.push(msg);
-      return [];
-    },
-    connection: {} as any,
-  };
-  await listFloors(hass as any);
-  expect(calls[0]).toEqual({ type: "ambience/floors/list" });
-});
-
-test("getFloor passes floor_id", async () => {
-  const calls: any[] = [];
-  const hass = {
-    callWS: async (msg: any) => {
-      calls.push(msg);
-      return { scenes: [] };
-    },
-    connection: {} as any,
-  };
-  await getFloor(hass as any, "upstairs");
-  expect(calls[0]).toEqual({ type: "ambience/floor/get", floor_id: "upstairs" });
-});
-
-test("saveFloor sends config", async () => {
-  const calls: any[] = [];
-  const hass = {
-    callWS: async (msg: any) => {
-      calls.push(msg);
-      return { ok: true, config: msg.config };
-    },
-    connection: {} as any,
-  };
-  await saveFloor(hass as any, "upstairs", { scenes: [] });
-  expect(calls[0]).toEqual({
-    type: "ambience/floor/save",
-    floor_id: "upstairs",
-    config: { scenes: [] },
-  });
-});
-
-test("getHouse calls ambience/house/get", async () => {
-  const calls: any[] = [];
-  const hass = {
-    callWS: async (msg: any) => {
-      calls.push(msg);
-      return { scenes: [] };
-    },
-    connection: {} as any,
-  };
-  await getHouse(hass as any);
-  expect(calls[0]).toEqual({ type: "ambience/house/get" });
-});
-
-test("saveHouse calls ambience/house/save", async () => {
-  const calls: any[] = [];
-  const hass = {
-    callWS: async (msg: any) => {
-      calls.push(msg);
-      return { ok: true, config: msg.config };
-    },
-    connection: {} as any,
-  };
-  await saveHouse(hass as any, { scenes: [] });
-  expect(calls[0]).toEqual({
-    type: "ambience/house/save",
-    config: { scenes: [] },
-  });
-});
-
-// ---------------------------------------------------------------------------
-// applyScenes
-// ---------------------------------------------------------------------------
 
 describe("API: applyScenes", () => {
   test("applyScenes without categoryId sends no category_id field", async () => {

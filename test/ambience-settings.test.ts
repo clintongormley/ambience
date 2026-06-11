@@ -163,4 +163,26 @@ describe("ambience-ambience-settings", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("p")).toBeFalsy();
   });
+
+  test("a rejected (empty) name edit restores the stored value in the input", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector("[data-test=defaults-name]") as HTMLInputElement;
+    input.value = "   ";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    // The edit is rejected; the input must not keep showing the rejected text
+    // while the stored value silently stays "Ambience".
+    expect(input.value).toBe("Ambience");
+  });
+
+  test("a rejected (negative) delay edit restores the stored value in the input", async () => {
+    el = await mount();
+    const input = el.shadowRoot.querySelector(
+      "[data-test=defaults-delay-seconds]",
+    ) as HTMLInputElement;
+    input.value = "-5";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(input.value).toBe("7200");
+  });
 });

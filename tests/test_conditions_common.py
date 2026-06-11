@@ -91,6 +91,13 @@ def test_validate_for_rejects_bad_shapes(bad: object) -> None:
         validate_for(bad)
 
 
+def test_validate_for_rejects_unknown_keys() -> None:
+    """`{"hours": 1}` (a plausible hand-edit) must not validate — dur_seconds
+    would silently evaluate it to a 0-second gate."""
+    with pytest.raises(ValueError, match="h/m/s"):
+        validate_for({"hours": 1})
+
+
 def test_merge_intervals_merges_overlaps_and_sorts() -> None:
     assert merge_intervals([(2.0, 3.0), (0.0, 1.0), (0.5, 2.5)]) == [(0.0, 3.0)]
     assert merge_intervals([(0.0, 1.0), (2.0, 3.0)]) == [(0.0, 1.0), (2.0, 3.0)]
@@ -103,3 +110,11 @@ def test_as_float_coerces_numbers_and_rejects_bool_and_non_numbers() -> None:
     assert as_float(True) is None
     assert as_float("5") is None
     assert as_float(None) is None
+
+
+def test_as_float_rejects_non_finite() -> None:
+    """NaN passes every bound comparison the wrong way (nan < lo and nan >= hi
+    are both False) — treat non-finite as unobservable, like lux already does."""
+    assert as_float(float("nan")) is None
+    assert as_float(float("inf")) is None
+    assert as_float(float("-inf")) is None

@@ -4,6 +4,7 @@ vi.mock("../frontend/src/api", () => ({
   listTraces: vi.fn(),
   getServiceSchema: vi.fn(),
   downloadScopeDiagnostics: vi.fn(),
+  clearTraces: vi.fn(async () => undefined),
 }));
 
 import "../frontend/src/views/traces-modal";
@@ -332,5 +333,42 @@ describe("ambience-traces-modal", () => {
     // The index fallback (event_id ?? i) and ("") fallback are exercised.
     // Element renders and the eval row is present.
     expect(el.shadowRoot.querySelectorAll(".eval").length).toBe(1);
+  });
+});
+
+describe("review fixes", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("a Clear button empties the buffer via ambience/traces/clear", async () => {
+    el = await mount([unit()]);
+    const clearBtn = el.shadowRoot.querySelector("button.clear") as HTMLButtonElement;
+    expect(clearBtn).not.toBeNull();
+    vi.mocked(api.listTraces).mockResolvedValue([]);
+    clearBtn.click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(vi.mocked(api.clearTraces)).toHaveBeenCalled();
+    expect(el.shadowRoot.textContent).toContain("No traces for this category yet.");
+  });
+
+  test("the new-traces poll runs only while the modal is open", async () => {
+    el = await mount([unit()]);
+    expect(el._poll).not.toBeUndefined();
+    el.open = false;
+    await el.updateComplete;
+    // The interval is torn down on close instead of ticking for the lifetime
+    // of scopes-view (the element is always mounted).
+    expect(el._poll).toBeUndefined();
+  });
+
+  test("Escape closes the modal", async () => {
+    el = await mount([unit()]);
+    let closed = false;
+    el.addEventListener("close", () => {
+      closed = true;
+    });
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(closed).toBe(true);
   });
 });

@@ -8,6 +8,12 @@ vi.mock("../frontend/src/api.js", () => ({
 import "../frontend/src/views/day-config";
 import { saveDayConfig } from "../frontend/src/api.js";
 
+// day-config guards its pickers on customElements.get("ha-form"); define a
+// stub so the ha-form path (what real HA renders) is the one under test.
+if (!customElements.get("ha-form")) {
+  customElements.define("ha-form", class extends HTMLElement {});
+}
+
 describe("ambience-day-config", () => {
   let el: any;
   beforeEach(() => {
@@ -174,5 +180,21 @@ describe("ambience-day-config", () => {
     expect(txt).toContain("Floor: upstairs"); // floor scope renders with prefix
     expect(txt).toContain("House"); // house scope renders the literal label
     expect(txt).not.toContain("undefined");
+  });
+
+  test("a failed load shows an error instead of a blank panel", async () => {
+    const { getDayConfig } = await import("../frontend/src/api.js");
+    vi.mocked(getDayConfig).mockRejectedValueOnce(new Error("day list boom"));
+    el = await mount();
+    expect(el.shadowRoot.textContent).toContain("day list boom");
+  });
+
+  test("a failed save shows an error", async () => {
+    el = await mount();
+    vi.mocked(saveDayConfig).mockRejectedValueOnce(new Error("day save boom"));
+    el._onSensorChange({ detail: { value: "binary_sensor.workday" } });
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).toContain("day save boom");
   });
 });

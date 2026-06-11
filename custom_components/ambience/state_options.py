@@ -170,9 +170,14 @@ def known_states_for(hass: HomeAssistant, entity_id: str) -> list[str]:
             for o in opts:
                 if isinstance(o, str):
                     _add(o)
-        # person / device_tracker: include zone friendly names.
+        # person / device_tracker: include zone friendly names. zone.home is
+        # skipped — HA reports presence there as the literal state `home`
+        # (already offered via the domain list), never as the zone's friendly
+        # name, so that label could never match.
         if domain in ("person", "device_tracker"):
             for z in hass.states.async_all("zone"):
+                if z.entity_id == "zone.home":
+                    continue
                 name = z.attributes.get("friendly_name")
                 if isinstance(name, str) and name:
                     _add(name)

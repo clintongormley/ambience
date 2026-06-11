@@ -10,23 +10,32 @@ import {
 import { entityDisplayName, formatArgValue, paramLabel } from "./summary.js";
 import type {
   BufferedUnit,
+  PeriodDef,
   ServiceSchema,
+  TraceAction,
   TraceCause,
   TraceOutcome,
   TraceSceneEval,
 } from "./types.js";
 import type { HassWithStates } from "./views/entity-row.js";
 
-type Action = { service: string; entity_ids?: string[]; params?: Record<string, unknown> };
-
 type HassLike = { localize?: (key: string) => string | undefined; [key: string]: unknown };
+
+/** The host's loaded custom-period definitions, threaded through so a custom
+ *  period id in a trace detail resolves to its configured label. */
+export type CustomPeriods = Record<string, PeriodDef>;
 
 // A predicate's `detail` is the condition's `describe()` output. Most conditions
 // already return a human phrase (e.g. "3 of 5 home (Alice, Bob)"); a couple
 // emit a raw enum id that needs a friendly label. Humanize only those — passing
 // the human phrases through untouched (humanizeId would lower-case them).
-function formatDetail(hass: HassLike | undefined, conditionKey: string, detail: string): string {
-  if (conditionKey === "time_of_day") return periodLabel(hass, detail, {});
+function formatDetail(
+  hass: HassLike | undefined,
+  conditionKey: string,
+  detail: string,
+  periods: CustomPeriods,
+): string {
+  if (conditionKey === "time_of_day") return periodLabel(hass, detail, periods);
   if (conditionKey === "weather") return weatherConditionLabel(hass, detail);
   return detail;
 }
@@ -246,7 +255,7 @@ export function outcomeSummary(u: BufferedUnit): string {
 // Brightness: 60". Param keys use the service schema's `field.name` when
 // `schemas` is supplied, else fall back to the humanized field id.
 export function formatActionHeader(
-  a: Action,
+  a: TraceAction,
   hass?: HassLike,
   schemas?: Record<string, ServiceSchema>,
 ): string {
@@ -258,7 +267,7 @@ export function formatActionHeader(
   return params ? `${label} · ${params}` : label;
 }
 
-function entityCount(actions: Action[]): number {
+function entityCount(actions: TraceAction[]): number {
   return actions.reduce((n, a) => n + (a.entity_ids?.length ?? 0), 0);
 }
 
@@ -273,7 +282,11 @@ function isSkipped(outcome: TraceOutcome): boolean {
   return outcome === "skipped_switch_off" || outcome === "skipped_scope_disabled";
 }
 
-function renderScene(r: TraceSceneEval, hass: HassLike | undefined): TemplateResult {
+function renderScene(
+  r: TraceSceneEval,
+  hass: HassLike | undefined,
+  periods: CustomPeriods,
+): TemplateResult {
   // `index` is the 0-based position in the scene list; scene numbers are shown 1-based.
   const num = r.index + 1;
   if (r.disabled) {
@@ -289,7 +302,7 @@ function renderScene(r: TraceSceneEval, hass: HassLike | undefined): TemplateRes
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
           ${p.passed ? "✓" : "✗"} ${conditionLabel(hass, p.condition_key)}${
             p.detail
-              ? html` <span class="dim">[${formatDetail(hass, p.condition_key, p.detail)}]</span>`
+              ? html` <span class="dim">[${formatDetail(hass, p.condition_key, p.detail, periods)}]</span>`
               : nothing
           }
         </div>`,
@@ -307,6 +320,7 @@ export function renderEvaluation(
   onToggle: () => void,
   hass?: HassLike,
   schemas?: Record<string, ServiceSchema>,
+  periods: CustomPeriods = {},
 ): TemplateResult {
   const services = u.actions.map((a) => deriveActionLabel(a.service)).join(", ");
   const n = entityCount(u.actions);
@@ -350,7 +364,7 @@ export function renderEvaluation(
               : html`<div class="action-summary">${outcomeSummary(u)}</div>`
         }
       </div>
-      ${expanded ? renderExpansion(u, hass, schemas) : nothing}
+      ${expanded ? renderExpansion(u, hass, schemas, periods) : nothing}
     </div>
   `;
 }
@@ -359,6 +373,7 @@ function renderExpansion(
   u: BufferedUnit,
   hass: HassLike | undefined,
   schemas: Record<string, ServiceSchema> | undefined,
+  periods: CustomPeriods,
 ): TemplateResult {
   const summary = outcomeSummary(u);
   // Raw entity_id + raw old→new, one click away. Only entity/duration causes
@@ -372,7 +387,7 @@ function renderExpansion(
         u.explanation
           ? html`<div class="section">
             <div class="section-title">Scene evaluation</div>
-            <div class="scenes">${u.explanation.scenes.map((r) => renderScene(r, hass))}</div>
+            <div class="scenes">${u.explanation.scenes.map((r) => renderScene(r, hass, periods))}</div>
           </div>`
           : nothing
       }

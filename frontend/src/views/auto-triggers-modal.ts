@@ -153,6 +153,12 @@ export class AmbienceAutoTriggersModal extends LitElement {
     super.willUpdate?.(changed);
     // Fetch when opened, or when scenes/scope change while already open.
     if (this.open && (changed.has("open") || changed.has("scenes") || changed.has("scope"))) {
+      if (changed.has("open") || changed.has("scope")) {
+        // A (re)open or scope switch must not flash the previous scope's rows
+        // while the fetch is in flight.
+        this._triggers = [];
+        this._opaque = false;
+      }
       void this._load();
     }
   }
@@ -161,17 +167,24 @@ export class AmbienceAutoTriggersModal extends LitElement {
     return this.scope.kind === "house" ? null : this.scope.id;
   }
 
+  // Monotonic token so an overlapping load (open + scenes change) can't land
+  // a stale response over a newer one.
+  private _loadSeq = 0;
+
   private async _load() {
+    const seq = ++this._loadSeq;
     this._loading = true;
     this._error = "";
     try {
       const res = await listAutoTriggers(this.hass, this.scope.kind, this._scopeId);
+      if (seq !== this._loadSeq) return;
       this._triggers = res.triggers;
       this._opaque = res.opaque;
     } catch (e) {
+      if (seq !== this._loadSeq) return;
       this._error = (e as Error).message || String(e);
     } finally {
-      this._loading = false;
+      if (seq === this._loadSeq) this._loading = false;
     }
   }
 
@@ -206,7 +219,8 @@ export class AmbienceAutoTriggersModal extends LitElement {
   private _sunPart(s: { anchor: string; offset: number }): string {
     const base = anchorLabel(this.hass, s.anchor);
     if (s.offset === 0) return base;
-    return `${base} ${s.offset > 0 ? "+" : ""}${s.offset} min`;
+    const min = localize(this.hass, "ui.unit_min", "min");
+    return `${base} ${s.offset > 0 ? "+" : ""}${s.offset} ${min}`;
   }
 
   /** Title + detail lines for a trigger row. Title is the primary line
@@ -307,7 +321,7 @@ export class AmbienceAutoTriggersModal extends LitElement {
       <div class="modal" role="dialog" aria-modal="true">
         <div class="header">
           <h3>${title}${this.scopeName ? ` — ${this.scopeName}` : ""}</h3>
-          <button class="close" @click=${this._close} aria-label="Close">✕</button>
+          <button class="close" @click=${this._close} aria-label=${localize(this.hass, "ui.close", "Close")}>✕</button>
         </div>
         <div class="body">${this._renderBody()}</div>
       </div>

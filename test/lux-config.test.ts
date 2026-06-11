@@ -137,3 +137,35 @@ describe("ambience-lux-config", () => {
     expect(el.shadowRoot.textContent).toContain("gloomy");
   });
 });
+
+describe("error handling (review fixes)", () => {
+  let el: any;
+  afterEach(() => {
+    el?.remove();
+    vi.clearAllMocks();
+  });
+
+  test("a failed list shows an error instead of a blank panel", async () => {
+    vi.mocked(api.listLuxRanges).mockRejectedValue(new Error("list boom"));
+    el = document.createElement("ambience-lux-config");
+    el.hass = {} as any;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).toContain("list boom");
+  });
+
+  test("a failed modal save keeps the modal open (the edit isn't discarded)", async () => {
+    el = await mount();
+    vi.mocked(api.saveLuxRanges).mockRejectedValue(new Error("save boom"));
+    el._modal = { mode: "add" };
+    await el.updateComplete;
+    await el._onModalSave(
+      new CustomEvent("save", { detail: { id: "gloomy", definition: { min: 1, max: 2 } } }),
+    );
+    await el.updateComplete;
+    expect(el._modal.mode).not.toBe("closed");
+    expect(el.shadowRoot.textContent).toContain("save boom");
+  });
+});

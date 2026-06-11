@@ -17,6 +17,7 @@ from ._common import (
     kleene_all,
     kleene_any,
     kleene_not,
+    state_sources,
     validate_for,
 )
 
@@ -72,11 +73,17 @@ class StateCondition:
         hass: HomeAssistant,
         *,
         now: datetime | None = None,
-        entities: frozenset[str] | None = None,  # part of the shared contract; not used here
+        entities: frozenset[str] | None = None,
     ) -> StateSnapshot:
         states: dict[str, tuple[str, datetime, datetime]] = {}
         attributes: dict[str, dict[str, Any]] = {}
-        for s in hass.states.async_all():
+        # `entities` (the entities atoms actually reference) lets us read just
+        # those; None (the simulator path) means a full scan. This runs on the
+        # hottest path in the system — every motion/door event — so copying
+        # every entity's attributes would be thousands of dict copies per tick.
+        for s in state_sources(hass, entities):
+            if s is None:
+                continue  # referenced entity that doesn't exist
             states[s.entity_id] = (s.state, s.last_changed, s.last_updated)
             # `s.attributes` is a Mapping; copy into a plain dict so the
             # snapshot stays detached from HA's live state object.
@@ -221,6 +228,9 @@ class StateCondition:
                 # State-mode atoms clock off last_changed (the state string has
                 # been stable that long); attribute-mode atoms clock off
                 # last_updated (an attribute change should reset its own clock).
+                # Note: `for` therefore means "in the current exact state that
+                # long" — an `is [A, B] for` atom resets when the entity flips
+                # A→B, even though membership held throughout.
                 since = last_updated if attribute else last_changed
                 elapsed = (snap.now - since).total_seconds()
                 if elapsed < seconds:

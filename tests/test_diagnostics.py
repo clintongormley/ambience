@@ -210,3 +210,63 @@ async def test_device_diagnostics_dumps_redacted_store(
 
     assert "living_room" in result["areas"]
     assert result["conditions"]["day"]["workday_sensor"] == REDACTED
+
+
+async def test_diagnostics_traces_redact_presence_pii(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, seeded_store: AmbienceStore
+) -> None:
+    """The structured who/where/template keys are redacted, but the same PII
+    also rides in free text: person/device_tracker causes carry zone names in
+    old/new, and people/template predicate `detail` strings render each
+    person's location. A diagnostics dump attached to a GitHub issue must not
+    publish the household's presence history."""
+    from custom_components.ambience.const import DATA_TRACE_BUFFER
+    from custom_components.ambience.engine import Explanation, PredicateResult, SceneEval
+    from custom_components.ambience.trace import (
+        BufferSink,
+        Outcome,
+        TraceEvent,
+        TriggerCause,
+        UnitTrace,
+    )
+
+    explanation = Explanation(
+        winner_index=0,
+        scenes=[
+            SceneEval(
+                index=0,
+                name="evening",
+                matched=True,
+                evaluated=True,
+                disabled=False,
+                predicates=[
+                    PredicateResult("people", True, "Alice: home ✓ … want any at home"),
+                    PredicateResult("template", True, "rendered → True"),
+                    PredicateResult("time_of_day", True, "evening"),
+                ],
+            )
+        ],
+    )
+    buffer = BufferSink()
+    buffer.emit(
+        TraceEvent(
+            TriggerCause(kind="entity", entity_id="person.alice", old="home", new="Secret Zone"),
+            [UnitTrace("area", "living_room", "general", "on", Outcome.ACTED, explanation)],
+            event_id="abc",
+            timestamp="2026-06-09T10:00:00+00:00",
+        )
+    )
+    hass.data[DOMAIN][DATA_TRACE_BUFFER] = buffer
+
+    result = await async_get_config_entry_diagnostics(hass, mock_config_entry)
+
+    trace = result["traces"][0]
+    assert trace["cause"]["entity_id"] == REDACTED
+    assert trace["cause"]["old"] == REDACTED
+    assert trace["cause"]["new"] == REDACTED
+    preds = {p["condition_key"]: p for p in trace["explanation"]["scenes"][0]["predicates"]}
+    assert preds["people"]["detail"] == REDACTED
+    assert preds["template"]["detail"] == REDACTED
+    # Non-presence details stay useful for debugging.
+    assert preds["time_of_day"]["detail"] == "evening"
+    assert "Secret Zone" not in str(result)

@@ -10,14 +10,14 @@ export type NamedDefView<Def> = {
   hidden: string[];
 };
 
-export type DefWarning = {
+type DefWarning = {
   scope_kind: string;
   scope_id: string | null;
   scene_name: string;
   missing_id: string; // the referenced builtin/custom id that no longer exists
 };
 
-export type ModalState<Def> =
+type ModalState<Def> =
   | { mode: "closed" }
   | { mode: "add" }
   | { mode: "edit"; id: string; initial: Def };
@@ -80,6 +80,7 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
       padding: 0.5rem 1rem; border-radius: 4px; margin-bottom: 1rem;
     }
     .warnings ul { margin: 0.3rem 0 0 0; padding-left: 1.2rem; }
+    .error { color: var(--error-color, #d32f2f); margin-bottom: 1rem; }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
@@ -87,6 +88,7 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
   @state() protected _view: NamedDefView<Def> = { builtins: {}, custom: {}, hidden: [] };
   @state() protected _modal: ModalState<Def> = { mode: "closed" };
   @state() protected _warnings: DefWarning[] = [];
+  @state() protected _error = "";
 
   // --- subclass hooks ------------------------------------------------------
   protected abstract _list(): Promise<NamedDefView<Def>>;
@@ -107,14 +109,28 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
   }
 
   private async _reload() {
-    this._view = await this._list();
+    try {
+      this._view = await this._list();
+      this._error = "";
+    } catch (e) {
+      // A failed fetch must not leave a blank panel + unhandled rejection.
+      this._error = (e as Error).message || String(e);
+    }
   }
 
   // `hidden` is preserved as-is; there is no UI to hide built-ins.
-  protected async _saveState(custom: Record<string, Def>) {
-    const res = await this._save(custom, this._view.hidden);
-    this._warnings = res.warnings;
+  // Returns whether the save succeeded (the modal closes only on success).
+  protected async _saveState(custom: Record<string, Def>): Promise<boolean> {
+    try {
+      const res = await this._save(custom, this._view.hidden);
+      this._warnings = res.warnings;
+      this._error = "";
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
+      return false;
+    }
     await this._reload();
+    return true;
   }
 
   protected _onEdit(id: string, defn: Def) {
@@ -134,8 +150,11 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
   protected async _onModalSave(e: CustomEvent<{ id: string; definition: Def }>) {
     e.stopPropagation();
     const { id, definition } = e.detail;
-    this._modal = { mode: "closed" };
-    await this._saveState({ ...this._view.custom, [id]: definition });
+    // Close only after a successful save — closing first would silently
+    // discard the user's definition when the save fails.
+    if (await this._saveState({ ...this._view.custom, [id]: definition })) {
+      this._modal = { mode: "closed" };
+    }
   }
 
   protected _onModalCancel() {
@@ -189,6 +208,7 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
       <header>
         <h2>${localize(this.hass, headingKey, headingFb)}</h2>
       </header>
+      ${this._error ? html`<p class="error">${this._error}</p>` : ""}
       ${
         this._warnings.length
           ? html`<div class="warnings">

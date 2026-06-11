@@ -1977,3 +1977,25 @@ describe("statePredicateError — robust to malformed persisted predicates", () 
     expect(statePredicateError({ kind: ">", entity_id: "x", states: [" "] })).toBeTruthy();
   });
 });
+
+describe("openPath on remove/unwrap (review fix)", () => {
+  test("removing a node clears the open path so a sibling can't inherit it", async () => {
+    const el: any = document.createElement("ambience-state-predicate-input");
+    el.hass = { callWS: async () => ({ states: [] }) };
+    el.value = {
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "light.a", states: ["on"] },
+        { kind: "is", entity_id: "light.b", states: ["on"] },
+        { kind: "is", entity_id: "light.c", states: ["on"] },
+      ],
+    };
+    document.body.appendChild(el);
+    await el.updateComplete;
+    el._openPath = [2];
+    el._removeAt([0]); // a node before the open one — indices shift
+    await el.updateComplete;
+    expect(el._openPath).toBeNull();
+    el.remove();
+  });
+});

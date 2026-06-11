@@ -23,7 +23,7 @@ from homeassistant.core import HomeAssistant
 
 from ..lux_ranges import validate_int_bound
 from ..triggers import TriggerSpec
-from ._common import as_float
+from ._common import as_float, predicate_has_any, state_sources
 
 _QUANTS = ("any", "all")
 
@@ -74,11 +74,7 @@ class LuxCondition:
         # directly; None means scan the whole sensor domain (back-compat). The
         # device_class filter stays either way, so a referenced-but-non-lux
         # sensor is excluded exactly as a domain scan would exclude it.
-        states = (
-            [hass.states.get(eid) for eid in entities]
-            if entities is not None
-            else hass.states.async_all("sensor")
-        )
+        states = state_sources(hass, entities, domain="sensor")
         for s in states:
             if s is None:
                 continue  # referenced entity that doesn't exist
@@ -235,7 +231,7 @@ class LuxCondition:
     def is_constraining(self, predicate: Any) -> bool:
         """Empty/absent `sensors` is match-anything (see matches()), so it is a
         wildcard for sorting, not a real constraint."""
-        return isinstance(predicate, dict) and bool(predicate.get("sensors"))
+        return predicate_has_any(predicate, "sensors")
 
     def contains(self, outer: Any, inner: Any) -> bool:
         """True iff every world-state matching `inner` also matches `outer`.

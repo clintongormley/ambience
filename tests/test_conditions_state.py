@@ -979,3 +979,14 @@ def test_describe_expr_non_dict_child_is_placeholder() -> None:
 def test_describe_expr_unknown_kind_is_placeholder() -> None:
     # An unrecognised expression kind renders as "?".
     assert StateCondition().describe(_snap(), {"kind": "frobnicate"}) == "?"
+
+
+async def test_snapshot_narrows_to_referenced_entities(hass: HomeAssistant) -> None:
+    """The trigger engine passes the entities scenes actually reference; the
+    snapshot must read just those instead of copying every entity in HA on the
+    hottest path (motion/door events)."""
+    hass.states.async_set("light.a", "on")
+    hass.states.async_set("light.b", "off")
+    snap = await StateCondition().snapshot(hass, entities=frozenset({"light.a", "light.gone"}))
+    assert set(snap.states) == {"light.a"}
+    assert set(snap.attributes) == {"light.a"}

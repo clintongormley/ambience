@@ -2,10 +2,11 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, simulate, simulateInputs } from "../api.js";
-import { humanizeId } from "../i18n.js";
+import { humanizeId, localize } from "../i18n.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import type {
   BufferedUnit,
+  PeriodStoreView,
   SimulateEntityKnob,
   SimulateKnob,
   SimulateOverrides,
@@ -14,11 +15,13 @@ import type {
   StateForDuration,
 } from "../types.js";
 import { entityName, entityRowStyles, renderEntityIcon } from "./entity-row.js";
+import { ModalDismissController } from "./modal-shell.js";
 
 // Display label for a raw option value (the sent value stays raw).
-const _OPTION_LABEL: Record<string, string> = { not_home: "Away", home: "Home" };
-function optionLabel(value: string): string {
-  return _OPTION_LABEL[value] ?? humanizeId(value);
+function optionLabel(hass: HassConnection | undefined, value: string): string {
+  if (value === "not_home") return localize(hass, "ui.away", "Away");
+  if (value === "home") return localize(hass, "ui.home", "Home");
+  return humanizeId(value);
 }
 
 // The editable values for an entity knob, pre-filled from its live state +
@@ -106,6 +109,7 @@ export class AmbienceSimulatorModal extends LitElement {
   ];
 
   @property({ attribute: false }) hass!: HassConnection;
+  @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) scope!: { scope_kind: string; scope_id: string | null };
   @property() category = "";
   @property() categoryName: string | null = null;
@@ -124,6 +128,12 @@ export class AmbienceSimulatorModal extends LitElement {
   @state() private _time = "";
   @state() private _result: BufferedUnit | null = null;
   @state() private _expanded = false;
+
+  constructor() {
+    super();
+    // Escape / backdrop-click close (shared with the settings and traces modals).
+    new ModalDismissController(this, () => this._onClose());
+  }
 
   override updated(changed: Map<string, unknown>): void {
     if (this.open && (changed.has("open") || changed.has("category") || changed.has("scope"))) {
@@ -249,7 +259,15 @@ export class AmbienceSimulatorModal extends LitElement {
 
   private async _run(): Promise<void> {
     this._error = "";
-    const now = new Date(`${this._date}T${this._time}`).toISOString();
+    // The native date/time inputs can be cleared; an Invalid Date's
+    // toISOString() throws, which used to die as an unhandled rejection
+    // (the Simulate button silently did nothing).
+    const parsed = new Date(`${this._date}T${this._time}`);
+    if (!this._date || !this._time || Number.isNaN(parsed.getTime())) {
+      this._error = localize(this.hass, "ui.invalid_datetime", "Enter a valid date and time.");
+      return;
+    }
+    const now = parsed.toISOString();
     try {
       this._result = await simulate(
         this.hass,
@@ -272,41 +290,41 @@ export class AmbienceSimulatorModal extends LitElement {
   override render() {
     if (!this.open) return nothing;
     return html`
-      <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal" role="dialog" aria-modal="true" @click=${(e: Event) => e.stopPropagation()}>
         <div class="header">
-          <h3>Simulate · ${this.categoryName ?? this.category}</h3>
-          <button class="close" @click=${this._onClose} aria-label="Close">✕</button>
+          <h3>${localize(this.hass, "ui.simulate_title", "Simulate")} · ${this.categoryName ?? this.category}</h3>
+          <button class="close" @click=${this._onClose} aria-label=${localize(this.hass, "ui.close", "Close")}>✕</button>
         </div>
         <div class="body">
           ${this._error ? html`<p class="error">${this._error}</p>` : nothing}
           ${
             this._loading
-              ? html`<p>Loading…</p>`
+              ? html`<p>${localize(this.hass, "ui.loading", "Loading…")}</p>`
               : html`
             ${
               this._hasTime
                 ? html`
-              <p class="sec-title">When</p>
+              <p class="sec-title">${localize(this.hass, "ui.when_heading", "When")}</p>
               <div class="when">
                 <input type="date" .value=${this._date}
                   @change=${(e: Event) => (this._date = (e.target as HTMLInputElement).value)} />
                 <input type="time" .value=${this._time}
                   @change=${(e: Event) => (this._time = (e.target as HTMLInputElement).value)} />
-                <button class="reset" title="Reset to now" aria-label="Reset to now"
+                <button class="reset" title=${localize(this.hass, "ui.reset_to_now", "Reset to now")} aria-label=${localize(this.hass, "ui.reset_to_now", "Reset to now")}
                   @click=${() => this._resetWhen()}>↺</button>
-                <span class="hint">drives sun, time-of-day, weekday &amp; workday</span>
+                <span class="hint">${localize(this.hass, "ui.simulate_when_hint", "drives sun, time-of-day, weekday & workday")}</span>
               </div>`
                 : nothing
             }
             ${
               this._knobs.length
                 ? html`
-              <p class="sec-title">Inputs this category depends on</p>
+              <p class="sec-title">${localize(this.hass, "ui.simulate_inputs_heading", "Inputs this category depends on")}</p>
               ${this._knobs.map((k) => (k.kind === "entity" ? this._renderEntity(k) : this._renderVerdict(k)))}`
                 : nothing
             }
-            <div class="run-row"><button class="runbtn" @click=${() => void this._run()}>Simulate ▸</button></div>
-            ${this._result ? html`<div class="result">${renderEvaluation(this._result, this._expanded, () => (this._expanded = !this._expanded), this.hass)}</div>` : nothing}
+            <div class="run-row"><button class="runbtn" @click=${() => void this._run()}>${localize(this.hass, "ui.simulate_button", "Simulate")} ▸</button></div>
+            ${this._result ? html`<div class="result">${renderEvaluation(this._result, this._expanded, () => (this._expanded = !this._expanded), this.hass, undefined, this.periods?.custom ?? {})}</div>` : nothing}
           `
           }
         </div>
@@ -326,21 +344,21 @@ export class AmbienceSimulatorModal extends LitElement {
         <div class="row-ctrl">
           ${this._renderControl(k, v?.state ?? "")}
           ${this._renderFor(k, v?.for ?? { h: 0, m: 0, s: 0 })}
-          <button class="reset" data-reset=${k.entity_id} title="Reset to live"
+          <button class="reset" data-reset=${k.entity_id} title=${localize(this.hass, "ui.reset_to_live", "Reset to live")}
             @click=${() => this._resetEntity(k)}>↺</button>
         </div>
       </div>
       ${k.attributes.map(
         (a, i) => html`
         <div class="row attr ${i === k.attributes.length - 1 ? "last-attr" : ""}">
-          <div class="row-text"><div class="row-title">${optionLabel(a.name)}</div></div>
+          <div class="row-text"><div class="row-title">${optionLabel(this.hass, a.name)}</div></div>
           <div class="row-ctrl">
             <input class=${a.control === "number" ? "num" : ""}
               type=${a.control === "number" ? "number" : "text"}
               data-attr=${`${k.entity_id}:${a.name}`}
               .value=${v?.attributes[a.name] ?? ""}
               @input=${(e: Event) => this._setAttr(k.entity_id, a.name, (e.target as HTMLInputElement).value)} />
-            <button class="reset" title="Reset to live"
+            <button class="reset" title=${localize(this.hass, "ui.reset_to_live", "Reset to live")}
               @click=${() => this._resetEntity(k)}>↺</button>
           </div>
         </div>`,
@@ -352,7 +370,7 @@ export class AmbienceSimulatorModal extends LitElement {
     if (k.control === "select") {
       return html`<select data-entity=${k.entity_id} .value=${value}
         @change=${(e: Event) => this._setState(k.entity_id, (e.target as HTMLSelectElement).value)}>
-        ${(k.options ?? [value]).map((o) => html`<option value=${o} ?selected=${o === value}>${optionLabel(o)}</option>`)}
+        ${(k.options ?? [value]).map((o) => html`<option value=${o} ?selected=${o === value}>${optionLabel(this.hass, o)}</option>`)}
       </select>`;
     }
     const type = k.control === "number" ? "number" : "text";
@@ -374,7 +392,7 @@ export class AmbienceSimulatorModal extends LitElement {
       @change=${(e: Event) =>
         this._setFor(k.entity_id, part, Number((e.target as HTMLInputElement).value))} />`;
     return html`<span class="for-ctrl" title="How long it has held this state (h:m:s)">
-      <span class="for-label">For</span>${cell("h")}<span>:</span>${cell("m")}<span>:</span>${cell("s")}
+      <span class="for-label">${localize(this.hass, "ui.for_label", "For")}</span>${cell("h")}<span>:</span>${cell("m")}<span>:</span>${cell("s")}
     </span>`;
   }
 
@@ -395,10 +413,10 @@ export class AmbienceSimulatorModal extends LitElement {
         <div class="row-ctrl">
           <select data-verdict=${vkey} .value=${String(cur)}
             @change=${(e: Event) => this._setVerdict(vkey, (e.target as HTMLSelectElement).value === "true")}>
-            <option value="true" ?selected=${cur}>True</option>
-            <option value="false" ?selected=${!cur}>False</option>
+            <option value="true" ?selected=${cur}>${localize(this.hass, "ui.true_label", "True")}</option>
+            <option value="false" ?selected=${!cur}>${localize(this.hass, "ui.false_label", "False")}</option>
           </select>
-          <button class="reset" title="Reset to live" @click=${() => this._resetVerdict(k)}>↺</button>
+          <button class="reset" title=${localize(this.hass, "ui.reset_to_live", "Reset to live")} @click=${() => this._resetVerdict(k)}>↺</button>
         </div>
       </div>`;
   }

@@ -2,13 +2,16 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import {
+  clearTraces,
   downloadScopeDiagnostics,
   getServiceSchema,
   type HassConnection,
   listTraces,
 } from "../api.js";
+import { localize } from "../i18n.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
-import type { BufferedUnit, ServiceSchema } from "../types.js";
+import type { BufferedUnit, PeriodStoreView, ServiceSchema } from "../types.js";
+import { ModalDismissController } from "./modal-shell.js";
 
 /**
  * Modal showing recent trace evaluations for one (scope, category) bucket.
@@ -48,7 +51,7 @@ export class AmbienceTracesModal extends LitElement {
         display: flex; align-items: center; gap: 0.5rem;
       }
       .header h3 { margin: 0; flex: 1; }
-      .refresh, .download {
+      .refresh, .download, .clear {
         padding: 0.25rem 0.75rem; cursor: pointer;
         border: 1px solid var(--divider-color, #ccc);
         border-radius: 4px; background: none; color: inherit;
@@ -73,6 +76,9 @@ export class AmbienceTracesModal extends LitElement {
   ];
 
   @property({ attribute: false }) hass!: HassConnection;
+  // Custom time-of-day periods, so a custom period id in a trace detail
+  // resolves to its configured label rather than a humanized id.
+  @property({ attribute: false }) periods?: PeriodStoreView;
   @property({ attribute: false }) scope!: { scope_kind: string; scope_id: string | null };
   @property() category = "";
   @property() categoryName: string | null = null;
@@ -90,19 +96,37 @@ export class AmbienceTracesModal extends LitElement {
   @state() private _hasNew = false;
   private _poll?: ReturnType<typeof setInterval>;
 
-  override connectedCallback(): void {
-    super.connectedCallback();
-    // While open, watch for newer traces for this category without disturbing the
-    // list the user is reading — just flag the Refresh button.
-    this._poll = setInterval(() => this._checkNew(), 5000);
+  constructor() {
+    super();
+    // Escape / backdrop-click close (shared with the settings and simulator modals).
+    new ModalDismissController(this, () => this._onClose());
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
-    if (this._poll) clearInterval(this._poll);
+    this._stopPoll();
+  }
+
+  // While open, watch for newer traces for this category without disturbing
+  // the list the user is reading — just flag the Refresh button. The element
+  // stays mounted for the lifetime of scopes-view, so the interval runs only
+  // while the modal is actually open.
+  private _startPoll(): void {
+    if (!this._poll) this._poll = setInterval(() => this._checkNew(), 5000);
+  }
+
+  private _stopPoll(): void {
+    if (this._poll) {
+      clearInterval(this._poll);
+      this._poll = undefined;
+    }
   }
 
   override updated(changed: Map<string, unknown>): void {
+    if (changed.has("open")) {
+      if (this.open) this._startPoll();
+      else this._stopPoll();
+    }
     if (this.open && (changed.has("open") || changed.has("category") || changed.has("scope"))) {
       this._load();
     }
@@ -187,6 +211,15 @@ export class AmbienceTracesModal extends LitElement {
     }
   }
 
+  private async _clear(): Promise<void> {
+    try {
+      await clearTraces(this.hass);
+      await this._load();
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
+    }
+  }
+
   private _onClose(): void {
     this.dispatchEvent(new CustomEvent("close", { bubbles: true, composed: true }));
   }
@@ -195,23 +228,32 @@ export class AmbienceTracesModal extends LitElement {
     if (!this.open) return nothing;
     const title = this.categoryName ?? this.category;
     return html`
-      <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal" role="dialog" aria-modal="true" @click=${(e: Event) => e.stopPropagation()}>
         <div class="header">
           <h3>${title}</h3>
           <button class="refresh ${this._hasNew ? "has-new" : ""}" @click=${() => this._load()}>
-            ${this._hasNew ? "● New traces — refresh" : "Refresh"}
+            ${
+              this._hasNew
+                ? `● ${localize(this.hass, "ui.new_traces_refresh", "New traces — refresh")}`
+                : localize(this.hass, "ui.refresh", "Refresh")
+            }
           </button>
-          <button class="download" @click=${this._download}>Download diagnostics</button>
-          <button class="close" @click=${this._onClose} aria-label="Close">✕</button>
+          <button class="clear" @click=${this._clear}>
+            ${localize(this.hass, "ui.clear_traces", "Clear")}
+          </button>
+          <button class="download" @click=${this._download}>
+            ${localize(this.hass, "ui.download_diagnostics", "Download diagnostics")}
+          </button>
+          <button class="close" @click=${this._onClose} aria-label=${localize(this.hass, "ui.close", "Close")}>✕</button>
         </div>
         <div class="body">
           ${
             this._error
               ? html`<p class="error">${this._error}</p>`
               : this._loading
-                ? html`<p class="empty">Loading…</p>`
+                ? html`<p class="empty">${localize(this.hass, "ui.loading", "Loading…")}</p>`
                 : this._records.length === 0
-                  ? html`<p class="empty">No traces for this category yet.</p>`
+                  ? html`<p class="empty">${localize(this.hass, "ui.no_traces_yet", "No traces for this category yet.")}</p>`
                   : html`<div class="list">${this._records.map((u, i) => {
                       const key = `${u.event_id ?? i}|${u.timestamp ?? ""}`;
                       return renderEvaluation(
@@ -220,6 +262,7 @@ export class AmbienceTracesModal extends LitElement {
                         () => this._toggle(key),
                         this.hass,
                         this._schemas,
+                        this.periods?.custom ?? {},
                       );
                     })}</div>`
           }

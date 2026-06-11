@@ -455,3 +455,18 @@ async def test_call_one_returns_false_for_non_dict_response() -> None:
     mock_hass.services.async_call = AsyncMock(return_value="not_a_dict")
     result = await ScriptCondition()._call_one(mock_hass, "script.foo", "{}")
     assert result is False
+
+
+async def test_snapshot_evicts_cache_keys_no_longer_referenced(hass: HomeAssistant) -> None:
+    """Keys for (script, args) pairs no longer present in any scene must be
+    dropped, or the cache grows for the lifetime of the singleton."""
+    _install_store(
+        hass,
+        {"a": {"scenes": [{"when": {"script": {"script": "script.live"}}}]}},
+    )
+    _install_service(hass, "script", "live", response={"match": True})
+    cond = ScriptCondition(hass=hass)
+    cond._cache["stale-key"] = (True, 1e18)  # far-future expiry; must still go
+    await cond.snapshot(hass)
+    assert "stale-key" not in cond._cache
+    assert _cache_key("script.live", {}) in cond._cache

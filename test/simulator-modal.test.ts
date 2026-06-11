@@ -716,3 +716,42 @@ describe("ambience-simulator-modal", () => {
     expect(el._knobs).toEqual([]);
   });
 });
+
+describe("review fixes", () => {
+  test("an invalid/cleared date surfaces an error instead of an unhandled rejection", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as never);
+    const el: any = document.createElement("ambience-simulator-modal");
+    el.hass = { states: {} };
+    el.scope = { scope_kind: "area", scope_id: "lr" };
+    el.category = "g1";
+    document.body.appendChild(el);
+    el.open = true;
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    el._date = ""; // the user cleared the native date input
+    await el._run();
+    await el.updateComplete;
+    expect(api.simulate).not.toHaveBeenCalled();
+    expect(el._error).not.toBe("");
+    el.remove();
+  });
+
+  test("Escape closes the modal", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as never);
+    const el: any = document.createElement("ambience-simulator-modal");
+    el.hass = { states: {} };
+    el.scope = { scope_kind: "area", scope_id: "lr" };
+    el.category = "g1";
+    document.body.appendChild(el);
+    el.open = true;
+    await el.updateComplete;
+    let closed = false;
+    el.addEventListener("close", () => {
+      closed = true;
+    });
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(closed).toBe(true);
+    el.remove();
+  });
+});

@@ -210,10 +210,14 @@ class PeopleCondition:
         """Apply negate/want_at/`for` to an observable location test `at`.
 
         NOTE: the `for` clock uses `last_changed`, which advances on STATE
-        changes only. Because zones can overlap, entering/leaving an overlapping
-        zone can change `in_zones` without changing `state` (the resolved zone
-        stays the same), so a zone-membership `for` is approximate in that edge
-        case. We do not track history.
+        changes only — so `for` means "in the current exact state that long",
+        not "the predicate has held that long". Two consequences:
+        * a `negate`/`nobody` test resets when the person moves between two
+          away zones (zone A → zone B), even though "not home" held throughout;
+        * because zones can overlap, entering/leaving an overlapping zone can
+          change `in_zones` without changing `state`, so a zone-membership
+          `for` is approximate in that edge case.
+        We do not track history.
         """
         if negate:  # "not at <where>" -> invert the observable location test
             at = not at

@@ -59,7 +59,7 @@ export class AmbienceTargetPicker extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    watchHaComponents(this, this.hass);
+    watchHaComponents(this);
   }
 
   private _emit(value: string[]) {

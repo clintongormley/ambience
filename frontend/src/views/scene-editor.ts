@@ -22,6 +22,8 @@ import type {
 } from "../types.js";
 import "./action-slot.js";
 import "./condition-input.js";
+import { dayPredicateError } from "./day-predicate-input.js";
+import { luxPredicateError } from "./lux-input.js";
 import { statePredicateError } from "./state-predicate-input.js";
 
 type OpenSlot =
@@ -61,6 +63,20 @@ function _defaultPredicateFor(name: string): unknown {
 function sameScope(a?: Scope, b?: Scope): boolean {
   return !!a && !!b && scopeKey(a) === scopeKey(b);
 }
+
+// Pure structural validators for predicates whose editors can emit shapes the
+// backend rejects (or silently never matches). The input widgets only mount
+// when their slot is expanded, so the save gate must catch never-opened slots
+// here — `render-invalid-changed` can't see them. One entry per condition
+// that needs it; everything else is valid by construction.
+const STRUCTURAL_VALIDATORS: Record<
+  string,
+  (pred: unknown, hass?: HassConnection) => string | null
+> = {
+  state: statePredicateError,
+  day: dayPredicateError,
+  lux: luxPredicateError,
+};
 
 @customElement("ambience-scene-editor")
 export class AmbienceSceneEditor extends LitElement {
@@ -312,7 +328,7 @@ export class AmbienceSceneEditor extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    watchHaComponents(this, this.hass);
+    watchHaComponents(this);
   }
 
   override willUpdate(changed: Map<string, unknown>) {
@@ -329,6 +345,9 @@ export class AmbienceSceneEditor extends LitElement {
       this._open = null;
       this._showError = false;
       this._addOrder = [];
+      // Stale errors from a previous (cancelled) session would block the
+      // first Save on a different scene until its widgets re-validate.
+      this._conditionError = new Map();
     }
   }
 
@@ -583,8 +602,8 @@ export class AmbienceSceneEditor extends LitElement {
       // report via `render-invalid-changed`. Without this, a scene loaded from
       // storage with a half-filled state atom would pass the save gate and be
       // rejected by the backend with a cryptic ValueError.
-      const stateErr = statePredicateError(pred, this.hass);
-      if (stateErr) return stateErr;
+      const structuralErr = STRUCTURAL_VALIDATORS[slot.id]?.(pred, this.hass);
+      if (structuralErr) return structuralErr;
       // A condition whose input widget reports an error (e.g. a `template` whose
       // Jinja throws) must not be left in the scene.
       if (this._conditionError.has(slot.id)) {

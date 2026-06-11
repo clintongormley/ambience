@@ -833,30 +833,6 @@ describe("ambience-state-expr-atom", () => {
     expect(captured.attribute).toBe("source");
   });
 
-  test("_forSchema is an ha-form duration selector (days disabled, not required)", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
-    const schema = el._forSchema();
-    expect(schema[0].name).toBe("duration");
-    // Optional → no `required: true` so the field is blank by default.
-    expect(schema[0].required).toBeFalsy();
-    expect(schema[0].selector.duration.enable_day).toBe(false);
-  });
-
-  test("_forData maps storage {h,m,s} to ha-form {hours,minutes,seconds}", async () => {
-    el = await mount({
-      kind: "is",
-      entity_id: "x",
-      states: ["on"],
-      for: { h: 1, m: 30, s: 15 },
-    });
-    expect(el._forData()).toEqual({ duration: { hours: 1, minutes: 30, seconds: 15 } });
-  });
-
-  test("_forData with no `for` falls back to {0,0,0} (blank display)", async () => {
-    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
-    expect(el._forData()).toEqual({ duration: { hours: 0, minutes: 0, seconds: 0 } });
-  });
-
   test("setting duration to {0,0,0} normalises to null on emit", async () => {
     el = await mount({
       kind: "is",
@@ -868,7 +844,7 @@ describe("ambience-state-expr-atom", () => {
     el.addEventListener("value-changed", (e: Event) => {
       captured = (e as CustomEvent).detail.value;
     });
-    el._setForFromHaForm({ hours: 0, minutes: 0, seconds: 0 });
+    el._setForDuration({ h: 0, m: 0, s: 0 });
     expect(captured.for).toBeNull();
   });
 
@@ -878,7 +854,33 @@ describe("ambience-state-expr-atom", () => {
     el.addEventListener("value-changed", (e: Event) => {
       captured = (e as CustomEvent).detail.value;
     });
-    el._setForFromHaForm({ hours: 0, minutes: 5, seconds: 0 });
+    el._setForDuration({ h: 0, m: 5, s: 0 });
     expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
+  });
+});
+
+describe("out-of-order fetches (review fix)", () => {
+  test("a slow known-states fetch from a superseded entity is discarded", async () => {
+    const resolvers: Record<string, (v: { states: string[] }) => void> = {};
+    vi.mocked(getKnownStates).mockImplementation(
+      (_h: unknown, entityId: string) =>
+        new Promise((resolve) => {
+          resolvers[entityId] = resolve as (v: { states: string[] }) => void;
+        }) as Promise<{ states: string[] }>,
+    );
+    const el: any = document.createElement("ambience-state-expr-atom");
+    el.hass = { callWS: vi.fn() };
+    el.value = { kind: "is", entity_id: "light.a", states: [] };
+    document.body.appendChild(el);
+    await el.updateComplete;
+    // Supersede with entity B before A's fetch resolves.
+    el.value = { kind: "is", entity_id: "light.b", states: [] };
+    await el.updateComplete;
+    resolvers["light.b"]?.({ states: ["b-on", "b-off"] });
+    await new Promise((r) => setTimeout(r, 0));
+    resolvers["light.a"]?.({ states: ["a-on"] }); // stale response lands LAST
+    await new Promise((r) => setTimeout(r, 0));
+    expect(el._knownStates).toEqual(["b-on", "b-off"]);
+    el.remove();
   });
 });

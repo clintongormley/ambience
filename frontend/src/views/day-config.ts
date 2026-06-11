@@ -2,9 +2,11 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { getDayConfig, type HassConnection, saveDayConfig } from "../api.js";
+import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
 import { scopeLabel } from "../scope-label.js";
 import type { DayConfig } from "../types.js";
+import { renderEntityPicker } from "./form-controls.js";
 
 type Warning = { scope_kind: string; scope_id: string | null; scene_name: string; reason: string };
 
@@ -25,16 +27,30 @@ export class AmbienceDayConfig extends LitElement {
   @property({ attribute: false }) hass!: HassConnection;
   @state() private _config: DayConfig = { workday_sensor: null, workday_calendar: null };
   @state() private _warnings: Warning[] = [];
+  @state() private _error = "";
 
   override async connectedCallback() {
     super.connectedCallback();
-    this._config = await getDayConfig(this.hass);
+    // Re-render when ha-form registers so the native fallback upgrades.
+    watchHaComponents(this);
+    try {
+      this._config = await getDayConfig(this.hass);
+    } catch (e) {
+      // A failed fetch must not leave a blank panel + unhandled rejection.
+      this._error = (e as Error).message || String(e);
+    }
   }
 
   private async _save(next: DayConfig) {
     this._config = next;
-    const res = await saveDayConfig(this.hass, next.workday_sensor, next.workday_calendar);
-    this._warnings = res.warnings ?? [];
+    try {
+      const res = await saveDayConfig(this.hass, next.workday_sensor, next.workday_calendar);
+      this._warnings = res.warnings ?? [];
+      this._error = "";
+    } catch (e) {
+      this._error = (e as Error).message || String(e);
+      return;
+    }
     // Tell the scopes view to re-evaluate its conditions hint against live state.
     window.dispatchEvent(new CustomEvent("ambience-conditions-changed"));
   }
@@ -48,50 +64,34 @@ export class AmbienceDayConfig extends LitElement {
   }
 
   override render() {
+    const errorBanner = this._error
+      ? html`<p style="color: var(--error-color, #d32f2f)">${this._error}</p>`
+      : "";
     // Filter both pickers to entities provided by the Workday integration so
     // the lists stay short (not every binary_sensor / calendar).
-    const sensorSchema = [
-      {
-        name: "workday_sensor",
-        selector: { entity: { integration: "workday", domain: "binary_sensor" } },
-      },
-    ];
-    const calendarSchema = [
-      {
-        name: "workday_calendar",
-        selector: { entity: { integration: "workday", domain: "calendar" } },
-      },
-    ];
     return html`
+      ${errorBanner}
       <div class="row">
         <label>${localize(this.hass, "ui.workday_sensor", "Workday sensor")}</label>
-        <ha-form
-          .hass=${this.hass as any}
-          .schema=${sensorSchema}
-          .data=${{ workday_sensor: this._config.workday_sensor ?? "" }}
-          .computeLabel=${() => ""}
-          @value-changed=${(e: CustomEvent) => {
-            e.stopPropagation();
-            this._onSensorChange({
-              detail: { value: (e.detail.value?.workday_sensor as string) || null },
-            });
-          }}
-        ></ha-form>
+        ${renderEntityPicker(
+          this.hass,
+          "workday_sensor",
+          this._config.workday_sensor,
+          { entity: { integration: "workday", domain: "binary_sensor" } },
+          "binary_sensor.workday",
+          (value) => this._onSensorChange({ detail: { value } }),
+        )}
       </div>
       <div class="row">
         <label>${localize(this.hass, "ui.workday_calendar", "Workday calendar")}</label>
-        <ha-form
-          .hass=${this.hass as any}
-          .schema=${calendarSchema}
-          .data=${{ workday_calendar: this._config.workday_calendar ?? "" }}
-          .computeLabel=${() => ""}
-          @value-changed=${(e: CustomEvent) => {
-            e.stopPropagation();
-            this._onCalendarChange({
-              detail: { value: (e.detail.value?.workday_calendar as string) || null },
-            });
-          }}
-        ></ha-form>
+        ${renderEntityPicker(
+          this.hass,
+          "workday_calendar",
+          this._config.workday_calendar,
+          { entity: { integration: "workday", domain: "calendar" } },
+          "calendar.workday",
+          (value) => this._onCalendarChange({ detail: { value } }),
+        )}
       </div>
       ${
         this._warnings.length

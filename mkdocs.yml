@@ -61,7 +61,9 @@ nav:
       - Sun: conditions/sun.md
       - Weather: conditions/weather.md
       - People: conditions/people.md
+      - Occupancy: conditions/occupancy.md
       - Day: conditions/day.md
+      - Lux: conditions/lux.md
       - Template: conditions/template.md
       - Script: conditions/script.md
   - Actions: actions.md

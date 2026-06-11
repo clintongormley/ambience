@@ -1657,9 +1657,9 @@ describe("ambience-actions-settings", () => {
     const warnings = el.shadowRoot.querySelector(".warning");
     expect(warnings).not.toBeNull();
     const txt = warnings!.textContent ?? "";
-    // scope_kind is present, scope_id separator is NOT rendered
-    expect(txt).toContain("house");
-    expect(txt).not.toMatch(/house\//);
+    // Rendered via the shared scopeLabel helper: "House", no scope_id suffix.
+    expect(txt).toContain("House");
+    expect(txt).not.toMatch(/House[:/]/);
     expect(txt).toContain("Night");
   });
 
@@ -1703,5 +1703,47 @@ describe("ambience-actions-settings", () => {
     const body = el.shadowRoot.querySelector("[data-card] .body") as HTMLElement;
     expect(body).not.toBeNull();
     expect(body.textContent).toContain("no fields");
+  });
+
+  test("clicking inside an overlay dropdown does not cancel the default editor", async () => {
+    el = await mount();
+    (el as any)._startEditingDefault("light.turn_on", "brightness_pct");
+    await el.updateComplete;
+    expect((el as any)._editingDefault).toBe("light.turn_on:brightness_pct");
+
+    // ha-form selectors (select/entity/color) render their options in a
+    // document-level overlay; the pointerdown on an option fires before the
+    // selection commits — it must not cancel-and-revert the editor.
+    const overlay = document.createElement("vaadin-combo-box-overlay");
+    document.body.appendChild(overlay);
+    try {
+      overlay.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
+      await el.updateComplete;
+      expect((el as any)._editingDefault).toBe("light.turn_on:brightness_pct");
+    } finally {
+      overlay.remove();
+    }
+  });
+
+  test("warning rows render the scope via scopeLabel, like the sibling views", async () => {
+    el = await mount();
+    (el as any)._warnings = [
+      { scope_kind: "floor", scope_id: "ground", scene_name: "Evening", reason: "test reason" },
+    ];
+    await el.updateComplete;
+    const warning = el.shadowRoot.querySelector(".warning");
+    expect(warning?.textContent).toContain("Floor: ground");
+    expect(warning?.textContent).not.toContain("floor/ground");
+  });
+
+  test("picking an already-exposed service expands its card as feedback", async () => {
+    el = await mount();
+    await (el as any)._addService("light.turn_on"); // already exposed in the fixture
+    await flush(el);
+    // No duplicate card, no save — but the existing card expands so the pick
+    // isn't a silent no-op.
+    expect(el.shadowRoot.querySelectorAll("[data-card]").length).toBe(1);
+    expect(saveExposedActions).not.toHaveBeenCalled();
+    expect((el as any)._expanded.has("light.turn_on")).toBe(true);
   });
 });

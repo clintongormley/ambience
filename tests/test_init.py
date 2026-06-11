@@ -315,3 +315,40 @@ def test_exposure_constants_shape():
     # Every known assistant has a safe (dot-free) form field name.
     assert set(ASSISTANT_FIELDS) == set(KNOWN_ASSISTANTS)
     assert all("." not in field for field in ASSISTANT_FIELDS.values())
+
+
+async def test_unload_aborts_when_platform_unload_fails(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """If the switch platform fails to unload, async_unload_entry must return
+    False (so it does NOT tear down hass.data[DOMAIN]) — that would leave live
+    entities referencing a missing store. We assert what our code controls
+    (data + the service survive); the resulting ConfigEntryState is HA-internal
+    bookkeeping that differs across versions (FAILED_UNLOAD on recent, LOADED on
+    the min pin), so we only require the entry was NOT cleanly unloaded."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with patch.object(
+        hass.config_entries, "async_unload_platforms", new=AsyncMock(return_value=False)
+    ):
+        await hass.config_entries.async_unload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert mock_config_entry.state is not ConfigEntryState.NOT_LOADED
+    assert DOMAIN in hass.data
+    assert hass.services.has_service(DOMAIN, "apply_scene")
+
+
+def test_manifest_orders_setup_after_frontend() -> None:
+    """The integration registers a sidebar panel, websocket commands, and a
+    Lovelace resource — frontend must be set up first when it is present.
+    after_dependencies (not dependencies) so a stripped/minimal install
+    without hass_frontend can still load the integration."""
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    assert "frontend" in manifest["after_dependencies"]
+    assert "frontend" not in manifest["dependencies"]

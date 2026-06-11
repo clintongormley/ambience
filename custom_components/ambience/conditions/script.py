@@ -189,6 +189,12 @@ class ScriptCondition:
             for (_, _, key), value in zip(misses, fetched, strict=True):
                 self._cache[key] = (value, expires_at)
                 results[key] = value
+        # Evict keys whose (script, args) pair is no longer referenced by any
+        # scene — the cache lives on a long-lived singleton and would otherwise
+        # grow with every pair ever configured. After the loops above,
+        # results ⊆ cache, so a size check spots the no-eviction common case.
+        if len(self._cache) > len(results):
+            self._cache = {k: v for k, v in self._cache.items() if k in results}
         return ScriptSnapshot(results=results)
 
     async def _call_one(self, hass: HomeAssistant, script: str, args_json: str) -> bool:

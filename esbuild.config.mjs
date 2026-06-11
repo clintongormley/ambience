@@ -7,9 +7,6 @@ const common = {
   minify: true,
   sourcemap: false,
   legalComments: "none",
-  // HA's frontend serves `custom-card-helpers` via an import map; resolve at
-  // runtime rather than bundling our own copy.
-  external: ["custom-card-helpers"],
   banner: {
     js: "/* Ambience — bundled output. Do not edit by hand. */",
   },

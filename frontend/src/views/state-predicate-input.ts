@@ -176,6 +176,10 @@ export class AmbienceStatePredicateInput extends LitElement {
   /** Remove the node at `path`. Collapses empty groups to null and
    *  single-child groups to that single child. Root removal → null. */
   _removeAt(path: number[]) {
+    // Indices shift under the open path when an earlier sibling goes away —
+    // collapse instead of letting whichever node inherits the index expand
+    // (the same hazard _onNodeChange already guards).
+    this._openPath = null;
     if (path.length === 0) {
       this._emit(null);
       return;
@@ -579,6 +583,7 @@ export class AmbienceStatePredicateInput extends LitElement {
    *  - Nested: splice the group's children into the parent's items list
    *    ("remove the parens, keep the clauses"). */
   _unwrapAt(path: number[]) {
+    this._openPath = null;
     if (path.length === 0) {
       // Root case: peel the group, keep a single child or clear entirely.
       const root = this.value;

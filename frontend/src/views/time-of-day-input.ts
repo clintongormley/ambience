@@ -88,8 +88,13 @@ export class AmbienceTimeOfDayInput extends LitElement {
   @state() private _entries: Entry[] = [ANY];
   @state() private _openIdx: number = 0;
 
+  // The last value this widget itself emitted; both the self-assignment in
+  // _emit and the parent's echo carry this exact object, so willUpdate can
+  // tell them apart from a genuine external change.
+  private _lastEmitted: TimeOfDayPredicate | undefined;
+
   override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has("value")) {
+    if (changed.has("value") && this.value !== this._lastEmitted) {
       this._entries = this._predicateToEntries(this.value);
       if (this._entries.length === 0) this._entries = [ANY];
       // Default open index to last entry when loading from value
@@ -131,6 +136,11 @@ export class AmbienceTimeOfDayInput extends LitElement {
       .map((e) => (e.kind === "period" ? { period: e.period } : { from: e.from, to: e.to }));
     const value: TimeOfDayPredicate =
       items.length === 0 ? null : items.length === 1 ? items[0]! : items;
+    // Record + assign before dispatching so neither the self-assignment nor
+    // the parent's echo (same object identity) rebuilds _entries — otherwise
+    // editing a non-last entry collapses it and expands the last one.
+    this._lastEmitted = value;
+    this.value = value;
     emitValueChanged(this, value);
   }
 

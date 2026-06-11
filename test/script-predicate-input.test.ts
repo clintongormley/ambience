@@ -474,3 +474,45 @@ describe("ambience-script-predicate-input — form tab reachable", () => {
     expect(el._mode).toBe("form");
   });
 });
+
+describe("YAML editor event containment (review fix)", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("ha-code-editor's raw value-changed must not escape the widget", async () => {
+    // Define a stub so the real-HA ha-code-editor branch renders in jsdom.
+    if (!customElements.get("ha-code-editor")) {
+      customElements.define(
+        "ha-code-editor",
+        class extends HTMLElement {
+          value = "";
+        },
+      );
+    }
+    el = await mount({ script: "script.foo", args: {} }, { services: { script: { foo: {} } } });
+    el._setMode("yaml");
+    await el.updateComplete;
+    const editor = el.shadowRoot.querySelector("ha-code-editor") as HTMLElement & {
+      value: string;
+    };
+    expect(editor).not.toBeNull();
+
+    const emitted: unknown[] = [];
+    el.parentElement!.addEventListener("value-changed", (e: Event) => {
+      emitted.push((e as CustomEvent).detail.value);
+    });
+    // ha-code-editor fires value-changed (composed) with the raw YAML string;
+    // without stopPropagation it bubbles past the widget and condition-input
+    // re-emits the STRING as the predicate, clobbering the parsed object.
+    editor.value = "script: script.foo\nargs:\n  k: 7\n";
+    editor.dispatchEvent(
+      new CustomEvent("value-changed", {
+        detail: { value: "script: script.foo\nargs:\n  k: 7\n" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    expect(emitted).toEqual([{ script: "script.foo", args: { k: 7 } }]);
+  });
+});

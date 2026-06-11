@@ -220,6 +220,37 @@ def test_matches_sun_relative_with_positive_offset_hours() -> None:
     assert _condition().matches(_range(_sun("noon", 60), _sun("sunset")), snap) is True
 
 
+def test_mixed_sun_time_range_does_not_match_after_midnight() -> None:
+    """Regression: a sun `from` resolves to within ±12h of now while a `time`
+    `to` resolves on now's local date — in the small hours that built a >24h
+    interval that swallowed `now` ("evening until 23:00" scenes coming back on
+    after midnight)."""
+    pred = _range(_sun("sunset"), _time(23, 0))
+    m = _condition()
+    # Anchors for now's local date (May 14), as the production snapshot builds.
+    for hour, minute in ((0, 30), (3, 0), (5, 30)):
+        snap = _build_snapshot(
+            datetime(2026, 5, 14, hour, minute, tzinfo=UTC),
+            sunset=datetime(2026, 5, 14, 18, 0, tzinfo=UTC),
+        )
+        assert m.matches(pred, snap) is False, f"{hour:02d}:{minute:02d}"
+    # Still matches inside the genuine sunset→23:00 window.
+    snap = _build_snapshot(
+        datetime(2026, 5, 14, 19, 0, tzinfo=UTC),
+        sunset=datetime(2026, 5, 14, 18, 0, tzinfo=UTC),
+    )
+    assert m.matches(pred, snap) is True
+
+
+def test_mixed_range_with_sun_start_after_time_end_wraps() -> None:
+    """The symmetric skew: a sun `from` normalised into tomorrow with a `to` on
+    today's date is a genuine wrap (endpoints >24h apart) and must still match
+    just before midnight."""
+    pred = _range(_sun("sunrise", 120), _time(0, 10))
+    snap = _build_snapshot(datetime(2026, 5, 13, 23, 50, tzinfo=UTC))
+    assert _condition().matches(pred, snap) is True
+
+
 # ── matches: named periods ─────────────────────────────────────────────────
 
 
@@ -265,10 +296,33 @@ def test_matches_custom_shadows_builtin() -> None:
     assert _condition(custom).matches({"period": "afternoon"}, snap) is False
 
 
-def test_matches_missing_period_raises_loudly() -> None:
+def test_matches_missing_period_fails_scene_not_scope() -> None:
+    """A period hidden/deleted while still referenced fails just this scene
+    (mirrors lux) instead of raising and killing the whole scope-category."""
     snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
-    with pytest.raises(ValueError, match="unknown time_of_day period"):
-        _condition().matches({"period": "nonexistent"}, snap)
+    assert _condition().matches({"period": "nonexistent"}, snap) is False
+
+
+def test_matches_list_with_missing_period_still_tries_other_items() -> None:
+    snap = _build_snapshot(datetime(2026, 5, 13, 14, 0, tzinfo=UTC))
+    pred = [{"period": "nonexistent"}, {"period": "afternoon"}]
+    assert _condition().matches(pred, snap) is True
+
+
+def test_order_key_tolerates_missing_period() -> None:
+    """`order_key` feeds scope save/sort — a dangling period must not break it."""
+    m = _condition()
+    assert m.order_key({"period": "nonexistent"}) == float("inf")
+    # A resolvable item still wins over the dangling one.
+    assert m.order_key([{"period": "nonexistent"}, _range(_time(10, 0), _time(12, 0))]) == 600.0
+
+
+def test_contains_tolerates_missing_period() -> None:
+    """`contains` feeds shadow detection — a dangling period proves nothing."""
+    m = _condition()
+    rng = _range(_time(10, 0), _time(12, 0))
+    assert m.contains({"period": "nonexistent"}, rng) is False
+    assert m.contains(rng, {"period": "nonexistent"}) is False
 
 
 # ── matches: OR lists ──────────────────────────────────────────────────────
@@ -335,6 +389,19 @@ def test_validate_predicate_rejects_invalid(pred: Any) -> None:
 def test_validate_predicate_rejects_missing_period() -> None:
     with pytest.raises(ValueError, match="unknown time_of_day period"):
         _condition().validate_predicate({"period": "nonexistent"})
+
+
+def test_validate_predicate_accepts_identical_endpoints() -> None:
+    """from == to is harmless (matches all day at runtime) and must stay
+    valid — rejecting it would block saving scopes with such a config."""
+    _condition().validate_predicate(_range(_time(10, 0), _time(10, 0)))
+
+
+def test_validate_predicate_rejects_bool_clock() -> None:
+    """bool is an int subclass; `hh: true` must not validate as hour 1 (the
+    trigger scheduler already rejects it, so it would never fire)."""
+    with pytest.raises(ValueError):
+        _condition().validate_predicate(_range({"kind": "time", "hh": True, "mm": 0}, _time(10, 0)))
 
 
 # ── describe ───────────────────────────────────────────────────────────────
@@ -588,55 +655,54 @@ async def test_snapshot_raises_when_anchor_undefined(hass: HomeAssistant) -> Non
         await _condition().snapshot(hass, now=now)
 
 
-# ── _resolve_endpoint error paths (lines 121, 128, 139, 146) ─────────────────
+# ── _resolve_endpoint error paths (via validate_predicate; matches() is
+# deliberately tolerant of malformed stored data) ─────────────────────────────
 
 
-def test_resolve_endpoint_non_dict_raises(hass: HomeAssistant) -> None:
+def test_resolve_endpoint_non_dict_raises() -> None:
     """_resolve_endpoint raises ValueError when the endpoint is not a dict
-    (line 121 branch — e.g. a bare string used as a from/to value)."""
-    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    (e.g. a bare string used as a from/to value)."""
     with pytest.raises(ValueError, match="invalid endpoint"):
-        _condition().matches({"from": "08:00", "to": _time(10, 0)}, snap)
+        _condition().validate_predicate({"from": "08:00", "to": _time(10, 0)})
 
 
-def test_resolve_endpoint_invalid_mm_raises(hass: HomeAssistant) -> None:
-    """_resolve_endpoint raises ValueError when mm is out of [0, 59] range
-    (line 128 branch)."""
-    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+def test_resolve_endpoint_invalid_mm_raises() -> None:
+    """_resolve_endpoint raises ValueError when mm is out of [0, 59] range."""
     with pytest.raises(ValueError, match="invalid mm"):
-        _condition().matches(
-            {"from": {"kind": "time", "hh": 8, "mm": 60}, "to": _time(10, 0)}, snap
+        _condition().validate_predicate(
+            {"from": {"kind": "time", "hh": 8, "mm": 60}, "to": _time(10, 0)}
         )
 
 
-def test_resolve_endpoint_non_int_mm_raises(hass: HomeAssistant) -> None:
-    """_resolve_endpoint raises ValueError when mm is not an int (line 128)."""
-    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+def test_resolve_endpoint_non_int_mm_raises() -> None:
+    """_resolve_endpoint raises ValueError when mm is not an int."""
     with pytest.raises(ValueError, match="invalid mm"):
-        _condition().matches(
-            {"from": {"kind": "time", "hh": 8, "mm": "30"}, "to": _time(10, 0)}, snap
+        _condition().validate_predicate(
+            {"from": {"kind": "time", "hh": 8, "mm": "30"}, "to": _time(10, 0)}
         )
 
 
 def test_resolve_endpoint_non_int_offset_raises() -> None:
-    """_resolve_endpoint raises ValueError when offset_min is not an int
-    (line 139 branch)."""
-    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    """_resolve_endpoint raises ValueError when offset_min is not an int."""
     with pytest.raises(ValueError, match="offset_min must be int"):
-        _condition().matches(
-            {"from": {"kind": "sun", "anchor": "sunrise", "offset_min": "30"}, "to": _time(10, 0)},
-            snap,
+        _condition().validate_predicate(
+            {"from": {"kind": "sun", "anchor": "sunrise", "offset_min": "30"}, "to": _time(10, 0)}
         )
 
 
 def test_resolve_endpoint_unknown_kind_raises() -> None:
-    """_resolve_endpoint raises ValueError when kind is not 'time' or 'sun'
-    (line 146 branch — the final raise at the bottom of _resolve_endpoint)."""
-    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    """_resolve_endpoint raises ValueError when kind is not 'time' or 'sun'."""
     with pytest.raises(ValueError, match="invalid endpoint kind"):
-        _condition().matches(
-            {"from": {"kind": "lunar", "hh": 8, "mm": 0}, "to": _time(10, 0)}, snap
+        _condition().validate_predicate(
+            {"from": {"kind": "lunar", "hh": 8, "mm": 0}, "to": _time(10, 0)}
         )
+
+
+def test_matches_tolerates_malformed_endpoints() -> None:
+    """matches() runs against stored data that may have rotted — a malformed
+    item fails its scene instead of raising into the engine."""
+    snap = _build_snapshot(datetime(2026, 5, 13, 12, 0, tzinfo=UTC))
+    assert _condition().matches({"from": "08:00", "to": _time(10, 0)}, snap) is False
 
 
 # ── describe: malformed period skipped via ValueError (lines 168-169) ────────

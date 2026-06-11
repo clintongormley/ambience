@@ -512,3 +512,19 @@ def test_validate_threshold_rejects_non_dict(m_no_entity: WeatherCondition) -> N
         m_no_entity.validate_predicate({"groups": [], "thresholds": ["temp < 5"]})
     with pytest.raises(ValueError, match="threshold must be an object"):
         m_no_entity.validate_predicate({"groups": [], "thresholds": [42]})
+
+
+def test_is_constraining_only_with_groups_or_thresholds() -> None:
+    """{groups: [], thresholds: []} matches everything — a sorting wildcard,
+    not a real constraint (mirrors lux/occupancy)."""
+    m = WeatherCondition()
+    assert m.is_constraining({"groups": ["sunny"], "thresholds": []}) is True
+    assert (
+        m.is_constraining(
+            {"groups": [], "thresholds": [{"attribute": "humidity", "op": "<", "value": 50}]}
+        )
+        is True
+    )
+    assert m.is_constraining({"groups": [], "thresholds": []}) is False
+    assert m.is_constraining({}) is False
+    assert m.is_constraining("not-a-dict") is False

@@ -20,8 +20,9 @@ and it handles future updates automatically.
    _Ambience_.
 6. Follow the setup prompts to complete the configuration.
 
-!!! info "📷 Screenshot" The Add Integration dialog with "Ambience" typed in the
-search box.
+!!! info "📷 Screenshot"
+
+    The Add Integration dialog with "Ambience" typed in the search box.
 
 ---
 
@@ -44,8 +45,9 @@ If you prefer not to use HACS, you can install the integration by hand.
 Once the integration has been added, an **Ambience** entry appears in the Home
 Assistant sidebar. The panel is visible to admin users only.
 
-!!! info "📷 Screenshot" The Home Assistant sidebar with the Ambience entry
-highlighted.
+!!! info "📷 Screenshot"
+
+    The Home Assistant sidebar with the Ambience entry highlighted.
 
 If you would prefer not to have the sidebar entry, you can turn it off in the
 integration's options. Go to **Settings → Devices & Services**, find the

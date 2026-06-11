@@ -240,9 +240,12 @@ async def test_diagnostics_traces_redact_presence_pii(
                 evaluated=True,
                 disabled=False,
                 predicates=[
-                    PredicateResult("people", True, "Alice: home ✓ … want any at home"),
+                    PredicateResult(
+                        "people", True, "Alice: home ✓ … want any at home", ("person.alice",)
+                    ),
                     PredicateResult("template", True, "rendered → True"),
                     PredicateResult("time_of_day", True, "evening"),
+                    PredicateResult("occupancy", True, "Hall: on ✓", ("binary_sensor.hall",)),
                 ],
             )
         ],
@@ -267,6 +270,12 @@ async def test_diagnostics_traces_redact_presence_pii(
     preds = {p["condition_key"]: p for p in trace["explanation"]["scenes"][0]["predicates"]}
     assert preds["people"]["detail"] == REDACTED
     assert preds["template"]["detail"] == REDACTED
-    # Non-presence details stay useful for debugging.
+    # Presence-revealing entity_ids are scrubbed too (person./device_tracker.),
+    # the same identifiers the cause scrub removes — they ride in the new
+    # per-predicate entity_ids list.
+    assert preds["people"]["entity_ids"] == [REDACTED]
+    # Non-presence details and entity_ids stay useful for debugging.
     assert preds["time_of_day"]["detail"] == "evening"
+    assert preds["occupancy"]["entity_ids"] == ["binary_sensor.hall"]
+    assert "person.alice" not in str(result)
     assert "Secret Zone" not in str(result)

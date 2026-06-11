@@ -351,7 +351,15 @@ export type TraceAction = {
   entity_ids?: string[];
   params?: Record<string, unknown>;
 };
-export type TracePredicate = { condition_key: string; passed: boolean; detail: string | null };
+export type TracePredicate = {
+  condition_key: string;
+  passed: boolean;
+  detail: string | null;
+  // entity_ids this predicate references, for inline more-info links in the
+  // trace. Optional so a trace captured before this field existed (or an
+  // ambient condition with no entities) renders as plain text.
+  entity_ids?: string[];
+};
 export type TraceSceneEval = {
   index: number;
   name: string | null;

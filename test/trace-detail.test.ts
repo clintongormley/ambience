@@ -8,7 +8,7 @@ import {
   outcomeSummary,
   renderEvaluation,
 } from "../frontend/src/trace-detail";
-import type { BufferedUnit } from "../frontend/src/types";
+import type { BufferedUnit, TracePredicate } from "../frontend/src/types";
 
 function unit(over: Partial<BufferedUnit> = {}): BufferedUnit {
   return {
@@ -434,6 +434,194 @@ describe("trace-detail", () => {
     );
     expect(host.textContent).toContain("disabled");
     expect(host.textContent).not.toContain("not reached");
+  });
+
+  // -------------------------------------------------------------------------
+  // Scene-evaluation entity more-info links
+  // -------------------------------------------------------------------------
+
+  function sceneEvalHost(
+    predicates: TracePredicate[],
+    hass?: Record<string, unknown>,
+  ): HTMLElement {
+    return renderToHost(
+      {
+        explanation: {
+          winner_index: 0,
+          scenes: [{ index: 0, name: "S", matched: true, evaluated: true, predicates }],
+        },
+      },
+      true,
+      hass,
+    );
+  }
+
+  test("scene-evaluation entity names become inline more-info links", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "occupancy",
+          passed: true,
+          detail: "Zone Shower: on ✓ (for ≥10s, held 13s)",
+          entity_ids: ["binary_sensor.zone_1"],
+        },
+      ],
+      { states: { "binary_sensor.zone_1": { attributes: { friendly_name: "Zone Shower" } } } },
+    );
+    const links = [...host.querySelectorAll(".pred .entity-link")].map((e) =>
+      e.textContent?.trim(),
+    );
+    expect(links).toEqual(["Zone Shower"]);
+    // The surrounding detail text is preserved around the link.
+    expect(host.querySelector(".pred")?.textContent).toContain("on ✓ (for ≥10s, held 13s)");
+  });
+
+  test("multiple entities each link; a shorter name does not double-wrap a longer one", () => {
+    // "Hall Light" appears first, so the shorter "Hall" must skip the "Hall"
+    // *inside* it and claim the standalone occurrence further along.
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "occupancy",
+          passed: true,
+          detail: "all of: Hall Light: off ✗, Hall: on ✓",
+          entity_ids: ["binary_sensor.hall", "light.hall"],
+        },
+      ],
+      {
+        states: {
+          "binary_sensor.hall": { attributes: { friendly_name: "Hall" } },
+          "light.hall": { attributes: { friendly_name: "Hall Light" } },
+        },
+      },
+    );
+    const links = [...host.querySelectorAll(".pred .entity-link")].map((e) =>
+      e.textContent?.trim(),
+    );
+    // Linked once each, in the order they appear in the detail string.
+    expect(links).toEqual(["Hall Light", "Hall"]);
+  });
+
+  test("an entity with no friendly name links by its raw id (as baked into the detail)", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "occupancy",
+          passed: true,
+          detail: "binary_sensor.zone_1: on ✓",
+          entity_ids: ["binary_sensor.zone_1"],
+        },
+      ],
+      // No friendly_name → entityDisplayName falls back to the id, which the
+      // backend also baked into the detail, so the id itself becomes the link.
+      { states: { "binary_sensor.zone_1": { attributes: {} } } },
+    );
+    const links = [...host.querySelectorAll(".pred .entity-link")].map((e) =>
+      e.textContent?.trim(),
+    );
+    expect(links).toEqual(["binary_sensor.zone_1"]);
+  });
+
+  test("clicking a scene-evaluation entity link fires hass-more-info for that entity", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "occupancy",
+          passed: true,
+          detail: "Zone Shower: on ✓",
+          entity_ids: ["binary_sensor.zone_1"],
+        },
+      ],
+      { states: { "binary_sensor.zone_1": { attributes: { friendly_name: "Zone Shower" } } } },
+    );
+    let detail: unknown;
+    host.addEventListener("hass-more-info", (e) => {
+      detail = (e as CustomEvent).detail;
+    });
+    (host.querySelector(".pred .entity-link") as HTMLElement).click();
+    expect(detail).toEqual({ entityId: "binary_sensor.zone_1" });
+  });
+
+  test("a renamed/missing entity falls back to plain detail text (no link)", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "occupancy",
+          passed: true,
+          // Name baked at trace time; the entity has since been renamed in hass.
+          detail: "Zone Shower: on ✓",
+          entity_ids: ["binary_sensor.zone_1"],
+        },
+      ],
+      { states: { "binary_sensor.zone_1": { attributes: { friendly_name: "Renamed Zone" } } } },
+    );
+    expect(host.querySelector(".pred .entity-link")).toBeFalsy();
+    expect(host.querySelector(".pred")?.textContent).toContain("Zone Shower: on ✓");
+  });
+
+  test("a predicate with no entity_ids renders the detail as plain text", () => {
+    const host = sceneEvalHost([
+      { condition_key: "people", passed: true, detail: "3 of 5 home (Alice, Bob)" },
+    ]);
+    expect(host.querySelector(".pred .entity-link")).toBeFalsy();
+    expect(host.querySelector(".pred")?.textContent).toContain("3 of 5 home (Alice, Bob)");
+  });
+
+  test("state attribute-mode links only the entity name, not the appended attribute", () => {
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "state",
+          passed: true,
+          detail: "Thermostat temperature: 22°C ✓ (is 20)",
+          entity_ids: ["climate.thermostat"],
+        },
+      ],
+      { states: { "climate.thermostat": { attributes: { friendly_name: "Thermostat" } } } },
+    );
+    const links = [...host.querySelectorAll(".pred .entity-link")].map((e) =>
+      e.textContent?.trim(),
+    );
+    expect(links).toEqual(["Thermostat"]); // not "Thermostat temperature"
+    expect(host.querySelector(".pred")?.textContent).toContain("temperature: 22°C ✓ (is 20)");
+  });
+
+  test("ambient sun condition does NOT link its prose, even though it carries sun.sun", () => {
+    // sun.describe() is prose ("Sun 12° elevation"); the leading word "Sun"
+    // equals sun.sun's friendly name only by coincidence — must not be linked.
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "sun",
+          passed: true,
+          detail: "Sun 12° elevation, 180° azimuth (S)",
+          entity_ids: ["sun.sun"],
+        },
+      ],
+      { states: { "sun.sun": { attributes: { friendly_name: "Sun" } } } },
+    );
+    expect(host.querySelector(".pred .entity-link")).toBeFalsy();
+    expect(host.querySelector(".pred")?.textContent).toContain(
+      "Sun 12° elevation, 180° azimuth (S)",
+    );
+  });
+
+  test("ambient weather condition does NOT link, even when its entity name matches the label", () => {
+    // weather detail is localized to a condition word; linking the weather
+    // entity here would be a coincidental match on that word.
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "weather",
+          passed: true,
+          detail: "sunny", // formatDetail → weatherConditionLabel → "Sunny"
+          entity_ids: ["weather.home"],
+        },
+      ],
+      { states: { "weather.home": { attributes: { friendly_name: "Sunny" } } } },
+    );
+    expect(host.querySelector(".pred .entity-link")).toBeFalsy();
+    expect(host.querySelector(".pred")?.textContent).toContain("Sunny");
   });
 
   // -------------------------------------------------------------------------

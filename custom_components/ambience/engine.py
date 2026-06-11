@@ -22,11 +22,22 @@ def scene_enabled(scene: Scene) -> bool:
 
 @dataclass(frozen=True)
 class PredicateResult:
-    """One predicate's evaluation within a scene."""
+    """One predicate's evaluation within a scene.
+
+    `entity_ids` are the entity_ids this predicate references (from the
+    condition's optional `trigger_deps`), so the trace UI can link the names it
+    shows to their more-info dialogs. Populated only when tracing AND the
+    predicate renders a `detail` to link AND the condition reports entities;
+    empty otherwise — not tracing, no detail (e.g. template/script, or an
+    unevaluated predicate), no `trigger_deps`, or a condition that references no
+    entities (e.g. time_of_day). Which keys are actually rendered as links is a
+    separate frontend decision.
+    """
 
     condition_key: str
     passed: bool
     detail: str | None = None
+    entity_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -103,7 +114,18 @@ def evaluate_explained(
             # Pass the predicate so the trace detail is scoped to the sensors/
             # persons THIS scene references, not the whole shared snapshot.
             detail = condition.describe(snap, predicate) if describe else None
-            predicates.append(PredicateResult(key, passed, detail))
+            # Reuse the condition's own dependency analysis for the entity_ids
+            # the trace UI links to — sorted so the (unordered) set serialises
+            # deterministically. Only a predicate that renders a detail string can
+            # have its names linked, so skip the lookup when there's nothing to
+            # link: this both avoids wasted work and, more importantly, keeps the
+            # always-on trace path off any expensive trigger_deps (e.g. the
+            # template condition re-renders its Jinja). `trigger_deps` is optional
+            # (protocols.py), so guard it like scope_triggers. `detail is not None`
+            # already implies tracing (detail is None when describe=False).
+            trigger_deps = getattr(condition, "trigger_deps", None) if detail is not None else None
+            entity_ids = tuple(sorted(trigger_deps(predicate).entities)) if trigger_deps else ()
+            predicates.append(PredicateResult(key, passed, detail, entity_ids))
             if not passed:
                 ok = False
                 break

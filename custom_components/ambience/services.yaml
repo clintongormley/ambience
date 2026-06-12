@@ -45,7 +45,7 @@ apply_scene:
           multiple: true
     force:
       name: Force
-      description: Apply even when a scope's switch is paused.
+      description: Apply even when a scope is paused/off.
       required: false
       default: false
       selector:

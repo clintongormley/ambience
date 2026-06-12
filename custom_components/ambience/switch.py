@@ -67,9 +67,9 @@ def scope_for_unique_id(unique_id: str) -> tuple[str, str | None] | None:
     """Reverse switch_unique_id: map a scope switch's unique_id back to
     (scope_kind, scope_id), or None if it isn't an Ambience scope switch.
 
-    The apply_scene service takes a scope switch entity_id; this resolves the
-    chosen entity to the scope it gates. scope_id may itself contain underscores,
-    so only the leading kind segment is split off.
+    The switch-registry reconcile maps each registered switch's unique_id back to
+    the scope it represents. scope_id may itself contain underscores, so only the
+    leading kind segment is split off.
     """
     if unique_id == "ambience_switch_house":
         return ("house", None)

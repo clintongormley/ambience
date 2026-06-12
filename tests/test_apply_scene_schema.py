@@ -38,6 +38,11 @@ def test_scene_without_category_is_now_valid():
     assert _APPLY_SCENE_SCHEMA({"scene": "Movie"})["scene"] == ["Movie"]
 
 
-def test_house_must_be_boolean():
+def test_house_coerces_truthy_strings():
+    # cv.boolean coerces YAML-style truthy strings (matches the `force` field).
+    assert _APPLY_SCENE_SCHEMA({"house": "yes"})["house"] is True
+
+
+def test_house_rejects_non_boolean():
     with pytest.raises(vol.Invalid):
-        _APPLY_SCENE_SCHEMA({"house": "yes"})
+        _APPLY_SCENE_SCHEMA({"house": ["not", "a", "bool"]})

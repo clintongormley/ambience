@@ -95,7 +95,7 @@ _APPLY_SCENE_SCHEMA = vol.Schema(
     {
         vol.Optional("areas"): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional("floors"): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional("house"): bool,
+        vol.Optional("house"): cv.boolean,
         vol.Optional("category"): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional("scene"): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional("force"): cv.boolean,

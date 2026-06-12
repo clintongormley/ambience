@@ -23,10 +23,6 @@ from custom_components.ambience.const import (
 from custom_components.ambience.service_logbook import compose_apply_message
 
 
-def _house_scope(hass: HomeAssistant) -> str:
-    return hass.data[DOMAIN][DATA_SWITCHES][("house", None)].entity_id
-
-
 async def _make_area_scope(hass: HomeAssistant, name: str) -> tuple[str, str]:
     """Create a real HA area (spawning its scope switch) → (area_id, switch entity_id)."""
     area = ar.async_get(hass).async_create(name)

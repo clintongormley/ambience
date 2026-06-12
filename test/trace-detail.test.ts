@@ -8,7 +8,11 @@ import {
   outcomeSummary,
   renderEvaluation,
 } from "../frontend/src/trace-detail";
-import type { BufferedUnit, TracePredicate } from "../frontend/src/types";
+import type { BufferedUnit, ExposedAction, TracePredicate } from "../frontend/src/types";
+
+function exposed(id: string, label: string): ExposedAction {
+  return { id, label, visible_fields: [], defaults: {} };
+}
 
 function unit(over: Partial<BufferedUnit> = {}): BufferedUnit {
   return {
@@ -193,6 +197,78 @@ describe("trace-detail", () => {
     );
     expect(host.textContent).toContain("Brightness: 60");
     expect(host.textContent).not.toContain("Brightness pct");
+  });
+
+  test("formatActionHeader prefers the configured exposed-action label over the derived service label", () => {
+    const schemas = {
+      "fado.fade_lights": { fields: { brightness_pct: { name: "Brightness" } }, target: null },
+    };
+    expect(
+      formatActionHeader(
+        { service: "fado.fade_lights", entity_ids: ["light.k"], params: { brightness_pct: 0 } },
+        undefined,
+        schemas as never,
+        [exposed("fado.fade_lights", "Fade lights")],
+      ),
+    ).toBe("Fade lights · Brightness: 0");
+  });
+
+  test("formatActionHeader falls back to the derived label when no exposed action matches or its label is blank", () => {
+    // Blank/whitespace configured label → fall back to the derived service label.
+    expect(
+      formatActionHeader({ service: "fado.fade_lights", entity_ids: [] }, undefined, undefined, [
+        exposed("fado.fade_lights", "   "),
+      ]),
+    ).toBe("Fade lights fado");
+    // No matching exposed action → fall back to the derived service label.
+    expect(
+      formatActionHeader({ service: "fado.fade_lights", entity_ids: [] }, undefined, undefined, [
+        exposed("light.turn_on", "Lights on"),
+      ]),
+    ).toBe("Fade lights fado");
+  });
+
+  test("collapsed action summary uses the configured exposed-action label", () => {
+    const host = document.createElement("div");
+    render(
+      renderEvaluation(
+        unit({ actions: [{ service: "fado.fade_lights", entity_ids: ["light.k", "light.m"] }] }),
+        false,
+        () => {},
+        undefined,
+        undefined,
+        {},
+        [exposed("fado.fade_lights", "Fade lights")],
+      ),
+      host,
+    );
+    expect(host.textContent).toContain("Fade lights");
+    expect(host.textContent).not.toContain("Fade lights fado");
+    expect(host.textContent).toContain("2 entities");
+  });
+
+  test("expanded actions-taken header uses the configured exposed-action label", () => {
+    const host = document.createElement("div");
+    render(
+      renderEvaluation(
+        unit({
+          actions: [
+            { service: "fado.fade_lights", entity_ids: ["light.k"], params: { brightness_pct: 0 } },
+          ],
+        }),
+        true,
+        () => {},
+        undefined,
+        {
+          "fado.fade_lights": { fields: { brightness_pct: { name: "Brightness" } }, target: null },
+        },
+        {},
+        [exposed("fado.fade_lights", "Fade lights")],
+      ),
+      host,
+    );
+    expect(host.textContent).toContain("Fade lights · Brightness: 0");
+    expect(host.textContent).not.toContain("Fade lights fado");
   });
 
   test("collapsed summary lists the action service + entity count, but not the entities or predicates", () => {

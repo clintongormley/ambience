@@ -1,5 +1,5 @@
 import { AMBIENCE_STRINGS } from "./i18n-data.js";
-import type { PeriodDef } from "./types.js";
+import type { ExposedAction, PeriodDef } from "./types.js";
 
 type Localizer = (key: string) => string | undefined;
 
@@ -74,6 +74,26 @@ export function deriveActionLabel(serviceId: string): string {
 
   const result = !domainWords || mentionsDomain ? serviceWords : `${serviceWords} ${domainWords}`;
   return result.charAt(0).toUpperCase() + result.slice(1);
+}
+
+/**
+ * Display label for an action: the user-configured label from the matching
+ * exposed action (when set and non-blank), else the result of `fallback()`.
+ *
+ * The single source of truth for "prefer the configured label, else derive it".
+ * Callers differ only in how they derive the fallback — the scene editor / action
+ * summary use {@link actionLabel} (HA localize → humanized id), while the trace
+ * renderer uses {@link deriveActionLabel} (humanized id with its domain appended).
+ * `fallback` is a thunk so it isn't computed when a configured label wins.
+ */
+export function exposedActionLabel(
+  service: string,
+  exposedActions: ExposedAction[] | undefined,
+  fallback: () => string,
+): string {
+  const match = exposedActions?.find((e) => e.id === service);
+  if (match?.label?.trim()) return match.label;
+  return fallback();
 }
 
 /** HA's snake_case → "Sentence case" attribute formatter, with the same

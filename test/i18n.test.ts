@@ -4,6 +4,7 @@ import {
   anchorLabel,
   conditionLabel,
   dayItemKindLabel,
+  exposedActionLabel,
   localize,
   monthLabel,
   periodLabel,
@@ -12,7 +13,14 @@ import {
   weatherConditionLabel,
   weekdayLabel,
 } from "../frontend/src/i18n";
-import type { PeriodDef } from "../frontend/src/types";
+import type { ExposedAction, PeriodDef } from "../frontend/src/types";
+
+const exposed = (id: string, label: string): ExposedAction => ({
+  id,
+  label,
+  visible_fields: [],
+  defaults: {},
+});
 
 const def = (label: string | null = null): PeriodDef => ({
   from: { kind: "time", hh: 20, mm: 0 },
@@ -90,6 +98,29 @@ describe("actionLabel", () => {
 
   test("falls back to friendly form of name", () => {
     expect(actionLabel(undefined, "media_played")).toBe("Media played");
+  });
+});
+
+describe("exposedActionLabel", () => {
+  test("returns the configured label when a matching exposed action has a non-blank label", () => {
+    expect(
+      exposedActionLabel("fado.fade_lights", [exposed("fado.fade_lights", "Fade lights")], () => {
+        throw new Error("fallback should not be called when a configured label wins");
+      }),
+    ).toBe("Fade lights");
+  });
+
+  test("falls back when the matching label is blank or whitespace-only", () => {
+    expect(
+      exposedActionLabel("fado.fade_lights", [exposed("fado.fade_lights", "   ")], () => "derived"),
+    ).toBe("derived");
+  });
+
+  test("falls back when no exposed action matches, or the list is undefined", () => {
+    expect(
+      exposedActionLabel("fado.fade_lights", [exposed("light.turn_on", "On")], () => "derived"),
+    ).toBe("derived");
+    expect(exposedActionLabel("fado.fade_lights", undefined, () => "derived")).toBe("derived");
   });
 });
 

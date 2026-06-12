@@ -6,6 +6,7 @@ import { humanizeId, localize } from "../i18n.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import type {
   BufferedUnit,
+  ExposedAction,
   PeriodStoreView,
   SimulateEntityKnob,
   SimulateKnob,
@@ -110,6 +111,9 @@ export class AmbienceSimulatorModal extends LitElement {
 
   @property({ attribute: false }) hass!: HassConnection;
   @property({ attribute: false }) periods?: PeriodStoreView;
+  // Exposed-actions list, so a simulated action renders with the user-configured
+  // label (e.g. "Fade lights") rather than the derived service id.
+  @property({ attribute: false }) exposedActions: ExposedAction[] = [];
   @property({ attribute: false }) scope!: { scope_kind: string; scope_id: string | null };
   @property() category = "";
   @property() categoryName: string | null = null;
@@ -324,7 +328,7 @@ export class AmbienceSimulatorModal extends LitElement {
                 : nothing
             }
             <div class="run-row"><button class="runbtn" @click=${() => void this._run()}>${localize(this.hass, "ui.simulate_button", "Simulate")} ▸</button></div>
-            ${this._result ? html`<div class="result">${renderEvaluation(this._result, this._expanded, () => (this._expanded = !this._expanded), this.hass, undefined, this.periods?.custom ?? {})}</div>` : nothing}
+            ${this._result ? html`<div class="result">${renderEvaluation(this._result, this._expanded, () => (this._expanded = !this._expanded), this.hass, undefined, this.periods?.custom ?? {}, this.exposedActions)}</div>` : nothing}
           `
           }
         </div>

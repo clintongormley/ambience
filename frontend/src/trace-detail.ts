@@ -2,6 +2,7 @@ import { css, html, nothing, type TemplateResult } from "lit";
 import {
   conditionLabel,
   deriveActionLabel,
+  exposedActionLabel,
   humanizeId,
   periodLabel,
   stateValueLabel,
@@ -10,6 +11,7 @@ import {
 import { entityDisplayName, formatArgValue, paramLabel } from "./summary.js";
 import type {
   BufferedUnit,
+  ExposedAction,
   PeriodDef,
   ServiceSchema,
   TraceAction,
@@ -320,21 +322,32 @@ export function outcomeSummary(u: BufferedUnit): string {
   }
 }
 
-// The action's humanized service label plus its params (key: value) — NOT its
-// entities (those are listed one-per-line beneath it in the "Actions taken"
-// section). e.g. `light.turn_on {brightness_pct: 60}` → "Turn on light ·
-// Brightness: 60". Param keys use the service schema's `field.name` when
-// `schemas` is supplied, else fall back to the humanized field id.
+// The action's display label: the user-configured label from the exposed-actions
+// list when one is set (e.g. "Fade lights"), else the humanized service id with
+// its domain appended (`fado.fade_lights` → "Fade lights fado"). The trace
+// renderer is a separate path from the scene editor, so it must resolve the
+// configured label itself rather than deriving solely from the service id.
+function actionLabelFor(service: string, exposedActions?: ExposedAction[]): string {
+  return exposedActionLabel(service, exposedActions, () => deriveActionLabel(service));
+}
+
+// The action's display label plus its params (key: value) — NOT its entities
+// (those are listed one-per-line beneath it in the "Actions taken" section).
+// e.g. `light.turn_on {brightness_pct: 60}` → "Turn on light · Brightness: 60".
+// The label prefers the configured exposed-action label (see actionLabelFor).
+// Param keys use the service schema's `field.name` when `schemas` is supplied,
+// else fall back to the humanized field id.
 export function formatActionHeader(
   a: TraceAction,
   hass?: HassLike,
   schemas?: Record<string, ServiceSchema>,
+  exposedActions?: ExposedAction[],
 ): string {
   const params = Object.entries(a.params ?? {})
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(([k, v]) => `${paramLabel(k, a.service, schemas)}: ${formatArgValue(hass, v)}`)
     .join(", ");
-  const label = deriveActionLabel(a.service);
+  const label = actionLabelFor(a.service, exposedActions);
   return params ? `${label} · ${params}` : label;
 }
 
@@ -392,8 +405,9 @@ export function renderEvaluation(
   hass?: HassLike,
   schemas?: Record<string, ServiceSchema>,
   periods: CustomPeriods = {},
+  exposedActions?: ExposedAction[],
 ): TemplateResult {
-  const services = u.actions.map((a) => deriveActionLabel(a.service)).join(", ");
+  const services = u.actions.map((a) => actionLabelFor(a.service, exposedActions)).join(", ");
   const n = entityCount(u.actions);
   // Skipped units have no explanation or actions, but still expand to reveal the
   // one-line reason (switch off / scope disabled).
@@ -435,7 +449,7 @@ export function renderEvaluation(
               : html`<div class="action-summary">${outcomeSummary(u)}</div>`
         }
       </div>
-      ${expanded ? renderExpansion(u, hass, schemas, periods) : nothing}
+      ${expanded ? renderExpansion(u, hass, schemas, periods, exposedActions) : nothing}
     </div>
   `;
 }
@@ -445,6 +459,7 @@ function renderExpansion(
   hass: HassLike | undefined,
   schemas: Record<string, ServiceSchema> | undefined,
   periods: CustomPeriods,
+  exposedActions?: ExposedAction[],
 ): TemplateResult {
   const summary = outcomeSummary(u);
   // Raw entity_id + raw old→new, one click away. Only entity/duration causes
@@ -468,7 +483,7 @@ function renderExpansion(
             <div class="section-title">Actions taken</div>
             ${u.actions.map(
               (a) => html`<div class="action-block">
-                <div class="action-head">${formatActionHeader(a, hass, schemas)}</div>
+                <div class="action-head">${formatActionHeader(a, hass, schemas, exposedActions)}</div>
                 ${(a.entity_ids ?? []).map(
                   (e) => html`<div class="entity">${clickableEntity(hass, e)}</div>`,
                 )}

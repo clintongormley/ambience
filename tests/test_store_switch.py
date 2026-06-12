@@ -225,6 +225,7 @@ async def test_set_scope_enabled_rejects_unknown_kind(hass: HomeAssistant) -> No
 async def test_set_scope_enabled_notifies_config_changed(hass: HomeAssistant) -> None:
     """async_set_scope_enabled must fire SIGNAL_CONFIG_CHANGED so the engine
     rebuilds its switch subscription for the re-enabled scope."""
+    from homeassistant.core import callback
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
     from custom_components.ambience.const import SIGNAL_CONFIG_CHANGED
@@ -232,7 +233,14 @@ async def test_set_scope_enabled_notifies_config_changed(hass: HomeAssistant) ->
     store = AmbienceStore(hass)
     await store.async_load()
     fired = []
-    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda a: fired.append(a))
+
+    # @callback so async_dispatcher_send runs the listener synchronously (a bare
+    # lambda is dispatched as an executor job, which races the assertion below).
+    @callback
+    def _record(affected: object) -> None:
+        fired.append(affected)
+
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _record)
     try:
         await store.async_set_scope_enabled("house", None, False)
     finally:

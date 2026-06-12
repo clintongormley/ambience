@@ -195,26 +195,28 @@ class TriggerSubscriptionsMixin:
         if old is not None:
             old()
         self._reapply_timers[unit] = async_call_later(
-            self._hass, interval, self._make_reapply_due(unit)
+            self._hass, interval, self._make_reapply_due(unit, interval)
         )
 
-    def _make_reapply_due(self, unit: tuple[str, str | None, str]) -> Callable[[Any], None]:
+    def _make_reapply_due(
+        self, unit: tuple[str, str | None, str], interval: int
+    ) -> Callable[[Any], None]:
         @callback
         def _due(_now: Any) -> None:
             self._reapply_timers.pop(unit, None)  # one-shot: it has fired
             if self._running:
-                self._hass.async_create_task(self._reapply_due(unit))
+                self._hass.async_create_task(self._reapply_due(unit, interval))
 
         return _due
 
-    async def _reapply_due(self, unit: tuple[str, str | None, str]) -> None:
-        """Re-assess + force-apply one idle unit. A successful dispatch re-emits
+    async def _reapply_due(self, unit: tuple[str, str | None, str], interval: int) -> None:
+        """Re-assess + force-apply one idle unit. `interval` is the value the timer
+        was armed with, used only to label the trace. A successful dispatch re-emits
         SIGNAL_UNIT_APPLIED, which re-arms the timer; a skip (switch off / scope
         disabled / no match) dispatches nothing, so the timer stays dead until the
-        next real apply re-arms it. The `_running`/enabled guards live in
-        `_make_reapply_due` (before the task is created) and in cancellation, so
+        next real apply re-arms it. The `_running` guard lives in `_make_reapply_due`
+        (before the task is created) and timers are cancelled on disable/teardown, so
         this path has no extra branch to cover."""
-        _, interval = self._reapply_settings()  # interval is for the trace label only
         await self._refresh_all_snapshots()
         trace = await self._resolve_and_apply(*unit, force=True)
         if trace is not None:

@@ -1877,7 +1877,7 @@ async def test_idle_reapply_due_callback_noop_after_teardown(hass):
     eng = AutoTriggerEngine(hass)
     eng.async_rebuild()
     eng.async_subscribe()
-    due = eng._make_reapply_due(("area", "k", "g"))
+    due = eng._make_reapply_due(("area", "k", "g"), 60)
     eng._teardown()  # sets _running False
     due(None)  # must not raise and must not create a task
     await hass.async_block_till_done()

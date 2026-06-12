@@ -346,8 +346,14 @@ async def test_unload_aborts_when_platform_unload_fails(
 
 async def test_setup_stashes_create_switches_flag(hass):
     from custom_components.ambience.const import CONF_CREATE_SWITCHES, DATA_CREATE_SWITCHES, DOMAIN
-    entry = MockConfigEntry(domain=DOMAIN, title="Ambience", data={},
-                            options={CONF_CREATE_SWITCHES: True}, unique_id="amb_cs")
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Ambience",
+        data={},
+        options={CONF_CREATE_SWITCHES: True},
+        unique_id="amb_cs",
+    )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -356,8 +362,10 @@ async def test_setup_stashes_create_switches_flag(hass):
 
 async def test_setup_create_switches_defaults_false(hass):
     from custom_components.ambience.const import DATA_CREATE_SWITCHES, DOMAIN
-    entry = MockConfigEntry(domain=DOMAIN, title="Ambience", data={}, options={},
-                            unique_id="amb_cs_default")
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Ambience", data={}, options={}, unique_id="amb_cs_default"
+    )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()

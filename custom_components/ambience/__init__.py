@@ -16,7 +16,6 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
@@ -69,9 +68,15 @@ from .const import (
 from .exposed_actions import ExposedActionsStore
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
-from .service import async_apply_named_scene, async_apply_scene, clear_last_applied
+from .service import (
+    _plan_named_scenes,
+    _resolve_target_scopes,
+    async_apply_named_scene,
+    async_apply_scene,
+    clear_last_applied,
+)
 from .store import AmbienceStore
-from .switch import _remove_scope_device, scope_for_unique_id
+from .switch import _remove_scope_device
 from .trace import BufferSink, LogSink
 from .trigger_engine import AutoTriggerEngine
 from .websocket import async_register_commands, async_unregister_commands
@@ -163,27 +168,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     async def _handle_apply_scene(call: ServiceCall) -> None:
-        scope_entity_id = call.data["scope"]
-        reg_entry = er.async_get(hass).async_get(scope_entity_id)
-        scope = (
-            scope_for_unique_id(reg_entry.unique_id)
-            if reg_entry is not None and reg_entry.platform == DOMAIN
-            else None
-        )
-        if scope is None:
-            raise ServiceValidationError(f"{scope_entity_id!r} is not an Ambience scope switch")
-        scope_kind, scope_id = scope
-        category = call.data.get("category")
-        scene = call.data.get("scene")
+        scopes = _resolve_target_scopes(hass, call.data)
+        categories = call.data.get("category")
+        scenes = call.data.get("scene")
         force = call.data.get("force", False)
-        if scene is not None:
-            # Schema (_scene_requires_category) guarantees category is present here,
-            # so index call.data directly to keep the category argument non-optional.
-            await async_apply_named_scene(
-                hass, scope_kind, scope_id, call.data["category"], scene, force=force
-            )
+        if scenes:
+            # Validate the whole plan first so an ambiguous name aborts before any apply.
+            plan = _plan_named_scenes(hass, scopes, scenes, categories)
+            for scope_kind, scope_id, category, name in plan:
+                await async_apply_named_scene(
+                    hass, scope_kind, scope_id, category, name, force=force
+                )
+        elif categories:
+            for scope_kind, scope_id in scopes:
+                for category in categories:
+                    await async_apply_scene(
+                        hass, scope_kind, scope_id, category=category, force=force
+                    )
         else:
-            await async_apply_scene(hass, scope_kind, scope_id, category=category, force=force)
+            for scope_kind, scope_id in scopes:
+                await async_apply_scene(hass, scope_kind, scope_id, category=None, force=force)
 
     # Admin-only: applying a scene dispatches real device service calls, so it must
     # not be reachable by non-admin users (HA services are not admin-gated by default).

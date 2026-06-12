@@ -1,38 +1,51 @@
 apply_scene:
   name: Apply scene
   description: >-
-    Apply scenes at a scope, chosen by its Ambience switch (house, a floor, or
-    an area). With no category, re-runs the rules for every category in the
-    scope. With a category, re-runs the rules for just that category. With a
-    category and a scene name, applies that scene's actions directly (ignoring
-    its conditions).
+    Apply Ambience scenes to one or more scopes. With no scope selected, targets
+    every scope. With no category, re-runs the rules for every category. With one
+    or more categories, limits to those. With scene names, applies those named
+    scenes' actions directly (each resolved to the category that contains it),
+    bypassing their conditions.
   fields:
-    scope:
-      name: Scope
-      description: The Ambience scope switch (house / a floor / an area) to apply in.
-      required: true
+    areas:
+      name: Areas
+      description: Area scopes to apply in.
+      required: false
       selector:
-        entity:
-          filter:
-            - integration: ambience
-              domain: switch
+        area:
+          multiple: true
+    floors:
+      name: Floors
+      description: Floor scopes to apply in.
+      required: false
+      selector:
+        floor:
+          multiple: true
+    house:
+      name: House
+      description: Also apply at the house scope.
+      required: false
+      selector:
+        boolean: {}
     category:
-      name: Category
-      description: Limit the apply to a single scene category (by category id).
+      name: Categories
+      description: Limit the apply to these scene categories (by category id).
       required: false
       selector:
-        text: {}
+        text:
+          multiple: true
     scene:
-      name: Scene
+      name: Scenes
       description: >-
-        Apply this named scene's actions directly, bypassing its conditions.
-        Requires a category.
+        Apply these named scenes' actions directly, bypassing their conditions.
+        Each name is resolved to the category that contains it.
       required: false
       selector:
-        text: {}
+        text:
+          multiple: true
     force:
       name: Force
-      description: Apply even when the scope's switch is off.
+      description: Apply even when a scope's switch is paused.
       required: false
       default: false
       selector:

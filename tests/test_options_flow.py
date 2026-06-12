@@ -13,7 +13,6 @@ from custom_components.ambience.const import (
     CONF_CREATE_SWITCHES,
     CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
-    DEFAULT_CREATE_SWITCHES,
     DOMAIN,
 )
 
@@ -173,8 +172,9 @@ async def test_card_resource_removed_on_unload(
 
 async def test_options_flow_exposes_create_switches_default_off(hass, mock_config_entry):
     # The product default is OFF even though the test fixture turns switches on.
-    entry = MockConfigEntry(domain=DOMAIN, title="Ambience", data={}, options={},
-                            unique_id="ambience_default_off")
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Ambience", data={}, options={}, unique_id="ambience_default_off"
+    )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -193,6 +193,7 @@ async def test_options_flow_saves_create_switches(hass, mock_config_entry):
 
     result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
     from custom_components.ambience.const import CONF_SHOW_SIDEBAR_PANEL
+
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {CONF_SHOW_SIDEBAR_PANEL: True, "create_switches": True}
     )

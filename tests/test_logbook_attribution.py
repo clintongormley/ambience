@@ -216,7 +216,7 @@ async def test_apply_fires_ambience_entry_and_shares_context(
         },
     )
 
-    await hass.services.async_call(DOMAIN, "apply_scene", {"scope": scope}, blocking=True)
+    await hass.services.async_call(DOMAIN, "apply_scene", {"areas": [area_id]}, blocking=True)
     await hass.async_block_till_done()
 
     ambience_entries = [e for e in entries if e.data.get("name") == "Ambience"]
@@ -235,13 +235,13 @@ async def test_apply_with_empty_actions_logs_nothing(
 ) -> None:
     entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
     store = hass.data[DOMAIN][DATA_STORE]
-    area_id, scope = await _make_area_scope(hass, "Lounge")
+    area_id, _ = await _make_area_scope(hass, "Lounge")
     await store.async_save_area(
         area_id,
         {"scenes": [{"name": "Empty", "category": "general", "when": {}, "actions": []}]},
     )
 
-    await hass.services.async_call(DOMAIN, "apply_scene", {"scope": scope}, blocking=True)
+    await hass.services.async_call(DOMAIN, "apply_scene", {"areas": [area_id]}, blocking=True)
     await hass.async_block_till_done()
 
     assert [e for e in entries if e.data.get("name") == "Ambience"] == []
@@ -328,9 +328,7 @@ async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockC
         }
     )
 
-    await hass.services.async_call(
-        DOMAIN, "apply_scene", {"scope": _house_scope(hass)}, blocking=True
-    )
+    await hass.services.async_call(DOMAIN, "apply_scene", {"house": True}, blocking=True)
     await hass.async_block_till_done()
 
     msgs = [e.data["message"] for e in entries if e.data.get("name") == "Ambience"]

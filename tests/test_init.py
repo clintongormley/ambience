@@ -344,6 +344,26 @@ async def test_unload_aborts_when_platform_unload_fails(
     assert hass.services.has_service(DOMAIN, "apply_scene")
 
 
+async def test_setup_stashes_create_switches_flag(hass):
+    from custom_components.ambience.const import CONF_CREATE_SWITCHES, DATA_CREATE_SWITCHES, DOMAIN
+    entry = MockConfigEntry(domain=DOMAIN, title="Ambience", data={},
+                            options={CONF_CREATE_SWITCHES: True}, unique_id="amb_cs")
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.data[DOMAIN][DATA_CREATE_SWITCHES] is True
+
+
+async def test_setup_create_switches_defaults_false(hass):
+    from custom_components.ambience.const import DATA_CREATE_SWITCHES, DOMAIN
+    entry = MockConfigEntry(domain=DOMAIN, title="Ambience", data={}, options={},
+                            unique_id="amb_cs_default")
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.data[DOMAIN][DATA_CREATE_SWITCHES] is False
+
+
 def test_manifest_orders_setup_after_frontend() -> None:
     """The integration registers a sidebar panel, websocket commands, and a
     Lovelace resource — frontend must be set up first when it is present.

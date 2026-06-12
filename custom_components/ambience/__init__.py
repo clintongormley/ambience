@@ -43,10 +43,12 @@ from .conditions.time_of_day import TimeOfDayCondition
 from .conditions.weather import WeatherCondition
 from .config_health_issues import reconcile_issues
 from .const import (
+    CONF_CREATE_SWITCHES,
     CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
     DATA_CARD_RESOURCE_URL,
     DATA_CONDITIONS,
+    DATA_CREATE_SWITCHES,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_EXPOSED_ASSISTANTS,
@@ -58,6 +60,7 @@ from .const import (
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
     DATA_TRACE_SINKS,
+    DEFAULT_CREATE_SWITCHES,
     DEFAULT_EXPOSED_ASSISTANTS,
     DEFAULT_SHOW_SIDEBAR_PANEL,
     DOMAIN,
@@ -217,6 +220,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     domain_data[DATA_EXPOSED_ASSISTANTS] = entry.options.get(
         CONF_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS
+    )
+    domain_data[DATA_CREATE_SWITCHES] = entry.options.get(
+        CONF_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])

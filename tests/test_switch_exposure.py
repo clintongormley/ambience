@@ -10,6 +10,7 @@ from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
+    CONF_CREATE_SWITCHES,
     CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
     DOMAIN,
@@ -45,11 +46,12 @@ async def test_exposure_follows_entry_option(hass):
         title="Ambience",
         data={},
         options={
+            CONF_CREATE_SWITCHES: True,
             CONF_EXPOSED_ASSISTANTS: {
                 "conversation": False,
                 "cloud.google_assistant": True,
                 "cloud.alexa": False,
-            }
+            },
         },
         unique_id="ambience_unique",
     )
@@ -65,7 +67,10 @@ async def test_partial_option_map_defaults_to_unexposed(hass):
         domain=DOMAIN,
         title="Ambience",
         data={},
-        options={CONF_EXPOSED_ASSISTANTS: {"conversation": True}},
+        options={
+            CONF_CREATE_SWITCHES: True,
+            CONF_EXPOSED_ASSISTANTS: {"conversation": True},
+        },
         unique_id="ambience_unique",
     )
     await _setup(hass, entry)

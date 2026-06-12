@@ -39,7 +39,6 @@ from .trace import (
     emit_trace,
     tracing_active,
 )
-from .validators import MIN_REAPPLY_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -740,9 +739,7 @@ async def async_execute_plan(
     index = plan["matched_scene_index"]
     actions = plan["actions"]
     context = (
-        log_apply(
-            hass, scope_kind, scope_id, category_id, plan["scene_name"], index, reapplied=False
-        )
+        log_apply(hass, scope_kind, scope_id, category_id, plan["scene_name"], index)
         if actions
         else None
     )
@@ -780,35 +777,3 @@ def forget_last_applied(
     """Drop one (scope, category)'s last-applied record, e.g. on a no-match, so the
     next match re-applies even when it resolves to the same scene as before."""
     hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).pop((scope_kind, scope_id, category_id), None)
-
-
-def scope_reapply_intervals(cfg: dict[str, Any], exposed_store: Any) -> list[int]:
-    """Distinct, sorted effective re-apply intervals (seconds) across a scope's
-    scene actions. Empty when no action re-applies."""
-    intervals: set[int] = set()
-    for scene in cfg.get("scenes", []):
-        for action in scene.get("actions", []):
-            seconds = effective_reapply_seconds(action, exposed_store)
-            if seconds:
-                intervals.add(seconds)
-    return sorted(intervals)
-
-
-def effective_reapply_seconds(action: dict[str, Any], exposed_store: Any) -> int:
-    """Resolve an action's effective re-apply interval in seconds.
-
-    The action's own `reapply_seconds` wins when the key is PRESENT (so an
-    explicit 0 disables an exposed default); otherwise the exposed-action
-    entry's default applies; otherwise off (0). Values below the floor, or of
-    the wrong type, are treated as off.
-    """
-    if "reapply_seconds" in action:
-        value = action["reapply_seconds"]
-    elif exposed_store is not None:
-        entry = exposed_store.get(action.get("service"))
-        value = entry.get("reapply_seconds", 0) if isinstance(entry, dict) else 0
-    else:
-        value = 0
-    if isinstance(value, bool) or not isinstance(value, int):
-        return 0
-    return value if value >= MIN_REAPPLY_SECONDS else 0

@@ -3,7 +3,6 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, listAutoTriggers } from "../api.js";
 import { anchorLabel, localize } from "../i18n.js";
-import { formatReapplyInterval } from "../reapply.js";
 import type { AutoTrigger, Scene, Scope } from "../types.js";
 import { DEFAULT_ENTITY_ICON, entityName, renderEntityIcon } from "./entity-row.js";
 
@@ -11,13 +10,12 @@ import { DEFAULT_ENTITY_ICON, entityName, renderEntityIcon } from "./entity-row.
 const _GROUP_ICON: Record<string, string> = {
   time: "mdi:clock-outline",
   sun: "mdi:weather-sunny",
-  reapply: "mdi:refresh",
 };
 
 /**
  * Read-only "Auto-triggers" modal for one scope. Lists every watch the engine
  * derives from the scope's scenes (entities, clock times, sun events, date
- * rollover, periodic re-check, re-apply intervals) as a plain list — no
+ * rollover, periodic re-check) as a plain list — no
  * enable/disable controls (auto-triggers are always on).
  *
  * Follows the modal pattern of `traces-modal.ts`; fetches lazily on open and
@@ -205,7 +203,7 @@ export class AmbienceAutoTriggersModal extends LitElement {
   }
 
   /** Entity rows sorted alphabetically by display name (case-insensitive), then
-   *  group rows in backend order (time, sun, then read-only re-apply rows). */
+   *  group rows in backend order (time, sun). */
   private get _sortedTriggers(): AutoTrigger[] {
     const nameOf = (t: Extract<AutoTrigger, { kind: "entity" }>) =>
       this._entityName(t.entity_id).toLowerCase();
@@ -250,11 +248,6 @@ export class AmbienceAutoTriggersModal extends LitElement {
         return {
           title: localize(this.hass, "ui.auto_trigger_group_sun", "Sun"),
           detail: t.suns.map((s) => this._sunPart(s)).join(", "),
-        };
-      case "reapply":
-        return {
-          title: localize(this.hass, "ui.auto_trigger_reapply", "Re-apply"),
-          detail: `${localize(this.hass, "ui.auto_trigger_every", "every")} ${formatReapplyInterval(t.interval_seconds)}`,
         };
     }
   }

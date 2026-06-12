@@ -227,42 +227,6 @@ def _entry(**over):
     return base
 
 
-def test_validate_shape_accepts_zero_and_valid_reapply():
-    store = ExposedActionsStore(_FakeStorage())
-    store.validate_shape([_entry(reapply_seconds=0)])
-    store.validate_shape([_entry(reapply_seconds=10)])
-    store.validate_shape([_entry(reapply_seconds=600)])
-
-
-def test_validate_shape_accepts_missing_reapply():
-    store = ExposedActionsStore(_FakeStorage())
-    store.validate_shape([_entry()])  # no reapply_seconds key
-
-
-def test_validate_shape_rejects_below_floor_reapply():
-    store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="reapply_seconds"):
-        store.validate_shape([_entry(reapply_seconds=9)])
-
-
-def test_validate_shape_rejects_negative_reapply():
-    store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="reapply_seconds"):
-        store.validate_shape([_entry(reapply_seconds=-1)])
-
-
-def test_validate_shape_rejects_non_int_reapply():
-    store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="reapply_seconds"):
-        store.validate_shape([_entry(reapply_seconds="300")])
-
-
-def test_validate_shape_rejects_bool_reapply():
-    store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="reapply_seconds"):
-        store.validate_shape([_entry(reapply_seconds=True)])
-
-
 def test_validate_shape_rejects_non_list_input() -> None:
     """validate_shape raises when actions is not a list (line 54)."""
     store = ExposedActionsStore(_FakeStorage())

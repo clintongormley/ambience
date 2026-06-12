@@ -5,7 +5,6 @@ import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
 import { entitiesForScope, sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { conditionLabel, localize } from "../i18n.js";
-import { effectiveReapplySeconds, parseReapplyOverrideSeconds } from "../reapply.js";
 import { entitiesUsedByOtherActions, stripPositionMetadata } from "../scene.js";
 import { scopeIcon } from "../scope-icon.js";
 import { sceneDisplayName, summariseAction, summariseCondition } from "../summary.js";
@@ -175,44 +174,6 @@ export class AmbienceSceneEditor extends LitElement {
       font-style: italic;
       margin: 0.5rem 0;
       padding: 0.5rem 0;
-    }
-    .reapply-override {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
-      padding-top: 0.5rem;
-      border-top: 1px dotted var(--divider-color, #eee);
-      font-size: 0.9rem;
-      flex-wrap: wrap;
-    }
-    .reapply-override label {
-      flex: 0 0 auto;
-      color: var(--secondary-text-color, #888);
-    }
-    .reapply-override input[data-reapply-override] {
-      width: 5rem;
-      box-sizing: border-box;
-      padding: 0.25rem 0.4rem;
-      border: 1px solid var(--divider-color, #ccc);
-      border-radius: 3px;
-      background: transparent;
-      color: var(--primary-text-color, inherit);
-      font: inherit;
-    }
-    .reapply-override .reapply-unit {
-      color: var(--secondary-text-color, #888);
-      flex: 0 0 auto;
-    }
-    .reapply-badge {
-      font-size: 0.75rem;
-      background: var(--secondary-background-color, #f5f5f5);
-      border: 1px solid var(--divider-color, #ddd);
-      border-radius: 3px;
-      color: var(--secondary-text-color, #888);
-      padding: 0.1rem 0.35rem;
-      white-space: nowrap;
-      flex: 0 0 auto;
     }
     .error {
       color: var(--error-color, #c62828);
@@ -1033,64 +994,18 @@ export class AmbienceSceneEditor extends LitElement {
     this._serviceHasTarget = new Map(this._serviceHasTarget).set(service, hasTarget);
   }
 
-  private _setReapplyOverride(idx: number, rawValue: string) {
-    const s = parseReapplyOverrideSeconds(rawValue);
-    this._updateActionAt(idx, (a) => {
-      if (s === null) {
-        // Empty/invalid → REMOVE the key (inherit exposed default).
-        const { reapply_seconds: _removed, ...rest } = a;
-        return rest as ActionSpec;
-      }
-      // 0 = disable for this scene; >0 = custom seconds.
-      return { ...a, reapply_seconds: s };
-    });
-  }
-
-  private _renderReapplyOverride(action: ActionSpec, idx: number, exposedSeconds: number) {
-    // Only render when the exposed action has re-apply enabled.
-    if (exposedSeconds <= 0) return html``;
-
-    // Empty field (key absent) → inheriting; explicit value (incl. 0) → shown.
-    const fieldValue = "reapply_seconds" in action ? String(action.reapply_seconds) : "";
-
-    return html`
-      <div class="reapply-override">
-        <label for="reapply-override-${idx}">
-          ${localize(this.hass, "ui.reapply_seconds_label", "Re-apply every (seconds)")}
-        </label>
-        <input
-          id="reapply-override-${idx}"
-          type="number"
-          min="0"
-          data-reapply-override
-          placeholder=${String(exposedSeconds)}
-          .value=${fieldValue}
-          @input=${(e: Event) => {
-            e.stopPropagation();
-            this._setReapplyOverride(idx, (e.target as HTMLInputElement).value);
-          }}
-        />
-        <span class="reapply-unit">${localize(this.hass, "ui.reapply_seconds_unit", "s")}</span>
-      </div>
-    `;
-  }
-
   private _renderActionRow(action: ActionSpec, idx: number) {
     const exposed = this.availableActions.find((x) => x.id === action.service);
-    const exposedSeconds = exposed?.reapply_seconds ?? 0;
     const open = this._isOpen({ kind: "action", idx });
     const summary = summariseAction(action, {
       hass: this.hass as any,
       exposedActions: this.availableActions,
       schemas: this.schemas,
     });
-    const effectiveSeconds = effectiveReapplySeconds(action, exposedSeconds);
-    const showBadge = exposedSeconds > 0 && effectiveSeconds > 0;
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "action", idx })}>
           <span class="summary-label">${summary}</span>
-          ${showBadge ? html`<span class="reapply-badge" data-reapply-badge>↺ ${effectiveSeconds}s</span>` : ""}
           <button class="remove" @click=${(e: Event) => {
             e.stopPropagation();
             this._deleteAction(idx);
@@ -1120,8 +1035,6 @@ export class AmbienceSceneEditor extends LitElement {
                 this._onTargetModeChanged(action.service, e.detail.hasTarget);
               }}
             ></ambience-action-slot>
-
-            ${this._renderReapplyOverride(action, idx, exposedSeconds)}
 
             ${
               this._showError && this._validationError({ kind: "action", idx })

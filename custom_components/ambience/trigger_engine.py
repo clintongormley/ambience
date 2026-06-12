@@ -21,7 +21,6 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DATA_CONDITIONS,
-    DATA_EXPOSED_ACTIONS,
     DATA_STORE,
     DOMAIN,
 )
@@ -37,7 +36,6 @@ from .service import (
     forget_last_applied,
     gather_unit_traces,
     get_last_applied,
-    scope_reapply_intervals,
     snapshot_conditions,
 )
 from .trace import (
@@ -98,7 +96,6 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # `(gate_key, seconds)` so a fired timer drops only its own handle.
         self._for_handles: dict[PredKey, dict[tuple[str, float], Callable[[], None]]] = {}
         self._switch_scopes: dict[str, tuple[str, str | None]] = {}
-        self._reapply_intervals: dict[int, set[tuple[str, str | None]]] = {}
         # False after teardown: handlers already queued in the event loop when
         # the engine is torn down must not evaluate or re-arm timers (after
         # unload, hass.data[DOMAIN] is gone).
@@ -158,7 +155,6 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             keep = live_gates.get(cond_key, set())
             for gate_key in [k for k in entries if k not in keep]:
                 del entries[gate_key]
-        self._reapply_intervals = self._build_reapply_intervals()
 
     def _build_entries(self) -> list[tuple[PredKey, TriggerSpec]]:
         """Return (PredKey, TriggerSpec) for every non-wildcard predicate with deps.
@@ -174,16 +170,6 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     continue
                 entries.append(((scope_kind, scope_id, scene_index, condition_key), spec))
         return entries
-
-    def _build_reapply_intervals(self) -> dict[int, set[tuple[str, str | None]]]:
-        """Map each distinct re-apply interval to the scopes that have at least
-        one action using it."""
-        exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
-        by_interval: dict[int, set[tuple[str, str | None]]] = {}
-        for scope_key, cfg in self._scope_cfgs.items():
-            for interval in scope_reapply_intervals(cfg, exposed):
-                by_interval.setdefault(interval, set()).add(scope_key)
-        return by_interval
 
     def _predicate_for(self, key: PredKey) -> Any:
         """The stored predicate for a PredKey, or None if it no longer exists."""

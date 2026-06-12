@@ -1865,65 +1865,6 @@ async def _save_state_scene(hass: HomeAssistant) -> None:
     )
 
 
-async def test_area_save_rejects_bad_action_reapply(
-    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
-) -> None:
-    """Validator rejects reapply_seconds that is not 0 or >= 10."""
-    config = {
-        "scenes": [
-            {
-                "when": {},
-                "actions": [
-                    {
-                        "service": "light.turn_on",
-                        "entity_ids": [],
-                        "params": {},
-                        "reapply_seconds": 9,
-                    }
-                ],
-            }
-        ],
-    }
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/area/save",
-        area_id=area_id,
-        config=config,
-    )
-    assert resp["success"] is False
-    assert resp["error"]["code"] == "validation_error"
-    assert "reapply_seconds" in resp["error"]["message"]
-
-
-async def test_area_save_accepts_valid_action_reapply(
-    hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
-) -> None:
-    """Validator accepts reapply_seconds >= 10."""
-    config = {
-        "scenes": [
-            {
-                "when": {},
-                "actions": [
-                    {
-                        "service": "light.turn_on",
-                        "entity_ids": [],
-                        "params": {},
-                        "reapply_seconds": 300,
-                    }
-                ],
-            }
-        ],
-    }
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/area/save",
-        area_id=area_id,
-        config=config,
-    )
-    assert resp["success"] is True
-    assert resp["result"]["ok"] is True
-
-
 # ---------------------------------------------------------------------------
 # shadowed_by: transient response field + round-trip storage
 # ---------------------------------------------------------------------------
@@ -2568,38 +2509,6 @@ async def test_auto_triggers_list_returns_derived_rows(
         "key": "entity:binary_sensor.motion",
         "kind": "entity",
         "entity_id": "binary_sensor.motion",
-    } in resp["result"]["triggers"]
-
-
-async def test_auto_triggers_list_includes_reapply_intervals(
-    hass: HomeAssistant, installed, hass_ws_client
-) -> None:
-    # An action with a re-apply interval surfaces a periodic "reapply" trigger row.
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_house(
-        {
-            "scenes": [
-                {
-                    "name": "S",
-                    "when": {},
-                    "actions": [
-                        {
-                            "service": "light.turn_on",
-                            "entity_ids": [],
-                            "params": {},
-                            "reapply_seconds": 300,
-                        }
-                    ],
-                }
-            ]
-        }
-    )
-    resp = await _ws_send(hass_ws_client, type="ambience/auto_triggers/list", scope_kind="house")
-    assert resp["success"] is True
-    assert {
-        "key": "reapply:300",
-        "kind": "reapply",
-        "interval_seconds": 300,
     } in resp["result"]["triggers"]
 
 

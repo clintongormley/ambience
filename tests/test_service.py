@@ -31,8 +31,6 @@ from custom_components.ambience.service import (
     attach_tenure,
     category_ids,
     clear_last_applied,
-    effective_reapply_seconds,
-    scope_reapply_intervals,
 )
 from custom_components.ambience.trace import TraceEvent
 from custom_components.ambience.triggers import TriggerSpec
@@ -999,112 +997,6 @@ async def test_execute_plan_does_not_record_last_applied_for_no_action_winner(
     plan = {"matched_scene_index": 9, "scene_name": None, "actions": []}
     await async_execute_plan(hass, "area", "a", plan, "lighting")
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "lighting")] == 7
-
-
-class _ExposedStub:
-    def __init__(self, entries: dict[str, dict]) -> None:
-        self._entries = entries
-
-    def get(self, service_id: str):
-        return self._entries.get(service_id)
-
-
-def test_effective_reapply_uses_action_key_when_present():
-    exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
-    action = {"service": "light.turn_on", "reapply_seconds": 60}
-    assert effective_reapply_seconds(action, exposed) == 60
-
-
-def test_effective_reapply_inherits_exposed_default_when_key_absent():
-    exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
-    action = {"service": "light.turn_on"}
-    assert effective_reapply_seconds(action, exposed) == 300
-
-
-def test_effective_reapply_action_zero_overrides_exposed_default():
-    exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
-    action = {"service": "light.turn_on", "reapply_seconds": 0}
-    assert effective_reapply_seconds(action, exposed) == 0
-
-
-def test_effective_reapply_off_when_nothing_set():
-    exposed = _ExposedStub({"light.turn_on": {}})
-    action = {"service": "light.turn_on"}
-    assert effective_reapply_seconds(action, exposed) == 0
-
-
-def test_effective_reapply_below_floor_is_off():
-    assert effective_reapply_seconds({"service": "x.y", "reapply_seconds": 9}, None) == 0
-
-
-def test_effective_reapply_bool_value_is_off():
-    # bool is a subclass of int; True must not be read as the integer 1.
-    assert effective_reapply_seconds({"service": "x.y", "reapply_seconds": True}, None) == 0
-
-
-def test_effective_reapply_handles_missing_exposed_store():
-    action = {"service": "x.y", "reapply_seconds": 30}
-    assert effective_reapply_seconds(action, None) == 30
-
-
-# ---------------------------------------------------------------------------
-# scope_reapply_intervals
-# ---------------------------------------------------------------------------
-
-
-def test_scope_reapply_intervals_returns_sorted_distinct():
-    cfg = {
-        "scenes": [
-            {"actions": [{"service": "x.y", "reapply_seconds": 600}]},
-            {"actions": [{"service": "x.y", "reapply_seconds": 300}]},
-            {"actions": [{"service": "x.y", "reapply_seconds": 600}]},  # duplicate
-        ]
-    }
-    assert scope_reapply_intervals(cfg, None) == [300, 600]
-
-
-def test_scope_reapply_intervals_empty_when_none():
-    cfg = {
-        "scenes": [
-            {"actions": [{"service": "x.y"}]},
-        ]
-    }
-    assert scope_reapply_intervals(cfg, None) == []
-
-
-def test_scope_reapply_intervals_empty_when_no_scenes():
-    assert scope_reapply_intervals({}, None) == []
-
-
-def test_scope_reapply_intervals_skips_zero_and_below_floor():
-    cfg = {
-        "scenes": [
-            {"actions": [{"service": "x.y", "reapply_seconds": 0}]},
-            {"actions": [{"service": "x.y", "reapply_seconds": 9}]},  # below floor
-            {"actions": [{"service": "x.y", "reapply_seconds": 300}]},
-        ]
-    }
-    assert scope_reapply_intervals(cfg, None) == [300]
-
-
-def test_scope_reapply_intervals_uses_exposed_default():
-    exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
-    cfg = {
-        "scenes": [
-            {"actions": [{"service": "light.turn_on"}]},  # inherits exposed default
-        ]
-    }
-    assert scope_reapply_intervals(cfg, exposed) == [300]
-
-
-def test_scope_reapply_intervals_action_zero_suppresses_exposed():
-    exposed = _ExposedStub({"light.turn_on": {"reapply_seconds": 300}})
-    cfg = {
-        "scenes": [
-            {"actions": [{"service": "light.turn_on", "reapply_seconds": 0}]},
-        ]
-    }
-    assert scope_reapply_intervals(cfg, exposed) == []
 
 
 async def test_apply_scene_emits_manual_trace_event(hass: HomeAssistant) -> None:

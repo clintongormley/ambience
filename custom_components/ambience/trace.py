@@ -50,7 +50,6 @@ class CauseKind(StrEnum):
     STARTUP = "startup"
     # A config save (not an HA restart) triggered the rerun.
     RELOADED = "reloaded"
-    REAPPLY = "reapply"
     SIMULATED = "simulated"
     UNKNOWN = "unknown"
 
@@ -67,9 +66,6 @@ class Outcome(StrEnum):
     NO_MATCH = "no_match"
     SKIPPED_SWITCH_OFF = "skipped_switch_off"
     SKIPPED_SCOPE_DISABLED = "skipped_scope_disabled"
-    # A periodic re-apply re-fired the current winner's due actions without
-    # re-resolving; routed to the changes stream alongside ACTED.
-    REAPPLIED = "reapplied"
 
 
 @dataclass(frozen=True)
@@ -105,8 +101,6 @@ class TriggerCause:
             return "startup sync"
         if self.kind == CauseKind.RELOADED:
             return "config reload"
-        if self.kind == CauseKind.REAPPLY:
-            return f"reapply ({self.detail})" if self.detail else "reapply"
         if self.kind == CauseKind.SIMULATED:
             return f"simulated {self.detail}" if self.detail else "simulated"
         return str(self.kind)
@@ -285,7 +279,6 @@ def format_trace_event(event: TraceEvent) -> list[str]:
             # Scene numbers are shown 1-based; winner_index is the 0-based position.
             winner = f" -> scene #{explanation.winner_index + 1} {unit.winner_name!r}"
         elif explanation is None and unit.winner_name is not None:
-            # Re-apply: no resolution happened, so no scene index — name only.
             winner = f" -> {unit.winner_name!r}"
         lines.append(f"  {scope}: {unit.outcome}{winner}")
         if explanation is not None:
@@ -313,7 +306,7 @@ def format_trace_event(event: TraceEvent) -> list[str]:
     return lines
 
 
-_CHANGES_OUTCOMES = (Outcome.ACTED, Outcome.REAPPLIED)
+_CHANGES_OUTCOMES = (Outcome.ACTED,)
 
 
 class LogSink:

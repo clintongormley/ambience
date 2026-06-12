@@ -1,7 +1,7 @@
 """HA event/timer subscription layer for the auto-trigger engine.
 
 This mixin holds everything that wires :class:`AutoTriggerEngine` to Home
-Assistant's event loop: state-change / clock / sun / re-apply-interval / switch
+Assistant's event loop: state-change / clock / sun / switch
 subscriptions, the per-`for` recheck timers, and the teardown that cancels them.
 It is split out so trigger_engine.py keeps just the evaluation core (index
 build + flip detection + resolve/apply). The methods reference engine state
@@ -11,7 +11,6 @@ build + flip detection + resolve/apply). The methods reference engine state
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable, Iterable
 from datetime import timedelta
 from typing import Any
@@ -29,24 +28,15 @@ from homeassistant.util import dt as dt_util
 
 from .conditions._common import fmt_duration
 from .conditions.time_of_day import ANCHOR_ATTR
-from .const import DATA_EXPOSED_ACTIONS, DATA_SWITCHES, DOMAIN
+from .const import DATA_SWITCHES, DOMAIN
 from .service import (
-    _scope_enabled,
-    _switch_state,
-    async_execute_actions,
     category_ids,
-    effective_reapply_seconds,
-    get_last_applied,
 )
-from .service_logbook import log_apply
 from .trace import (
     CauseKind,
-    Outcome,
     TraceEvent,
     TriggerCause,
-    UnitTrace,
     emit_trace,
-    tracing_active,
 )
 from .trigger_index import PredKey
 from .triggers import DurationGate
@@ -132,14 +122,6 @@ class TriggerSubscriptionsMixin:
                     _HAS_TIME_INTERVAL,
                 )
             )
-        for interval, scopes in self._reapply_intervals.items():
-            self._unsubs.append(
-                async_track_time_interval(
-                    self._hass,
-                    self._make_reapply_handler(interval, scopes),
-                    timedelta(seconds=interval),
-                )
-            )
         self._switch_scopes = {}
         switches = self._hass.data[DOMAIN].get(DATA_SWITCHES, {})
         for scope_key in self._scope_cfgs:
@@ -183,78 +165,6 @@ class TriggerSubscriptionsMixin:
             self._fire(set(keys), cause)
 
         return _handler
-
-    def _make_reapply_handler(
-        self, interval: int, scopes: set[tuple[str, str | None]]
-    ) -> Callable[[Any], None]:
-        scope_set = set(scopes)
-
-        @callback
-        def _handler(_now: Any) -> None:
-            self._hass.async_create_task(self._reapply_tick(interval, scope_set))
-
-        return _handler
-
-    async def _reapply_tick(self, interval: int, scopes: set[tuple[str, str | None]]) -> None:
-        # Scopes are independent — re-apply them concurrently.
-        await asyncio.gather(*(self._reapply_scope(scope, interval) for scope in scopes))
-
-    async def _reapply_scope(self, scope: tuple[str, str | None], interval: int) -> None:
-        """Re-fire each category's current winning scene's actions due at `interval`.
-
-        Uses last-applied per (scope, category) (kept current by the watch system)
-        rather than re-resolving, and never mutates last-applied. Skips when the
-        scope is disabled, the switch is off, a category has no active scene, or its
-        stored index is out of range.
-        """
-        scope_kind, scope_id = scope
-        if not _scope_enabled(self._hass, scope_kind, scope_id):
-            return
-        switch_state = _switch_state(self._hass, scope_kind, scope_id)
-        if switch_state == "off":
-            return
-        cfg = self._scope_cfgs.get(scope)
-        if cfg is None:
-            return
-        scenes = cfg.get("scenes", [])
-        exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
-        active = tracing_active(self._hass)
-        traces: list[UnitTrace] = []
-        for category_id in category_ids(cfg):
-            index = get_last_applied(self._hass, scope_kind, scope_id, category_id)
-            if index is None or not 0 <= index < len(scenes):
-                continue
-            due = [
-                action
-                for action in scenes[index].get("actions", [])
-                if effective_reapply_seconds(action, exposed) == interval
-            ]
-            if due:
-                scene_name = scenes[index].get("name")
-                context = log_apply(
-                    self._hass, scope_kind, scope_id, category_id, scene_name, index, reapplied=True
-                )
-                await async_execute_actions(
-                    self._hass, scope_kind, scope_id, due, scene_index=index, context=context
-                )
-                if active:
-                    traces.append(
-                        UnitTrace(
-                            scope_kind,
-                            scope_id,
-                            category_id,
-                            switch_state,
-                            Outcome.REAPPLIED,
-                            None,  # re-apply does not re-resolve, so no explanation
-                            winner_name=scene_name,
-                            actions=due,
-                        )
-                    )
-        if traces:
-            emit_trace(
-                self._hass,
-                TraceEvent(TriggerCause(kind=CauseKind.REAPPLY, detail=f"{interval}s"), traces),
-            )
 
     def _schedule_for_rechecks(self, preds: Iterable[PredKey]) -> None:
         """(Re)arm one timer per *pending* `for:` gate of each predicate.

@@ -19,7 +19,6 @@ from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
@@ -72,7 +71,7 @@ from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .service import async_apply_named_scene, async_apply_scene, clear_last_applied
 from .store import AmbienceStore
-from .switch import scope_for_unique_id
+from .switch import _remove_scope_device, scope_for_unique_id
 from .trace import BufferSink, LogSink
 from .trigger_engine import AutoTriggerEngine
 from .websocket import async_register_commands, async_unregister_commands
@@ -115,16 +114,6 @@ def _hash_bundle(bundle_path: Path) -> str:
         return hashlib.sha256(bundle_path.read_bytes()).hexdigest()[:12]
     except OSError:
         return "missing"
-
-
-def _remove_scope_device(hass: HomeAssistant, scope_kind: str, scope_id: str) -> None:
-    """Remove a floor/area scope's sub-device from the device registry."""
-    from .switch import _device_identifiers
-
-    dev_reg = dr.async_get(hass)
-    device = dev_reg.async_get_device(identifiers=_device_identifiers(scope_kind, scope_id))
-    if device is not None:
-        dev_reg.async_remove_device(device.id)
 
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:

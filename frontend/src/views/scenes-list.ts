@@ -4,7 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import "./kebab-menu";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
-import { actionLabel, conditionLabel, localize } from "../i18n.js";
+import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
 import { formatArgValue, paramLabel, sceneDisplayName, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
@@ -454,9 +454,9 @@ export class AmbienceScenesList extends LitElement {
    *  set, otherwise the service id rendered via actionLabel (which is
    *  snake-case → title-case for unknown ids). */
   private _actionLabel(action: ActionSpec): string {
-    const exposed = this.availableActions.find((e) => e.id === action.service);
-    if (exposed?.label?.trim()) return exposed.label;
-    return actionLabel(this.hass as any, action.service);
+    return exposedActionLabel(action.service, this.availableActions, () =>
+      actionLabel(this.hass as any, action.service),
+    );
   }
 
   private _onCategoryMenu(category: SceneCategory, id: string) {

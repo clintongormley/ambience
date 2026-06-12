@@ -237,6 +237,31 @@ describe("ambience-simulator-modal", () => {
     expect(el.shadowRoot.querySelector(".eval")).toBeTruthy();
   });
 
+  test("result action uses the configured exposed-action label (exposedActions threaded through)", async () => {
+    vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as any);
+    vi.mocked(api.simulate).mockResolvedValue({
+      ...RESULT,
+      actions: [{ service: "fado.fade_lights", entity_ids: ["light.k"], params: {} }],
+    } as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "kitchen" };
+    el.category = "g1";
+    el.exposedActions = [
+      { id: "fado.fade_lights", label: "Fade lights", visible_fields: [], defaults: {} },
+    ];
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".result").textContent).toContain("Fade lights");
+    expect(el.shadowRoot.querySelector(".result").textContent).not.toContain("Fade lights fado");
+  });
+
   test("result entities are clickable and friendly-named (hass passed through)", async () => {
     vi.mocked(api.simulateInputs).mockResolvedValue(INPUTS as any);
     vi.mocked(api.simulate).mockResolvedValue({

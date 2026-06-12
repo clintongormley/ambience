@@ -933,6 +933,7 @@ export class AmbienceScopesView extends LitElement {
         ?open=${this._viewingTraces !== null}
         .hass=${this.hass}
         .periods=${this._store.periods}
+        .exposedActions=${this._store.actions}
         .scope=${
           this._viewingTraces?.scope ?? {
             scope_kind: "house",
@@ -961,6 +962,7 @@ export class AmbienceScopesView extends LitElement {
         ?open=${this._viewingSimulator !== null}
         .hass=${this.hass}
         .periods=${this._store.periods}
+        .exposedActions=${this._store.actions}
         .scope=${
           this._viewingSimulator?.scope ?? {
             scope_kind: "house",

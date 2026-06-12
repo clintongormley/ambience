@@ -75,6 +75,21 @@ describe("ambience-traces-modal", () => {
     expect(el.shadowRoot.textContent).toContain("No traces");
   });
 
+  test("renders the configured exposed-action label, not the derived service label", async () => {
+    el = await mount([
+      unit({ actions: [{ service: "fado.fade_lights", entity_ids: ["light.k"], params: {} }] }),
+    ]);
+    // No exposed-actions list yet → the derived label (with appended domain) shows.
+    expect(el.shadowRoot.textContent).toContain("Fade lights fado");
+    // Supplying the configured label flips the rendering to use it.
+    el.exposedActions = [
+      { id: "fado.fade_lights", label: "Fade lights", visible_fields: [], defaults: {} },
+    ];
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).toContain("Fade lights");
+    expect(el.shadowRoot.textContent).not.toContain("Fade lights fado");
+  });
+
   test("refresh re-fetches", async () => {
     el = await mount([unit()]);
     const calls = vi.mocked(api.listTraces).mock.calls.length;

@@ -1,6 +1,7 @@
 import {
   actionLabel,
   anchorLabel,
+  exposedActionLabel,
   humanizeId,
   localize,
   luxLabel,
@@ -602,9 +603,9 @@ function _fmtEndpoint(ep: TimeEndpoint, ctx: ConditionContext): string {
  * back to the snake-case → title-case form of the service id).
  */
 function _actionDisplayName(action: ActionSpec, ctx: ActionContext): string {
-  const exposed = ctx.exposedActions?.find((e) => e.id === action.service);
-  if (exposed?.label?.trim()) return exposed.label;
-  return actionLabel(ctx.hass, action.service);
+  return exposedActionLabel(action.service, ctx.exposedActions, () =>
+    actionLabel(ctx.hass, action.service),
+  );
 }
 
 /**

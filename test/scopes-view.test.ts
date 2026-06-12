@@ -1311,6 +1311,17 @@ describe("ambience-scopes-view", () => {
     expect(el.hass.callService).not.toHaveBeenCalled();
   });
 
+  test("toggling a scope refreshes the switch list (so the pause timer follows)", async () => {
+    el = await mount({ areaConfigs: { living_room: { scenes: [], enabled: true } } });
+    const spy = vi.spyOn((el as any)._store, "refreshSwitches");
+    const lr = toggleIn(el.shadowRoot.querySelector(".scope-row.area[data-id='living_room']"));
+    lr.checked = false;
+    lr.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    expect(spy).toHaveBeenCalled();
+  });
+
   test("toggling the header switch writes the enabled flag, not the HA switch", async () => {
     el = await mount({ houseConfig: { scenes: [], enabled: true } });
     const houseRow = el.shadowRoot.querySelector(".scope-row.house");

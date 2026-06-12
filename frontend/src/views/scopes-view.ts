@@ -1133,6 +1133,7 @@ export class AmbienceScopesView extends LitElement {
       try {
         await setScopeEnabled(this.hass, scope, !enabled);
         await this._store.reloadScope(scope);
+        await this._store.refreshSwitches();
       } catch (err) {
         this._store.error = (err as Error).message || String(err);
       }

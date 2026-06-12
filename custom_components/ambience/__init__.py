@@ -64,7 +64,9 @@ from .const import (
     DEFAULT_SHOW_SIDEBAR_PANEL,
     DOMAIN,
     SIGNAL_CONFIG_CHANGED,
+    SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
+    SIGNAL_UNIT_APPLIED,
 )
 from .exposed_actions import ExposedActionsStore
 from .lux_ranges import LuxRangeStore
@@ -328,6 +330,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.async_create_task(engine.async_request_refresh())
 
     entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _on_config_changed))
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_UNIT_APPLIED, engine.note_unit_applied)
+    )
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, SIGNAL_REAPPLY_CONFIG_UPDATED, engine.note_reapply_config_changed
+        )
+    )
     entry.async_on_unload(engine.async_shutdown)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 

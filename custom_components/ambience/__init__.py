@@ -86,25 +86,15 @@ _PANEL_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-panel.js"
 _CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
 
 
-def _scene_requires_category(value: dict) -> dict:
-    """Validator: a `scene` name may only be given together with a `category`."""
-    if "scene" in value and "category" not in value:
-        raise vol.Invalid("apply_scene: 'scene' requires 'category'")
-    return value
-
-
-_APPLY_SCENE_SCHEMA = vol.All(
-    vol.Schema(
-        {
-            # The scope is chosen by its switch entity (house/floor/area each have
-            # one); the handler resolves it back to (scope_kind, scope_id).
-            vol.Required("scope"): cv.entity_id,
-            vol.Optional("category"): cv.string,
-            vol.Optional("scene"): cv.string,
-            vol.Optional("force"): cv.boolean,
-        }
-    ),
-    _scene_requires_category,
+_APPLY_SCENE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("areas"): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional("floors"): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional("house"): bool,
+        vol.Optional("category"): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional("scene"): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional("force"): cv.boolean,
+    }
 )
 
 

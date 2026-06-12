@@ -2654,3 +2654,45 @@ async def test_dry_run_snapshots_each_condition_once(
     resp = await _ws_send(hass_ws_client, type="ambience/dry_run", area_id=area_id)
     assert resp["success"]
     assert len(calls) == 1
+
+
+async def test_reapply_list_returns_defaults(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    client = await hass_ws_client()
+    await client.send_json({"id": 1, "type": "ambience/reapply/list"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"] == {"enabled": False, "interval_seconds": 5400}
+
+
+async def test_reapply_save_persists_and_signals(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    from custom_components.ambience.const import SIGNAL_REAPPLY_CONFIG_UPDATED
+
+    fired = []
+    async_dispatcher_connect(hass, SIGNAL_REAPPLY_CONFIG_UPDATED, lambda *_a: fired.append(True))
+    client = await hass_ws_client()
+    await client.send_json(
+        {"id": 1, "type": "ambience/reapply/save", "enabled": True, "interval_seconds": 3600}
+    )
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"] == {"ok": True}
+    assert fired == [True]
+    store = hass.data[DOMAIN][DATA_STORE]
+    assert store.get_reapply_settings() == {"enabled": True, "interval_seconds": 3600}
+
+
+async def test_reapply_save_rejects_bad_interval(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    client = await hass_ws_client()
+    await client.send_json(
+        {"id": 1, "type": "ambience/reapply/save", "enabled": True, "interval_seconds": 30}
+    )
+    msg = await client.receive_json()
+    assert not msg["success"]
+    assert msg["error"]["code"] == "validation_error"

@@ -156,7 +156,7 @@ In `frontend/src/i18n-data.ts`: remove `auto_trigger_reapply` (line ~152), `auto
 
 Run, in order:
 ```bash
-grep -rn "reapply" custom_components frontend/src tests test docs   # expect: ZERO hits
+grep -rn "reapply" custom_components frontend/src tests test   # expect: ZERO hits (docs handled in Task 9)
 ruff check . && ruff format .
 pytest --cov=custom_components.ambience --cov-branch --cov-report=term-missing --cov-fail-under=99
 npm run ci && npm run check && npm test && npm run build

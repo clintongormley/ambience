@@ -63,6 +63,11 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     settings_ambience_field_name: "Switch name",
     settings_ambience_field_delay: "Auto-on delay (seconds)",
     settings_ambience_delay_help: "0 = never auto-on",
+    settings_reapply_card: "Re-apply",
+    settings_reapply_enable_label: "Re-apply scenes after inactivity",
+    settings_reapply_interval_label: "Inactivity timeout (minutes)",
+    settings_reapply_help:
+      "Re-send each area's scene commands after this much quiet, to recover dropped commands.",
     no_areas: "No areas found in Home Assistant.",
     not_configured: "not configured",
     scene_singular: "scene",

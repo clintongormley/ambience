@@ -86,6 +86,11 @@ export type SwitchDefaults = {
   auto_on_delay_seconds: number;
 };
 
+export type ReapplySettings = {
+  enabled: boolean;
+  interval_seconds: number;
+};
+
 // One scope's Ambience switch entity, as resolved by the backend (the
 // entity_id can be user-renamed, so it can't be derived client-side).
 export type ScopeSwitch = {

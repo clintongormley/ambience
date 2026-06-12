@@ -1,9 +1,15 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { getSwitchDefaults, type HassConnection, saveSwitchDefaults } from "../api.js";
+import {
+  getReapplySettings,
+  getSwitchDefaults,
+  type HassConnection,
+  saveReapplySettings,
+  saveSwitchDefaults,
+} from "../api.js";
 import { localize } from "../i18n.js";
-import type { SwitchDefaults } from "../types.js";
+import type { ReapplySettings, SwitchDefaults } from "../types.js";
 
 @customElement("ambience-ambience-settings")
 export class AmbienceAmbienceSettings extends LitElement {
@@ -51,12 +57,17 @@ export class AmbienceAmbienceSettings extends LitElement {
     name: "Ambience",
     auto_on_delay_seconds: 7200,
   };
+  @state() private _reapply: ReapplySettings = {
+    enabled: false,
+    interval_seconds: 5400,
+  };
   @state() private _error = "";
 
   override async connectedCallback() {
     super.connectedCallback();
     try {
       this._defaults = await getSwitchDefaults(this.hass);
+      this._reapply = await getReapplySettings(this.hass);
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
@@ -102,6 +113,28 @@ export class AmbienceAmbienceSettings extends LitElement {
     );
   }
 
+  private _saveReapply() {
+    void this._safeSave(() =>
+      saveReapplySettings(this.hass, this._reapply.enabled, this._reapply.interval_seconds),
+    );
+  }
+
+  private _onReapplyEnabled(e: Event) {
+    this._reapply = { ...this._reapply, enabled: (e.target as HTMLInputElement).checked };
+    this._saveReapply();
+  }
+
+  private _onReapplyMinutes(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const minutes = Math.floor(Number(input.value));
+    if (input.value === "" || !Number.isFinite(minutes) || minutes < 1) {
+      input.value = String(Math.round(this._reapply.interval_seconds / 60));
+      return;
+    }
+    this._reapply = { ...this._reapply, interval_seconds: minutes * 60 };
+    this._saveReapply();
+  }
+
   override render() {
     return html`
       ${this._error ? html`<p style="color: var(--error-color, #d32f2f)">${this._error}</p>` : ""}
@@ -138,6 +171,48 @@ export class AmbienceAmbienceSettings extends LitElement {
           />
           <div class="help">
             ${localize(this.hass, "ui.settings_ambience_delay_help", "0 = never auto-on")}
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>${localize(this.hass, "ui.settings_reapply_card", "Re-apply")}</h3>
+        <div class="row">
+          <label>
+            <input
+              data-test="reapply-enabled"
+              type="checkbox"
+              .checked=${this._reapply.enabled}
+              @change=${(e: Event) => this._onReapplyEnabled(e)}
+            />
+            ${localize(
+              this.hass,
+              "ui.settings_reapply_enable_label",
+              "Re-apply scenes after inactivity",
+            )}
+          </label>
+        </div>
+        <div class="row">
+          <label
+            >${localize(
+              this.hass,
+              "ui.settings_reapply_interval_label",
+              "Inactivity timeout (minutes)",
+            )}</label
+          >
+          <input
+            data-test="reapply-interval-minutes"
+            type="number"
+            min="1"
+            .value=${String(Math.round(this._reapply.interval_seconds / 60))}
+            @change=${(e: Event) => this._onReapplyMinutes(e)}
+          />
+          <div class="help">
+            ${localize(
+              this.hass,
+              "ui.settings_reapply_help",
+              "Re-send each area's scene commands after this much quiet, to recover dropped commands.",
+            )}
           </div>
         </div>
       </div>

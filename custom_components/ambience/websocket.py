@@ -18,11 +18,13 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DATA_CONDITIONS,
+    DATA_CREATE_SWITCHES,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_LUX_RANGES,
     DATA_PERIODS,
     DATA_STORE,
+    DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
     DOMAIN,
@@ -43,7 +45,7 @@ from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import condition_priority
 from .state_options import known_attribute_values_for, known_states_for
 from .store import CategoryInUseError, LastCategoryError
-from .switch import switch_unique_id
+from .switch import _remove_scope_device, make_scope_switch, switch_unique_id
 from .trace import buffered_unit_to_dict
 from .websocket_helpers import (
     canonicalise,
@@ -877,29 +879,22 @@ async def _ws_set_scope_enabled(
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_set_scope_enabled(scope_kind, scope_id, enabled)
 
-    # Disabled scopes never apply scenes, so keep their switch entity out of HA's
-    # default views by HIDING it (re-enabling restores it).
-    registry = er.async_get(hass)
-    entity_id = registry.async_get_entity_id(
-        "switch", DOMAIN, switch_unique_id(scope_kind, scope_id)
-    )
-    if entity_id is not None:
+    # Switch lifecycle follows enabled-ness when switches are turned on: disabling a
+    # scope DELETES its switch (and device); enabling recreates it. No clutter from
+    # hidden entities. When the create_switches toggle is off there is nothing to do.
+    if hass.data[DOMAIN].get(DATA_CREATE_SWITCHES):
+        registry = er.async_get(hass)
+        entity_id = registry.async_get_entity_id(
+            "switch", DOMAIN, switch_unique_id(scope_kind, scope_id)
+        )
         if enabled:
-            # Heal any integration-applied hide/disable so the switch reappears.
-            entry = registry.async_get(entity_id)
-            updates: dict[str, Any] = {}
-            if entry and entry.hidden_by is er.RegistryEntryHider.INTEGRATION:
-                updates["hidden_by"] = None
-            if entry and entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
-                updates["disabled_by"] = None
-            if updates:
-                registry.async_update_entity(entity_id, **updates)
-        else:
-            # Hide (don't disable) so the switch stays loaded — disabling removes
-            # it from DATA_SWITCHES and forces a config-entry reload, which breaks
-            # the frontend pause-timer icon. Hidden entities are just kept out of
-            # HA's default views.
-            registry.async_update_entity(entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION)
+            if entity_id is None:
+                add_entities = hass.data[DOMAIN].get(DATA_SWITCH_ADD_ENTITIES)
+                if add_entities is not None:
+                    add_entities([make_scope_switch(hass, scope_kind, scope_id)])
+        elif entity_id is not None:
+            registry.async_remove(entity_id)
+            _remove_scope_device(hass, scope_kind, scope_id)
     # Re-enabling resyncs the scope (mirrors switch turn-on's force resync). Re-arm
     # the scope's `for:` rechecks too — a duration timer that matured while the
     # scope was disabled was consumed as a no-op, so without this a "switch on for

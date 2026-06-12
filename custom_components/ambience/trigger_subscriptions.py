@@ -30,6 +30,8 @@ from .conditions._common import fmt_duration
 from .conditions.time_of_day import ANCHOR_ATTR
 from .const import DATA_SWITCHES, DOMAIN
 from .service import (
+    _scope_enabled,
+    _switch_state,
     category_ids,
     get_last_applied,
 )
@@ -211,12 +213,20 @@ class TriggerSubscriptionsMixin:
 
     async def _reapply_due(self, unit: tuple[str, str | None, str], interval: int) -> None:
         """Re-assess + force-apply one idle unit. `interval` is the value the timer
-        was armed with, used only to label the trace. A successful dispatch re-emits
-        SIGNAL_UNIT_APPLIED, which re-arms the timer; a skip (switch off / scope
-        disabled / no match) dispatches nothing, so the timer stays dead until the
-        next real apply re-arms it. The `_running` guard lives in `_make_reapply_due`
-        (before the task is created) and timers are cancelled on disable/teardown, so
-        this path has no extra branch to cover."""
+        was armed with, used only to label the trace. Skip cheaply — before the
+        snapshot refresh — when the scope is disabled or its switch is off: those
+        units are gated out by `_resolve_and_apply` anyway, and returning early
+        avoids a wasted full-snapshot refresh (notably the burst when the feature is
+        enabled while many scopes are off). A successful dispatch re-emits
+        SIGNAL_UNIT_APPLIED, which re-arms the timer; a skip dispatches nothing, so
+        the timer stays dead until the next real apply re-arms it. The `_running`
+        guard lives in `_make_reapply_due` (before the task is created) and timers
+        are cancelled on disable/teardown."""
+        scope_kind, scope_id, _category = unit
+        if not _scope_enabled(self._hass, scope_kind, scope_id) or (
+            _switch_state(self._hass, scope_kind, scope_id) == "off"
+        ):
+            return
         await self._refresh_all_snapshots()
         trace = await self._resolve_and_apply(*unit, force=True)
         if trace is not None:

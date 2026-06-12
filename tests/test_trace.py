@@ -520,8 +520,8 @@ def test_cause_describe_duration_multi_entity_uses_label():
 def test_reapply_cause_describe_with_detail():
     from custom_components.ambience.trace import CauseKind, TriggerCause
 
-    cause = TriggerCause(kind=CauseKind.REAPPLY, detail="1h 30m")
-    assert cause.describe() == "reapply (1h 30m)"
+    cause = TriggerCause(kind=CauseKind.REAPPLY, detail="1h30m")  # fmt_duration format
+    assert cause.describe() == "reapply (1h30m)"
 
 
 def test_reapply_cause_describe_without_detail():

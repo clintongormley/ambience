@@ -517,6 +517,19 @@ def test_cause_describe_duration_multi_entity_uses_label():
     assert cause.describe() == "nobody home for 30m"
 
 
+def test_reapply_cause_describe_with_detail():
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    cause = TriggerCause(kind=CauseKind.REAPPLY, detail="1h 30m")
+    assert cause.describe() == "reapply (1h 30m)"
+
+
+def test_reapply_cause_describe_without_detail():
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    assert TriggerCause(kind=CauseKind.REAPPLY).describe() == "reapply"
+
+
 def test_cause_describe_switch():
     cause = TriggerCause(kind=CauseKind.SWITCH, entity_id="switch.ambience_living_room")
     assert cause.describe() == "switch switch.ambience_living_room on"

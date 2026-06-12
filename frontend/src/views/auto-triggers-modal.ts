@@ -268,7 +268,7 @@ export class AmbienceAutoTriggersModal extends LitElement {
 
   /** The entity a row's more-info dialog should open, or null if the row has
    *  no entity. Entity rows map to their entity; the Sun group maps to the
-   *  `sun.sun` entity when present; Time/Re-apply have no entity. */
+   *  `sun.sun` entity when present; Time rows have no entity. */
   private _moreInfoEntity(t: AutoTrigger): string | null {
     if (t.kind === "entity") return t.entity_id;
     if (t.kind === "sun" && this.hass?.states?.["sun.sun"]) return "sun.sun";

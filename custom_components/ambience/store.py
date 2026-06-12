@@ -12,9 +12,12 @@ from homeassistant.helpers.storage import Store
 
 from .conditions.weather import DEFAULT_WEATHER_GROUPS
 from .const import (
+    DEFAULT_REAPPLY_ENABLED,
+    DEFAULT_REAPPLY_INTERVAL_SECONDS,
     DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
     DEFAULT_SWITCH_NAME,
     GENERAL_CATEGORY,
+    MIN_REAPPLY_INTERVAL_SECONDS,
     SIGNAL_CONFIG_CHANGED,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -76,6 +79,10 @@ class AmbienceStore:
                 "name": DEFAULT_SWITCH_NAME,
                 "auto_on_delay_seconds": DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
             },
+            "reapply": {
+                "enabled": DEFAULT_REAPPLY_ENABLED,
+                "interval_seconds": DEFAULT_REAPPLY_INTERVAL_SECONDS,
+            },
             "exposed_actions": [],
         }
 
@@ -105,6 +112,11 @@ class AmbienceStore:
         sd.setdefault("name", DEFAULT_SWITCH_NAME)
         sd.setdefault("auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS)
 
+    def _ensure_reapply_settings(self) -> None:
+        r = self._data.setdefault("reapply", {})
+        r.setdefault("enabled", DEFAULT_REAPPLY_ENABLED)
+        r.setdefault("interval_seconds", DEFAULT_REAPPLY_INTERVAL_SECONDS)
+
     async def async_load(self) -> None:
         raw = await self._store.async_load()
         if raw is None:
@@ -119,6 +131,7 @@ class AmbienceStore:
         self._ensure_scope_buckets()
         self._ensure_categories()
         self._ensure_switch_defaults()
+        self._ensure_reapply_settings()
 
     def as_dict(self) -> dict[str, Any]:
         """A deep copy of the full persisted payload, for diagnostics dumps."""
@@ -313,6 +326,37 @@ class AmbienceStore:
         self._data["switch_defaults"] = {
             "name": payload["name"],
             "auto_on_delay_seconds": payload["auto_on_delay_seconds"],
+        }
+        await self._store.async_save(self._data)
+
+    @staticmethod
+    def _validate_reapply_settings(payload: dict[str, Any]) -> None:
+        enabled = payload.get("enabled")
+        if not isinstance(enabled, bool):
+            raise ValueError(f"reapply `enabled` must be a bool: {enabled!r}")
+        interval = payload.get("interval_seconds")
+        if (
+            not isinstance(interval, int)
+            or isinstance(interval, bool)
+            or interval < MIN_REAPPLY_INTERVAL_SECONDS
+        ):
+            raise ValueError(
+                f"reapply `interval_seconds` must be an int >= "
+                f"{MIN_REAPPLY_INTERVAL_SECONDS}: {interval!r}"
+            )
+
+    def get_reapply_settings(self) -> dict[str, Any]:
+        r = self._data.get("reapply", {})
+        return {
+            "enabled": r.get("enabled", DEFAULT_REAPPLY_ENABLED),
+            "interval_seconds": r.get("interval_seconds", DEFAULT_REAPPLY_INTERVAL_SECONDS),
+        }
+
+    async def async_save_reapply_settings(self, payload: dict[str, Any]) -> None:
+        self._validate_reapply_settings(payload)
+        self._data["reapply"] = {
+            "enabled": payload["enabled"],
+            "interval_seconds": payload["interval_seconds"],
         }
         await self._store.async_save(self._data)
 

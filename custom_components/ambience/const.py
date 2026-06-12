@@ -47,6 +47,21 @@ SIGNAL_SWITCH_CONFIG_UPDATED = "ambience_switch_config_updated"
 # (scope_kind, scope_id) tuple, or None for a global change (reapply all).
 SIGNAL_CONFIG_CHANGED = "ambience_config_changed"
 
+# Dispatcher signal — fired after a unit's actions are dispatched (last-applied
+# recorded). Payload: the (scope_kind, scope_id, category_id) unit. Drives the
+# idle re-apply timer reset.
+SIGNAL_UNIT_APPLIED = "ambience_unit_applied"
+
+# Dispatcher signal — fired when the global re-apply settings change. Payload: None.
+SIGNAL_REAPPLY_CONFIG_UPDATED = "ambience_reapply_config_updated"
+
+# Idle re-apply: re-assert each unit's scene after this many seconds of no
+# dispatch. Off by default; interval pre-filled at 90 min. Floor keeps tests
+# fast and rejects nonsensical values.
+DEFAULT_REAPPLY_ENABLED = False
+DEFAULT_REAPPLY_INTERVAL_SECONDS = 5400
+MIN_REAPPLY_INTERVAL_SECONDS = 60
+
 # Defaults
 DEFAULT_SWITCH_NAME = "Ambience"
 DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 7200  # 2h; 0 = never auto-on

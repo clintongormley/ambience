@@ -333,6 +333,7 @@ export type TraceCause = {
     | "manual"
     | "startup"
     | "reloaded"
+    | "reapply"
     | "simulated"
     | "unknown";
   entity_id: string | null;

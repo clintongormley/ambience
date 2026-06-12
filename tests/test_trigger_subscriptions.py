@@ -60,11 +60,16 @@ class FakeStore:
         self,
         scopes: list[tuple[str, str | None, dict]],
         categories: list[dict] | None = None,
+        reapply: dict | None = None,
     ) -> None:
         self._scopes = scopes
         self._by_key = {(kind, sid): cfg for kind, sid, cfg in scopes}
         self._categories = categories or []
         self._scope_enabled: dict[tuple[str, str | None], bool] = {}
+        self._reapply = reapply or {"enabled": False, "interval_seconds": 5400}
+
+    def get_reapply_settings(self) -> dict:
+        return dict(self._reapply)
 
     def get_scope_enabled(self, scope_kind: str, scope_id: str | None) -> bool:
         return self._scope_enabled.get((scope_kind, scope_id), True)

@@ -96,6 +96,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         # `(gate_key, seconds)` so a fired timer drops only its own handle.
         self._for_handles: dict[PredKey, dict[tuple[str, float], Callable[[], None]]] = {}
         self._switch_scopes: dict[str, tuple[str, str | None]] = {}
+        # Per-unit idle-reapply one-shot timers, keyed by (scope_kind, scope_id,
+        # category_id). The cancel callable from async_call_later is stored
+        # directly (same convention as _for_handles / _sun_unsubs).
+        self._reapply_timers: dict[tuple[str, str | None, str], Callable[[], None]] = {}
         # False after teardown: handlers already queued in the event loop when
         # the engine is torn down must not evaluate or re-arm timers (after
         # unload, hass.data[DOMAIN] is gone).

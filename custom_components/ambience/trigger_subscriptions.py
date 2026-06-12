@@ -31,6 +31,7 @@ from .conditions.time_of_day import ANCHOR_ATTR
 from .const import DATA_SWITCHES, DOMAIN
 from .service import (
     category_ids,
+    get_last_applied,
 )
 from .trace import (
     CauseKind,
@@ -71,6 +72,7 @@ class TriggerSubscriptionsMixin:
                 cancel()
         self._for_handles.clear()
         self._switch_scopes.clear()
+        self._cancel_all_reapply_timers()
 
     def async_subscribe(self) -> None:
         """(Re)create one subscription per distinct dependency in the index."""
@@ -134,6 +136,7 @@ class TriggerSubscriptionsMixin:
                     self._hass, list(self._switch_scopes), self._on_switch_event
                 )
             )
+        self._rearm_all_reapply_timers()
 
     @callback
     def _on_state_event(self, event: Event) -> None:
@@ -165,6 +168,73 @@ class TriggerSubscriptionsMixin:
             self._fire(set(keys), cause)
 
         return _handler
+
+    def _reapply_settings(self) -> tuple[bool, int]:
+        settings = self._store().get_reapply_settings()
+        return bool(settings["enabled"]), int(settings["interval_seconds"])
+
+    @callback
+    def note_unit_applied(self, unit: tuple[str, str | None, str]) -> None:
+        """SIGNAL_UNIT_APPLIED handler: (re)arm this unit's idle clock."""
+        self._arm_reapply_timer(unit)
+
+    @callback
+    def note_reapply_config_changed(self, _payload: Any = None) -> None:
+        """SIGNAL_REAPPLY_CONFIG_UPDATED handler: re-establish timers under the new
+        settings — cancel all, then re-arm applied units (a no-op when the feature
+        is now disabled, since _arm_reapply_timer gates on enabled)."""
+        self._cancel_all_reapply_timers()
+        self._rearm_all_reapply_timers()
+
+    @callback
+    def _arm_reapply_timer(self, unit: tuple[str, str | None, str]) -> None:
+        enabled, interval = self._reapply_settings()
+        if not enabled or not self._running:
+            return
+        old = self._reapply_timers.pop(unit, None)
+        if old is not None:
+            old()
+        self._reapply_timers[unit] = async_call_later(
+            self._hass, interval, self._make_reapply_due(unit)
+        )
+
+    def _make_reapply_due(self, unit: tuple[str, str | None, str]) -> Callable[[Any], None]:
+        @callback
+        def _due(_now: Any) -> None:
+            self._reapply_timers.pop(unit, None)  # one-shot: it has fired
+            if self._running:
+                self._hass.async_create_task(self._reapply_due(unit))
+
+        return _due
+
+    async def _reapply_due(self, unit: tuple[str, str | None, str]) -> None:
+        """Re-assess + force-apply one idle unit. A successful dispatch re-emits
+        SIGNAL_UNIT_APPLIED, which re-arms the timer; a skip (switch off / scope
+        disabled / no match) dispatches nothing, so the timer stays dead until the
+        next real apply re-arms it. The `_running`/enabled guards live in
+        `_make_reapply_due` (before the task is created) and in cancellation, so
+        this path has no extra branch to cover."""
+        _, interval = self._reapply_settings()  # interval is for the trace label only
+        await self._refresh_all_snapshots()
+        trace = await self._resolve_and_apply(*unit, force=True)
+        if trace is not None:
+            emit_trace(
+                self._hass,
+                TraceEvent(
+                    TriggerCause(kind=CauseKind.REAPPLY, detail=fmt_duration(interval)),
+                    [trace],
+                ),
+            )
+
+    def _cancel_all_reapply_timers(self) -> None:
+        for cancel in self._reapply_timers.values():
+            cancel()
+        self._reapply_timers.clear()
+
+    def _rearm_all_reapply_timers(self) -> None:
+        for unit in self._all_units():
+            if get_last_applied(self._hass, *unit) is not None:
+                self._arm_reapply_timer(unit)
 
     def _schedule_for_rechecks(self, preds: Iterable[PredKey]) -> None:
         """(Re)arm one timer per *pending* `for:` gate of each predicate.

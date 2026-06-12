@@ -94,6 +94,24 @@ async def test_reconcile_ignores_non_ambience_switch_entities(hass: HomeAssistan
     assert reg.async_get_entity_id("sensor", DOMAIN, "ambience_not_a_switch") is not None
 
 
+async def test_area_create_makes_no_switch_when_toggle_off(hass: HomeAssistant) -> None:
+    entry = _entry(hass, create_switches=False, uid="off_create")
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    area = ar.async_get(hass).async_create("Late Room")
+    await hass.async_block_till_done()
+    assert ("area", area.id) not in hass.data[DOMAIN][DATA_SWITCHES]
+
+
+async def test_area_create_makes_switch_when_toggle_on(hass: HomeAssistant) -> None:
+    entry = _entry(hass, create_switches=True, uid="on_create")
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    area = ar.async_get(hass).async_create("Late Room")
+    await hass.async_block_till_done()
+    assert ("area", area.id) in hass.data[DOMAIN][DATA_SWITCHES]
+
+
 async def test_reconcile_removes_switches_and_devices_when_toggle_off(hass: HomeAssistant) -> None:
     area = ar.async_get(hass).async_create("Living Room")
     entry = _entry(hass, create_switches=True, uid="flip")

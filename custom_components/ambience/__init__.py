@@ -220,12 +220,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         action = event.data["action"]
         area_id = event.data["area_id"]
         if action == "create":
-            from .switch import AmbienceScopeSwitch
+            from .switch import make_scope_switch
 
             add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
             area = area_reg.async_get_area(area_id)
-            if add_entities is not None and area is not None:
-                add_entities([AmbienceScopeSwitch("area", area_id, area.name)])
+            if (
+                domain_data.get(DATA_CREATE_SWITCHES)
+                and add_entities is not None
+                and area is not None
+            ):
+                add_entities([make_scope_switch(hass, "area", area_id)])
             return
         if action == "update":
             # An area rename must refresh the scope device names. The global
@@ -254,12 +258,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         action = event.data["action"]
         floor_id = event.data["floor_id"]
         if action == "create":
-            from .switch import AmbienceScopeSwitch
+            from .switch import make_scope_switch
 
             add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
             floor = floor_reg.async_get_floor(floor_id)
-            if add_entities is not None and floor is not None:
-                add_entities([AmbienceScopeSwitch("floor", floor_id, floor.name)])
+            if (
+                domain_data.get(DATA_CREATE_SWITCHES)
+                and add_entities is not None
+                and floor is not None
+            ):
+                add_entities([make_scope_switch(hass, "floor", floor_id)])
             return
         if action == "update":
             # A floor rename must refresh the scope device names. The global

@@ -1627,6 +1627,7 @@ async def test_execute_plan_emits_unit_applied_when_actions_dispatched(hass):
         "actions": [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}],
     }
     await async_execute_plan(hass, "area", "k", plan, "g")
+    await hass.async_block_till_done()  # let the dispatcher deliver the signal
     assert seen == [("area", "k", "g")]
 
 
@@ -1641,4 +1642,5 @@ async def test_execute_plan_no_signal_for_pure_blocker(hass):
     hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: exposed, DATA_STORE: FakeStore({})}
     plan = {"matched_scene_index": 0, "scene_name": "Block", "actions": []}
     await async_execute_plan(hass, "area", "k", plan, "g")
+    await hass.async_block_till_done()  # ensure no late signal sneaks in
     assert seen == []

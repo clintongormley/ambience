@@ -32,17 +32,10 @@ The combination is flexible. For example, a `light.turn_on` exposed action might
    - **Tick the checkbox** next to it to make the field visible in the scene editor. Scenes using this action will see this field and can set their own value.
    - **Set a default** by clicking the *+ Set default* button. Enter a value; this will be sent every time the action runs. You can set a default with or without ticking the checkbox — a hidden field with a default is always sent but never shown in the scene editor.
 5. Optionally, give the action a **label** (the text field in the card header). The label appears in the scene editor's action picker to make it easier to tell similar actions apart — for example, "Main lights on" and "Accent lights on" might both wrap `light.turn_on` but target different groups.
-6. Optionally, enable **Re-apply periodically** and enter an interval in seconds. This is described in the next section.
 
 Changes are saved automatically as you make them.
 
 You can reorder exposed actions by dragging the handle on the left of each card. The order controls how they appear in the scene editor's action picker.
-
-### Re-apply interval
-
-Some services do not hold their state reliably — a light that gets power-cycled, for instance, or a cover that can be moved manually. The **Re-apply periodically** checkbox lets you tell Ambience to re-run this action at a regular interval (minimum 10 seconds) while the scene stays matched, not only when the scene first applies.
-
-The interval you set here is the default for every scene that uses this action. An individual scene can override it — or disable re-apply for its use of the action entirely — without affecting any other scene.
 
 ---
 

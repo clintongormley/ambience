@@ -6,7 +6,7 @@ Open the Settings modal by clicking the cogwheel (⚙) in the Ambience panel hea
 
 ## Ambience tab
 
-The Ambience tab has two sections: **Defaults** and **Scene categories**.
+The Ambience tab has three sections: **Defaults**, **Re-apply**, and **Scene categories**.
 
 !!! info "📷 Screenshot"
 
@@ -21,6 +21,20 @@ The name used for the Ambience switch entities when per-scope switches are enabl
 How long (in seconds) Ambience waits after you turn a scope off before automatically turning it back on. The default is `7200` (two hours). Set it to `0` to disable auto-on entirely — the scope will stay off until you turn it on again by hand.
 
 Changes take effect immediately and are persisted to the integration's storage.
+
+---
+
+### Re-apply
+
+The **Re-apply** card lets Ambience automatically re-send a scope/category unit's scene commands after a period of inactivity. This is useful for recovering from dropped commands — for example, a light that did not actually turn off, or a cover that reverted to its previous position.
+
+**Re-apply scenes after inactivity** (toggle)
+Enables or disables the feature globally. Off by default.
+
+**Inactivity timeout (minutes)**
+How long Ambience waits without dispatching any commands to a given scope/category unit before it re-asserts that unit's winning scene. The default is `90` minutes (stored as 5400 seconds). The minimum is `1` minute.
+
+When the feature is enabled and the timeout elapses for a unit, Ambience re-evaluates and re-dispatches that unit's winning scene — even if the winner has not changed — to recover any commands that may have been dropped. The idle clock resets each time a unit's commands are actually dispatched. Units whose switch is off, or whose scope is disabled, are skipped.
 
 ---
 
@@ -155,9 +169,6 @@ Each field the service accepts is listed with a checkbox and an optional default
 
 - **Checkbox** — tick a field to make it editable per-scene. Unticked fields are hidden in the scene editor.
 - **Default value** — click **+ Set default** to open an inline editor for that field. The editor uses HA's native selector widget for the field type. Once set, the default is shown as a pill (`Default: 3000`). Click the pill to edit it, or click the ✕ inside the editor to clear it.
-
-**Re-apply periodically**
-When ticked, Ambience re-runs the action on a regular interval as long as the scene remains active. Enter the interval in seconds in the field that appears. Use this for services that control devices which might reset themselves (for example, a media player that reverts volume after a few minutes). The minimum interval is 10 seconds.
 
 ### Reordering actions
 

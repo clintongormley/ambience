@@ -103,3 +103,32 @@ async def test_plan_category_narrows_eligibility(hass, installed):
     )
     plan = _plan_named_scenes(hass, [("area", "lr")], ["Movie"], ["lighting"])
     assert plan == [("area", "lr", "lighting", "Movie")]
+
+
+async def test_plan_skips_disabled_scope(hass, installed):
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        "lr",
+        {
+            "scenes": [
+                {"name": "Movie", "category": "lighting", "when": {}, "actions": []},
+            ]
+        },
+    )
+    await store.async_set_scope_enabled("area", "lr", False)
+    # A disabled scope is skipped, not planned (so the apply never raises for it).
+    assert _plan_named_scenes(hass, [("area", "lr")], ["Movie"], None) == []
+
+
+async def test_plan_skips_whitespace_named_scene(hass, installed):
+    store = hass.data[DOMAIN][DATA_STORE]
+    # A stored whitespace-only name must not be matchable (consistent with the apply stage).
+    await store.async_save_area(
+        "lr",
+        {
+            "scenes": [
+                {"name": "   ", "category": "lighting", "when": {}, "actions": []},
+            ]
+        },
+    )
+    assert _plan_named_scenes(hass, [("area", "lr")], ["   "], None) == []

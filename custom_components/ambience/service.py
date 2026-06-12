@@ -119,6 +119,8 @@ def _plan_named_scenes(
     eligible = set(categories) if categories else None
     plan: list[tuple[str, str | None, str, str]] = []
     for scope_kind, scope_id in scopes:
+        if not store.get_scope_enabled(scope_kind, scope_id):
+            continue
         cfg = store.scope_config(scope_kind, scope_id)
         for name in scenes:
             target = name.strip().lower()
@@ -126,6 +128,7 @@ def _plan_named_scenes(
                 scene["category"]
                 for scene in cfg.get("scenes", [])
                 if isinstance(scene.get("name"), str)
+                and scene["name"].strip()
                 and scene["name"].strip().lower() == target
                 and scene.get("category") is not None
                 and (eligible is None or scene["category"] in eligible)

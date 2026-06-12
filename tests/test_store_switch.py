@@ -222,6 +222,24 @@ async def test_set_scope_enabled_rejects_unknown_kind(hass: HomeAssistant) -> No
         await store.async_set_scope_enabled("planet", None, False)
 
 
+async def test_set_scope_enabled_notifies_config_changed(hass: HomeAssistant) -> None:
+    """async_set_scope_enabled must fire SIGNAL_CONFIG_CHANGED so the engine
+    rebuilds its switch subscription for the re-enabled scope."""
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    from custom_components.ambience.const import SIGNAL_CONFIG_CHANGED
+
+    store = AmbienceStore(hass)
+    await store.async_load()
+    fired = []
+    unsub = async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, lambda a: fired.append(a))
+    try:
+        await store.async_set_scope_enabled("house", None, False)
+    finally:
+        unsub()
+    assert ("house", None) in fired
+
+
 async def test_set_off_at_uses_delayed_save(hass: HomeAssistant) -> None:
     """off_at is loss-tolerant runtime state written once per switch in a
     cascade — a house toggle would otherwise serialise N+1 immediate full-store

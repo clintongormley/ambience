@@ -163,12 +163,18 @@ async def test_set_scope_enabled_recreates_switch_on_reenable(hass, installed, h
 
 
 async def test_set_scope_enabled_no_switch_work_when_toggle_off(hass, hass_ws_client):
-    from custom_components.ambience.const import CONF_CREATE_SWITCHES
     from homeassistant.helpers import entity_registry as er
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    entry = MockConfigEntry(domain=DOMAIN, title="Ambience", data={},
-                            options={CONF_CREATE_SWITCHES: False}, unique_id="ws_off")
+    from custom_components.ambience.const import CONF_CREATE_SWITCHES
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Ambience",
+        data={},
+        options={CONF_CREATE_SWITCHES: False},
+        unique_id="ws_off",
+    )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -235,3 +241,37 @@ async def test_set_scope_enabled_enable_already_enabled_applies_no_heal(
 async def test_set_scope_enabled_requires_one_scope(hass, installed, hass_ws_client):
     resp = await _ws_send(hass_ws_client, type="ambience/set_scope_enabled", enabled=False)
     assert not resp["success"]
+
+
+async def test_set_scope_enabled_enable_no_recreate_when_add_entities_missing(
+    hass, installed, hass_ws_client
+):
+    # Enable path with the add-entities callback absent: the recreate is skipped
+    # (defensive guard) and the call still succeeds.
+    from homeassistant.helpers import entity_registry as er
+
+    from custom_components.ambience.const import DATA_SWITCH_ADD_ENTITIES
+
+    reg = er.async_get(hass)
+    entity_id = reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house")
+    reg.async_remove(entity_id)
+    await hass.async_block_till_done()
+    hass.data[DOMAIN].pop(DATA_SWITCH_ADD_ENTITIES, None)
+
+    resp = await _ws_send(
+        hass_ws_client, type="ambience/set_scope_enabled", house=True, enabled=True
+    )
+    assert resp["success"]
+    await hass.async_block_till_done()
+    assert reg.async_get_entity_id("switch", DOMAIN, "ambience_switch_house") is None
+
+
+async def test_set_scope_enabled_rejects_unregistered_floor_id(hass, installed, hass_ws_client):
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/set_scope_enabled",
+        floor_id="ghost_floor_without_switch",
+        enabled=False,
+    )
+    assert not resp["success"]
+    assert resp["error"]["code"] == "validation_error"

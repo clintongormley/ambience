@@ -55,12 +55,10 @@ SIGNAL_UNIT_APPLIED = "ambience_unit_applied"
 # Dispatcher signal — fired when the global re-apply settings change. Payload: None.
 SIGNAL_REAPPLY_CONFIG_UPDATED = "ambience_reapply_config_updated"
 
-# Idle re-apply: re-assert each unit's scene after this many seconds of no
-# dispatch. Off by default; interval pre-filled at 90 min. Floor keeps tests
-# fast and rejects nonsensical values.
-DEFAULT_REAPPLY_ENABLED = False
-DEFAULT_REAPPLY_INTERVAL_SECONDS = 5400
-MIN_REAPPLY_INTERVAL_SECONDS = 60
+# Note: the idle re-apply defaults (DEFAULT_REAPPLY_ENABLED / *_INTERVAL_SECONDS /
+# MIN_REAPPLY_INTERVAL_SECONDS) live in store.py, their only consumer — keeping
+# them out of const avoids a CodeQL py/unsafe-cyclic-import false positive (const
+# has a TYPE_CHECKING-only import of store for get_store's annotation).
 
 # Defaults
 DEFAULT_SWITCH_NAME = "Ambience"

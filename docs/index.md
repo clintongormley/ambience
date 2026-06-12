@@ -84,12 +84,17 @@ winner is always well defined.
 
 ### Switches
 
-Each scope has its own independent **switch** that toggles Ambience's automatic
-control for that scope on or off. The House and Floor switches **cascade
-downwards**, so if you turn off the Floor switch it will also turn off the Areas
-on that floor, and if you turn off the House switch it'll disable Ambience
-everywhere. But because switches are independent, you can, for example, turn off
-the House switch and then reenable just the room you are in.
+Each scope has its own independent **toggle** that pauses or resumes Ambience's
+automatic control for that scope. The House and Floor toggles **cascade
+downwards**, so if you turn off the Floor toggle it will also turn off the Areas
+on that floor, and if you turn off the House toggle it'll disable Ambience
+everywhere. But because toggles are independent, you can, for example, turn off
+the House toggle and then reenable just the room you are in.
+
+Optionally, Ambience can create a **switch entity** for every scope (enable
+**Create per-scope switches** in the integration's **Configure** dialog). These
+entities let you control scope toggles from dashboards, automations, and voice
+assistants. They are off by default.
 
 ### Actions
 

@@ -1,6 +1,6 @@
 # Scopes & switches
 
-Ambience organises your home into a hierarchy of *scopes*. Each scope has its own scenes, its own switch entity, and its own position in a top-down cascade. Understanding the three levels — House, Floor, and Area — is the foundation for everything else Ambience does.
+Ambience organises your home into a hierarchy of *scopes*. Each scope has its own scenes and its own position in a top-down cascade. Optionally, each scope also has a switch entity that lets you pause or re-enable Ambience for that scope from outside the panel. Understanding the three levels — House, Floor, and Area — is the foundation for everything else Ambience does.
 
 ---
 
@@ -24,7 +24,9 @@ There is nothing to configure in Ambience to add or remove scopes — they mirro
 
 ## Switch entities
 
-Every scope has one switch entity, named after the scope and ending in "Ambience". For example:
+Switch entities are **opt-in**. By default Ambience creates no switch entities. To enable them, go to **Settings → Devices & Services**, find the Ambience integration, open its **Configure** dialog, and turn on **Create per-scope switches**.
+
+When per-scope switches are enabled, each scope gets one switch entity named after the scope and ending in "Ambience". For example:
 
 | Scope | Entity |
 |---|---|
@@ -36,9 +38,11 @@ Floor switches carry `_floor_` in their entity ID to avoid collisions with an ar
 
 Each switch lives on its own device. The House switch is the main **Ambience** device, and every floor and area switch is a sub-device linked to it. **Area** sub-devices are placed in their matching HA area automatically, so the switch shows up under that area and area-aware voice assistants can resolve it. If you move an area's device to a different area yourself, Ambience leaves your choice alone.
 
+If a scope is disabled (removed from Ambience's configuration) while per-scope switches are enabled, its switch entity is deleted automatically.
+
 You can choose which voice assistants the switches are exposed to in the integration's **Configure** dialog — see [Installation](../installation.md#voice-assistants).
 
-All three types of switch appear in the Ambience panel as a toggle on each scope row. You can also control them from HA's developer tools, automations, or dashboards like any other switch entity.
+When per-scope switches exist, they appear in the Ambience panel as a toggle on each scope row. You can also control them from HA's developer tools, automations, or dashboards like any other switch entity. When per-scope switches are not enabled, the panel's scope toggles still work — they pause and resume Ambience for that scope — but no HA entity is created.
 
 !!! info "📷 Screenshot"
     The main Ambience panel showing the House row at the top with its toggle, then a Floor row, then several Area rows each with their own toggle.
@@ -95,7 +99,7 @@ You could equally turn off just the Living room switch if you only want to freez
 ## Summary
 
 - **House, Floor, Area** — three levels, mirroring your HA area/floor registry.
-- **One switch per scope**, named `switch.<scope>_ambience` (floors: `switch.<scope>_floor_ambience`; House: `switch.house_ambience`).
+- **Switch entities are opt-in** — enable **Create per-scope switches** in the integration's **Configure** dialog. When enabled, each scope gets one switch entity named `switch.<scope>_ambience` (floors: `switch.<scope>_floor_ambience`; House: `switch.house_ambience`). Disabling a scope while switches are on deletes its entity.
 - **Turning off cascades down**; turning on cascades down too. Turning off a leaf (area) affects only that area.
 - **Off means paused**: Ambience skips automatic scene application for that scope. Manual "Run actions" still works.
 - **Auto-on** brings the switch back after the configured delay (default: two hours). Setting the delay to 0 disables it.

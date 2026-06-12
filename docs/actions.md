@@ -77,36 +77,41 @@ If you want to test a scene's actions without waiting for its conditions to matc
 
 Everything above happens automatically, but the same machinery is available
 to your own automations and scripts via the `ambience.apply_scene` action
-(admin-only). It takes the **scope switch entity** as its target — every
-scope (house, floor, area) has one.
+(admin-only). You target scopes by area id, floor id, or the `house` flag —
+no switch entity is required.
 
 ```yaml
 # Re-resolve and apply every category in the living room:
 action: ambience.apply_scene
 data:
-  scope: switch.living_room_ambience
+  areas: [living_room]
 
-# Apply only the lighting category, even if the scope is paused:
+# Apply only the lighting category in the living room, even if the scope is paused:
 action: ambience.apply_scene
 data:
-  scope: switch.living_room_ambience
-  category: lighting
+  areas: [living_room]
+  category: [lighting]
   force: true
 
-# Run one named scene directly, skipping condition resolution:
+# Run one named scene directly across a whole floor, skipping condition resolution:
 action: ambience.apply_scene
 data:
-  scope: switch.living_room_ambience
-  category: lighting
-  scene: Movie night
+  floors: [ground_floor]
+  scene: [Movie night]
+
+# Apply every scope in the house (omit areas/floors/house to target all):
+action: ambience.apply_scene
+data: {}
 ```
 
 | Field | Required | Description |
 |---|---|---|
-| `scope` | Yes | The scope's Ambience switch entity. |
-| `category` | No | Limit the apply to one category (default: all). |
-| `scene` | No | Apply this named scene directly. Requires `category`. |
-| `force` | No | Apply even while the scope's switch is off. |
+| `areas` | No | List of area ids to target. |
+| `floors` | No | List of floor ids to target. |
+| `house` | No | `true` to target the House scope. |
+| `category` | No | Limit the apply to one or more category ids (default: all). |
+| `scene` | No | Apply this named scene directly; each scene resolves its own category. |
+| `force` | No | Apply even while the scope's toggle is off. |
 
-Without `force`, the call is a no-op while the scope's switch is off. A scope
-that has been permanently **disabled** never applies, even with `force`.
+Omitting `areas`, `floors`, and `house` targets every scope. Without `force`,
+the call is a no-op for any scope whose toggle is currently off.

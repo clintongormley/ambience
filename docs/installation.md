@@ -56,8 +56,14 @@ panel** option is enabled by default; uncheck it to remove the sidebar entry.
 
 ## Voice assistants
 
-The same **Configure** dialog lets you choose which voice assistants the Ambience
-switches are exposed to. There is one toggle per assistant — **Assist**, **Google
+The same **Configure** dialog also contains a **Create per-scope switches** option
+(off by default). When enabled, Ambience creates one switch entity per scope
+(`switch.living_room_ambience`, `switch.house_ambience`, etc.) that you can use
+from dashboards, automations, or voice assistants. Disabling a scope while this
+option is on deletes its switch entity.
+
+When per-scope switches are enabled, you can choose which voice assistants they
+are exposed to. There is one toggle per assistant — **Assist**, **Google
 Assistant**, and **Alexa**. By default the switches are exposed to **Assist** (Home
 Assistant's built-in voice agent) only; the Google and Alexa toggles require Home
 Assistant Cloud (or a manual setup) to have any effect. Because each switch is

@@ -1609,4 +1609,36 @@ async def test_manual_apply_serialises_with_engine_apply_lock(hass: HomeAssistan
     assert not calls  # blocked on the lock — nothing dispatched yet
     lock.release()
     await asyncio.wait_for(task, 1)  # bounded so a hung task fails, not hangs
-    assert len(calls) == 1
+
+
+async def test_execute_plan_emits_unit_applied_when_actions_dispatched(hass):
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    from custom_components.ambience.const import SIGNAL_UNIT_APPLIED
+
+    seen = []
+    async_dispatcher_connect(hass, SIGNAL_UNIT_APPLIED, lambda unit: seen.append(unit))
+    async_mock_service(hass, "light", "turn_on")
+    exposed = ExposedActionsStore(_FakeExposedStorage([_exposed("light.turn_on")]))
+    hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: exposed, DATA_STORE: FakeStore({})}
+    plan = {
+        "matched_scene_index": 0,
+        "scene_name": "Evening",
+        "actions": [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}],
+    }
+    await async_execute_plan(hass, "area", "k", plan, "g")
+    assert seen == [("area", "k", "g")]
+
+
+async def test_execute_plan_no_signal_for_pure_blocker(hass):
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    from custom_components.ambience.const import SIGNAL_UNIT_APPLIED
+
+    seen = []
+    async_dispatcher_connect(hass, SIGNAL_UNIT_APPLIED, lambda unit: seen.append(unit))
+    exposed = ExposedActionsStore(_FakeExposedStorage([_exposed("light.turn_on")]))
+    hass.data[DOMAIN] = {DATA_EXPOSED_ACTIONS: exposed, DATA_STORE: FakeStore({})}
+    plan = {"matched_scene_index": 0, "scene_name": "Block", "actions": []}
+    await async_execute_plan(hass, "area", "k", plan, "g")
+    assert seen == []

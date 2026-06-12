@@ -195,7 +195,7 @@ async def test_apply_fires_ambience_entry_and_shares_context(
     await exposed_store.save(
         [{"id": "cover.open_cover", "label": "", "visible_fields": [], "defaults": {}}]
     )
-    area_id, scope = await _make_area_scope(hass, "Lounge")
+    area_id, _ = await _make_area_scope(hass, "Lounge")
     await store.async_save_area(
         area_id,
         {

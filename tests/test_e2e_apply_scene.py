@@ -23,11 +23,6 @@ from custom_components.ambience.const import (
 from custom_components.ambience.service import async_resolve_only
 
 
-def _house_scope(hass: HomeAssistant) -> str:
-    """entity_id of the always-present house scope switch."""
-    return hass.data[DOMAIN][DATA_SWITCHES][("house", None)].entity_id
-
-
 async def _make_area_scope(hass: HomeAssistant, name: str = "E2E Room") -> tuple[str, str]:
     """Create a real HA area (which spawns its scope switch via the registry
     listener) and return (area_id, scope_switch_entity_id)."""

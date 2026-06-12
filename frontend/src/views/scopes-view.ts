@@ -1132,8 +1132,7 @@ export class AmbienceScopesView extends LitElement {
       e.stopPropagation();
       try {
         await setScopeEnabled(this.hass, scope, !enabled);
-        await this._store.reloadScope(scope);
-        await this._store.refreshSwitches();
+        await Promise.all([this._store.reloadScope(scope), this._store.refreshSwitches()]);
       } catch (err) {
         this._store.error = (err as Error).message || String(err);
       }

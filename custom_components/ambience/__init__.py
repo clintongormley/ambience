@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+from functools import partial
 from pathlib import Path
 
 import voluptuous as vol
@@ -15,7 +16,7 @@ from homeassistant.components.frontend import (
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
@@ -69,10 +70,7 @@ from .exposed_actions import ExposedActionsStore
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .service import (
-    _plan_named_scenes,
-    _resolve_target_scopes,
-    async_apply_named_scene,
-    async_apply_scene,
+    async_apply_scene_service,
     clear_last_applied,
 )
 from .store import AmbienceStore
@@ -167,35 +165,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "template": TemplateCondition(hass=hass),
     }
 
-    async def _handle_apply_scene(call: ServiceCall) -> None:
-        scopes = _resolve_target_scopes(hass, call.data)
-        categories = call.data.get("category")
-        scenes = call.data.get("scene")
-        force = call.data.get("force", False)
-        if scenes:
-            # Validate the whole plan first so an ambiguous name aborts before any apply.
-            plan = _plan_named_scenes(hass, scopes, scenes, categories)
-            for scope_kind, scope_id, category, name in plan:
-                await async_apply_named_scene(
-                    hass, scope_kind, scope_id, category, name, force=force
-                )
-        elif categories:
-            for scope_kind, scope_id in scopes:
-                for category in categories:
-                    await async_apply_scene(
-                        hass, scope_kind, scope_id, category=category, force=force
-                    )
-        else:
-            for scope_kind, scope_id in scopes:
-                await async_apply_scene(hass, scope_kind, scope_id, category=None, force=force)
-
     # Admin-only: applying a scene dispatches real device service calls, so it must
     # not be reachable by non-admin users (HA services are not admin-gated by default).
     async_register_admin_service(
         hass,
         DOMAIN,
         "apply_scene",
-        _handle_apply_scene,
+        partial(async_apply_scene_service, hass),
         schema=_APPLY_SCENE_SCHEMA,
     )
 
@@ -219,7 +195,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
             area = area_reg.async_get_area(area_id)
             if (
-                domain_data.get(DATA_CREATE_SWITCHES)
+                domain_data.get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES)
                 and add_entities is not None
                 and area is not None
             ):
@@ -257,7 +233,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
             floor = floor_reg.async_get_floor(floor_id)
             if (
-                domain_data.get(DATA_CREATE_SWITCHES)
+                domain_data.get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES)
                 and add_entities is not None
                 and floor is not None
             ):

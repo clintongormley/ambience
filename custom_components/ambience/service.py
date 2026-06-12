@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from dataclasses import replace
 from typing import Any
 
-from homeassistant.core import Context, HomeAssistant
+from homeassistant.core import Context, HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
@@ -145,6 +145,32 @@ def _plan_named_scenes(
                 )
             plan.append((scope_kind, scope_id, next(iter(cats)), name))
     return plan
+
+
+async def async_apply_scene_service(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Service handler for ambience.apply_scene: resolve target scopes, then apply.
+
+    Targets scopes by areas/floors/house (blank = every scope). With scene names,
+    applies those named scenes directly (each resolved to its own category, validated
+    up front so an ambiguous name aborts before any apply); with categories, fans out
+    over scope x category; otherwise re-resolves every category per scope.
+    """
+    scopes = _resolve_target_scopes(hass, call.data)
+    categories = call.data.get("category")
+    scenes = call.data.get("scene")
+    force = call.data.get("force", False)
+    if scenes:
+        # Validate the whole plan first so an ambiguous name aborts before any apply.
+        plan = _plan_named_scenes(hass, scopes, scenes, categories)
+        for scope_kind, scope_id, category, name in plan:
+            await async_apply_named_scene(hass, scope_kind, scope_id, category, name, force=force)
+    elif categories:
+        for scope_kind, scope_id in scopes:
+            for category in categories:
+                await async_apply_scene(hass, scope_kind, scope_id, category=category, force=force)
+    else:
+        for scope_kind, scope_id in scopes:
+            await async_apply_scene(hass, scope_kind, scope_id, force=force)
 
 
 def apply_lock(

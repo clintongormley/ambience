@@ -26,6 +26,7 @@ from .const import (
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
+    DEFAULT_CREATE_SWITCHES,
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
@@ -33,6 +34,10 @@ from .exposure import async_apply_switch_exposure
 from .naming import scope_device_name
 
 _LOGGER = logging.getLogger(__name__)
+
+# House switch first so its device exists before floor/area switches register their
+# via_device link to it (avoids an HA device-registry warning on fresh setup).
+_SCOPE_KIND_ORDER = {"house": 0, "floor": 1, "area": 2}
 
 
 class _CancellableTimer:
@@ -166,14 +171,11 @@ async def async_setup_entry(
     hass.data[DOMAIN].setdefault(DATA_SWITCHES, {})
 
     store = hass.data[DOMAIN][DATA_STORE]
-    create_switches = hass.data[DOMAIN].get(DATA_CREATE_SWITCHES, False)
+    create_switches = hass.data[DOMAIN].get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES)
     desired = _desired_switch_scopes(hass, store, create_switches)
 
     if desired:
-        # House must be first so its device exists before floor/area switches
-        # reference it via via_device.
-        _kind_order = {"house": 0, "floor": 1, "area": 2}
-        ordered = sorted(desired, key=lambda s: _kind_order.get(s[0], 3))
+        ordered = sorted(desired, key=lambda s: _SCOPE_KIND_ORDER.get(s[0], 3))
         async_add_entities([make_scope_switch(hass, kind, sid) for (kind, sid) in ordered])
     _reconcile_switch_registry(hass, entry, desired)
 

@@ -27,6 +27,7 @@ from .const import (
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
+    DEFAULT_CREATE_SWITCHES,
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
@@ -882,7 +883,7 @@ async def _ws_set_scope_enabled(
     # Switch lifecycle follows enabled-ness when switches are turned on: disabling a
     # scope DELETES its switch (and device); enabling recreates it. No clutter from
     # hidden entities. When the create_switches toggle is off there is nothing to do.
-    if hass.data[DOMAIN].get(DATA_CREATE_SWITCHES):
+    if hass.data[DOMAIN].get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES):
         registry = er.async_get(hass)
         entity_id = registry.async_get_entity_id(
             "switch", DOMAIN, switch_unique_id(scope_kind, scope_id)

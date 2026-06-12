@@ -3129,7 +3129,7 @@ var $o=Object.defineProperty;var ko=Object.getOwnPropertyDescriptor;var u=(t,n,e
     >
       <ha-icon icon="mdi:timer"></ha-icon>
       <span class="countdown">${uc(a)}</span>
-    </button>`}_renderScopeSwitch(e,r){let i=r.enabled!==!1,s=a=>a.stopPropagation(),o=async a=>{a.stopPropagation();try{await Dn(this.hass,e,!i),await this._store.reloadScope(e),await this._store.refreshSwitches()}catch(c){this._store.error=c.message||String(c)}};return customElements.get("ha-switch")?l`<ha-switch
+    </button>`}_renderScopeSwitch(e,r){let i=r.enabled!==!1,s=a=>a.stopPropagation(),o=async a=>{a.stopPropagation();try{await Dn(this.hass,e,!i),await Promise.all([this._store.reloadScope(e),this._store.refreshSwitches()])}catch(c){this._store.error=c.message||String(c)}};return customElements.get("ha-switch")?l`<ha-switch
         class="scope-switch"
         data-test="scope-switch"
         .checked=${li(i)}

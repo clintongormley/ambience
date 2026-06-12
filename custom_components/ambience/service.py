@@ -100,7 +100,10 @@ def _resolve_target_scopes(
         scopes.append(("house", None))
         scopes.extend(("floor", f.floor_id) for f in floor_reg.async_list_floors())
         scopes.extend(("area", a.id) for a in area_reg.async_list_areas())
-    return scopes
+    # De-dup, preserving order: repeated area/floor ids (easy to write in YAML)
+    # would otherwise apply the same scope twice — and named scenes bypass the
+    # last-applied guard, so they would dispatch their actions twice.
+    return list(dict.fromkeys(scopes))
 
 
 def _plan_named_scenes(

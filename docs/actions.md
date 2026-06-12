@@ -111,7 +111,9 @@ data: {}
 | `house` | No | `true` to target the House scope. |
 | `category` | No | Limit the apply to one or more category ids (default: all). |
 | `scene` | No | Apply this named scene directly; each scene resolves its own category. |
-| `force` | No | Apply even while the scope's toggle is off. |
+| `force` | No | Apply even when a scope is paused (its switch is off). Does **not** override a permanently disabled scope. |
 
 Omitting `areas`, `floors`, and `house` targets every scope. Without `force`,
-the call is a no-op for any scope whose toggle is currently off.
+the call is a no-op for any scope that is currently paused (its switch off). A
+permanently disabled scope (`enabled: false`) is always skipped — even with
+`force`.

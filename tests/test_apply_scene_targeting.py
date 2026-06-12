@@ -48,6 +48,13 @@ async def test_resolve_unknown_floor_raises(hass, installed):
         _resolve_target_scopes(hass, {"floors": ["ghost"]})
 
 
+async def test_resolve_dedups_repeated_ids(hass, installed):
+    # Repeated ids (easy to write in YAML) must not apply the same scope twice.
+    area = ar.async_get(hass).async_create("LR")
+    scopes = _resolve_target_scopes(hass, {"areas": [area.id, area.id]})
+    assert scopes == [("area", area.id)]
+
+
 async def test_plan_named_scene_resolves_category(hass, installed):
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_area(

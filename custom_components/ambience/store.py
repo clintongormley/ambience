@@ -12,7 +12,6 @@ from homeassistant.helpers.storage import Store
 
 from .conditions.weather import DEFAULT_WEATHER_GROUPS
 from .const import (
-    DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
     DEFAULT_SWITCH_NAME,
     GENERAL_CATEGORY,
     SIGNAL_CONFIG_CHANGED,
@@ -20,14 +19,17 @@ from .const import (
     STORAGE_VERSION,
 )
 
-# Idle re-apply defaults. Defined here (store is their only consumer) rather than
-# in const.py, to avoid a CodeQL py/unsafe-cyclic-import false positive: const has
-# a TYPE_CHECKING-only import of store for get_store's annotation, and CodeQL flags
-# const-level constants imported by store as "defined after the cyclic import".
+# Switch / idle re-apply defaults. Defined here (store is their only consumer)
+# rather than in const.py, to avoid a CodeQL py/unsafe-cyclic-import false
+# positive: const has a TYPE_CHECKING-only import of store for get_store's
+# annotation, and CodeQL flags const-level constants imported by store as
+# "defined after the cyclic import".
+# auto_on_delay: how long a paused scope stays off before auto-resuming; 0 = never.
+DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 0
 # Re-assert each unit's scene after this many seconds of no dispatch; off by
-# default; interval pre-filled at 90 min; the floor rejects nonsensical values.
+# default; interval pre-filled at 60 min; the floor rejects nonsensical values.
 DEFAULT_REAPPLY_ENABLED = False
-DEFAULT_REAPPLY_INTERVAL_SECONDS = 5400
+DEFAULT_REAPPLY_INTERVAL_SECONDS = 3600
 MIN_REAPPLY_INTERVAL_SECONDS = 60
 
 _LOGGER = logging.getLogger(__name__)
@@ -85,6 +87,7 @@ class AmbienceStore:
             "switch_defaults": {
                 "name": DEFAULT_SWITCH_NAME,
                 "auto_on_delay_seconds": DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
+                "create_switches": False,
             },
             "reapply": {
                 "enabled": DEFAULT_REAPPLY_ENABLED,
@@ -118,6 +121,7 @@ class AmbienceStore:
         sd = self._data.setdefault("switch_defaults", {})
         sd.setdefault("name", DEFAULT_SWITCH_NAME)
         sd.setdefault("auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS)
+        sd.setdefault("create_switches", False)
 
     def _ensure_reapply_settings(self) -> None:
         r = self._data.setdefault("reapply", {})
@@ -318,6 +322,9 @@ class AmbienceStore:
             raise ValueError(
                 f"switch defaults `auto_on_delay_seconds` must be a non-negative int: {delay!r}"
             )
+        create = payload.get("create_switches")
+        if not isinstance(create, bool):
+            raise ValueError(f"switch defaults `create_switches` must be a bool: {create!r}")
 
     def get_switch_defaults(self) -> dict[str, Any]:
         sd = self._data.get("switch_defaults", {})
@@ -326,6 +333,7 @@ class AmbienceStore:
             "auto_on_delay_seconds": sd.get(
                 "auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS
             ),
+            "create_switches": sd.get("create_switches", False),
         }
 
     async def async_save_switch_defaults(self, payload: dict[str, Any]) -> None:
@@ -333,6 +341,7 @@ class AmbienceStore:
         self._data["switch_defaults"] = {
             "name": payload["name"],
             "auto_on_delay_seconds": payload["auto_on_delay_seconds"],
+            "create_switches": payload["create_switches"],
         }
         await self._store.async_save(self._data)
 

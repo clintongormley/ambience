@@ -56,18 +56,33 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
   ui: {
     panel_title: "Ambience",
     tab_settings: "Settings",
-    settings_tab_ambience: "Ambience",
+    settings_tab_ambience: "Advanced",
     settings_tab_conditions: "Conditions",
     settings_tab_actions: "Actions",
-    settings_ambience_defaults_card: "Defaults",
+    settings_ambience_pause_card: "Scope-level pause switch",
     settings_ambience_field_name: "Switch name",
-    settings_ambience_field_delay: "Auto-on delay (seconds)",
-    settings_ambience_delay_help: "0 = never auto-on",
-    settings_reapply_card: "Re-apply",
-    settings_reapply_enable_label: "Re-apply scenes after inactivity",
-    settings_reapply_interval_label: "Inactivity timeout (minutes)",
-    settings_reapply_help:
-      "Re-send each area's scene commands after this much quiet, to recover dropped commands.",
+    settings_ambience_field_pause: "Pause for",
+    settings_reapply_enable_label: "Reapply scenes after inactivity",
+    settings_reapply_interval_label: "Reapply after",
+    unit_minutes: "minutes",
+    help_pause_switch:
+      "Create a switch entity per area/floor/house that pauses Ambience for that scope when turned off.",
+    help_switch_name: "The name used for the per-scope pause switch entities.",
+    help_pause_for:
+      "When a scope's switch is turned off, auto-resume after this many minutes. 0 = stays paused until turned back on.",
+    help_reapply_toggle:
+      "Check the scenes for a scope/category after inactivity and reapply the winning scene, in case any action had previously failed, such as a light not turning off.",
+    help_reapply_after: "Reapply scenes that haven't been updated for this many minutes.",
+    help_actions_tab:
+      "Actions are the service calls a scene runs. Define them here so scenes can reuse them.",
+    help_show_in_scene_editor:
+      "Show this field in the scene editor so each scene can set it. Leave off to send a fixed default instead.",
+    help_set_default:
+      "A value sent automatically when the action runs. Scenes can override it if the field is also shown in the editor.",
+    help_conditions_tab:
+      "Conditions are the inputs scenes match on (time of day, presence, weather, …). A scene wins when all its conditions pass.",
+    help_categories_tab:
+      "Categories let one scope have several independent winners at once — one scene wins per category.",
     no_areas: "No areas found in Home Assistant.",
     not_configured: "not configured",
     scene_singular: "scene",
@@ -235,8 +250,8 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     retry: "Retry",
     action_label_placeholder: "Label (optional)",
     action_no_parameters: "This action has no configurable fields.",
-    actions_field_help:
-      "Tick a checkbox to make a field editable per scene. Set a default to pre-fill it.",
+    actions_field_help_show: "Tick a checkbox to make a field editable per scene.",
+    actions_field_help_default: "Set a default to pre-fill it.",
     clear_default: "Clear default",
     set_default: "Set default",
     default_prefix: "Default: ",

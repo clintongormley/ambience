@@ -454,12 +454,13 @@ describe("ambience-scopes-view", () => {
 
   // --- subscriptions ------------------------------------------------------
 
-  test("subscribes to both area_registry_updated and floor_registry_updated", async () => {
+  test("subscribes to the area, floor, and entity registries", async () => {
     el = await mount();
     const calls = vi.mocked(el.hass.connection.subscribeEvents).mock.calls;
     const eventTypes = calls.map((c: any) => c[1]);
     expect(eventTypes).toContain("area_registry_updated");
     expect(eventTypes).toContain("floor_registry_updated");
+    expect(eventTypes).toContain("entity_registry_updated");
   });
 
   test("expanded scope body no longer renders the inline auto-triggers section", async () => {
@@ -2452,10 +2453,12 @@ describe("ambience-scopes-view", () => {
   test("_subscribe unsubscribes immediately when element is disconnected before subscriptions resolve", async () => {
     const unsubArea = vi.fn();
     const unsubFloor = vi.fn();
-    // Use a two-step deferred: the first call to subscribeEvents returns a promise
-    // that won't resolve until after we remove the element.
+    const unsubEntity = vi.fn();
+    // Use a deferred per registry: subscribeEvents returns promises that won't
+    // resolve until after we remove the element.
     const deferredArea = { resolve: null as null | ((v: any) => void) };
     const deferredFloor = { resolve: null as null | ((v: any) => void) };
+    const deferredEntity = { resolve: null as null | ((v: any) => void) };
 
     vi.mocked(api.listAreas).mockResolvedValue(baseAreas);
     vi.mocked(api.getArea).mockResolvedValue(baseConfig);
@@ -2474,8 +2477,13 @@ describe("ambience-scopes-view", () => {
               deferredArea.resolve = r;
             });
           }
-          return new Promise<typeof unsubFloor>((r) => {
-            deferredFloor.resolve = r;
+          if (type === "floor_registry_updated") {
+            return new Promise<typeof unsubFloor>((r) => {
+              deferredFloor.resolve = r;
+            });
+          }
+          return new Promise<typeof unsubEntity>((r) => {
+            deferredEntity.resolve = r;
           });
         }),
       },
@@ -2493,11 +2501,13 @@ describe("ambience-scopes-view", () => {
     // Now let the subscription promises resolve — element is already disconnected
     deferredArea.resolve!(unsubArea);
     deferredFloor.resolve!(unsubFloor);
+    deferredEntity.resolve!(unsubEntity);
     await new Promise((r) => setTimeout(r, 0));
 
     // The element should have called unsubscribe immediately (isConnected=false path)
     expect(unsubArea).toHaveBeenCalled();
     expect(unsubFloor).toHaveBeenCalled();
+    expect(unsubEntity).toHaveBeenCalled();
   });
 
   // --- _onExposedActionsChanged: silent catch path -------------------------

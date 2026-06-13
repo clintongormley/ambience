@@ -70,43 +70,40 @@ If you want to test a scene's actions without waiting for its conditions to matc
 
 Everything above happens automatically, but the same machinery is available
 to your own automations and scripts via the `ambience.apply_scene` action
-(admin-only). You target scopes by area id, floor id, or the `house` flag —
-no switch entity is required.
+(admin-only). You target scopes with the `scope` field, whose values are
+`house`, `floor:<floor_id>`, or `area:<area_id>` — no switch entity is required.
+
+In the Home Assistant action editor, the `scope` and `category` fields
+are dropdowns auto-populated from your current Ambience configuration: `scope`
+lists House plus your enabled floors and areas, and `category` lists your
+configured categories. You can still type a value manually (for example in YAML
+or a template) — the dropdowns are suggestions, not a fixed list.
 
 ```yaml
 # Re-resolve and apply every category in the living room:
 action: ambience.apply_scene
 data:
-  areas: [living_room]
+  scope: [area:living_room]
 
 # Apply only the lighting category in the living room, even if the scope is paused:
 action: ambience.apply_scene
 data:
-  areas: [living_room]
+  scope: [area:living_room]
   category: [lighting]
   force: true
 
-# Run one named scene directly across a whole floor, skipping condition resolution:
-action: ambience.apply_scene
-data:
-  floors: [ground_floor]
-  scene: [Movie night]
-
-# Apply every scope in the house (omit areas/floors/house to target all):
+# Apply every scope in the house (omit scope to target all):
 action: ambience.apply_scene
 data: {}
 ```
 
 | Field | Required | Description |
 |---|---|---|
-| `areas` | No | List of area ids to target. |
-| `floors` | No | List of floor ids to target. |
-| `house` | No | `true` to target the House scope. |
+| `scope` | No | List of scopes to target. Each value is `house`, `floor:<floor_id>`, or `area:<area_id>`. |
 | `category` | No | Limit the apply to one or more category ids (default: all). |
-| `scene` | No | Apply this named scene directly; each scene resolves its own category. |
 | `force` | No | Apply even when a scope is paused (its switch is off). Does **not** override a permanently disabled scope. |
 
-Omitting `areas`, `floors`, and `house` targets every scope. Without `force`,
+Omitting `scope` targets every scope. Without `force`,
 the call is a no-op for any scope that is currently paused (its switch off). A
 permanently disabled scope (`enabled: false`) is always skipped — even with
 `force`.

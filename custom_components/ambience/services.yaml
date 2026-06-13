@@ -3,42 +3,20 @@ apply_scene:
   description: >-
     Apply Ambience scenes to one or more scopes. With no scope selected, targets
     every scope. With no category, re-runs the rules for every category. With one
-    or more categories, limits to those. With scene names, applies those named
-    scenes' actions directly (each resolved to the category that contains it),
-    bypassing their conditions.
+    or more categories, limits to those.
   fields:
-    areas:
-      name: Areas
-      description: Area scopes to apply in.
-      required: false
-      selector:
-        area:
-          multiple: true
-    floors:
-      name: Floors
-      description: Floor scopes to apply in.
-      required: false
-      selector:
-        floor:
-          multiple: true
-    house:
-      name: House
-      description: Also apply at the house scope.
-      required: false
-      selector:
-        boolean: {}
-    category:
-      name: Categories
-      description: Limit the apply to these scene categories (by category id).
+    scope:
+      name: Scopes
+      description: >-
+        Scopes to apply in (House, a floor, or an area). Leave empty to apply at
+        every scope. Values are "house", "floor:<floor_id>", or "area:<area_id>".
       required: false
       selector:
         text:
           multiple: true
-    scene:
-      name: Scenes
-      description: >-
-        Apply these named scenes' actions directly, bypassing their conditions.
-        Each name is resolved to the category that contains it.
+    category:
+      name: Categories
+      description: Limit the apply to these scene categories (by category id).
       required: false
       selector:
         text:
@@ -49,6 +27,5 @@ apply_scene:
         Apply even when a scope is paused (its switch is off). A permanently
         disabled scope is always skipped.
       required: false
-      default: false
       selector:
         boolean: {}

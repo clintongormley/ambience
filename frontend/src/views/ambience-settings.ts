@@ -8,8 +8,10 @@ import {
   saveReapplySettings,
   saveSwitchDefaults,
 } from "../api.js";
+import { renderHaSwitch } from "../ha-switch.js";
 import { localize } from "../i18n.js";
 import type { ReapplySettings, SwitchDefaults } from "../types.js";
+import "./ambience-help.js";
 
 @customElement("ambience-ambience-settings")
 export class AmbienceAmbienceSettings extends LitElement {
@@ -24,30 +26,53 @@ export class AmbienceAmbienceSettings extends LitElement {
       margin-bottom: 1rem;
       padding: 1rem;
     }
-    h3 {
-      margin: 0 0 0.75rem;
-    }
     .row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .row label {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-weight: 600;
+      /* Label column is a fixed half-width so the fields beside it line up. */
+      flex: 0 0 50%;
+    }
+    .toggle-row {
+      border-bottom: 1px solid var(--divider-color, #e0e0e0);
+      padding-bottom: 0.75rem;
       margin-bottom: 0.75rem;
     }
-    label {
-      display: block;
-      font-weight: 600;
-      margin-bottom: 0.25rem;
-    }
-    .help {
-      color: var(--secondary-text-color, #888);
-      font-size: 0.85em;
-      margin-top: 0.25rem;
+    .toggle-row label {
+      font-weight: 700;
     }
     input[type="text"],
     input[type="number"] {
-      width: 100%;
       padding: 0.4rem 0.6rem;
       border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 4px;
       background: var(--card-background-color, #fff);
       color: var(--primary-text-color, inherit);
+    }
+    input[type="text"] {
+      /* Fill the remaining half beside the 50% label, on the same line. */
+      flex: 1 1 auto;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    input[type="number"] {
+      width: 5rem;
+    }
+    input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .unit {
+      margin-left: 0.4rem;
+      color: var(--secondary-text-color, #888);
     }
   `;
 
@@ -55,11 +80,12 @@ export class AmbienceAmbienceSettings extends LitElement {
 
   @state() private _defaults: SwitchDefaults = {
     name: "Ambience",
-    auto_on_delay_seconds: 7200,
+    auto_on_delay_seconds: 0,
+    create_switches: false,
   };
   @state() private _reapply: ReapplySettings = {
     enabled: false,
-    interval_seconds: 5400,
+    interval_seconds: 3600,
   };
   @state() private _error = "";
 
@@ -82,6 +108,25 @@ export class AmbienceAmbienceSettings extends LitElement {
     }
   }
 
+  private _saveDefaults() {
+    void this._safeSave(() =>
+      saveSwitchDefaults(
+        this.hass,
+        this._defaults.name,
+        this._defaults.auto_on_delay_seconds,
+        this._defaults.create_switches,
+      ),
+    );
+  }
+
+  private _onCreateSwitches(e: Event) {
+    this._defaults = {
+      ...this._defaults,
+      create_switches: (e.target as HTMLInputElement).checked,
+    };
+    this._saveDefaults();
+  }
+
   private _onDefaultName(e: Event) {
     const input = e.target as HTMLInputElement;
     const value = input.value.trim();
@@ -92,25 +137,18 @@ export class AmbienceAmbienceSettings extends LitElement {
       return;
     }
     this._defaults = { ...this._defaults, name: value };
-    void this._safeSave(() =>
-      saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds),
-    );
+    this._saveDefaults();
   }
 
-  private _onDefaultDelay(e: Event) {
+  private _onPauseMinutes(e: Event) {
     const input = e.target as HTMLInputElement;
-    const raw = input.value;
-    if (raw === "" || !Number.isFinite(Number(raw)) || Number(raw) < 0) {
-      input.value = String(this._defaults.auto_on_delay_seconds);
+    const minutes = Math.floor(Number(input.value));
+    if (input.value === "" || !Number.isFinite(minutes) || minutes < 0) {
+      input.value = String(Math.round(this._defaults.auto_on_delay_seconds / 60));
       return;
     }
-    this._defaults = {
-      ...this._defaults,
-      auto_on_delay_seconds: Math.floor(Number(raw)),
-    };
-    void this._safeSave(() =>
-      saveSwitchDefaults(this.hass, this._defaults.name, this._defaults.auto_on_delay_seconds),
-    );
+    this._defaults = { ...this._defaults, auto_on_delay_seconds: minutes * 60 };
+    this._saveDefaults();
   }
 
   private _saveReapply() {
@@ -135,85 +173,119 @@ export class AmbienceAmbienceSettings extends LitElement {
     this._saveReapply();
   }
 
+  /** Render a toggle using ha-switch when registered (real HA), else a plain
+   *  checkbox fallback so the view remains testable under jsdom. Both carry
+   *  the same data-test attribute. */
+  private _renderToggle(checked: boolean, dataTest: string, onChange: (e: Event) => void) {
+    return renderHaSwitch({ checked, dataTest, onChange });
+  }
+
   override render() {
     return html`
       ${this._error ? html`<p style="color: var(--error-color, #d32f2f)">${this._error}</p>` : ""}
 
       <div class="card">
-        <h3>
-          ${localize(this.hass, "ui.settings_ambience_defaults_card", "Defaults")}
-        </h3>
+        <div class="row toggle-row">
+          <label>
+            ${localize(this.hass, "ui.settings_ambience_pause_card", "Scope-level pause switch")}
+            <ambience-help
+              .text=${localize(
+                this.hass,
+                "ui.help_pause_switch",
+                "Create a switch entity per area/floor/house that pauses Ambience for that scope when turned off.",
+              )}
+            ></ambience-help>
+          </label>
+          ${this._renderToggle(this._defaults.create_switches, "pause-switch-enabled", (e) =>
+            this._onCreateSwitches(e),
+          )}
+        </div>
         <div class="row">
-          <label
-            >${localize(this.hass, "ui.settings_ambience_field_name", "Switch name")}</label
-          >
+          <label>
+            ${localize(this.hass, "ui.settings_ambience_field_name", "Switch name")}
+            <ambience-help
+              .text=${localize(
+                this.hass,
+                "ui.help_switch_name",
+                "The name used for the per-scope pause switch entities.",
+              )}
+            ></ambience-help>
+          </label>
           <input
             data-test="defaults-name"
             type="text"
+            ?disabled=${!this._defaults.create_switches}
             .value=${this._defaults.name}
             @change=${(e: Event) => this._onDefaultName(e)}
           />
         </div>
         <div class="row">
-          <label
-            >${localize(
-              this.hass,
-              "ui.settings_ambience_field_delay",
-              "Auto-on delay (seconds)",
-            )}</label
-          >
+          <label>
+            ${localize(this.hass, "ui.settings_ambience_field_pause", "Pause for")}
+            <ambience-help
+              .text=${localize(
+                this.hass,
+                "ui.help_pause_for",
+                "When a scope's switch is turned off, auto-resume after this many minutes. 0 = stays paused until turned back on.",
+              )}
+            ></ambience-help>
+          </label>
           <input
-            data-test="defaults-delay-seconds"
+            data-test="pause-for-minutes"
             type="number"
             min="0"
-            .value=${String(this._defaults.auto_on_delay_seconds)}
-            @change=${(e: Event) => this._onDefaultDelay(e)}
+            ?disabled=${!this._defaults.create_switches}
+            .value=${String(Math.round(this._defaults.auto_on_delay_seconds / 60))}
+            @change=${(e: Event) => this._onPauseMinutes(e)}
           />
-          <div class="help">
-            ${localize(this.hass, "ui.settings_ambience_delay_help", "0 = never auto-on")}
-          </div>
+          <span class="unit"
+            >${localize(this.hass, "ui.unit_minutes", "minutes")}</span
+          >
         </div>
       </div>
 
       <div class="card">
-        <h3>${localize(this.hass, "ui.settings_reapply_card", "Re-apply")}</h3>
-        <div class="row">
+        <div class="row toggle-row">
           <label>
-            <input
-              data-test="reapply-enabled"
-              type="checkbox"
-              .checked=${this._reapply.enabled}
-              @change=${(e: Event) => this._onReapplyEnabled(e)}
-            />
             ${localize(
               this.hass,
               "ui.settings_reapply_enable_label",
-              "Re-apply scenes after inactivity",
+              "Reapply scenes after inactivity",
             )}
+            <ambience-help
+              .text=${localize(
+                this.hass,
+                "ui.help_reapply_toggle",
+                "Check the scenes for a scope/category after inactivity and reapply the winning scene, in case any action had previously failed, such as a light not turning off.",
+              )}
+            ></ambience-help>
           </label>
+          ${this._renderToggle(this._reapply.enabled, "reapply-enabled", (e) =>
+            this._onReapplyEnabled(e),
+          )}
         </div>
         <div class="row">
-          <label
-            >${localize(
-              this.hass,
-              "ui.settings_reapply_interval_label",
-              "Inactivity timeout (minutes)",
-            )}</label
-          >
+          <label>
+            ${localize(this.hass, "ui.settings_reapply_interval_label", "Reapply after")}
+            <ambience-help
+              .text=${localize(
+                this.hass,
+                "ui.help_reapply_after",
+                "Reapply scenes that haven't been updated for this many minutes.",
+              )}
+            ></ambience-help>
+          </label>
           <input
             data-test="reapply-interval-minutes"
             type="number"
             min="1"
+            ?disabled=${!this._reapply.enabled}
             .value=${String(Math.round(this._reapply.interval_seconds / 60))}
             @change=${(e: Event) => this._onReapplyMinutes(e)}
           />
-          <div class="help">
-            ${localize(
-              this.hass,
-              "ui.settings_reapply_help",
-              "Re-send each area's scene commands after this much quiet, to recover dropped commands.",
-            )}
-          </div>
+          <span class="unit"
+            >${localize(this.hass, "ui.unit_minutes", "minutes")}</span
+          >
         </div>
       </div>
     `;

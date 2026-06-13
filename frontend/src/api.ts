@@ -42,6 +42,13 @@ export type FloorRegistryEvent = {
   data: { action: "create" | "update" | "remove"; floor_id: string };
 };
 
+// HA fires this whenever an entity is created/updated/removed in the registry —
+// used to spot scope pause switches appearing/disappearing (e.g. when the
+// create_switches toggle flips), which don't touch the area/floor registry.
+export type EntityRegistryEvent = {
+  data: { action: "create" | "update" | "remove"; entity_id: string };
+};
+
 // HA panel components receive a `hass` object. We type only what we use,
 // plus an index signature for the surface we hand to HA components like
 // `<ha-form>` that expect the full HomeAssistant shape (hass.localize,
@@ -337,11 +344,13 @@ export async function saveSwitchDefaults(
   hass: HassConnection,
   name: string,
   auto_on_delay_seconds: number,
+  create_switches: boolean,
 ): Promise<{ ok: true }> {
   return hass.callWS({
     type: "ambience/switch_defaults/save",
     name,
     auto_on_delay_seconds,
+    create_switches,
   });
 }
 

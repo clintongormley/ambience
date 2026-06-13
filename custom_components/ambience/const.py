@@ -56,13 +56,13 @@ SIGNAL_UNIT_APPLIED = "ambience_unit_applied"
 SIGNAL_REAPPLY_CONFIG_UPDATED = "ambience_reapply_config_updated"
 
 # Note: the idle re-apply defaults (DEFAULT_REAPPLY_ENABLED / *_INTERVAL_SECONDS /
-# MIN_REAPPLY_INTERVAL_SECONDS) live in store.py, their only consumer — keeping
-# them out of const avoids a CodeQL py/unsafe-cyclic-import false positive (const
-# has a TYPE_CHECKING-only import of store for get_store's annotation).
+# MIN_REAPPLY_INTERVAL_SECONDS) and DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS live in
+# store.py, their only consumer — keeping them out of const avoids a CodeQL
+# py/unsafe-cyclic-import false positive (const has a TYPE_CHECKING-only import of
+# store for get_store's annotation).
 
 # Defaults
 DEFAULT_SWITCH_NAME = "Ambience"
-DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 7200  # 2h; 0 = never auto-on
 
 # The category seeded on a fresh install. It is an ordinary category (renameable,
 # deletable when it is not the last category) — these are only its initial values.
@@ -77,15 +77,6 @@ GENERAL_CATEGORY = {
 # Options flow
 CONF_SHOW_SIDEBAR_PANEL = "show_sidebar_panel"
 DEFAULT_SHOW_SIDEBAR_PANEL = True
-
-# Optional per-scope switches (options flow). Off by default: most users want the
-# panel only, not a switch entity + device per scope. When on, a switch exists for
-# every ENABLED scope; disabling a scope deletes its switch.
-CONF_CREATE_SWITCHES = "create_switches"
-DEFAULT_CREATE_SWITCHES = False
-# hass.data key holding the resolved create_switches bool for this entry, so the
-# switch platform + runtime handlers can read it without the config entry in hand.
-DATA_CREATE_SWITCHES = "create_switches_enabled"
 
 # Voice-assistant exposure (options flow).
 CONF_EXPOSED_ASSISTANTS = "exposed_assistants"

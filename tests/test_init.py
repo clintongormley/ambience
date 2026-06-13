@@ -10,6 +10,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import floor_registry as fr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
@@ -88,6 +89,43 @@ async def test_setup_registers_apply_scene_service(
     assert hass.services.has_service(DOMAIN, "apply_scene")
 
 
+async def test_apply_scene_schema_is_set_and_refreshes(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """The dynamic apply_scene UI schema is set at setup and re-set on config change."""
+    from unittest.mock import patch
+
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+    from custom_components.ambience.const import SIGNAL_CONFIG_CHANGED
+
+    mock_config_entry.add_to_hass(hass)
+    with patch("custom_components.ambience.async_set_service_schema") as set_schema:
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert set_schema.called  # set at setup
+
+        set_schema.reset_mock()
+        async_dispatcher_send(hass, SIGNAL_CONFIG_CHANGED, None)
+        await hass.async_block_till_done()
+
+        assert set_schema.called  # re-set on config change
+
+        set_schema.reset_mock()
+        hass.bus.async_fire(ar.EVENT_AREA_REGISTRY_UPDATED, {"action": "create", "area_id": "x"})
+        await hass.async_block_till_done()
+
+        assert set_schema.called  # re-set on area-registry change
+
+        set_schema.reset_mock()
+        hass.bus.async_fire(fr.EVENT_FLOOR_REGISTRY_UPDATED, {"action": "create", "floor_id": "x"})
+        await hass.async_block_till_done()
+
+        assert set_schema.called  # re-set on floor-registry change
+
+
 async def test_unload_clears_data(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -157,8 +195,6 @@ async def test_floor_remove_event_deletes_floor_config(
     hass: HomeAssistant, mock_config_entry
 ) -> None:
     """Removing a floor from HA's registry drops its Ambience config."""
-    from homeassistant.helpers import floor_registry as fr
-
     from custom_components.ambience.const import DATA_STORE
 
     mock_config_entry.add_to_hass(hass)
@@ -344,32 +380,24 @@ async def test_unload_aborts_when_platform_unload_fails(
     assert hass.services.has_service(DOMAIN, "apply_scene")
 
 
-async def test_setup_stashes_create_switches_flag(hass):
-    from custom_components.ambience.const import CONF_CREATE_SWITCHES, DATA_CREATE_SWITCHES, DOMAIN
+async def test_setup_does_not_stash_create_switches_in_domain_data(hass):
+    """create_switches is now owned by the store; DATA_CREATE_SWITCHES must not exist."""
+    from custom_components.ambience.const import DATA_STORE
 
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Ambience",
         data={},
-        options={CONF_CREATE_SWITCHES: True},
+        options={},
         unique_id="amb_cs",
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    assert hass.data[DOMAIN][DATA_CREATE_SWITCHES] is True
-
-
-async def test_setup_create_switches_defaults_false(hass):
-    from custom_components.ambience.const import DATA_CREATE_SWITCHES, DOMAIN
-
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="Ambience", data={}, options={}, unique_id="amb_cs_default"
-    )
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.data[DOMAIN][DATA_CREATE_SWITCHES] is False
+    # The store (not domain_data) is the source of truth
+    assert "create_switches_enabled" not in hass.data[DOMAIN]
+    # The store defaults to False
+    assert hass.data[DOMAIN][DATA_STORE].get_switch_defaults()["create_switches"] is False
 
 
 def test_manifest_orders_setup_after_frontend() -> None:

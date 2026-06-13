@@ -76,102 +76,141 @@ def category_ids(cfg: dict[str, Any]) -> list[str]:
     )
 
 
+def scope_option_value(scope_kind: str, scope_id: str | None) -> str:
+    """Encode a scope as the opaque string used by the apply_scene `scope`
+    select option (and accepted back by the service)."""
+    return "house" if scope_kind == "house" else f"{scope_kind}:{scope_id}"
+
+
+def parse_scope_option(value: str) -> tuple[str, str | None]:
+    """Decode a `scope` option value into (scope_kind, scope_id). Raises
+    ServiceValidationError on an unparseable value or unknown kind."""
+    if value == "house":
+        return ("house", None)
+    kind, sep, scope_id = value.partition(":")
+    if sep and kind in ("floor", "area") and scope_id:
+        return (kind, scope_id)
+    raise ServiceValidationError(f"invalid scope: {value!r}")
+
+
+def build_apply_scene_schema(hass: HomeAssistant) -> dict[str, Any]:
+    """Build the apply_scene service UI schema with runtime-populated scope /
+    category dropdowns. Passed to async_set_service_schema and rebuilt
+    when the store or area/floor registries change."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    area_reg = ar.async_get(hass)
+    floor_reg = fr.async_get(hass)
+
+    scope_options: list[dict[str, str]] = []
+    if store.get_scope_enabled("house", None):
+        scope_options.append({"value": scope_option_value("house", None), "label": "House"})
+    for floor in sorted(floor_reg.async_list_floors(), key=lambda f: f.name):
+        if store.get_scope_enabled("floor", floor.floor_id):
+            scope_options.append(
+                {
+                    "value": scope_option_value("floor", floor.floor_id),
+                    "label": f"{floor.name} (floor)",
+                }
+            )
+    for area in sorted(area_reg.async_list_areas(), key=lambda a: a.name):
+        if store.get_scope_enabled("area", area.id):
+            scope_options.append(
+                {
+                    "value": scope_option_value("area", area.id),
+                    "label": f"{area.name} (area)",
+                }
+            )
+
+    category_options = [
+        {"value": c["id"], "label": c.get("name") or c["id"]} for c in store.categories()
+    ]
+
+    def _select(options: list[dict[str, str]]) -> dict[str, Any]:
+        return {
+            "select": {
+                "multiple": True,
+                "custom_value": True,
+                "mode": "dropdown",
+                "options": options,
+            }
+        }
+
+    return {
+        "name": "Apply scene",
+        "description": (
+            "Apply Ambience scenes to one or more scopes. Blank scope = every scope; "
+            "blank category = every category."
+        ),
+        "fields": {
+            "scope": {
+                "name": "Scopes",
+                "description": "Scopes to apply in (blank = every scope).",
+                "required": False,
+                "selector": _select(scope_options),
+            },
+            "category": {
+                "name": "Categories",
+                "description": "Limit to these scene categories (blank = all).",
+                "required": False,
+                "selector": _select(category_options),
+            },
+            "force": {
+                "name": "Force",
+                "description": "Apply even when a scope is paused (its switch is off).",
+                "required": False,
+                "selector": {"boolean": {}},
+            },
+        },
+    }
+
+
 def _resolve_target_scopes(
     hass: HomeAssistant, data: dict[str, Any]
 ) -> list[tuple[str, str | None]]:
-    """Map the service's targeting fields to a list of (scope_kind, scope_id).
+    """Map the service's `scope` values to a list of (scope_kind, scope_id).
 
-    Validates area/floor ids against the registries (unknown -> ServiceValidationError).
-    A blank target (no areas/floors/house) means every scope.
+    Each non-blank value is decoded by parse_scope_option; floor/area ids are
+    validated against the registries (unknown -> ServiceValidationError). Blank or
+    whitespace-only entries are ignored (a stray empty chip shouldn't abort the
+    call), so an all-blank or omitted `scope` means every scope (house + all
+    floors + all areas).
+
+    A blank or explicitly-typed scope may include scopes that are permanently
+    disabled; the downstream apply skips disabled scopes, so resolving them here
+    is harmless.
     """
     area_reg = ar.async_get(hass)
     floor_reg = fr.async_get(hass)
     scopes: list[tuple[str, str | None]] = []
-    for area_id in data.get("areas", []):
-        if area_reg.async_get_area(area_id) is None:
-            raise ServiceValidationError(f"unknown area: {area_id}")
-        scopes.append(("area", area_id))
-    for floor_id in data.get("floors", []):
-        if floor_reg.async_get_floor(floor_id) is None:
-            raise ServiceValidationError(f"unknown floor: {floor_id}")
-        scopes.append(("floor", floor_id))
-    if data.get("house"):
-        scopes.append(("house", None))
+    for value in data.get("scope", []):
+        value = value.strip()
+        if not value:
+            continue
+        kind, scope_id = parse_scope_option(value)
+        if kind == "area" and area_reg.async_get_area(scope_id) is None:
+            raise ServiceValidationError(f"unknown_area: {scope_id!r}")
+        if kind == "floor" and floor_reg.async_get_floor(scope_id) is None:
+            raise ServiceValidationError(f"unknown_floor: {scope_id!r}")
+        scopes.append((kind, scope_id))
     if not scopes:
         scopes.append(("house", None))
         scopes.extend(("floor", f.floor_id) for f in floor_reg.async_list_floors())
         scopes.extend(("area", a.id) for a in area_reg.async_list_areas())
-    # De-dup, preserving order: repeated area/floor ids (easy to write in YAML)
-    # would otherwise apply the same scope twice — and named scenes bypass the
-    # last-applied guard, so they would dispatch their actions twice.
+    # De-dup, preserving order: repeated ids (easy to write in YAML) would
+    # otherwise apply the same scope twice.
     return list(dict.fromkeys(scopes))
-
-
-def _plan_named_scenes(
-    hass: HomeAssistant,
-    scopes: list[tuple[str, str | None]],
-    scenes: list[str],
-    categories: list[str] | None,
-) -> list[tuple[str, str | None, str, str]]:
-    """Resolve each (scope, scene-name) to the single category that contains it.
-
-    Returns (scope_kind, scope_id, category, scene_name) tuples. A name absent in a
-    scope is skipped; a name found in >1 eligible category raises (nothing applied).
-    `categories`, when given, narrows the eligible categories.
-    """
-    store = hass.data[DOMAIN][DATA_STORE]
-    eligible = set(categories) if categories else None
-    plan: list[tuple[str, str | None, str, str]] = []
-    for scope_kind, scope_id in scopes:
-        if not store.get_scope_enabled(scope_kind, scope_id):
-            continue
-        cfg = store.scope_config(scope_kind, scope_id)
-        for name in scenes:
-            target = name.strip().lower()
-            cats = {
-                scene["category"]
-                for scene in cfg.get("scenes", [])
-                if isinstance(scene.get("name"), str)
-                and scene["name"].strip()
-                and scene["name"].strip().lower() == target
-                and scene.get("category") is not None
-                and (eligible is None or scene["category"] in eligible)
-            }
-            if not cats:
-                _LOGGER.info(
-                    "ambience: apply_scene scene %r not found in scope %s/%s — skipping",
-                    name,
-                    scope_kind,
-                    scope_id,
-                )
-                continue
-            if len(cats) > 1:
-                raise ServiceValidationError(
-                    f"scene {name!r} exists in multiple categories {sorted(cats)} "
-                    f"in scope {scope_kind}/{scope_id}; specify `category`"
-                )
-            plan.append((scope_kind, scope_id, next(iter(cats)), name))
-    return plan
 
 
 async def async_apply_scene_service(hass: HomeAssistant, call: ServiceCall) -> None:
     """Service handler for ambience.apply_scene: resolve target scopes, then apply.
 
-    Targets scopes by areas/floors/house (blank = every scope). With scene names,
-    applies those named scenes directly (each resolved to its own category, validated
-    up front so an ambiguous name aborts before any apply); with categories, fans out
-    over scope x category; otherwise re-resolves every category per scope.
+    Targets scopes by the `scope` field (blank = every scope). With categories,
+    fans out over scope x category; otherwise re-resolves every category per scope.
     """
     scopes = _resolve_target_scopes(hass, call.data)
     categories = call.data.get("category")
-    scenes = call.data.get("scene")
     force = call.data.get("force", False)
-    if scenes:
-        # Validate the whole plan first so an ambiguous name aborts before any apply.
-        plan = _plan_named_scenes(hass, scopes, scenes, categories)
-        for scope_kind, scope_id, category, name in plan:
-            await async_apply_named_scene(hass, scope_kind, scope_id, category, name, force=force)
-    elif categories:
+    if categories:
         for scope_kind, scope_id in scopes:
             for category in categories:
                 await async_apply_scene(hass, scope_kind, scope_id, category=category, force=force)
@@ -643,85 +682,6 @@ async def async_run_scene_actions(
         hass, scope_kind, scope_id, actions, scene_index=scene_index, context=context
     )
     return {"ran": len(actions), "scene_name": scene_name}
-
-
-async def async_apply_named_scene(
-    hass: HomeAssistant,
-    scope_kind: str,
-    scope_id: str | None,
-    category: str,
-    scene_name: str,
-    *,
-    force: bool = False,
-) -> None:
-    """Apply a single named scene's actions directly, bypassing predicate resolution.
-
-    Locates the scene by case-insensitive name within (scope, category) — names are
-    unique there by construction — and runs its actions. Always refuses when the
-    scope is permanently disabled. Honours the scope switch unless `force=True`.
-    Does NOT touch last_applied (an out-of-band manual override, like
-    async_run_scene_actions). Emits a MANUAL-cause trace.
-    """
-    if not _scope_enabled(hass, scope_kind, scope_id):
-        raise ServiceValidationError(f"scope {scope_kind}/{scope_id} is disabled")
-
-    switch_state = _switch_state(hass, scope_kind, scope_id)
-    if not force and switch_state == "off":
-        _LOGGER.info(
-            "ambience: scope=%s/%s switch is off; skipping apply_scene (named scene %r)",
-            scope_kind,
-            scope_id,
-            scene_name,
-        )
-        return
-
-    store = hass.data[DOMAIN][DATA_STORE]
-    cfg = _scope_config(store, scope_kind, scope_id)
-    target = scene_name.strip().lower()
-    match: tuple[int, dict[str, Any], str] | None = None
-    for index, scene in enumerate(cfg.get("scenes", [])):
-        if scene.get("category") != category:
-            continue
-        name = scene.get("name")
-        # Only non-empty names are matchable (unnamed scenes are exempt from the
-        # uniqueness rule), so an empty scene_name never matches an unnamed scene.
-        if isinstance(name, str) and name.strip() and name.strip().lower() == target:
-            match = (index, scene, name)
-            break
-    if match is None:
-        raise ServiceValidationError(
-            f"no scene named {scene_name!r} in scope {scope_kind}/{scope_id} category {category!r}"
-        )
-
-    index, scene, name = match
-    actions = scene.get("actions", [])
-    context = log_run_actions(hass, scope_kind, scope_id, name, index) if actions else None
-    await async_execute_actions(
-        hass, scope_kind, scope_id, actions, scene_index=index, context=context
-    )
-
-    if tracing_active(hass):
-        outcome = Outcome.ACTED if actions else Outcome.NO_OP
-        unit_kwargs: dict[str, Any] = {"winner_name": name}
-        if actions:
-            unit_kwargs["actions"] = actions
-        emit_trace(
-            hass,
-            TraceEvent(
-                TriggerCause(kind=CauseKind.MANUAL),
-                [
-                    UnitTrace(
-                        scope_kind,
-                        scope_id,
-                        category,
-                        switch_state,
-                        outcome,
-                        None,
-                        **unit_kwargs,
-                    )
-                ],
-            ),
-        )
 
 
 async def async_execute_plan(

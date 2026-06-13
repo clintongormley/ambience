@@ -24,7 +24,7 @@ There is nothing to configure in Ambience to add or remove scopes — they mirro
 
 ## Switch entities
 
-Switch entities are **opt-in**. By default Ambience creates no switch entities. To enable them, go to **Settings → Devices & Services**, find the Ambience integration, open its **Configure** dialog, and turn on **Create per-scope switches**.
+Switch entities are **opt-in**. By default Ambience creates no switch entities. To enable them, open the Ambience panel's Settings modal (cogwheel ⚙), go to the **Advanced** tab, and turn on **Scope-level pause switch**.
 
 When per-scope switches are enabled, each scope gets one switch entity named after the scope and ending in "Ambience". For example:
 
@@ -40,7 +40,7 @@ Each switch lives on its own device. The House switch is the main **Ambience** d
 
 If a scope is disabled (removed from Ambience's configuration) while per-scope switches are enabled, its switch entity is deleted automatically.
 
-You can choose which voice assistants the switches are exposed to in the integration's **Configure** dialog — see [Installation](../installation.md#voice-assistants).
+You can choose which voice assistants the switches are exposed to in the integration's **Configure** dialog (Settings → Devices & Services → Ambience → Configure) — see [Installation](../installation.md#voice-assistants).
 
 When per-scope switches exist, they appear in the Ambience panel as a toggle on each scope row. You can also control them from HA's developer tools, automations, or dashboards like any other switch entity. When per-scope switches are not enabled, the panel's scope toggles still work — they pause and resume Ambience for that scope — but no HA entity is created.
 
@@ -76,7 +76,7 @@ There is one exception: the **Run actions** option in a scene's action menu appl
 
 When you turn a switch off, Ambience starts a timer. When the timer expires the switch turns itself back on automatically — including cascading back on to all the switches below it.
 
-The default delay is **two hours**. You can change it in [Settings](../settings-reference.md). Setting the delay to **0** disables auto-on entirely: the switch stays off until you turn it back on manually.
+The default delay is **0** (disabled — the switch stays off until you turn it back on manually). You can set a positive number of minutes in the [Advanced tab](../settings-reference.md#advanced-tab) of the Settings modal (**Pause for** field).
 
 The timer survives a Home Assistant restart. Ambience records the moment the switch was turned off and, on restart, calculates how much time is left. If the delay has already elapsed by the time HA comes back up, the switch turns on immediately.
 
@@ -88,9 +88,9 @@ Changing the global delay setting takes effect immediately for any switch that i
 
 Suppose you are having a party. You want the lighting in the living room and dining room to stay exactly as you have set it, without Ambience adjusting things as occupancy or the time changes.
 
-Turn off the "Ground floor" switch. Ambience cascades the off down to every area on that floor, including Living room and Dining room. With a two-hour auto-on delay, Ambience will re-engage automatically after the party — you do not need to remember to turn it back on.
+Turn off the "Ground floor" switch. Ambience cascades the off down to every area on that floor, including Living room and Dining room. If you set a **Pause for** duration in the Advanced tab (for example, 120 minutes), Ambience will re-engage automatically after the party — you do not need to remember to turn it back on.
 
-If the party is likely to run longer, go into Settings and raise the delay. If guests are staying overnight and you want to leave things off until morning, set the delay to 0 on your way to bed, then turn the floor switch back on manually the next day (and restore the delay in Settings).
+If the party is likely to run longer, go into Settings → Advanced and raise the **Pause for** value. If guests are staying overnight and you want to leave things off until morning, leave **Pause for** at `0` (never auto-resume), then turn the floor switch back on manually the next day.
 
 You could equally turn off just the Living room switch if you only want to freeze that one area, leaving the kitchen and hallway running normally.
 
@@ -99,7 +99,7 @@ You could equally turn off just the Living room switch if you only want to freez
 ## Summary
 
 - **House, Floor, Area** — three levels, mirroring your HA area/floor registry.
-- **Switch entities are opt-in** — enable **Create per-scope switches** in the integration's **Configure** dialog. When enabled, each scope gets one switch entity named `switch.<scope>_ambience` (floors: `switch.<scope>_floor_ambience`; House: `switch.house_ambience`). Disabling a scope while switches are on deletes its entity.
+- **Switch entities are opt-in** — enable **Scope-level pause switch** in the **Advanced** tab of the Settings modal. When enabled, each scope gets one switch entity named `switch.<scope>_ambience` (floors: `switch.<scope>_floor_ambience`; House: `switch.house_ambience`). Disabling a scope while switches are on deletes its entity. Changes take effect live without a reload.
 - **Turning off cascades down**; turning on cascades down too. Turning off a leaf (area) affects only that area.
 - **Off means paused**: Ambience skips automatic scene application for that scope. Manual "Run actions" still works.
-- **Auto-on** brings the switch back after the configured delay (default: two hours). Setting the delay to 0 disables it.
+- **Auto-on** brings the switch back after the **Pause for** duration (default: `0` = never; set a positive number of minutes to auto-resume).

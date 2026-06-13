@@ -22,11 +22,9 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
 from .const import (
-    DATA_CREATE_SWITCHES,
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
-    DEFAULT_CREATE_SWITCHES,
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
@@ -160,24 +158,41 @@ def _reconcile_switch_registry(
         _remove_scope_device(hass, scope[0], scope[1])
 
 
+def reconcile_scope_switches(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Create switches for every desired scope not already live, and delete any
+    that should no longer exist. Driven by the store's `create_switches` flag plus
+    the enabled scopes. Safe to call repeatedly (idempotent)."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    create_switches = store.get_switch_defaults()["create_switches"]
+    desired = _desired_switch_scopes(hass, store, create_switches)
+    add_entities = hass.data[DOMAIN].get(DATA_SWITCH_ADD_ENTITIES)
+    live = hass.data[DOMAIN].get(DATA_SWITCHES, {})
+    missing = [s for s in desired if s not in live]
+    if missing and add_entities is not None:
+        ordered = sorted(missing, key=lambda s: _SCOPE_KIND_ORDER.get(s[0], 3))
+        add_entities([make_scope_switch(hass, kind, sid) for (kind, sid) in ordered])
+    _reconcile_switch_registry(hass, entry, desired)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create a switch for each enabled scope when create_switches is on; reconcile
-    the entity registry to match (deleting any switch that should not exist)."""
+    """Create a switch for each enabled scope when create_switches is on, reconcile
+    the registry, and re-reconcile live whenever the switch config changes (so the
+    panel toggle creates/removes switches without an integration reload)."""
     hass.data[DOMAIN][DATA_SWITCH_ADD_ENTITIES] = async_add_entities
     hass.data[DOMAIN].setdefault(DATA_SWITCHES, {})
+    reconcile_scope_switches(hass, entry)
 
-    store = hass.data[DOMAIN][DATA_STORE]
-    create_switches = hass.data[DOMAIN].get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES)
-    desired = _desired_switch_scopes(hass, store, create_switches)
+    @callback
+    def _on_switch_config_updated(_payload: None = None) -> None:
+        reconcile_scope_switches(hass, entry)
 
-    if desired:
-        ordered = sorted(desired, key=lambda s: _SCOPE_KIND_ORDER.get(s[0], 3))
-        async_add_entities([make_scope_switch(hass, kind, sid) for (kind, sid) in ordered])
-    _reconcile_switch_registry(hass, entry, desired)
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_SWITCH_CONFIG_UPDATED, _on_switch_config_updated)
+    )
 
 
 class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):

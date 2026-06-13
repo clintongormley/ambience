@@ -200,7 +200,7 @@ const CAUSE_LABELS_FIXED: Record<string, string> = {
 const CAUSE_LABELS_WITH_DETAIL: Record<string, string> = {
   clock: "Time of day",
   sun: "Sun position",
-  reapply: "Re-apply", // idle re-apply fired; detail is the inactivity interval (e.g. "1h 30m")
+  reapply: "Reapply", // idle re-apply fired; detail is the inactivity interval (e.g. "1h 30m")
 };
 
 // A raw value or "?" when the backend sent null (e.g. an entity with no prior

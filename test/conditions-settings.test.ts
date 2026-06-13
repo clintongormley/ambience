@@ -134,4 +134,9 @@ describe("ambience-conditions-settings", () => {
     const cards = el.shadowRoot.querySelectorAll("ambience-condition-card");
     expect(cards.length).toBe(0);
   });
+
+  test("renders a help tooltip trigger", async () => {
+    el = await mount();
+    expect(el.shadowRoot.querySelector("ambience-help")).not.toBeNull();
+  });
 });

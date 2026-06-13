@@ -45,10 +45,24 @@ async def _ws_send(hass_ws_client, **payload: Any) -> dict:
 # --- defaults ---------------------------------------------------------------
 
 
-async def test_switch_defaults_list(hass, installed, hass_ws_client):
+async def test_switch_defaults_list(hass, hass_ws_client):
+    # Use a fresh entry (no pre-seeded store) so create_switches defaults to False.
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Ambience", data={}, options={}, unique_id="ws_defaults"
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
     resp = await _ws_send(hass_ws_client, type="ambience/switch_defaults/list")
     assert resp["success"]
-    assert resp["result"] == {"name": "Ambience", "auto_on_delay_seconds": 7200}
+    assert resp["result"] == {
+        "name": "Ambience",
+        "auto_on_delay_seconds": 0,
+        "create_switches": False,
+    }
 
 
 async def test_switch_defaults_save_fires_None(hass, installed, hass_ws_client):
@@ -60,11 +74,13 @@ async def test_switch_defaults_save_fires_None(hass, installed, hass_ws_client):
             type="ambience/switch_defaults/save",
             name="Master",
             auto_on_delay_seconds=600,
+            create_switches=False,
         )
         assert resp["success"]
         assert hass.data[DOMAIN][DATA_STORE].get_switch_defaults() == {
             "name": "Master",
             "auto_on_delay_seconds": 600,
+            "create_switches": False,
         }
         assert fired == [None]
     finally:
@@ -77,6 +93,7 @@ async def test_switch_defaults_save_validation_error(hass, installed, hass_ws_cl
         type="ambience/switch_defaults/save",
         name="",
         auto_on_delay_seconds=0,
+        create_switches=False,
     )
     assert not resp["success"]
     assert resp["error"]["code"] == "validation_error"
@@ -166,13 +183,13 @@ async def test_set_scope_enabled_no_switch_work_when_toggle_off(hass, hass_ws_cl
     from homeassistant.helpers import entity_registry as er
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    from custom_components.ambience.const import CONF_CREATE_SWITCHES
-
+    # create_switches defaults to False in the store, so an entry with empty options
+    # starts with no switches (simulates toggle-off state)
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Ambience",
         data={},
-        options={CONF_CREATE_SWITCHES: False},
+        options={},
         unique_id="ws_off",
     )
     entry.add_to_hass(hass)

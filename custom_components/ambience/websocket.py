@@ -11,23 +11,19 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import (
     DATA_CONDITIONS,
-    DATA_CREATE_SWITCHES,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_LUX_RANGES,
     DATA_PERIODS,
     DATA_STORE,
-    DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
-    DEFAULT_CREATE_SWITCHES,
     DOMAIN,
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
@@ -46,7 +42,6 @@ from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import condition_priority
 from .state_options import known_attribute_values_for, known_states_for
 from .store import CategoryInUseError, LastCategoryError
-from .switch import _remove_scope_device, make_scope_switch, switch_unique_id
 from .trace import buffered_unit_to_dict
 from .websocket_helpers import (
     canonicalise,
@@ -800,6 +795,7 @@ async def _ws_switch_defaults_list(
         vol.Required("type"): "ambience/switch_defaults/save",
         vol.Required("name"): str,
         vol.Required("auto_on_delay_seconds"): int,
+        vol.Required("create_switches"): bool,
     }
 )
 @websocket_api.async_response
@@ -811,7 +807,11 @@ async def _ws_switch_defaults_save(
     store = hass.data[DOMAIN][DATA_STORE]
     try:
         await store.async_save_switch_defaults(
-            {"name": msg["name"], "auto_on_delay_seconds": msg["auto_on_delay_seconds"]}
+            {
+                "name": msg["name"],
+                "auto_on_delay_seconds": msg["auto_on_delay_seconds"],
+                "create_switches": msg["create_switches"],
+            }
         )
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
@@ -912,22 +912,12 @@ async def _ws_set_scope_enabled(
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_set_scope_enabled(scope_kind, scope_id, enabled)
 
-    # Switch lifecycle follows enabled-ness when switches are turned on: disabling a
-    # scope DELETES its switch (and device); enabling recreates it. No clutter from
-    # hidden entities. When the create_switches toggle is off there is nothing to do.
-    if hass.data[DOMAIN].get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES):
-        registry = er.async_get(hass)
-        entity_id = registry.async_get_entity_id(
-            "switch", DOMAIN, switch_unique_id(scope_kind, scope_id)
-        )
-        if enabled:
-            if entity_id is None:
-                add_entities = hass.data[DOMAIN].get(DATA_SWITCH_ADD_ENTITIES)
-                if add_entities is not None:
-                    add_entities([make_scope_switch(hass, scope_kind, scope_id)])
-        elif entity_id is not None:
-            registry.async_remove(entity_id)
-            _remove_scope_device(hass, scope_kind, scope_id)
+    # A scope's switch follows its enabled-ness (when create_switches is on):
+    # enabling (re)creates it, disabling deletes it and its device. Fire the
+    # switch-config signal so the switch platform's reconcile — the single source
+    # of truth for which switches exist — applies the change, rather than
+    # duplicating per-scope create/remove logic here.
+    async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     # Re-enabling resyncs the scope (mirrors switch turn-on's force resync). Re-arm
     # the scope's `for:` rechecks too — a duration timer that matured while the
     # scope was disabled was consumed as a no-op, so without this a "switch on for

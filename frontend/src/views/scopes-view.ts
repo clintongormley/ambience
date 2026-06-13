@@ -1,11 +1,11 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { live } from "lit/directives/live.js";
 import { repeat } from "lit/directives/repeat.js";
 
 import type { HassConnection } from "../api.js";
 import { applyScenes, runSceneActions, setScopeEnabled } from "../api.js";
 import { sceneNameKey, scopeKey } from "../entities-for-scope.js";
+import { renderHaSwitch } from "../ha-switch.js";
 import { localize } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
 import { scopeIcon } from "../scope-icon.js";
@@ -1137,22 +1137,12 @@ export class AmbienceScopesView extends LitElement {
         this._store.error = (err as Error).message || String(err);
       }
     };
-    if (customElements.get("ha-switch")) {
-      return html`<ha-switch
-        class="scope-switch"
-        data-test="scope-switch"
-        .checked=${live(enabled)}
-        @click=${stop}
-        @change=${onChange}
-      ></ha-switch>`;
-    }
-    return html`<input
-      class="scope-switch"
-      data-test="scope-switch"
-      type="checkbox"
-      .checked=${live(enabled)}
-      @click=${stop}
-      @change=${onChange}
-    />`;
+    return renderHaSwitch({
+      checked: enabled,
+      dataTest: "scope-switch",
+      onChange,
+      className: "scope-switch",
+      onClick: stop,
+    });
   }
 }

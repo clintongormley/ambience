@@ -65,9 +65,9 @@ export class AmbienceSettingsView extends LitElement {
 
   @property({ attribute: false }) hass!: HassConnection;
   /** Optional initial tab (set by the modal when deep-linked from a banner).
-   *  Absent → defaults to "ambience". */
+   *  Absent → defaults to "categories". */
   @property({ attribute: false }) initialTab?: Tab;
-  @state() private _tab: Tab = "ambience";
+  @state() private _tab: Tab = "categories";
 
   protected override willUpdate(changed: Map<string, unknown>) {
     // Seed the active tab from `initialTab` when supplied. The modal recreates
@@ -79,11 +79,6 @@ export class AmbienceSettingsView extends LitElement {
   override render() {
     return html`
       <nav>
-        <button class=${this._tab === "ambience" ? "active" : ""} @click=${() => {
-          this._tab = "ambience";
-        }}>
-          <ha-icon icon="mdi:home-lightbulb"></ha-icon>${localize(this.hass, "ui.settings_tab_ambience", "Ambience")}
-        </button>
         <button class=${this._tab === "categories" ? "active" : ""} @click=${() => {
           this._tab = "categories";
         }}>
@@ -99,16 +94,21 @@ export class AmbienceSettingsView extends LitElement {
         }}>
           <ha-icon icon="mdi:flash"></ha-icon>${localize(this.hass, "ui.settings_tab_actions", "Actions")}
         </button>
+        <button class=${this._tab === "ambience" ? "active" : ""} @click=${() => {
+          this._tab = "ambience";
+        }}>
+          <ha-icon icon="mdi:home-lightbulb"></ha-icon>${localize(this.hass, "ui.settings_tab_ambience", "Advanced")}
+        </button>
       </nav>
       <div class="content">
         ${
-          this._tab === "ambience"
-            ? html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
-            : this._tab === "categories"
-              ? html`<ambience-categories-settings .hass=${this.hass}></ambience-categories-settings>`
-              : this._tab === "conditions"
-                ? html`<ambience-conditions-settings .hass=${this.hass}></ambience-conditions-settings>`
-                : html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`
+          this._tab === "categories"
+            ? html`<ambience-categories-settings .hass=${this.hass}></ambience-categories-settings>`
+            : this._tab === "conditions"
+              ? html`<ambience-conditions-settings .hass=${this.hass}></ambience-conditions-settings>`
+              : this._tab === "actions"
+                ? html`<ambience-actions-settings .hass=${this.hass}></ambience-actions-settings>`
+                : html`<ambience-ambience-settings .hass=${this.hass}></ambience-ambience-settings>`
         }
       </div>
     `;

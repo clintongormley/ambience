@@ -234,4 +234,9 @@ describe("ambience-categories-settings", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".modal")).toBeFalsy();
   });
+
+  test("renders a help tooltip trigger", async () => {
+    el = await mount();
+    expect(el.shadowRoot.querySelector("ambience-help")).not.toBeNull();
+  });
 });

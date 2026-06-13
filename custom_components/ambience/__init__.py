@@ -22,7 +22,10 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-from homeassistant.helpers.service import async_register_admin_service
+from homeassistant.helpers.service import (
+    async_register_admin_service,
+    async_set_service_schema,
+)
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
@@ -42,12 +45,10 @@ from .conditions.time_of_day import TimeOfDayCondition
 from .conditions.weather import WeatherCondition
 from .config_health_issues import reconcile_issues
 from .const import (
-    CONF_CREATE_SWITCHES,
     CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
     DATA_CARD_RESOURCE_URL,
     DATA_CONDITIONS,
-    DATA_CREATE_SWITCHES,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_EXPOSED_ASSISTANTS,
@@ -59,7 +60,6 @@ from .const import (
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
     DATA_TRACE_SINKS,
-    DEFAULT_CREATE_SWITCHES,
     DEFAULT_EXPOSED_ASSISTANTS,
     DEFAULT_SHOW_SIDEBAR_PANEL,
     DOMAIN,
@@ -73,6 +73,7 @@ from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .service import (
     async_apply_scene_service,
+    build_apply_scene_schema,
     clear_last_applied,
 )
 from .store import AmbienceStore
@@ -93,11 +94,8 @@ _CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
 
 _APPLY_SCENE_SCHEMA = vol.Schema(
     {
-        vol.Optional("areas"): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional("floors"): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional("house"): cv.boolean,
+        vol.Optional("scope"): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional("category"): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional("scene"): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional("force"): cv.boolean,
     }
 )
@@ -177,13 +175,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         schema=_APPLY_SCENE_SCHEMA,
     )
 
+    # Called directly at setup, by the SIGNAL_CONFIG_CHANGED dispatcher, and by the
+    # area/floor registry-event listeners — *_args absorbs each source's differing arguments.
+    @callback
+    def _refresh_apply_scene_schema(*_args: object) -> None:
+        async_set_service_schema(hass, DOMAIN, "apply_scene", build_apply_scene_schema(hass))
+
+    _refresh_apply_scene_schema()
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _refresh_apply_scene_schema)
+    )
+    entry.async_on_unload(
+        hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _refresh_apply_scene_schema)
+    )
+    entry.async_on_unload(
+        hass.bus.async_listen(fr.EVENT_FLOOR_REGISTRY_UPDATED, _refresh_apply_scene_schema)
+    )
+
     async_register_commands(hass)
 
     domain_data[DATA_EXPOSED_ASSISTANTS] = entry.options.get(
         CONF_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS
-    )
-    domain_data[DATA_CREATE_SWITCHES] = entry.options.get(
-        CONF_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
@@ -197,7 +209,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
             area = area_reg.async_get_area(area_id)
             if (
-                domain_data.get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES)
+                store.get_switch_defaults()["create_switches"]
                 and add_entities is not None
                 and area is not None
             ):
@@ -235,7 +247,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
             floor = floor_reg.async_get_floor(floor_id)
             if (
-                domain_data.get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES)
+                store.get_switch_defaults()["create_switches"]
                 and add_entities is not None
                 and floor is not None
             ):

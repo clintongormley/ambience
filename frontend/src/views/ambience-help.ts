@@ -70,21 +70,25 @@ export class AmbienceHelp extends LitElement {
 
   private _openPopover(): void {
     this._open = true;
-    document.addEventListener("click", this._onDocClick);
+    // Capture phase: the panel lives inside a modal whose `.modal` stops click
+    // propagation in the bubble phase, so a bubble-phase document listener never
+    // sees clicks elsewhere in the modal. Capturing fires before that
+    // stopPropagation, so click-outside-to-dismiss works inside the modal too.
+    document.addEventListener("click", this._onDocClick, true);
     document.addEventListener("keydown", this._onKeydown);
   }
 
   private _close(): void {
     if (!this._open) return;
     this._open = false;
-    document.removeEventListener("click", this._onDocClick);
+    document.removeEventListener("click", this._onDocClick, true);
     document.removeEventListener("keydown", this._onKeydown);
     (this.renderRoot.querySelector(".trigger") as HTMLElement | null)?.focus();
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
-    document.removeEventListener("click", this._onDocClick);
+    document.removeEventListener("click", this._onDocClick, true);
     document.removeEventListener("keydown", this._onKeydown);
   }
 

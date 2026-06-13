@@ -3303,7 +3303,7 @@ var $o=Object.defineProperty;var ko=Object.getOwnPropertyDescriptor;var c=(t,n,e
         padding: 0.5rem 1rem 1rem 1rem;
         border-top: 1px solid var(--divider-color, #e0e0e0);
       }
-    `],c([m({attribute:!1})],Q.prototype,"hass",2),c([g()],Q.prototype,"_expanded",2),c([g()],Q.prototype,"_conditionsHintDismissed",2),c([g()],Q.prototype,"_editing",2),c([g()],Q.prototype,"_sceneEditorError",2),c([g()],Q.prototype,"_viewingTraces",2),c([g()],Q.prototype,"_viewingSimulator",2),c([g()],Q.prototype,"_autoTriggers",2),c([m({attribute:!1})],Q.prototype,"filterCategory",2),Q=c([w("ambience-scopes-view")],Q);var et=class extends b{constructor(){super(...arguments);this.text="";this._open=!1;this._onDocClick=e=>{e.composedPath().includes(this)||this._close()};this._onKeydown=e=>{e.key==="Escape"&&this._close()}}_toggle(e){e.stopPropagation(),this._open?this._close():this._openPopover()}_openPopover(){this._open=!0,document.addEventListener("click",this._onDocClick),document.addEventListener("keydown",this._onKeydown)}_close(){this._open&&(this._open=!1,document.removeEventListener("click",this._onDocClick),document.removeEventListener("keydown",this._onKeydown),this.renderRoot.querySelector(".trigger")?.focus())}disconnectedCallback(){super.disconnectedCallback(),document.removeEventListener("click",this._onDocClick),document.removeEventListener("keydown",this._onKeydown)}render(){return l`
+    `],c([m({attribute:!1})],Q.prototype,"hass",2),c([g()],Q.prototype,"_expanded",2),c([g()],Q.prototype,"_conditionsHintDismissed",2),c([g()],Q.prototype,"_editing",2),c([g()],Q.prototype,"_sceneEditorError",2),c([g()],Q.prototype,"_viewingTraces",2),c([g()],Q.prototype,"_viewingSimulator",2),c([g()],Q.prototype,"_autoTriggers",2),c([m({attribute:!1})],Q.prototype,"filterCategory",2),Q=c([w("ambience-scopes-view")],Q);var et=class extends b{constructor(){super(...arguments);this.text="";this._open=!1;this._onDocClick=e=>{e.composedPath().includes(this)||this._close()};this._onKeydown=e=>{e.key==="Escape"&&this._close()}}_toggle(e){e.stopPropagation(),this._open?this._close():this._openPopover()}_openPopover(){this._open=!0,document.addEventListener("click",this._onDocClick,!0),document.addEventListener("keydown",this._onKeydown)}_close(){this._open&&(this._open=!1,document.removeEventListener("click",this._onDocClick,!0),document.removeEventListener("keydown",this._onKeydown),this.renderRoot.querySelector(".trigger")?.focus())}disconnectedCallback(){super.disconnectedCallback(),document.removeEventListener("click",this._onDocClick,!0),document.removeEventListener("keydown",this._onKeydown)}render(){return l`
       <button
         class="trigger"
         data-test="help-trigger"
@@ -3471,7 +3471,8 @@ var $o=Object.defineProperty;var ko=Object.getOwnPropertyDescriptor;var c=(t,n,e
       align-items: center;
       gap: 0.25rem;
       font-weight: 600;
-      flex: 1 1 auto;
+      /* Label column is a fixed half-width so the fields beside it line up. */
+      flex: 0 0 50%;
     }
     .toggle-row {
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
@@ -3490,7 +3491,9 @@ var $o=Object.defineProperty;var ko=Object.getOwnPropertyDescriptor;var c=(t,n,e
       color: var(--primary-text-color, inherit);
     }
     input[type="text"] {
-      width: 100%;
+      /* Fill the remaining half beside the 50% label, on the same line. */
+      flex: 1 1 auto;
+      min-width: 0;
       box-sizing: border-box;
     }
     input[type="number"] {

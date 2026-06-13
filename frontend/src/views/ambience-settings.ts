@@ -38,7 +38,8 @@ export class AmbienceAmbienceSettings extends LitElement {
       align-items: center;
       gap: 0.25rem;
       font-weight: 600;
-      flex: 1 1 auto;
+      /* Label column is a fixed half-width so the fields beside it line up. */
+      flex: 0 0 50%;
     }
     .toggle-row {
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
@@ -57,7 +58,9 @@ export class AmbienceAmbienceSettings extends LitElement {
       color: var(--primary-text-color, inherit);
     }
     input[type="text"] {
-      width: 100%;
+      /* Fill the remaining half beside the 50% label, on the same line. */
+      flex: 1 1 auto;
+      min-width: 0;
       box-sizing: border-box;
     }
     input[type="number"] {

@@ -41,4 +41,27 @@ describe("ambience-help", () => {
     await el.updateComplete;
     expect(el.shadowRoot.querySelector('[data-test="help-popover"]')).toBeNull();
   });
+
+  it("closes on outside click even inside a container that stops click propagation", async () => {
+    // The settings panel lives inside a modal whose `.modal` stops click
+    // propagation in the bubble phase. A capture-phase document listener must
+    // still see the click so the popover dismisses. This reproduces that.
+    document.body.innerHTML = "";
+    const modal = document.createElement("div");
+    modal.addEventListener("click", (e) => e.stopPropagation());
+    const el = document.createElement("ambience-help") as any;
+    el.text = "Helpful explanation";
+    const elsewhere = document.createElement("button");
+    modal.append(el, elsewhere);
+    document.body.appendChild(modal);
+    await el.updateComplete;
+
+    el.shadowRoot.querySelector('[data-test="help-trigger"]').click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-test="help-popover"]')).not.toBeNull();
+
+    elsewhere.click(); // bubble is stopped at `modal`, but capture still reaches document
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector('[data-test="help-popover"]')).toBeNull();
+  });
 });

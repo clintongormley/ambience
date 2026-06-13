@@ -20,7 +20,7 @@ async def test_switch_defaults_empty_load(hass: HomeAssistant) -> None:
     await store.async_load()
     assert store.get_switch_defaults() == {
         "name": "Ambience",
-        "auto_on_delay_seconds": 7200,
+        "auto_on_delay_seconds": 0,
     }
 
 
@@ -68,7 +68,7 @@ async def test_legacy_load_backfills_switch_defaults(hass: HomeAssistant) -> Non
     )
     store = AmbienceStore(hass)
     await store.async_load()
-    assert store.get_switch_defaults() == {"name": "Ambience", "auto_on_delay_seconds": 7200}
+    assert store.get_switch_defaults() == {"name": "Ambience", "auto_on_delay_seconds": 0}
 
 
 # --- off_at ------------------------------------------------------------------
@@ -115,7 +115,7 @@ async def test_off_at_ignores_legacy_name_and_delay(hass: HomeAssistant) -> None
     )
     assert store.get_scope_switch_off_at("area", "a1") == "ts"
     # The defaults are untouched by the legacy override.
-    assert store.get_switch_defaults() == {"name": "Ambience", "auto_on_delay_seconds": 7200}
+    assert store.get_switch_defaults() == {"name": "Ambience", "auto_on_delay_seconds": 0}
 
 
 async def test_save_scenes_preserves_off_at(hass: HomeAssistant) -> None:

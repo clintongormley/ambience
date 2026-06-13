@@ -27,7 +27,7 @@ from .const import (
 # Re-assert each unit's scene after this many seconds of no dispatch; off by
 # default; interval pre-filled at 90 min; the floor rejects nonsensical values.
 DEFAULT_REAPPLY_ENABLED = False
-DEFAULT_REAPPLY_INTERVAL_SECONDS = 5400
+DEFAULT_REAPPLY_INTERVAL_SECONDS = 3600
 MIN_REAPPLY_INTERVAL_SECONDS = 60
 
 _LOGGER = logging.getLogger(__name__)

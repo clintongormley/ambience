@@ -62,7 +62,7 @@ SIGNAL_REAPPLY_CONFIG_UPDATED = "ambience_reapply_config_updated"
 
 # Defaults
 DEFAULT_SWITCH_NAME = "Ambience"
-DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 7200  # 2h; 0 = never auto-on
+DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 0  # 0 = never auto-resume
 
 # The category seeded on a fresh install. It is an ordinary category (renameable,
 # deletable when it is not the last category) — these are only its initial values.

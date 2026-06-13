@@ -63,6 +63,7 @@ def _all_descendants(ids: dict[str, Any]) -> tuple[tuple[str, str], ...]:
 async def test_house_off_cascades_all_switches_off(hass, mock_config_entry, fixed_utcnow):
     ids = await _setup_hierarchy(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 7200})
 
     await _switch(hass, "house", None).async_turn_off()
     await hass.async_block_till_done()
@@ -129,6 +130,7 @@ async def test_cascade_off_preserves_already_off_child_off_at(
 ):
     ids = await _setup_hierarchy(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 7200})
 
     # Turn the bedroom off individually at T0.
     await _switch(hass, "area", ids["bedroom"]).async_turn_off()

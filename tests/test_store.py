@@ -586,7 +586,7 @@ async def test_save_condition_config_signal_is_global(hass: HomeAssistant) -> No
 async def test_reapply_settings_default_off(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    assert store.get_reapply_settings() == {"enabled": False, "interval_seconds": 5400}
+    assert store.get_reapply_settings() == {"enabled": False, "interval_seconds": 3600}
 
 
 async def test_save_and_get_reapply_settings(hass: HomeAssistant) -> None:
@@ -615,4 +615,16 @@ async def test_ensure_reapply_settings_backfills_legacy_store(hass: HomeAssistan
     await store.async_load()
     del store._data["reapply"]  # simulate a store saved before this key existed
     store._ensure_reapply_settings()
-    assert store.get_reapply_settings() == {"enabled": False, "interval_seconds": 5400}
+    assert store.get_reapply_settings() == {"enabled": False, "interval_seconds": 3600}
+
+
+async def test_switch_defaults_default_pause_is_zero(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.get_switch_defaults()["auto_on_delay_seconds"] == 0
+
+
+async def test_reapply_default_interval_is_one_hour(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.get_reapply_settings()["interval_seconds"] == 3600

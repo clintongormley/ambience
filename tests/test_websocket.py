@@ -2663,7 +2663,7 @@ async def test_reapply_list_returns_defaults(
     await client.send_json({"id": 1, "type": "ambience/reapply/list"})
     msg = await client.receive_json()
     assert msg["success"]
-    assert msg["result"] == {"enabled": False, "interval_seconds": 5400}
+    assert msg["result"] == {"enabled": False, "interval_seconds": 3600}
 
 
 async def test_reapply_save_persists_and_signals(

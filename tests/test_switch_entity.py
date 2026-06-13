@@ -101,11 +101,12 @@ async def test_each_scope_gets_its_own_device(hass, mock_config_entry):
 
 async def test_turn_off_writes_off_at_and_schedules_timer(hass, mock_config_entry, fixed_utcnow):
     await _setup(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 7200})
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
     await hass.async_block_till_done()
 
-    store = hass.data[DOMAIN][DATA_STORE]
     assert ent.is_on is False
     assert store.get_scope_switch_off_at("house", None) == fixed_utcnow["now"].isoformat()
     assert ent._timer is not None
@@ -113,6 +114,8 @@ async def test_turn_off_writes_off_at_and_schedules_timer(hass, mock_config_entr
 
 async def test_turn_on_cancels_timer_and_clears_off_at(hass, mock_config_entry, fixed_utcnow):
     await _setup(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 7200})
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
     await hass.async_block_till_done()
@@ -122,7 +125,7 @@ async def test_turn_on_cancels_timer_and_clears_off_at(hass, mock_config_entry, 
     assert ent.is_on is True
     assert ent._timer is None
     assert timer.cancelled()
-    assert hass.data[DOMAIN][DATA_STORE].get_scope_switch_off_at("house", None) is None
+    assert store.get_scope_switch_off_at("house", None) is None
 
 
 async def test_zero_delay_disables_timer(hass, mock_config_entry, fixed_utcnow):
@@ -258,6 +261,8 @@ async def test_user_device_rename_is_preserved(hass, mock_config_entry):
 
 async def test_unload_cancels_pending_timers(hass, mock_config_entry, fixed_utcnow):
     await _setup(hass, mock_config_entry)
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_switch_defaults({"name": "Ambience", "auto_on_delay_seconds": 7200})
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
     await hass.async_block_till_done()
@@ -436,7 +441,7 @@ async def test_switch_exposes_off_at_and_delay(hass, mock_config_entry, fixed_ut
     await hass.async_block_till_done()
     attrs = house.extra_state_attributes
     assert attrs["off_at"] is not None
-    assert attrs["auto_on_delay_seconds"] == 7200
+    assert attrs["auto_on_delay_seconds"] == 0
 
     # After turning on, off_at is cleared.
     await house.async_turn_on()

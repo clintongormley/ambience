@@ -48,7 +48,11 @@ async def _ws_send(hass_ws_client, **payload: Any) -> dict:
 async def test_switch_defaults_list(hass, installed, hass_ws_client):
     resp = await _ws_send(hass_ws_client, type="ambience/switch_defaults/list")
     assert resp["success"]
-    assert resp["result"] == {"name": "Ambience", "auto_on_delay_seconds": 0}
+    assert resp["result"] == {
+        "name": "Ambience",
+        "auto_on_delay_seconds": 0,
+        "create_switches": False,
+    }
 
 
 async def test_switch_defaults_save_fires_None(hass, installed, hass_ws_client):
@@ -60,11 +64,13 @@ async def test_switch_defaults_save_fires_None(hass, installed, hass_ws_client):
             type="ambience/switch_defaults/save",
             name="Master",
             auto_on_delay_seconds=600,
+            create_switches=False,
         )
         assert resp["success"]
         assert hass.data[DOMAIN][DATA_STORE].get_switch_defaults() == {
             "name": "Master",
             "auto_on_delay_seconds": 600,
+            "create_switches": False,
         }
         assert fired == [None]
     finally:
@@ -77,6 +83,7 @@ async def test_switch_defaults_save_validation_error(hass, installed, hass_ws_cl
         type="ambience/switch_defaults/save",
         name="",
         auto_on_delay_seconds=0,
+        create_switches=False,
     )
     assert not resp["success"]
     assert resp["error"]["code"] == "validation_error"

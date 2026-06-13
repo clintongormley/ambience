@@ -800,6 +800,7 @@ async def _ws_switch_defaults_list(
         vol.Required("type"): "ambience/switch_defaults/save",
         vol.Required("name"): str,
         vol.Required("auto_on_delay_seconds"): int,
+        vol.Required("create_switches"): bool,
     }
 )
 @websocket_api.async_response
@@ -811,7 +812,11 @@ async def _ws_switch_defaults_save(
     store = hass.data[DOMAIN][DATA_STORE]
     try:
         await store.async_save_switch_defaults(
-            {"name": msg["name"], "auto_on_delay_seconds": msg["auto_on_delay_seconds"]}
+            {
+                "name": msg["name"],
+                "auto_on_delay_seconds": msg["auto_on_delay_seconds"],
+                "create_switches": msg["create_switches"],
+            }
         )
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))

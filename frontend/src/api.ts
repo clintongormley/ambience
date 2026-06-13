@@ -337,11 +337,13 @@ export async function saveSwitchDefaults(
   hass: HassConnection,
   name: string,
   auto_on_delay_seconds: number,
+  create_switches: boolean,
 ): Promise<{ ok: true }> {
   return hass.callWS({
     type: "ambience/switch_defaults/save",
     name,
     auto_on_delay_seconds,
+    create_switches,
   });
 }
 

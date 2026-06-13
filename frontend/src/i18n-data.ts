@@ -59,15 +59,20 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     settings_tab_ambience: "Advanced",
     settings_tab_conditions: "Conditions",
     settings_tab_actions: "Actions",
-    settings_ambience_defaults_card: "Defaults",
+    settings_ambience_pause_card: "Scope-level pause switch",
     settings_ambience_field_name: "Switch name",
-    settings_ambience_field_delay: "Auto-on delay (seconds)",
-    settings_ambience_delay_help: "0 = never auto-on",
-    settings_reapply_card: "Re-apply",
+    settings_ambience_field_pause: "Pause for",
     settings_reapply_enable_label: "Re-apply scenes after inactivity",
-    settings_reapply_interval_label: "Inactivity timeout (minutes)",
-    settings_reapply_help:
-      "Re-send each area's scene commands after this much quiet, to recover dropped commands.",
+    settings_reapply_interval_label: "Reapply after",
+    unit_minutes: "minutes",
+    help_pause_switch:
+      "Create a switch entity per area/floor/house that pauses Ambience for that scope when turned off.",
+    help_switch_name: "The name used for the per-scope pause switch entities.",
+    help_pause_for:
+      "When a scope's switch is turned off, auto-resume after this many minutes. 0 = stays paused until turned back on.",
+    help_reapply_toggle:
+      "After this much inactivity, re-assess and re-send a scope/category's scene commands — recovers commands that were dropped (e.g. a light that didn't turn off).",
+    help_reapply_after: "Minutes of no dispatch to a scope/category before it is re-applied.",
     no_areas: "No areas found in Home Assistant.",
     not_configured: "not configured",
     scene_singular: "scene",

@@ -169,9 +169,11 @@ def _resolve_target_scopes(
 ) -> list[tuple[str, str | None]]:
     """Map the service's `scope` values to a list of (scope_kind, scope_id).
 
-    Each value is decoded by parse_scope_option; floor/area ids are validated
-    against the registries (unknown -> ServiceValidationError). A blank `scope`
-    means every scope (house + all floors + all areas).
+    Each non-blank value is decoded by parse_scope_option; floor/area ids are
+    validated against the registries (unknown -> ServiceValidationError). Blank or
+    whitespace-only entries are ignored (a stray empty chip shouldn't abort the
+    call), so an all-blank or omitted `scope` means every scope (house + all
+    floors + all areas).
 
     A blank or explicitly-typed scope may include scopes that are permanently
     disabled; the downstream apply skips disabled scopes, so resolving them here
@@ -181,6 +183,8 @@ def _resolve_target_scopes(
     floor_reg = fr.async_get(hass)
     scopes: list[tuple[str, str | None]] = []
     for value in data.get("scope", []):
+        if not value.strip():
+            continue
         kind, scope_id = parse_scope_option(value)
         if kind == "area" and area_reg.async_get_area(scope_id) is None:
             raise ServiceValidationError(f"unknown_area: {scope_id!r}")

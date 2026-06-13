@@ -58,6 +58,24 @@ async def test_resolve_blank_targets_every_scope(hass, installed):
     assert ("area", area.id) in scopes
 
 
+async def test_resolve_skips_blank_scope_entries(hass, installed):
+    # A stray empty/whitespace chip (e.g. from a template) is ignored, not an
+    # error — only the real scopes are targeted.
+    area = ar.async_get(hass).async_create("LR")
+    scopes = _resolve_target_scopes(
+        hass, {"scope": ["", "   ", scope_option_value("area", area.id)]}
+    )
+    assert scopes == [("area", area.id)]
+
+
+async def test_resolve_all_blank_scope_targets_every_scope(hass, installed):
+    # If every entry is blank the call still means "all scopes", not an error.
+    ar.async_get(hass).async_create("LR")
+    await hass.async_block_till_done()
+    scopes = _resolve_target_scopes(hass, {"scope": ["", "  "]})
+    assert ("house", None) in scopes
+
+
 async def test_resolve_unknown_area_raises(hass, installed):
     with pytest.raises(ServiceValidationError):
         _resolve_target_scopes(hass, {"scope": ["area:ghost"]})

@@ -283,7 +283,7 @@ export class AmbienceAmbienceSettings extends LitElement {
               .text=${localize(
                 this.hass,
                 "ui.help_reapply_after",
-                "Minutes of no dispatch to a scope/category before it is re-applied.",
+                "Reapply scenes that haven't been updated for this many minutes.",
               )}
             ></ambience-help>
           </label>

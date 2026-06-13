@@ -72,7 +72,7 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
       "When a scope's switch is turned off, auto-resume after this many minutes. 0 = stays paused until turned back on.",
     help_reapply_toggle:
       "Check the scenes for a scope/category after inactivity and reapply the winning scene, in case any action had previously failed, such as a light not turning off.",
-    help_reapply_after: "Minutes of no dispatch to a scope/category before it is re-applied.",
+    help_reapply_after: "Reapply scenes that haven't been updated for this many minutes.",
     help_actions_tab:
       "Actions are the service calls a scene runs. Define them here so scenes can reuse them.",
     help_show_in_scene_editor:

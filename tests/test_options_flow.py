@@ -10,6 +10,7 @@ from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
+    CONF_CREATE_SWITCHES,
     CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
     DOMAIN,
@@ -167,3 +168,35 @@ async def test_card_resource_removed_on_unload(
         await hass.async_block_till_done()
     mock_unregister.assert_called_once()
     assert "ambience-card.js" in mock_unregister.call_args.args[1]
+
+
+async def test_options_flow_exposes_create_switches_default_off(hass, mock_config_entry):
+    # The product default is OFF even though the test fixture turns switches on.
+    entry = MockConfigEntry(
+        domain=DOMAIN, title="Ambience", data={}, options={}, unique_id="ambience_default_off"
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    schema_keys = {str(k) for k in result["data_schema"].schema}
+    assert "create_switches" in schema_keys
+    defaults = {str(k): k.default() for k in result["data_schema"].schema}
+    assert defaults["create_switches"] is False
+
+
+async def test_options_flow_saves_create_switches(hass, mock_config_entry):
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    from custom_components.ambience.const import CONF_SHOW_SIDEBAR_PANEL
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_SHOW_SIDEBAR_PANEL: True, "create_switches": True}
+    )
+    await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert mock_config_entry.options[CONF_CREATE_SWITCHES] is True

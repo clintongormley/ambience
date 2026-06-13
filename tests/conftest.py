@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ambience.const import DOMAIN
+from custom_components.ambience.const import CONF_CREATE_SWITCHES, DOMAIN
 
 
 @pytest.fixture(autouse=True)
@@ -116,11 +116,16 @@ def init_frontend_extra_module_urls(hass: HomeAssistant) -> None:
 
 @pytest.fixture
 def mock_config_entry() -> MockConfigEntry:
-    """Create a mock config entry for the Ambience integration."""
+    """Mock config entry for the Ambience integration.
+
+    Switches are ON here so the large body of switch-dependent tests keeps
+    working; the product default (off) is exercised by tests that build their
+    own entry with empty options.
+    """
     return MockConfigEntry(
         domain=DOMAIN,
         title="Ambience",
         data={},
-        options={},
+        options={CONF_CREATE_SWITCHES: True},
         unique_id="ambience_unique",
     )

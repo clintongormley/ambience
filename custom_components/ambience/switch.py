@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -21,9 +22,11 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util import slugify
 
 from .const import (
+    DATA_CREATE_SWITCHES,
     DATA_STORE,
     DATA_SWITCH_ADD_ENTITIES,
     DATA_SWITCHES,
+    DEFAULT_CREATE_SWITCHES,
     DOMAIN,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
@@ -31,6 +34,10 @@ from .exposure import async_apply_switch_exposure
 from .naming import scope_device_name
 
 _LOGGER = logging.getLogger(__name__)
+
+# House switch first so its device exists before floor/area switches register their
+# via_device link to it (avoids an HA device-registry warning on fresh setup).
+_SCOPE_KIND_ORDER = {"house": 0, "floor": 1, "area": 2}
 
 
 class _CancellableTimer:
@@ -65,9 +72,9 @@ def scope_for_unique_id(unique_id: str) -> tuple[str, str | None] | None:
     """Reverse switch_unique_id: map a scope switch's unique_id back to
     (scope_kind, scope_id), or None if it isn't an Ambience scope switch.
 
-    The apply_scene service takes a scope switch entity_id; this resolves the
-    chosen entity to the scope it gates. scope_id may itself contain underscores,
-    so only the leading kind segment is split off.
+    The switch-registry reconcile maps each registered switch's unique_id back to
+    the scope it represents. scope_id may itself contain underscores, so only the
+    leading kind segment is split off.
     """
     if unique_id == "ambience_switch_house":
         return ("house", None)
@@ -95,24 +102,82 @@ def _entity_id_for(scope_kind: str, display_name: str) -> str:
     return f"switch.{slugify(display_name)}_ambience"
 
 
+def _remove_scope_device(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> None:
+    """Remove a scope's device from the device registry (no-op if absent)."""
+    dev_reg = dr.async_get(hass)
+    device = dev_reg.async_get_device(identifiers=_device_identifiers(scope_kind, scope_id))
+    if device is not None:
+        dev_reg.async_remove_device(device.id)
+
+
+def make_scope_switch(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None
+) -> AmbienceScopeSwitch:
+    """Build a switch for a scope, resolving its display name from the registry.
+    Used by the platform setup and the runtime create-on-enable path."""
+    if scope_kind == "house":
+        return AmbienceScopeSwitch("house", None, "house")
+    if scope_kind == "floor":
+        floor = fr.async_get(hass).async_get_floor(scope_id)
+        return AmbienceScopeSwitch("floor", scope_id, floor.name if floor else str(scope_id))
+    area = ar.async_get(hass).async_get_area(scope_id)
+    return AmbienceScopeSwitch("area", scope_id, area.name if area else str(scope_id))
+
+
+def _desired_switch_scopes(
+    hass: HomeAssistant, store: Any, create_switches: bool
+) -> set[tuple[str, str | None]]:
+    """Scope keys that should have a switch: empty when the toggle is off, else the
+    house plus every ENABLED floor/area."""
+    if not create_switches:
+        return set()
+    desired: set[tuple[str, str | None]] = set()
+    if store.get_scope_enabled("house", None):
+        desired.add(("house", None))
+    for floor in fr.async_get(hass).async_list_floors():
+        if store.get_scope_enabled("floor", floor.floor_id):
+            desired.add(("floor", floor.floor_id))
+    for area in ar.async_get(hass).async_list_areas():
+        if store.get_scope_enabled("area", area.id):
+            desired.add(("area", area.id))
+    return desired
+
+
+def _reconcile_switch_registry(
+    hass: HomeAssistant, entry: ConfigEntry, desired: set[tuple[str, str | None]]
+) -> None:
+    """Delete any registered Ambience scope switch (and its device) whose scope is
+    not in *desired*. Covers the toggle being off, disabled scopes, scopes removed
+    while HA was down, and legacy hidden entities from the old hide approach."""
+    registry = er.async_get(hass)
+    for ent in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if ent.domain != "switch" or ent.platform != DOMAIN:
+            continue
+        scope = scope_for_unique_id(ent.unique_id)
+        if scope is None or scope in desired:
+            continue
+        registry.async_remove(ent.entity_id)
+        _remove_scope_device(hass, scope[0], scope[1])
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create the house switch + one switch per HA area + one per HA floor."""
-    # Stashed for use by the registry create-event handlers in __init__.py.
+    """Create a switch for each enabled scope when create_switches is on; reconcile
+    the entity registry to match (deleting any switch that should not exist)."""
     hass.data[DOMAIN][DATA_SWITCH_ADD_ENTITIES] = async_add_entities
     hass.data[DOMAIN].setdefault(DATA_SWITCHES, {})
 
-    entities: list[AmbienceScopeSwitch] = [AmbienceScopeSwitch("house", None, "house")]
-    floor_reg = fr.async_get(hass)
-    for floor in floor_reg.async_list_floors():
-        entities.append(AmbienceScopeSwitch("floor", floor.floor_id, floor.name))
-    area_reg = ar.async_get(hass)
-    for area in area_reg.async_list_areas():
-        entities.append(AmbienceScopeSwitch("area", area.id, area.name))
-    async_add_entities(entities)
+    store = hass.data[DOMAIN][DATA_STORE]
+    create_switches = hass.data[DOMAIN].get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES)
+    desired = _desired_switch_scopes(hass, store, create_switches)
+
+    if desired:
+        ordered = sorted(desired, key=lambda s: _SCOPE_KIND_ORDER.get(s[0], 3))
+        async_add_entities([make_scope_switch(hass, kind, sid) for (kind, sid) in ordered])
+    _reconcile_switch_registry(hass, entry, desired)
 
 
 class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):

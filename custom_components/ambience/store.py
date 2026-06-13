@@ -357,6 +357,7 @@ class AmbienceStore:
         container = self._scope_container(scope_kind, scope_id)
         container["enabled"] = bool(enabled)
         await self._store.async_save(self._data)
+        self._notify_config_changed((scope_kind, scope_id))
 
     def scope_config(self, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
         """Read-only per-scope config dict ({} if absent). Does not create."""

@@ -23,11 +23,6 @@ from custom_components.ambience.const import (
 from custom_components.ambience.service import async_resolve_only
 
 
-def _house_scope(hass: HomeAssistant) -> str:
-    """entity_id of the always-present house scope switch."""
-    return hass.data[DOMAIN][DATA_SWITCHES][("house", None)].entity_id
-
-
 async def _make_area_scope(hass: HomeAssistant, name: str = "E2E Room") -> tuple[str, str]:
     """Create a real HA area (which spawns its scope switch via the registry
     listener) and return (area_id, scope_switch_entity_id)."""
@@ -79,7 +74,7 @@ async def test_service_call_invokes_light_turn_on(
             }
         ]
     )
-    area_id, scope = await _make_area_scope(hass)
+    area_id, _ = await _make_area_scope(hass)
     await store.async_save_area(
         area_id,
         {
@@ -106,7 +101,7 @@ async def test_service_call_invokes_light_turn_on(
     await hass.services.async_call(
         DOMAIN,
         "apply_scene",
-        {"scope": scope},
+        {"areas": [area_id]},
         blocking=True,
     )
 
@@ -207,47 +202,29 @@ async def test_time_of_day_scene_matches_for_area_without_conditions_field(
     assert result["scene_name"] == "all-day"
 
 
-async def test_apply_scene_accepts_scope_switch(
+async def test_apply_scene_house_target_is_clean_noop(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """A scope switch entity_id is a valid scope; applying it resolves and runs
-    (no scenes configured ⇒ a clean no-op)."""
-    await hass.services.async_call(
-        DOMAIN, "apply_scene", {"scope": _house_scope(hass)}, blocking=True
-    )
+    """Calling with house=True resolves and runs (no scenes configured ⇒ a clean no-op)."""
+    await hass.services.async_call(DOMAIN, "apply_scene", {"house": True}, blocking=True)
 
 
-async def test_apply_scene_rejects_unknown_scope_entity(
+async def test_apply_scene_rejects_unknown_area(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """A well-formed entity_id that isn't an Ambience scope switch is rejected."""
     from homeassistant.exceptions import ServiceValidationError
 
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
-            DOMAIN, "apply_scene", {"scope": "switch.not_ambience"}, blocking=True
+            DOMAIN, "apply_scene", {"areas": ["ghost_area"]}, blocking=True
         )
 
 
-async def test_apply_scene_rejects_missing_scope(
+async def test_apply_scene_empty_targets_all_scopes_noop(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    import voluptuous as vol
-
-    with pytest.raises(vol.Invalid):
-        await hass.services.async_call(DOMAIN, "apply_scene", {}, blocking=True)
-
-
-async def test_apply_scene_rejects_scene_without_category(
-    hass: HomeAssistant, installed: MockConfigEntry
-) -> None:
-    """A `scene` name requires a `category`; supplying it alone must be rejected."""
-    import voluptuous as vol
-
-    with pytest.raises(vol.Invalid):
-        await hass.services.async_call(
-            DOMAIN, "apply_scene", {"scope": _house_scope(hass), "scene": "movie"}, blocking=True
-        )
+    # No target and no configured scenes => clean no-op across every scope.
+    await hass.services.async_call(DOMAIN, "apply_scene", {}, blocking=True)
 
 
 async def test_apply_scene_rejects_non_admin_user(
@@ -261,7 +238,7 @@ async def test_apply_scene_rejects_non_admin_user(
         await hass.services.async_call(
             DOMAIN,
             "apply_scene",
-            {"scope": _house_scope(hass)},
+            {"house": True},
             blocking=True,
             context=Context(user_id=hass_read_only_user.id),
         )
@@ -276,7 +253,7 @@ async def test_apply_scene_allows_admin_user(
     await hass.services.async_call(
         DOMAIN,
         "apply_scene",
-        {"scope": _house_scope(hass)},
+        {"house": True},
         blocking=True,
         context=Context(user_id=hass_admin_user.id),
     )
@@ -399,7 +376,7 @@ async def test_service_call_named_scene_runs_actions_bypassing_predicates(
     await exposed_store.save(
         [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
     )
-    area_id, scope = await _make_area_scope(hass)
+    area_id, _ = await _make_area_scope(hass)
     await store.async_save_area(
         area_id,
         {
@@ -427,7 +404,7 @@ async def test_service_call_named_scene_runs_actions_bypassing_predicates(
     await hass.services.async_call(
         DOMAIN,
         "apply_scene",
-        {"scope": scope, "category": "lighting", "scene": "Bright"},
+        {"areas": [area_id], "scene": ["Bright"]},
         blocking=True,
     )
 
@@ -445,7 +422,7 @@ async def test_service_call_category_limits_to_one_category(
             {"id": "cover.open_cover", "label": "", "visible_fields": [], "defaults": {}},
         ]
     )
-    area_id, scope = await _make_area_scope(hass)
+    area_id, _ = await _make_area_scope(hass)
     await store.async_save_area(
         area_id,
         {
@@ -473,9 +450,88 @@ async def test_service_call_category_limits_to_one_category(
     await hass.services.async_call(
         DOMAIN,
         "apply_scene",
-        {"scope": scope, "category": "lighting"},
+        {"areas": [area_id], "category": ["lighting"]},
         blocking=True,
     )
 
     assert len(light_calls) == 1
     assert len(cover_calls) == 0
+
+
+async def test_apply_scene_multi_scope_and_named_scene(hass, installed):
+    store = hass.data[DOMAIN][DATA_STORE]
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    a1, _ = await _make_area_scope(hass, "Room A")
+    a2, _ = await _make_area_scope(hass, "Room B")
+    for aid in (a1, a2):
+        await store.async_save_area(
+            aid,
+            {
+                "scenes": [
+                    {
+                        "name": "Movie",
+                        "category": "lighting",
+                        "when": {
+                            "state": {
+                                "kind": "is",
+                                "entity_id": "binary_sensor.nope",
+                                "states": ["on"],
+                            }
+                        },
+                        "actions": [
+                            {"service": "light.turn_on", "entity_ids": ["light.l"], "params": {}}
+                        ],
+                    },
+                ]
+            },
+        )
+    calls = async_mock_service(hass, "light", "turn_on")
+
+    await hass.services.async_call(
+        DOMAIN, "apply_scene", {"areas": [a1, a2], "scene": ["Movie"]}, blocking=True
+    )
+    # Named scene bypasses the never-true predicate, applied once per targeted scope.
+    assert len(calls) == 2
+
+
+async def test_apply_scene_ambiguous_named_scene_raises_before_applying(hass, installed):
+    from homeassistant.exceptions import ServiceValidationError
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    await exposed_store.save(
+        [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}]
+    )
+    aid, _ = await _make_area_scope(hass, "Ambi Room")
+    await store.async_save_area(
+        aid,
+        {
+            "scenes": [
+                {
+                    "name": "Movie",
+                    "category": "lighting",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.l"], "params": {}}
+                    ],
+                },
+                {
+                    "name": "Movie",
+                    "category": "blinds",
+                    "when": {},
+                    "actions": [
+                        {"service": "light.turn_on", "entity_ids": ["light.l"], "params": {}}
+                    ],
+                },
+            ]
+        },
+    )
+    calls = async_mock_service(hass, "light", "turn_on")
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "apply_scene", {"areas": [aid], "scene": ["Movie"]}, blocking=True
+        )
+    assert len(calls) == 0  # nothing applied before the abort

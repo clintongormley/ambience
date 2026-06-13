@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+from functools import partial
 from pathlib import Path
 
 import voluptuous as vol
@@ -15,11 +16,9 @@ from homeassistant.components.frontend import (
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
@@ -43,10 +42,12 @@ from .conditions.time_of_day import TimeOfDayCondition
 from .conditions.weather import WeatherCondition
 from .config_health_issues import reconcile_issues
 from .const import (
+    CONF_CREATE_SWITCHES,
     CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
     DATA_CARD_RESOURCE_URL,
     DATA_CONDITIONS,
+    DATA_CREATE_SWITCHES,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
     DATA_EXPOSED_ASSISTANTS,
@@ -58,6 +59,7 @@ from .const import (
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
     DATA_TRACE_SINKS,
+    DEFAULT_CREATE_SWITCHES,
     DEFAULT_EXPOSED_ASSISTANTS,
     DEFAULT_SHOW_SIDEBAR_PANEL,
     DOMAIN,
@@ -67,9 +69,12 @@ from .const import (
 from .exposed_actions import ExposedActionsStore
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
-from .service import async_apply_named_scene, async_apply_scene, clear_last_applied
+from .service import (
+    async_apply_scene_service,
+    clear_last_applied,
+)
 from .store import AmbienceStore
-from .switch import scope_for_unique_id
+from .switch import _remove_scope_device
 from .trace import BufferSink, LogSink
 from .trigger_engine import AutoTriggerEngine
 from .websocket import async_register_commands, async_unregister_commands
@@ -84,25 +89,15 @@ _PANEL_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-panel.js"
 _CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
 
 
-def _scene_requires_category(value: dict) -> dict:
-    """Validator: a `scene` name may only be given together with a `category`."""
-    if "scene" in value and "category" not in value:
-        raise vol.Invalid("apply_scene: 'scene' requires 'category'")
-    return value
-
-
-_APPLY_SCENE_SCHEMA = vol.All(
-    vol.Schema(
-        {
-            # The scope is chosen by its switch entity (house/floor/area each have
-            # one); the handler resolves it back to (scope_kind, scope_id).
-            vol.Required("scope"): cv.entity_id,
-            vol.Optional("category"): cv.string,
-            vol.Optional("scene"): cv.string,
-            vol.Optional("force"): cv.boolean,
-        }
-    ),
-    _scene_requires_category,
+_APPLY_SCENE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("areas"): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional("floors"): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional("house"): cv.boolean,
+        vol.Optional("category"): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional("scene"): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional("force"): cv.boolean,
+    }
 )
 
 
@@ -112,16 +107,6 @@ def _hash_bundle(bundle_path: Path) -> str:
         return hashlib.sha256(bundle_path.read_bytes()).hexdigest()[:12]
     except OSError:
         return "missing"
-
-
-def _remove_scope_device(hass: HomeAssistant, scope_kind: str, scope_id: str) -> None:
-    """Remove a floor/area scope's sub-device from the device registry."""
-    from .switch import _device_identifiers
-
-    dev_reg = dr.async_get(hass)
-    device = dev_reg.async_get_device(identifiers=_device_identifiers(scope_kind, scope_id))
-    if device is not None:
-        dev_reg.async_remove_device(device.id)
 
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
@@ -180,36 +165,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "template": TemplateCondition(hass=hass),
     }
 
-    async def _handle_apply_scene(call: ServiceCall) -> None:
-        scope_entity_id = call.data["scope"]
-        reg_entry = er.async_get(hass).async_get(scope_entity_id)
-        scope = (
-            scope_for_unique_id(reg_entry.unique_id)
-            if reg_entry is not None and reg_entry.platform == DOMAIN
-            else None
-        )
-        if scope is None:
-            raise ServiceValidationError(f"{scope_entity_id!r} is not an Ambience scope switch")
-        scope_kind, scope_id = scope
-        category = call.data.get("category")
-        scene = call.data.get("scene")
-        force = call.data.get("force", False)
-        if scene is not None:
-            # Schema (_scene_requires_category) guarantees category is present here,
-            # so index call.data directly to keep the category argument non-optional.
-            await async_apply_named_scene(
-                hass, scope_kind, scope_id, call.data["category"], scene, force=force
-            )
-        else:
-            await async_apply_scene(hass, scope_kind, scope_id, category=category, force=force)
-
     # Admin-only: applying a scene dispatches real device service calls, so it must
     # not be reachable by non-admin users (HA services are not admin-gated by default).
     async_register_admin_service(
         hass,
         DOMAIN,
         "apply_scene",
-        _handle_apply_scene,
+        partial(async_apply_scene_service, hass),
         schema=_APPLY_SCENE_SCHEMA,
     )
 
@@ -218,6 +180,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data[DATA_EXPOSED_ASSISTANTS] = entry.options.get(
         CONF_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS
     )
+    domain_data[DATA_CREATE_SWITCHES] = entry.options.get(
+        CONF_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
 
@@ -225,12 +190,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         action = event.data["action"]
         area_id = event.data["area_id"]
         if action == "create":
-            from .switch import AmbienceScopeSwitch
+            from .switch import make_scope_switch
 
             add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
             area = area_reg.async_get_area(area_id)
-            if add_entities is not None and area is not None:
-                add_entities([AmbienceScopeSwitch("area", area_id, area.name)])
+            if (
+                domain_data.get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES)
+                and add_entities is not None
+                and area is not None
+            ):
+                add_entities([make_scope_switch(hass, "area", area_id)])
             return
         if action == "update":
             # An area rename must refresh the scope device names. The global
@@ -259,12 +228,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         action = event.data["action"]
         floor_id = event.data["floor_id"]
         if action == "create":
-            from .switch import AmbienceScopeSwitch
+            from .switch import make_scope_switch
 
             add_entities = domain_data.get(DATA_SWITCH_ADD_ENTITIES)
             floor = floor_reg.async_get_floor(floor_id)
-            if add_entities is not None and floor is not None:
-                add_entities([AmbienceScopeSwitch("floor", floor_id, floor.name)])
+            if (
+                domain_data.get(DATA_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES)
+                and add_entities is not None
+                and floor is not None
+            ):
+                add_entities([make_scope_switch(hass, "floor", floor_id)])
             return
         if action == "update":
             # A floor rename must refresh the scope device names. The global

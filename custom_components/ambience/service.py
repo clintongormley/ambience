@@ -12,8 +12,10 @@ from collections.abc import Iterable
 from dataclasses import replace
 from typing import Any
 
-from homeassistant.core import Context, HomeAssistant
+from homeassistant.core import Context, HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import floor_registry as fr
 
 from .const import (
     DATA_APPLY_LOCKS,
@@ -71,6 +73,110 @@ def category_ids(cfg: dict[str, Any]) -> list[str]:
     return list(
         dict.fromkeys(r["category"] for r in cfg.get("scenes", []) if r.get("category") is not None)
     )
+
+
+def _resolve_target_scopes(
+    hass: HomeAssistant, data: dict[str, Any]
+) -> list[tuple[str, str | None]]:
+    """Map the service's targeting fields to a list of (scope_kind, scope_id).
+
+    Validates area/floor ids against the registries (unknown -> ServiceValidationError).
+    A blank target (no areas/floors/house) means every scope.
+    """
+    area_reg = ar.async_get(hass)
+    floor_reg = fr.async_get(hass)
+    scopes: list[tuple[str, str | None]] = []
+    for area_id in data.get("areas", []):
+        if area_reg.async_get_area(area_id) is None:
+            raise ServiceValidationError(f"unknown area: {area_id}")
+        scopes.append(("area", area_id))
+    for floor_id in data.get("floors", []):
+        if floor_reg.async_get_floor(floor_id) is None:
+            raise ServiceValidationError(f"unknown floor: {floor_id}")
+        scopes.append(("floor", floor_id))
+    if data.get("house"):
+        scopes.append(("house", None))
+    if not scopes:
+        scopes.append(("house", None))
+        scopes.extend(("floor", f.floor_id) for f in floor_reg.async_list_floors())
+        scopes.extend(("area", a.id) for a in area_reg.async_list_areas())
+    # De-dup, preserving order: repeated area/floor ids (easy to write in YAML)
+    # would otherwise apply the same scope twice — and named scenes bypass the
+    # last-applied guard, so they would dispatch their actions twice.
+    return list(dict.fromkeys(scopes))
+
+
+def _plan_named_scenes(
+    hass: HomeAssistant,
+    scopes: list[tuple[str, str | None]],
+    scenes: list[str],
+    categories: list[str] | None,
+) -> list[tuple[str, str | None, str, str]]:
+    """Resolve each (scope, scene-name) to the single category that contains it.
+
+    Returns (scope_kind, scope_id, category, scene_name) tuples. A name absent in a
+    scope is skipped; a name found in >1 eligible category raises (nothing applied).
+    `categories`, when given, narrows the eligible categories.
+    """
+    store = hass.data[DOMAIN][DATA_STORE]
+    eligible = set(categories) if categories else None
+    plan: list[tuple[str, str | None, str, str]] = []
+    for scope_kind, scope_id in scopes:
+        if not store.get_scope_enabled(scope_kind, scope_id):
+            continue
+        cfg = store.scope_config(scope_kind, scope_id)
+        for name in scenes:
+            target = name.strip().lower()
+            cats = {
+                scene["category"]
+                for scene in cfg.get("scenes", [])
+                if isinstance(scene.get("name"), str)
+                and scene["name"].strip()
+                and scene["name"].strip().lower() == target
+                and scene.get("category") is not None
+                and (eligible is None or scene["category"] in eligible)
+            }
+            if not cats:
+                _LOGGER.info(
+                    "ambience: apply_scene scene %r not found in scope %s/%s — skipping",
+                    name,
+                    scope_kind,
+                    scope_id,
+                )
+                continue
+            if len(cats) > 1:
+                raise ServiceValidationError(
+                    f"scene {name!r} exists in multiple categories {sorted(cats)} "
+                    f"in scope {scope_kind}/{scope_id}; specify `category`"
+                )
+            plan.append((scope_kind, scope_id, next(iter(cats)), name))
+    return plan
+
+
+async def async_apply_scene_service(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Service handler for ambience.apply_scene: resolve target scopes, then apply.
+
+    Targets scopes by areas/floors/house (blank = every scope). With scene names,
+    applies those named scenes directly (each resolved to its own category, validated
+    up front so an ambiguous name aborts before any apply); with categories, fans out
+    over scope x category; otherwise re-resolves every category per scope.
+    """
+    scopes = _resolve_target_scopes(hass, call.data)
+    categories = call.data.get("category")
+    scenes = call.data.get("scene")
+    force = call.data.get("force", False)
+    if scenes:
+        # Validate the whole plan first so an ambiguous name aborts before any apply.
+        plan = _plan_named_scenes(hass, scopes, scenes, categories)
+        for scope_kind, scope_id, category, name in plan:
+            await async_apply_named_scene(hass, scope_kind, scope_id, category, name, force=force)
+    elif categories:
+        for scope_kind, scope_id in scopes:
+            for category in categories:
+                await async_apply_scene(hass, scope_kind, scope_id, category=category, force=force)
+    else:
+        for scope_kind, scope_id in scopes:
+            await async_apply_scene(hass, scope_kind, scope_id, force=force)
 
 
 def apply_lock(

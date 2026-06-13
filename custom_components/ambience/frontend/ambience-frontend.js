@@ -3131,7 +3131,7 @@ var Eo=Object.defineProperty;var So=Object.getOwnPropertyDescriptor;var u=(t,n,e
     >
       <ha-icon icon="mdi:timer"></ha-icon>
       <span class="countdown">${pc(a)}</span>
-    </button>`}_renderScopeSwitch(e,r){let i=r.enabled!==!1,s=a=>a.stopPropagation(),o=async a=>{a.stopPropagation();try{await Hn(this.hass,e,!i),await this._store.reloadScope(e)}catch(c){this._store.error=c.message||String(c)}};return customElements.get("ha-switch")?l`<ha-switch
+    </button>`}_renderScopeSwitch(e,r){let i=r.enabled!==!1,s=a=>a.stopPropagation(),o=async a=>{a.stopPropagation();try{await Hn(this.hass,e,!i),await Promise.all([this._store.reloadScope(e),this._store.refreshSwitches()])}catch(c){this._store.error=c.message||String(c)}};return customElements.get("ha-switch")?l`<ha-switch
         class="scope-switch"
         data-test="scope-switch"
         .checked=${di(i)}

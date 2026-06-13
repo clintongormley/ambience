@@ -16,12 +16,14 @@
         "title": "Ambience options",
         "data": {
           "show_sidebar_panel": "Show Ambience in the sidebar",
+          "create_switches": "Create per-scope switches",
           "expose_assist": "Expose switches to Assist",
           "expose_google": "Expose switches to Google Assistant",
           "expose_alexa": "Expose switches to Alexa"
         },
         "data_description": {
           "show_sidebar_panel": "When off, Ambience is removed from the sidebar. You can still add the Ambience card to any dashboard.",
+          "create_switches": "When on, Ambience creates a switch entity (and device) for each enabled area, floor, and the house — used to pause that scope. When off, no switches are created. Disabling a scope deletes its switch.",
           "expose_assist": "Allow Home Assistant's built-in Assist voice agent to control the Ambience switches.",
           "expose_google": "Expose the Ambience switches to Google Assistant (requires Home Assistant Cloud or a manual Google Assistant setup).",
           "expose_alexa": "Expose the Ambience switches to Alexa (requires Home Assistant Cloud or a manual Alexa setup)."

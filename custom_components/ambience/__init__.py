@@ -90,9 +90,7 @@ _CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
 
 _APPLY_SCENE_SCHEMA = vol.Schema(
     {
-        vol.Optional("areas"): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional("floors"): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional("house"): cv.boolean,
+        vol.Optional("scope"): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional("category"): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional("scene"): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional("force"): cv.boolean,

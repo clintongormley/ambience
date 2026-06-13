@@ -7,26 +7,15 @@ apply_scene:
     scenes' actions directly (each resolved to the category that contains it),
     bypassing their conditions.
   fields:
-    areas:
-      name: Areas
-      description: Area scopes to apply in.
+    scope:
+      name: Scopes
+      description: >-
+        Scopes to apply in (House, a floor, or an area). Leave empty to apply at
+        every scope. Values are "house", "floor:<floor_id>", or "area:<area_id>".
       required: false
       selector:
-        area:
+        text:
           multiple: true
-    floors:
-      name: Floors
-      description: Floor scopes to apply in.
-      required: false
-      selector:
-        floor:
-          multiple: true
-    house:
-      name: House
-      description: Also apply at the house scope.
-      required: false
-      selector:
-        boolean: {}
     category:
       name: Categories
       description: Limit the apply to these scene categories (by category id).

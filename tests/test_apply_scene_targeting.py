@@ -10,7 +10,12 @@ from homeassistant.helpers import floor_registry as fr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import DATA_STORE, DOMAIN
-from custom_components.ambience.service import _plan_named_scenes, _resolve_target_scopes
+from custom_components.ambience.service import (
+    _plan_named_scenes,
+    _resolve_target_scopes,
+    parse_scope_option,
+    scope_option_value,
+)
 
 
 @pytest.fixture
@@ -21,37 +26,55 @@ async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry):
     return mock_config_entry
 
 
-async def test_resolve_explicit_scopes(hass, installed):
+def test_scope_option_value_encodes_each_kind():
+    assert scope_option_value("house", None) == "house"
+    assert scope_option_value("floor", "ground") == "floor:ground"
+    assert scope_option_value("area", "kitchen") == "area:kitchen"
+
+
+def test_parse_scope_option_round_trips_and_rejects_bad():
+    assert parse_scope_option("house") == ("house", None)
+    assert parse_scope_option("floor:ground") == ("floor", "ground")
+    assert parse_scope_option("area:kitchen") == ("area", "kitchen")
+    with pytest.raises(ServiceValidationError):
+        parse_scope_option("bogus")
+    with pytest.raises(ServiceValidationError):
+        parse_scope_option("zone:x")
+    with pytest.raises(ServiceValidationError):
+        parse_scope_option("area:")
+
+
+async def test_resolve_explicit_scopes_preserve_order(hass, installed):
+    area = ar.async_get(hass).async_create("LR")
+    scopes = _resolve_target_scopes(hass, {"scope": ["house", scope_option_value("area", area.id)]})
+    assert scopes == [("house", None), ("area", area.id)]
+
+
+async def test_resolve_blank_targets_every_scope(hass, installed):
     area = ar.async_get(hass).async_create("LR")
     floor = fr.async_get(hass).async_create("Ground")
-    scopes = _resolve_target_scopes(
-        hass, {"areas": [area.id], "floors": [floor.floor_id], "house": True}
-    )
-    assert set(scopes) == {("area", area.id), ("floor", floor.floor_id), ("house", None)}
-
-
-async def test_resolve_blank_means_all(hass, installed):
-    area = ar.async_get(hass).async_create("LR")
     await hass.async_block_till_done()
     scopes = _resolve_target_scopes(hass, {})
     assert ("house", None) in scopes
+    assert ("floor", floor.floor_id) in scopes
     assert ("area", area.id) in scopes
 
 
 async def test_resolve_unknown_area_raises(hass, installed):
     with pytest.raises(ServiceValidationError):
-        _resolve_target_scopes(hass, {"areas": ["ghost"]})
+        _resolve_target_scopes(hass, {"scope": ["area:ghost"]})
 
 
 async def test_resolve_unknown_floor_raises(hass, installed):
     with pytest.raises(ServiceValidationError):
-        _resolve_target_scopes(hass, {"floors": ["ghost"]})
+        _resolve_target_scopes(hass, {"scope": ["floor:ghost"]})
 
 
 async def test_resolve_dedups_repeated_ids(hass, installed):
     # Repeated ids (easy to write in YAML) must not apply the same scope twice.
     area = ar.async_get(hass).async_create("LR")
-    scopes = _resolve_target_scopes(hass, {"areas": [area.id, area.id]})
+    value = f"area:{area.id}"
+    scopes = _resolve_target_scopes(hass, {"scope": [value, value]})
     assert scopes == [("area", area.id)]
 
 

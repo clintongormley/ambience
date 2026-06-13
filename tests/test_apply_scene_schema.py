@@ -13,14 +13,14 @@ def test_empty_is_valid():
     assert _APPLY_SCENE_SCHEMA({}) == {}
 
 
-def test_areas_and_floors_coerced_to_lists():
-    out = _APPLY_SCENE_SCHEMA({"areas": "living_room", "floors": ["ground"]})
-    assert out["areas"] == ["living_room"]
-    assert out["floors"] == ["ground"]
+def test_scope_coerced_to_list():
+    out = _APPLY_SCENE_SCHEMA({"scope": "area:living_room"})
+    assert out["scope"] == ["area:living_room"]
 
 
-def test_house_boolean_accepted():
-    assert _APPLY_SCENE_SCHEMA({"house": True})["house"] is True
+def test_scope_multiple_accepted():
+    out = _APPLY_SCENE_SCHEMA({"scope": ["house", "floor:ground", "area:lr"]})
+    assert out["scope"] == ["house", "floor:ground", "area:lr"]
 
 
 def test_category_and_scene_multiple():
@@ -38,11 +38,11 @@ def test_scene_without_category_is_now_valid():
     assert _APPLY_SCENE_SCHEMA({"scene": "Movie"})["scene"] == ["Movie"]
 
 
-def test_house_coerces_truthy_strings():
-    # cv.boolean coerces YAML-style truthy strings (matches the `force` field).
-    assert _APPLY_SCENE_SCHEMA({"house": "yes"})["house"] is True
+def test_scope_items_coerced_to_strings():
+    # cv.string coerces non-string list items (e.g. a stray number) to str.
+    assert _APPLY_SCENE_SCHEMA({"scope": [123]})["scope"] == ["123"]
 
 
-def test_house_rejects_non_boolean():
+def test_scope_rejects_nested_list():
     with pytest.raises(vol.Invalid):
-        _APPLY_SCENE_SCHEMA({"house": ["not", "a", "bool"]})
+        _APPLY_SCENE_SCHEMA({"scope": [["nested"]]})

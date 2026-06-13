@@ -22,7 +22,10 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-from homeassistant.helpers.service import async_register_admin_service
+from homeassistant.helpers.service import (
+    async_register_admin_service,
+    async_set_service_schema,
+)
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
@@ -70,6 +73,7 @@ from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .service import (
     async_apply_scene_service,
+    build_apply_scene_schema,
     clear_last_applied,
 )
 from .store import AmbienceStore
@@ -170,6 +174,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "apply_scene",
         partial(async_apply_scene_service, hass),
         schema=_APPLY_SCENE_SCHEMA,
+    )
+
+    # Called directly at setup, by the SIGNAL_CONFIG_CHANGED dispatcher, and by the
+    # area/floor registry-event listeners — *_args absorbs each source's differing arguments.
+    @callback
+    def _refresh_apply_scene_schema(*_args: object) -> None:
+        async_set_service_schema(hass, DOMAIN, "apply_scene", build_apply_scene_schema(hass))
+
+    _refresh_apply_scene_schema()
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _refresh_apply_scene_schema)
+    )
+    entry.async_on_unload(
+        hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _refresh_apply_scene_schema)
+    )
+    entry.async_on_unload(
+        hass.bus.async_listen(fr.EVENT_FLOOR_REGISTRY_UPDATED, _refresh_apply_scene_schema)
     )
 
     async_register_commands(hass)

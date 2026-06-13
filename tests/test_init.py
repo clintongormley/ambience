@@ -88,6 +88,37 @@ async def test_setup_registers_apply_scene_service(
     assert hass.services.has_service(DOMAIN, "apply_scene")
 
 
+async def test_apply_scene_schema_is_set_and_refreshes(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """The dynamic apply_scene UI schema is set at setup and re-set on config change."""
+    from unittest.mock import patch
+
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+    from custom_components.ambience.const import SIGNAL_CONFIG_CHANGED
+
+    mock_config_entry.add_to_hass(hass)
+    with patch("custom_components.ambience.async_set_service_schema") as set_schema:
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert set_schema.called  # set at setup
+
+        set_schema.reset_mock()
+        async_dispatcher_send(hass, SIGNAL_CONFIG_CHANGED, None)
+        await hass.async_block_till_done()
+
+        assert set_schema.called  # re-set on config change
+
+        set_schema.reset_mock()
+        hass.bus.async_fire(ar.EVENT_AREA_REGISTRY_UPDATED, {"action": "create", "area_id": "x"})
+        await hass.async_block_till_done()
+
+        assert set_schema.called  # re-set on area-registry change
+
+
 async def test_unload_clears_data(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,

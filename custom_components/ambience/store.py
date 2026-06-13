@@ -12,7 +12,6 @@ from homeassistant.helpers.storage import Store
 
 from .conditions.weather import DEFAULT_WEATHER_GROUPS
 from .const import (
-    DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
     DEFAULT_SWITCH_NAME,
     GENERAL_CATEGORY,
     SIGNAL_CONFIG_CHANGED,
@@ -20,10 +19,13 @@ from .const import (
     STORAGE_VERSION,
 )
 
-# Idle re-apply defaults. Defined here (store is their only consumer) rather than
-# in const.py, to avoid a CodeQL py/unsafe-cyclic-import false positive: const has
-# a TYPE_CHECKING-only import of store for get_store's annotation, and CodeQL flags
-# const-level constants imported by store as "defined after the cyclic import".
+# Switch / idle re-apply defaults. Defined here (store is their only consumer)
+# rather than in const.py, to avoid a CodeQL py/unsafe-cyclic-import false
+# positive: const has a TYPE_CHECKING-only import of store for get_store's
+# annotation, and CodeQL flags const-level constants imported by store as
+# "defined after the cyclic import".
+# auto_on_delay: how long a paused scope stays off before auto-resuming; 0 = never.
+DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 0
 # Re-assert each unit's scene after this many seconds of no dispatch; off by
 # default; interval pre-filled at 60 min; the floor rejects nonsensical values.
 DEFAULT_REAPPLY_ENABLED = False

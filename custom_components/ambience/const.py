@@ -56,13 +56,13 @@ SIGNAL_UNIT_APPLIED = "ambience_unit_applied"
 SIGNAL_REAPPLY_CONFIG_UPDATED = "ambience_reapply_config_updated"
 
 # Note: the idle re-apply defaults (DEFAULT_REAPPLY_ENABLED / *_INTERVAL_SECONDS /
-# MIN_REAPPLY_INTERVAL_SECONDS) live in store.py, their only consumer — keeping
-# them out of const avoids a CodeQL py/unsafe-cyclic-import false positive (const
-# has a TYPE_CHECKING-only import of store for get_store's annotation).
+# MIN_REAPPLY_INTERVAL_SECONDS) and DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS live in
+# store.py, their only consumer — keeping them out of const avoids a CodeQL
+# py/unsafe-cyclic-import false positive (const has a TYPE_CHECKING-only import of
+# store for get_store's annotation).
 
 # Defaults
 DEFAULT_SWITCH_NAME = "Ambience"
-DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS = 0  # 0 = never auto-resume
 
 # The category seeded on a fresh install. It is an ordinary category (renameable,
 # deletable when it is not the last category) — these are only its initial values.

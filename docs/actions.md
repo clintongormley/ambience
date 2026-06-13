@@ -73,6 +73,13 @@ to your own automations and scripts via the `ambience.apply_scene` action
 (admin-only). You target scopes with the `scope` field, whose values are
 `house`, `floor:<floor_id>`, or `area:<area_id>` — no switch entity is required.
 
+In the Home Assistant action editor, the `scope`, `category`, and `scene` fields
+are dropdowns auto-populated from your current Ambience configuration: `scope`
+lists House plus your enabled floors and areas, `category` lists your configured
+categories, and `scene` lists your distinct scene names. You can still type a
+value manually (for example in YAML or a template) — the dropdowns are
+suggestions, not a fixed list.
+
 ```yaml
 # Re-resolve and apply every category in the living room:
 action: ambience.apply_scene

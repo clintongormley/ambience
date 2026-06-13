@@ -56,7 +56,7 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
   ui: {
     panel_title: "Ambience",
     tab_settings: "Settings",
-    settings_tab_ambience: "Ambience",
+    settings_tab_ambience: "Advanced",
     settings_tab_conditions: "Conditions",
     settings_tab_actions: "Actions",
     settings_ambience_defaults_card: "Defaults",

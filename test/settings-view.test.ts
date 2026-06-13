@@ -35,9 +35,10 @@ describe("ambience-settings-view", () => {
     return el;
   }
 
-  test("default sub-tab is Ambience", async () => {
+  test("default sub-tab is Categories", async () => {
     el = await mount();
-    expect(el.shadowRoot.querySelector("ambience-ambience-settings")).not.toBeNull();
+    expect(el.shadowRoot.querySelector("ambience-categories-settings")).not.toBeNull();
+    expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
   });
 
   test("initialTab seeds the active tab", async () => {
@@ -52,19 +53,10 @@ describe("ambience-settings-view", () => {
     expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
   });
 
-  test("clicking Categories swaps the body", async () => {
-    el = await mount();
-    const buttons = el.shadowRoot.querySelectorAll("nav button");
-    (buttons[1] as HTMLButtonElement).click();
-    await el.updateComplete;
-    expect(el.shadowRoot.querySelector("ambience-categories-settings")).not.toBeNull();
-    expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
-  });
-
   test("clicking Conditions swaps the body", async () => {
     el = await mount();
     const buttons = el.shadowRoot.querySelectorAll("nav button");
-    (buttons[2] as HTMLButtonElement).click();
+    (buttons[1] as HTMLButtonElement).click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("ambience-conditions-settings")).not.toBeNull();
     expect(el.shadowRoot.querySelector("ambience-ambience-settings")).toBeNull();
@@ -73,9 +65,26 @@ describe("ambience-settings-view", () => {
   test("clicking Actions swaps the body", async () => {
     el = await mount();
     const buttons = el.shadowRoot.querySelectorAll("nav button");
-    (buttons[3] as HTMLButtonElement).click();
+    (buttons[2] as HTMLButtonElement).click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("ambience-actions-settings")).not.toBeNull();
+  });
+
+  test("clicking Advanced swaps the body", async () => {
+    el = await mount();
+    const buttons = el.shadowRoot.querySelectorAll("nav button");
+    (buttons[3] as HTMLButtonElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("ambience-ambience-settings")).not.toBeNull();
+  });
+
+  test("renders the Advanced tab last with Categories first", async () => {
+    el = await mount();
+    const labels = [...el.shadowRoot!.querySelectorAll("nav button")].map((b: Element) =>
+      b.textContent!.trim(),
+    );
+    expect(labels.at(-1)).toBe("Advanced");
+    expect(labels[0]).toBe("Categories");
   });
 
   test("initialTab can deep-link to Categories", async () => {
@@ -94,10 +103,10 @@ describe("ambience-settings-view", () => {
     el = await mount();
     const icons = el.shadowRoot.querySelectorAll("nav button ha-icon");
     expect(Array.from(icons).map((i: Element) => i.getAttribute("icon"))).toEqual([
-      "mdi:home-lightbulb",
       "mdi:shape-outline",
       "mdi:filter-variant",
       "mdi:flash",
+      "mdi:home-lightbulb",
     ]);
   });
 
@@ -105,14 +114,14 @@ describe("ambience-settings-view", () => {
     el = await mount();
     const active = el.shadowRoot.querySelectorAll("nav button.active");
     expect(active.length).toBe(1);
-    expect(active[0].textContent).toContain("Ambience");
+    expect(active[0].textContent).toContain("Categories");
   });
 
   test("tab content lives in a scroll region separate from the nav", async () => {
     el = await mount();
     const content = el.shadowRoot.querySelector(".content");
     expect(content).not.toBeNull();
-    expect(content!.querySelector("ambience-ambience-settings")).not.toBeNull();
+    expect(content!.querySelector("ambience-categories-settings")).not.toBeNull();
     // the nav must NOT be inside the scrolling content region
     expect(content!.querySelector("nav")).toBeNull();
   });

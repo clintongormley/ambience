@@ -268,7 +268,7 @@ export class AmbienceAmbienceSettings extends LitElement {
               .text=${localize(
                 this.hass,
                 "ui.help_reapply_toggle",
-                "After this much inactivity, re-assess and re-send a scope/category's scene commands — recovers commands that were dropped (e.g. a light that didn't turn off).",
+                "Check the scenes for a scope/category after inactivity and reapply the winning scene, in case any action had previously failed, such as a light not turning off.",
               )}
             ></ambience-help>
           </label>

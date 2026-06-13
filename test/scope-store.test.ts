@@ -572,33 +572,46 @@ describe("ScopeStore", () => {
   });
 
   describe("registry subscriptions", () => {
-    type Captured = { area?: (e: any) => void; floor?: (e: any) => void };
+    type Captured = {
+      area?: (e: any) => void;
+      floor?: (e: any) => void;
+      entity?: (e: any) => void;
+    };
 
-    /** Host whose subscribeEvents captures the area/floor callbacks and hands
-     *  back per-type unsubscribe spies. */
+    /** Host whose subscribeEvents captures the area/floor/entity callbacks and
+     *  hands back per-type unsubscribe spies. */
     function subscribingHost() {
       const captured: Captured = {};
       const unsubArea = vi.fn();
       const unsubFloor = vi.fn();
+      const unsubEntity = vi.fn();
       const host = makeHost();
       host.hass.connection.subscribeEvents = vi.fn(async (cb: (e: any) => void, type: string) => {
         if (type === "area_registry_updated") {
           captured.area = cb;
           return unsubArea;
         }
-        captured.floor = cb;
-        return unsubFloor;
+        if (type === "floor_registry_updated") {
+          captured.floor = cb;
+          return unsubFloor;
+        }
+        captured.entity = cb;
+        return unsubEntity;
       }) as any;
-      return { host, captured, unsubArea, unsubFloor };
+      return { host, captured, unsubArea, unsubFloor, unsubEntity };
     }
 
-    test("subscribes to both registries", async () => {
+    test("subscribes to the area, floor, and entity registries", async () => {
       const { host } = subscribingHost();
       const { store } = makeStore(host);
       await store.subscribe(() => {});
       const types = vi.mocked(host.hass.connection.subscribeEvents).mock.calls.map((c) => c[1]);
       expect(types).toEqual(
-        expect.arrayContaining(["area_registry_updated", "floor_registry_updated"]),
+        expect.arrayContaining([
+          "area_registry_updated",
+          "floor_registry_updated",
+          "entity_registry_updated",
+        ]),
       );
     });
 
@@ -659,19 +672,65 @@ describe("ScopeStore", () => {
       expect(api.listSwitches).not.toHaveBeenCalled();
     });
 
-    test("hostDisconnected unsubscribes from both registries", async () => {
-      const { host, unsubArea, unsubFloor } = subscribingHost();
+    test("a switch entity create refreshes switches (e.g. create_switches toggled on)", async () => {
+      const { host, captured } = subscribingHost();
+      const { store } = makeStore(host);
+      await store.subscribe(() => {});
+      vi.mocked(api.listSwitches).mockClear();
+      captured.entity?.({ data: { action: "create", entity_id: "switch.house_ambience" } });
+      await tick();
+      expect(api.listSwitches).toHaveBeenCalledTimes(1);
+    });
+
+    test("a switch entity remove refreshes switches (create_switches toggled off)", async () => {
+      const { host, captured } = subscribingHost();
+      const { store } = makeStore(host);
+      await store.subscribe(() => {});
+      vi.mocked(api.listSwitches).mockClear();
+      captured.entity?.({ data: { action: "remove", entity_id: "switch.house_ambience" } });
+      await tick();
+      expect(api.listSwitches).toHaveBeenCalledTimes(1);
+    });
+
+    test("a non-switch entity create does not refresh switches", async () => {
+      const { host, captured } = subscribingHost();
+      const { store } = makeStore(host);
+      await store.subscribe(() => {});
+      vi.mocked(api.listSwitches).mockClear();
+      captured.entity?.({ data: { action: "create", entity_id: "light.kitchen" } });
+      await tick();
+      expect(api.listSwitches).not.toHaveBeenCalled();
+    });
+
+    test("a switch entity update does not refresh switches", async () => {
+      const { host, captured } = subscribingHost();
+      const { store } = makeStore(host);
+      await store.subscribe(() => {});
+      vi.mocked(api.listSwitches).mockClear();
+      captured.entity?.({ data: { action: "update", entity_id: "switch.house_ambience" } });
+      await tick();
+      expect(api.listSwitches).not.toHaveBeenCalled();
+    });
+
+    test("hostDisconnected unsubscribes from all three registries", async () => {
+      const { host, unsubArea, unsubFloor, unsubEntity } = subscribingHost();
       const { store } = makeStore(host);
       await store.subscribe(() => {});
       store.hostDisconnected();
       expect(unsubArea).toHaveBeenCalledTimes(1);
       expect(unsubFloor).toHaveBeenCalledTimes(1);
+      expect(unsubEntity).toHaveBeenCalledTimes(1);
     });
 
     test("subscribe resolving after disconnect unsubscribes immediately", async () => {
       const unsubArea = vi.fn();
       const unsubFloor = vi.fn();
-      const deferred: { area?: (v: any) => void; floor?: (v: any) => void } = {};
+      const unsubEntity = vi.fn();
+      const deferred: {
+        area?: (v: any) => void;
+        floor?: (v: any) => void;
+        entity?: (v: any) => void;
+      } = {};
       const host = makeHost();
       host.hass.connection.subscribeEvents = vi.fn((_cb: any, type: string) => {
         if (type === "area_registry_updated") {
@@ -679,8 +738,13 @@ describe("ScopeStore", () => {
             deferred.area = r;
           });
         }
+        if (type === "floor_registry_updated") {
+          return new Promise((r) => {
+            deferred.floor = r;
+          });
+        }
         return new Promise((r) => {
-          deferred.floor = r;
+          deferred.entity = r;
         });
       }) as any;
       const { store } = makeStore(host);
@@ -688,9 +752,11 @@ describe("ScopeStore", () => {
       host.isConnected = false;
       deferred.area?.(unsubArea);
       deferred.floor?.(unsubFloor);
+      deferred.entity?.(unsubEntity);
       await pending;
       expect(unsubArea).toHaveBeenCalledTimes(1);
       expect(unsubFloor).toHaveBeenCalledTimes(1);
+      expect(unsubEntity).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -1,5 +1,10 @@
 import type { ReactiveController, ReactiveControllerHost } from "lit";
-import type { AreaRegistryEvent, FloorRegistryEvent, HassConnection } from "../api.js";
+import type {
+  AreaRegistryEvent,
+  EntityRegistryEvent,
+  FloorRegistryEvent,
+  HassConnection,
+} from "../api.js";
 import {
   getArea,
   getDayConfig,
@@ -113,6 +118,7 @@ export class ScopeStore implements ReactiveController {
   // Registry-event unsubscribers, set once subscribe() resolves.
   private _unsubArea?: () => void;
   private _unsubFloor?: () => void;
+  private _unsubEntity?: () => void;
   // 1s tick that drives the live pause countdown while any scope switch is off.
   private _tick?: ReturnType<typeof setInterval>;
 
@@ -148,6 +154,8 @@ export class ScopeStore implements ReactiveController {
     this._unsubArea = undefined;
     this._unsubFloor?.();
     this._unsubFloor = undefined;
+    this._unsubEntity?.();
+    this._unsubEntity = undefined;
   }
 
   /**
@@ -173,13 +181,24 @@ export class ScopeStore implements ReactiveController {
       void this.refreshFloors();
       if (event.data.action !== "update") void this.refreshSwitches();
     }, "floor_registry_updated");
-    const [unsubArea, unsubFloor] = await Promise.all([subArea, subFloor]);
+    // Scope pause switches are created/removed when the create_switches toggle
+    // flips or a scope is enabled/disabled — none of which touches the
+    // area/floor registry. Refresh the switch set on switch.* entity
+    // create/remove so the pause icons appear/disappear without a page reload.
+    const subEntity = this._hass.connection.subscribeEvents<EntityRegistryEvent>((event) => {
+      if (event.data.action !== "update" && event.data.entity_id.startsWith("switch.")) {
+        void this.refreshSwitches();
+      }
+    }, "entity_registry_updated");
+    const [unsubArea, unsubFloor, unsubEntity] = await Promise.all([subArea, subFloor, subEntity]);
     if (this._host.isConnected) {
       this._unsubArea = unsubArea;
       this._unsubFloor = unsubFloor;
+      this._unsubEntity = unsubEntity;
     } else {
       unsubArea();
       unsubFloor();
+      unsubEntity();
     }
   }
 

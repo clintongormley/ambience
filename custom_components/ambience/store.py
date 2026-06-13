@@ -25,7 +25,7 @@ from .const import (
 # a TYPE_CHECKING-only import of store for get_store's annotation, and CodeQL flags
 # const-level constants imported by store as "defined after the cyclic import".
 # Re-assert each unit's scene after this many seconds of no dispatch; off by
-# default; interval pre-filled at 90 min; the floor rejects nonsensical values.
+# default; interval pre-filled at 60 min; the floor rejects nonsensical values.
 DEFAULT_REAPPLY_ENABLED = False
 DEFAULT_REAPPLY_INTERVAL_SECONDS = 3600
 MIN_REAPPLY_INTERVAL_SECONDS = 60

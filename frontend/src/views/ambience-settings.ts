@@ -1,6 +1,5 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { live } from "lit/directives/live.js";
 
 import {
   getReapplySettings,
@@ -9,6 +8,7 @@ import {
   saveReapplySettings,
   saveSwitchDefaults,
 } from "../api.js";
+import { renderHaSwitch } from "../ha-switch.js";
 import { localize } from "../i18n.js";
 import type { ReapplySettings, SwitchDefaults } from "../types.js";
 import "./ambience-help.js";
@@ -177,19 +177,7 @@ export class AmbienceAmbienceSettings extends LitElement {
    *  checkbox fallback so the view remains testable under jsdom. Both carry
    *  the same data-test attribute. */
   private _renderToggle(checked: boolean, dataTest: string, onChange: (e: Event) => void) {
-    if (customElements.get("ha-switch")) {
-      return html`<ha-switch
-        data-test=${dataTest}
-        .checked=${live(checked)}
-        @change=${onChange}
-      ></ha-switch>`;
-    }
-    return html`<input
-      data-test=${dataTest}
-      type="checkbox"
-      .checked=${live(checked)}
-      @change=${onChange}
-    />`;
+    return renderHaSwitch({ checked, dataTest, onChange });
   }
 
   override render() {

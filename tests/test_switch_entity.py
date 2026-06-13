@@ -103,7 +103,7 @@ async def test_turn_off_writes_off_at_and_schedules_timer(hass, mock_config_entr
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
@@ -118,7 +118,7 @@ async def test_turn_on_cancels_timer_and_clears_off_at(hass, mock_config_entry, 
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
@@ -136,7 +136,7 @@ async def test_zero_delay_disables_timer(hass, mock_config_entry, fixed_utcnow):
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
@@ -149,7 +149,7 @@ async def test_auto_on_fires_after_delay(hass, mock_config_entry, fixed_utcnow):
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 60, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 60, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
@@ -171,7 +171,7 @@ async def test_restore_off_with_remaining_delay_reschedules(hass, mock_config_en
     await pre.async_load()
     off_at = (fixed_utcnow["now"] - timedelta(minutes=10)).isoformat()
     await pre.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
     )
     await pre.async_set_scope_switch_off_at("house", None, off_at)
     # off_at writes are delayed (loss-tolerant runtime state) — flush before
@@ -194,7 +194,7 @@ async def test_restore_off_expired_turns_on_immediately(hass, mock_config_entry,
     await pre.async_load()
     off_at = (fixed_utcnow["now"] - timedelta(hours=10)).isoformat()
     await pre.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
     )
     await pre.async_set_scope_switch_off_at("house", None, off_at)
     # off_at writes are delayed (loss-tolerant runtime state) — flush before
@@ -232,7 +232,7 @@ async def test_default_name_change_updates_device_names(hass, mock_config_entry)
 
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Master", "auto_on_delay_seconds": 7200, "create_switches": False}
+        {"name": "Master", "auto_on_delay_seconds": 7200, "create_switches": True}
     )
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
@@ -267,7 +267,7 @@ async def test_user_device_rename_is_preserved(hass, mock_config_entry):
     # A default-name change must not clobber the user's rename.
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Master", "auto_on_delay_seconds": 7200, "create_switches": False}
+        {"name": "Master", "auto_on_delay_seconds": 7200, "create_switches": True}
     )
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
@@ -279,7 +279,7 @@ async def test_unload_cancels_pending_timers(hass, mock_config_entry, fixed_utcn
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
@@ -320,7 +320,7 @@ async def test_schedule_auto_on_replaces_existing_timer(hass, mock_config_entry,
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
 
@@ -352,7 +352,7 @@ async def test_schedule_auto_on_from_store_zero_delay_returns_early(
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
     # Manually set the switch as off so the call is meaningful.
@@ -371,7 +371,7 @@ async def test_schedule_auto_on_from_store_no_off_at_returns_early(
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
     ent._attr_is_on = False
@@ -392,7 +392,7 @@ async def test_schedule_auto_on_from_store_invalid_off_at_logs_warning(
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
     ent._attr_is_on = False
@@ -414,7 +414,7 @@ async def test_schedule_auto_on_from_store_expired_turn_on_false_does_not_turn_o
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
     ent._attr_is_on = False
@@ -438,7 +438,7 @@ async def test_config_updated_while_off_reschedules_auto_on(hass, mock_config_en
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
 
@@ -450,7 +450,7 @@ async def test_config_updated_while_off_reschedules_auto_on(hass, mock_config_en
 
     # Now update the defaults with a longer delay and fire the signal while off.
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 7200, "create_switches": True}
     )
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()
@@ -548,7 +548,7 @@ async def test_config_update_to_zero_delay_cancels_armed_timer(
     await _setup(hass, mock_config_entry)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 3600, "create_switches": True}
     )
     ent = _switch(hass, "house", None)
     await ent.async_turn_off()
@@ -556,7 +556,7 @@ async def test_config_update_to_zero_delay_cancels_armed_timer(
     assert ent._timer is not None
 
     await store.async_save_switch_defaults(
-        {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": False}
+        {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": True}
     )
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     await hass.async_block_till_done()

@@ -10,7 +10,6 @@ from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
-    CONF_CREATE_SWITCHES,
     CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
     DOMAIN,
@@ -41,12 +40,28 @@ async def test_switch_added_post_setup_picks_up_exposure(hass, mock_config_entry
 
 
 async def test_exposure_follows_entry_option(hass):
+    from homeassistant.helpers.storage import Store
+
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {},
+            "floors": {},
+            "house": {},
+            "conditions": {},
+            "switch_defaults": {
+                "name": "Ambience",
+                "auto_on_delay_seconds": 0,
+                "create_switches": True,
+            },
+        }
+    )
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Ambience",
         data={},
         options={
-            CONF_CREATE_SWITCHES: True,
             CONF_EXPOSED_ASSISTANTS: {
                 "conversation": False,
                 "cloud.google_assistant": True,
@@ -63,12 +78,28 @@ async def test_exposure_follows_entry_option(hass):
 async def test_partial_option_map_defaults_to_unexposed(hass):
     # A map missing some assistants (e.g. after a new assistant is added to
     # KNOWN_ASSISTANTS before the user re-saves) defaults the missing ones off.
+    from homeassistant.helpers.storage import Store
+
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {},
+            "floors": {},
+            "house": {},
+            "conditions": {},
+            "switch_defaults": {
+                "name": "Ambience",
+                "auto_on_delay_seconds": 0,
+                "create_switches": True,
+            },
+        }
+    )
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Ambience",
         data={},
         options={
-            CONF_CREATE_SWITCHES: True,
             CONF_EXPOSED_ASSISTANTS: {"conversation": True},
         },
         unique_id="ambience_unique",

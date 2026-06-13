@@ -15,10 +15,8 @@ from homeassistant.core import callback
 
 from .const import (
     ASSISTANT_FIELDS,
-    CONF_CREATE_SWITCHES,
     CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
-    DEFAULT_CREATE_SWITCHES,
     DEFAULT_EXPOSED_ASSISTANTS,
     DEFAULT_SHOW_SIDEBAR_PANEL,
     DOMAIN,
@@ -59,19 +57,14 @@ class AmbienceOptionsFlow(OptionsFlow):
                 title="",
                 data={
                     CONF_SHOW_SIDEBAR_PANEL: user_input[CONF_SHOW_SIDEBAR_PANEL],
-                    CONF_CREATE_SWITCHES: user_input[CONF_CREATE_SWITCHES],
                     CONF_EXPOSED_ASSISTANTS: exposed,
                 },
             )
 
         current = self.config_entry.options.get(CONF_SHOW_SIDEBAR_PANEL, DEFAULT_SHOW_SIDEBAR_PANEL)
         exposed = self.config_entry.options.get(CONF_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS)
-        create_switches = self.config_entry.options.get(
-            CONF_CREATE_SWITCHES, DEFAULT_CREATE_SWITCHES
-        )
         fields: dict[Any, Any] = {
             vol.Required(CONF_SHOW_SIDEBAR_PANEL, default=current): bool,
-            vol.Required(CONF_CREATE_SWITCHES, default=create_switches): bool,
         }
         for assistant, field in ASSISTANT_FIELDS.items():
             # DEFAULT_EXPOSED_ASSISTANTS[assistant] (not .get) so a new assistant

@@ -78,15 +78,6 @@ GENERAL_CATEGORY = {
 CONF_SHOW_SIDEBAR_PANEL = "show_sidebar_panel"
 DEFAULT_SHOW_SIDEBAR_PANEL = True
 
-# Optional per-scope switches (options flow). Off by default: most users want the
-# panel only, not a switch entity + device per scope. When on, a switch exists for
-# every ENABLED scope; disabling a scope deletes its switch.
-CONF_CREATE_SWITCHES = "create_switches"
-DEFAULT_CREATE_SWITCHES = False
-# hass.data key holding the resolved create_switches bool for this entry, so the
-# switch platform + runtime handlers can read it without the config entry in hand.
-DATA_CREATE_SWITCHES = "create_switches_enabled"
-
 # Voice-assistant exposure (options flow).
 CONF_EXPOSED_ASSISTANTS = "exposed_assistants"
 # Pinned copy of homeassistant.components.homeassistant.exposed_entities.

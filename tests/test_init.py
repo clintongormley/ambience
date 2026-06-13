@@ -344,32 +344,24 @@ async def test_unload_aborts_when_platform_unload_fails(
     assert hass.services.has_service(DOMAIN, "apply_scene")
 
 
-async def test_setup_stashes_create_switches_flag(hass):
-    from custom_components.ambience.const import CONF_CREATE_SWITCHES, DATA_CREATE_SWITCHES, DOMAIN
+async def test_setup_does_not_stash_create_switches_in_domain_data(hass):
+    """create_switches is now owned by the store; DATA_CREATE_SWITCHES must not exist."""
+    from custom_components.ambience.const import DATA_STORE
 
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Ambience",
         data={},
-        options={CONF_CREATE_SWITCHES: True},
+        options={},
         unique_id="amb_cs",
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    assert hass.data[DOMAIN][DATA_CREATE_SWITCHES] is True
-
-
-async def test_setup_create_switches_defaults_false(hass):
-    from custom_components.ambience.const import DATA_CREATE_SWITCHES, DOMAIN
-
-    entry = MockConfigEntry(
-        domain=DOMAIN, title="Ambience", data={}, options={}, unique_id="amb_cs_default"
-    )
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.data[DOMAIN][DATA_CREATE_SWITCHES] is False
+    # The store (not domain_data) is the source of truth
+    assert "create_switches_enabled" not in hass.data[DOMAIN]
+    # The store defaults to False
+    assert hass.data[DOMAIN][DATA_STORE].get_switch_defaults()["create_switches"] is False
 
 
 def test_manifest_orders_setup_after_frontend() -> None:

@@ -1,4 +1,4 @@
-"""Unit tests for apply_scene scope resolution + named-scene planning."""
+"""Unit tests for apply_scene scope resolution."""
 
 from __future__ import annotations
 
@@ -9,9 +9,7 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ambience.const import DATA_STORE, DOMAIN
 from custom_components.ambience.service import (
-    _plan_named_scenes,
     _resolve_target_scopes,
     parse_scope_option,
     scope_option_value,
@@ -76,89 +74,3 @@ async def test_resolve_dedups_repeated_ids(hass, installed):
     value = f"area:{area.id}"
     scopes = _resolve_target_scopes(hass, {"scope": [value, value]})
     assert scopes == [("area", area.id)]
-
-
-async def test_plan_named_scene_resolves_category(hass, installed):
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(
-        "lr",
-        {
-            "scenes": [
-                {"name": "Movie", "category": "lighting", "when": {}, "actions": []},
-            ]
-        },
-    )
-    plan = _plan_named_scenes(hass, [("area", "lr")], ["Movie"], None)
-    assert plan == [("area", "lr", "lighting", "Movie")]
-
-
-async def test_plan_absent_name_skipped(hass, installed):
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(
-        "lr",
-        {
-            "scenes": [
-                {"name": "Movie", "category": "lighting", "when": {}, "actions": []},
-            ]
-        },
-    )
-    assert _plan_named_scenes(hass, [("area", "lr")], ["Nope"], None) == []
-
-
-async def test_plan_ambiguous_name_raises(hass, installed):
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(
-        "lr",
-        {
-            "scenes": [
-                {"name": "Movie", "category": "lighting", "when": {}, "actions": []},
-                {"name": "Movie", "category": "blinds", "when": {}, "actions": []},
-            ]
-        },
-    )
-    with pytest.raises(ServiceValidationError):
-        _plan_named_scenes(hass, [("area", "lr")], ["Movie"], None)
-
-
-async def test_plan_category_narrows_eligibility(hass, installed):
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(
-        "lr",
-        {
-            "scenes": [
-                {"name": "Movie", "category": "lighting", "when": {}, "actions": []},
-                {"name": "Movie", "category": "blinds", "when": {}, "actions": []},
-            ]
-        },
-    )
-    plan = _plan_named_scenes(hass, [("area", "lr")], ["Movie"], ["lighting"])
-    assert plan == [("area", "lr", "lighting", "Movie")]
-
-
-async def test_plan_skips_disabled_scope(hass, installed):
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_area(
-        "lr",
-        {
-            "scenes": [
-                {"name": "Movie", "category": "lighting", "when": {}, "actions": []},
-            ]
-        },
-    )
-    await store.async_set_scope_enabled("area", "lr", False)
-    # A disabled scope is skipped, not planned (so the apply never raises for it).
-    assert _plan_named_scenes(hass, [("area", "lr")], ["Movie"], None) == []
-
-
-async def test_plan_skips_whitespace_named_scene(hass, installed):
-    store = hass.data[DOMAIN][DATA_STORE]
-    # A stored whitespace-only name must not be matchable (consistent with the apply stage).
-    await store.async_save_area(
-        "lr",
-        {
-            "scenes": [
-                {"name": "   ", "category": "lighting", "when": {}, "actions": []},
-            ]
-        },
-    )
-    assert _plan_named_scenes(hass, [("area", "lr")], ["   "], None) == []

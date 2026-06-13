@@ -73,12 +73,11 @@ to your own automations and scripts via the `ambience.apply_scene` action
 (admin-only). You target scopes with the `scope` field, whose values are
 `house`, `floor:<floor_id>`, or `area:<area_id>` — no switch entity is required.
 
-In the Home Assistant action editor, the `scope`, `category`, and `scene` fields
+In the Home Assistant action editor, the `scope` and `category` fields
 are dropdowns auto-populated from your current Ambience configuration: `scope`
-lists House plus your enabled floors and areas, `category` lists your configured
-categories, and `scene` lists your distinct scene names. You can still type a
-value manually (for example in YAML or a template) — the dropdowns are
-suggestions, not a fixed list.
+lists House plus your enabled floors and areas, and `category` lists your
+configured categories. You can still type a value manually (for example in YAML
+or a template) — the dropdowns are suggestions, not a fixed list.
 
 ```yaml
 # Re-resolve and apply every category in the living room:
@@ -93,12 +92,6 @@ data:
   category: [lighting]
   force: true
 
-# Run one named scene directly across a whole floor, skipping condition resolution:
-action: ambience.apply_scene
-data:
-  scope: [floor:ground_floor]
-  scene: [Movie night]
-
 # Apply every scope in the house (omit scope to target all):
 action: ambience.apply_scene
 data: {}
@@ -108,7 +101,6 @@ data: {}
 |---|---|---|
 | `scope` | No | List of scopes to target. Each value is `house`, `floor:<floor_id>`, or `area:<area_id>`. |
 | `category` | No | Limit the apply to one or more category ids (default: all). |
-| `scene` | No | Apply this named scene directly; each scene resolves its own category. |
 | `force` | No | Apply even when a scope is paused (its switch is off). Does **not** override a permanently disabled scope. |
 
 Omitting `scope` targets every scope. Without `force`,

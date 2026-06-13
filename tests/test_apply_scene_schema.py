@@ -49,19 +49,20 @@ def test_scope_multiple_accepted():
     assert out["scope"] == ["house", "floor:ground", "area:lr"]
 
 
-def test_category_and_scene_multiple():
-    out = _APPLY_SCENE_SCHEMA({"category": ["lighting", "blinds"], "scene": "Movie"})
+def test_category_multiple():
+    out = _APPLY_SCENE_SCHEMA({"category": ["lighting", "blinds"]})
     assert out["category"] == ["lighting", "blinds"]
-    assert out["scene"] == ["Movie"]
 
 
 def test_force_accepted():
     assert _APPLY_SCENE_SCHEMA({"force": True})["force"] is True
 
 
-def test_scene_without_category_is_now_valid():
-    # The old "scene requires category" rule is gone; scenes resolve their own category.
-    assert _APPLY_SCENE_SCHEMA({"scene": "Movie"})["scene"] == ["Movie"]
+def test_scene_key_rejected():
+    # The `scene` parameter was removed; the schema rejects extra keys, so passing
+    # `scene` now raises "extra keys not allowed".
+    with pytest.raises(vol.Invalid):
+        _APPLY_SCENE_SCHEMA({"scene": ["Movie"]})
 
 
 def test_scope_items_coerced_to_strings():
@@ -89,17 +90,13 @@ async def test_build_apply_scene_schema_options(hass, installed):
             {"id": "blinds", "name": "Blinds"},
         ]
     )
-    # A house scene named "Evening".
-    await store.async_save_house(
-        {"scenes": [{"name": "Evening", "category": "lighting", "when": {}, "actions": []}]}
-    )
-    # An ENABLED area with a scene named "Movie".
+    # An ENABLED area.
     area = ar.async_get(hass).async_create("Kitchen")
     floor = fr.async_get(hass).async_create("Ground")
     await hass.async_block_till_done()
     await store.async_save_area(
         area.id,
-        {"scenes": [{"name": "Movie", "category": "lighting", "when": {}, "actions": []}]},
+        {"scenes": [{"category": "lighting", "when": {}, "actions": []}]},
     )
     # A DISABLED floor.
     await store.async_set_scope_enabled("floor", floor.floor_id, False)
@@ -117,12 +114,9 @@ async def test_build_apply_scene_schema_options(hass, installed):
     assert {"value": "lighting", "label": "Lighting"} in cat_opts
     assert {"value": "blinds", "label": "Blinds"} in cat_opts
 
-    scene_opts = fields["scene"]["selector"]["select"]["options"]
-    scene_values = [o["value"] for o in scene_opts]
-    assert scene_values == sorted(set(scene_values))  # distinct + sorted
-    assert "Evening" in scene_values and "Movie" in scene_values
+    assert "scene" not in fields
 
-    for key in ("scope", "category", "scene"):
+    for key in ("scope", "category"):
         sel = fields[key]["selector"]["select"]
         assert sel["multiple"] is True and sel["custom_value"] is True
 
@@ -132,7 +126,7 @@ async def test_build_apply_scene_schema_options(hass, installed):
 
 async def test_build_apply_scene_schema_empty_store(hass, installed):
     """Empty store: house enabled by default (get_scope_enabled default True), no
-    areas/floors, only the seeded General category, and no scene names."""
+    areas/floors, and only the seeded General category."""
     schema = build_apply_scene_schema(hass)
     fields = schema["fields"]
 
@@ -142,8 +136,7 @@ async def test_build_apply_scene_schema_empty_store(hass, installed):
     cat_opts = fields["category"]["selector"]["select"]["options"]
     assert cat_opts == [{"value": GENERAL_CATEGORY_ID, "label": "General"}]
 
-    scene_opts = fields["scene"]["selector"]["select"]["options"]
-    assert scene_opts == []
+    assert "scene" not in fields
 
 
 async def test_build_apply_scene_schema_house_disabled(hass, installed):
@@ -156,21 +149,10 @@ async def test_build_apply_scene_schema_house_disabled(hass, installed):
     assert scope_opts == []
 
 
-async def test_build_apply_scene_schema_enabled_floor_and_blank_scene_names(hass, installed):
-    """An enabled floor is listed; whitespace/blank scene names are dropped."""
-    store = hass.data[DOMAIN][DATA_STORE]
+async def test_build_apply_scene_schema_enabled_floor_listed(hass, installed):
+    """An enabled floor is listed with its kind-suffixed label."""
     floor = fr.async_get(hass).async_create("Loft")
     await hass.async_block_till_done()
-    # Enabled by default; give it a scene with a blank name plus a real one.
-    await store.async_save_floor(
-        floor.floor_id,
-        {
-            "scenes": [
-                {"name": "   ", "category": "general", "when": {}, "actions": []},
-                {"name": "Reading", "category": "general", "when": {}, "actions": []},
-            ]
-        },
-    )
 
     schema = build_apply_scene_schema(hass)
     fields = schema["fields"]
@@ -184,6 +166,3 @@ async def test_build_apply_scene_schema_enabled_floor_and_blank_scene_names(hass
         if o["value"] == scope_option_value("floor", floor.floor_id)
     )
     assert floor_opt["label"] == "Loft (floor)"
-
-    scene_values = [o["value"] for o in fields["scene"]["selector"]["select"]["options"]]
-    assert scene_values == ["Reading"]  # blank name dropped

@@ -110,19 +110,18 @@ Defined in `custom_components/ambience/services.yaml`; schema in
 `custom_components/ambience/__init__.py` (`_APPLY_SCENE_SCHEMA`). Admin-only.
 
 Resolves the scenes for one or more scopes and applies each category's winning
-scene's actions — or, with `scene`, runs the named scenes directly.
+scene's actions.
 
 | Field | Required | Description |
 |---|---|---|
 | `scope` | No | List of scopes to target. Each value is `house`, `floor:<floor_id>`, or `area:<area_id>`. Blank targets every scope (house + all floors + all areas). |
 | `category` | No | List of category ids to limit the apply to (default: all categories in each scope). |
-| `scene` | No | List of scene names applied directly, bypassing condition resolution. Each name resolves its own containing category — it does **not** require `category`. |
 | `force` | No | Boolean. Apply even when a scope is paused (its switch is off). Does **not** override a permanently disabled scope. |
 
 Without `force`, the call is a no-op for any scope whose switch is off; a
 permanently disabled scope never applies, even with `force`.
 
-In the HA action editor the `scope`, `category`, and `scene` fields are
+In the HA action editor the `scope` and `category` fields are
 runtime-populated dropdowns. The schema is built by `build_apply_scene_schema`
 (in `service.py`) from the current configuration and pushed via
 `async_set_service_schema`, re-set whenever the config or the area/floor

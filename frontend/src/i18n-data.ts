@@ -62,7 +62,7 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     settings_ambience_pause_card: "Scope-level pause switch",
     settings_ambience_field_name: "Switch name",
     settings_ambience_field_pause: "Pause for",
-    settings_reapply_enable_label: "Re-apply scenes after inactivity",
+    settings_reapply_enable_label: "Reapply scenes after inactivity",
     settings_reapply_interval_label: "Reapply after",
     unit_minutes: "minutes",
     help_pause_switch:

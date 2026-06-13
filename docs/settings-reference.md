@@ -148,7 +148,7 @@ Click the ✖ on the right of any card header to stop exposing that service. Exi
 
 ## Advanced tab
 
-The Advanced tab is the last tab in the Settings modal. It has two sections: **Scope-level pause switch** and **Re-apply**.
+The Advanced tab is the last tab in the Settings modal. It has two sections: **Scope-level pause switch** and **Reapply**.
 
 !!! info "📷 Screenshot"
 
@@ -169,11 +169,11 @@ Changes take effect immediately — Ambience creates or removes switch entities 
 
 ---
 
-### Re-apply
+### Reapply
 
-The **Re-apply** card lets Ambience automatically re-send a scope/category unit's scene commands after a period of inactivity. This is useful for recovering from dropped commands — for example, a light that did not actually turn off, or a cover that reverted to its previous position.
+The **Reapply** card lets Ambience automatically re-send a scope/category unit's scene commands after a period of inactivity. This is useful for recovering from dropped commands — for example, a light that did not actually turn off, or a cover that reverted to its previous position.
 
-**Re-apply scenes after inactivity** (toggle)
+**Reapply scenes after inactivity** (toggle)
 Enables or disables the feature globally. Off by default.
 
 **Reapply after (minutes)**

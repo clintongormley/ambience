@@ -14,7 +14,7 @@ In the Ambience panel, each category card has a small **Traces** button. Clickin
 
 Each entry shows four things across the top row:
 
-- **Outcome badge** — one of: `acted` (Ambience ran actions and something changed), `debounced` (a scene won but it is the same one already applied, so its identical actions were suppressed), `no op` (a scene won but it has no actions to run — e.g. a blocker scene), `no match` (no scene matched), or `skipped switch off` (the category's enable switch was off). Re-apply evaluations that dispatch commands also record `acted` — you can tell them apart by the `reapply` cause badge.
+- **Outcome badge** — one of: `acted` (Ambience ran actions and something changed), `debounced` (a scene won but it is the same one already applied, so its identical actions were suppressed), `no op` (a scene won but it has no actions to run — e.g. a blocker scene), `no match` (no scene matched), or `skipped switch off` (the category's enable switch was off). Reapply evaluations that dispatch commands also record `acted` — you can tell them apart by the `reapply` cause badge.
 - **Cause** — what triggered the evaluation. Entity causes read as `sensor.my_sensor off → on`; time-based causes read as `clock`, `sun`, or `duration recheck`. `Reloaded` means a configuration save re-applied the scope (only the scope you changed is re-evaluated); `Startup` means Home Assistant restarted. `reapply (1h30m)` means the idle re-apply timer fired after the configured inactivity period.
 - **Time** — the local time of the evaluation.
 

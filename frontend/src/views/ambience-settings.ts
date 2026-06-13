@@ -262,7 +262,7 @@ export class AmbienceAmbienceSettings extends LitElement {
             ${localize(
               this.hass,
               "ui.settings_reapply_enable_label",
-              "Re-apply scenes after inactivity",
+              "Reapply scenes after inactivity",
             )}
             <ambience-help
               .text=${localize(

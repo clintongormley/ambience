@@ -92,9 +92,9 @@ everywhere. But because toggles are independent, you can, for example, turn off
 the House toggle and then reenable just the room you are in.
 
 Optionally, Ambience can create a **switch entity** for every scope (enable
-**Create per-scope switches** in the integration's **Configure** dialog). These
-entities let you control scope toggles from dashboards, automations, and voice
-assistants. They are off by default.
+**Scope-level pause switch** in the **Advanced** tab of the Ambience Settings
+modal). These entities let you control scope toggles from dashboards,
+automations, and voice assistants. They are off by default.
 
 ### Actions
 

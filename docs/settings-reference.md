@@ -1,46 +1,12 @@
 # Settings reference
 
-Open the Settings modal by clicking the cogwheel (⚙) in the Ambience panel header. The modal has three tabs: **Ambience**, **Conditions**, and **Actions**. Category management lives inside the Ambience tab rather than as a separate tab.
+Open the Settings modal by clicking the cogwheel (⚙) in the Ambience panel header. The modal has four tabs: **Categories**, **Conditions**, **Actions**, and **Advanced**. Each tab has `(?)` help buttons next to controls — click one to open a short explanation.
 
 ---
 
-## Ambience tab
+## Categories tab
 
-The Ambience tab has three sections: **Defaults**, **Re-apply**, and **Scene categories**.
-
-!!! info "📷 Screenshot"
-
-### Defaults
-
-These values apply to every scope. See [Scopes & switches](concepts/scopes-and-switches.md) for an explanation of how scopes relate to switch entities.
-
-**Switch name**
-The name used for the Ambience switch entities when per-scope switches are enabled. The default is `Ambience`. Changing this field renames all of the Ambience switch entities.
-
-**Auto-on delay (seconds)**
-How long (in seconds) Ambience waits after you turn a scope off before automatically turning it back on. The default is `7200` (two hours). Set it to `0` to disable auto-on entirely — the scope will stay off until you turn it on again by hand.
-
-Changes take effect immediately and are persisted to the integration's storage.
-
----
-
-### Re-apply
-
-The **Re-apply** card lets Ambience automatically re-send a scope/category unit's scene commands after a period of inactivity. This is useful for recovering from dropped commands — for example, a light that did not actually turn off, or a cover that reverted to its previous position.
-
-**Re-apply scenes after inactivity** (toggle)
-Enables or disables the feature globally. Off by default.
-
-**Inactivity timeout (minutes)**
-How long Ambience waits without dispatching any commands to a given scope/category unit before it re-asserts that unit's winning scene. The default is `90` minutes (stored as 5400 seconds). The minimum is `1` minute.
-
-When the feature is enabled and the timeout elapses for a unit, Ambience re-evaluates and re-dispatches that unit's winning scene — even if the winner has not changed — to recover any commands that may have been dropped. The idle clock resets each time a unit's commands are actually dispatched. Units whose switch is off, or whose scope is disabled, are skipped.
-
----
-
-## Scene categories
-
-Category management is embedded in the Ambience tab, below the Defaults card.
+Category management lives in the Categories tab.
 
 Categories let you group scenes so you can filter the scene list and reason about them separately. Every fresh install starts with a single "General" category. You need at least one category at all times — Ambience will not let you delete the last one.
 
@@ -177,3 +143,40 @@ Drag the ⠿ handle on the left of any card to change the order in which actions
 ### Removing a service
 
 Click the ✖ on the right of any card header to stop exposing that service. Existing scenes that used it are not deleted, but they will show a warning when you next open them.
+
+---
+
+## Advanced tab
+
+The Advanced tab is the last tab in the Settings modal. It has two sections: **Scope-level pause switch** and **Re-apply**.
+
+!!! info "📷 Screenshot"
+
+### Scope-level pause switch
+
+This section controls whether Ambience creates a switch entity per scope that you can use to pause automatic scene application from outside the panel.
+
+**Scope-level pause switch** (toggle)
+Enables or disables per-scope switch entities. Off by default. When turned on, each scope (House, each Floor, each Area) gets a switch entity that pauses Ambience for that scope when turned off. See [Scopes & switches](concepts/scopes-and-switches.md) for a full explanation.
+
+**Switch name**
+The name used for the per-scope switch entities. The default is `Ambience`. Changing this renames all of the Ambience switch entities. Only editable when the toggle above is on.
+
+**Pause for (minutes)**
+How long Ambience waits after a scope's switch is turned off before automatically turning it back on. The default is `0` (never auto-resume) — the scope stays paused until you turn the switch back on manually. Set a positive number of minutes to resume automatically after that delay. Only editable when the toggle above is on.
+
+Changes take effect immediately — Ambience creates or removes switch entities live without requiring an integration reload.
+
+---
+
+### Re-apply
+
+The **Re-apply** card lets Ambience automatically re-send a scope/category unit's scene commands after a period of inactivity. This is useful for recovering from dropped commands — for example, a light that did not actually turn off, or a cover that reverted to its previous position.
+
+**Re-apply scenes after inactivity** (toggle)
+Enables or disables the feature globally. Off by default.
+
+**Reapply after (minutes)**
+How long Ambience waits without dispatching any commands to a given scope/category unit before it re-asserts that unit's winning scene. The default is `60` minutes. The minimum is `1` minute. Only editable when the toggle above is on.
+
+When the feature is enabled and the timeout elapses for a unit, Ambience re-evaluates and re-dispatches that unit's winning scene — even if the winner has not changed — to recover any commands that may have been dropped. The idle clock resets each time a unit's commands are actually dispatched. Units whose switch is off, or whose scope is disabled, are skipped.

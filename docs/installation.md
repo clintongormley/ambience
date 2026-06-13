@@ -56,11 +56,7 @@ panel** option is enabled by default; uncheck it to remove the sidebar entry.
 
 ## Voice assistants
 
-The same **Configure** dialog also contains a **Create per-scope switches** option
-(off by default). When enabled, Ambience creates one switch entity per scope
-(`switch.living_room_ambience`, `switch.house_ambience`, etc.) that you can use
-from dashboards, automations, or voice assistants. Disabling a scope while this
-option is on deletes its switch entity.
+Ambience can create one switch entity per scope (`switch.living_room_ambience`, `switch.house_ambience`, etc.) that you can use from dashboards, automations, or voice assistants. To enable this, open the Ambience panel's Settings modal (cogwheel ⚙), go to the **Advanced** tab, and turn on **Scope-level pause switch**. Disabling a scope while this is on deletes its switch entity. Changes take effect live.
 
 When per-scope switches are enabled, you can choose which voice assistants they
 are exposed to. There is one toggle per assistant — **Assist**, **Google

@@ -6,6 +6,7 @@ import { CATEGORY_COLORS, colorHex } from "../category-colors.js";
 import { localize } from "../i18n.js";
 import { randomId } from "../random-id.js";
 import type { SceneCategory } from "../types.js";
+import "./ambience-help.js";
 
 @customElement("ambience-categories-settings")
 export class AmbienceCategoriesSettings extends LitElement {
@@ -40,6 +41,11 @@ export class AmbienceCategoriesSettings extends LitElement {
       padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;
     }
     .error { color: var(--error-color, #d32f2f); }
+    .add-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
 
     /* Modal overlay (mirrors ambience-scene-editor) */
     .overlay {
@@ -392,9 +398,12 @@ export class AmbienceCategoriesSettings extends LitElement {
           </button>`;
         })}
       </div>
-      <button class="add" @click=${() => this._addCategory()}>
-        ${localize(this.hass, "ui.category_add", "+ Add category")}
-      </button>
+      <div class="add-row">
+        <button class="add" @click=${() => this._addCategory()}>
+          ${localize(this.hass, "ui.category_add", "+ Add category")}
+        </button>
+        <ambience-help .text=${localize(this.hass, "ui.help_categories_tab", "Categories let one scope have several independent winners at once — one scene wins per category.")}></ambience-help>
+      </div>
       ${this._renderModal()}
     `;
   }

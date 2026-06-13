@@ -3,6 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { deriveActionLabel, humanizeId, localize } from "../i18n.js";
 import { scopeLabel } from "../scope-label.js";
+import "./ambience-help.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
 // existing importers of this view keep working.
@@ -302,6 +303,13 @@ export class AmbienceActionsSettings extends LitElement {
       color: var(--text-primary-color, #fff);
       padding: 0.5rem 1rem;
       border-radius: 4px;
+    }
+    .section-heading {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-weight: 600;
+      margin-bottom: 0.6rem;
     }
   `;
 
@@ -620,6 +628,10 @@ export class AmbienceActionsSettings extends LitElement {
     }
     return html`
       <section>
+        <div class="section-heading">
+          <span>${localize(this.hass, "ui.settings_tab_actions", "Actions")}</span>
+          <ambience-help .text=${localize(this.hass, "ui.help_actions_tab", "Actions are the service calls a scene runs. Define them here so scenes can reuse them.")}></ambience-help>
+        </div>
         ${this._renderWarnings()}
         ${this._saveError ? html`<div class="error">${this._saveError}</div>` : ""}
         ${this._actions.map((a, i) => this._renderCard(a, i))}
@@ -725,11 +737,10 @@ export class AmbienceActionsSettings extends LitElement {
     }
     return html`
       <p class="body-help">
-        ${localize(
-          this.hass,
-          "ui.actions_field_help",
-          "Tick a checkbox to make a field editable per scene. Set a default to pre-fill it.",
-        )}
+        ${localize(this.hass, "ui.actions_field_help_show", "Tick a checkbox to make a field editable per scene.")}
+        <ambience-help .text=${localize(this.hass, "ui.help_show_in_scene_editor", "Show this field in the scene editor so each scene can set it. Leave off to send a fixed default instead.")}></ambience-help>
+        ${localize(this.hass, "ui.actions_field_help_default", "Set a default to pre-fill it.")}
+        <ambience-help .text=${localize(this.hass, "ui.help_set_default", "A value sent automatically when the action runs. Scenes can override it if the field is also shown in the editor.")}></ambience-help>
       </p>
       ${fields.map(([name, field]) => this._renderFieldRow(action, name, field))}
     `;

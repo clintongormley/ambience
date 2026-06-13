@@ -73,6 +73,16 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     help_reapply_toggle:
       "After this much inactivity, re-assess and re-send a scope/category's scene commands — recovers commands that were dropped (e.g. a light that didn't turn off).",
     help_reapply_after: "Minutes of no dispatch to a scope/category before it is re-applied.",
+    help_actions_tab:
+      "Actions are the service calls a scene runs. Define them here so scenes can reuse them.",
+    help_show_in_scene_editor:
+      "Show this field in the scene editor so each scene can set it. Leave off to send a fixed default instead.",
+    help_set_default:
+      "A value sent automatically when the action runs. Scenes can override it if the field is also shown in the editor.",
+    help_conditions_tab:
+      "Conditions are the inputs scenes match on (time of day, presence, weather, …). A scene wins when all its conditions pass.",
+    help_categories_tab:
+      "Categories let one scope have several independent winners at once — one scene wins per category.",
     no_areas: "No areas found in Home Assistant.",
     not_configured: "not configured",
     scene_singular: "scene",
@@ -240,8 +250,8 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     retry: "Retry",
     action_label_placeholder: "Label (optional)",
     action_no_parameters: "This action has no configurable fields.",
-    actions_field_help:
-      "Tick a checkbox to make a field editable per scene. Set a default to pre-fill it.",
+    actions_field_help_show: "Tick a checkbox to make a field editable per scene.",
+    actions_field_help_default: "Set a default to pre-fill it.",
     clear_default: "Clear default",
     set_default: "Set default",
     default_prefix: "Default: ",

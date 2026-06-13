@@ -1517,4 +1517,9 @@ describe("ambience-actions-settings", () => {
     expect(saveExposedActions).not.toHaveBeenCalled();
     expect((el as any)._expanded.has("light.turn_on")).toBe(true);
   });
+
+  test("renders a help tooltip trigger", async () => {
+    el = await mount();
+    expect(el.shadowRoot.querySelector("ambience-help")).not.toBeNull();
+  });
 });

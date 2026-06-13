@@ -2,7 +2,9 @@ import { css, html, LitElement, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, listConditions } from "../api.js";
+import { localize } from "../i18n.js";
 import type { ConditionInfo } from "../types.js";
+import "./ambience-help.js";
 import "./condition-card.js";
 import "./time-of-day-config.js";
 import "./lux-config.js";
@@ -26,6 +28,13 @@ export class AmbienceConditionsSettings extends LitElement {
   static override styles = css`
     :host { display: block; }
     .error { color: var(--error-color, #d32f2f); }
+    .tab-heading {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-weight: 600;
+      margin-bottom: 0.6rem;
+    }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
@@ -47,6 +56,10 @@ export class AmbienceConditionsSettings extends LitElement {
       .slice()
       .sort((a, b) => b.priority - a.priority);
     return html`
+      <div class="tab-heading">
+        <span>${localize(this.hass, "ui.settings_tab_conditions", "Conditions")}</span>
+        <ambience-help .text=${localize(this.hass, "ui.help_conditions_tab", "Conditions are the inputs scenes match on (time of day, presence, weather, …). A scene wins when all its conditions pass.")}></ambience-help>
+      </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
       ${configurable.map(
         (m) => html`

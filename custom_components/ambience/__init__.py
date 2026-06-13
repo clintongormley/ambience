@@ -96,7 +96,7 @@ _APPLY_SCENE_SCHEMA = vol.Schema(
     {
         vol.Optional("scope"): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional("category"): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional("force", default=False): cv.boolean,
+        vol.Optional("force"): cv.boolean,
     }
 )
 

@@ -31,12 +31,15 @@ async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry):
 
 
 def test_empty_is_valid():
-    # No target => all scopes; the schema permits an empty call and defaults force off.
-    assert _APPLY_SCENE_SCHEMA({}) == {"force": False}
+    # No target => all scopes; force is optional and absent when omitted (the
+    # handler treats a missing force as false).
+    assert _APPLY_SCENE_SCHEMA({}) == {}
 
 
-def test_force_defaults_to_false():
-    assert _APPLY_SCENE_SCHEMA({})["force"] is False
+def test_force_omitted_is_absent():
+    # force is a plain optional field — omitting it leaves it out of the call data
+    # rather than injecting a default.
+    assert "force" not in _APPLY_SCENE_SCHEMA({})
 
 
 def test_scope_coerced_to_list():

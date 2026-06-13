@@ -158,7 +158,6 @@ def build_apply_scene_schema(hass: HomeAssistant) -> dict[str, Any]:
                 "name": "Force",
                 "description": "Apply even when a scope is paused (its switch is off).",
                 "required": False,
-                "default": False,
                 "selector": {"boolean": {}},
             },
         },

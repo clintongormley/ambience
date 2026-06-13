@@ -183,7 +183,8 @@ def _resolve_target_scopes(
     floor_reg = fr.async_get(hass)
     scopes: list[tuple[str, str | None]] = []
     for value in data.get("scope", []):
-        if not value.strip():
+        value = value.strip()
+        if not value:
             continue
         kind, scope_id = parse_scope_option(value)
         if kind == "area" and area_reg.async_get_area(scope_id) is None:

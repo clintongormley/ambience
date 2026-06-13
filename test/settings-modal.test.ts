@@ -13,7 +13,11 @@ vi.mock("../frontend/src/api.js", () => ({
   saveWeatherConfig: vi.fn(async () => ({ ok: true, warnings: [] })),
   listAreas: vi.fn(async () => []),
   listFloors: vi.fn(async () => []),
-  getSwitchDefaults: vi.fn(async () => ({ name: "Ambience", auto_on_delay_seconds: 7200 })),
+  getSwitchDefaults: vi.fn(async () => ({
+    name: "Ambience",
+    auto_on_delay_seconds: 7200,
+    create_switches: false,
+  })),
   saveSwitchDefaults: vi.fn(async () => ({ ok: true })),
   getArea: vi.fn(async () => ({ scenes: [] })),
   getFloor: vi.fn(async () => ({ scenes: [] })),

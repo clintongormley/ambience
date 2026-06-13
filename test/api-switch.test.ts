@@ -20,11 +20,12 @@ describe("switch API wrappers", () => {
 
   test("saveSwitchDefaults", async () => {
     const hass = mockHass(() => ({ ok: true }));
-    await saveSwitchDefaults(hass, "X", 600);
+    await saveSwitchDefaults(hass, "X", 600, true);
     expect(hass.callWS).toHaveBeenCalledWith({
       type: "ambience/switch_defaults/save",
       name: "X",
       auto_on_delay_seconds: 600,
+      create_switches: true,
     });
   });
 

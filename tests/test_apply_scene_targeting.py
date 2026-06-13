@@ -76,6 +76,14 @@ async def test_resolve_all_blank_scope_targets_every_scope(hass, installed):
     assert ("house", None) in scopes
 
 
+async def test_resolve_strips_surrounding_whitespace(hass, installed):
+    # Whitespace-padded values (common from templating) are stripped before
+    # parsing, so they resolve rather than raising "invalid scope".
+    area = ar.async_get(hass).async_create("LR")
+    scopes = _resolve_target_scopes(hass, {"scope": [f"  area:{area.id}  "]})
+    assert scopes == [("area", area.id)]
+
+
 async def test_resolve_unknown_area_raises(hass, installed):
     with pytest.raises(ServiceValidationError):
         _resolve_target_scopes(hass, {"scope": ["area:ghost"]})

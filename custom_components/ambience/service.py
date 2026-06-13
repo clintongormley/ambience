@@ -93,6 +93,92 @@ def parse_scope_option(value: str) -> tuple[str, str | None]:
     raise ServiceValidationError(f"invalid scope: {value!r}")
 
 
+def build_apply_scene_schema(hass: HomeAssistant) -> dict[str, Any]:
+    """Build the apply_scene service UI schema with runtime-populated scope /
+    category / scene dropdowns. Passed to async_set_service_schema and rebuilt
+    when the store or area/floor registries change."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    area_reg = ar.async_get(hass)
+    floor_reg = fr.async_get(hass)
+
+    scope_options: list[dict[str, str]] = []
+    if store.get_scope_enabled("house", None):
+        scope_options.append({"value": scope_option_value("house", None), "label": "House"})
+    for floor in sorted(floor_reg.async_list_floors(), key=lambda f: f.name):
+        if store.get_scope_enabled("floor", floor.floor_id):
+            scope_options.append(
+                {
+                    "value": scope_option_value("floor", floor.floor_id),
+                    "label": f"{floor.name} (floor)",
+                }
+            )
+    for area in sorted(area_reg.async_list_areas(), key=lambda a: a.name):
+        if store.get_scope_enabled("area", area.id):
+            scope_options.append(
+                {
+                    "value": scope_option_value("area", area.id),
+                    "label": f"{area.name} (area)",
+                }
+            )
+
+    category_options = [
+        {"value": c["id"], "label": c.get("name") or c["id"]} for c in store.categories()
+    ]
+
+    scene_names: set[str] = set()
+    for _kind, _scope_id, cfg in store.all_scope_configs():
+        for scene in cfg.get("scenes", []):
+            name = (scene.get("name") or "").strip()
+            if name:
+                scene_names.add(name)
+    scene_options = [{"value": n, "label": n} for n in sorted(scene_names)]
+
+    def _select(options: list[dict[str, str]]) -> dict[str, Any]:
+        return {
+            "select": {
+                "multiple": True,
+                "custom_value": True,
+                "mode": "dropdown",
+                "options": options,
+            }
+        }
+
+    return {
+        "name": "Apply scene",
+        "description": (
+            "Apply Ambience scenes to one or more scopes. Blank scope = every scope; "
+            "blank category = every category; scene names apply those scenes directly."
+        ),
+        "fields": {
+            "scope": {
+                "name": "Scopes",
+                "description": "Scopes to apply in (blank = every scope).",
+                "required": False,
+                "selector": _select(scope_options),
+            },
+            "category": {
+                "name": "Categories",
+                "description": "Limit to these scene categories (blank = all).",
+                "required": False,
+                "selector": _select(category_options),
+            },
+            "scene": {
+                "name": "Scenes",
+                "description": "Apply these named scenes' actions directly, bypassing conditions.",
+                "required": False,
+                "selector": _select(scene_options),
+            },
+            "force": {
+                "name": "Force",
+                "description": "Apply even when a scope is paused (its switch is off).",
+                "required": False,
+                "default": False,
+                "selector": {"boolean": {}},
+            },
+        },
+    }
+
+
 def _resolve_target_scopes(
     hass: HomeAssistant, data: dict[str, Any]
 ) -> list[tuple[str, str | None]]:

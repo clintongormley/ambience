@@ -33,9 +33,6 @@ export type ActionSpec = {
   service: string; // "domain.service"
   entity_ids: string[];
   params: Record<string, unknown>;
-  // Per-scene override: absent = inherit exposed default; 0 = explicitly off;
-  // >= 10 = re-apply every N seconds (frontend shows minutes, stores seconds).
-  reapply_seconds?: number;
 };
 
 // One entry in the user's exposed-actions list (Configuration → Actions).
@@ -51,9 +48,6 @@ export type ExposedAction = {
   label: string; // user-friendly display name; "" allowed
   visible_fields: string[]; // shown in the scene editor
   defaults: Record<string, unknown>; // applied at execution; scene params override
-  // Default re-apply interval in seconds. 0/absent = off; >= 10 = enabled.
-  // Scenes may override this per-use via ActionSpec.reapply_seconds.
-  reapply_seconds?: number;
 };
 
 // HA service listing for the settings UI's service picker.
@@ -90,6 +84,11 @@ export type ExposedActionWarning = {
 export type SwitchDefaults = {
   name: string;
   auto_on_delay_seconds: number;
+};
+
+export type ReapplySettings = {
+  enabled: boolean;
+  interval_seconds: number;
 };
 
 // One scope's Ambience switch entity, as resolved by the backend (the
@@ -303,7 +302,7 @@ export type ScopeConfig = AreaConfig;
 // Purely informational — there are no enable/disable controls (auto-triggers
 // are always on). Entities get one row each; clock times / periodic re-check /
 // date rollover collapse into a single `time` group; sun events into a `sun`
-// group; each distinct re-apply interval is its own `reapply` row.
+// group.
 export type AutoTrigger = { key: string } & (
   | { kind: "entity"; entity_id: string }
   | {
@@ -313,7 +312,6 @@ export type AutoTrigger = { key: string } & (
       date_rollover: boolean;
     }
   | { kind: "sun"; suns: { anchor: string; offset: number }[] }
-  | { kind: "reapply"; interval_seconds: number }
 );
 
 export type AutoTriggerList = {
@@ -375,8 +373,7 @@ export type TraceOutcome =
   | "no_op"
   | "no_match"
   | "skipped_switch_off"
-  | "skipped_scope_disabled"
-  | "reapplied";
+  | "skipped_scope_disabled";
 export type BufferedUnit = {
   event_id: string | null;
   timestamp: string | null;

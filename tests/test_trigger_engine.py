@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
@@ -23,6 +24,7 @@ from custom_components.ambience.const import (
     DATA_SWITCHES,
     DATA_TRACE_SINKS,
     DOMAIN,
+    SIGNAL_UNIT_APPLIED,
 )
 from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.trace import TraceEvent
@@ -97,11 +99,16 @@ class FakeStore:
         self,
         scopes: list[tuple[str, str | None, dict]],
         categories: list[dict] | None = None,
+        reapply: dict | None = None,
     ) -> None:
         self._scopes = scopes
         self._by_key = {(kind, sid): cfg for kind, sid, cfg in scopes}
         self._categories = categories or []
         self._enabled: dict[tuple[str, str | None], bool] = {}
+        self._reapply = reapply or {"enabled": False, "interval_seconds": 5400}
+
+    def get_reapply_settings(self) -> dict:
+        return dict(self._reapply)
 
     def all_scope_configs(self) -> list[tuple[str, str | None, dict]]:
         return list(self._scopes)
@@ -1137,212 +1144,6 @@ def _exposed_store_with(*service_ids):
     )
 
 
-async def test_reapply_fires_due_action_for_winning_scene(hass):
-    calls = []
-    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
-    action = {
-        "service": "light.turn_on",
-        "entity_ids": ["light.a"],
-        "params": {"brightness": 7},
-        "reapply_seconds": 10,
-    }
-    scene = {"when": {}, "category": "g", "actions": [action]}
-    hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
-        DATA_CONDITIONS: {},
-        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
-        DATA_LAST_APPLIED: {("area", "k", "g"): 0},
-        DATA_SWITCHES: {},
-    }
-    eng = AutoTriggerEngine(hass)
-    eng.async_rebuild()
-    eng.async_subscribe()
-
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
-    await hass.async_block_till_done()
-
-    assert len(calls) == 1 and calls[0]["brightness"] == 7
-    eng._teardown()
-
-
-async def test_reapply_attributes_to_ambience(hass):
-    from homeassistant.const import EVENT_LOGBOOK_ENTRY
-    from pytest_homeassistant_custom_component.common import async_capture_events
-
-    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
-    contexts: list[str] = []
-    hass.services.async_register("light", "turn_on", lambda call: contexts.append(call.context.id))
-    action = {
-        "service": "light.turn_on",
-        "entity_ids": ["light.a"],
-        "params": {},
-        "reapply_seconds": 10,
-    }
-    scene = {"when": {}, "category": "g", "name": "Evening", "actions": [action]}
-    hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
-        DATA_CONDITIONS: {},
-        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
-        DATA_LAST_APPLIED: {("area", "k", "g"): 0},
-        DATA_SWITCHES: {},
-    }
-    eng = AutoTriggerEngine(hass)
-    eng.async_rebuild()
-    eng.async_subscribe()
-
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
-    await hass.async_block_till_done()
-
-    ambience = [e for e in entries if e.data.get("name") == "Ambience"]
-    assert len(ambience) == 1
-    entry = ambience[0]
-    # Single category ⇒ no category suffix; area "k" not registered ⇒ raw-id scope label.
-    assert entry.data["message"] == "re-applied 'Evening' in k"
-    assert len(contexts) == 1
-    assert contexts[0] == entry.context.id  # re-fired call shares the entry's context
-    eng._teardown()
-
-
-async def test_reapply_emits_trace_event(hass):
-    captured: list[TraceEvent] = []
-
-    class CaptureSink:
-        def emit(self, event):
-            captured.append(event)
-
-    hass.services.async_register("light", "turn_on", lambda call: None)
-    action = {
-        "service": "light.turn_on",
-        "entity_ids": ["light.a"],
-        "params": {"brightness": 7},
-        "reapply_seconds": 10,
-    }
-    scene = {"when": {}, "category": "g", "name": "evening", "actions": [action]}
-    hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
-        DATA_CONDITIONS: {},
-        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
-        DATA_LAST_APPLIED: {("area", "k", "g"): 0},
-        DATA_SWITCHES: {},
-        DATA_TRACE_SINKS: [CaptureSink()],
-    }
-    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
-    try:
-        eng = AutoTriggerEngine(hass)
-        eng.async_rebuild()
-        eng.async_subscribe()
-
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
-        await hass.async_block_till_done()
-
-        assert captured, "expected a reapply TraceEvent"
-        event = captured[-1]
-        assert event.cause.kind == "reapply"
-        unit = next(u for u in event.units if u.outcome == "reapplied")
-        assert unit.winner_name == "evening"
-        assert unit.actions == [action]
-        eng._teardown()
-    finally:
-        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
-
-
-async def test_reapply_skips_when_switch_off(hass):
-    calls = []
-    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
-    scene = {
-        "when": {},
-        "category": "g",
-        "actions": [
-            {
-                "service": "light.turn_on",
-                "entity_ids": ["light.a"],
-                "params": {},
-                "reapply_seconds": 10,
-            }
-        ],
-    }
-    hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
-        DATA_CONDITIONS: {},
-        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
-        DATA_LAST_APPLIED: {("area", "k", "g"): 0},
-        DATA_SWITCHES: {("area", "k"): SimpleNamespace(is_on=False)},
-    }
-    eng = AutoTriggerEngine(hass)
-    eng.async_rebuild()
-    eng.async_subscribe()
-
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
-    await hass.async_block_till_done()
-
-    assert calls == []
-    eng._teardown()
-
-
-async def test_reapply_skips_when_scene_is_not_the_winner(hass):
-    calls = []
-    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
-    scene0 = {"when": {}, "category": "g", "actions": []}
-    scene1 = {
-        "when": {},
-        "category": "g",
-        "actions": [
-            {
-                "service": "light.turn_on",
-                "entity_ids": ["light.a"],
-                "params": {},
-                "reapply_seconds": 10,
-            }
-        ],
-    }
-    hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene0, scene1]})]),
-        DATA_CONDITIONS: {},
-        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
-        # winner is scene 0; the re-applying action lives in scene 1
-        DATA_LAST_APPLIED: {("area", "k", "g"): 0},
-        DATA_SWITCHES: {},
-    }
-    eng = AutoTriggerEngine(hass)
-    eng.async_rebuild()
-    eng.async_subscribe()
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
-    await hass.async_block_till_done()
-    assert calls == []
-    eng._teardown()
-
-
-async def test_reapply_skips_when_no_scene_active(hass):
-    calls = []
-    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
-    scene = {
-        "when": {},
-        "category": "g",
-        "actions": [
-            {
-                "service": "light.turn_on",
-                "entity_ids": ["light.a"],
-                "params": {},
-                "reapply_seconds": 10,
-            }
-        ],
-    }
-    hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
-        DATA_CONDITIONS: {},
-        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
-        DATA_LAST_APPLIED: {},  # nothing applied
-        DATA_SWITCHES: {},
-    }
-    eng = AutoTriggerEngine(hass)
-    eng.async_rebuild()
-    eng.async_subscribe()
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
-    await hass.async_block_till_done()
-    assert calls == []
-    eng._teardown()
-
-
 async def test_state_change_emits_trace_event_to_sink(hass) -> None:
     captured: list[TraceEvent] = []
 
@@ -1372,46 +1173,6 @@ async def test_state_change_emits_trace_event_to_sink(hass) -> None:
         assert any(u.outcome == "acted" for u in event.units)
     finally:
         trace_logger.setLevel(logging.NOTSET)
-
-
-async def test_reapply_distinct_intervals_fire_independently(hass):
-    calls = []
-    hass.services.async_register("light", "turn_on", lambda c: calls.append(("on", c.data)))
-    hass.services.async_register("light", "turn_off", lambda c: calls.append(("off", c.data)))
-    scene = {
-        "when": {},
-        "category": "g",
-        "actions": [
-            {
-                "service": "light.turn_on",
-                "entity_ids": ["light.a"],
-                "params": {},
-                "reapply_seconds": 10,
-            },
-            {
-                "service": "light.turn_off",
-                "entity_ids": ["light.b"],
-                "params": {},
-                "reapply_seconds": 20,
-            },
-        ],
-    }
-    hass.data[DOMAIN] = {
-        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})]),
-        DATA_CONDITIONS: {},
-        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on", "light.turn_off"),
-        DATA_LAST_APPLIED: {("area", "k", "g"): 0},
-        DATA_SWITCHES: {},
-    }
-    eng = AutoTriggerEngine(hass)
-    eng.async_rebuild()
-    eng.async_subscribe()
-
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
-    await hass.async_block_till_done()
-    kinds = [c[0] for c in calls]
-    assert "on" in kinds and "off" not in kinds
-    eng._teardown()
 
 
 # ---------------------------------------------------------------------------
@@ -1951,3 +1712,195 @@ async def test_sync_applies_units_flipped_by_seeding_recompute(hass) -> None:
     forced = {u: force for units, force in applied for u in units}
     assert forced.get(("area", "a", "g")) is True  # the requested unit keeps force
     assert forced.get(("area", "b", "h")) is False  # the seeded flip is applied, unforced
+
+
+# ---------------------------------------------------------------------------
+# Idle-reapply: per-unit one-shot timers in the engine
+# ---------------------------------------------------------------------------
+
+
+def _reapply_hass_data(reapply, *, last_applied=True, switches=None):
+    scene = {
+        "when": {},
+        "category": "g",
+        "name": "Evening",
+        "actions": [
+            {
+                "service": "light.turn_on",
+                "entity_ids": ["light.a"],
+                "params": {"brightness": 7},
+            }
+        ],
+    }
+    return {
+        DATA_STORE: FakeStore([("area", "k", {"scenes": [scene]})], reapply=reapply),
+        DATA_CONDITIONS: {},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {("area", "k", "g"): 0} if last_applied else {},
+        DATA_SWITCHES: switches or {},
+    }
+
+
+async def test_idle_reapply_force_redispatches_unchanged_winner(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    hass.data[DOMAIN] = _reapply_hass_data({"enabled": True, "interval_seconds": 60})
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()  # arms the idle timer for the applied unit
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+    await hass.async_block_till_done()
+    assert len(calls) == 1 and calls[0]["brightness"] == 7
+    eng._teardown()
+
+
+async def test_idle_reapply_rearms_after_firing(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    hass.data[DOMAIN] = _reapply_hass_data({"enabled": True, "interval_seconds": 60})
+    eng = AutoTriggerEngine(hass)
+    # The re-arm closes through SIGNAL_UNIT_APPLIED: a forced dispatch in
+    # _reapply_due re-emits it via async_execute_plan, which (once connected to
+    # note_unit_applied — done in __init__ at setup) re-arms the timer. This
+    # engine-only test stands in for that wiring so the self-perpetuating loop
+    # can be exercised in isolation.
+    eng.async_rebuild()
+    async_dispatcher_connect(hass, SIGNAL_UNIT_APPLIED, eng.note_unit_applied)
+    eng.async_subscribe()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=120))
+    await hass.async_block_till_done()
+    assert len(calls) == 2  # re-armed by its own dispatch
+    eng._teardown()
+
+
+async def test_idle_reapply_rearm_cancels_prior_timer(hass):
+    # A second note_unit_applied before the first timer fires must cancel the
+    # already-armed timer and replace it (covers the `old is not None` branch in
+    # _arm_reapply_timer). Only the latest timer survives, so exactly one dispatch
+    # happens at the interval.
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    hass.data[DOMAIN] = _reapply_hass_data({"enabled": True, "interval_seconds": 60})
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()  # arms the applied unit once
+    unit = ("area", "k", "g")
+    first = eng._reapply_timers[unit]
+    eng.note_unit_applied(unit)  # re-arm: cancels `first`, installs a new timer
+    assert eng._reapply_timers[unit] is not first
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+    await hass.async_block_till_done()
+    assert len(calls) == 1
+    eng._teardown()
+
+
+async def test_idle_reapply_disabled_does_not_fire(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    hass.data[DOMAIN] = _reapply_hass_data({"enabled": False, "interval_seconds": 60})
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=600))
+    await hass.async_block_till_done()
+    assert calls == []
+    eng._teardown()
+
+
+async def test_idle_reapply_skips_when_switch_off(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    hass.data[DOMAIN] = _reapply_hass_data(
+        {"enabled": True, "interval_seconds": 60},
+        switches={("area", "k"): SimpleNamespace(is_on=False)},
+    )
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+    await hass.async_block_till_done()
+    assert calls == []
+    eng._teardown()
+
+
+async def test_idle_reapply_skips_when_scope_disabled(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    hass.data[DOMAIN] = _reapply_hass_data({"enabled": True, "interval_seconds": 60})
+    await hass.data[DOMAIN][DATA_STORE].async_set_scope_enabled("area", "k", False)
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+    await hass.async_block_till_done()
+    assert calls == []
+    eng._teardown()
+
+
+async def test_idle_reapply_config_disable_cancels_timer(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    hass.data[DOMAIN] = _reapply_hass_data({"enabled": True, "interval_seconds": 60})
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+    # operator turns the feature off; engine handler cancels armed timers
+    eng._store()._reapply = {"enabled": False, "interval_seconds": 60}
+    eng.note_reapply_config_changed(None)
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+    await hass.async_block_till_done()
+    assert calls == []
+    eng._teardown()
+
+
+async def test_idle_reapply_enable_via_config_arms_timer(hass):
+    calls = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call.data))
+    hass.data[DOMAIN] = _reapply_hass_data({"enabled": False, "interval_seconds": 60})
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()  # disabled at start → arms nothing
+    eng._store()._reapply = {"enabled": True, "interval_seconds": 60}
+    eng.note_reapply_config_changed(None)  # enable → arms the already-applied unit
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+    await hass.async_block_till_done()
+    assert len(calls) == 1
+    eng._teardown()
+
+
+async def test_idle_reapply_due_callback_noop_after_teardown(hass):
+    # Covers the `if self._running` guard in the one-shot callback: a timer whose
+    # callback was already queued when teardown ran must not start an apply.
+    hass.data[DOMAIN] = _reapply_hass_data({"enabled": True, "interval_seconds": 60})
+    eng = AutoTriggerEngine(hass)
+    eng.async_rebuild()
+    eng.async_subscribe()
+    due = eng._make_reapply_due(("area", "k", "g"), 60)
+    eng._teardown()  # sets _running False
+    due(None)  # must not raise and must not create a task
+    await hass.async_block_till_done()
+
+
+async def test_idle_reapply_emits_reapply_trace(hass):
+    captured = []
+
+    class CaptureSink:
+        def emit(self, event):
+            captured.append(event)
+
+    hass.services.async_register("light", "turn_on", lambda call: None)
+    hass.data[DOMAIN] = _reapply_hass_data({"enabled": True, "interval_seconds": 60})
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [CaptureSink()]
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        eng = AutoTriggerEngine(hass)
+        eng.async_rebuild()
+        eng.async_subscribe()
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+        await hass.async_block_till_done()
+        assert any(e.cause.kind == "reapply" for e in captured)
+        eng._teardown()
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)

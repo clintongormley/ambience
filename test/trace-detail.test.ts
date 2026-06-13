@@ -87,6 +87,12 @@ describe("trace-detail", () => {
     ).toContain("20:00");
   });
 
+  test("formatCause labels the idle re-apply cause and keeps its interval detail", () => {
+    expect(
+      formatCause({ kind: "reapply", entity_id: null, old: null, new: null, detail: "1h30m" }),
+    ).toBe("Re-apply 1h30m");
+  });
+
   test("formatCause normalizes null state values to '?' (not the string 'null')", () => {
     expect(
       formatCause({ kind: "entity", entity_id: "x", old: null, new: null, detail: null }),
@@ -397,14 +403,6 @@ describe("trace-detail", () => {
       true,
     );
     expect(host.textContent).toContain("not reached");
-  });
-
-  test("a unit with actions but no explanation can still expand to its actions", () => {
-    const host = renderToHost({ outcome: "reapplied", explanation: null }, true);
-    const titles = [...host.querySelectorAll(".section-title")].map((e) => e.textContent?.trim());
-    expect(titles).toContain("Actions taken");
-    expect(titles).not.toContain("Scene evaluation");
-    expect(host.querySelector(".outcome.clickable")).toBeTruthy();
   });
 
   test("scene numbers are displayed 1-based (index 0 → 'Scene #1')", () => {
@@ -949,7 +947,6 @@ describe("trace-detail", () => {
     expect(outcomeLabel("no_op")).toBe("blocked");
     expect(outcomeLabel("debounced")).toBe("unchanged");
     expect(outcomeLabel("no_match")).toBe("no match");
-    expect(outcomeLabel("reapplied")).toBe("refreshed");
     expect(outcomeLabel("skipped_switch_off")).toBe("skipped");
     expect(outcomeLabel("skipped_scope_disabled")).toBe("skipped");
   });
@@ -973,9 +970,6 @@ describe("trace-detail", () => {
     );
     expect(outcomeSummary(unit({ outcome: "no_match", winner_name: null }))).toContain(
       "No scene matched",
-    );
-    expect(outcomeSummary(unit({ outcome: "reapplied", winner_name: "Evening" }))).toContain(
-      "re-sent",
     );
     expect(outcomeSummary(unit({ outcome: "skipped_switch_off" }))).toContain("switch is off");
     expect(outcomeSummary(unit({ outcome: "skipped_scope_disabled" }))).toContain(
@@ -1008,7 +1002,6 @@ describe("trace-detail", () => {
     const base = { entity_id: null, old: null, new: null } as const;
     expect(formatCause({ kind: "switch", ...base, detail: null })).toBe("Switch turned on");
     expect(formatCause({ kind: "manual", ...base, detail: null })).toBe("Manual apply");
-    expect(formatCause({ kind: "reapply", ...base, detail: "300s" })).toBe("Periodic refresh");
     expect(formatCause({ kind: "simulated", ...base, detail: "2026-06-01T10:00:00" })).toBe(
       "Simulation",
     );

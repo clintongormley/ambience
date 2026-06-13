@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getSwitchDefaults: vi.fn(async () => ({ name: "Ambience", auto_on_delay_seconds: 7200 })),
   saveSwitchDefaults: vi.fn(async () => ({ ok: true })),
+  getReapplySettings: vi.fn(async () => ({ enabled: false, interval_seconds: 5400 })),
+  saveReapplySettings: vi.fn(async () => ({ ok: true })),
 }));
 
 vi.mock("../frontend/src/api.js", () => mocks);
@@ -184,5 +186,30 @@ describe("ambience-ambience-settings", () => {
     input.dispatchEvent(new Event("change", { bubbles: true }));
     await el.updateComplete;
     expect(input.value).toBe("7200");
+  });
+
+  test("loads reapply settings and shows minutes", async () => {
+    mocks.getSwitchDefaults.mockResolvedValue({ name: "Ambience", auto_on_delay_seconds: 7200 });
+    mocks.getReapplySettings.mockResolvedValue({ enabled: true, interval_seconds: 5400 });
+    el = await mount();
+    const minutes = el.shadowRoot.querySelector(
+      '[data-test="reapply-interval-minutes"]',
+    ) as HTMLInputElement;
+    expect(minutes.value).toBe("90");
+    const toggle = el.shadowRoot.querySelector('[data-test="reapply-enabled"]') as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+  });
+
+  test("saves reapply settings as seconds when minutes change", async () => {
+    mocks.getSwitchDefaults.mockResolvedValue({ name: "Ambience", auto_on_delay_seconds: 7200 });
+    mocks.getReapplySettings.mockResolvedValue({ enabled: true, interval_seconds: 5400 });
+    el = await mount();
+    const minutes = el.shadowRoot.querySelector(
+      '[data-test="reapply-interval-minutes"]',
+    ) as HTMLInputElement;
+    minutes.value = "120";
+    minutes.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    expect(mocks.saveReapplySettings).toHaveBeenCalledWith(expect.anything(), true, 7200);
   });
 });

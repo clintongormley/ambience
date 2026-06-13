@@ -205,49 +205,6 @@ class TestValidateScopeConfig:
             validate_scope_config(hass, config)
         mock_condition.validate_predicate.assert_called_once_with({"period": "garbage"})
 
-    def test_validates_reapply_seconds_when_present(self) -> None:
-        # Line 79: reapply_seconds in action_spec triggers validate_reapply_seconds.
-        exposed = _make_exposed(["light.turn_on"])
-        hass = _make_hass(exposed_actions=exposed)
-        config = {
-            "scenes": [
-                {
-                    "when": {},
-                    "actions": [
-                        {
-                            "service": "light.turn_on",
-                            "entity_ids": [],
-                            "params": {},
-                            "reapply_seconds": 5,  # invalid: not 0 and < 10
-                        }
-                    ],
-                }
-            ]
-        }
-        with pytest.raises(ValueError, match="reapply_seconds"):
-            validate_scope_config(hass, config)
-
-    def test_accepts_zero_reapply_seconds(self) -> None:
-        # 0 is the only non-minimum valid value for reapply_seconds.
-        exposed = _make_exposed(["light.turn_on"])
-        hass = _make_hass(exposed_actions=exposed)
-        config = {
-            "scenes": [
-                {
-                    "when": {},
-                    "actions": [
-                        {
-                            "service": "light.turn_on",
-                            "entity_ids": [],
-                            "params": {},
-                            "reapply_seconds": 0,
-                        }
-                    ],
-                }
-            ]
-        }
-        validate_scope_config(hass, config)  # no error
-
     # --- scene-name uniqueness (server-side backstop for the frontend rule) ---
 
     def test_rejects_duplicate_scene_name_in_same_category(self) -> None:

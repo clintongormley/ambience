@@ -218,33 +218,6 @@ def test_format_renders_actions_for_acted_unit():
     assert "brightness_pct" in text
 
 
-def test_format_renders_reapply_unit_with_actions():
-    unit = UnitTrace(
-        "area",
-        "kitchen",
-        "General",
-        "on",
-        "reapplied",
-        None,
-        winner_name="evening",
-        actions=[{"service": "light.turn_on", "entity_ids": ["light.kitchen"]}],
-    )
-    text = "\n".join(
-        format_trace_event(TraceEvent(TriggerCause(kind="reapply", detail="10s"), [unit]))
-    )
-    assert "reapply (10s)" in text  # cause describes the interval
-    assert "reapplied -> 'evening'" in text  # winner name shown without a scene index
-    assert "light.turn_on" in text
-
-
-def test_logsink_routes_reapplied_to_changes_stream(caplog):
-    unit = UnitTrace("area", "kitchen", "General", "on", "reapplied", None, winner_name="evening")
-    event = TraceEvent(TriggerCause(kind="reapply", detail="10s"), [unit])
-    with caplog.at_level(logging.DEBUG, logger="custom_components.ambience.trace"):
-        LogSink().emit(event)
-    assert "reapplied" in caplog.text
-
-
 def test_emit_trace_resolves_category_name_for_log(caplog):
     class StoreStub:
         def categories(self):
@@ -462,17 +435,6 @@ def test_buffered_unit_to_dict_acted_with_explanation():
     }
 
 
-def test_buffered_unit_to_dict_reapplied_has_null_explanation():
-    unit = UnitTrace("area", "kitchen", "General", "on", "reapplied", None, winner_name="evening")
-    record = BufferedUnit(
-        "e", "2026-06-01T00:00:00", TriggerCause(kind="reapply", detail="10s"), unit
-    )
-    data = buffered_unit_to_dict(record)
-    assert data["outcome"] == "reapplied"
-    assert data["explanation"] is None
-    assert json.loads(json.dumps(data)) == data
-
-
 def test_format_marks_disabled_scenes():
     explanation = Explanation(
         winner_index=1,
@@ -553,6 +515,19 @@ def test_cause_describe_duration_multi_entity_uses_label():
     # label, entity_id is None — render "<label> for <duration>".
     cause = TriggerCause(kind=CauseKind.DURATION, new="nobody home", detail="30m")
     assert cause.describe() == "nobody home for 30m"
+
+
+def test_reapply_cause_describe_with_detail():
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    cause = TriggerCause(kind=CauseKind.REAPPLY, detail="1h30m")  # fmt_duration format
+    assert cause.describe() == "reapply (1h30m)"
+
+
+def test_reapply_cause_describe_without_detail():
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    assert TriggerCause(kind=CauseKind.REAPPLY).describe() == "reapply"
 
 
 def test_cause_describe_switch():

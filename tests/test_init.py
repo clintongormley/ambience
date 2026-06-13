@@ -380,3 +380,38 @@ def test_manifest_orders_setup_after_frontend() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text())
     assert "frontend" in manifest["after_dependencies"]
     assert "frontend" not in manifest["dependencies"]
+
+
+async def test_unit_applied_signal_arms_reapply_timer(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Dispatching SIGNAL_UNIT_APPLIED after setup should arm the idle-reapply timer."""
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+    from custom_components.ambience.const import DATA_ENGINE, SIGNAL_UNIT_APPLIED
+
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    engine = hass.data[DOMAIN][DATA_ENGINE]
+    store = hass.data[DOMAIN][DATA_STORE]
+
+    # Seed the house scope with a scene that has a category so _all_units() is non-empty.
+    await store.async_save_house(
+        {"scenes": [{"when": {}, "category": "g", "name": "Evening", "actions": []}]}
+    )
+    engine.async_rebuild()
+
+    # Enable the feature before dispatching the signal.
+    await store.async_save_reapply_settings({"enabled": True, "interval_seconds": 60})
+
+    unit = next(iter(engine._all_units()))
+    async_dispatcher_send(hass, SIGNAL_UNIT_APPLIED, unit)
+    await hass.async_block_till_done()
+
+    assert unit in engine._reapply_timers
+
+    # Clean up timers to avoid post-test noise.
+    engine._cancel_all_reapply_timers()

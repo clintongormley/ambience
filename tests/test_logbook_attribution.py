@@ -48,7 +48,6 @@ class _FakeExposedStorage:
 
 def test_message_named_scene_single_category() -> None:
     msg = compose_apply_message(
-        reapplied=False,
         scene_name="Evening",
         scene_index=0,
         scope_label="Master Bedroom",
@@ -60,7 +59,6 @@ def test_message_named_scene_single_category() -> None:
 
 def test_message_multiple_categories_includes_category() -> None:
     msg = compose_apply_message(
-        reapplied=False,
         scene_name="Evening",
         scene_index=0,
         scope_label="Master Bedroom",
@@ -72,7 +70,6 @@ def test_message_multiple_categories_includes_category() -> None:
 
 def test_message_unnamed_scene_falls_back_to_index() -> None:
     msg = compose_apply_message(
-        reapplied=False,
         scene_name=None,
         scene_index=2,
         scope_label="Kitchen",
@@ -82,22 +79,9 @@ def test_message_unnamed_scene_falls_back_to_index() -> None:
     assert msg == "applied 'scene 3' in Kitchen"
 
 
-def test_message_reapplied_verb() -> None:
-    msg = compose_apply_message(
-        reapplied=True,
-        scene_name="Evening",
-        scene_index=0,
-        scope_label="Master Bedroom",
-        category_label="Lights",
-        category_count=2,
-    )
-    assert msg == "re-applied 'Evening' in Master Bedroom (Lights)"
-
-
 def test_message_multiple_categories_but_no_label_omits_category() -> None:
     # category_count > 1 with an unknown/labelless category: suffix is omitted.
     msg = compose_apply_message(
-        reapplied=False,
         scene_name="Evening",
         scene_index=0,
         scope_label="Master Bedroom",
@@ -105,18 +89,6 @@ def test_message_multiple_categories_but_no_label_omits_category() -> None:
         category_count=2,
     )
     assert msg == "applied 'Evening' in Master Bedroom"
-
-
-def test_message_reapplied_single_category() -> None:
-    msg = compose_apply_message(
-        reapplied=True,
-        scene_name="Evening",
-        scene_index=0,
-        scope_label="Master Bedroom",
-        category_label="Lights",
-        category_count=1,
-    )
-    assert msg == "re-applied 'Evening' in Master Bedroom"
 
 
 # --- Context propagation through async_execute_actions ------------------------

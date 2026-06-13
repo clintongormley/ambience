@@ -29,6 +29,7 @@ from .const import (
     DATA_TRACE_BUFFER,
     DEFAULT_CREATE_SWITCHES,
     DOMAIN,
+    SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from .diagnostics import scope_diagnostics
@@ -40,7 +41,6 @@ from .service import (
     async_resolve_only,
     async_run_scene_actions,
     async_snapshot_all,
-    scope_reapply_intervals,
 )
 from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import condition_priority
@@ -419,8 +419,8 @@ async def _ws_auto_triggers_list(
     """Read-only list of the watches the engine derives from a scope's scenes.
 
     Triggers are computed live from the scope's scenes (each condition's
-    ``trigger_deps``) — entities, clock times, sun events, date rollover, and
-    periodic re-apply intervals. Purely informational: there are no enable/disable
+    ``trigger_deps``) — entities, clock times, sun events, and date rollover.
+    Purely informational: there are no enable/disable
     controls (auto-triggers are always on).
     """
     store = hass.data[DOMAIN][DATA_STORE]
@@ -432,11 +432,6 @@ async def _ws_auto_triggers_list(
         return
     spec = scope_trigger_spec(conditions, cfg)
     triggers = trigger_descriptors(spec)
-    exposed = hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
-    for interval in scope_reapply_intervals(cfg, exposed):
-        triggers.append(
-            {"key": f"reapply:{interval}", "kind": "reapply", "interval_seconds": interval}
-        )
     connection.send_result(msg["id"], {"triggers": triggers, "opaque": spec.opaque})
 
 
@@ -826,6 +821,43 @@ async def _ws_switch_defaults_save(
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/reapply/list"})
+@websocket_api.async_response
+async def _ws_reapply_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    connection.send_result(msg["id"], hass.data[DOMAIN][DATA_STORE].get_reapply_settings())
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/reapply/save",
+        vol.Required("enabled"): bool,
+        vol.Required("interval_seconds"): int,
+    }
+)
+@websocket_api.async_response
+async def _ws_reapply_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    try:
+        await store.async_save_reapply_settings(
+            {"enabled": msg["enabled"], "interval_seconds": msg["interval_seconds"]}
+        )
+    except ValueError as exc:
+        connection.send_error(msg["id"], "validation_error", str(exc))
+        return
+    async_dispatcher_send(hass, SIGNAL_REAPPLY_CONFIG_UPDATED, None)
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "ambience/switches/list"})
 @websocket_api.async_response
 async def _ws_switches_list(
@@ -1197,6 +1229,8 @@ _WS_HANDLERS = (
     _ws_state_known_attribute_values,
     _ws_switch_defaults_list,
     _ws_switch_defaults_save,
+    _ws_reapply_list,
+    _ws_reapply_save,
     _ws_switches_list,
     _ws_set_scope_enabled,
     _ws_categories_list,

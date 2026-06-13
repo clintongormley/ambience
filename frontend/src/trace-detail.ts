@@ -58,7 +58,6 @@ export const traceDetailStyles = css`
   .outcome .ts { position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
     font-weight: normal; font-size: 0.75rem; opacity: 0.85; }
   .outcome.acted { background: var(--success-color, #4caf50); color: #fff; }
-  .outcome.reapplied { background: var(--info-color, #2196f3); color: #fff; }
   .outcome.debounced { background: var(--warning-color, #ff9800); color: #fff; }
   .won { margin-top: 0.4rem; }
   .won .name { color: var(--success-color, #4caf50); font-weight: 600; }
@@ -194,7 +193,6 @@ const CAUSE_LABELS_FIXED: Record<string, string> = {
   manual: "Manual apply",
   startup: "Startup",
   reloaded: "Reloaded",
-  reapply: "Periodic refresh",
   simulated: "Simulation",
 };
 
@@ -202,6 +200,7 @@ const CAUSE_LABELS_FIXED: Record<string, string> = {
 const CAUSE_LABELS_WITH_DETAIL: Record<string, string> = {
   clock: "Time of day",
   sun: "Sun position",
+  reapply: "Re-apply", // idle re-apply fired; detail is the inactivity interval (e.g. "1h 30m")
 };
 
 // A raw value or "?" when the backend sent null (e.g. an entity with no prior
@@ -283,7 +282,6 @@ const OUTCOME_LABELS: Record<string, string> = {
   no_op: "blocked",
   debounced: "unchanged",
   no_match: "no match",
-  reapplied: "refreshed",
   skipped_switch_off: "skipped",
   skipped_scope_disabled: "skipped",
 };
@@ -311,8 +309,6 @@ export function outcomeSummary(u: BufferedUnit): string {
       return `${winner} matched, but it's already applied — nothing was re-sent.`;
     case "no_match":
       return "No scene matched — nothing applied.";
-    case "reapplied":
-      return `Periodic refresh re-sent ${winner}'s actions.`;
     case "skipped_switch_off":
       return "Skipped — the category switch is off.";
     case "skipped_scope_disabled":

@@ -14,8 +14,8 @@ In the Ambience panel, each category card has a small **Traces** button. Clickin
 
 Each entry shows four things across the top row:
 
-- **Outcome badge** — one of: `acted` (Ambience ran actions and something changed), `reapplied` (the current scene's actions were re-fired on a periodic reapply without re-resolving), `debounced` (a scene won but it is the same one already applied, so its identical actions were suppressed), `no op` (a scene won but it has no actions to run — e.g. a blocker scene), `no match` (no scene matched), or `skipped switch off` (the category's enable switch was off).
-- **Cause** — what triggered the evaluation. Entity causes read as `sensor.my_sensor off → on`; time-based causes read as `clock`, `sun`, or `duration recheck`. `Reloaded` means a configuration save re-applied the scope (only the scope you changed is re-evaluated); `Startup` means Home Assistant restarted.
+- **Outcome badge** — one of: `acted` (Ambience ran actions and something changed), `debounced` (a scene won but it is the same one already applied, so its identical actions were suppressed), `no op` (a scene won but it has no actions to run — e.g. a blocker scene), `no match` (no scene matched), or `skipped switch off` (the category's enable switch was off). Re-apply evaluations that dispatch commands also record `acted` — you can tell them apart by the `reapply` cause badge.
+- **Cause** — what triggered the evaluation. Entity causes read as `sensor.my_sensor off → on`; time-based causes read as `clock`, `sun`, or `duration recheck`. `Reloaded` means a configuration save re-applied the scope (only the scope you changed is re-evaluated); `Startup` means Home Assistant restarted. `reapply (1h30m)` means the idle re-apply timer fired after the configured inactivity period.
 - **Time** — the local time of the evaluation.
 
 Below the top row, if a scene won, its name is shown in green ("Won: *scene name*"). If any actions ran, a one-line summary follows showing the service called and the number of entities affected.
@@ -62,7 +62,7 @@ The Traces viewer covers most questions about Ambience's behaviour. When it is n
 
 ### The two streams
 
-**`custom_components.ambience.trace`** — the *changes* stream. Ambience writes here whenever an evaluation caused something to happen (outcome `acted` or `reapplied`). This stream is on whenever the integration's debug logging is on.
+**`custom_components.ambience.trace`** — the *changes* stream. Ambience writes here whenever an evaluation caused something to happen (outcome `acted`). This stream is on whenever the integration's debug logging is on.
 
 **`custom_components.ambience.trace.noop`** — the *everything* stream. Ambience writes here for evaluations that ran and did nothing — the quiet majority of evaluations. This stream is kept at `warning` by default, even when the parent logger is at `debug`, so it does not flood the log. You have to raise it explicitly.
 

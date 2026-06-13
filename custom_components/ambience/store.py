@@ -20,6 +20,16 @@ from .const import (
     STORAGE_VERSION,
 )
 
+# Idle re-apply defaults. Defined here (store is their only consumer) rather than
+# in const.py, to avoid a CodeQL py/unsafe-cyclic-import false positive: const has
+# a TYPE_CHECKING-only import of store for get_store's annotation, and CodeQL flags
+# const-level constants imported by store as "defined after the cyclic import".
+# Re-assert each unit's scene after this many seconds of no dispatch; off by
+# default; interval pre-filled at 90 min; the floor rejects nonsensical values.
+DEFAULT_REAPPLY_ENABLED = False
+DEFAULT_REAPPLY_INTERVAL_SECONDS = 5400
+MIN_REAPPLY_INTERVAL_SECONDS = 60
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -76,6 +86,10 @@ class AmbienceStore:
                 "name": DEFAULT_SWITCH_NAME,
                 "auto_on_delay_seconds": DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS,
             },
+            "reapply": {
+                "enabled": DEFAULT_REAPPLY_ENABLED,
+                "interval_seconds": DEFAULT_REAPPLY_INTERVAL_SECONDS,
+            },
             "exposed_actions": [],
         }
 
@@ -105,6 +119,11 @@ class AmbienceStore:
         sd.setdefault("name", DEFAULT_SWITCH_NAME)
         sd.setdefault("auto_on_delay_seconds", DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS)
 
+    def _ensure_reapply_settings(self) -> None:
+        r = self._data.setdefault("reapply", {})
+        r.setdefault("enabled", DEFAULT_REAPPLY_ENABLED)
+        r.setdefault("interval_seconds", DEFAULT_REAPPLY_INTERVAL_SECONDS)
+
     async def async_load(self) -> None:
         raw = await self._store.async_load()
         if raw is None:
@@ -119,6 +138,7 @@ class AmbienceStore:
         self._ensure_scope_buckets()
         self._ensure_categories()
         self._ensure_switch_defaults()
+        self._ensure_reapply_settings()
 
     def as_dict(self) -> dict[str, Any]:
         """A deep copy of the full persisted payload, for diagnostics dumps."""
@@ -316,6 +336,37 @@ class AmbienceStore:
         }
         await self._store.async_save(self._data)
 
+    @staticmethod
+    def _validate_reapply_settings(payload: dict[str, Any]) -> None:
+        enabled = payload.get("enabled")
+        if not isinstance(enabled, bool):
+            raise ValueError(f"reapply `enabled` must be a bool: {enabled!r}")
+        interval = payload.get("interval_seconds")
+        if (
+            not isinstance(interval, int)
+            or isinstance(interval, bool)
+            or interval < MIN_REAPPLY_INTERVAL_SECONDS
+        ):
+            raise ValueError(
+                f"reapply `interval_seconds` must be an int >= "
+                f"{MIN_REAPPLY_INTERVAL_SECONDS}: {interval!r}"
+            )
+
+    def get_reapply_settings(self) -> dict[str, Any]:
+        r = self._data.get("reapply", {})
+        return {
+            "enabled": r.get("enabled", DEFAULT_REAPPLY_ENABLED),
+            "interval_seconds": r.get("interval_seconds", DEFAULT_REAPPLY_INTERVAL_SECONDS),
+        }
+
+    async def async_save_reapply_settings(self, payload: dict[str, Any]) -> None:
+        self._validate_reapply_settings(payload)
+        self._data["reapply"] = {
+            "enabled": payload["enabled"],
+            "interval_seconds": payload["interval_seconds"],
+        }
+        await self._store.async_save(self._data)
+
     def get_scope_switch_off_at(self, scope_kind: str, scope_id: str | None) -> str | None:
         """The persisted off-at timestamp for a scope's switch (``None`` if on or
         never set). ``off_at`` is runtime state owned by the switch entity, not
@@ -377,6 +428,6 @@ class AmbienceStore:
     async def async_save_exposed_actions(self, actions: list[dict[str, Any]]) -> None:
         self._data["exposed_actions"] = list(actions)
         await self._store.async_save(self._data)
-        # Exposed-action defaults feed the engine's re-apply intervals, so a
-        # change here must rebuild the watch-set like any other config save.
+        # Exposed-action defaults affect scene execution, so a change here must
+        # rebuild the watch-set like any other config save.
         self._notify_config_changed()

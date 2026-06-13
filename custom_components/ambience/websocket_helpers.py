@@ -23,7 +23,6 @@ from .const import (
 )
 from .sorting import resolve_order, shadowed_by
 from .store import reassign_orphan_scenes
-from .validators import validate_reapply_seconds
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -113,10 +112,6 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
             # to the user; the engine treats them as overrides.
             # `exposed` is used here only for the existence check above.
             _ = exposed
-            if "reapply_seconds" in action_spec:
-                validate_reapply_seconds(
-                    f"scene {scene_idx} action {action_idx}", action_spec["reapply_seconds"]
-                )
 
 
 def canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:

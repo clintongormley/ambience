@@ -16,7 +16,6 @@ from .naming import category_names, scope_display_name
 
 def compose_apply_message(
     *,
-    reapplied: bool,
     scene_name: str | None,
     scene_index: int,
     scope_label: str,
@@ -29,9 +28,8 @@ def compose_apply_message(
     more than one category exists and a label is known (an unknown category id yields
     no suffix). Unnamed scenes fall back to "scene <N>" (1-based).
     """
-    verb = "re-applied" if reapplied else "applied"
     scene = scene_name or f"scene {scene_index + 1}"
-    message = f"{verb} '{scene}' in {scope_label}"
+    message = f"applied '{scene}' in {scope_label}"
     if category_count > 1 and category_label:
         message += f" ({category_label})"
     return message
@@ -59,15 +57,12 @@ def log_apply(
     category_id: str,
     scene_name: str | None,
     scene_index: int,
-    *,
-    reapplied: bool,
 ) -> Context:
     """Fire the logbook entry for an apply and return its Context."""
     categories = category_names(hass)
     return _log_entry(
         hass,
         compose_apply_message(
-            reapplied=reapplied,
             scene_name=scene_name,
             scene_index=scene_index,
             scope_label=scope_display_name(hass, scope_kind, scope_id),

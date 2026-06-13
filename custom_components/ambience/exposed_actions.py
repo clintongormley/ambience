@@ -23,7 +23,6 @@ from typing import Any, Protocol
 from homeassistant.core import HomeAssistant
 
 from .services_meta import _descriptions_with_status, _flatten_field_groups
-from .validators import validate_reapply_seconds
 
 
 class _StorageLike(Protocol):
@@ -74,8 +73,6 @@ class ExposedActionsStore:
                 raise ValueError(f"{sid}: visible_fields must be a list of strings")
             if not isinstance(defaults, dict) or not all(isinstance(k, str) for k in defaults):
                 raise ValueError(f"{sid}: defaults must be an object keyed by string")
-            if "reapply_seconds" in entry:
-                validate_reapply_seconds(sid, entry["reapply_seconds"])
 
     async def validate_against_catalog(
         self,

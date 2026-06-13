@@ -16,6 +16,7 @@ import type {
   LuxRangeStoreView,
   PeriodDef,
   PeriodStoreView,
+  ReapplySettings,
   SceneCategory,
   Scope,
   ScopeConfig,
@@ -341,6 +342,22 @@ export async function saveSwitchDefaults(
     type: "ambience/switch_defaults/save",
     name,
     auto_on_delay_seconds,
+  });
+}
+
+export async function getReapplySettings(hass: HassConnection): Promise<ReapplySettings> {
+  return hass.callWS({ type: "ambience/reapply/list" });
+}
+
+export async function saveReapplySettings(
+  hass: HassConnection,
+  enabled: boolean,
+  interval_seconds: number,
+): Promise<{ ok: true }> {
+  return hass.callWS({
+    type: "ambience/reapply/save",
+    enabled,
+    interval_seconds,
   });
 }
 

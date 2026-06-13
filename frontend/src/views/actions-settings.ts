@@ -17,7 +17,6 @@ import {
 } from "../api.js";
 import { DragReorderController } from "../drag-reorder.js";
 import type { HaFormSchemaEntry } from "../ha-form.js";
-import { DEFAULT_REAPPLY_SECONDS, parseReapplyConfigSeconds } from "../reapply.js";
 import { selectorUnit } from "../summary.js";
 import type {
   ExposedAction,
@@ -262,36 +261,6 @@ export class AmbienceActionsSettings extends LitElement {
       background: transparent;
       color: var(--primary-text-color, inherit);
       font: inherit;
-    }
-    .reapply-row {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.35rem 0;
-      margin-top: 0.25rem;
-      border-top: 1px dotted var(--divider-color, #eee);
-      font-size: 0.9rem;
-      /* Reserve the height of the seconds input so the row doesn't grow when
-         the field appears/disappears as the checkbox is toggled. */
-      min-height: 2rem;
-    }
-    .reapply-row label {
-      color: var(--primary-text-color, inherit);
-      flex: 0 0 auto;
-    }
-    .reapply-row input[data-reapply-input] {
-      width: 5rem;
-      box-sizing: border-box;
-      padding: 0.25rem 0.4rem;
-      border: 1px solid var(--divider-color, #ccc);
-      border-radius: 3px;
-      background: transparent;
-      color: var(--primary-text-color, inherit);
-      font: inherit;
-    }
-    .reapply-row .reapply-unit {
-      color: var(--secondary-text-color, #888);
-      flex: 0 0 auto;
     }
     .add-row {
       margin: 0.75rem 0;
@@ -585,32 +554,6 @@ export class AmbienceActionsSettings extends LitElement {
     this._actions = this._actions.map((a) => (a.id === actionId ? { ...a, label } : a));
   }
 
-  private _setReapplyEnabled(actionId: string, enabled: boolean) {
-    this._actions = this._actions.map((a) => {
-      if (a.id !== actionId) return a;
-      if (!enabled) {
-        // Uncheck → remove the key entirely.
-        const { reapply_seconds: _removed, ...rest } = a;
-        return rest as typeof a;
-      }
-      // Check → seed the default interval (the key was absent while unchecked).
-      return { ...a, reapply_seconds: DEFAULT_REAPPLY_SECONDS };
-    });
-    void this._autoSave();
-  }
-
-  private _setReapplySeconds(actionId: string, rawValue: string) {
-    const seconds = parseReapplyConfigSeconds(rawValue);
-    // null means empty/invalid — leave the stored value unchanged (don't
-    // drop the enabled state; the checkbox owns enable/disable).
-    if (seconds === null) return;
-    this._actions = this._actions.map((a) => {
-      if (a.id !== actionId) return a;
-      return { ...a, reapply_seconds: seconds };
-    });
-    void this._autoSave();
-  }
-
   private _toggleExpand(actionId: string) {
     // At most one card is expanded at a time: opening a card collapses any
     // other open one. Clicking the already-open card collapses it.
@@ -754,15 +697,9 @@ export class AmbienceActionsSettings extends LitElement {
   }
 
   private _renderBody(action: ExposedAction, schema: ServiceSchema | null | undefined) {
-    // The re-apply row is a property of the action itself — it does not depend
-    // on the service's fields (you can't infer what an action does from its
-    // schema). So it renders for EVERY expanded action, independent of whether
-    // the field schema is loading, unavailable, or field-less. The
-    // schema-dependent field section handles its own states above it.
     return html`
       <div class="body">
         ${this._renderFieldsSection(action, schema)}
-        ${this._renderReapplyRow(action)}
       </div>
     `;
   }
@@ -931,47 +868,6 @@ export class AmbienceActionsSettings extends LitElement {
       @input=${(e: Event) =>
         this._setDefault(action.id, fieldName, (e.target as HTMLInputElement).value)}
     />`;
-  }
-
-  private _renderReapplyRow(action: ExposedAction) {
-    const enabled = typeof action.reapply_seconds === "number" && action.reapply_seconds > 0;
-    const currentSeconds = enabled ? String(action.reapply_seconds) : "";
-    return html`
-      <div class="reapply-row">
-        <input
-          id="reapply-enable-${action.id}"
-          type="checkbox"
-          data-reapply-enable
-          .checked=${enabled}
-          @change=${(e: Event) => {
-            this._setReapplyEnabled(action.id, (e.target as HTMLInputElement).checked);
-          }}
-        />
-        <label for="reapply-enable-${action.id}">
-          ${localize(this.hass, "ui.reapply_enable_label", "Re-apply periodically")}
-        </label>
-        ${
-          enabled
-            ? html`
-          <input
-            id="reapply-${action.id}"
-            type="number"
-            min="10"
-            data-reapply-input
-            aria-label=${localize(this.hass, "ui.reapply_seconds_label", "Re-apply every (seconds)")}
-            .value=${currentSeconds}
-            @input=${(e: Event) => {
-              this._setReapplySeconds(action.id, (e.target as HTMLInputElement).value);
-            }}
-          />
-          <span class="reapply-unit">
-            ${localize(this.hass, "ui.reapply_seconds_unit", "s")}
-          </span>
-        `
-            : ""
-        }
-      </div>
-    `;
   }
 
   private _renderAdd() {

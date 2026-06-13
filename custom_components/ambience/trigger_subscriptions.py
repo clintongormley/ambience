@@ -1,7 +1,7 @@
 """HA event/timer subscription layer for the auto-trigger engine.
 
 This mixin holds everything that wires :class:`AutoTriggerEngine` to Home
-Assistant's event loop: state-change / clock / sun / re-apply-interval / switch
+Assistant's event loop: state-change / clock / sun / switch
 subscriptions, the per-`for` recheck timers, and the teardown that cancels them.
 It is split out so trigger_engine.py keeps just the evaluation core (index
 build + flip detection + resolve/apply). The methods reference engine state
@@ -11,7 +11,6 @@ build + flip detection + resolve/apply). The methods reference engine state
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable, Iterable
 from datetime import timedelta
 from typing import Any
@@ -29,24 +28,18 @@ from homeassistant.util import dt as dt_util
 
 from .conditions._common import fmt_duration
 from .conditions.time_of_day import ANCHOR_ATTR
-from .const import DATA_EXPOSED_ACTIONS, DATA_SWITCHES, DOMAIN
+from .const import DATA_SWITCHES, DOMAIN
 from .service import (
     _scope_enabled,
     _switch_state,
-    async_execute_actions,
     category_ids,
-    effective_reapply_seconds,
     get_last_applied,
 )
-from .service_logbook import log_apply
 from .trace import (
     CauseKind,
-    Outcome,
     TraceEvent,
     TriggerCause,
-    UnitTrace,
     emit_trace,
-    tracing_active,
 )
 from .trigger_index import PredKey
 from .triggers import DurationGate
@@ -81,6 +74,7 @@ class TriggerSubscriptionsMixin:
                 cancel()
         self._for_handles.clear()
         self._switch_scopes.clear()
+        self._cancel_all_reapply_timers()
 
     def async_subscribe(self) -> None:
         """(Re)create one subscription per distinct dependency in the index."""
@@ -132,14 +126,6 @@ class TriggerSubscriptionsMixin:
                     _HAS_TIME_INTERVAL,
                 )
             )
-        for interval, scopes in self._reapply_intervals.items():
-            self._unsubs.append(
-                async_track_time_interval(
-                    self._hass,
-                    self._make_reapply_handler(interval, scopes),
-                    timedelta(seconds=interval),
-                )
-            )
         self._switch_scopes = {}
         switches = self._hass.data[DOMAIN].get(DATA_SWITCHES, {})
         for scope_key in self._scope_cfgs:
@@ -152,6 +138,7 @@ class TriggerSubscriptionsMixin:
                     self._hass, list(self._switch_scopes), self._on_switch_event
                 )
             )
+        self._rearm_all_reapply_timers()
 
     @callback
     def _on_state_event(self, event: Event) -> None:
@@ -184,77 +171,82 @@ class TriggerSubscriptionsMixin:
 
         return _handler
 
-    def _make_reapply_handler(
-        self, interval: int, scopes: set[tuple[str, str | None]]
+    def _reapply_settings(self) -> tuple[bool, int]:
+        settings = self._store().get_reapply_settings()
+        return bool(settings["enabled"]), int(settings["interval_seconds"])
+
+    @callback
+    def note_unit_applied(self, unit: tuple[str, str | None, str]) -> None:
+        """SIGNAL_UNIT_APPLIED handler: (re)arm this unit's idle clock."""
+        self._arm_reapply_timer(unit)
+
+    @callback
+    def note_reapply_config_changed(self, _payload: Any = None) -> None:
+        """SIGNAL_REAPPLY_CONFIG_UPDATED handler: re-establish timers under the new
+        settings — cancel all, then re-arm applied units (a no-op when the feature
+        is now disabled, since _arm_reapply_timer gates on enabled)."""
+        self._cancel_all_reapply_timers()
+        self._rearm_all_reapply_timers()
+
+    @callback
+    def _arm_reapply_timer(self, unit: tuple[str, str | None, str]) -> None:
+        enabled, interval = self._reapply_settings()
+        if not enabled or not self._running:
+            return
+        old = self._reapply_timers.pop(unit, None)
+        if old is not None:
+            old()
+        self._reapply_timers[unit] = async_call_later(
+            self._hass, interval, self._make_reapply_due(unit, interval)
+        )
+
+    def _make_reapply_due(
+        self, unit: tuple[str, str | None, str], interval: int
     ) -> Callable[[Any], None]:
-        scope_set = set(scopes)
-
         @callback
-        def _handler(_now: Any) -> None:
-            self._hass.async_create_task(self._reapply_tick(interval, scope_set))
+        def _due(_now: Any) -> None:
+            self._reapply_timers.pop(unit, None)  # one-shot: it has fired
+            if self._running:
+                self._hass.async_create_task(self._reapply_due(unit, interval))
 
-        return _handler
+        return _due
 
-    async def _reapply_tick(self, interval: int, scopes: set[tuple[str, str | None]]) -> None:
-        # Scopes are independent — re-apply them concurrently.
-        await asyncio.gather(*(self._reapply_scope(scope, interval) for scope in scopes))
-
-    async def _reapply_scope(self, scope: tuple[str, str | None], interval: int) -> None:
-        """Re-fire each category's current winning scene's actions due at `interval`.
-
-        Uses last-applied per (scope, category) (kept current by the watch system)
-        rather than re-resolving, and never mutates last-applied. Skips when the
-        scope is disabled, the switch is off, a category has no active scene, or its
-        stored index is out of range.
-        """
-        scope_kind, scope_id = scope
-        if not _scope_enabled(self._hass, scope_kind, scope_id):
+    async def _reapply_due(self, unit: tuple[str, str | None, str], interval: int) -> None:
+        """Re-assess + force-apply one idle unit. `interval` is the value the timer
+        was armed with, used only to label the trace. Skip cheaply — before the
+        snapshot refresh — when the scope is disabled or its switch is off: those
+        units are gated out by `_resolve_and_apply` anyway, and returning early
+        avoids a wasted full-snapshot refresh (notably the burst when the feature is
+        enabled while many scopes are off). A successful dispatch re-emits
+        SIGNAL_UNIT_APPLIED, which re-arms the timer; a skip dispatches nothing, so
+        the timer stays dead until the next real apply re-arms it. The `_running`
+        guard lives in `_make_reapply_due` (before the task is created) and timers
+        are cancelled on disable/teardown."""
+        scope_kind, scope_id, _category = unit
+        if not _scope_enabled(self._hass, scope_kind, scope_id) or (
+            _switch_state(self._hass, scope_kind, scope_id) == "off"
+        ):
             return
-        switch_state = _switch_state(self._hass, scope_kind, scope_id)
-        if switch_state == "off":
-            return
-        cfg = self._scope_cfgs.get(scope)
-        if cfg is None:
-            return
-        scenes = cfg.get("scenes", [])
-        exposed = self._hass.data[DOMAIN].get(DATA_EXPOSED_ACTIONS)
-        active = tracing_active(self._hass)
-        traces: list[UnitTrace] = []
-        for category_id in category_ids(cfg):
-            index = get_last_applied(self._hass, scope_kind, scope_id, category_id)
-            if index is None or not 0 <= index < len(scenes):
-                continue
-            due = [
-                action
-                for action in scenes[index].get("actions", [])
-                if effective_reapply_seconds(action, exposed) == interval
-            ]
-            if due:
-                scene_name = scenes[index].get("name")
-                context = log_apply(
-                    self._hass, scope_kind, scope_id, category_id, scene_name, index, reapplied=True
-                )
-                await async_execute_actions(
-                    self._hass, scope_kind, scope_id, due, scene_index=index, context=context
-                )
-                if active:
-                    traces.append(
-                        UnitTrace(
-                            scope_kind,
-                            scope_id,
-                            category_id,
-                            switch_state,
-                            Outcome.REAPPLIED,
-                            None,  # re-apply does not re-resolve, so no explanation
-                            winner_name=scene_name,
-                            actions=due,
-                        )
-                    )
-        if traces:
+        await self._refresh_all_snapshots()
+        trace = await self._resolve_and_apply(*unit, force=True)
+        if trace is not None:
             emit_trace(
                 self._hass,
-                TraceEvent(TriggerCause(kind=CauseKind.REAPPLY, detail=f"{interval}s"), traces),
+                TraceEvent(
+                    TriggerCause(kind=CauseKind.REAPPLY, detail=fmt_duration(interval)),
+                    [trace],
+                ),
             )
+
+    def _cancel_all_reapply_timers(self) -> None:
+        for cancel in self._reapply_timers.values():
+            cancel()
+        self._reapply_timers.clear()
+
+    def _rearm_all_reapply_timers(self) -> None:
+        for unit in self._all_units():
+            if get_last_applied(self._hass, *unit) is not None:
+                self._arm_reapply_timer(unit)
 
     def _schedule_for_rechecks(self, preds: Iterable[PredKey]) -> None:
         """(Re)arm one timer per *pending* `for:` gate of each predicate.

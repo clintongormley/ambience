@@ -31,8 +31,12 @@ async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry):
 
 
 def test_empty_is_valid():
-    # No target => all scopes; the schema permits an empty call.
-    assert _APPLY_SCENE_SCHEMA({}) == {}
+    # No target => all scopes; the schema permits an empty call and defaults force off.
+    assert _APPLY_SCENE_SCHEMA({}) == {"force": False}
+
+
+def test_force_defaults_to_false():
+    assert _APPLY_SCENE_SCHEMA({})["force"] is False
 
 
 def test_scope_coerced_to_list():

@@ -187,6 +187,10 @@ def _resolve_target_scopes(
     Each value is decoded by parse_scope_option; floor/area ids are validated
     against the registries (unknown -> ServiceValidationError). A blank `scope`
     means every scope (house + all floors + all areas).
+
+    A blank or explicitly-typed scope may include scopes that are permanently
+    disabled; the downstream apply skips disabled scopes, so resolving them here
+    is harmless.
     """
     area_reg = ar.async_get(hass)
     floor_reg = fr.async_get(hass)

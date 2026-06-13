@@ -10,6 +10,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import floor_registry as fr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
@@ -118,6 +119,12 @@ async def test_apply_scene_schema_is_set_and_refreshes(
 
         assert set_schema.called  # re-set on area-registry change
 
+        set_schema.reset_mock()
+        hass.bus.async_fire(fr.EVENT_FLOOR_REGISTRY_UPDATED, {"action": "create", "floor_id": "x"})
+        await hass.async_block_till_done()
+
+        assert set_schema.called  # re-set on floor-registry change
+
 
 async def test_unload_clears_data(
     hass: HomeAssistant,
@@ -188,8 +195,6 @@ async def test_floor_remove_event_deletes_floor_config(
     hass: HomeAssistant, mock_config_entry
 ) -> None:
     """Removing a floor from HA's registry drops its Ambience config."""
-    from homeassistant.helpers import floor_registry as fr
-
     from custom_components.ambience.const import DATA_STORE
 
     mock_config_entry.add_to_hass(hass)

@@ -317,6 +317,14 @@ describe("ambience-scenes-list", () => {
     expect(flag.getAttribute("title")).toContain("light.ghost");
   });
 
+  test("overlap row shows a warning-severity flag listing the contested entity", async () => {
+    const overlap: Scene = { ...movieScene, overlap_entities: ["light.kitchen"] };
+    el = await mount([overlap]);
+    const flag = el.shadowRoot.querySelector(".problem-flag");
+    expect(flag.getAttribute("data-severity")).toBe("warning");
+    expect(flag.getAttribute("title")).toContain("light.kitchen");
+  });
+
   test("category header shows a problem indicator when a scene in it has a problem", async () => {
     const cats: SceneCategory[] = [{ id: "c1", name: "Cat one" }];
     const broken: Scene = { ...movieScene, category: "c1", missing_entities: ["light.ghost"] };

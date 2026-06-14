@@ -45,6 +45,15 @@ describe("ambience-problem-flag", () => {
     expect(el.shadowRoot.querySelector(".details")).toBeFalsy();
   });
 
+  test("clicking inside the open popover keeps it open (so text is selectable)", async () => {
+    el = await mount({ details: ["Missing in Home Assistant: light.ghost"] });
+    (el.shadowRoot.querySelector(".problem-flag") as HTMLElement).click();
+    await el.updateComplete;
+    (el.shadowRoot.querySelector(".details") as HTMLElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".details")).toBeTruthy();
+  });
+
   test("the badge click does not bubble (so it won't trigger row/scope toggles)", async () => {
     el = await mount();
     let bubbled = false;

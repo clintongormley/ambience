@@ -156,7 +156,11 @@ export class AmbienceProblemFlag extends LitElement {
       </button>
       ${
         this._open
-          ? html`<div class="details" role="tooltip">
+          ? html`<div
+            class="details"
+            role="tooltip"
+            @click=${(e: Event) => e.stopPropagation()}
+          >
             ${this.details.map((line) => html`<div>${line}</div>`)}
           </div>`
           : ""

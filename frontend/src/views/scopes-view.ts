@@ -8,8 +8,6 @@ import { sceneNameKey, scopeCategoryKey, scopeKey } from "../entities-for-scope.
 import { renderHaSwitch } from "../ha-switch.js";
 import { localize } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
-import { problemCount, worstSeverity } from "../scene-problems.js";
-import "./problem-flag.js";
 import { scopeIcon } from "../scope-icon.js";
 import type { ConditionInfo, Scene, Scope, ScopeConfig, ScopeOption } from "../types.js";
 import {
@@ -20,6 +18,7 @@ import {
   setConditionsHintDismissed,
   setExpandedScopes,
 } from "../ui-state.js";
+import { renderAggregateProblemFlag } from "./problem-flag.js";
 import { ScopeStore } from "./scope-store.js";
 import "./scenes-list.js";
 import "./scene-editor.js";
@@ -1057,22 +1056,6 @@ export class AmbienceScopesView extends LitElement {
     `;
   }
 
-  /** Problem indicator for a scope, computed from its loaded scenes, or "". */
-  private _scopeProblemFlag(cfg: ScopeConfig) {
-    const severity = worstSeverity(cfg.scenes);
-    if (!severity) return "";
-    const n = problemCount(cfg.scenes);
-    const title = localize(this.hass, "ui.problems_count", "{n} scene(s) have problems").replace(
-      "{n}",
-      String(n),
-    );
-    return html`<ambience-problem-flag
-      .severity=${severity}
-      .details=${[title]}
-      .summary=${title}
-    ></ambience-problem-flag>`;
-  }
-
   private _renderScopeRow(
     scope: Scope,
     name: string,
@@ -1099,7 +1082,7 @@ export class AmbienceScopesView extends LitElement {
           <span class="chevron ${open ? "open" : ""}">▶</span>
           <ha-icon class="scope-icon" icon=${scopeIcon(scope, this.hass as any)}></ha-icon>
           <span class="scope-name">${name}</span>
-          ${this._scopeProblemFlag(cfg)}
+          ${renderAggregateProblemFlag(this.hass, cfg.scenes)}
           <span class="scope-summary">${this._summary(cfg)}</span>
           ${this._renderPauseIcon(scope, cfg)}
           ${this._renderScopeSwitch(scope, cfg)}

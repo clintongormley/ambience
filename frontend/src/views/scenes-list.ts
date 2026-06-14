@@ -5,8 +5,7 @@ import "./kebab-menu";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
 import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
-import { problemCount, sceneProblems, worstSeverity } from "../scene-problems.js";
-import "./problem-flag.js";
+import { sceneProblems } from "../scene-problems.js";
 import { formatArgValue, paramLabel, sceneDisplayName, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
@@ -18,6 +17,7 @@ import type {
 } from "../types.js";
 import { entityName, type HassWithStates } from "./entity-row.js";
 import type { KebabItem } from "./kebab-menu";
+import { renderAggregateProblemFlag } from "./problem-flag.js";
 
 @customElement("ambience-scenes-list")
 export class AmbienceScenesList extends LitElement {
@@ -312,7 +312,10 @@ export class AmbienceScenesList extends LitElement {
       <span class="category-chevron ${open ? "open" : ""}" aria-hidden="true">▶</span>
       ${category.icon ? html`<ha-icon icon=${category.icon}></ha-icon>` : ""}
       <span>${category.name}</span>
-      ${this._sectionProblemFlag(rows)}
+      ${renderAggregateProblemFlag(
+        this.hass,
+        rows.map(([, scene]) => scene),
+      )}
       <ambience-kebab-menu
         class="category-kebab"
         .hass=${this.hass}
@@ -532,23 +535,6 @@ export class AmbienceScenesList extends LitElement {
       .severity=${p.severity}
       .details=${lines}
       .summary=${lines.join("\n")}
-    ></ambience-problem-flag>`;
-  }
-
-  /** Aggregate problem indicator for a section's rows, or "" when all clean. */
-  private _sectionProblemFlag(rows: Array<[number, Scene]>) {
-    const scenes = rows.map(([, scene]) => scene);
-    const severity = worstSeverity(scenes);
-    if (!severity) return "";
-    const n = problemCount(scenes);
-    const title = localize(this.hass, "ui.problems_count", "{n} scene(s) have problems").replace(
-      "{n}",
-      String(n),
-    );
-    return html`<ambience-problem-flag
-      .severity=${severity}
-      .details=${[title]}
-      .summary=${title}
     ></ambience-problem-flag>`;
   }
 

@@ -1,11 +1,34 @@
-import { css, html, LitElement } from "lit";
+import { css, html, LitElement, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import type { ProblemSeverity } from "../scene-problems.js";
+import { type HassLike, localize } from "../i18n.js";
+import { type ProblemSeverity, problemCount, worstSeverity } from "../scene-problems.js";
+import type { Scene } from "../types.js";
 
 // The single flag whose popover is currently open. Opening one closes any other,
 // so at most one detail popover shows at a time.
 let openFlag: AmbienceProblemFlag | null = null;
+
+/** A flag summarising a list of scenes (used for the category-section and scope
+ *  headers), or "" when none have problems. The detail popover shows an "N
+ *  scene(s) have problems" count. */
+export function renderAggregateProblemFlag(
+  hass: HassLike | undefined,
+  scenes: Scene[],
+): TemplateResult | string {
+  const severity = worstSeverity(scenes);
+  if (!severity) return "";
+  const n = problemCount(scenes);
+  const title = localize(hass, "ui.problems_count", "{n} scene(s) have problems").replace(
+    "{n}",
+    String(n),
+  );
+  return html`<ambience-problem-flag
+    .severity=${severity}
+    .details=${[title]}
+    .summary=${title}
+  ></ambience-problem-flag>`;
+}
 
 /**
  * A severity-coloured circular badge with a white exclamation mark, flagging a

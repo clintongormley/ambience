@@ -3,7 +3,7 @@ import type { ExposedAction, PeriodDef } from "./types.js";
 
 type Localizer = (key: string) => string | undefined;
 
-interface HassLike {
+export interface HassLike {
   localize?: Localizer;
   [key: string]: unknown;
 }

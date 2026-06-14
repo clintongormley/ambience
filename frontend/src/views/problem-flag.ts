@@ -3,6 +3,10 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import type { ProblemSeverity } from "../scene-problems.js";
 
+// The single flag whose popover is currently open. Opening one closes any other,
+// so at most one detail popover shows at a time.
+let openFlag: AmbienceProblemFlag | null = null;
+
 /**
  * A severity-coloured circular badge with a white exclamation mark, flagging a
  * scene/category/scope that has problems. The mark is an explicit white glyph on
@@ -60,8 +64,11 @@ export class AmbienceProblemFlag extends LitElement {
       top: calc(100% + 4px);
       left: 0;
       z-index: 20;
-      min-width: 12rem;
-      max-width: 18rem;
+      /* Grow to fit the content, but cap and wrap long entity ids (which have no
+         natural break points) instead of overflowing the box. */
+      width: max-content;
+      max-width: min(22rem, 80vw);
+      overflow-wrap: anywhere;
       padding: 0.4rem 0.6rem;
       border-radius: 6px;
       background: var(--card-background-color, #fff);
@@ -70,7 +77,6 @@ export class AmbienceProblemFlag extends LitElement {
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
       font-size: 0.8rem;
       font-weight: 400;
-      white-space: normal;
       text-align: left;
       cursor: auto;
     }
@@ -82,7 +88,7 @@ export class AmbienceProblemFlag extends LitElement {
   // Close the popover when the user clicks anywhere else. The badge's own click
   // calls stopPropagation, so opening never immediately re-closes.
   private _onDocClick = () => {
-    if (this._open) this._open = false;
+    if (this._open) this._setOpen(false);
   };
 
   override connectedCallback(): void {
@@ -92,13 +98,26 @@ export class AmbienceProblemFlag extends LitElement {
 
   override disconnectedCallback(): void {
     document.removeEventListener("click", this._onDocClick);
+    if (openFlag === this) openFlag = null;
     super.disconnectedCallback();
+  }
+
+  /** Set this flag's open state, keeping at most one popover open across all
+   *  flags: opening this one closes whichever was previously open. */
+  private _setOpen(open: boolean) {
+    if (open) {
+      if (openFlag && openFlag !== this) openFlag._open = false;
+      openFlag = this;
+    } else if (openFlag === this) {
+      openFlag = null;
+    }
+    this._open = open;
   }
 
   private _toggle(e: Event) {
     // Don't let the click reach a parent row/scope header that toggles on click.
     e.stopPropagation();
-    this._open = !this._open;
+    this._setOpen(!this._open);
   }
 
   override render() {

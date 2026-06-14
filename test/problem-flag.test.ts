@@ -55,6 +55,33 @@ describe("ambience-problem-flag", () => {
     expect(bubbled).toBe(false);
   });
 
+  test("opening one flag closes any other open flag", async () => {
+    const a: any = document.createElement("ambience-problem-flag");
+    a.severity = "error";
+    a.details = ["A detail"];
+    a.summary = "A";
+    const b: any = document.createElement("ambience-problem-flag");
+    b.severity = "warning";
+    b.details = ["B detail"];
+    b.summary = "B";
+    document.body.append(a, b);
+    await a.updateComplete;
+    await b.updateComplete;
+
+    (a.shadowRoot.querySelector(".problem-flag") as HTMLElement).click();
+    await a.updateComplete;
+    expect(a.shadowRoot.querySelector(".details")).toBeTruthy();
+
+    (b.shadowRoot.querySelector(".problem-flag") as HTMLElement).click();
+    await a.updateComplete;
+    await b.updateComplete;
+    expect(b.shadowRoot.querySelector(".details")).toBeTruthy();
+    expect(a.shadowRoot.querySelector(".details")).toBeFalsy();
+
+    a.remove();
+    b.remove();
+  });
+
   test("clicking elsewhere closes an open popover (and is a no-op when already closed)", async () => {
     el = await mount();
     // No-op path: a document click while closed must not throw or open it.

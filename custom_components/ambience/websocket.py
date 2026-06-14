@@ -53,7 +53,7 @@ from .websocket_helpers import (
     missing_period_refs,
     validate_scope_config,
     validate_weather_groups,
-    with_shadows,
+    annotate_scenes,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -268,7 +268,7 @@ async def _ws_area_get(
         return
     store = hass.data[DOMAIN][DATA_STORE]
     area = store.get_area(area_id) or {"scenes": []}
-    connection.send_result(msg["id"], with_shadows(hass, area))
+    connection.send_result(msg["id"], annotate_scenes(hass, area))
 
 
 async def _save_scope(
@@ -291,7 +291,7 @@ async def _save_scope(
     coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
     await save_fn(store, config)
-    connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
+    connection.send_result(msg["id"], {"ok": True, "config": annotate_scenes(hass, config)})
 
 
 @websocket_api.require_admin
@@ -338,7 +338,7 @@ async def _ws_floor_get(
         return
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = store.get_floor(floor_id) or {"scenes": []}
-    connection.send_result(msg["id"], with_shadows(hass, cfg))
+    connection.send_result(msg["id"], annotate_scenes(hass, cfg))
 
 
 @websocket_api.require_admin
@@ -378,7 +378,7 @@ async def _ws_house_get(
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     house = store.get_house() or {"scenes": []}
-    connection.send_result(msg["id"], with_shadows(hass, house))
+    connection.send_result(msg["id"], annotate_scenes(hass, house))
 
 
 @websocket_api.require_admin

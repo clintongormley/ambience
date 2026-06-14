@@ -108,19 +108,21 @@ export class AmbienceProblemFlag extends LitElement {
     }
   `;
 
-  // Close the popover when the user clicks anywhere else. The badge's own click
-  // calls stopPropagation, so opening never immediately re-closes.
-  private _onDocClick = () => {
-    if (this._open) this._setOpen(false);
+  // Close the popover on any click outside this flag. Capture phase + a
+  // composedPath check (matching ambience-help) so dismissal is robust even
+  // inside HA wrappers that stop click propagation in the bubble phase — rather
+  // than relying on the badge's own stopPropagation to shield the opening click.
+  private _onDocClick = (e: Event) => {
+    if (this._open && !e.composedPath().includes(this)) this._setOpen(false);
   };
 
   override connectedCallback(): void {
     super.connectedCallback();
-    document.addEventListener("click", this._onDocClick);
+    document.addEventListener("click", this._onDocClick, true);
   }
 
   override disconnectedCallback(): void {
-    document.removeEventListener("click", this._onDocClick);
+    document.removeEventListener("click", this._onDocClick, true);
     if (openFlag === this) openFlag = null;
     super.disconnectedCallback();
   }
@@ -150,6 +152,7 @@ export class AmbienceProblemFlag extends LitElement {
         data-severity=${this.severity}
         title=${this.summary}
         aria-label=${this.summary}
+        aria-expanded=${this._open}
         @click=${this._toggle}
       >
         <ha-icon icon="mdi:exclamation-thick"></ha-icon>

@@ -25,6 +25,15 @@ describe("ambience-problem-flag", () => {
     expect(badge.querySelector('ha-icon[icon="mdi:exclamation-thick"]')).toBeTruthy();
   });
 
+  test("the badge exposes its open state via aria-expanded", async () => {
+    el = await mount();
+    const badge = el.shadowRoot.querySelector(".problem-flag") as HTMLElement;
+    expect(badge.getAttribute("aria-expanded")).toBe("false");
+    badge.click();
+    await el.updateComplete;
+    expect(badge.getAttribute("aria-expanded")).toBe("true");
+  });
+
   test("details are hidden until the badge is clicked", async () => {
     el = await mount({ details: ["Missing in Home Assistant: light.ghost"] });
     expect(el.shadowRoot.querySelector(".details")).toBeFalsy();

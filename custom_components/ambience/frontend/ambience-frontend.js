@@ -187,12 +187,13 @@ var Oo=Object.defineProperty;var No=Object.getOwnPropertyDescriptor;var u=(t,n,e
     .severity=${e}
     .details=${[r]}
     .summary=${r}
-  ></ambience-problem-flag>`}var ge=class extends b{constructor(){super(...arguments);this.severity="warning";this.details=[];this.summary="";this._open=!1;this._onDocClick=()=>{this._open&&this._setOpen(!1)}}connectedCallback(){super.connectedCallback(),document.addEventListener("click",this._onDocClick)}disconnectedCallback(){document.removeEventListener("click",this._onDocClick),Te===this&&(Te=null),super.disconnectedCallback()}_setOpen(e){e?(Te&&Te!==this&&(Te._open=!1),Te=this):Te===this&&(Te=null),this._open=e}_toggle(e){e.stopPropagation(),this._setOpen(!this._open)}render(){return l`
+  ></ambience-problem-flag>`}var ge=class extends b{constructor(){super(...arguments);this.severity="warning";this.details=[];this.summary="";this._open=!1;this._onDocClick=e=>{this._open&&!e.composedPath().includes(this)&&this._setOpen(!1)}}connectedCallback(){super.connectedCallback(),document.addEventListener("click",this._onDocClick,!0)}disconnectedCallback(){document.removeEventListener("click",this._onDocClick,!0),Te===this&&(Te=null),super.disconnectedCallback()}_setOpen(e){e?(Te&&Te!==this&&(Te._open=!1),Te=this):Te===this&&(Te=null),this._open=e}_toggle(e){e.stopPropagation(),this._setOpen(!this._open)}render(){return l`
       <button
         class="problem-flag ${this.severity}"
         data-severity=${this.severity}
         title=${this.summary}
         aria-label=${this.summary}
+        aria-expanded=${this._open}
         @click=${this._toggle}
       >
         <ha-icon icon="mdi:exclamation-thick"></ha-icon>

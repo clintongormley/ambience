@@ -64,6 +64,27 @@ def _action_entities(scene: dict[str, Any]) -> Iterator[str]:
                 yield eid
 
 
+def referenced_entities_by_scene(
+    conditions: dict[str, Any], cfg: dict[str, Any]
+) -> dict[int, set[str]]:
+    """Entity ids each ENABLED scene references (monitored + acted), keyed by scene
+    index. Monitored entities come from iter_predicate_specs (which already skips
+    disabled scenes); acted entities from enabled scenes only. This mirrors scan()'s
+    reference policy exactly, so the frontend flag can never diverge from the
+    Repairs issue."""
+    scenes = cfg.get("scenes", []) or []
+    out: dict[int, set[str]] = {}
+    for scene_index, _condition_key, spec in iter_predicate_specs(conditions, cfg):
+        out.setdefault(scene_index, set()).update(spec.entities)
+    for idx, scene in enumerate(scenes):
+        if not scene_enabled(scene):
+            continue
+        acted = set(_action_entities(scene))
+        if acted:
+            out.setdefault(idx, set()).update(acted)
+    return out
+
+
 def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
     """Return every config-health problem across `configs`.
 
@@ -88,17 +109,12 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
 
     for scope_kind, scope_id, cfg in configs:
         scenes = cfg.get("scenes", []) or []
-        # Monitored entities: reuse the engine's "what does a predicate watch?"
-        # policy so disabled/wildcard/unknown handling matches exactly.
-        for scene_index, _condition_key, spec in iter_predicate_specs(conditions, cfg):
+        # Single reference-policy source: monitored (via iter_predicate_specs) +
+        # acted entities of every enabled scene, so the Repairs missing-entity set
+        # and the frontend per-scene flag are computed identically.
+        for scene_index, eids in referenced_entities_by_scene(conditions, cfg).items():
             scene = scenes[scene_index]
-            for eid in spec.entities:
-                note_missing(scope_kind, scope_id, eid, scene)
-        # Acted entities.
-        for scene in scenes:
-            if not scene_enabled(scene):
-                continue
-            for eid in _action_entities(scene):
+            for eid in eids:
                 note_missing(scope_kind, scope_id, eid, scene)
 
     # 2. Action overlap, per acted entity across distinct (scope, category) groups.

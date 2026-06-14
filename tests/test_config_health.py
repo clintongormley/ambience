@@ -7,7 +7,14 @@ from typing import Any
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.ambience.config_health import entity_exists, scan
+from homeassistant.helpers import area_registry as ar
+
+from custom_components.ambience.config_health import (
+    entity_exists,
+    referenced_entities_by_scene,
+    scan,
+)
+from custom_components.ambience.const import DATA_CONDITIONS, DATA_STORE, DOMAIN
 
 
 def _cfg(scenes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -261,3 +268,39 @@ async def test_scan_flags_cross_scope_overlap(hass: HomeAssistant, installed) ->
         ("area", "a"),
         ("house", None),
     }
+
+
+async def test_referenced_entities_by_scene_collects_monitored_and_acted(
+    hass: HomeAssistant, installed
+) -> None:
+    conditions = hass.data[DOMAIN][DATA_CONDITIONS]
+    cfg = _cfg(
+        [
+            {
+                "name": "watch+act",
+                "when": {"occupancy": {"sensors": ["binary_sensor.mon"]}},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.act"]}],
+            }
+        ]
+    )
+    refs = referenced_entities_by_scene(conditions, cfg)
+    assert refs[0] == {"binary_sensor.mon", "light.act"}
+
+
+async def test_referenced_entities_by_scene_skips_disabled(
+    hass: HomeAssistant, installed
+) -> None:
+    conditions = hass.data[DOMAIN][DATA_CONDITIONS]
+    cfg = _cfg(
+        [
+            {
+                "name": "off",
+                "enabled": False,
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.act"]}],
+            }
+        ]
+    )
+    assert referenced_entities_by_scene(conditions, cfg) == {}

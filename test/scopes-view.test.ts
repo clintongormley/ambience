@@ -2867,4 +2867,222 @@ describe("ambience-scopes-view", () => {
     );
     expect(el.hass.callService).not.toHaveBeenCalled();
   });
+
+  // --- collapsible category sections (per-scope, persisted) ----------------
+
+  const expandLivingRoom = async (): Promise<HTMLElement> => {
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    return row;
+  };
+
+  const dispatchToggleCategory = (row: HTMLElement, categoryId: string) =>
+    row.querySelector("ambience-scenes-list")!.dispatchEvent(
+      new CustomEvent("toggle-category-collapse", {
+        detail: { categoryId },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+
+  test("collapsing a category persists the composite key and hides it in the scenes-list", async () => {
+    const scenes: Scene[] = [
+      { name: "M", when: {}, actions: [], category: "a" },
+      { name: "B", when: {}, actions: [], category: "b" },
+    ];
+    el = await mount({ areaConfigs: { living_room: { scenes } } });
+    el._store.categories = [
+      { id: "a", name: "A" },
+      { id: "b", name: "B" },
+    ] as SceneCategory[];
+    await el.updateComplete;
+    const row = await expandLivingRoom();
+    dispatchToggleCategory(row, "a");
+    await el.updateComplete;
+    expect(JSON.parse(window.localStorage.getItem("ambience-collapsed-categories")!)).toContain(
+      "area:living_room\u0000a",
+    );
+    const scenesList: any = row.querySelector("ambience-scenes-list");
+    expect(scenesList.collapsedCategories).toContain("a");
+    expect(scenesList.collapsedCategories).not.toContain("b");
+  });
+
+  test("toggling the same category again clears its collapse key", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [{ when: {}, actions: [], category: "a" }] } },
+    });
+    el._store.categories = [{ id: "a", name: "A" }] as SceneCategory[];
+    await el.updateComplete;
+    const row = await expandLivingRoom();
+    dispatchToggleCategory(row, "a");
+    await el.updateComplete;
+    dispatchToggleCategory(row, "a");
+    await el.updateComplete;
+    expect(JSON.parse(window.localStorage.getItem("ambience-collapsed-categories")!)).not.toContain(
+      "area:living_room\u0000a",
+    );
+    expect((row.querySelector("ambience-scenes-list") as any).collapsedCategories).not.toContain(
+      "a",
+    );
+  });
+
+  test("collapsing a category in one scope does not collapse it in another", async () => {
+    el = await mount({
+      areaConfigs: {
+        living_room: { scenes: [{ when: {}, actions: [], category: "a" }] },
+        bedroom: { scenes: [{ when: {}, actions: [], category: "a" }] },
+      },
+    });
+    el._store.categories = [{ id: "a", name: "A" }] as SceneCategory[];
+    await el.updateComplete;
+    const lr = await expandLivingRoom();
+    const br = el.shadowRoot.querySelector(".scope-row.area[data-id='bedroom']") as HTMLElement;
+    (br.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    dispatchToggleCategory(lr, "a");
+    await el.updateComplete;
+    expect((lr.querySelector("ambience-scenes-list") as any).collapsedCategories).toContain("a");
+    expect((br.querySelector("ambience-scenes-list") as any).collapsedCategories).not.toContain(
+      "a",
+    );
+  });
+
+  test("restores collapsed categories from localStorage on mount", async () => {
+    window.localStorage.setItem(
+      "ambience-collapsed-categories",
+      JSON.stringify(["area:living_room\u0000a"]),
+    );
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [{ when: {}, actions: [], category: "a" }] } },
+    });
+    el._store.categories = [{ id: "a", name: "A" }] as SceneCategory[];
+    await el.updateComplete;
+    const row = await expandLivingRoom();
+    expect((row.querySelector("ambience-scenes-list") as any).collapsedCategories).toContain("a");
+  });
+
+  test("a collapsed category survives collapsing and reopening the scope", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [{ when: {}, actions: [], category: "a" }] } },
+    });
+    el._store.categories = [{ id: "a", name: "A" }] as SceneCategory[];
+    await el.updateComplete;
+    const row = await expandLivingRoom();
+    dispatchToggleCategory(row, "a");
+    await el.updateComplete;
+    const header = row.querySelector(".scope-header") as HTMLElement;
+    header.click(); // collapse the scope
+    await el.updateComplete;
+    header.click(); // reopen the scope
+    await el.updateComplete;
+    expect((row.querySelector("ambience-scenes-list") as any).collapsedCategories).toContain("a");
+  });
+
+  test("removing a scope prunes its collapsed-category keys", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [{ when: {}, actions: [], category: "a" }] } },
+    });
+    el._store.categories = [{ id: "a", name: "A" }] as SceneCategory[];
+    await el.updateComplete;
+    const row = await expandLivingRoom();
+    dispatchToggleCategory(row, "a");
+    await el.updateComplete;
+    expect(JSON.parse(window.localStorage.getItem("ambience-collapsed-categories")!)).toContain(
+      "area:living_room\u0000a",
+    );
+    el._onScopeRemoved({ kind: "area", id: "living_room" });
+    await el.updateComplete;
+    expect(JSON.parse(window.localStorage.getItem("ambience-collapsed-categories")!)).not.toContain(
+      "area:living_room\u0000a",
+    );
+  });
+
+  // --- auto behaviour on filter change -------------------------------------
+
+  test("changing the filter to a category with no scenes collapses that scope's row", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [{ when: {}, actions: [], category: "a" }] } },
+    });
+    const row = await expandLivingRoom();
+    expect(row.querySelector(".scope-body")).toBeTruthy();
+    el.filterCategory = "b"; // living_room has no category-b scenes
+    await el.updateComplete;
+    expect(row.querySelector(".scope-body")).toBeFalsy();
+    expect(JSON.parse(window.localStorage.getItem("ambience-expanded-scopes")!)).not.toContain(
+      "area:living_room",
+    );
+  });
+
+  test("changing the filter leaves a scope that has matching scenes expanded", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [{ when: {}, actions: [], category: "b" }] } },
+    });
+    const row = await expandLivingRoom();
+    el.filterCategory = "b";
+    await el.updateComplete;
+    expect(row.querySelector(".scope-body")).toBeTruthy();
+  });
+
+  test("changing the filter does not auto-expand a collapsed scope with matching scenes", async () => {
+    el = await mount({
+      areaConfigs: { living_room: { scenes: [{ when: {}, actions: [], category: "b" }] } },
+    });
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    expect(row.querySelector(".scope-body")).toBeFalsy(); // starts collapsed
+    el.filterCategory = "b";
+    await el.updateComplete;
+    expect(row.querySelector(".scope-body")).toBeFalsy(); // still collapsed
+  });
+
+  test("changing the filter to a category clears that category's collapse flag everywhere", async () => {
+    el = await mount({
+      areaConfigs: {
+        living_room: {
+          scenes: [
+            { when: {}, actions: [], category: "a" },
+            { when: {}, actions: [], category: "b" },
+          ],
+        },
+      },
+    });
+    el._store.categories = [
+      { id: "a", name: "A" },
+      { id: "b", name: "B" },
+    ] as SceneCategory[];
+    await el.updateComplete;
+    const row = await expandLivingRoom();
+    dispatchToggleCategory(row, "b"); // manually collapse category b
+    await el.updateComplete;
+    expect(JSON.parse(window.localStorage.getItem("ambience-collapsed-categories")!)).toContain(
+      "area:living_room\u0000b",
+    );
+    el.filterCategory = "b"; // selecting b must surface it again
+    await el.updateComplete;
+    expect(JSON.parse(window.localStorage.getItem("ambience-collapsed-categories")!)).not.toContain(
+      "area:living_room\u0000b",
+    );
+    expect((row.querySelector("ambience-scenes-list") as any).collapsedCategories).not.toContain(
+      "b",
+    );
+  });
+
+  test("filter→specific collapses an empty scope, but filter→All never force-collapses", async () => {
+    el = await mount({ areaConfigs: { living_room: { scenes: [] } } });
+    const row = await expandLivingRoom(); // expand the empty scope
+    el.filterCategory = "a";
+    await el.updateComplete;
+    // A specific category with no matching scenes collapses it...
+    expect(row.querySelector(".scope-body")).toBeFalsy();
+    // ...re-expand, then switch to All, which must NOT force-collapse.
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+    el.filterCategory = "";
+    await el.updateComplete;
+    expect(row.querySelector(".scope-body")).toBeTruthy();
+  });
 });

@@ -1038,6 +1038,75 @@ describe("ambience-scenes-list", () => {
     await pickCategoryKebab(el, "simulate");
     expect(get()).toEqual({ category: "g1" });
   });
+
+  // --- collapsible category sections -----------------------------------------
+
+  test("clicking a category header emits toggle-category-collapse with the category id", async () => {
+    const category = { id: "g1", name: "Evening", color: "blue", icon: "" } as SceneCategory;
+    el = await mount([{ ...movieScene, category: "g1" }], [], {}, [category]);
+    const get = captureEvent(el, "toggle-category-collapse");
+    const header = el.shadowRoot.querySelector(".category-section-header") as HTMLElement;
+    header.click();
+    expect(get()).toEqual({ categoryId: "g1" });
+  });
+
+  test("opening the category kebab does not toggle the section", async () => {
+    const category = { id: "g1", name: "Evening", color: "blue", icon: "" } as SceneCategory;
+    el = await mount([{ ...movieScene, category: "g1" }], [], {}, [category]);
+    const get = captureEvent(el, "toggle-category-collapse");
+    const kebab = el.shadowRoot.querySelector(
+      ".category-section-header ambience-kebab-menu",
+    ) as HTMLElement;
+    // Click the kebab host itself (not its inner trigger) so the header's
+    // stopPropagation wrapper is what's under test, not the kebab's own guard.
+    kebab.click();
+    await el.updateComplete;
+    expect(get()).toBeUndefined();
+  });
+
+  test("a collapsed category hides its scenes and add button but keeps the header", async () => {
+    const category = { id: "g1", name: "Evening", color: "blue", icon: "" } as SceneCategory;
+    el = await mount([{ ...movieScene, category: "g1" }], [], {}, [category]);
+    // Sanity: while expanded the row and its add button render.
+    expect(el.shadowRoot.querySelectorAll("li").length).toBe(1);
+    el.collapsedCategories = ["g1"];
+    await el.updateComplete;
+    const section = el.shadowRoot.querySelector(".category-section") as HTMLElement;
+    expect(section.querySelector(".category-section-header")).toBeTruthy();
+    expect(section.querySelectorAll("li").length).toBe(0);
+    expect(section.querySelector(".add")).toBeNull();
+  });
+
+  test("the category header chevron reflects expanded/collapsed state", async () => {
+    const category = { id: "g1", name: "Evening" } as SceneCategory;
+    el = await mount([{ ...movieScene, category: "g1" }], [], {}, [category]);
+    const chevron = () =>
+      el.shadowRoot.querySelector(".category-section-header .category-chevron") as HTMLElement;
+    expect(chevron().classList.contains("open")).toBe(true);
+    el.collapsedCategories = ["g1"];
+    await el.updateComplete;
+    expect(chevron().classList.contains("open")).toBe(false);
+  });
+
+  test("collapsing one category leaves other categories' scenes visible", async () => {
+    const groups = [
+      { id: "a", name: "A" },
+      { id: "b", name: "B" },
+    ];
+    const scenes = [
+      { when: {}, actions: [], category: "a" },
+      { when: {}, actions: [], category: "b" },
+    ];
+    el = await mount(scenes, [], {}, groups);
+    el.collapsedCategories = ["a"];
+    await el.updateComplete;
+    const sectionFor = (name: string) =>
+      Array.from(el.shadowRoot.querySelectorAll(".category-section")).find((s: any) =>
+        s.querySelector(".category-section-header")!.textContent!.includes(name),
+      ) as Element;
+    expect(sectionFor("A").querySelectorAll("li").length).toBe(0);
+    expect(sectionFor("B").querySelectorAll("li").length).toBe(1);
+  });
 });
 
 describe("expanded-state reconciliation (review fix)", () => {

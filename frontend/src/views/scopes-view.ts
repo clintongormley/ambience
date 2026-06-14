@@ -4,15 +4,17 @@ import { repeat } from "lit/directives/repeat.js";
 
 import type { HassConnection } from "../api.js";
 import { applyScenes, runSceneActions, setScopeEnabled } from "../api.js";
-import { sceneNameKey, scopeKey } from "../entities-for-scope.js";
+import { sceneNameKey, scopeCategoryKey, scopeKey } from "../entities-for-scope.js";
 import { renderHaSwitch } from "../ha-switch.js";
 import { localize } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
 import { scopeIcon } from "../scope-icon.js";
 import type { ConditionInfo, Scene, Scope, ScopeConfig, ScopeOption } from "../types.js";
 import {
+  getCollapsedCategories,
   getConditionsHintDismissed,
   getExpandedScopes,
+  setCollapsedCategories,
   setConditionsHintDismissed,
   setExpandedScopes,
 } from "../ui-state.js";
@@ -301,6 +303,11 @@ export class AmbienceScopesView extends LitElement {
   // localStorage so a reload (or HA's panel rebuild on reconnect) restores which
   // rows were open; persisted on every change via _setExpanded.
   @state() private _expanded = new Set<string>(getExpandedScopes());
+  // Collapsed category sections, keyed by scopeCategoryKey(scope, categoryId).
+  // Owned here (scenes-list is presentational and rebuilt on every scope
+  // reopen, so it can't hold this) and seeded from localStorage so a reload or
+  // HA's panel rebuild on reconnect restores which sections were collapsed.
+  @state() private _collapsedCategories = new Set<string>(getCollapsedCategories());
   @state() private _conditionsHintDismissed = false;
   @state() private _editing: EditingState | null = null;
   // A failed scene save's message, shown inside the (still-open) editor.
@@ -350,9 +357,50 @@ export class AmbienceScopesView extends LitElement {
     const expanded = new Set(this._expanded);
     expanded.delete(key);
     this._setExpanded(expanded);
+    // Drop the scope's collapsed-category keys too (parallel to `_expanded`).
+    // Every such key is prefixed with `scopeCategoryKey(scope, "")`, and the NUL
+    // in that prefix means it can't false-match a different scope's keys.
+    const prefix = scopeCategoryKey(scope, "");
+    this._setCollapsedCategories(
+      new Set([...this._collapsedCategories].filter((k) => !k.startsWith(prefix))),
+    );
     if (this._editing && scopeKey(this._editing.scope) === key) {
       this._editing = null;
     }
+  }
+
+  override willUpdate(changed: Map<string, unknown>): void {
+    // React only to a genuine, user-driven change of the active filter. On the
+    // initial property assignment Lit reports the old value as `undefined`; we
+    // skip that so mount honours the persisted expanded/collapsed state intact.
+    if (changed.has("filterCategory") && changed.get("filterCategory") !== undefined) {
+      this._onFilterCategoryChanged();
+    }
+  }
+
+  /** When the filter changes to a specific category X: collapse every scope row
+   *  that has no scenes in X (leaving scopes WITH matching scenes as the user
+   *  left them — no auto-expand), and clear X's collapse flag in every scope so
+   *  the selected category is visible as soon as a scope is opened. Switching to
+   *  "All" ("") does nothing. */
+  private _onFilterCategoryChanged() {
+    const x = this.filterCategory;
+    if (x === "") return;
+    const expanded = new Set(this._expanded);
+    const collapsed = new Set(this._collapsedCategories);
+    let expandedChanged = false;
+    let collapsedChanged = false;
+    for (const row of this._orderedScopeRows()) {
+      const key = scopeKey(row.scope);
+      if (this._matchingSceneCount(row.cfg) === 0 && expanded.delete(key)) {
+        expandedChanged = true;
+      }
+      if (collapsed.delete(scopeCategoryKey(row.scope, x))) {
+        collapsedChanged = true;
+      }
+    }
+    if (expandedChanged) this._setExpanded(expanded);
+    if (collapsedChanged) this._setCollapsedCategories(collapsed);
   }
 
   // --- expand --------------------------------------------------------------
@@ -370,6 +418,32 @@ export class AmbienceScopesView extends LitElement {
     if (next.has(key)) next.delete(key);
     else next.add(key);
     this._setExpanded(next);
+  }
+
+  /** Update the collapsed-categories set and persist it (same survives-reload
+   *  rationale as `_setExpanded`). */
+  private _setCollapsedCategories(next: Set<string>) {
+    this._collapsedCategories = next;
+    setCollapsedCategories([...next]);
+  }
+
+  /** Flip whether a category's section is collapsed within `scope`, driven by a
+   *  click on that section's header in scenes-list. */
+  private _toggleCategoryCollapse(scope: Scope, e: CustomEvent<{ categoryId: string }>) {
+    const key = scopeCategoryKey(scope, e.detail.categoryId);
+    const next = new Set(this._collapsedCategories);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this._setCollapsedCategories(next);
+  }
+
+  /** The collapsed category ids for one scope — derived by intersecting the
+   *  persisted composite-key set with the known categories — to pass down to
+   *  that scope's scenes-list. */
+  private _collapsedCategoriesFor(scope: Scope): string[] {
+    return this._store.categories
+      .map((c) => c.id)
+      .filter((id) => this._collapsedCategories.has(scopeCategoryKey(scope, id)));
   }
 
   // --- scenes ---------------------------------------------------------------
@@ -1043,7 +1117,10 @@ export class AmbienceScopesView extends LitElement {
                   .schemas=${this._store.schemas}
                   .categories=${this._store.categories}
                   .filterCategory=${this.filterCategory}
+                  .collapsedCategories=${this._collapsedCategoriesFor(scope)}
                   .hass=${this.hass}
+                  @toggle-category-collapse=${(e: CustomEvent<{ categoryId: string }>) =>
+                    this._toggleCategoryCollapse(scope, e)}
                   @add-scene=${(e: CustomEvent<{ category?: string }>) =>
                     this._addScene(scope, e.detail?.category)}
                   @edit-scene=${(e: CustomEvent<{ index: number }>) => this._editScene(scope, e)}

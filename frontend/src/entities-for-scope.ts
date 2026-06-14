@@ -7,11 +7,23 @@ export function scopeKey(scope: Scope): string {
   return scope.kind === "house" ? "house" : `${scope.kind}:${scope.id}`;
 }
 
+/** Join a scope's identity with a sub-key using a NUL separator. NUL can't
+ *  appear in a scope id, category id, or scene category, so the parts never
+ *  collide. Single-sources the separator for the composite keys below. */
+function scopedKey(scope: Scope, part: string): string {
+  return `${scopeKey(scope)}\u0000${part}`;
+}
+
+/** Composite key identifying a (scope, category) section, used to persist which
+ *  category sections are collapsed within each scope. */
+export function scopeCategoryKey(scope: Scope, categoryId: string): string {
+  return scopedKey(scope, categoryId);
+}
+
 /** Composite key identifying the (scope, category) pair within which scene
- *  names must be unique. The NUL separator can't appear in a scope or category
- *  id, so the two parts can't collide. */
+ *  names must be unique. */
 export function sceneNameKey(scope: Scope, category: string): string {
-  return `${scopeKey(scope)}\u0000${category}`;
+  return scopedKey(scope, category);
 }
 
 /**

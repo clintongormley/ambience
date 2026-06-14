@@ -202,6 +202,22 @@ export class AmbienceScenesList extends LitElement {
       font-weight: 600;
       background: var(--secondary-background-color, #e0e0e0);
       color: var(--primary-text-color, #212121);
+      /* The whole bar toggles the section's collapse (the kebab stops its own
+         clicks); show the affordance. */
+      cursor: pointer;
+    }
+    /* Chevron mirrors the scope-header's: points right when collapsed, rotates
+       to point down when the section is open. Inherits the bar's (auto-contrast)
+       text colour. */
+    .category-chevron {
+      flex: 0 0 auto;
+      width: 1em;
+      font-size: 0.85em;
+      color: currentColor;
+      transition: transform 0.1s;
+    }
+    .category-chevron.open {
+      transform: rotate(90deg);
     }
     .category-section:first-of-type .category-section-header {
       margin-top: 0;
@@ -254,6 +270,12 @@ export class AmbienceScenesList extends LitElement {
   // otherwise a category id. Presentation-only.
   @property({ attribute: false }) filterCategory: string = "";
 
+  // Category ids whose section is collapsed within THIS scope, OWNED BY THE
+  // PARENT (scopes-view) and persisted there. Presentation-only: a collapsed
+  // section renders just its header bar. Clicking a header emits
+  // "toggle-category-collapse" {categoryId} for the parent to flip.
+  @property({ attribute: false }) collapsedCategories: string[] = [];
+
   // Drag-to-reorder controller. On drop it emits "reorder-scenes" {from,to};
   // the parent (scopes-view) performs the actual move.
   private _drag = new DragReorderController(this, (from, to) =>
@@ -268,19 +290,27 @@ export class AmbienceScenesList extends LitElement {
     if (changed.has("scenes")) this._expanded = new Set();
   }
 
-  /** A full-width coloured header bar for a category's section: the category's
-   *  colour as background (auto-contrast text), its icon, then its name. Falls
-   *  back to neutral theme colours when the category has no colour. */
-  private _renderSectionHeader(category: SceneCategory) {
+  /** A full-width coloured header bar for a category's section: a chevron, the
+   *  category's colour as background (auto-contrast text), its icon, then its
+   *  name. Falls back to neutral theme colours when the category has no colour.
+   *  Clicking the bar toggles the section's collapse; the kebab stops its own
+   *  clicks so opening the menu never collapses the section. */
+  private _renderSectionHeader(category: SceneCategory, open: boolean) {
+    // A plain clickable bar with a rotating chevron, matching the scope-header
+    // pattern (no role="button" — the bar nests an interactive kebab, so a
+    // button role would be invalid; the chevron is decorative, hence aria-hidden).
     return html`<div
       class="category-section-header"
       style=${categorySwatchStyle(category.color)}
+      @click=${() => this._emit("toggle-category-collapse", { categoryId: category.id })}
     >
+      <span class="category-chevron ${open ? "open" : ""}" aria-hidden="true">▶</span>
       ${category.icon ? html`<ha-icon icon=${category.icon}></ha-icon>` : ""}
       <span>${category.name}</span>
       <ambience-kebab-menu
         class="category-kebab"
         .hass=${this.hass}
+        @click=${(e: Event) => e.stopPropagation()}
         .items=${
           [
             {
@@ -665,22 +695,36 @@ export class AmbienceScenesList extends LitElement {
     // category is filtered — the bar labels which category these scenes belong to.
     const showHeaders = this.categories.length > 0;
     return html`
-      ${sections.map(
-        (section) => html`
+      ${sections.map((section) => {
+        // A section can only collapse if it has a header to click; orphan
+        // sections (no matching category) always render their scenes.
+        const collapsed =
+          !!section.category && this.collapsedCategories.includes(section.category.id);
+        return html`
           <div class="category-section">
-            ${showHeaders && section.category ? this._renderSectionHeader(section.category) : ""}
-            <ul>
-              ${section.rows.map(([i, scene], n) => this._renderRow(i, scene, n + 1))}
-            </ul>
-            <button
-              class="add"
-              @click=${() => this._emit("add-scene", { category: section.category?.id })}
-            >
-              ${localize(this.hass, "ui.add_scene", "+ Add scene")}
-            </button>
+            ${
+              showHeaders && section.category
+                ? this._renderSectionHeader(section.category, !collapsed)
+                : ""
+            }
+            ${
+              collapsed
+                ? ""
+                : html`
+                  <ul>
+                    ${section.rows.map(([i, scene], n) => this._renderRow(i, scene, n + 1))}
+                  </ul>
+                  <button
+                    class="add"
+                    @click=${() => this._emit("add-scene", { category: section.category?.id })}
+                  >
+                    ${localize(this.hass, "ui.add_scene", "+ Add scene")}
+                  </button>
+                `
+            }
           </div>
-        `,
-      )}
+        `;
+      })}
     `;
   }
 }

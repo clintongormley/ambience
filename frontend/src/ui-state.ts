@@ -16,6 +16,7 @@
 
 const FILTER_CATEGORY_KEY = "ambience-filter-category";
 const EXPANDED_SCOPES_KEY = "ambience-expanded-scopes";
+const COLLAPSED_CATEGORIES_KEY = "ambience-collapsed-categories";
 const CONDITIONS_HINT_DISMISSED_KEY = "ambience-conditions-hint-dismissed";
 
 /** The remembered category filter ("" = All), or "" when none is stored. */
@@ -61,6 +62,34 @@ export function setExpandedScopes(keys: string[]): void {
     window.localStorage.setItem(EXPANDED_SCOPES_KEY, JSON.stringify(keys));
   } catch {
     // Storage disabled — the expansion just won't persist.
+  }
+}
+
+/** The remembered set of collapsed category-section keys, each a composite
+ *  `"<scopeKey>\u0000<categoryId>"` (see scopeCategoryKey). Returns [] when
+ *  nothing is stored, the value isn't valid JSON, or it isn't an array. A stored
+ *  array is recovered leniently: any non-string entries are dropped and the
+ *  valid keys kept (a corrupted entry shouldn't discard the user's whole
+ *  collapsed set — unknown keys are harmless, they just never match at render). */
+export function getCollapsedCategories(): string[] {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_CATEGORIES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((k): k is string => typeof k === "string");
+  } catch {
+    // Malformed JSON or storage disabled — treat as nothing collapsed.
+    return [];
+  }
+}
+
+/** Persist the set of collapsed category-section keys. */
+export function setCollapsedCategories(keys: string[]): void {
+  try {
+    window.localStorage.setItem(COLLAPSED_CATEGORIES_KEY, JSON.stringify(keys));
+  } catch {
+    // Storage disabled — the collapse just won't persist.
   }
 }
 

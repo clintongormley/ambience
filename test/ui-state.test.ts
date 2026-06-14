@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
+  getCollapsedCategories,
   getConditionsHintDismissed,
   getExpandedScopes,
   getFilterCategory,
+  setCollapsedCategories,
   setConditionsHintDismissed,
   setExpandedScopes,
   setFilterCategory,
@@ -95,6 +97,55 @@ describe("ui-state persistence", () => {
         throw new Error("storage disabled");
       });
       expect(() => setExpandedScopes(["house"])).not.toThrow();
+    });
+  });
+
+  describe("collapsed categories", () => {
+    test("defaults to [] when nothing stored", () => {
+      expect(getCollapsedCategories()).toEqual([]);
+    });
+
+    test("round-trips a list of scope+category keys", () => {
+      setCollapsedCategories(["house\u0000relax", "area:kitchen\u0000night"]);
+      expect(getCollapsedCategories()).toEqual(["house\u0000relax", "area:kitchen\u0000night"]);
+    });
+
+    test("an empty list overwrites a previously stored list", () => {
+      setCollapsedCategories(["house\u0000relax"]);
+      setCollapsedCategories([]);
+      expect(getCollapsedCategories()).toEqual([]);
+    });
+
+    test("returns [] for malformed JSON", () => {
+      window.localStorage.setItem("ambience-collapsed-categories", "{not json");
+      expect(getCollapsedCategories()).toEqual([]);
+    });
+
+    test("returns [] when the stored value is not an array (e.g. an object)", () => {
+      window.localStorage.setItem("ambience-collapsed-categories", '{"house":true}');
+      expect(getCollapsedCategories()).toEqual([]);
+    });
+
+    test("recovers the valid string keys from an array with mixed entries", () => {
+      window.localStorage.setItem(
+        "ambience-collapsed-categories",
+        JSON.stringify(["house\u0000relax", 123, null, "area:kitchen\u0000night"]),
+      );
+      expect(getCollapsedCategories()).toEqual(["house\u0000relax", "area:kitchen\u0000night"]);
+    });
+
+    test("returns [] when reading throws (storage disabled)", () => {
+      vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
+        throw new Error("storage disabled");
+      });
+      expect(getCollapsedCategories()).toEqual([]);
+    });
+
+    test("swallows errors when writing throws (storage disabled)", () => {
+      vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
+        throw new Error("storage disabled");
+      });
+      expect(() => setCollapsedCategories(["house\u0000relax"])).not.toThrow();
     });
   });
 

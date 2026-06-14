@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { entitiesForScope, filterEntities } from "../frontend/src/entities-for-scope";
+import {
+  entitiesForScope,
+  filterEntities,
+  scopeCategoryKey,
+} from "../frontend/src/entities-for-scope";
 
 const hass = {
   entities: {
@@ -145,5 +149,17 @@ describe("filterEntities", () => {
     expect(filterEntities(["broken", "light.a"], { entity: { domain: "light" } })).toEqual([
       "light.a",
     ]);
+  });
+});
+
+describe("scopeCategoryKey", () => {
+  test("joins the house scope key and category id with a NUL separator", () => {
+    expect(scopeCategoryKey({ kind: "house" }, "relax")).toBe("house\u0000relax");
+  });
+
+  test("joins a kinded scope key and category id with a NUL separator", () => {
+    expect(scopeCategoryKey({ kind: "area", id: "kitchen" }, "night")).toBe(
+      "area:kitchen\u0000night",
+    );
   });
 });

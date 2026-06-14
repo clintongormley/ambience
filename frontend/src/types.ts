@@ -22,6 +22,11 @@ export type Scene = {
   // Transient (response-only): index of an earlier scene that shadows this one,
   // or null/absent. Never persisted.
   shadowed_by?: number | null;
+  // Transient (response-only) problem hints injected by the backend
+  // (annotate_scenes); never persisted. Present only on enabled scenes that
+  // reference missing / multiply-controlled entities.
+  missing_entities?: string[];
+  overlap_entities?: string[];
 };
 
 // A user-defined grouping of scenes. Stored separately; scenes reference it by id.

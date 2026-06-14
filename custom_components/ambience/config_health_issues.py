@@ -8,6 +8,8 @@ issues auto-clear the moment a typo is fixed or a device returns.
 
 from __future__ import annotations
 
+import re
+
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
@@ -33,16 +35,22 @@ def _issue_id(problem: Problem) -> str:
     return f"action_overlap:{problem.entity_id}"
 
 
+def _clean(text: str) -> str:
+    """Collapse whitespace (incl. newlines/tabs) so a user-supplied scope/category/
+    scene name can't break the markdown bullet structure of a Repairs description."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _scope_phrase(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
     """Bold friendly scope label with its kind: '**House**', '**Kitchen** floor',
     '**Living Room** area'."""
-    name = scope_display_name(hass, scope_kind, scope_id)
+    name = _clean(scope_display_name(hass, scope_kind, scope_id))
     return f"**{name}**" if scope_kind == "house" else f"**{name}** {scope_kind}"
 
 
 def _category_clause(category_name: str) -> str:
     """'category: Security' for a named category, else 'uncategorised'."""
-    return f"category: {category_name}" if category_name else "uncategorised"
+    return f"category: {_clean(category_name)}" if category_name else "uncategorised"
 
 
 @callback
@@ -87,7 +95,7 @@ def reconcile_issues(hass: HomeAssistant) -> None:
                 }
             )
             scenes = "".join(
-                f'\n- "{name}" — {_category_clause(category)}' for name, category in bullets
+                f'\n- "{_clean(name)}" — {_category_clause(category)}' for name, category in bullets
             )
             translation_key = "missing_entity"
             placeholders = {"entity_id": problem.entity_id, "scope": scope, "scenes": scenes}

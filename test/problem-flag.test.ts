@@ -25,6 +25,20 @@ describe("ambience-problem-flag", () => {
     expect(badge.querySelector('ha-icon[icon="mdi:exclamation-thick"]')).toBeTruthy();
   });
 
+  test("the badge is type=button (never submits a surrounding form)", async () => {
+    el = await mount();
+    expect((el.shadowRoot.querySelector(".problem-flag") as HTMLButtonElement).type).toBe("button");
+  });
+
+  test("aria-label collapses the multi-line summary to a single line", async () => {
+    el = await mount({ summary: "Never fires.\nMissing in Home Assistant: light.x" });
+    const label = (el.shadowRoot.querySelector(".problem-flag") as HTMLElement).getAttribute(
+      "aria-label",
+    );
+    expect(label).not.toContain("\n");
+    expect(label).toBe("Never fires. Missing in Home Assistant: light.x");
+  });
+
   test("the badge exposes its open state via aria-expanded", async () => {
     el = await mount();
     const badge = el.shadowRoot.querySelector(".problem-flag") as HTMLElement;

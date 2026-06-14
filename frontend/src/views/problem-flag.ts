@@ -116,25 +116,23 @@ export class AmbienceProblemFlag extends LitElement {
     if (this._open && !e.composedPath().includes(this)) this._setOpen(false);
   };
 
-  override connectedCallback(): void {
-    super.connectedCallback();
-    document.addEventListener("click", this._onDocClick, true);
-  }
-
   override disconnectedCallback(): void {
-    document.removeEventListener("click", this._onDocClick, true);
-    if (openFlag === this) openFlag = null;
+    if (this._open) this._setOpen(false);
     super.disconnectedCallback();
   }
 
   /** Set this flag's open state, keeping at most one popover open across all
-   *  flags: opening this one closes whichever was previously open. */
+   *  flags: opening this one closes whichever was previously open. The document
+   *  click listener is registered only while open (matching ambience-help), so a
+   *  page full of closed flags adds no per-click overhead. */
   private _setOpen(open: boolean) {
     if (open) {
-      if (openFlag && openFlag !== this) openFlag._open = false;
+      if (openFlag && openFlag !== this) openFlag._setOpen(false);
       openFlag = this;
-    } else if (openFlag === this) {
-      openFlag = null;
+      document.addEventListener("click", this._onDocClick, true);
+    } else {
+      if (openFlag === this) openFlag = null;
+      document.removeEventListener("click", this._onDocClick, true);
     }
     this._open = open;
   }
@@ -148,10 +146,11 @@ export class AmbienceProblemFlag extends LitElement {
   override render() {
     return html`
       <button
+        type="button"
         class="problem-flag ${this.severity}"
         data-severity=${this.severity}
         title=${this.summary}
-        aria-label=${this.summary}
+        aria-label=${this.summary.replace(/\s+/g, " ").trim()}
         aria-expanded=${this._open}
         @click=${this._toggle}
       >

@@ -228,3 +228,29 @@ async def test_reconcile_caches_overlap_set(hass, installed, area_id) -> None:
     reconcile_issues(hass)
     # The frontend overlap flag reads this cache (config_health.scene_annotations).
     assert hass.data[DOMAIN][DATA_OVERLAP_SET] == frozenset({"light.shared"})
+
+
+async def test_missing_entity_message_collapses_newline_in_scene_name(
+    hass, installed, area_id
+) -> None:
+    # A newline in a user-supplied scene name must not break the markdown bullet
+    # list — whitespace is collapsed so the name stays on its one bullet.
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "two\nlines",
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+                }
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    issues = ir.async_get(hass).issues
+    iid = next(i for (dom, i) in issues if dom == DOMAIN and i.startswith("missing_entity:"))
+    scenes = issues[(DOMAIN, iid)].translation_placeholders["scenes"]
+    assert scenes == '\n- "two lines" — uncategorised'

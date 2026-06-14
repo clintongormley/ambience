@@ -14,6 +14,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 
 from .conditions.weather import WEATHER_CONDITIONS, weather_predicate_active
+from .config_health import scene_annotations
 from .const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -114,25 +115,44 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
             _ = exposed
 
 
+# Transient per-scene hints injected for the frontend by annotate_scenes; stripped
+# by canonicalise so they're never persisted.
+_TRANSIENT_SCENE_FIELDS = ("shadowed_by", "missing_entities", "overlap_entities")
+
+
 def canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
     """Resolve scene order + numbers for storage. Strips the transient per-scene
-    `shadowed_by` hint so it isn't persisted."""
+    frontend hints (`shadowed_by`, `missing_entities`, `overlap_entities`) so they
+    aren't persisted."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     out = dict(config)
-    scenes = [{k: v for k, v in r.items() if k != "shadowed_by"} for r in config.get("scenes", [])]
+    scenes = [
+        {k: v for k, v in r.items() if k not in _TRANSIENT_SCENE_FIELDS}
+        for r in config.get("scenes", [])
+    ]
     out["scenes"] = resolve_order(scenes, conditions_registry)
     return out
 
 
-def with_shadows(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy whose scenes carry a transient `shadowed_by` index (or None).
-    Not persisted — only sent to the frontend."""
+def annotate_scenes(
+    hass: HomeAssistant, config: dict[str, Any], *, fresh_overlap: bool = False
+) -> dict[str, Any]:
+    """Return a copy whose scenes carry transient frontend-only problem hints:
+    `shadowed_by` (index or None), `missing_entities`, and `overlap_entities`.
+    Not persisted — canonicalise() strips all three before storage.
+
+    `fresh_overlap=True` recomputes the global overlap set instead of reading the
+    cache; pass it on the save path so the save response reflects the new config."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     scenes = config.get("scenes", [])
     shadows = shadowed_by(scenes, conditions_registry)
+    annos = scene_annotations(hass, config, fresh_overlap=fresh_overlap)
     return {
         **config,
-        "scenes": [{**r, "shadowed_by": shadows.get(idx)} for idx, r in enumerate(scenes)],
+        "scenes": [
+            {**scene, "shadowed_by": shadows.get(idx), **annos[idx]}
+            for idx, scene in enumerate(scenes)
+        ],
     }
 
 

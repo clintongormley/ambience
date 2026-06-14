@@ -18,6 +18,7 @@ import {
   setConditionsHintDismissed,
   setExpandedScopes,
 } from "../ui-state.js";
+import { renderAggregateProblemFlag } from "./problem-flag.js";
 import { ScopeStore } from "./scope-store.js";
 import "./scenes-list.js";
 import "./scene-editor.js";
@@ -258,6 +259,9 @@ export class AmbienceScopesView extends LitElement {
         flex: 1;
         text-align: left;
         font-weight: 600;
+      }
+      .scope-header ambience-problem-flag {
+        margin-left: 0.25rem;
       }
       .scope-summary {
         font-size: 0.85em;
@@ -1078,6 +1082,7 @@ export class AmbienceScopesView extends LitElement {
           <span class="chevron ${open ? "open" : ""}">▶</span>
           <ha-icon class="scope-icon" icon=${scopeIcon(scope, this.hass as any)}></ha-icon>
           <span class="scope-name">${name}</span>
+          ${renderAggregateProblemFlag(this.hass, cfg.scenes)}
           <span class="scope-summary">${this._summary(cfg)}</span>
           ${this._renderPauseIcon(scope, cfg)}
           ${this._renderScopeSwitch(scope, cfg)}

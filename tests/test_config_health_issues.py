@@ -10,7 +10,7 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import issue_registry as ir
 
 from custom_components.ambience.config_health_issues import reconcile_issues
-from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.const import DATA_OVERLAP_SET, DATA_STORE, DOMAIN
 
 
 @pytest.fixture
@@ -51,7 +51,11 @@ async def test_reconcile_creates_issue_for_missing_entity(hass, installed, area_
     issue = issues[(DOMAIN, iid)]
     # Lock the translation contract so a key/placeholder rename can't silently drift.
     assert issue.translation_key == "missing_entity"
-    assert issue.translation_placeholders == {"entity_id": "light.ghost", "scenes": "ghost"}
+    assert issue.translation_placeholders == {
+        "entity_id": "light.ghost",
+        "scope": "**Living Room** area",
+        "scenes": '\n- "ghost" — uncategorised',
+    }
 
 
 async def test_reconcile_clears_issue_when_entity_appears(hass, installed, area_id) -> None:
@@ -123,6 +127,45 @@ async def test_reconcile_creates_overlap_issue(hass, installed, area_id) -> None
     assert "action_overlap:light.shared" in _domain_issue_ids(hass)
 
 
+async def test_overlap_issue_message_lists_groups_as_bullets(hass, installed, area_id) -> None:
+    hass.states.async_set("light.shared", "on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    # Two distinct (scope, category) groups acting on the same entity: house + area.
+    await store.async_save_house(
+        {
+            "scenes": [
+                {
+                    "name": "h",
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.shared"]}],
+                }
+            ]
+        }
+    )
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "a",
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_off", "entity_ids": ["light.shared"]}],
+                }
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    issues = ir.async_get(hass).issues
+    issue = issues[(DOMAIN, "action_overlap:light.shared")]
+    assert issue.translation_key == "action_overlap"
+    assert issue.translation_placeholders["entity_id"] == "light.shared"
+    groups = issue.translation_placeholders["groups"]
+    assert "\n- **House** · uncategorised" in groups
+    assert "\n- **Living Room** area · uncategorised" in groups
+
+
 async def test_reconcile_leaves_foreign_domain_issues_untouched(hass, installed, area_id) -> None:
     """A Repairs issue under DOMAIN with an id not owned by config-health must
     not be deleted by the reconcile delete-pass."""
@@ -158,3 +201,56 @@ async def test_reconcile_noops_when_domain_data_missing(hass, installed) -> None
     (e.g. during the unload race)."""
     hass.data.pop(DOMAIN, None)
     reconcile_issues(hass)  # must not raise
+
+
+async def test_reconcile_caches_overlap_set(hass, installed, area_id) -> None:
+    hass.states.async_set("light.shared", "on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "a",
+                    "when": {},
+                    "category": "cat1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.shared"]}],
+                },
+                {
+                    "name": "b",
+                    "when": {},
+                    "category": "cat2",
+                    "actions": [{"service": "light.turn_off", "entity_ids": ["light.shared"]}],
+                },
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    # The frontend overlap flag reads this cache (config_health.scene_annotations).
+    assert hass.data[DOMAIN][DATA_OVERLAP_SET] == frozenset({"light.shared"})
+
+
+async def test_missing_entity_message_collapses_newline_in_scene_name(
+    hass, installed, area_id
+) -> None:
+    # A newline in a user-supplied scene name must not break the markdown bullet
+    # list — whitespace is collapsed so the name stays on its one bullet.
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "two\nlines",
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+                }
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    issues = ir.async_get(hass).issues
+    iid = next(i for (dom, i) in issues if dom == DOMAIN and i.startswith("missing_entity:"))
+    scenes = issues[(DOMAIN, iid)].translation_placeholders["scenes"]
+    assert scenes == '\n- "two lines" — uncategorised'

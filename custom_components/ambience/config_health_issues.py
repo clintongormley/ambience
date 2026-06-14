@@ -8,11 +8,14 @@ issues auto-clear the moment a typo is fixed or a device returns.
 
 from __future__ import annotations
 
+import re
+
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
 from .config_health import Problem, scan
-from .const import DATA_STORE, DOMAIN
+from .const import DATA_OVERLAP_SET, DATA_STORE, DOMAIN
+from .naming import category_names, scope_display_name
 
 # Issue-id prefixes this module owns. The reconcile delete-pass only touches ids
 # with these prefixes, so it never deletes a Repairs issue some other part of the
@@ -32,9 +35,22 @@ def _issue_id(problem: Problem) -> str:
     return f"action_overlap:{problem.entity_id}"
 
 
-def _group_label(scope_kind: str, scope_id: str | None, category_id: str | None) -> str:
-    scope = scope_kind if scope_id is None else f"{scope_kind}:{scope_id}"
-    return f"{scope}/{category_id or 'uncategorised'}"
+def _clean(text: str) -> str:
+    """Collapse whitespace (incl. newlines/tabs) so a user-supplied scope/category/
+    scene name can't break the markdown bullet structure of a Repairs description."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _scope_phrase(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> str:
+    """Bold friendly scope label with its kind: '**House**', '**Kitchen** floor',
+    '**Living Room** area'."""
+    name = _clean(scope_display_name(hass, scope_kind, scope_id))
+    return f"**{name}**" if scope_kind == "house" else f"**{name}** {scope_kind}"
+
+
+def _category_clause(category_name: str) -> str:
+    """'category: Security' for a named category, else 'uncategorised'."""
+    return f"category: {_clean(category_name)}" if category_name else "uncategorised"
 
 
 @callback
@@ -48,7 +64,14 @@ def reconcile_issues(hass: HomeAssistant) -> None:
         return
     store = domain_data[DATA_STORE]
     problems = scan(hass, store.all_scope_configs())
+    # Refresh the overlap-set cache the frontend flag reads (see
+    # config_health.scene_annotations) from this same scan — no extra work, and it
+    # keeps the flag on the same config-change/registry cadence as the Repairs issue.
+    domain_data[DATA_OVERLAP_SET] = frozenset(
+        p.entity_id for p in problems if p.kind == "action_overlap"
+    )
     desired: dict[str, Problem] = {_issue_id(p): p for p in problems}
+    cats = category_names(hass)  # category id -> friendly name
 
     registry = ir.async_get(hass)
     existing = [
@@ -63,15 +86,31 @@ def reconcile_issues(hass: HomeAssistant) -> None:
     # why this loop has no "skip if already present" guard like the delete pass.
     for iid, problem in desired.items():
         if problem.kind == "missing_entity":
-            scenes = ", ".join(sorted({loc.scene_name or "(unnamed)" for loc in problem.locations}))
-            translation_key = "missing_entity"
-            placeholders = {"entity_id": problem.entity_id, "scenes": scenes}
-        elif problem.kind == "action_overlap":
-            groups = ", ".join(
-                sorted(
-                    _group_label(loc.scope_kind, loc.scope_id, loc.category_id)
+            loc0 = problem.locations[0]  # all locations share one scope for this kind
+            scope = _scope_phrase(hass, loc0.scope_kind, loc0.scope_id)
+            bullets = sorted(
+                {
+                    (loc.scene_name or "(unnamed)", cats.get(loc.category_id) or "")
                     for loc in problem.locations
-                )
+                }
+            )
+            scenes = "".join(
+                f'\n- "{_clean(name)}" — {_category_clause(category)}' for name, category in bullets
+            )
+            translation_key = "missing_entity"
+            placeholders = {"entity_id": problem.entity_id, "scope": scope, "scenes": scenes}
+        elif problem.kind == "action_overlap":
+            group_bullets = sorted(
+                {
+                    (
+                        _scope_phrase(hass, loc.scope_kind, loc.scope_id),
+                        cats.get(loc.category_id) or "",
+                    )
+                    for loc in problem.locations
+                }
+            )
+            groups = "".join(
+                f"\n- {phrase} · {_category_clause(category)}" for phrase, category in group_bullets
             )
             translation_key = "action_overlap"
             placeholders = {"entity_id": problem.entity_id, "groups": groups}

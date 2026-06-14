@@ -44,6 +44,7 @@ from .state_options import known_attribute_values_for, known_states_for
 from .store import CategoryInUseError, LastCategoryError
 from .trace import buffered_unit_to_dict
 from .websocket_helpers import (
+    annotate_scenes,
     canonicalise,
     coerce_scene_categories,
     collect_dangling_ref_warnings,
@@ -53,7 +54,6 @@ from .websocket_helpers import (
     missing_period_refs,
     validate_scope_config,
     validate_weather_groups,
-    with_shadows,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -268,7 +268,7 @@ async def _ws_area_get(
         return
     store = hass.data[DOMAIN][DATA_STORE]
     area = store.get_area(area_id) or {"scenes": []}
-    connection.send_result(msg["id"], with_shadows(hass, area))
+    connection.send_result(msg["id"], annotate_scenes(hass, area))
 
 
 async def _save_scope(
@@ -291,7 +291,11 @@ async def _save_scope(
     coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
     await save_fn(store, config)
-    connection.send_result(msg["id"], {"ok": True, "config": with_shadows(hass, config)})
+    # Recompute the overlap set so the save response reflects the just-saved config
+    # rather than a cached set; the get path reads the cache.
+    connection.send_result(
+        msg["id"], {"ok": True, "config": annotate_scenes(hass, config, fresh_overlap=True)}
+    )
 
 
 @websocket_api.require_admin
@@ -338,7 +342,7 @@ async def _ws_floor_get(
         return
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = store.get_floor(floor_id) or {"scenes": []}
-    connection.send_result(msg["id"], with_shadows(hass, cfg))
+    connection.send_result(msg["id"], annotate_scenes(hass, cfg))
 
 
 @websocket_api.require_admin
@@ -378,7 +382,7 @@ async def _ws_house_get(
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     house = store.get_house() or {"scenes": []}
-    connection.send_result(msg["id"], with_shadows(hass, house))
+    connection.send_result(msg["id"], annotate_scenes(hass, house))
 
 
 @websocket_api.require_admin

@@ -20,6 +20,7 @@ from custom_components.ambience.const import (
     GENERAL_CATEGORY_ID,
 )
 from custom_components.ambience.websocket_helpers import (
+    annotate_scenes,
     canonicalise,
     coerce_scene_categories,
     dangling_day_entity_warnings,
@@ -29,7 +30,6 @@ from custom_components.ambience.websocket_helpers import (
     validate_scope_config,
     validate_weather_groups,
     weather_predicate_active,
-    with_shadows,
 )
 
 # ---------------------------------------------------------------------------
@@ -829,14 +829,44 @@ class TestCanonicalise:
         result = canonicalise(hass, config)
         assert result["scenes"][0]["name"] == "keep me"
 
+    def test_strips_problem_fields_from_scenes(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [
+                {
+                    "name": "r1",
+                    "when": {},
+                    "actions": [],
+                    "shadowed_by": 0,
+                    "missing_entities": ["light.x"],
+                    "overlap_entities": ["light.y"],
+                },
+            ]
+        }
+        result = canonicalise(hass, config)
+        assert "shadowed_by" not in result["scenes"][0]
+        assert "missing_entities" not in result["scenes"][0]
+        assert "overlap_entities" not in result["scenes"][0]
+
 
 # ---------------------------------------------------------------------------
-# with_shadows  (smoke test — verify shadowed_by key is added)
+# annotate_scenes  (merge unit — shadowed_by + scene_annotations; the heavy
+# missing/overlap computation is covered in test_config_health.py, so the
+# computation is stubbed here to isolate the merge.)
 # ---------------------------------------------------------------------------
 
 
-class TestWithShadows:
-    def test_adds_shadowed_by_key_to_every_scene(self) -> None:
+class TestAnnotateScenes:
+    def test_adds_problem_fields_to_every_scene(self, monkeypatch) -> None:
+        import custom_components.ambience.websocket_helpers as wh
+
+        monkeypatch.setattr(
+            wh,
+            "scene_annotations",
+            lambda hass, cfg, **_kw: [
+                {"missing_entities": [], "overlap_entities": []} for _ in cfg["scenes"]
+            ],
+        )
         hass = _make_hass(conditions={})
         config = {
             "scenes": [
@@ -844,12 +874,38 @@ class TestWithShadows:
                 {"name": "r2", "when": {}, "actions": []},
             ]
         }
-        result = with_shadows(hass, config)
-        assert all("shadowed_by" in r for r in result["scenes"])
+        result = annotate_scenes(hass, config)
+        for r in result["scenes"]:
+            assert "shadowed_by" in r
+            assert r["missing_entities"] == []
+            assert r["overlap_entities"] == []
 
-    def test_does_not_mutate_original_config(self) -> None:
+    def test_does_not_mutate_original_config(self, monkeypatch) -> None:
+        import custom_components.ambience.websocket_helpers as wh
+
+        monkeypatch.setattr(
+            wh,
+            "scene_annotations",
+            lambda hass, cfg, **_kw: [{"missing_entities": ["x"], "overlap_entities": []}],
+        )
         hass = _make_hass(conditions={})
         config = {"scenes": [{"name": "r1", "when": {}, "actions": []}]}
-        result = with_shadows(hass, config)
-        assert "shadowed_by" not in config["scenes"][0]
+        result = annotate_scenes(hass, config)
+        assert "missing_entities" not in config["scenes"][0]
+        assert result["scenes"][0]["missing_entities"] == ["x"]
         assert "shadowed_by" in result["scenes"][0]
+
+    def test_forwards_fresh_overlap_to_scene_annotations(self, monkeypatch) -> None:
+        import custom_components.ambience.websocket_helpers as wh
+
+        captured: dict[str, object] = {}
+
+        def fake(hass, cfg, *, fresh_overlap=False):
+            captured["fresh_overlap"] = fresh_overlap
+            return [{"missing_entities": [], "overlap_entities": []} for _ in cfg["scenes"]]
+
+        monkeypatch.setattr(wh, "scene_annotations", fake)
+        hass = _make_hass(conditions={})
+        config = {"scenes": [{"name": "r1", "when": {}, "actions": []}]}
+        annotate_scenes(hass, config, fresh_overlap=True)
+        assert captured["fresh_overlap"] is True

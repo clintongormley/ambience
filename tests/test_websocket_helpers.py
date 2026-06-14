@@ -863,7 +863,7 @@ class TestAnnotateScenes:
         monkeypatch.setattr(
             wh,
             "scene_annotations",
-            lambda hass, cfg: [
+            lambda hass, cfg, **_kw: [
                 {"missing_entities": [], "overlap_entities": []} for _ in cfg["scenes"]
             ],
         )
@@ -886,7 +886,7 @@ class TestAnnotateScenes:
         monkeypatch.setattr(
             wh,
             "scene_annotations",
-            lambda hass, cfg: [{"missing_entities": ["x"], "overlap_entities": []}],
+            lambda hass, cfg, **_kw: [{"missing_entities": ["x"], "overlap_entities": []}],
         )
         hass = _make_hass(conditions={})
         config = {"scenes": [{"name": "r1", "when": {}, "actions": []}]}
@@ -894,3 +894,18 @@ class TestAnnotateScenes:
         assert "missing_entities" not in config["scenes"][0]
         assert result["scenes"][0]["missing_entities"] == ["x"]
         assert "shadowed_by" in result["scenes"][0]
+
+    def test_forwards_fresh_overlap_to_scene_annotations(self, monkeypatch) -> None:
+        import custom_components.ambience.websocket_helpers as wh
+
+        captured: dict[str, object] = {}
+
+        def fake(hass, cfg, *, fresh_overlap=False):
+            captured["fresh_overlap"] = fresh_overlap
+            return [{"missing_entities": [], "overlap_entities": []} for _ in cfg["scenes"]]
+
+        monkeypatch.setattr(wh, "scene_annotations", fake)
+        hass = _make_hass(conditions={})
+        config = {"scenes": [{"name": "r1", "when": {}, "actions": []}]}
+        annotate_scenes(hass, config, fresh_overlap=True)
+        assert captured["fresh_overlap"] is True

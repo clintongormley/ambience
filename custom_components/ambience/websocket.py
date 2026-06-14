@@ -291,7 +291,11 @@ async def _save_scope(
     coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
     await save_fn(store, config)
-    connection.send_result(msg["id"], {"ok": True, "config": annotate_scenes(hass, config)})
+    # Recompute the overlap set so the save response reflects the just-saved config
+    # rather than a cached set; the get path reads the cache.
+    connection.send_result(
+        msg["id"], {"ok": True, "config": annotate_scenes(hass, config, fresh_overlap=True)}
+    )
 
 
 @websocket_api.require_admin

@@ -134,14 +134,19 @@ def canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def annotate_scenes(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
+def annotate_scenes(
+    hass: HomeAssistant, config: dict[str, Any], *, fresh_overlap: bool = False
+) -> dict[str, Any]:
     """Return a copy whose scenes carry transient frontend-only problem hints:
     `shadowed_by` (index or None), `missing_entities`, and `overlap_entities`.
-    Not persisted — canonicalise() strips all three before storage."""
+    Not persisted — canonicalise() strips all three before storage.
+
+    `fresh_overlap=True` recomputes the global overlap set instead of reading the
+    cache; pass it on the save path so the save response reflects the new config."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     scenes = config.get("scenes", [])
     shadows = shadowed_by(scenes, conditions_registry)
-    annos = scene_annotations(hass, config)
+    annos = scene_annotations(hass, config, fresh_overlap=fresh_overlap)
     return {
         **config,
         "scenes": [

@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 
 from .config_health import Problem, scan
-from .const import DATA_STORE, DOMAIN
+from .const import DATA_OVERLAP_SET, DATA_STORE, DOMAIN
 from .naming import category_names, scope_display_name
 
 # Issue-id prefixes this module owns. The reconcile delete-pass only touches ids
@@ -56,6 +56,12 @@ def reconcile_issues(hass: HomeAssistant) -> None:
         return
     store = domain_data[DATA_STORE]
     problems = scan(hass, store.all_scope_configs())
+    # Refresh the overlap-set cache the frontend flag reads (see
+    # config_health.scene_annotations) from this same scan — no extra work, and it
+    # keeps the flag on the same config-change/registry cadence as the Repairs issue.
+    domain_data[DATA_OVERLAP_SET] = frozenset(
+        p.entity_id for p in problems if p.kind == "action_overlap"
+    )
     desired: dict[str, Problem] = {_issue_id(p): p for p in problems}
     cats = category_names(hass)  # category id -> friendly name
 

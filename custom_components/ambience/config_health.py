@@ -15,7 +15,7 @@ from typing import Any, Literal
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from .const import DATA_CONDITIONS, DATA_STORE, DOMAIN
+from .const import DATA_CONDITIONS, DATA_OVERLAP_SET, DATA_STORE, DOMAIN
 from .engine import scene_enabled
 from .scope_triggers import iter_predicate_specs
 
@@ -146,18 +146,36 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
     return problems
 
 
-def scene_annotations(hass: HomeAssistant, cfg: dict[str, Any]) -> list[dict[str, list[str]]]:
+def overlap_entity_ids(hass: HomeAssistant) -> frozenset[str]:
+    """Global action-overlap entity-id set from a full scan of every scope.
+
+    Same source as Repairs (scan's action_overlap problems), so the frontend
+    overlap flag can't diverge from the overlap issue."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    return frozenset(
+        p.entity_id for p in scan(hass, store.all_scope_configs()) if p.kind == "action_overlap"
+    )
+
+
+def scene_annotations(
+    hass: HomeAssistant, cfg: dict[str, Any], *, fresh_overlap: bool = False
+) -> list[dict[str, list[str]]]:
     """Per-scene problem annotations for `cfg`, aligned with cfg['scenes'].
 
     Each entry is {"missing_entities": [...], "overlap_entities": [...]}. Computed
     from the SAME scan() that drives Repairs: missing = referenced entities that
     don't exist; overlap = acted entities that are in the global action_overlap set.
-    Disabled scenes carry empty lists (they're skipped, matching scan())."""
-    conditions = hass.data[DOMAIN][DATA_CONDITIONS]
-    store = hass.data[DOMAIN][DATA_STORE]
-    overlap_set = {
-        p.entity_id for p in scan(hass, store.all_scope_configs()) if p.kind == "action_overlap"
-    }
+    Disabled scenes carry empty lists (they're skipped, matching scan()).
+
+    The global overlap set is cached in hass.data[DATA_OVERLAP_SET] — refreshed by
+    reconcile_issues on every config-change / entity-registry event — so a per-scope
+    WS get doesn't re-scan every scope. Pass `fresh_overlap=True` (the save path) to
+    recompute it now, so a save's response reflects the just-saved config."""
+    domain = hass.data[DOMAIN]
+    conditions = domain[DATA_CONDITIONS]
+    if fresh_overlap or DATA_OVERLAP_SET not in domain:
+        domain[DATA_OVERLAP_SET] = overlap_entity_ids(hass)
+    overlap_set = domain[DATA_OVERLAP_SET]
     referenced = referenced_entities_by_scene(conditions, cfg)
     out: list[dict[str, list[str]]] = []
     for idx, scene in enumerate(cfg.get("scenes", []) or []):

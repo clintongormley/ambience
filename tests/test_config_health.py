@@ -14,7 +14,12 @@ from custom_components.ambience.config_health import (
     scan,
     scene_annotations,
 )
-from custom_components.ambience.const import DATA_CONDITIONS, DATA_STORE, DOMAIN
+from custom_components.ambience.const import (
+    DATA_CONDITIONS,
+    DATA_OVERLAP_SET,
+    DATA_STORE,
+    DOMAIN,
+)
 
 
 def _cfg(scenes: list[dict[str, Any]]) -> dict[str, Any]:
@@ -366,3 +371,65 @@ async def test_scene_annotations_disabled_scene_has_no_annotations(
     await store.async_save_area(ar.async_get(hass).async_create("LR").id, cfg)
     annos = scene_annotations(hass, cfg)
     assert annos[0] == {"missing_entities": [], "overlap_entities": []}
+
+
+_OVERLAP_CFG = {
+    "scenes": [
+        {
+            "name": "a",
+            "when": {},
+            "category": "cat1",
+            "actions": [{"service": "light.turn_on", "entity_ids": ["light.shared"]}],
+        },
+        {
+            "name": "b",
+            "when": {},
+            "category": "cat2",
+            "actions": [{"service": "light.turn_off", "entity_ids": ["light.shared"]}],
+        },
+    ]
+}
+
+
+async def test_scene_annotations_reads_cached_overlap_set(hass: HomeAssistant, installed) -> None:
+    # A cache that flags an entity the live config would NOT (a single group): proves
+    # scene_annotations reads the cache rather than running a fresh scan.
+    hass.states.async_set("light.cached", "on")
+    hass.data[DOMAIN][DATA_OVERLAP_SET] = frozenset({"light.cached"})
+    cfg = {
+        "scenes": [
+            {
+                "name": "a",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.cached"]}],
+            }
+        ]
+    }
+    annos = scene_annotations(hass, cfg)
+    assert annos[0]["overlap_entities"] == ["light.cached"]
+
+
+async def test_scene_annotations_cold_cache_computes_and_populates(
+    hass: HomeAssistant, installed
+) -> None:
+    hass.states.async_set("light.shared", "on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(ar.async_get(hass).async_create("LR").id, _OVERLAP_CFG)
+    hass.data[DOMAIN].pop(DATA_OVERLAP_SET, None)  # force a cold cache
+    annos = scene_annotations(hass, _OVERLAP_CFG)
+    assert annos[0]["overlap_entities"] == ["light.shared"]
+    # The compute path also populates the cache for subsequent gets.
+    assert hass.data[DOMAIN][DATA_OVERLAP_SET] == frozenset({"light.shared"})
+
+
+async def test_scene_annotations_fresh_overlap_ignores_stale_cache(
+    hass: HomeAssistant, installed
+) -> None:
+    hass.states.async_set("light.shared", "on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(ar.async_get(hass).async_create("LR").id, _OVERLAP_CFG)
+    hass.data[DOMAIN][DATA_OVERLAP_SET] = frozenset({"light.stale"})  # poison the cache
+    annos = scene_annotations(hass, _OVERLAP_CFG, fresh_overlap=True)
+    assert annos[0]["overlap_entities"] == ["light.shared"]
+    assert hass.data[DOMAIN][DATA_OVERLAP_SET] == frozenset({"light.shared"})

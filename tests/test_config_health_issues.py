@@ -10,7 +10,7 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import issue_registry as ir
 
 from custom_components.ambience.config_health_issues import reconcile_issues
-from custom_components.ambience.const import DATA_STORE, DOMAIN
+from custom_components.ambience.const import DATA_OVERLAP_SET, DATA_STORE, DOMAIN
 
 
 @pytest.fixture
@@ -201,3 +201,30 @@ async def test_reconcile_noops_when_domain_data_missing(hass, installed) -> None
     (e.g. during the unload race)."""
     hass.data.pop(DOMAIN, None)
     reconcile_issues(hass)  # must not raise
+
+
+async def test_reconcile_caches_overlap_set(hass, installed, area_id) -> None:
+    hass.states.async_set("light.shared", "on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "a",
+                    "when": {},
+                    "category": "cat1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.shared"]}],
+                },
+                {
+                    "name": "b",
+                    "when": {},
+                    "category": "cat2",
+                    "actions": [{"service": "light.turn_off", "entity_ids": ["light.shared"]}],
+                },
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    # The frontend overlap flag reads this cache (config_health.scene_annotations).
+    assert hass.data[DOMAIN][DATA_OVERLAP_SET] == frozenset({"light.shared"})

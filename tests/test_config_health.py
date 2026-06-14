@@ -13,6 +13,7 @@ from custom_components.ambience.config_health import (
     entity_exists,
     referenced_entities_by_scene,
     scan,
+    scene_annotations,
 )
 from custom_components.ambience.const import DATA_CONDITIONS, DATA_STORE, DOMAIN
 
@@ -304,3 +305,67 @@ async def test_referenced_entities_by_scene_skips_disabled(
         ]
     )
     assert referenced_entities_by_scene(conditions, cfg) == {}
+
+
+async def test_scene_annotations_flags_missing(hass: HomeAssistant, installed) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = {
+        "scenes": [
+            {
+                "name": "go",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+            }
+        ]
+    }
+    await store.async_save_area(ar.async_get(hass).async_create("LR").id, cfg)
+    annos = scene_annotations(hass, cfg)
+    assert annos[0]["missing_entities"] == ["light.ghost"]
+    assert annos[0]["overlap_entities"] == []
+
+
+async def test_scene_annotations_flags_overlap(hass: HomeAssistant, installed) -> None:
+    hass.states.async_set("light.shared", "on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = {
+        "scenes": [
+            {
+                "name": "a",
+                "when": {},
+                "category": "cat1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.shared"]}],
+            },
+            {
+                "name": "b",
+                "when": {},
+                "category": "cat2",
+                "actions": [{"service": "light.turn_off", "entity_ids": ["light.shared"]}],
+            },
+        ]
+    }
+    await store.async_save_area(ar.async_get(hass).async_create("LR").id, cfg)
+    annos = scene_annotations(hass, cfg)
+    assert annos[0]["overlap_entities"] == ["light.shared"]
+    assert annos[1]["overlap_entities"] == ["light.shared"]
+    assert annos[0]["missing_entities"] == []
+
+
+async def test_scene_annotations_disabled_scene_has_no_annotations(
+    hass: HomeAssistant, installed
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = {
+        "scenes": [
+            {
+                "name": "off",
+                "enabled": False,
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+            }
+        ]
+    }
+    await store.async_save_area(ar.async_get(hass).async_create("LR").id, cfg)
+    annos = scene_annotations(hass, cfg)
+    assert annos[0] == {"missing_entities": [], "overlap_entities": []}

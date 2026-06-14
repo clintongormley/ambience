@@ -15,7 +15,7 @@ from typing import Any, Literal
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from .const import DATA_CONDITIONS, DOMAIN
+from .const import DATA_CONDITIONS, DATA_STORE, DOMAIN
 from .engine import scene_enabled
 from .scope_triggers import iter_predicate_specs
 
@@ -144,3 +144,26 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
         if len(per_entity) > 1:
             problems.append(Problem("action_overlap", eid, tuple(per_entity.values())))
     return problems
+
+
+def scene_annotations(hass: HomeAssistant, cfg: dict[str, Any]) -> list[dict[str, list[str]]]:
+    """Per-scene problem annotations for `cfg`, aligned with cfg['scenes'].
+
+    Each entry is {"missing_entities": [...], "overlap_entities": [...]}. Computed
+    from the SAME scan() that drives Repairs: missing = referenced entities that
+    don't exist; overlap = acted entities that are in the global action_overlap set.
+    Disabled scenes carry empty lists (they're skipped, matching scan())."""
+    conditions = hass.data[DOMAIN][DATA_CONDITIONS]
+    store = hass.data[DOMAIN][DATA_STORE]
+    overlap_set = {
+        p.entity_id for p in scan(hass, store.all_scope_configs()) if p.kind == "action_overlap"
+    }
+    referenced = referenced_entities_by_scene(conditions, cfg)
+    out: list[dict[str, list[str]]] = []
+    for idx, scene in enumerate(cfg.get("scenes", []) or []):
+        refs = referenced.get(idx, set())
+        missing = sorted(eid for eid in refs if not entity_exists(hass, eid))
+        acted = set(_action_entities(scene)) if scene_enabled(scene) else set()
+        overlaps = sorted(eid for eid in acted if eid in overlap_set)
+        out.append({"missing_entities": missing, "overlap_entities": overlaps})
+    return out

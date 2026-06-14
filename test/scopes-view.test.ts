@@ -154,6 +154,28 @@ describe("ambience-scopes-view", () => {
     expect(houseRow.textContent).toContain("House");
   });
 
+  test("scope row shows an error-severity problem flag when a scene references a missing entity", async () => {
+    const broken: Scene = {
+      name: "broken",
+      category: "c1",
+      when: {},
+      actions: [],
+      missing_entities: ["light.ghost"],
+    };
+    el = await mount({ houseConfig: { scenes: [broken] } });
+    const header = el.shadowRoot.querySelector(".scope-row.house .scope-header");
+    const flag = header.querySelector(".problem-flag");
+    expect(flag).toBeTruthy();
+    expect(flag.getAttribute("data-severity")).toBe("error");
+  });
+
+  test("scope row shows no problem flag when all scenes are clean", async () => {
+    const clean: Scene = { name: "ok", category: "c1", when: {}, actions: [] };
+    el = await mount({ houseConfig: { scenes: [clean] } });
+    const header = el.shadowRoot.querySelector(".scope-row.house .scope-header");
+    expect(header.querySelector(".problem-flag")).toBeFalsy();
+  });
+
   test("renders one row per HA area by bare name (no redundant 'Area: ' prefix)", async () => {
     el = await mount();
     expect(el.shadowRoot.textContent).toContain("Living Room");

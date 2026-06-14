@@ -8,6 +8,7 @@ import { sceneNameKey, scopeCategoryKey, scopeKey } from "../entities-for-scope.
 import { renderHaSwitch } from "../ha-switch.js";
 import { localize } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
+import { problemCount, worstSeverity } from "../scene-problems.js";
 import { scopeIcon } from "../scope-icon.js";
 import type { ConditionInfo, Scene, Scope, ScopeConfig, ScopeOption } from "../types.js";
 import {
@@ -258,6 +259,18 @@ export class AmbienceScopesView extends LitElement {
         flex: 1;
         text-align: left;
         font-weight: 600;
+      }
+      .scope-header .problem-flag {
+        flex: 0 0 auto;
+        --mdc-icon-size: 18px;
+        margin-left: 0.25rem;
+        cursor: help;
+      }
+      .scope-header .problem-flag.error {
+        color: var(--error-color, #db4437);
+      }
+      .scope-header .problem-flag.warning {
+        color: var(--warning-color, #ffa600);
       }
       .scope-summary {
         font-size: 0.85em;
@@ -1052,6 +1065,23 @@ export class AmbienceScopesView extends LitElement {
     `;
   }
 
+  /** Problem indicator for a scope, computed from its loaded scenes, or "". */
+  private _scopeProblemFlag(cfg: ScopeConfig) {
+    const severity = worstSeverity(cfg.scenes);
+    if (!severity) return "";
+    const n = problemCount(cfg.scenes);
+    const title = localize(this.hass, "ui.problems_count", "{n} scene(s) have problems").replace(
+      "{n}",
+      String(n),
+    );
+    return html`<ha-icon
+      class="problem-flag ${severity}"
+      data-severity=${severity}
+      icon="mdi:alert-circle"
+      title=${title}
+    ></ha-icon>`;
+  }
+
   private _renderScopeRow(
     scope: Scope,
     name: string,
@@ -1078,6 +1108,7 @@ export class AmbienceScopesView extends LitElement {
           <span class="chevron ${open ? "open" : ""}">▶</span>
           <ha-icon class="scope-icon" icon=${scopeIcon(scope, this.hass as any)}></ha-icon>
           <span class="scope-name">${name}</span>
+          ${this._scopeProblemFlag(cfg)}
           <span class="scope-summary">${this._summary(cfg)}</span>
           ${this._renderPauseIcon(scope, cfg)}
           ${this._renderScopeSwitch(scope, cfg)}

@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 from homeassistant.core import HomeAssistant
-
 from homeassistant.helpers import area_registry as ar
 
 from custom_components.ambience.config_health import (
@@ -289,9 +288,7 @@ async def test_referenced_entities_by_scene_collects_monitored_and_acted(
     assert refs[0] == {"binary_sensor.mon", "light.act"}
 
 
-async def test_referenced_entities_by_scene_skips_disabled(
-    hass: HomeAssistant, installed
-) -> None:
+async def test_referenced_entities_by_scene_skips_disabled(hass: HomeAssistant, installed) -> None:
     conditions = hass.data[DOMAIN][DATA_CONDITIONS]
     cfg = _cfg(
         [

@@ -51,7 +51,11 @@ async def test_reconcile_creates_issue_for_missing_entity(hass, installed, area_
     issue = issues[(DOMAIN, iid)]
     # Lock the translation contract so a key/placeholder rename can't silently drift.
     assert issue.translation_key == "missing_entity"
-    assert issue.translation_placeholders == {"entity_id": "light.ghost", "scenes": "ghost"}
+    assert issue.translation_placeholders == {
+        "entity_id": "light.ghost",
+        "scope": "**Living Room** area",
+        "scenes": '\n- "ghost" — uncategorised',
+    }
 
 
 async def test_reconcile_clears_issue_when_entity_appears(hass, installed, area_id) -> None:
@@ -121,6 +125,45 @@ async def test_reconcile_creates_overlap_issue(hass, installed, area_id) -> None
     )
     reconcile_issues(hass)
     assert "action_overlap:light.shared" in _domain_issue_ids(hass)
+
+
+async def test_overlap_issue_message_lists_groups_as_bullets(hass, installed, area_id) -> None:
+    hass.states.async_set("light.shared", "on")
+    store = hass.data[DOMAIN][DATA_STORE]
+    # Two distinct (scope, category) groups acting on the same entity: house + area.
+    await store.async_save_house(
+        {
+            "scenes": [
+                {
+                    "name": "h",
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.shared"]}],
+                }
+            ]
+        }
+    )
+    await store.async_save_area(
+        area_id,
+        {
+            "scenes": [
+                {
+                    "name": "a",
+                    "when": {},
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_off", "entity_ids": ["light.shared"]}],
+                }
+            ]
+        },
+    )
+    reconcile_issues(hass)
+    issues = ir.async_get(hass).issues
+    issue = issues[(DOMAIN, "action_overlap:light.shared")]
+    assert issue.translation_key == "action_overlap"
+    assert issue.translation_placeholders["entity_id"] == "light.shared"
+    groups = issue.translation_placeholders["groups"]
+    assert "\n- **House** · uncategorised" in groups
+    assert "\n- **Living Room** area · uncategorised" in groups
 
 
 async def test_reconcile_leaves_foreign_domain_issues_untouched(hass, installed, area_id) -> None:

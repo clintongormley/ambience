@@ -44,6 +44,7 @@ from .state_options import known_attribute_values_for, known_states_for
 from .store import CategoryInUseError, LastCategoryError
 from .trace import buffered_unit_to_dict
 from .websocket_helpers import (
+    annotate_scenes,
     canonicalise,
     coerce_scene_categories,
     collect_dangling_ref_warnings,
@@ -53,7 +54,6 @@ from .websocket_helpers import (
     missing_period_refs,
     validate_scope_config,
     validate_weather_groups,
-    annotate_scenes,
 )
 
 _LOGGER = logging.getLogger(__name__)

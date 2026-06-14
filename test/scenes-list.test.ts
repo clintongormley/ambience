@@ -296,15 +296,33 @@ describe("ambience-scenes-list", () => {
     expect(el.shadowRoot.querySelector(".pin")).toBeFalsy();
   });
 
-  test("shadowed row shows a warning badge", async () => {
+  test("shadowed row shows a warning-severity problem flag", async () => {
     const shadowed: Scene = { ...eveningScene, shadowed_by: 0 };
     el = await mount([movieScene, shadowed]);
-    expect(el.shadowRoot.querySelector(".shadow-warning")).toBeTruthy();
+    const flag = el.shadowRoot.querySelector(".problem-flag");
+    expect(flag).toBeTruthy();
+    expect(flag.getAttribute("data-severity")).toBe("warning");
   });
 
-  test("unshadowed row shows no warning badge", async () => {
+  test("clean row shows no problem flag", async () => {
     el = await mount([movieScene]);
-    expect(el.shadowRoot.querySelector(".shadow-warning")).toBeFalsy();
+    expect(el.shadowRoot.querySelector(".problem-flag")).toBeFalsy();
+  });
+
+  test("missing-entity row shows an error-severity flag with the entity in the tooltip", async () => {
+    const broken: Scene = { ...movieScene, missing_entities: ["light.ghost"] };
+    el = await mount([broken]);
+    const flag = el.shadowRoot.querySelector(".problem-flag");
+    expect(flag.getAttribute("data-severity")).toBe("error");
+    expect(flag.getAttribute("title")).toContain("light.ghost");
+  });
+
+  test("category header shows a problem indicator when a scene in it has a problem", async () => {
+    const cats: SceneCategory[] = [{ id: "c1", name: "Cat one" }];
+    const broken: Scene = { ...movieScene, category: "c1", missing_entities: ["light.ghost"] };
+    el = await mount([broken], [], {}, cats);
+    const header = el.shadowRoot.querySelector(".category-section-header");
+    expect(header.querySelector(".problem-flag")).toBeTruthy();
   });
 
   test("the manual-sort toggle is gone", async () => {
@@ -1019,13 +1037,13 @@ describe("ambience-scenes-list", () => {
     expect(get()).toEqual({ index: 0, enabled: false });
   });
 
-  test("a disabled scene: toggle emits enabled:true, row is dimmed, no shadow warning", async () => {
+  test("a disabled scene: toggle emits enabled:true, row is dimmed, no problem flag", async () => {
     const disabled: Scene = { ...movieScene, enabled: false, shadowed_by: 0 };
     el = await mount([disabled]);
     const get = captureEvent(el, "toggle-scene-enabled");
     const li = el.shadowRoot.querySelector("li") as HTMLElement;
     expect(li.classList.contains("disabled")).toBe(true);
-    expect(el.shadowRoot.querySelector(".shadow-warning")).toBeNull();
+    expect(el.shadowRoot.querySelector(".problem-flag")).toBeNull();
     (el.shadowRoot.querySelector("button.toggle") as HTMLButtonElement).click();
     expect(get()).toEqual({ index: 0, enabled: true });
   });

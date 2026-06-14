@@ -5,6 +5,7 @@ import "./kebab-menu";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
 import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
+import { problemCount, sceneProblems, worstSeverity } from "../scene-problems.js";
 import { formatArgValue, paramLabel, sceneDisplayName, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
@@ -182,10 +183,19 @@ export class AmbienceScenesList extends LitElement {
     .pin:active {
       cursor: grabbing;
     }
-    .shadow-warning {
-      color: var(--error-color, #db4437);
+    .problem-flag {
+      --mdc-icon-size: 18px;
       cursor: help;
       line-height: 1;
+    }
+    .problem-flag.error {
+      color: var(--error-color, #db4437);
+    }
+    .problem-flag.warning {
+      color: var(--warning-color, #ffa600);
+    }
+    .category-section-header .problem-flag {
+      margin-left: 0.25rem;
     }
     /* Full-width coloured bar before each category's scenes. The colour + text
        colour are set inline per category; this CSS rule carries layout + the neutral
@@ -291,11 +301,16 @@ export class AmbienceScenesList extends LitElement {
   }
 
   /** A full-width coloured header bar for a category's section: a chevron, the
-   *  category's colour as background (auto-contrast text), its icon, then its
-   *  name. Falls back to neutral theme colours when the category has no colour.
-   *  Clicking the bar toggles the section's collapse; the kebab stops its own
-   *  clicks so opening the menu never collapses the section. */
-  private _renderSectionHeader(category: SceneCategory, open: boolean) {
+   *  category's colour as background (auto-contrast text), its icon, its name,
+   *  then a problem-flag when any scene in the section has problems. Falls back
+   *  to neutral theme colours when the category has no colour. Clicking the bar
+   *  toggles the section's collapse; the kebab and the flag stop their own clicks
+   *  so neither collapses the section. */
+  private _renderSectionHeader(
+    category: SceneCategory,
+    open: boolean,
+    rows: Array<[number, Scene]>,
+  ) {
     // A plain clickable bar with a rotating chevron, matching the scope-header
     // pattern (no role="button" — the bar nests an interactive kebab, so a
     // button role would be invalid; the chevron is decorative, hence aria-hidden).
@@ -307,6 +322,7 @@ export class AmbienceScenesList extends LitElement {
       <span class="category-chevron ${open ? "open" : ""}" aria-hidden="true">▶</span>
       ${category.icon ? html`<ha-icon icon=${category.icon}></ha-icon>` : ""}
       <span>${category.name}</span>
+      ${this._sectionProblemFlag(rows)}
       <ambience-kebab-menu
         class="category-kebab"
         .hass=${this.hass}
@@ -502,6 +518,52 @@ export class AmbienceScenesList extends LitElement {
     else if (id === "delete") this._emit("delete-scene", { index: i });
   }
 
+  /** Severity-coloured problem indicator for a scene, or "" when the scene is
+   *  clean/disabled. Folds shadowing, missing-entity and overlap hints into one
+   *  icon with an aggregated multi-line tooltip. */
+  private _problemFlag(scene: Scene) {
+    const p = sceneProblems(scene);
+    if (!p.severity) return "";
+    const lines: string[] = [];
+    if (p.shadowed) {
+      lines.push(localize(this.hass, "ui.shadowed", "Never fires — shadowed by an earlier scene."));
+    }
+    if (p.missing.length) {
+      lines.push(
+        `${localize(this.hass, "ui.problem_missing", "Missing in Home Assistant:")} ${p.missing.join(", ")}`,
+      );
+    }
+    if (p.overlap.length) {
+      lines.push(
+        `${localize(this.hass, "ui.problem_overlap", "Controlled by multiple groups:")} ${p.overlap.join(", ")}`,
+      );
+    }
+    return html`<ha-icon
+      class="problem-flag ${p.severity}"
+      data-severity=${p.severity}
+      icon="mdi:alert-circle"
+      title=${lines.join("\n")}
+    ></ha-icon>`;
+  }
+
+  /** Aggregate problem indicator for a section's rows, or "" when all clean. */
+  private _sectionProblemFlag(rows: Array<[number, Scene]>) {
+    const scenes = rows.map(([, scene]) => scene);
+    const severity = worstSeverity(scenes);
+    if (!severity) return "";
+    const n = problemCount(scenes);
+    const title = localize(this.hass, "ui.problems_count", "{n} scene(s) have problems").replace(
+      "{n}",
+      String(n),
+    );
+    return html`<ha-icon
+      class="problem-flag ${severity}"
+      data-severity=${severity}
+      icon="mdi:alert-circle"
+      title=${title}
+    ></ha-icon>`;
+  }
+
   /** A single scene row. `i` is the scene's ORIGINAL index in `this.scenes`
    *  (used for every emitted event and drag handler); `displayNum` is the
    *  1-based position WITHIN its render section. */
@@ -550,21 +612,7 @@ export class AmbienceScenesList extends LitElement {
           }
         </span>
         <span class="idx">${displayNum}</span>
-        <span class="warn-slot">
-          ${
-            scene.shadowed_by != null && !isDisabled
-              ? html`<span
-                class="shadow-warning"
-                title=${localize(
-                  this.hass,
-                  "ui.shadowed",
-                  "Never fires — shadowed by an earlier scene.",
-                )}
-                >⚠️</span
-              >`
-              : ""
-          }
-        </span>
+        <span class="warn-slot">${this._problemFlag(scene)}</span>
         <div class="body" @click=${() => this._toggleScene(i)}>
           <div class="name">
             ${sceneDisplayName(
@@ -704,7 +752,7 @@ export class AmbienceScenesList extends LitElement {
           <div class="category-section">
             ${
               showHeaders && section.category
-                ? this._renderSectionHeader(section.category, !collapsed)
+                ? this._renderSectionHeader(section.category, !collapsed, section.rows)
                 : ""
             }
             ${

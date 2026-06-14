@@ -27,9 +27,9 @@ describe("sceneProblems", () => {
   });
 
   test("missing wins over shadow (error beats warning)", () => {
-    expect(
-      sceneProblems({ ...base, missing_entities: ["light.x"], shadowed_by: 0 }).severity,
-    ).toBe("error");
+    expect(sceneProblems({ ...base, missing_entities: ["light.x"], shadowed_by: 0 }).severity).toBe(
+      "error",
+    );
   });
 
   test("disabled scene reports no problems even if hints set", () => {

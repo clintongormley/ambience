@@ -1,0 +1,124 @@
+import { css, html, LitElement } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
+
+import type { ProblemSeverity } from "../scene-problems.js";
+
+/**
+ * A severity-coloured circular badge with a white exclamation mark, flagging a
+ * scene/category/scope that has problems. The mark is an explicit white glyph on
+ * the disc (not the transparent cutout of `mdi:alert-circle`), so it stays legible
+ * on any background — the coloured category bar, dark theme, etc.
+ *
+ * Tap/click toggles a small detail popover listing the problems, so the info is
+ * reachable on touch where a native hover tooltip never shows. The native `title`
+ * (from `summary`) still gives a quick hover tooltip on desktop.
+ */
+@customElement("ambience-problem-flag")
+export class AmbienceProblemFlag extends LitElement {
+  @property() severity: ProblemSeverity = "warning";
+  // One line per problem, shown in the tap-to-reveal popover.
+  @property({ attribute: false }) details: string[] = [];
+  // One-line hover tooltip (desktop). Usually the details joined by newlines.
+  @property() summary = "";
+
+  @state() private _open = false;
+
+  static override styles = css`
+    :host {
+      position: relative;
+      display: inline-flex;
+    }
+    .problem-flag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      width: 18px;
+      height: 18px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      cursor: pointer;
+      line-height: 1;
+      /* The nested mark inherits this as its fill — white reads on both the red
+         error disc and the amber warning disc. */
+      color: #fff;
+      --mdc-icon-size: 13px;
+    }
+    .problem-flag.error {
+      background: var(--error-color, #db4437);
+    }
+    .problem-flag.warning {
+      background: var(--warning-color, #ffa600);
+    }
+    /* Hover/click land on the badge button, not the icon's shadow DOM. */
+    .problem-flag ha-icon {
+      pointer-events: none;
+    }
+    .details {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      z-index: 20;
+      min-width: 12rem;
+      max-width: 18rem;
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color, #212121);
+      border: 1px solid var(--divider-color, #e0e0e0);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      font-size: 0.8rem;
+      font-weight: 400;
+      white-space: normal;
+      text-align: left;
+      cursor: auto;
+    }
+    .details > div {
+      padding: 0.1rem 0;
+    }
+  `;
+
+  // Close the popover when the user clicks anywhere else. The badge's own click
+  // calls stopPropagation, so opening never immediately re-closes.
+  private _onDocClick = () => {
+    if (this._open) this._open = false;
+  };
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    document.addEventListener("click", this._onDocClick);
+  }
+
+  override disconnectedCallback(): void {
+    document.removeEventListener("click", this._onDocClick);
+    super.disconnectedCallback();
+  }
+
+  private _toggle(e: Event) {
+    // Don't let the click reach a parent row/scope header that toggles on click.
+    e.stopPropagation();
+    this._open = !this._open;
+  }
+
+  override render() {
+    return html`
+      <button
+        class="problem-flag ${this.severity}"
+        data-severity=${this.severity}
+        title=${this.summary}
+        aria-label=${this.summary}
+        @click=${this._toggle}
+      >
+        <ha-icon icon="mdi:exclamation-thick"></ha-icon>
+      </button>
+      ${
+        this._open
+          ? html`<div class="details" role="tooltip">
+            ${this.details.map((line) => html`<div>${line}</div>`)}
+          </div>`
+          : ""
+      }
+    `;
+  }
+}

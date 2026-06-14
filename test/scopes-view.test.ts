@@ -164,16 +164,33 @@ describe("ambience-scopes-view", () => {
     };
     el = await mount({ houseConfig: { scenes: [broken] } });
     const header = el.shadowRoot.querySelector(".scope-row.house .scope-header");
-    const flag = header.querySelector(".problem-flag");
+    const flag = header.querySelector("ambience-problem-flag");
     expect(flag).toBeTruthy();
-    expect(flag.getAttribute("data-severity")).toBe("error");
+    expect(flag.severity).toBe("error");
   });
 
   test("scope row shows no problem flag when all scenes are clean", async () => {
     const clean: Scene = { name: "ok", category: "c1", when: {}, actions: [] };
     el = await mount({ houseConfig: { scenes: [clean] } });
     const header = el.shadowRoot.querySelector(".scope-row.house .scope-header");
-    expect(header.querySelector(".problem-flag")).toBeFalsy();
+    expect(header.querySelector("ambience-problem-flag")).toBeFalsy();
+  });
+
+  test("tapping the scope problem flag reveals the detail", async () => {
+    const broken: Scene = {
+      name: "broken",
+      category: "c1",
+      when: {},
+      actions: [],
+      missing_entities: ["light.ghost"],
+    };
+    el = await mount({ houseConfig: { scenes: [broken] } });
+    const flag = el.shadowRoot.querySelector(
+      ".scope-row.house .scope-header ambience-problem-flag",
+    );
+    (flag.shadowRoot.querySelector(".problem-flag") as HTMLElement).click();
+    await flag.updateComplete;
+    expect(flag.shadowRoot.querySelector(".details")).toBeTruthy();
   });
 
   test("renders one row per HA area by bare name (no redundant 'Area: ' prefix)", async () => {

@@ -299,30 +299,39 @@ describe("ambience-scenes-list", () => {
   test("shadowed row shows a warning-severity problem flag", async () => {
     const shadowed: Scene = { ...eveningScene, shadowed_by: 0 };
     el = await mount([movieScene, shadowed]);
-    const flag = el.shadowRoot.querySelector(".problem-flag");
+    const flag = el.shadowRoot.querySelector("ambience-problem-flag");
     expect(flag).toBeTruthy();
-    expect(flag.getAttribute("data-severity")).toBe("warning");
+    expect(flag.severity).toBe("warning");
   });
 
   test("clean row shows no problem flag", async () => {
     el = await mount([movieScene]);
-    expect(el.shadowRoot.querySelector(".problem-flag")).toBeFalsy();
+    expect(el.shadowRoot.querySelector("ambience-problem-flag")).toBeFalsy();
   });
 
-  test("missing-entity row shows an error-severity flag with the entity in the tooltip", async () => {
+  test("missing-entity row shows an error-severity flag naming the entity", async () => {
     const broken: Scene = { ...movieScene, missing_entities: ["light.ghost"] };
     el = await mount([broken]);
-    const flag = el.shadowRoot.querySelector(".problem-flag");
-    expect(flag.getAttribute("data-severity")).toBe("error");
-    expect(flag.getAttribute("title")).toContain("light.ghost");
+    const flag = el.shadowRoot.querySelector("ambience-problem-flag");
+    expect(flag.severity).toBe("error");
+    expect(flag.details.join(" ")).toContain("light.ghost");
   });
 
   test("overlap row shows a warning-severity flag listing the contested entity", async () => {
     const overlap: Scene = { ...movieScene, overlap_entities: ["light.kitchen"] };
     el = await mount([overlap]);
-    const flag = el.shadowRoot.querySelector(".problem-flag");
-    expect(flag.getAttribute("data-severity")).toBe("warning");
-    expect(flag.getAttribute("title")).toContain("light.kitchen");
+    const flag = el.shadowRoot.querySelector("ambience-problem-flag");
+    expect(flag.severity).toBe("warning");
+    expect(flag.details.join(" ")).toContain("light.kitchen");
+  });
+
+  test("tapping a scene's problem flag reveals the missing entity", async () => {
+    const broken: Scene = { ...movieScene, missing_entities: ["light.ghost"] };
+    el = await mount([broken]);
+    const flag = el.shadowRoot.querySelector("ambience-problem-flag");
+    (flag.shadowRoot.querySelector(".problem-flag") as HTMLElement).click();
+    await flag.updateComplete;
+    expect(flag.shadowRoot.querySelector(".details").textContent).toContain("light.ghost");
   });
 
   test("category header shows a problem indicator when a scene in it has a problem", async () => {
@@ -330,7 +339,7 @@ describe("ambience-scenes-list", () => {
     const broken: Scene = { ...movieScene, category: "c1", missing_entities: ["light.ghost"] };
     el = await mount([broken], [], {}, cats);
     const header = el.shadowRoot.querySelector(".category-section-header");
-    expect(header.querySelector(".problem-flag")).toBeTruthy();
+    expect(header.querySelector("ambience-problem-flag")).toBeTruthy();
   });
 
   test("the manual-sort toggle is gone", async () => {
@@ -1051,7 +1060,7 @@ describe("ambience-scenes-list", () => {
     const get = captureEvent(el, "toggle-scene-enabled");
     const li = el.shadowRoot.querySelector("li") as HTMLElement;
     expect(li.classList.contains("disabled")).toBe(true);
-    expect(el.shadowRoot.querySelector(".problem-flag")).toBeNull();
+    expect(el.shadowRoot.querySelector("ambience-problem-flag")).toBeNull();
     (el.shadowRoot.querySelector("button.toggle") as HTMLButtonElement).click();
     expect(get()).toEqual({ index: 0, enabled: true });
   });

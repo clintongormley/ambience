@@ -6,6 +6,7 @@ import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
 import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
 import { problemCount, sceneProblems, worstSeverity } from "../scene-problems.js";
+import "./problem-flag.js";
 import { formatArgValue, paramLabel, sceneDisplayName, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
@@ -183,18 +184,7 @@ export class AmbienceScenesList extends LitElement {
     .pin:active {
       cursor: grabbing;
     }
-    .problem-flag {
-      --mdc-icon-size: 18px;
-      cursor: help;
-      line-height: 1;
-    }
-    .problem-flag.error {
-      color: var(--error-color, #db4437);
-    }
-    .problem-flag.warning {
-      color: var(--warning-color, #ffa600);
-    }
-    .category-section-header .problem-flag {
+    .category-section-header ambience-problem-flag {
       margin-left: 0.25rem;
     }
     /* Full-width coloured bar before each category's scenes. The colour + text
@@ -538,12 +528,11 @@ export class AmbienceScenesList extends LitElement {
         `${localize(this.hass, "ui.problem_overlap", "Controlled by multiple groups:")} ${p.overlap.join(", ")}`,
       );
     }
-    return html`<ha-icon
-      class="problem-flag ${p.severity}"
-      data-severity=${p.severity}
-      icon="mdi:alert-circle"
-      title=${lines.join("\n")}
-    ></ha-icon>`;
+    return html`<ambience-problem-flag
+      .severity=${p.severity}
+      .details=${lines}
+      .summary=${lines.join("\n")}
+    ></ambience-problem-flag>`;
   }
 
   /** Aggregate problem indicator for a section's rows, or "" when all clean. */
@@ -556,12 +545,11 @@ export class AmbienceScenesList extends LitElement {
       "{n}",
       String(n),
     );
-    return html`<ha-icon
-      class="problem-flag ${severity}"
-      data-severity=${severity}
-      icon="mdi:alert-circle"
-      title=${title}
-    ></ha-icon>`;
+    return html`<ambience-problem-flag
+      .severity=${severity}
+      .details=${[title]}
+      .summary=${title}
+    ></ambience-problem-flag>`;
   }
 
   /** A single scene row. `i` is the scene's ORIGINAL index in `this.scenes`

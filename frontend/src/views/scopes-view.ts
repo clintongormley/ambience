@@ -9,6 +9,7 @@ import { renderHaSwitch } from "../ha-switch.js";
 import { localize } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
 import { problemCount, worstSeverity } from "../scene-problems.js";
+import "./problem-flag.js";
 import { scopeIcon } from "../scope-icon.js";
 import type { ConditionInfo, Scene, Scope, ScopeConfig, ScopeOption } from "../types.js";
 import {
@@ -260,17 +261,8 @@ export class AmbienceScopesView extends LitElement {
         text-align: left;
         font-weight: 600;
       }
-      .scope-header .problem-flag {
-        flex: 0 0 auto;
-        --mdc-icon-size: 18px;
+      .scope-header ambience-problem-flag {
         margin-left: 0.25rem;
-        cursor: help;
-      }
-      .scope-header .problem-flag.error {
-        color: var(--error-color, #db4437);
-      }
-      .scope-header .problem-flag.warning {
-        color: var(--warning-color, #ffa600);
       }
       .scope-summary {
         font-size: 0.85em;
@@ -1074,12 +1066,11 @@ export class AmbienceScopesView extends LitElement {
       "{n}",
       String(n),
     );
-    return html`<ha-icon
-      class="problem-flag ${severity}"
-      data-severity=${severity}
-      icon="mdi:alert-circle"
-      title=${title}
-    ></ha-icon>`;
+    return html`<ambience-problem-flag
+      .severity=${severity}
+      .details=${[title]}
+      .summary=${title}
+    ></ambience-problem-flag>`;
   }
 
   private _renderScopeRow(

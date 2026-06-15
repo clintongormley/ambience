@@ -2247,12 +2247,21 @@ async def test_reapply_list_returns_defaults(
 async def test_reapply_save_persists_and_signals(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
+    from homeassistant.core import callback
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
     from custom_components.ambience.const import SIGNAL_REAPPLY_CONFIG_UPDATED
 
     fired = []
-    async_dispatcher_connect(hass, SIGNAL_REAPPLY_CONFIG_UPDATED, lambda *_a: fired.append(True))
+
+    # @callback so the dispatcher runs it synchronously inline — a bare lambda is
+    # run in the executor and `fired` may not be populated before the assert below
+    # (see the dispatcher-test-callback-flake lesson).
+    @callback
+    def _on_signal(*_a: object) -> None:
+        fired.append(True)
+
+    async_dispatcher_connect(hass, SIGNAL_REAPPLY_CONFIG_UPDATED, _on_signal)
     client = await hass_ws_client()
     await client.send_json(
         {"id": 1, "type": "ambience/reapply/save", "enabled": True, "interval_seconds": 3600}

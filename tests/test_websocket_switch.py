@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -67,7 +68,15 @@ async def test_switch_defaults_list(hass, hass_ws_client):
 
 async def test_switch_defaults_save_fires_None(hass, installed, hass_ws_client):
     fired: list[Any] = []
-    unsub = async_dispatcher_connect(hass, SIGNAL_SWITCH_CONFIG_UPDATED, lambda p: fired.append(p))
+
+    # @callback so async_dispatcher_send runs the listener synchronously inline —
+    # a bare lambda is dispatched as an executor job and `fired` may not be
+    # populated before the assert below (see the dispatcher-test-callback-flake lesson).
+    @callback
+    def _record(payload: Any) -> None:
+        fired.append(payload)
+
+    unsub = async_dispatcher_connect(hass, SIGNAL_SWITCH_CONFIG_UPDATED, _record)
     try:
         resp = await _ws_send(
             hass_ws_client,

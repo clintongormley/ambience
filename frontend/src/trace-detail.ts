@@ -80,7 +80,7 @@ export const traceDetailStyles = css`
   .action-block { font-family: monospace; font-size: 0.8rem; line-height: 1.6; margin-bottom: 0.3rem; }
   .action-block.unexposed { opacity: 0.6; }
   .action-head { color: var(--primary-text-color, #ddd); }
-  .skipped-tag { color: var(--error-color, #db4437); }
+  .skipped-tag { color: var(--error-color, #e57373); }
   .action-block .entity { padding-left: 1rem; color: var(--secondary-text-color, #aaa); }
   .entity-link { cursor: pointer; color: var(--primary-color, #03a9f4); }
   .entity-link:hover { text-decoration: underline; }
@@ -417,8 +417,12 @@ export function renderEvaluation(
   periods: CustomPeriods = {},
   exposedActions?: ExposedAction[],
 ): TemplateResult {
-  const services = u.actions.map((a) => actionLabelFor(a.service, exposedActions)).join(", ");
-  const n = entityCount(u.actions);
+  // Skipped (unexposed) actions didn't run, so the one-line summary lists only the
+  // ones that did; when every action was skipped, fall through to the outcome
+  // summary (which notes the skip) rather than presenting them as taken.
+  const ran = u.actions.filter((a) => !a.unexposed);
+  const services = ran.map((a) => actionLabelFor(a.service, exposedActions)).join(", ");
+  const n = entityCount(ran);
   // Skipped units have no explanation or actions, but still expand to reveal the
   // one-line reason (switch off / scope disabled).
   const canExpand = u.explanation !== null || u.actions.length > 0 || isSkipped(u.outcome);
@@ -447,7 +451,7 @@ export function renderEvaluation(
         <div class="cause-line">Trigger: ${renderCauseFriendly(u.cause, hass)}</div>
         ${u.winner_name ? html`<div class="won">Won: <span class="name">${u.winner_name}</span></div>` : nothing}
         ${
-          u.actions.length
+          ran.length
             ? html`<div class="action-summary">→ ${services}
               ${n ? html`<span class="n">· ${pluralize(n, "entity", "entities")}</span>` : nothing}</div>`
             : // No actions to list (UNCHANGED, blocked, no match, skipped, …) — fill

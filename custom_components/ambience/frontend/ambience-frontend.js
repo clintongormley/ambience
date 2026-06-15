@@ -2668,7 +2668,7 @@ var Fo=Object.defineProperty;var Mo=Object.getOwnPropertyDescriptor;var u=(t,n,e
   .action-block { font-family: monospace; font-size: 0.8rem; line-height: 1.6; margin-bottom: 0.3rem; }
   .action-block.unexposed { opacity: 0.6; }
   .action-head { color: var(--primary-text-color, #ddd); }
-  .skipped-tag { color: var(--error-color, #db4437); }
+  .skipped-tag { color: var(--error-color, #e57373); }
   .action-block .entity { padding-left: 1rem; color: var(--secondary-text-color, #aaa); }
   .entity-link { cursor: pointer; color: var(--primary-color, #03a9f4); }
   .entity-link:hover { text-decoration: underline; }
@@ -2687,15 +2687,15 @@ var Fo=Object.defineProperty;var Mo=Object.getOwnPropertyDescriptor;var u=(t,n,e
         <div class="pred ${r.passed?"pass":"fail"}" style="padding-left:1rem">
           ${r.passed?"\u2713":"\u2717"} ${J(n,r.condition_key)}${r.detail?l` <span class="dim">[${fc(n,r.condition_key,r.detail,e,r.entity_ids)}]</span>`:w}
         </div>`)}
-  `:l`<div class="scene skipped">Scene #${i} ${t.name??"\u2014"}: not reached</div>`}function Gi(t,n,e,i,r,s={},o){let a=t.actions.map(f=>Lo(f.service,o)).join(", "),c=Po(t.actions),h=t.explanation!==null||t.actions.length>0||kc(t.outcome),p=f=>{(f.key==="Enter"||f.key===" ")&&!f.repeat&&(f.preventDefault(),e())};return l`
+  `:l`<div class="scene skipped">Scene #${i} ${t.name??"\u2014"}: not reached</div>`}function Gi(t,n,e,i,r,s={},o){let a=t.actions.filter(_=>!_.unexposed),c=a.map(_=>Lo(_.service,o)).join(", "),h=Po(a),p=t.explanation!==null||t.actions.length>0||kc(t.outcome),f=_=>{(_.key==="Enter"||_.key===" ")&&!_.repeat&&(_.preventDefault(),e())};return l`
     <div class="eval">
       <div
-        class="outcome ${t.outcome}${h?" clickable":""}"
-        role=${h?"button":w}
-        tabindex=${h?"0":w}
-        aria-expanded=${h?n:w}
-        @click=${h?e:void 0}
-        @keydown=${h?p:void 0}
+        class="outcome ${t.outcome}${p?" clickable":""}"
+        role=${p?"button":w}
+        tabindex=${p?"0":w}
+        aria-expanded=${p?n:w}
+        @click=${p?e:void 0}
+        @keydown=${p?f:void 0}
       >
         <span class="label">${wc(t.outcome)}</span>
         <span class="ts">${t.timestamp?new Date(t.timestamp).toLocaleTimeString():""}</span>
@@ -2703,8 +2703,8 @@ var Fo=Object.defineProperty;var Mo=Object.getOwnPropertyDescriptor;var u=(t,n,e
       <div class="eval-body">
         <div class="cause-line">Trigger: ${bc(t.cause,i)}</div>
         ${t.winner_name?l`<div class="won">Won: <span class="name">${t.winner_name}</span></div>`:w}
-        ${t.actions.length?l`<div class="action-summary">→ ${a}
-              ${c?l`<span class="n">· ${zr(c,"entity","entities")}</span>`:w}</div>`:n?w:l`<div class="action-summary">${To(t)}</div>`}
+        ${a.length?l`<div class="action-summary">→ ${c}
+              ${h?l`<span class="n">· ${zr(h,"entity","entities")}</span>`:w}</div>`:n?w:l`<div class="action-summary">${To(t)}</div>`}
       </div>
       ${n?Cc(t,i,r,s,o):w}
     </div>

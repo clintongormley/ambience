@@ -1228,4 +1228,19 @@ describe("review fixes", () => {
     );
     expect(host.textContent).toContain("not exposed");
   });
+
+  test("collapsed summary does not present an all-skipped unit's action as taken", () => {
+    const host = renderToHost(
+      {
+        actions: [
+          { service: "light.toggle", entity_ids: ["light.b"], params: {}, unexposed: true },
+        ],
+      },
+      false,
+    );
+    // The one-line summary must not read like the skipped action ran; it falls
+    // through to the outcome summary, which notes the skip.
+    expect(host.textContent).toContain("skipped");
+    expect(host.textContent).not.toContain("· 1 entity");
+  });
 });

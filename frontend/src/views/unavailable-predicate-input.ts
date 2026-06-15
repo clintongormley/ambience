@@ -7,6 +7,16 @@ import type { HaFormSchema } from "../ha-form.js";
 import type { UnavailablePredicate } from "../types.js";
 import { renderSensorField } from "./form-controls.js";
 
+// Static schema, hoisted to module scope so `ha-form` sees a stable reference
+// across re-renders (per the project's "memoise the schema" guidance) rather
+// than a fresh array each render. `renderSensorField` hardcodes the internal
+// form field name "sensors" (shared with the occupancy widget, whose predicate
+// uses that key); we re-map the picked ids to `{ entities }` in `_setEntities`
+// on emit, so the predicate's public shape stays `entities`.
+const UNAVAILABLE_SCHEMA: HaFormSchema[] = [
+  { name: "sensors", selector: { entity: { multiple: true } } },
+];
+
 /**
  * Editor for an `unavailable` predicate: a single any-domain entity multi-select.
  * Matches when ANY listed entity is unavailable/unknown/absent — the "block here
@@ -56,20 +66,12 @@ export class AmbienceUnavailablePredicateInput extends LitElement {
     emitValueChanged(this, next);
   }
 
-  private _schema(): HaFormSchema[] {
-    // `renderSensorField` hardcodes the internal form field name "sensors" (it is
-    // shared with the occupancy widget, whose predicate uses that key). We keep
-    // the shared control and re-map the picked ids to `{ entities }` in
-    // `_setEntities` on emit — the predicate's public shape stays `entities`.
-    return [{ name: "sensors", selector: { entity: { multiple: true } } }];
-  }
-
   override render() {
     return html`
       <div class="row">
         ${renderSensorField(
           this.hass,
-          this._schema(),
+          UNAVAILABLE_SCHEMA,
           this._entities(),
           "binary_sensor.a, light.b",
           (ids) => this._setEntities(ids),

@@ -141,8 +141,8 @@ class UnavailableCondition:
     def order_key(self, predicate: Any) -> str:
         if not isinstance(predicate, dict):
             return ""
-        entities = sorted(e for e in (predicate.get("entities") or []) if isinstance(e, str))
-        return entities[0] if entities else ""
+        # Lexicographically-first entity id is the stable linearisation key.
+        return min((e for e in (predicate.get("entities") or []) if isinstance(e, str)), default="")
 
     def contains(self, outer: Any, inner: Any) -> bool:
         """True iff every world-state matching `inner` also matches `outer`.

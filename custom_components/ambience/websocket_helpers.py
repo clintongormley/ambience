@@ -13,11 +13,10 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
-from .conditions.weather import WEATHER_CONDITIONS, weather_predicate_active
+from .conditions.weather import WEATHER_CONDITIONS
 from .config_health import scene_annotations
 from .const import (
     DATA_CONDITIONS,
-    DATA_STORE,
     DOMAIN,
     GENERAL_CATEGORY_ID,
 )
@@ -25,10 +24,6 @@ from .sorting import resolve_order, shadowed_by
 from .store import reassign_orphan_scenes
 
 _LOGGER = logging.getLogger(__name__)
-
-_SENSOR_DEPENDENT_KINDS = {"workday", "holiday"}
-_CALENDAR_DEPENDENT_KINDS = {"first_workday", "last_workday"}
-
 
 # --- scope-save pipeline ----------------------------------------------------
 
@@ -102,8 +97,7 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
             # Note: params keys are NOT whitelisted against visible_fields.
             # A scene may carry extra params for fields that have since been
             # hidden in settings (or were never exposed); they're still sent
-            # at execution. The save-time dangling-scene warnings surface this
-            # to the user; the engine treats them as overrides.
+            # at execution. The engine treats them as overrides.
 
 
 # Transient per-scene hints injected for the frontend by annotate_scenes; stripped
@@ -163,92 +157,6 @@ def coerce_scene_categories(store, config: dict) -> None:
         )
 
 
-# --- dangling-reference warnings --------------------------------------------
-
-
-def collect_dangling_ref_warnings(
-    store: Any,
-    condition_key: str,
-    missing_fn: Any,
-    effective_ids: set[str],
-) -> list[dict[str, Any]]:
-    """Walk every persisted scene and flag `condition_key` predicates whose
-    named references (via `missing_fn(pred, effective_ids)`) are dangling.
-    Shared by the period and lux-range save handlers."""
-    warnings: list[dict[str, Any]] = []
-    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for scene in scope_cfg.get("scenes", []):
-            pred = scene.get("when", {}).get(condition_key)
-            for missing in missing_fn(pred, effective_ids):
-                warnings.append(
-                    {
-                        "scope_kind": scope_kind,
-                        "scope_id": scope_id,
-                        "scene_name": scene.get("name", ""),
-                        "missing_id": missing,
-                    }
-                )
-    return warnings
-
-
-def missing_period_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
-    """Return a list of period ids referenced by predicate that are not in effective_ids."""
-    if predicate is None:
-        return []
-    if isinstance(predicate, list):
-        result: list[str] = []
-        for item in predicate:
-            result.extend(missing_period_refs(item, effective_ids))
-        return result
-    if isinstance(predicate, dict) and "period" in predicate:
-        pid = predicate["period"]
-        if isinstance(pid, str) and pid not in effective_ids:
-            return [pid]
-    return []
-
-
-def missing_lux_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
-    """Return lux range ids referenced by predicate that are not in effective_ids."""
-    if isinstance(predicate, dict) and "range" in predicate:
-        rid = predicate["range"]
-        if isinstance(rid, str) and rid not in effective_ids:
-            return [rid]
-    return []
-
-
-def dangling_day_entity_warnings(hass: HomeAssistant, cfg: dict[str, Any]) -> list[dict[str, Any]]:
-    store = hass.data[DOMAIN][DATA_STORE]
-    sensor_ok = bool(cfg.get("workday_sensor"))
-    calendar_ok = bool(cfg.get("workday_calendar"))
-    warnings: list[dict[str, Any]] = []
-    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for scene in scope_cfg.get("scenes", []):
-            pred = scene.get("when", {}).get("day")
-            if not isinstance(pred, dict):
-                continue
-            for slot in (pred.get("include") or []) + (pred.get("exclude") or []):
-                kind = (slot or {}).get("kind")
-                if kind in _SENSOR_DEPENDENT_KINDS and not sensor_ok:
-                    warnings.append(
-                        {
-                            "scope_kind": scope_kind,
-                            "scope_id": scope_id,
-                            "scene_name": scene.get("name", ""),
-                            "reason": f"uses `{kind}` item but `workday_sensor` is unset",
-                        }
-                    )
-                if kind in _CALENDAR_DEPENDENT_KINDS and not calendar_ok:
-                    warnings.append(
-                        {
-                            "scope_kind": scope_kind,
-                            "scope_id": scope_id,
-                            "scene_name": scene.get("name", ""),
-                            "reason": f"uses `{kind}` item but `workday_calendar` is unset",
-                        }
-                    )
-    return warnings
-
-
 def validate_weather_groups(groups: Any) -> list[dict[str, Any]]:
     if groups is None:
         return []
@@ -278,40 +186,3 @@ def validate_weather_groups(groups: Any) -> list[dict[str, Any]]:
     return cleaned
 
 
-def dangling_weather_warnings(
-    hass: HomeAssistant,
-    old_cfg: dict[str, Any],
-    new_cfg: dict[str, Any],
-) -> list[dict[str, Any]]:
-    store = hass.data[DOMAIN][DATA_STORE]
-    new_ids = {g["id"] for g in (new_cfg.get("groups") or [])}
-    old_ids = {g["id"] for g in (old_cfg.get("groups") or [])}
-    removed_ids = old_ids - new_ids
-    entity_cleared = not new_cfg.get("entity")
-
-    warnings: list[dict[str, Any]] = []
-    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for scene in scope_cfg.get("scenes", []):
-            pred = scene.get("when", {}).get("weather")
-            if not weather_predicate_active(pred):
-                continue
-            if entity_cleared:
-                warnings.append(
-                    {
-                        "scope_kind": scope_kind,
-                        "scope_id": scope_id,
-                        "scene_name": scene.get("name", ""),
-                        "reason": "uses a weather predicate but the weather entity is unset",
-                    }
-                )
-            for gid in pred.get("groups", []):
-                if gid in removed_ids:
-                    warnings.append(
-                        {
-                            "scope_kind": scope_kind,
-                            "scope_id": scope_id,
-                            "scene_name": scene.get("name", ""),
-                            "reason": f"references deleted weather group {gid!r}",
-                        }
-                    )
-    return warnings

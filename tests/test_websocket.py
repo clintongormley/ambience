@@ -262,7 +262,7 @@ async def test_exposed_actions_save_and_list_round_trip(
     )
     assert resp["success"] is True, resp
     assert resp["result"]["ok"] is True
-    assert resp["result"]["warnings"] == []
+    assert "warnings" not in resp["result"]
 
     resp2 = await _ws_send(hass_ws_client, type="ambience/exposed_actions/list")
     assert resp2["success"] is True
@@ -299,194 +299,6 @@ async def test_exposed_actions_save_rejects_unknown_service(
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
-
-
-async def test_exposed_actions_save_warns_on_removed_service(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
-) -> None:
-    """Removing a service from the exposed list while a scene still references
-    it emits a dangling warning."""
-    _seed_services_catalog(hass)
-    # First expose light.turn_on so the scene below validates.
-    await _ws_send(
-        hass_ws_client,
-        type="ambience/exposed_actions/save",
-        actions=[
-            {
-                "id": "light.turn_on",
-                "label": "",
-                "visible_fields": ["brightness_pct"],
-                "defaults": {},
-            }
-        ],
-    )
-    # Save a scene that references the exposed service.
-    save_area = await _ws_send(
-        hass_ws_client,
-        id=2,
-        type="ambience/area/save",
-        area_id=area_id,
-        config={
-            "scenes": [
-                {
-                    "name": "movie",
-                    "when": {},
-                    "actions": [
-                        {
-                            "service": "light.turn_on",
-                            "entity_ids": ["light.a"],
-                            "params": {"brightness_pct": 30},
-                        }
-                    ],
-                }
-            ],
-        },
-    )
-    assert save_area["success"] is True
-
-    # Now remove the service from the exposed list → dangling warning.
-    resp = await _ws_send(
-        hass_ws_client,
-        id=3,
-        type="ambience/exposed_actions/save",
-        actions=[],
-    )
-    assert resp["success"] is True
-    warnings = resp["result"]["warnings"]
-    assert any(
-        w["scope_kind"] == "area"
-        and w["scope_id"] == area_id
-        and w["scene_name"] == "movie"
-        and "no longer exposed" in w["reason"]
-        for w in warnings
-    )
-
-
-async def test_exposed_actions_save_warns_on_param_not_currently_exposed(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
-) -> None:
-    """If an existing scene sets a param that is no longer in visible_fields
-    OR defaults (i.e. not currently exposed), the save emits a warning."""
-    _seed_services_catalog(hass)
-    await _ws_send(
-        hass_ws_client,
-        type="ambience/exposed_actions/save",
-        actions=[
-            {
-                "id": "light.turn_on",
-                "label": "",
-                "visible_fields": ["brightness_pct", "transition"],
-                "defaults": {},
-            }
-        ],
-    )
-    save_area = await _ws_send(
-        hass_ws_client,
-        id=2,
-        type="ambience/area/save",
-        area_id=area_id,
-        config={
-            "scenes": [
-                {
-                    "name": "movie",
-                    "when": {},
-                    "actions": [
-                        {
-                            "service": "light.turn_on",
-                            "entity_ids": ["light.a"],
-                            "params": {"brightness_pct": 30, "transition": 1.5},
-                        }
-                    ],
-                }
-            ],
-        },
-    )
-    assert save_area["success"] is True
-
-    # Re-save with `transition` removed from both visible and defaults → warn.
-    resp = await _ws_send(
-        hass_ws_client,
-        id=3,
-        type="ambience/exposed_actions/save",
-        actions=[
-            {
-                "id": "light.turn_on",
-                "label": "",
-                "visible_fields": ["brightness_pct"],
-                "defaults": {},
-            }
-        ],
-    )
-    assert resp["success"] is True
-    warnings = resp["result"]["warnings"]
-    assert any(
-        w["scope_kind"] == "area"
-        and w["scope_id"] == area_id
-        and w["scene_name"] == "movie"
-        and "transition" in w["reason"]
-        and "not currently exposed" in w["reason"]
-        for w in warnings
-    )
-
-
-async def test_exposed_actions_save_no_warning_when_param_in_defaults_only(
-    hass: HomeAssistant, installed, area_id, hass_ws_client
-) -> None:
-    """A param matching a key in `defaults` (even if not in visible_fields)
-    is still 'exposed' — no warning should fire."""
-    _seed_services_catalog(hass)
-    await _ws_send(
-        hass_ws_client,
-        type="ambience/exposed_actions/save",
-        actions=[
-            {
-                "id": "light.turn_on",
-                "label": "",
-                "visible_fields": ["brightness_pct", "transition"],
-                "defaults": {},
-            }
-        ],
-    )
-    save_area = await _ws_send(
-        hass_ws_client,
-        id=2,
-        type="ambience/area/save",
-        area_id=area_id,
-        config={
-            "scenes": [
-                {
-                    "name": "movie",
-                    "when": {},
-                    "actions": [
-                        {
-                            "service": "light.turn_on",
-                            "entity_ids": ["light.a"],
-                            "params": {"brightness_pct": 30, "transition": 1.5},
-                        }
-                    ],
-                }
-            ],
-        },
-    )
-    assert save_area["success"] is True
-
-    # Move `transition` from visible to defaults — still exposed, no warning.
-    resp = await _ws_send(
-        hass_ws_client,
-        id=3,
-        type="ambience/exposed_actions/save",
-        actions=[
-            {
-                "id": "light.turn_on",
-                "label": "",
-                "visible_fields": ["brightness_pct"],
-                "defaults": {"transition": 2.0},
-            }
-        ],
-    )
-    assert resp["success"] is True
-    warnings = resp["result"]["warnings"]
-    assert not any("transition" in w["reason"] for w in warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -1146,7 +958,7 @@ async def test_ws_periods_save_persists_payload(
     msg = await client.receive_json()
     assert msg["success"]
     assert msg["result"]["ok"] is True
-    assert msg["result"]["warnings"] == []
+    assert "warnings" not in msg["result"]
 
     await client.send_json({"id": 2, "type": "ambience/time_of_day_periods/list"})
     msg = await client.receive_json()
@@ -1169,91 +981,6 @@ async def test_ws_periods_save_rejects_malformed(
     msg = await client.receive_json()
     assert msg["success"] is False
     assert msg["error"]["code"] == "validation_error"
-
-
-async def test_ws_periods_save_returns_warnings_for_dangling_refs(
-    hass: HomeAssistant, installed, hass_ws_client
-) -> None:
-    """If a saved set leaves an existing scene referencing a now-missing period,
-    save succeeds but returns a warning listing the affected scenes."""
-    from homeassistant.helpers import area_registry as ar
-
-    area_reg = ar.async_get(hass)
-    area = area_reg.async_create("Living Room")
-    client = await hass_ws_client()
-    await client.send_json(
-        {
-            "id": 1,
-            "type": "ambience/area/save",
-            "area_id": area.id,
-            "config": {
-                "conditions": ["time_of_day"],
-                "scenes": [
-                    {
-                        "name": "Evening scene",
-                        "when": {"time_of_day": {"period": "evening"}},
-                        "actions": [],
-                    }
-                ],
-            },
-        }
-    )
-    msg = await client.receive_json()
-    assert msg["success"]
-
-    # Now hide 'evening' via the periods save command
-    await client.send_json(
-        {
-            "id": 2,
-            "type": "ambience/time_of_day_periods/save",
-            "custom": {},
-            "hidden": ["evening"],
-        }
-    )
-    msg = await client.receive_json()
-    assert msg["success"]
-    warnings = msg["result"]["warnings"]
-    assert any(
-        w["scope_kind"] == "area"
-        and w["scope_id"] == area.id
-        and w["scene_name"] == "Evening scene"
-        and w["missing_id"] == "evening"
-        for w in warnings
-    )
-
-
-async def test_periods_save_warnings_include_floor_scope(
-    hass: HomeAssistant, installed, hass_ws_client, floor_id
-) -> None:
-    """A dangling period reference in a floor's scene shows up in periods/save warnings."""
-    store = hass.data[DOMAIN][DATA_STORE]
-    # Save a floor scene referencing a custom period id we'll later delete.
-    await store.async_save_floor(
-        floor_id,
-        {
-            "scenes": [
-                {
-                    "name": "evening",
-                    "when": {"time_of_day": {"period": "supper"}},
-                    "actions": [],
-                }
-            ],
-        },
-    )
-    # Save periods with no `supper` entry → reference is dangling.
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/time_of_day_periods/save",
-        custom={},
-        hidden=[],
-    )
-    assert resp["success"] is True
-    warnings = resp["result"]["warnings"]
-    matching = [
-        w for w in warnings if w.get("scope_kind") == "floor" and w.get("scope_id") == floor_id
-    ]
-    assert matching, f"expected a floor warning, got {warnings!r}"
-    assert matching[0]["missing_id"] == "supper"
 
 
 # ---------------------------------------------------------------------------
@@ -1320,7 +1047,7 @@ async def test_ws_lux_ranges_save_persists_payload(
     msg = await client.receive_json()
     assert msg["success"]
     assert msg["result"]["ok"] is True
-    assert msg["result"]["warnings"] == []
+    assert "warnings" not in msg["result"]
 
     await client.send_json({"id": 2, "type": "ambience/lux_ranges/list"})
     msg = await client.receive_json()
@@ -1339,49 +1066,6 @@ async def test_ws_lux_ranges_save_rejects_malformed(
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
-
-
-async def test_ws_lux_ranges_save_returns_warnings_for_dangling_refs(
-    hass: HomeAssistant, installed, hass_ws_client
-) -> None:
-    from homeassistant.helpers import area_registry as ar
-
-    area_reg = ar.async_get(hass)
-    area = area_reg.async_create("Living Room")
-    client = await hass_ws_client()
-    await client.send_json(
-        {
-            "id": 1,
-            "type": "ambience/area/save",
-            "area_id": area.id,
-            "config": {
-                "conditions": ["lux"],
-                "scenes": [
-                    {
-                        "name": "Dark scene",
-                        "when": {"lux": {"sensors": ["sensor.a"], "range": "dark"}},
-                        "actions": [],
-                    }
-                ],
-            },
-        }
-    )
-    msg = await client.receive_json()
-    assert msg["success"]
-
-    await client.send_json(
-        {"id": 2, "type": "ambience/lux_ranges/save", "custom": {}, "hidden": ["dark"]}
-    )
-    msg = await client.receive_json()
-    assert msg["success"]
-    warnings = msg["result"]["warnings"]
-    assert any(
-        w["scope_kind"] == "area"
-        and w["scope_id"] == area.id
-        and w["scene_name"] == "Dark scene"
-        and w["missing_id"] == "dark"
-        for w in warnings
-    )
 
 
 async def test_ws_lux_ranges_reset_clears_custom_and_hidden(
@@ -1430,49 +1114,12 @@ async def test_day_config_save_round_trips(hass, installed, hass_ws_client) -> N
     )
     assert resp["success"] is True
     assert resp["result"]["ok"] is True
-    assert resp["result"]["warnings"] == []
+    assert "warnings" not in resp["result"]
     resp2 = await _ws_send(hass_ws_client, type="ambience/conditions/day/config/list")
     assert resp2["result"] == {
         "workday_sensor": "binary_sensor.workday",
         "workday_calendar": "calendar.workday",
     }
-
-
-async def test_day_config_save_emits_warnings_when_clearing_sensor(
-    hass, installed, hass_ws_client, area_id
-) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_condition_config(
-        "day",
-        {
-            "workday_sensor": "binary_sensor.workday",
-            "workday_calendar": None,
-        },
-    )
-    await store.async_save_area(
-        area_id,
-        {
-            "scenes": [
-                {
-                    "name": "Pay reminder",
-                    "when": {"day": {"include": [{"kind": "workday"}], "exclude": []}},
-                    "actions": [],
-                }
-            ],
-        },
-    )
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/conditions/day/config/save",
-        workday_sensor=None,
-        workday_calendar=None,
-    )
-    assert resp["success"] is True
-    warnings = resp["result"]["warnings"]
-    assert any(
-        w["scope_kind"] == "area" and w["scope_id"] == area_id and "workday_sensor" in w["reason"]
-        for w in warnings
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -1538,90 +1185,9 @@ async def test_weather_config_save_round_trips(hass, installed, hass_ws_client) 
     )
     assert resp["success"] is True
     assert resp["result"]["ok"] is True
-    assert resp["result"]["warnings"] == []
+    assert "warnings" not in resp["result"]
     resp2 = await _ws_send(hass_ws_client, type="ambience/conditions/weather/config/list")
     assert resp2["result"] == {"entity": "weather.home", "groups": custom}
-
-
-async def test_weather_config_save_warns_when_clearing_referenced_entity(
-    hass, installed, hass_ws_client, area_id
-) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_condition_config(
-        "weather",
-        {
-            "entity": "weather.home",
-            "groups": [{"id": "wet", "label": "Wet", "conditions": ["rainy"]}],
-        },
-    )
-    await store.async_save_area(
-        area_id,
-        {
-            "scenes": [
-                {
-                    "name": "Rainy",
-                    "when": {"weather": {"groups": ["wet"], "thresholds": []}},
-                    "actions": [],
-                }
-            ],
-        },
-    )
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/conditions/weather/config/save",
-        entity=None,
-        groups=[{"id": "wet", "label": "Wet", "conditions": ["rainy"]}],
-    )
-    assert resp["success"] is True
-    warnings = resp["result"]["warnings"]
-    assert any(
-        w["scope_kind"] == "area" and w["scope_id"] == area_id and "weather entity" in w["reason"]
-        for w in warnings
-    )
-
-
-async def test_weather_config_save_warns_when_deleting_referenced_group(
-    hass, installed, hass_ws_client, area_id
-) -> None:
-    store = hass.data[DOMAIN][DATA_STORE]
-    await store.async_save_condition_config(
-        "weather",
-        {
-            "entity": "weather.home",
-            "groups": [
-                {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
-                {"id": "sunny", "label": "Sunny", "conditions": ["sunny"]},
-            ],
-        },
-    )
-    await store.async_save_area(
-        area_id,
-        {
-            "scenes": [
-                {
-                    "name": "Rainy scene",
-                    "when": {"weather": {"groups": ["wet"], "thresholds": []}},
-                    "actions": [],
-                }
-            ],
-        },
-    )
-    # Save with `wet` removed.
-    resp = await _ws_send(
-        hass_ws_client,
-        type="ambience/conditions/weather/config/save",
-        entity="weather.home",
-        groups=[{"id": "sunny", "label": "Sunny", "conditions": ["sunny"]}],
-    )
-    assert resp["success"] is True
-    warnings = resp["result"]["warnings"]
-    assert any(
-        w["scope_kind"] == "area"
-        and w["scope_id"] == area_id
-        and "wet" in w["reason"]
-        and w["scene_name"] == "Rainy scene"
-        for w in warnings
-    )
 
 
 async def test_weather_config_save_rejects_malformed_groups(
@@ -2203,9 +1769,8 @@ async def test_ws_run_scene_actions_requires_exactly_one_scope(
 async def test_exposed_actions_save_skips_action_with_non_string_service(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
-    """An action whose 'service' value is not a string is silently skipped in the
-    dangling-warning scan (line 277 continue).  Save still succeeds and returns
-    no warnings."""
+    """An action whose 'service' value is not a string is silently skipped.
+    Save still succeeds."""
     _seed_services_catalog(hass)
     # Bypass WS validation and write the config directly so the scene carries a
     # non-string service value that would otherwise be rejected by
@@ -2226,7 +1791,7 @@ async def test_exposed_actions_save_skips_action_with_non_string_service(
             ]
         },
     )
-    # Now save exposed actions; the warning loop must hit the non-string branch.
+    # Now save exposed actions; the non-string branch must not crash.
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/exposed_actions/save",
@@ -2240,7 +1805,7 @@ async def test_exposed_actions_save_skips_action_with_non_string_service(
         ],
     )
     assert resp["success"] is True
-    assert resp["result"]["warnings"] == []
+    assert "warnings" not in resp["result"]
 
 
 # --- exposed_actions/save warning loop: service not in old OR new list (line 291 continue) ---
@@ -2249,9 +1814,7 @@ async def test_exposed_actions_save_skips_action_with_non_string_service(
 async def test_exposed_actions_save_skips_action_with_service_never_exposed(
     hass: HomeAssistant, installed, area_id, hass_ws_client
 ) -> None:
-    """An action whose service was never in the exposed list (not old, not new) is
-    skipped in the dangling-warning scan (line 291 continue).  No warning is emitted
-    for it."""
+    """An action whose service was never in the exposed list saves without error."""
     _seed_services_catalog(hass)
     # Write a scene that references a service that will never be in the exposed list.
     store = hass.data[DOMAIN][DATA_STORE]
@@ -2267,7 +1830,7 @@ async def test_exposed_actions_save_skips_action_with_service_never_exposed(
             ]
         },
     )
-    # Save exposed actions that don't include switch.turn_on — neither old nor new.
+    # Save exposed actions that don't include switch.turn_on — save must succeed.
     resp = await _ws_send(
         hass_ws_client,
         type="ambience/exposed_actions/save",
@@ -2281,8 +1844,7 @@ async def test_exposed_actions_save_skips_action_with_service_never_exposed(
         ],
     )
     assert resp["success"] is True
-    # No warning — the service was never exposed, so there's nothing to flag.
-    assert all("switch.turn_on" not in w.get("reason", "") for w in resp["result"]["warnings"])
+    assert "warnings" not in resp["result"]
 
 
 # --- floor/save: validate_scope_config raises ValueError (lines 417-419) ---

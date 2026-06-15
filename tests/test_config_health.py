@@ -98,7 +98,9 @@ async def test_scan_does_not_flag_existing_entity(hass: HomeAssistant, installed
             }
         ]
     )
-    assert scan(hass, [("area", "a", cfg)]) == []
+    # No missing_entity problem (the entity exists). The service may be unexposed but
+    # that is a separate problem kind introduced by pass 3 and is not this test's concern.
+    assert [p for p in scan(hass, [("area", "a", cfg)]) if p.kind == "missing_entity"] == []
 
 
 async def test_scan_skips_disabled_scene(hass: HomeAssistant, installed) -> None:
@@ -530,3 +532,19 @@ async def test_scene_config_issues_unexposed_action(hass: HomeAssistant, install
     ctx = _build_ref_context(hass)
     scene = {"when": {}, "actions": [{"service": "fan.toggle", "entity_ids": ["fan.x"]}]}
     assert scene_config_issues(ctx, scene) == [("unexposed_action", "fan.toggle")]
+
+
+async def test_scan_aggregates_config_refs_globally_per_ref(
+    hass: HomeAssistant, installed
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    a1 = ar.async_get(hass).async_create("Kitchen").id
+    a2 = ar.async_get(hass).async_create("Hall").id
+    wd_scene = {"name": "wd", "category": "c1", "when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []}
+    await store.async_save_area(a1, {"scenes": [wd_scene]})
+    await store.async_save_area(a2, {"scenes": [wd_scene]})
+    problems = scan(hass, store.all_scope_configs())
+    wd = [p for p in problems if p.kind == "missing_workday_sensor"]
+    assert len(wd) == 1                       # one issue, global per ref
+    assert wd[0].ref == "workday_sensor"
+    assert len(wd[0].locations) == 2          # both scopes listed

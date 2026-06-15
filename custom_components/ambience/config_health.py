@@ -266,6 +266,20 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
     for eid, per_entity in groups.items():
         if len(per_entity) > 1:
             problems.append(Problem("action_overlap", eid, tuple(per_entity.values())))
+
+    # 3. Dangling config references (per-scene), aggregated globally per (kind, ref).
+    ctx = _build_ref_context(hass)
+    config_refs: dict[tuple[str, str], list[Location]] = {}
+    for scope_kind, scope_id, cfg in configs:
+        for scene in cfg.get("scenes", []) or []:
+            for kind, ref in scene_config_issues(ctx, scene):
+                loc = Location(scope_kind, scope_id, scene.get("category"), scene.get("name") or "")
+                bucket = config_refs.setdefault((kind, ref), [])
+                if loc not in bucket:
+                    bucket.append(loc)
+    for (kind, ref), locs in config_refs.items():
+        problems.append(Problem(kind, ref, tuple(locs)))
+
     return problems
 
 

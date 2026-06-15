@@ -13,6 +13,7 @@ import "./sun-predicate-input.js";
 import "./state-predicate-input.js";
 import "./people-predicate-input.js";
 import "./occupancy-predicate-input.js";
+import "./unavailable-predicate-input.js";
 import "./template-predicate-input.js";
 import { emitValueChanged } from "../dom.js";
 
@@ -167,6 +168,15 @@ export class AmbienceConditionInput extends LitElement {
           .value=${this.value as any}
           @value-changed=${this._onChild}
         ></ambience-occupancy-predicate-input>
+      `;
+    }
+    if (this.condition.input === "unavailable_predicate") {
+      return html`
+        <ambience-unavailable-predicate-input
+          .hass=${this.hass}
+          .value=${this.value as any}
+          @value-changed=${this._onChild}
+        ></ambience-unavailable-predicate-input>
       `;
     }
     return html`

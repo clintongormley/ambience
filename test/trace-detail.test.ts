@@ -305,6 +305,7 @@ describe("trace-detail", () => {
     ["no_match", null, "No scene matched"],
     ["skipped_switch_off", null, "switch is off"],
     ["skipped_scope_disabled", null, "scope is disabled"],
+    ["skipped_unavailable", null, "went unavailable"],
   ] as const)("%s (no actions) shows the explanation where the action summary would go", (outcome, winner_name, phrase) => {
     const host = renderToHost({ outcome, winner_name, actions: [] }, false);
     const slot = host.querySelector(".action-summary");
@@ -949,6 +950,7 @@ describe("trace-detail", () => {
     expect(outcomeLabel("no_match")).toBe("no match");
     expect(outcomeLabel("skipped_switch_off")).toBe("skipped");
     expect(outcomeLabel("skipped_scope_disabled")).toBe("skipped");
+    expect(outcomeLabel("skipped_unavailable")).toBe("skipped");
   });
 
   test("badge shows the friendly label while keeping the internal CSS class", () => {
@@ -975,6 +977,7 @@ describe("trace-detail", () => {
     expect(outcomeSummary(unit({ outcome: "skipped_scope_disabled" }))).toContain(
       "scope is disabled",
     );
+    expect(outcomeSummary(unit({ outcome: "skipped_unavailable" }))).toContain("went unavailable");
   });
 
   test("the friendly outcome summary appears at the top of the expansion", () => {

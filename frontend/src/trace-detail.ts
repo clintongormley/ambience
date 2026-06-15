@@ -284,6 +284,7 @@ const OUTCOME_LABELS: Record<string, string> = {
   no_match: "no match",
   skipped_switch_off: "skipped",
   skipped_scope_disabled: "skipped",
+  skipped_unavailable: "skipped",
 };
 
 export function outcomeLabel(outcome: TraceOutcome): string {
@@ -313,6 +314,8 @@ export function outcomeSummary(u: BufferedUnit): string {
       return "Skipped — the category switch is off.";
     case "skipped_scope_disabled":
       return "Skipped — the scope is disabled.";
+    case "skipped_unavailable":
+      return "Skipped — the triggering entity went unavailable; devices left as they are.";
     default:
       return "";
   }
@@ -359,7 +362,11 @@ function pluralize(count: number, singular: string, plural: string): string {
 // Outcomes where the whole unit's evaluation was skipped (switch off / scope
 // disabled). They carry no explanation or actions but still expand to show why.
 function isSkipped(outcome: TraceOutcome): boolean {
-  return outcome === "skipped_switch_off" || outcome === "skipped_scope_disabled";
+  return (
+    outcome === "skipped_switch_off" ||
+    outcome === "skipped_scope_disabled" ||
+    outcome === "skipped_unavailable"
+  );
 }
 
 function renderScene(

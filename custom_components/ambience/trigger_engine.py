@@ -19,6 +19,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.util import dt as dt_util
 
+from .conditions._common import UNAVAILABLE
 from .const import (
     DATA_CONDITIONS,
     DATA_STORE,
@@ -198,6 +199,27 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             return scenes[scene_index].get("category")
         return None
 
+    def _winner_has_unavailable(
+        self, scope_kind: str, scope_id: str | None, scene_index: int | None
+    ) -> bool:
+        """Whether the winning scene carries a non-wildcard `unavailable` predicate.
+
+        Such a scene is an availability guard — the one scene allowed to act on an
+        entity drop-out (a winner that won *because* an entity is unavailable). A
+        winning `unavailable` predicate is necessarily non-None and matched true,
+        so its presence in the winner's `when` is sufficient. `scene_index` is the
+        full-scene index (`matched_scene_index`), aligned with `self._scope_cfgs`.
+        """
+        if scene_index is None:
+            return False
+        cfg = self._scope_cfgs.get((scope_kind, scope_id))
+        if cfg is None:
+            return False
+        scenes = cfg.get("scenes", [])
+        if not 0 <= scene_index < len(scenes):
+            return False
+        return scenes[scene_index].get("when", {}).get("unavailable") is not None
+
     def _recompute(
         self, fired: set[PredKey], snapshots: dict[str, Any], *, seed: bool = False
     ) -> set[tuple[str, str | None, str]]:
@@ -295,7 +317,13 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         await self._refresh_snapshots(set(self._conditions()))
 
     async def _resolve_and_apply(
-        self, scope_kind: str, scope_id: str | None, category_id: str, *, force: bool = False
+        self,
+        scope_kind: str,
+        scope_id: str | None,
+        category_id: str,
+        *,
+        force: bool = False,
+        cause: TriggerCause | None = None,
     ) -> UnitTrace | None:
         """Resolve a dirty (scope, category) unit and apply if the winner changed
         (or `force`). Skips when the scope is disabled or the switch is off.
@@ -344,6 +372,28 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             )
             index = plan["matched_scene_index"]
             explanation = plan.get("explanation")
+            # Drop-out (the triggering entity went unavailable/unknown, or was
+            # removed → cause.new is None): only an `unavailable`-guard winner may
+            # act on it. A non-guard fall-through winner (or a no-match) is
+            # suppressed so a sensor blip can't drive an unrelated scene — devices
+            # and last_applied are left untouched. The guard itself runs normally
+            # below (its actions, or its NO_OP block).
+            if (
+                cause is not None
+                and cause.kind == CauseKind.ENTITY
+                and (cause.new in UNAVAILABLE or cause.new is None)
+                and not self._winner_has_unavailable(scope_kind, scope_id, index)
+            ):
+                if active:
+                    return UnitTrace(
+                        scope_kind,
+                        scope_id,
+                        category_id,
+                        switch_state,
+                        Outcome.SKIPPED_UNAVAILABLE,
+                        explanation,
+                    )
+                return None
             if index is None:
                 # A no-match is a transition away from the previous winner: drop
                 # the last-applied record so a later win of the same scene re-applies.
@@ -404,7 +454,11 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         return None
 
     async def _apply_units(
-        self, units: Iterable[tuple[str, str | None, str]], *, force: bool = False
+        self,
+        units: Iterable[tuple[str, str | None, str]],
+        *,
+        force: bool = False,
+        cause: TriggerCause | None = None,
     ) -> list[UnitTrace]:
         """Apply dirty (scope_kind, scope_id, category) units, concurrently within
         each containment tier, tiers sequential in order areas→floors→house.
@@ -416,7 +470,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         for tier in sorted(by_tier):
             traces.extend(
                 await gather_unit_traces(
-                    self._resolve_and_apply(*u, force=force) for u in by_tier[tier]
+                    self._resolve_and_apply(*u, force=force, cause=cause) for u in by_tier[tier]
                 )
             )
         return traces
@@ -427,12 +481,13 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         TraceEvent for the batch when tracing produced any unit traces."""
         if not fired:
             return
+        resolved_cause = cause or TriggerCause(kind=CauseKind.UNKNOWN)
         await self._refresh_snapshots({key[3] for key in fired})
-        traces = await self._apply_units(self._recompute(fired, self._snapshots))
+        traces = await self._apply_units(
+            self._recompute(fired, self._snapshots), cause=resolved_cause
+        )
         if traces:
-            emit_trace(
-                self._hass, TraceEvent(cause or TriggerCause(kind=CauseKind.UNKNOWN), traces)
-            )
+            emit_trace(self._hass, TraceEvent(resolved_cause, traces))
 
     async def _async_refresh(self) -> None:
         """Debounced config-reload: rebuild + resubscribe, then re-apply only what
@@ -523,10 +578,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
         seeded_dirty = self._recompute(
             set(self._index.all_predicates()), self._snapshots, seed=True
         )
-        traces = await self._apply_units(units, force=force)
+        traces = await self._apply_units(units, force=force, cause=cause)
         extra = sorted(seeded_dirty - set(units), key=lambda u: (u[0], u[1] or "", u[2]))
         if extra:
-            traces.extend(await self._apply_units(extra, force=False))
+            traces.extend(await self._apply_units(extra, force=False, cause=cause))
         if traces:
             emit_trace(self._hass, TraceEvent(cause, traces))
 

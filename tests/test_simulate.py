@@ -886,3 +886,48 @@ def test_safe_category_name_returns_none_on_broken_store():
             self.data = _RaisingData()
 
     assert _safe_category_name(_BrokenHass(), "g1") is None
+
+
+# ---------------------------------------------------------------------------
+# Simulator: the what-if simulator honours the `unavailable` condition.
+# Mirrors the run_simulation pattern used for 'state' scenes above.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_unavailable_condition_matches_when_entity_unavailable():
+    """An `unavailable` guard wins in the simulator when the overridden entity
+    is set to 'unavailable' — confirming the condition integrates end-to-end
+    through build_simulated_snapshots and run_simulation."""
+    from custom_components.ambience.conditions.unavailable import UnavailableCondition
+
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Sensor down",
+            "when": {"unavailable": {"entities": ["binary_sensor.x"]}},
+            "actions": [],  # guard — no actions; outcome is no_op when it wins
+        }
+    ]
+
+    class _UnavailStore:
+        def scope_config(self, scope_kind, scope_id):
+            return {"scenes": scenes}
+
+        def get_condition_config(self, name):
+            return {}
+
+    hass = _Hass([_State("binary_sensor.x", "on")])  # live state is "on" (available)
+    hass.data[DOMAIN] = {
+        DATA_CONDITIONS: {"unavailable": UnavailableCondition(hass=hass)},
+        DATA_STORE: _UnavailStore(),
+    }
+
+    # Override the entity to "unavailable" in the simulated world.
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.x": {"state": "unavailable"}})
+    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+
+    # The guard wins (no_op because it has no actions), confirming the condition matched.
+    assert result["outcome"] == "no_op"
+    assert result["winner_name"] == "Sensor down"
+    assert result["explanation"]["scenes"][0]["matched"] is True

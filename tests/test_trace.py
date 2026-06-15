@@ -101,6 +101,22 @@ def test_format_skipped_scope_disabled():
     assert "area/kitchen/General: skipped (scope disabled)" in text
 
 
+def test_format_skipped_unavailable() -> None:
+    unit = UnitTrace(
+        scope_kind="area",
+        scope_id="lounge",
+        category="general",
+        switch_state="on",
+        outcome=Outcome.SKIPPED_UNAVAILABLE,
+        explanation=None,
+    )
+    cause = TriggerCause(
+        kind=CauseKind.ENTITY, entity_id="binary_sensor.x", old="off", new="unavailable"
+    )
+    lines = format_trace_event(TraceEvent(cause, [unit]))
+    assert any("skipped (went unavailable)" in line for line in lines)
+
+
 def test_format_marks_unevaluated_scenes():
     explanation = Explanation(
         winner_index=0,

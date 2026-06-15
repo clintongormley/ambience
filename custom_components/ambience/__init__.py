@@ -42,6 +42,7 @@ from .conditions.state import StateCondition
 from .conditions.sun import SunCondition
 from .conditions.template import TemplateCondition
 from .conditions.time_of_day import TimeOfDayCondition
+from .conditions.unavailable import UnavailableCondition
 from .conditions.weather import WeatherCondition
 from .config_health_issues import reconcile_issues
 from .const import (
@@ -161,6 +162,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "state": StateCondition(hass=hass),
         "occupancy": OccupancyCondition(hass=hass),
         "people": PeopleCondition(hass=hass),
+        "unavailable": UnavailableCondition(hass=hass),
         "script": ScriptCondition(hass=hass),
         "template": TemplateCondition(hass=hass),
     }

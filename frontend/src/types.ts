@@ -269,6 +269,14 @@ export interface OccupancyPredicate {
   negate?: boolean; // default false; inverts the whole match (incl. `for`)
 }
 
+// --- unavailable condition --------------------------------------------------
+
+/** Per-scene predicate. `null` = wildcard (no constraint). Matches when any
+ *  listed entity is unavailable/unknown/absent. */
+export interface UnavailablePredicate {
+  entities: string[]; // any-domain entity_ids; at least one
+}
+
 // --- script condition -------------------------------------------------------
 
 /** Per-scene predicate. `null` = wildcard. */
@@ -379,7 +387,8 @@ export type TraceOutcome =
   | "no_op"
   | "no_match"
   | "skipped_switch_off"
-  | "skipped_scope_disabled";
+  | "skipped_scope_disabled"
+  | "skipped_unavailable";
 export type BufferedUnit = {
   event_id: string | null;
   timestamp: string | null;

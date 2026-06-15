@@ -170,6 +170,18 @@ async def test_conditions_list(hass: HomeAssistant, installed, hass_ws_client) -
     assert lux["predicate_help"].strip() != ""
 
 
+async def test_conditions_list_includes_unavailable(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    resp = await _ws_send(hass_ws_client, type="ambience/conditions/list")
+    assert resp["success"] is True
+    result = resp["result"]
+    names = {c["name"] for c in result}
+    assert "unavailable" in names
+    info = next(c for c in result if c["name"] == "unavailable")
+    assert info["input"] == "unavailable_predicate"
+
+
 # ---------------------------------------------------------------------------
 # services/list, services/get_schema, exposed_actions/list, exposed_actions/save
 # ---------------------------------------------------------------------------

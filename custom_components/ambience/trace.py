@@ -68,6 +68,9 @@ class Outcome(StrEnum):
     NO_MATCH = "no_match"
     SKIPPED_SWITCH_OFF = "skipped_switch_off"
     SKIPPED_SCOPE_DISABLED = "skipped_scope_disabled"
+    # The triggering change was an entity going unavailable/unknown — a
+    # drop-out is not a real-world event worth re-applying for. Apply nothing.
+    SKIPPED_UNAVAILABLE = "skipped_unavailable"
 
 
 @dataclass(frozen=True)
@@ -276,6 +279,9 @@ def format_trace_event(event: TraceEvent) -> list[str]:
             continue
         if unit.outcome == Outcome.SKIPPED_SCOPE_DISABLED:
             lines.append(f"  {scope}: skipped (scope disabled)")
+            continue
+        if unit.outcome == Outcome.SKIPPED_UNAVAILABLE:
+            lines.append(f"  {scope}: skipped (went unavailable)")
             continue
         explanation = unit.explanation
         winner = ""

@@ -9,12 +9,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
 
 from custom_components.ambience.config_health import (
+    _build_ref_context,
     entity_exists,
     missing_lux_refs,
     missing_period_refs,
     referenced_entities_by_scene,
     scan,
     scene_annotations,
+    scene_config_issues,
 )
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
@@ -448,3 +450,45 @@ def test_missing_lux_refs_flags_unknown_id() -> None:
     assert missing_lux_refs({"range": "gone"}, {"dim"}) == ["gone"]
     assert missing_lux_refs({"range": "dim"}, {"dim"}) == []
     assert missing_lux_refs({"min": 0, "max": 5}, {"dim"}) == []
+
+
+async def test_scene_config_issues_flags_workday_sensor_unset(
+    hass: HomeAssistant, installed
+) -> None:
+    # No workday_sensor configured (default). A scene using a workday item dangles.
+    ctx = _build_ref_context(hass)
+    scene = {
+        "name": "wd",
+        "category": "c1",
+        "when": {"day": {"include": [{"kind": "workday"}]}},
+        "actions": [],
+    }
+    assert scene_config_issues(ctx, scene) == [("missing_workday_sensor", "workday_sensor")]
+
+
+async def test_scene_config_issues_clean_when_workday_sensor_set(
+    hass: HomeAssistant, installed
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_condition_config("day", {"workday_sensor": "binary_sensor.wd"})
+    ctx = _build_ref_context(hass)
+    scene = {"when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []}
+    assert scene_config_issues(ctx, scene) == []
+
+
+async def test_scene_config_issues_disabled_scene_is_clean(
+    hass: HomeAssistant, installed
+) -> None:
+    ctx = _build_ref_context(hass)
+    scene = {"enabled": False, "when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []}
+    assert scene_config_issues(ctx, scene) == []
+
+
+async def test_scene_config_issues_ignores_non_string_weather_group(
+    hass: HomeAssistant, installed
+) -> None:
+    ctx = _build_ref_context(hass)
+    # A partial/corrupt save could leave a non-string group id; it must not produce
+    # a spurious ("missing_weather_group", None) tuple.
+    scene = {"when": {"weather": {"groups": [None]}}, "actions": []}
+    assert ("missing_weather_group", None) not in scene_config_issues(ctx, scene)

@@ -15,7 +15,16 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from .const import DATA_CONDITIONS, DATA_OVERLAP_SET, DATA_STORE, DOMAIN
+from .conditions.weather import weather_predicate_active
+from .const import (
+    DATA_CONDITIONS,
+    DATA_EXPOSED_ACTIONS,
+    DATA_LUX_RANGES,
+    DATA_OVERLAP_SET,
+    DATA_PERIODS,
+    DATA_STORE,
+    DOMAIN,
+)
 from .engine import scene_enabled
 from .scope_triggers import iter_predicate_specs
 
@@ -52,6 +61,87 @@ class Problem:
 # share one definition. (The websocket dangling_* copies are deleted in Phase 7.)
 _SENSOR_DEPENDENT_KINDS = {"workday", "holiday"}
 _CALENDAR_DEPENDENT_KINDS = {"first_workday", "last_workday"}
+
+
+@dataclass(frozen=True)
+class _RefContext:
+    """Live config snapshot for dangling-reference detection, built once per scan."""
+
+    workday_sensor: bool          # True when a workday sensor is configured
+    workday_calendar: bool        # True when a workday calendar is configured
+    weather_entity: bool          # True when a weather entity is configured
+    weather_group_ids: frozenset[str]
+    period_ids: frozenset[str]
+    lux_ids: frozenset[str]
+    exposed_services: frozenset[str]
+
+
+def _build_ref_context(hass: HomeAssistant) -> _RefContext:
+    """Snapshot the live config-reference universe once, for per-scene detection."""
+    domain = hass.data[DOMAIN]
+    store = domain[DATA_STORE]
+    day = store.get_condition_config("day")
+    weather = store.get_condition_config("weather")
+    exposed = domain[DATA_EXPOSED_ACTIONS]
+    return _RefContext(
+        workday_sensor=bool(day.get("workday_sensor")),
+        workday_calendar=bool(day.get("workday_calendar")),
+        weather_entity=bool(weather.get("entity")),
+        weather_group_ids=frozenset(
+            g.get("id") for g in (weather.get("groups") or []) if isinstance(g.get("id"), str)
+        ),
+        period_ids=frozenset(domain[DATA_PERIODS].effective()),
+        lux_ids=frozenset(domain[DATA_LUX_RANGES].effective()),
+        exposed_services=frozenset(
+            sid for a in exposed.list() if isinstance((sid := a.get("id")), str)
+        ),
+    )
+
+
+def scene_config_issues(ctx: _RefContext, scene: dict[str, Any]) -> list[tuple[str, str]]:
+    """Ordered, de-duplicated (kind, ref) dangling-reference problems for one
+    ENABLED scene. The single source shared by scan() (Repairs) and
+    scene_annotations() (per-scene badges)."""
+    if not scene_enabled(scene):
+        return []
+    issues: list[tuple[str, str]] = []
+    when = scene.get("when", {}) or {}
+
+    day_pred = when.get("day")
+    if isinstance(day_pred, dict):
+        for slot in (day_pred.get("include") or []) + (day_pred.get("exclude") or []):
+            kind = (slot or {}).get("kind")
+            if kind in _SENSOR_DEPENDENT_KINDS and not ctx.workday_sensor:
+                issues.append(("missing_workday_sensor", "workday_sensor"))
+            if kind in _CALENDAR_DEPENDENT_KINDS and not ctx.workday_calendar:
+                issues.append(("missing_workday_calendar", "workday_calendar"))
+
+    weather_pred = when.get("weather")
+    if weather_predicate_active(weather_pred):
+        if not ctx.weather_entity:
+            issues.append(("missing_weather_entity", "weather_entity"))
+        for gid in weather_pred.get("groups") or []:
+            if isinstance(gid, str) and gid not in ctx.weather_group_ids:
+                issues.append(("missing_weather_group", gid))
+
+    for pid in missing_period_refs(when.get("time_of_day"), set(ctx.period_ids)):
+        issues.append(("missing_period", pid))
+    for rid in missing_lux_refs(when.get("lux"), set(ctx.lux_ids)):
+        issues.append(("missing_lux_range", rid))
+
+    for action in scene.get("actions", []) or []:
+        sid = action.get("service")
+        if isinstance(sid, str) and sid and sid not in ctx.exposed_services:
+            issues.append(("unexposed_action", sid))
+
+    # De-dup while preserving first-seen order.
+    seen: set[tuple[str, str]] = set()
+    out: list[tuple[str, str]] = []
+    for item in issues:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
 
 
 def missing_period_refs(predicate: Any, effective_ids: set[str]) -> list[str]:

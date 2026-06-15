@@ -3544,7 +3544,7 @@ var Fo=Object.defineProperty;var Mo=Object.getOwnPropertyDescriptor;var c=(t,n,e
             >${d(this.hass,"ui.unit_minutes","minutes")}</span
           >
         </div>
-        <div class="row toggle-row" style="margin-top:0.5rem">
+        <div class="row toggle-row" style="margin-top:1.5rem">
           <label style="flex:1 1 auto">
             ${d(this.hass,"ui.settings_expose_group","Expose to voice assistants")}
             <ambience-help

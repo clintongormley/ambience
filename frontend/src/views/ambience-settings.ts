@@ -271,7 +271,7 @@ export class AmbienceAmbienceSettings extends LitElement {
             >${localize(this.hass, "ui.unit_minutes", "minutes")}</span
           >
         </div>
-        <div class="row toggle-row" style="margin-top:0.5rem">
+        <div class="row toggle-row" style="margin-top:1.5rem">
           <label style="flex:1 1 auto">
             ${localize(this.hass, "ui.settings_expose_group", "Expose to voice assistants")}
             <ambience-help

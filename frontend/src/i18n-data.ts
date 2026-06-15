@@ -43,6 +43,7 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     sun: "Sun",
     template: "Template",
     lux: "Lux",
+    unavailable: "Unavailable",
   },
   action: {},
   anchor: {

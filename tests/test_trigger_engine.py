@@ -1975,3 +1975,53 @@ async def test_no_cause_not_suppressed(hass) -> None:
     engine._snapshots = {"tod": "evening"}
     await engine._resolve_and_apply("area", "a", "g")
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
+# ---------------------------------------------------------------------------
+# Integration: `unavailable` guard blocks a lower scene on a non-dropout tick.
+# A pinned `unavailable` guard (no actions) wins on a clock tick and prevents
+# the lower time scene from applying — proving A+B combine correctly.
+# ---------------------------------------------------------------------------
+
+
+async def test_unavailable_guard_blocks_lower_scene_on_clock_tick(hass) -> None:
+    """While a sensor is unavailable, a pinned `unavailable` guard (no actions)
+    wins on a clock tick and blocks the lower time scene from applying."""
+    from custom_components.ambience.conditions.unavailable import UnavailableCondition
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    hass.states.async_set("binary_sensor.x", "unavailable")
+    tod = CacheCondition(TriggerSpec(entities=frozenset()), "evening")
+    act = _light_action(hass)
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {
+                        "when": {"unavailable": {"entities": ["binary_sensor.x"]}},
+                        "category": "g",
+                        "actions": [],
+                    },
+                    {"when": {"tod": "evening"}, "category": "g", "actions": act},
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"tod": tod, "unavailable": UnavailableCondition(hass=hass)},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    await engine._refresh_all_snapshots()
+    cause = TriggerCause(kind=CauseKind.CLOCK, detail="20:00")
+    await engine._resolve_and_apply("area", "a", "g", cause=cause)
+    # The guard (scene 0, no actions) won -> a no-op that stays transparent to
+    # last-applied: nothing is recorded, and the lower time scene (index 1)
+    # never applies.
+    assert ("area", "a", "g") not in hass.data[DOMAIN][DATA_LAST_APPLIED]

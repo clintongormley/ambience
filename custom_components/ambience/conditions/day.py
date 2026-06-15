@@ -220,6 +220,18 @@ class DayCondition:
         # wraparound (e.g. Dec 20 -> Jan 5)
         return today_md >= from_md or today_md <= to_md
 
+    def unconfigured_reason(self, predicate: Any, snapshot: DaySnapshot) -> str | None:
+        if not isinstance(predicate, dict):
+            return None
+        cfg = self._day_config()
+        for slot in (predicate.get("include") or []) + (predicate.get("exclude") or []):
+            kind = (slot or {}).get("kind")
+            if kind in ("workday", "holiday") and not cfg.get("workday_sensor"):
+                return "workday sensor not configured"
+            if kind in ("first_workday", "last_workday") and not cfg.get("workday_calendar"):
+                return "workday calendar not configured"
+        return None
+
     def describe(self, snapshot: DaySnapshot, predicate: Any = None) -> str | None:
         return None
 

@@ -189,6 +189,17 @@ class WeatherCondition:
             return False
         return _op_satisfied(snap.attributes[attr], t.get("op"), float(value))
 
+    def unconfigured_reason(self, predicate: Any, snapshot: WeatherSnapshot) -> str | None:
+        if not weather_predicate_active(predicate):
+            return None
+        if not self._entity():
+            return "weather entity not configured"
+        known = {g.get("id") for g in self._configured_groups()}
+        for gid in predicate.get("groups") or []:
+            if isinstance(gid, str) and gid not in known:
+                return f"weather group {gid!r} no longer exists"
+        return None
+
     def describe(self, snapshot: WeatherSnapshot, predicate: Any = None) -> str | None:
         return snapshot.condition
 

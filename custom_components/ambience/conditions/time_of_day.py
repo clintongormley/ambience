@@ -239,6 +239,14 @@ class TimeOfDayCondition:
                 continue  # dangling period ref is a config-health problem, not malformed
             self._match_one(item, synthetic)
 
+    def unconfigured_reason(self, predicate: Any, snapshot: TimeOfDaySnapshot) -> str | None:
+        known = set(self._period_lookup())
+        items = predicate if isinstance(predicate, list) else [predicate]
+        for item in items:
+            if isinstance(item, dict) and item.get("period") and item["period"] not in known:
+                return f"time-of-day period {item['period']!r} no longer exists"
+        return None
+
     def describe(self, snapshot: TimeOfDaySnapshot, predicate: Any = None) -> str | None:
         periods = self._period_lookup()
         for pid in periods:

@@ -130,6 +130,13 @@ class LuxCondition:
             return as_float(defn.get("min")), as_float(defn.get("max"))
         return as_float(predicate.get("min")), as_float(predicate.get("max"))
 
+    def unconfigured_reason(self, predicate: Any, snapshot: LuxSnapshot) -> str | None:
+        if isinstance(predicate, dict) and "range" in predicate:
+            rid = predicate["range"]
+            if isinstance(rid, str) and rid not in self._range_lookup():
+                return f"lux range {rid!r} no longer exists"
+        return None
+
     def describe(self, snapshot: LuxSnapshot, predicate: Any = None) -> str | None:
         # No predicate: whole-snapshot summary (used by `snapshots_described`).
         if predicate is None:

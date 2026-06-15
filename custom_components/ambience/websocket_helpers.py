@@ -117,7 +117,7 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
 
 # Transient per-scene hints injected for the frontend by annotate_scenes; stripped
 # by canonicalise so they're never persisted.
-_TRANSIENT_SCENE_FIELDS = ("shadowed_by", "missing_entities", "overlap_entities")
+_TRANSIENT_SCENE_FIELDS = ("shadowed_by", "missing_entities", "overlap_entities", "config_issues")
 
 
 def canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:

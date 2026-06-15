@@ -296,12 +296,14 @@ def overlap_entity_ids(hass: HomeAssistant) -> frozenset[str]:
 
 def scene_annotations(
     hass: HomeAssistant, cfg: dict[str, Any], *, fresh_overlap: bool = False
-) -> list[dict[str, list[str]]]:
+) -> list[dict[str, Any]]:
     """Per-scene problem annotations for `cfg`, aligned with cfg['scenes'].
 
-    Each entry is {"missing_entities": [...], "overlap_entities": [...]}. Computed
-    from the SAME scan() that drives Repairs: missing = referenced entities that
-    don't exist; overlap = acted entities that are in the global action_overlap set.
+    Each entry is {"missing_entities": [...], "overlap_entities": [...],
+    "config_issues": [{"kind": ..., "ref": ...}, ...]}. Computed from the SAME
+    scan() that drives Repairs: missing = referenced entities that don't exist;
+    overlap = acted entities that are in the global action_overlap set;
+    config_issues = dangling config references from scene_config_issues().
     Disabled scenes carry empty lists (they're skipped, matching scan()).
 
     The global overlap set is cached in hass.data[DATA_OVERLAP_SET] — refreshed by
@@ -314,11 +316,19 @@ def scene_annotations(
         domain[DATA_OVERLAP_SET] = overlap_entity_ids(hass)
     overlap_set = domain[DATA_OVERLAP_SET]
     referenced = referenced_entities_by_scene(conditions, cfg)
-    out: list[dict[str, list[str]]] = []
+    ctx = _build_ref_context(hass)
+    out: list[dict[str, Any]] = []
     for idx, scene in enumerate(cfg.get("scenes", []) or []):
         refs = referenced.get(idx, set())
         missing = sorted(eid for eid in refs if not entity_exists(hass, eid))
         acted = set(_action_entities(scene)) if scene_enabled(scene) else set()
         overlaps = sorted(eid for eid in acted if eid in overlap_set)
-        out.append({"missing_entities": missing, "overlap_entities": overlaps})
+        config_issues = [{"kind": k, "ref": r} for k, r in scene_config_issues(ctx, scene)]
+        out.append(
+            {
+                "missing_entities": missing,
+                "overlap_entities": overlaps,
+                "config_issues": config_issues,
+            }
+        )
     return out

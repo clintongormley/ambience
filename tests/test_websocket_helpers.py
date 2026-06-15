@@ -840,6 +840,7 @@ class TestCanonicalise:
                     "shadowed_by": 0,
                     "missing_entities": ["light.x"],
                     "overlap_entities": ["light.y"],
+                    "config_issues": [{"kind": "missing_workday_sensor", "ref": "workday_sensor"}],
                 },
             ]
         }
@@ -847,6 +848,7 @@ class TestCanonicalise:
         assert "shadowed_by" not in result["scenes"][0]
         assert "missing_entities" not in result["scenes"][0]
         assert "overlap_entities" not in result["scenes"][0]
+        assert "config_issues" not in result["scenes"][0]
 
 
 # ---------------------------------------------------------------------------

@@ -376,7 +376,7 @@ async def test_scene_annotations_disabled_scene_has_no_annotations(
     }
     await store.async_save_area(ar.async_get(hass).async_create("LR").id, cfg)
     annos = scene_annotations(hass, cfg)
-    assert annos[0] == {"missing_entities": [], "overlap_entities": []}
+    assert annos[0] == {"missing_entities": [], "overlap_entities": [], "config_issues": []}
 
 
 _OVERLAP_CFG = {
@@ -548,3 +548,16 @@ async def test_scan_aggregates_config_refs_globally_per_ref(
     assert len(wd) == 1                       # one issue, global per ref
     assert wd[0].ref == "workday_sensor"
     assert len(wd[0].locations) == 2          # both scopes listed
+
+
+async def test_scene_annotations_emits_config_issues(hass: HomeAssistant, installed) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = {"scenes": [
+        {"name": "wd", "category": "c1",
+         "when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []},
+        {"name": "ok", "category": "c1", "when": {}, "actions": []},
+    ]}
+    await store.async_save_area(ar.async_get(hass).async_create("LR").id, cfg)
+    annos = scene_annotations(hass, cfg)
+    assert annos[0]["config_issues"] == [{"kind": "missing_workday_sensor", "ref": "workday_sensor"}]
+    assert annos[1]["config_issues"] == []

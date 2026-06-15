@@ -494,9 +494,11 @@ function renderExpansion(
             ${u.actions.map(
               (a) => html`<div class="action-block ${a.unexposed ? "unexposed" : ""}">
                 <div class="action-head">
-                  ${formatActionHeader(a, hass, schemas, exposedActions)}${a.unexposed
-                    ? html`<span class="skipped-tag"> — skipped (not exposed)</span>`
-                    : nothing}
+                  ${formatActionHeader(a, hass, schemas, exposedActions)}${
+                    a.unexposed
+                      ? html`<span class="skipped-tag"> — skipped (not exposed)</span>`
+                      : nothing
+                  }
                 </div>
                 ${(a.entity_ids ?? []).map(
                   (e) => html`<div class="entity">${clickableEntity(hass, e)}</div>`,

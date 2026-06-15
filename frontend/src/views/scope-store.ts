@@ -208,6 +208,10 @@ export class ScopeStore implements ReactiveController {
       if (!this._host.isConnected) return;
       this.actions = actions;
       await this._refreshSchemas(actions);
+      // Removing/adding an exposed action re-derives every scene's config_issues
+      // badge on the backend (unexposed_action), so re-fetch each scope's config —
+      // refreshAreas/refreshFloors reuse cached configs and wouldn't pick this up.
+      await this.reloadConfigs();
     } catch {
       // Silent — the user just saw a successful save; transient refetch failures
       // are not worth surfacing here. The next manual reload will re-fetch.
@@ -354,6 +358,36 @@ export class ScopeStore implements ReactiveController {
       const house = normalizeConfig(await getHouse(this._hass));
       if (!this._host.isConnected) return;
       this.house = house;
+    } catch (e) {
+      this.error = (e as Error).message || String(e);
+    }
+  }
+
+  /** Force a fresh fetch of every known scope's config, bypassing the
+   *  reuse-existing optimisation in refreshAreas/refreshFloors. Used when the
+   *  exposed-actions list changes, which re-derives per-scene config_issues
+   *  badges on the backend — so the cached scene references must be replaced. */
+  async reloadConfigs(): Promise<void> {
+    try {
+      const [areaPairs, floorPairs, house] = await Promise.all([
+        Promise.all(
+          this.areas.map(
+            async (a) =>
+              [a.area_id, normalizeConfig(await getArea(this._hass, a.area_id))] as const,
+          ),
+        ),
+        Promise.all(
+          this.floors.map(
+            async (f) =>
+              [f.floor_id, normalizeConfig(await getFloor(this._hass, f.floor_id))] as const,
+          ),
+        ),
+        getHouse(this._hass),
+      ]);
+      if (!this._host.isConnected) return;
+      this.areaConfigs = new Map(areaPairs);
+      this.floorConfigs = new Map(floorPairs);
+      this.house = normalizeConfig(house);
     } catch (e) {
       this.error = (e as Error).message || String(e);
     }

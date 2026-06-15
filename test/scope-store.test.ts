@@ -239,6 +239,26 @@ describe("ScopeStore", () => {
       expect(Object.keys(store.schemas)).toEqual(["switch.turn_on"]);
     });
 
+    test("ambience-exposed-actions-changed re-fetches scope configs so badges refresh", async () => {
+      const { store } = makeStore();
+      connect(store);
+      await store.refreshAreas();
+      await store.refreshFloors();
+      vi.mocked(api.getArea).mockClear();
+      vi.mocked(api.getFloor).mockClear();
+      vi.mocked(api.getHouse).mockClear();
+      window.dispatchEvent(new Event("ambience-exposed-actions-changed"));
+      await tick();
+      // Deleting an action re-derives every scene's config_issues badge on the
+      // backend, so the open panel must re-fetch each scope's config — the
+      // actions-list refresh alone leaves the badges stale until a full reload.
+      expect(vi.mocked(api.getArea).mock.calls.map((c) => c[1])).toEqual(
+        expect.arrayContaining(["living_room", "bedroom"]),
+      );
+      expect(api.getFloor).toHaveBeenCalled();
+      expect(api.getHouse).toHaveBeenCalled();
+    });
+
     test("ambience-categories-changed refetches categories", async () => {
       const { store } = makeStore();
       connect(store);

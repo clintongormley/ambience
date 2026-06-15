@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ambience.const import (
@@ -2355,3 +2356,37 @@ async def test_switch_defaults_save_persists_create_switches(
     assert msg["success"] and msg["result"] == {"ok": True}
     store = hass.data[DOMAIN][DATA_STORE]
     assert store.get_switch_defaults()["create_switches"] is True
+
+
+async def test_exposed_actions_save_reconciles_repairs_live(
+    hass: HomeAssistant, installed_with_actions, hass_ws_client
+) -> None:
+    """Removing an exposed action a scene uses raises its Repairs issue
+    immediately (the save reconciles), not only after a reload."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    area = ar.async_get(hass).async_create("LR").id
+    await store.async_save_area(
+        area,
+        {
+            "scenes": [
+                {
+                    "name": "go",
+                    "category": "c1",
+                    "actions": [{"service": "light.turn_on", "entity_ids": ["light.x"]}],
+                }
+            ]
+        },
+    )
+    reg = ir.async_get(hass)
+    # light.turn_on is still exposed → no unexposed_action issue yet.
+    assert reg.async_get_issue(DOMAIN, "unexposed_action:light.turn_on") is None
+    # Remove light.turn_on from the exposed list (keep light.turn_off so the
+    # save payload is still valid against the seeded catalog).
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/exposed_actions/save",
+        actions=[{"id": "light.turn_off", "label": "", "visible_fields": [], "defaults": {}}],
+    )
+    assert resp["success"] is True
+    # The save reconciled Repairs live — the issue now exists without a reload.
+    assert reg.async_get_issue(DOMAIN, "unexposed_action:light.turn_on") is not None

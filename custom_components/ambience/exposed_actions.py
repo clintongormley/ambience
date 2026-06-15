@@ -43,6 +43,20 @@ class ExposedActionsStore:
                 return dict(entry)
         return None
 
+    def annotate_unexposed(self, actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Return a shallow copy of `actions`, tagging each one `unexposed=True`
+        when its (well-formed) service id is not currently exposed — so a trace can
+        render a now-deleted action as skipped instead of applied (the engine
+        log-and-skips it at dispatch). The caller's list/dicts are not mutated."""
+        out: list[dict[str, Any]] = []
+        for action in actions:
+            service_id = action.get("service")
+            if isinstance(service_id, str) and "." in service_id and self.get(service_id) is None:
+                out.append({**action, "unexposed": True})
+            else:
+                out.append(action)
+        return out
+
     def validate_shape(self, actions: list[dict[str, Any]]) -> None:
         """Self-consistency checks. Does not consult the HA service catalog.
 

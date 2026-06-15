@@ -22,6 +22,7 @@ from homeassistant.util import dt as dt_util
 from .conditions._common import UNAVAILABLE
 from .const import (
     DATA_CONDITIONS,
+    DATA_EXPOSED_ACTIONS,
     DATA_STORE,
     DOMAIN,
 )
@@ -449,7 +450,9 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                 Outcome.ACTED,
                 explanation,
                 winner_name=plan["scene_name"],
-                actions=plan["actions"],
+                actions=self._hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(
+                    plan["actions"]
+                ),
             )
         return None
 

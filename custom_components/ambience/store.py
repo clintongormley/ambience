@@ -32,6 +32,17 @@ DEFAULT_REAPPLY_ENABLED = False
 DEFAULT_REAPPLY_INTERVAL_SECONDS = 3600
 MIN_REAPPLY_INTERVAL_SECONDS = 60
 
+# Voice-assistant exposure default: switches exposed to local Assist only.
+# Defined here (store owns the persisted map) rather than const.py to avoid the
+# CodeQL py/unsafe-cyclic-import false positive (see the note above). Keys must
+# stay aligned with const.KNOWN_ASSISTANTS / const.ASSISTANT_FIELDS — guarded by
+# test_known_assistants_match_default_map_and_fields.
+DEFAULT_EXPOSED_ASSISTANTS = {
+    "conversation": True,
+    "cloud.google_assistant": False,
+    "cloud.alexa": False,
+}
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -93,6 +104,7 @@ class AmbienceStore:
                 "enabled": DEFAULT_REAPPLY_ENABLED,
                 "interval_seconds": DEFAULT_REAPPLY_INTERVAL_SECONDS,
             },
+            "exposed_assistants": dict(DEFAULT_EXPOSED_ASSISTANTS),
             "exposed_actions": [],
         }
 
@@ -128,6 +140,11 @@ class AmbienceStore:
         r.setdefault("enabled", DEFAULT_REAPPLY_ENABLED)
         r.setdefault("interval_seconds", DEFAULT_REAPPLY_INTERVAL_SECONDS)
 
+    def _ensure_exposed_assistants(self) -> None:
+        ea = self._data.setdefault("exposed_assistants", {})
+        for assistant, default in DEFAULT_EXPOSED_ASSISTANTS.items():
+            ea.setdefault(assistant, default)
+
     async def async_load(self) -> None:
         raw = await self._store.async_load()
         if raw is None:
@@ -143,6 +160,7 @@ class AmbienceStore:
         self._ensure_categories()
         self._ensure_switch_defaults()
         self._ensure_reapply_settings()
+        self._ensure_exposed_assistants()
 
     def as_dict(self) -> dict[str, Any]:
         """A deep copy of the full persisted payload, for diagnostics dumps."""
@@ -373,6 +391,29 @@ class AmbienceStore:
         self._data["reapply"] = {
             "enabled": payload["enabled"],
             "interval_seconds": payload["interval_seconds"],
+        }
+        await self._store.async_save(self._data)
+
+    def get_exposed_assistants(self) -> dict[str, bool]:
+        ea = self._data.get("exposed_assistants", {})
+        return {
+            assistant: bool(ea.get(assistant, default))
+            for assistant, default in DEFAULT_EXPOSED_ASSISTANTS.items()
+        }
+
+    @staticmethod
+    def _validate_exposed_assistants(payload: dict[str, Any]) -> None:
+        for assistant, value in payload.items():
+            if assistant not in DEFAULT_EXPOSED_ASSISTANTS:
+                raise ValueError(f"unknown assistant: {assistant!r}")
+            if not isinstance(value, bool):
+                raise ValueError(f"exposure for {assistant!r} must be a bool: {value!r}")
+
+    async def async_save_exposed_assistants(self, payload: dict[str, Any]) -> None:
+        self._validate_exposed_assistants(payload)
+        self._data["exposed_assistants"] = {
+            assistant: bool(payload.get(assistant, default))
+            for assistant, default in DEFAULT_EXPOSED_ASSISTANTS.items()
         }
         await self._store.async_save(self._data)
 

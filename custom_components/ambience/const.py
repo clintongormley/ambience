@@ -59,6 +59,11 @@ SIGNAL_UNIT_APPLIED = "ambience_unit_applied"
 # Dispatcher signal — fired when the global re-apply settings change. Payload: None.
 SIGNAL_REAPPLY_CONFIG_UPDATED = "ambience_reapply_config_updated"
 
+# Dispatcher signal — fired when the voice-assistant exposure map changes (saved
+# from the panel's Advanced page). Payload: None. The listener re-applies exposure
+# to every live switch.
+SIGNAL_EXPOSED_ASSISTANTS_UPDATED = "ambience_exposed_assistants_updated"
+
 # Note: the idle re-apply defaults (DEFAULT_REAPPLY_ENABLED / *_INTERVAL_SECONDS /
 # MIN_REAPPLY_INTERVAL_SECONDS) and DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS live in
 # store.py, their only consumer — keeping them out of const avoids a CodeQL

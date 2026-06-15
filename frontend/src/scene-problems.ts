@@ -1,5 +1,5 @@
-import { localize } from "./i18n.js";
 import type { HassLike } from "./i18n.js";
+import { localize } from "./i18n.js";
 import type { ConfigIssue, Scene } from "./types.js";
 
 export type ProblemSeverity = "error" | "warning";

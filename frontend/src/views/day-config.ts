@@ -4,11 +4,8 @@ import { customElement, property, state } from "lit/decorators.js";
 import { getDayConfig, type HassConnection, saveDayConfig } from "../api.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize } from "../i18n.js";
-import { scopeLabel } from "../scope-label.js";
 import type { DayConfig } from "../types.js";
 import { renderEntityPicker } from "./form-controls.js";
-
-type Warning = { scope_kind: string; scope_id: string | null; scene_name: string; reason: string };
 
 @customElement("ambience-day-config")
 export class AmbienceDayConfig extends LitElement {
@@ -16,17 +13,10 @@ export class AmbienceDayConfig extends LitElement {
     :host { display: block; }
     .row { margin-bottom: 0.75rem; }
     label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
-    .warnings {
-      background: var(--warning-color, #ffd);
-      border: 1px solid var(--warning-color, #cc9);
-      padding: 0.5rem 1rem; border-radius: 4px; margin-top: 0.5rem;
-    }
-    .warnings ul { margin: 0.3rem 0 0 0; padding-left: 1.2rem; }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
   @state() private _config: DayConfig = { workday_sensor: null, workday_calendar: null };
-  @state() private _warnings: Warning[] = [];
   @state() private _error = "";
 
   override async connectedCallback() {
@@ -44,8 +34,7 @@ export class AmbienceDayConfig extends LitElement {
   private async _save(next: DayConfig) {
     this._config = next;
     try {
-      const res = await saveDayConfig(this.hass, next.workday_sensor, next.workday_calendar);
-      this._warnings = res.warnings ?? [];
+      await saveDayConfig(this.hass, next.workday_sensor, next.workday_calendar);
       this._error = "";
     } catch (e) {
       this._error = (e as Error).message || String(e);
@@ -93,18 +82,6 @@ export class AmbienceDayConfig extends LitElement {
           (value) => this._onCalendarChange({ detail: { value } }),
         )}
       </div>
-      ${
-        this._warnings.length
-          ? html`
-        <div class="warnings">
-          <strong>${localize(this.hass, "ui.day_warning_prefix", "Warning:")}</strong> ${localize(this.hass, "ui.day_warning_text", "scenes now reference unconfigured entities:")}
-          <ul>
-            ${this._warnings.map((w) => html`<li>${scopeLabel(w)} / "${w.scene_name}" → ${w.reason}</li>`)}
-          </ul>
-        </div>
-      `
-          : ""
-      }
     `;
   }
 }

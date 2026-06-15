@@ -2,7 +2,6 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { deriveActionLabel, humanizeId, localize } from "../i18n.js";
-import { scopeLabel } from "../scope-label.js";
 import "./ambience-help.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
@@ -19,13 +18,7 @@ import {
 import { DragReorderController } from "../drag-reorder.js";
 import type { HaFormSchemaEntry } from "../ha-form.js";
 import { selectorUnit } from "../summary.js";
-import type {
-  ExposedAction,
-  ExposedActionWarning,
-  ServiceField,
-  ServiceInfo,
-  ServiceSchema,
-} from "../types.js";
+import type { ExposedAction, ServiceField, ServiceInfo, ServiceSchema } from "../types.js";
 
 @customElement("ambience-actions-settings")
 export class AmbienceActionsSettings extends LitElement {
@@ -275,14 +268,6 @@ export class AmbienceActionsSettings extends LitElement {
       flex: 1;
       min-width: 0;
     }
-    .warning {
-      background: var(--warning-color, #ffd);
-      border: 1px solid var(--warning-color, #cc9);
-      padding: 0.5rem 1rem;
-      border-radius: 4px;
-      margin: 0.5rem 0;
-      list-style-position: inside;
-    }
     .error {
       color: var(--error-color, #d33);
       margin: 0.5rem 0;
@@ -326,7 +311,6 @@ export class AmbienceActionsSettings extends LitElement {
   private _availableServices: ServiceInfo[] = [];
   @state() private _expanded: Set<string> = new Set();
   @state() private _adding = false;
-  @state() private _warnings: ExposedActionWarning[] = [];
   @state() private _loadError: string | null = null;
   @state() private _saveError: string | null = null;
   @state() private _loaded = false;
@@ -606,10 +590,8 @@ export class AmbienceActionsSettings extends LitElement {
 
   private async _autoSave(): Promise<void> {
     this._saveError = null;
-    this._warnings = [];
     try {
-      const res = await saveExposedActions(this.hass, this._actions);
-      this._warnings = res.warnings ?? [];
+      await saveExposedActions(this.hass, this._actions);
       window.dispatchEvent(new CustomEvent("ambience-exposed-actions-changed"));
     } catch (e: unknown) {
       this._saveError = e instanceof Error ? e.message : String(e);
@@ -632,7 +614,6 @@ export class AmbienceActionsSettings extends LitElement {
           <span>${localize(this.hass, "ui.settings_tab_actions", "Actions")}</span>
           <ambience-help .text=${localize(this.hass, "ui.help_actions_tab", "Actions are the service calls a scene runs. Define them here so scenes can reuse them.")}></ambience-help>
         </div>
-        ${this._renderWarnings()}
         ${this._saveError ? html`<div class="error">${this._saveError}</div>` : ""}
         ${this._actions.map((a, i) => this._renderCard(a, i))}
         ${this._renderAdd()}
@@ -959,16 +940,5 @@ export class AmbienceActionsSettings extends LitElement {
         (s) => html`<option value=${s.id}>${this._addOptionLabel(s.id)}</option>`,
       )}
     </select>`;
-  }
-
-  private _renderWarnings() {
-    if (this._warnings.length === 0) return "";
-    return html`<ul class="warning">
-      ${this._warnings.map(
-        (w) => html`<li>
-          ${scopeLabel(w)}${w.scene_name ? html` — <em>${w.scene_name}</em>` : ""}: ${w.reason}
-        </li>`,
-      )}
-    </ul>`;
   }
 }

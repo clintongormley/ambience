@@ -30,8 +30,8 @@ export class AmbienceTimeOfDayConfig extends AmbienceNamedDefConfig<PeriodDef> {
   protected _list(): Promise<NamedDefView<PeriodDef>> {
     return listPeriods(this.hass);
   }
-  protected _save(custom: Record<string, PeriodDef>, hidden: string[]) {
-    return savePeriods(this.hass, custom, hidden);
+  protected async _save(custom: Record<string, PeriodDef>, hidden: string[]): Promise<void> {
+    await savePeriods(this.hass, custom, hidden);
   }
   protected _label(id: string, custom: Record<string, PeriodDef>): string {
     return periodLabel(this.hass as never, id, custom);
@@ -44,9 +44,6 @@ export class AmbienceTimeOfDayConfig extends AmbienceNamedDefConfig<PeriodDef> {
   }
   protected _addKey(): [string, string] {
     return ["ui.add_custom_period", "+ Add custom period"];
-  }
-  protected _warningTextKey(): [string, string] {
-    return ["ui.period_warning_text", "some scenes now reference missing periods:"];
   }
 
   protected _renderModal() {

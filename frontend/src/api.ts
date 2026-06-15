@@ -10,7 +10,6 @@ import type {
   ConditionInfo,
   DayConfig,
   ExposedAction,
-  ExposedActionWarning,
   ExposedAssistants,
   FloorListItem,
   LuxRangeDef,
@@ -147,7 +146,7 @@ export async function listExposedActions(hass: HassConnection): Promise<ExposedA
 export async function saveExposedActions(
   hass: HassConnection,
   actions: ExposedAction[],
-): Promise<{ ok: true; warnings: ExposedActionWarning[] }> {
+): Promise<{ ok: true }> {
   return hass.callWS({ type: "ambience/exposed_actions/save", actions });
 }
 
@@ -203,15 +202,7 @@ export async function savePeriods(
   hass: HassConnection,
   custom: Record<string, PeriodDef>,
   hidden: string[],
-): Promise<{
-  ok: true;
-  warnings: Array<{
-    scope_kind: string;
-    scope_id: string | null;
-    scene_name: string;
-    missing_id: string;
-  }>;
-}> {
+): Promise<{ ok: true }> {
   return hass.callWS({
     type: "ambience/time_of_day_periods/save",
     custom,
@@ -231,15 +222,7 @@ export async function saveLuxRanges(
   hass: HassConnection,
   custom: Record<string, LuxRangeDef>,
   hidden: string[],
-): Promise<{
-  ok: true;
-  warnings: Array<{
-    scope_kind: string;
-    scope_id: string | null;
-    scene_name: string;
-    missing_id: string;
-  }>;
-}> {
+): Promise<{ ok: true }> {
   return hass.callWS({ type: "ambience/lux_ranges/save", custom, hidden });
 }
 
@@ -255,15 +238,7 @@ export async function saveDayConfig(
   hass: HassConnection,
   workday_sensor: string | null,
   workday_calendar: string | null,
-): Promise<{
-  ok: true;
-  warnings: Array<{
-    scope_kind: string;
-    scope_id: string | null;
-    scene_name: string;
-    reason: string;
-  }>;
-}> {
+): Promise<{ ok: true }> {
   return hass.callWS({
     type: "ambience/conditions/day/config/save",
     workday_sensor,
@@ -279,15 +254,7 @@ export async function saveWeatherConfig(
   hass: HassConnection,
   entity: string | null,
   groups: WeatherGroup[],
-): Promise<{
-  ok: true;
-  warnings: Array<{
-    scope_kind: string;
-    scope_id: string | null;
-    scene_name: string;
-    reason: string;
-  }>;
-}> {
+): Promise<{ ok: true }> {
   return hass.callWS({
     type: "ambience/conditions/weather/config/save",
     entity,

@@ -82,14 +82,6 @@ export type ServiceField = {
   example?: unknown;
 };
 
-// Warning shape returned by exposed_actions/save (parallels other warnings).
-export type ExposedActionWarning = {
-  scope_kind: string;
-  scope_id: string | null;
-  scene_name: string;
-  reason: string;
-};
-
 export type SwitchDefaults = {
   name: string;
   auto_on_delay_seconds: number;

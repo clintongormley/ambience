@@ -2123,7 +2123,7 @@ var No=Object.defineProperty;var Io=Object.getOwnPropertyDescriptor;var c=(t,n,e
     .field { width: 100%; }
     .for-row { display: flex; gap: 0.25rem; align-items: center; }
     .for-row input[type='number'] { width: 3.5rem; }
-  `,c([m({attribute:!1})],et.prototype,"hass",2),c([m({attribute:!1})],et.prototype,"value",2),et=c([w("ambience-occupancy-predicate-input")],et);var nc=[{name:"sensors",selector:{entity:{multiple:!0}}}],tt=class extends b{constructor(){super(...arguments);this.value=null}_entities(){return this.value?.entities??[]}_setEntities(e){let i={entities:e};this.value=i,S(this,i)}render(){return l`
+  `,c([m({attribute:!1})],et.prototype,"hass",2),c([m({attribute:!1})],et.prototype,"value",2),et=c([w("ambience-occupancy-predicate-input")],et);var nc=[{name:"sensors",selector:{entity:{multiple:!0}}}],tt=class extends b{constructor(){super(...arguments);this.value=null}_entities(){return this.value?.entities??[]}_setEntities(e){let i=e.length?{entities:e}:null;this.value=i,S(this,i)}render(){return l`
       <div class="row">
         ${bt(this.hass,nc,this._entities(),"binary_sensor.a, light.b",e=>this._setEntities(e))}
       </div>

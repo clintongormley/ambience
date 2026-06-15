@@ -30,4 +30,13 @@ describe("ambience-unavailable-predicate-input", () => {
     await mount({ entities: ["binary_sensor.a"] });
     expect(el._entities()).toEqual(["binary_sensor.a"]);
   });
+
+  test("emits null when the selection is cleared (no invalid empty predicate)", async () => {
+    await mount({ entities: ["binary_sensor.a"] });
+    const events: any[] = [];
+    el.addEventListener("value-changed", (e: any) => events.push(e.detail.value));
+    el._setEntities([]);
+    expect(events.at(-1)).toBeNull();
+    expect(el._entities()).toEqual([]);
+  });
 });

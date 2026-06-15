@@ -61,7 +61,11 @@ export class AmbienceUnavailablePredicateInput extends LitElement {
   }
 
   _setEntities(entities: string[]) {
-    const next: UnavailablePredicate = { entities };
+    // An empty selection is not a valid predicate (the backend requires at least
+    // one entity). Emit null — the "no constraint / condition removed" sentinel —
+    // so the widget stays valid-by-construction and clearing never produces a
+    // save-time validation failure.
+    const next: UnavailablePredicate | null = entities.length ? { entities } : null;
     this.value = next;
     emitValueChanged(this, next);
   }

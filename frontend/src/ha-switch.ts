@@ -11,12 +11,14 @@ export function renderHaSwitch(opts: {
   onChange: (e: Event) => void;
   className?: string;
   onClick?: (e: Event) => void;
+  disabled?: boolean;
 }) {
-  const { checked, dataTest, onChange, className, onClick } = opts;
+  const { checked, dataTest, onChange, className, onClick, disabled } = opts;
   if (customElements.get("ha-switch")) {
     return html`<ha-switch
       class=${className ?? nothing}
       data-test=${dataTest}
+      ?disabled=${disabled ?? false}
       .checked=${live(checked)}
       @click=${onClick}
       @change=${onChange}
@@ -26,6 +28,7 @@ export function renderHaSwitch(opts: {
     class=${className ?? nothing}
     data-test=${dataTest}
     type="checkbox"
+    ?disabled=${disabled ?? false}
     .checked=${live(checked)}
     @click=${onClick}
     @change=${onChange}

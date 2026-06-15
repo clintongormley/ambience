@@ -652,3 +652,108 @@ async def test_save_switch_defaults_rejects_non_bool_create_switches(hass: HomeA
         await store.async_save_switch_defaults(
             {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": 1}
         )
+
+
+async def test_exposed_assistants_default_assist_only(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.get_exposed_assistants() == {
+        "conversation": True,
+        "cloud.google_assistant": False,
+        "cloud.alexa": False,
+    }
+
+
+async def test_save_and_get_exposed_assistants(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_save_exposed_assistants(
+        {"conversation": False, "cloud.google_assistant": True, "cloud.alexa": False}
+    )
+    assert store.get_exposed_assistants() == {
+        "conversation": False,
+        "cloud.google_assistant": True,
+        "cloud.alexa": False,
+    }
+
+
+async def test_ensure_exposed_assistants_backfills_legacy_store(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    del store._data["exposed_assistants"]  # store saved before this key existed
+    store._ensure_exposed_assistants()
+    assert store.get_exposed_assistants() == {
+        "conversation": True,
+        "cloud.google_assistant": False,
+        "cloud.alexa": False,
+    }
+
+
+async def test_ensure_exposed_assistants_backfills_partial_map(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    store._data["exposed_assistants"] = {"conversation": False}  # missing google/alexa
+    store._ensure_exposed_assistants()
+    assert store.get_exposed_assistants() == {
+        "conversation": False,
+        "cloud.google_assistant": False,
+        "cloud.alexa": False,
+    }
+
+
+async def test_get_exposed_assistants_falls_back_on_non_bool(hass: HomeAssistant) -> None:
+    # Corrupted/hand-edited storage: a non-bool value falls back to the default,
+    # not bool(...) coercion (bool("false") would wrongly be True).
+    store = AmbienceStore(hass)
+    await store.async_load()
+    store._data["exposed_assistants"] = {
+        "conversation": True,
+        "cloud.google_assistant": "false",  # truthy string under bool(), default is False
+        "cloud.alexa": False,
+    }
+    assert store.get_exposed_assistants() == {
+        "conversation": True,
+        "cloud.google_assistant": False,
+        "cloud.alexa": False,
+    }
+
+
+async def test_save_exposed_assistants_rejects_non_bool(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with pytest.raises(ValueError):
+        await store.async_save_exposed_assistants({"conversation": 1})
+
+
+async def test_save_exposed_assistants_rejects_unknown_assistant(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    # A complete, valid map plus an extra unknown key — exercises the unknown
+    # rejection specifically (a bare {"cloud.bixby": True} would be rejected for
+    # missing the known keys instead).
+    with pytest.raises(ValueError):
+        await store.async_save_exposed_assistants(
+            {
+                "conversation": True,
+                "cloud.google_assistant": False,
+                "cloud.alexa": False,
+                "cloud.bixby": True,
+            }
+        )
+
+
+async def test_save_exposed_assistants_rejects_partial_map(hass: HomeAssistant) -> None:
+    # A partial payload must be rejected, not silently backfilled with defaults
+    # (which would reset the omitted assistants).
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with pytest.raises(ValueError):
+        await store.async_save_exposed_assistants({"conversation": False})
+
+
+def test_known_assistants_match_default_map_and_fields() -> None:
+    from custom_components.ambience.const import ASSISTANT_FIELDS, KNOWN_ASSISTANTS
+    from custom_components.ambience.store import DEFAULT_EXPOSED_ASSISTANTS
+
+    assert set(KNOWN_ASSISTANTS) == set(DEFAULT_EXPOSED_ASSISTANTS)
+    assert set(ASSISTANT_FIELDS) == set(DEFAULT_EXPOSED_ASSISTANTS)

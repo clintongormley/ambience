@@ -2,16 +2,46 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import {
+  getExposedAssistants,
   getReapplySettings,
   getSwitchDefaults,
   type HassConnection,
+  saveExposedAssistants,
   saveReapplySettings,
   saveSwitchDefaults,
 } from "../api.js";
 import { renderHaSwitch } from "../ha-switch.js";
 import { localize } from "../i18n.js";
-import type { ReapplySettings, SwitchDefaults } from "../types.js";
+import type { ExposedAssistants, ReapplySettings, SwitchDefaults } from "../types.js";
 import "./ambience-help.js";
+
+/** The voice-assistant exposure toggles, in display order. One row per assistant
+ *  — rendered identically, so a table avoids three copy-pasted blocks. */
+const EXPOSE_ROWS: ReadonlyArray<{
+  field: keyof ExposedAssistants;
+  labelKey: string;
+  label: string;
+  dataTest: string;
+}> = [
+  {
+    field: "expose_assist",
+    labelKey: "ui.settings_expose_assist",
+    label: "Assist",
+    dataTest: "expose-assist",
+  },
+  {
+    field: "expose_google",
+    labelKey: "ui.settings_expose_google",
+    label: "Google Assistant",
+    dataTest: "expose-google",
+  },
+  {
+    field: "expose_alexa",
+    labelKey: "ui.settings_expose_alexa",
+    label: "Alexa",
+    dataTest: "expose-alexa",
+  },
+];
 
 @customElement("ambience-ambience-settings")
 export class AmbienceAmbienceSettings extends LitElement {
@@ -87,6 +117,11 @@ export class AmbienceAmbienceSettings extends LitElement {
     enabled: false,
     interval_seconds: 3600,
   };
+  @state() private _exposed: ExposedAssistants = {
+    expose_assist: true,
+    expose_google: false,
+    expose_alexa: false,
+  };
   @state() private _error = "";
 
   override async connectedCallback() {
@@ -94,6 +129,7 @@ export class AmbienceAmbienceSettings extends LitElement {
     try {
       this._defaults = await getSwitchDefaults(this.hass);
       this._reapply = await getReapplySettings(this.hass);
+      this._exposed = await getExposedAssistants(this.hass);
     } catch (e) {
       this._error = (e as Error).message || String(e);
     }
@@ -173,11 +209,32 @@ export class AmbienceAmbienceSettings extends LitElement {
     this._saveReapply();
   }
 
+  private _saveExposed() {
+    void this._safeSave(() =>
+      saveExposedAssistants(
+        this.hass,
+        this._exposed.expose_assist,
+        this._exposed.expose_google,
+        this._exposed.expose_alexa,
+      ),
+    );
+  }
+
+  private _onExpose(field: keyof ExposedAssistants, e: Event) {
+    this._exposed = { ...this._exposed, [field]: (e.target as HTMLInputElement).checked };
+    this._saveExposed();
+  }
+
   /** Render a toggle using ha-switch when registered (real HA), else a plain
    *  checkbox fallback so the view remains testable under jsdom. Both carry
    *  the same data-test attribute. */
-  private _renderToggle(checked: boolean, dataTest: string, onChange: (e: Event) => void) {
-    return renderHaSwitch({ checked, dataTest, onChange });
+  private _renderToggle(
+    checked: boolean,
+    dataTest: string,
+    onChange: (e: Event) => void,
+    disabled = false,
+  ) {
+    return renderHaSwitch({ checked, dataTest, onChange, disabled });
   }
 
   override render() {
@@ -242,6 +299,31 @@ export class AmbienceAmbienceSettings extends LitElement {
             >${localize(this.hass, "ui.unit_minutes", "minutes")}</span
           >
         </div>
+        <div class="row toggle-row" style="margin-top:1.5rem">
+          <label style="flex:1 1 auto">
+            ${localize(this.hass, "ui.settings_expose_group", "Expose to voice assistants")}
+            <ambience-help
+              .text=${localize(
+                this.hass,
+                "ui.help_expose",
+                "Expose the per-scope pause switches to the selected voice assistants so you can pause/resume Ambience by voice. Google Assistant and Alexa require Home Assistant Cloud or a manual setup.",
+              )}
+            ></ambience-help>
+          </label>
+        </div>
+        ${EXPOSE_ROWS.map(
+          (row) => html`
+            <div class="row">
+              <label>${localize(this.hass, row.labelKey, row.label)}</label>
+              ${this._renderToggle(
+                this._exposed[row.field],
+                row.dataTest,
+                (e) => this._onExpose(row.field, e),
+                !this._defaults.create_switches,
+              )}
+            </div>
+          `,
+        )}
       </div>
 
       <div class="card">

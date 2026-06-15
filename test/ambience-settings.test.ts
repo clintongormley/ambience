@@ -9,6 +9,12 @@ const mocks = vi.hoisted(() => ({
   saveSwitchDefaults: vi.fn(async () => ({ ok: true })),
   getReapplySettings: vi.fn(async () => ({ enabled: false, interval_seconds: 3600 })),
   saveReapplySettings: vi.fn(async () => ({ ok: true })),
+  getExposedAssistants: vi.fn(async () => ({
+    expose_assist: true,
+    expose_google: false,
+    expose_alexa: false,
+  })),
+  saveExposedAssistants: vi.fn(async () => ({ ok: true })),
 }));
 
 vi.mock("../frontend/src/api.js", () => mocks);
@@ -332,5 +338,76 @@ describe("ambience-ambience-settings", () => {
       '[data-test="reapply-interval-minutes"]',
     ) as HTMLInputElement;
     expect(interval.disabled).toBe(false);
+  });
+
+  test("renders the three voice toggles, enabled, when the pause switch is on", async () => {
+    mocks.getSwitchDefaults.mockResolvedValue({
+      name: "Ambience",
+      auto_on_delay_seconds: 0,
+      create_switches: true,
+    });
+    el = await mount();
+    for (const t of ["expose-assist", "expose-google", "expose-alexa"]) {
+      const toggle = el.shadowRoot.querySelector(`[data-test="${t}"]`) as HTMLInputElement;
+      expect(toggle, t).not.toBeNull();
+      expect(toggle.disabled, t).toBe(false);
+    }
+  });
+
+  test("voice toggles reflect the loaded exposure values", async () => {
+    mocks.getSwitchDefaults.mockResolvedValue({
+      name: "Ambience",
+      auto_on_delay_seconds: 0,
+      create_switches: true,
+    });
+    mocks.getExposedAssistants.mockResolvedValue({
+      expose_assist: true,
+      expose_google: true,
+      expose_alexa: false,
+    });
+    el = await mount();
+    expect(
+      (el.shadowRoot.querySelector('[data-test="expose-assist"]') as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(
+      (el.shadowRoot.querySelector('[data-test="expose-google"]') as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(
+      (el.shadowRoot.querySelector('[data-test="expose-alexa"]') as HTMLInputElement).checked,
+    ).toBe(false);
+  });
+
+  test("voice toggles disabled when the pause switch is off", async () => {
+    mocks.getSwitchDefaults.mockResolvedValue({
+      name: "Ambience",
+      auto_on_delay_seconds: 0,
+      create_switches: false,
+    });
+    el = await mount();
+    for (const t of ["expose-assist", "expose-google", "expose-alexa"]) {
+      expect(
+        (el.shadowRoot.querySelector(`[data-test="${t}"]`) as HTMLInputElement).disabled,
+        t,
+      ).toBe(true);
+    }
+  });
+
+  test("toggling a voice switch saves all three values", async () => {
+    mocks.getSwitchDefaults.mockResolvedValue({
+      name: "Ambience",
+      auto_on_delay_seconds: 0,
+      create_switches: true,
+    });
+    mocks.getExposedAssistants.mockResolvedValue({
+      expose_assist: true,
+      expose_google: false,
+      expose_alexa: false,
+    });
+    el = await mount();
+    const toggle = el.shadowRoot.querySelector('[data-test="expose-google"]') as HTMLInputElement;
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    await el.updateComplete;
+    expect(mocks.saveExposedAssistants).toHaveBeenCalledWith(expect.anything(), true, true, false);
   });
 });

@@ -11,6 +11,7 @@ import type {
   DayConfig,
   ExposedAction,
   ExposedActionWarning,
+  ExposedAssistants,
   FloorListItem,
   LuxRangeDef,
   LuxRangeStoreView,
@@ -367,6 +368,24 @@ export async function saveReapplySettings(
     type: "ambience/reapply/save",
     enabled,
     interval_seconds,
+  });
+}
+
+export async function getExposedAssistants(hass: HassConnection): Promise<ExposedAssistants> {
+  return hass.callWS({ type: "ambience/exposed_assistants/list" });
+}
+
+export async function saveExposedAssistants(
+  hass: HassConnection,
+  expose_assist: boolean,
+  expose_google: boolean,
+  expose_alexa: boolean,
+): Promise<{ ok: true }> {
+  return hass.callWS({
+    type: "ambience/exposed_assistants/save",
+    expose_assist,
+    expose_google,
+    expose_alexa,
   });
 }
 

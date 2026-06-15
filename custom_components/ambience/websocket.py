@@ -16,6 +16,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ASSISTANT_FIELDS,
     DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
@@ -25,6 +26,7 @@ from .const import (
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
     DOMAIN,
+    SIGNAL_EXPOSED_ASSISTANTS_UPDATED,
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
@@ -862,6 +864,50 @@ async def _ws_reapply_save(
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/exposed_assistants/list"})
+@websocket_api.async_response
+async def _ws_exposed_assistants_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    exposed = hass.data[DOMAIN][DATA_STORE].get_exposed_assistants()
+    # get_exposed_assistants() returns a complete bool map over every assistant,
+    # so a plain lookup is safe — no re-cast/fallback needed (matches the
+    # zero-processing of _ws_switch_defaults_list / _ws_reapply_list).
+    connection.send_result(
+        msg["id"],
+        {field: exposed[assistant] for assistant, field in ASSISTANT_FIELDS.items()},
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "ambience/exposed_assistants/save",
+        vol.Required("expose_assist"): bool,
+        vol.Required("expose_google"): bool,
+        vol.Required("expose_alexa"): bool,
+    }
+)
+@websocket_api.async_response
+async def _ws_exposed_assistants_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    # The schema only permits the three known bool fields, so the store's
+    # validation can't reject this payload — no try/except (an unreachable
+    # branch would fail the coverage gate; store validation is tested directly).
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_exposed_assistants(
+        {assistant: msg[field] for assistant, field in ASSISTANT_FIELDS.items()}
+    )
+    async_dispatcher_send(hass, SIGNAL_EXPOSED_ASSISTANTS_UPDATED, None)
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "ambience/switches/list"})
 @websocket_api.async_response
 async def _ws_switches_list(
@@ -1225,6 +1271,8 @@ _WS_HANDLERS = (
     _ws_switch_defaults_save,
     _ws_reapply_list,
     _ws_reapply_save,
+    _ws_exposed_assistants_list,
+    _ws_exposed_assistants_save,
     _ws_switches_list,
     _ws_set_scope_enabled,
     _ws_categories_list,

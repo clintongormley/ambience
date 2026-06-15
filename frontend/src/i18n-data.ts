@@ -74,6 +74,12 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     help_reapply_toggle:
       "Check the scenes for a scope/category after inactivity and reapply the winning scene, in case any action had previously failed, such as a light not turning off.",
     help_reapply_after: "Reapply scenes that haven't been updated for this many minutes.",
+    settings_expose_group: "Expose to voice assistants",
+    settings_expose_assist: "Assist",
+    settings_expose_google: "Google Assistant",
+    settings_expose_alexa: "Alexa",
+    help_expose:
+      "Expose the per-scope pause switches to the selected voice assistants so you can pause/resume Ambience by voice. Google Assistant and Alexa require Home Assistant Cloud or a manual setup.",
     help_actions_tab:
       "Actions are the service calls a scene runs. Define them here so scenes can reuse them.",
     help_show_in_scene_editor:

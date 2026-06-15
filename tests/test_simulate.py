@@ -5,7 +5,13 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from custom_components.ambience.conditions.script import ScriptCondition, _cache_key
-from custom_components.ambience.const import DATA_CONDITIONS, DATA_STORE, DOMAIN
+from custom_components.ambience.const import (
+    DATA_CONDITIONS,
+    DATA_EXPOSED_ACTIONS,
+    DATA_STORE,
+    DOMAIN,
+)
+from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.simulate import (
     SimulatedWorld,
     _build_override_states,
@@ -300,13 +306,25 @@ async def test_simulate_inputs_emits_script_verdict_knob():
 # ---------------------------------------------------------------------------
 
 
-def _resolve_hass(scenes, states):
+class _ExposedStorage:
+    def __init__(self, ids):
+        self._ids = list(ids)
+
+    def get_exposed_actions(self):
+        return [{"id": i, "label": "", "visible_fields": [], "defaults": {}} for i in self._ids]
+
+    async def async_save_exposed_actions(self, actions):
+        self._ids = [a["id"] for a in actions]
+
+
+def _resolve_hass(scenes, states, exposed=("light.turn_on", "light.turn_off")):
     from custom_components.ambience.conditions.state import StateCondition
 
     hass = _Hass(states)
     hass.data[DOMAIN] = {
         DATA_CONDITIONS: {"state": StateCondition(hass)},
         DATA_STORE: _Store(scenes),
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_ExposedStorage(exposed)),
     }
     return hass
 
@@ -332,6 +350,29 @@ async def test_run_simulation_returns_winner_as_buffered_unit():
     assert result["cause"]["kind"] == "simulated"
     assert result["category"] == "g1"
     assert result["explanation"]["scenes"][0]["matched"] is True
+
+
+@pytest.mark.asyncio
+async def test_run_simulation_marks_unexposed_action():
+    """The what-if preview marks an action whose service isn't exposed, matching
+    what the live trace would show (it's skipped at dispatch)."""
+    scenes = [
+        {
+            "category": "g1",
+            "name": "Motion on",
+            "when": {
+                "state": {"kind": "is", "entity_id": "binary_sensor.motion", "states": ["on"]}
+            },
+            "actions": [{"service": "fan.toggle", "entity_ids": ["fan.k"], "params": {}}],
+        }
+    ]
+    # fan.toggle is not in the exposed set → flagged.
+    hass = _resolve_hass(scenes, [_State("binary_sensor.motion", "off")])
+    world = SimulatedWorld(now=FIXED, overrides={"binary_sensor.motion": {"state": "on"}})
+    result = await run_simulation(hass, "area", "kitchen", "g1", world)
+
+    assert result["outcome"] == "acted"
+    assert result["actions"][0]["unexposed"] is True
 
 
 @pytest.mark.asyncio

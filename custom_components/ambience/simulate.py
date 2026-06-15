@@ -21,7 +21,7 @@ from .conditions._common import dur_seconds
 from .conditions.script import ScriptSnapshot
 from .conditions.template import TemplateSnapshot
 from .conditions.weather import WEATHER_CONDITIONS
-from .const import DATA_CONDITIONS, DATA_STORE, DOMAIN
+from .const import DATA_CONDITIONS, DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
 from .engine import evaluate_explained
 from .naming import category_names, scope_display_name
 from .scope_triggers import iter_predicate_specs, referenced_entities, scope_trigger_spec
@@ -484,7 +484,11 @@ async def run_simulation(
             Outcome.ACTED if actions else Outcome.NO_OP,
             explanation,
             winner_name=scene.get("name"),
-            actions=actions,
+            actions=(
+                hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(actions)
+                if actions
+                else actions
+            ),
             category_name=category_name,
             scope_name=scope_name,
         )

@@ -304,6 +304,10 @@ export function outcomeSummary(u: BufferedUnit): string {
       // count only the ones that actually ran and note the rest.
       const ran = u.actions.filter((a) => !a.unexposed);
       const skipped = u.actions.length - ran.length;
+      if (ran.length === 0 && skipped) {
+        // Won, but every action was skipped — nothing actually applied.
+        return `${winner} matched — ${pluralize(skipped, "action", "actions")} skipped (not exposed); nothing applied.`;
+      }
       const acts = pluralize(ran.length, "action", "actions");
       const e = entityCount(ran);
       const tail = skipped ? ` (${skipped} skipped — not exposed)` : "";

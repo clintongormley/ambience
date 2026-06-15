@@ -305,6 +305,18 @@ describe("ScopeStore", () => {
       expect(store.error).toBe("");
     });
 
+    test("an exposed-actions-changed config refetch failure is silently swallowed", async () => {
+      const { store } = makeStore();
+      connect(store);
+      await store.refreshAreas();
+      vi.mocked(api.getArea).mockRejectedValue(new Error("transient"));
+      window.dispatchEvent(new Event("ambience-exposed-actions-changed"));
+      await tick();
+      // A transient config refetch failure right after a successful save must not
+      // flash the page error banner — same silent contract as the actions refetch.
+      expect(store.error).toBe("");
+    });
+
     test("a conditions-changed refetch failure is silently swallowed", async () => {
       const { store } = makeStore();
       connect(store);

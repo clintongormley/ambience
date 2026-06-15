@@ -1243,4 +1243,17 @@ describe("review fixes", () => {
     expect(host.textContent).toContain("skipped");
     expect(host.textContent).not.toContain("· 1 entity");
   });
+
+  test("outcomeSummary reads sensibly when every action was skipped", () => {
+    const summary = outcomeSummary(
+      unit({
+        actions: [
+          { service: "light.toggle", entity_ids: ["light.b"], params: {}, unexposed: true },
+        ],
+      }),
+    );
+    expect(summary).toContain("skipped");
+    expect(summary).not.toContain("0 actions");
+    expect(summary).not.toMatch(/^Applied/);
+  });
 });

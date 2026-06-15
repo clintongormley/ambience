@@ -366,31 +366,28 @@ export class ScopeStore implements ReactiveController {
   /** Force a fresh fetch of every known scope's config, bypassing the
    *  reuse-existing optimisation in refreshAreas/refreshFloors. Used when the
    *  exposed-actions list changes, which re-derives per-scene config_issues
-   *  badges on the backend — so the cached scene references must be replaced. */
+   *  badges on the backend — so the cached scene references must be replaced.
+   *  Rejections propagate to the caller (the change handler swallows them
+   *  silently) rather than flashing the page error banner. */
   async reloadConfigs(): Promise<void> {
-    try {
-      const [areaPairs, floorPairs, house] = await Promise.all([
-        Promise.all(
-          this.areas.map(
-            async (a) =>
-              [a.area_id, normalizeConfig(await getArea(this._hass, a.area_id))] as const,
-          ),
+    const [areaPairs, floorPairs, house] = await Promise.all([
+      Promise.all(
+        this.areas.map(
+          async (a) => [a.area_id, normalizeConfig(await getArea(this._hass, a.area_id))] as const,
         ),
-        Promise.all(
-          this.floors.map(
-            async (f) =>
-              [f.floor_id, normalizeConfig(await getFloor(this._hass, f.floor_id))] as const,
-          ),
+      ),
+      Promise.all(
+        this.floors.map(
+          async (f) =>
+            [f.floor_id, normalizeConfig(await getFloor(this._hass, f.floor_id))] as const,
         ),
-        getHouse(this._hass),
-      ]);
-      if (!this._host.isConnected) return;
-      this.areaConfigs = new Map(areaPairs);
-      this.floorConfigs = new Map(floorPairs);
-      this.house = normalizeConfig(house);
-    } catch (e) {
-      this.error = (e as Error).message || String(e);
-    }
+      ),
+      getHouse(this._hass),
+    ]);
+    if (!this._host.isConnected) return;
+    this.areaConfigs = new Map(areaPairs);
+    this.floorConfigs = new Map(floorPairs);
+    this.house = normalizeConfig(house);
   }
 
   async refreshSwitches(): Promise<void> {

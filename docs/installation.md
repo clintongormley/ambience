@@ -66,8 +66,8 @@ Assistant Cloud (or a manual setup) to have any effect. Because each switch is
 named after its scope (for example "Living Room Ambience") and assigned to the
 matching area, you can say things like "turn off Living Room Ambience".
 
-Changing these toggles reloads the integration and re-applies the exposure to
-every Ambience switch, so any per-switch exposure you had set manually in
+Changing these toggles re-applies the exposure to every Ambience switch in
+place, so any per-switch exposure you had set manually in
 **Settings → Voice assistants → Expose** for these entities is overwritten.
 
 As an alternative to the sidebar, you can add the **Ambience card** to any

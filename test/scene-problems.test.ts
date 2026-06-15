@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 
-import { problemCount, sceneProblems, worstSeverity } from "../frontend/src/scene-problems";
+import {
+  configIssueLabel,
+  problemCount,
+  sceneProblems,
+  worstSeverity,
+} from "../frontend/src/scene-problems";
 import type { Scene } from "../frontend/src/types";
 
 const base: Scene = { category: "c1", name: "s", when: {}, actions: [] };
@@ -84,5 +89,19 @@ describe("sceneProblems config_issues", () => {
 
   test("no config issues = none", () => {
     expect(sceneProblems(base).configIssues).toEqual([]);
+  });
+});
+
+describe("configIssueLabel", () => {
+  test("known kinds render specific text with the ref substituted", () => {
+    expect(configIssueLabel(undefined, { kind: "missing_period", ref: "wind_down" })).toBe(
+      "missing period wind_down",
+    );
+    expect(configIssueLabel(undefined, { kind: "unexposed_action", ref: "light.toggle" })).toBe(
+      "action light.toggle not exposed",
+    );
+    expect(
+      configIssueLabel(undefined, { kind: "missing_workday_sensor", ref: "workday_sensor" }),
+    ).toBe("needs a workday sensor");
   });
 });

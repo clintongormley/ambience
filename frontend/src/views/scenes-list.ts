@@ -5,7 +5,7 @@ import "./kebab-menu";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
 import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
-import { sceneProblems } from "../scene-problems.js";
+import { configIssueLabel, sceneProblems } from "../scene-problems.js";
 import { formatArgValue, paramLabel, sceneDisplayName, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
@@ -529,6 +529,13 @@ export class AmbienceScenesList extends LitElement {
     if (p.overlap.length) {
       lines.push(
         `${localize(this.hass, "ui.problem_overlap", "Controlled by multiple groups:")} ${p.overlap.join(", ")}`,
+      );
+    }
+    if (p.configIssues.length) {
+      lines.push(
+        `${localize(this.hass, "ui.problem_config", "Configuration problems:")} ${p.configIssues
+          .map((c) => configIssueLabel(this.hass, c))
+          .join(", ")}`,
       );
     }
     return html`<ambience-problem-flag

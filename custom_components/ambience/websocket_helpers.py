@@ -17,7 +17,6 @@ from .conditions.weather import WEATHER_CONDITIONS, weather_predicate_active
 from .config_health import scene_annotations
 from .const import (
     DATA_CONDITIONS,
-    DATA_EXPOSED_ACTIONS,
     DATA_STORE,
     DOMAIN,
     GENERAL_CATEGORY_ID,
@@ -38,7 +37,6 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise ValueError("config must be an object")
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
-    exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
     # Shape guards: the ws schema only requires `config` to be a dict, so the
     # nested shapes must be checked here — an AttributeError on hand-edited /
     # corrupted data would escape the handlers' `except ValueError` and surface
@@ -89,11 +87,6 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
                 raise ValueError(
                     f"scene {scene_idx} action {action_idx}: missing or malformed `service`"
                 )
-            exposed = exposed_store.get(service_id)
-            if exposed is None:
-                raise ValueError(
-                    f"scene {scene_idx} action {action_idx}: service {service_id!r} not exposed"
-                )
             entity_ids = action_spec.get("entity_ids", [])
             if not isinstance(entity_ids, list):
                 raise ValueError(
@@ -111,8 +104,6 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
             # hidden in settings (or were never exposed); they're still sent
             # at execution. The save-time dangling-scene warnings surface this
             # to the user; the engine treats them as overrides.
-            # `exposed` is used here only for the existence check above.
-            _ = exposed
 
 
 # Transient per-scene hints injected for the frontend by annotate_scenes; stripped

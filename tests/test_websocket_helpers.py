@@ -103,18 +103,13 @@ class TestValidateScopeConfig:
         with pytest.raises(ValueError, match="missing or malformed"):
             validate_scope_config(hass, config)
 
-    def test_rejects_service_not_exposed(self) -> None:
-        hass = _make_hass(exposed_actions={})  # nothing exposed
-        config = {
-            "scenes": [
-                {
-                    "when": {},
-                    "actions": [{"service": "light.turn_on", "entity_ids": [], "params": {}}],
-                }
-            ]
-        }
-        with pytest.raises(ValueError, match="not exposed"):
-            validate_scope_config(hass, config)
+    def test_allows_unexposed_action(self) -> None:
+        # A well-formed action whose service isn't exposed must no longer block the
+        # save; it surfaces via Repairs + the scene badge instead.
+        hass = _make_hass(conditions={}, exposed_actions=_make_exposed([]))
+        cfg = {"scenes": [{"when": {}, "actions": [
+            {"service": "fan.toggle", "entity_ids": ["fan.x"]}]}]}
+        validate_scope_config(hass, cfg)  # must not raise
 
     def test_rejects_non_list_entity_ids(self) -> None:
         exposed = _make_exposed(["light.turn_on"])

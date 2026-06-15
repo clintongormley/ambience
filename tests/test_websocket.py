@@ -566,10 +566,11 @@ async def test_area_save_rejects_malformed_service(
     assert resp["error"]["code"] == "validation_error"
 
 
-async def test_area_save_rejects_unexposed_service(
+async def test_area_save_allows_unexposed_service_and_badges_it(
     hass: HomeAssistant, installed_with_actions, area_id, hass_ws_client
 ) -> None:
-    """Validator rejects a service that exists in HA but is not exposed."""
+    """Saving a scene with an unexposed action no longer fails — it surfaces as a
+    per-scene config_issues badge (and a Repairs issue) instead."""
     # switch.turn_on is not in our seeded exposed list.
     config = {
         "scenes": [
@@ -591,9 +592,11 @@ async def test_area_save_rejects_unexposed_service(
         area_id=area_id,
         config=config,
     )
-    assert resp["success"] is False
-    assert resp["error"]["code"] == "validation_error"
-    assert "not exposed" in resp["error"]["message"]
+    # Saving a scene with an unexposed action no longer fails — it surfaces as a
+    # per-scene config_issues badge (and a Repairs issue) instead.
+    assert resp["success"] is True
+    scene0 = resp["result"]["config"]["scenes"][0]
+    assert {"kind": "unexposed_action", "ref": "switch.turn_on"} in scene0["config_issues"]
 
 
 async def test_area_save_rejects_non_list_entity_ids(

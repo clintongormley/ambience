@@ -334,7 +334,7 @@ async def test_tier_executor_applies_areas_then_floors_then_house(hass) -> None:
     engine = _engine(hass, scopes, conditions)
     recorded: list[str] = []
 
-    async def _spy(scope_kind, scope_id, category_id, *, force=False):
+    async def _spy(scope_kind, scope_id, category_id, *, force=False, cause=None):
         recorded.append(scope_kind)
 
     engine._resolve_and_apply = _spy  # type: ignore[assignment]
@@ -1450,7 +1450,7 @@ async def test_apply_units_logs_warning_on_exception(hass) -> None:
     engine, _tod = _apply_engine(hass)
     call_count = 0
 
-    async def _exploding(scope_kind, scope_id, category_id, *, force=False):
+    async def _exploding(scope_kind, scope_id, category_id, *, force=False, cause=None):
         nonlocal call_count
         call_count += 1
         raise RuntimeError("boom")
@@ -1697,7 +1697,7 @@ async def test_sync_applies_units_flipped_by_seeding_recompute(hass) -> None:
 
     applied: list = []
 
-    async def fake_apply(units, *, force=False):
+    async def fake_apply(units, *, force=False, cause=None):
         applied.append((list(units), force))
         return []
 
@@ -1904,3 +1904,74 @@ async def test_idle_reapply_emits_reapply_trace(hass):
         eng._teardown()
     finally:
         logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+
+
+# ---------------------------------------------------------------------------
+# Drop-out suppression: an entity going unavailable/unknown must NOT trigger a
+# scene change. The engine recomputes but skips applying, recording
+# Outcome.SKIPPED_UNAVAILABLE.
+# ---------------------------------------------------------------------------
+
+
+async def test_dropout_to_unavailable_is_suppressed(hass) -> None:
+    """Cause = entity → unavailable: skip applying, record SKIPPED_UNAVAILABLE."""
+    from custom_components.ambience.trace import CauseKind, Outcome, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="binary_sensor.x", new="unavailable")
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g", cause=cause)
+        assert result is not None
+        assert result.outcome == Outcome.SKIPPED_UNAVAILABLE
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
+async def test_dropout_to_unknown_is_suppressed(hass) -> None:
+    """Cause = entity → unknown: skip applying, record SKIPPED_UNAVAILABLE."""
+    from custom_components.ambience.trace import CauseKind, Outcome, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="binary_sensor.x", new="unknown")
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g", cause=cause)
+        assert result is not None
+        assert result.outcome == Outcome.SKIPPED_UNAVAILABLE
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
+async def test_recovery_from_unavailable_is_not_suppressed(hass) -> None:
+    """Cause = entity → a real state: evaluates and applies normally."""
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    engine._snapshots = {"tod": "evening"}  # scene 0 wins
+    cause = TriggerCause(
+        kind=CauseKind.ENTITY, entity_id="binary_sensor.x", old="unavailable", new="off"
+    )
+    await engine._resolve_and_apply("area", "a", "g", cause=cause)
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
+async def test_non_entity_cause_not_suppressed(hass) -> None:
+    """A clock-driven change with an unavailable entity elsewhere is not a drop-out."""
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    engine._snapshots = {"tod": "evening"}
+    cause = TriggerCause(kind=CauseKind.CLOCK, detail="20:00")
+    await engine._resolve_and_apply("area", "a", "g", cause=cause)
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
+async def test_no_cause_not_suppressed(hass) -> None:
+    """Back-compat: a direct call with no cause applies normally."""
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    engine._snapshots = {"tod": "evening"}
+    await engine._resolve_and_apply("area", "a", "g")
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0

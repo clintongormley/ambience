@@ -61,7 +61,7 @@ async def test_scan_flags_missing_action_entity(hass: HomeAssistant, installed) 
     )
     problems = scan(hass, [("area", "a", cfg)])
     p = next(p for p in problems if p.kind == "missing_entity")
-    assert p.entity_id == "light.ghost"
+    assert p.ref == "light.ghost"
     assert p.locations[0].scope_kind == "area"
     assert p.locations[0].scene_name == "go"
 
@@ -78,7 +78,7 @@ async def test_scan_flags_missing_condition_entity(hass: HomeAssistant, installe
         ]
     )
     problems = scan(hass, [("area", "a", cfg)])
-    kinds = {(p.kind, p.entity_id) for p in problems}
+    kinds = {(p.kind, p.ref) for p in problems}
     assert ("missing_entity", "binary_sensor.ghost") in kinds
 
 
@@ -133,7 +133,7 @@ async def test_scan_flags_cross_category_overlap(hass: HomeAssistant, installed)
     problems = scan(hass, [("area", "a", cfg)])
     overlap = [p for p in problems if p.kind == "action_overlap"]
     assert len(overlap) == 1
-    assert overlap[0].entity_id == "light.shared"
+    assert overlap[0].ref == "light.shared"
     assert {loc.category_id for loc in overlap[0].locations} == {"cat1", "cat2"}
 
 
@@ -179,7 +179,7 @@ async def test_scan_no_overlap_for_nonexistent_entity(hass: HomeAssistant, insta
     )
     problems = scan(hass, [("area", "a", cfg)])
     assert [p for p in problems if p.kind == "action_overlap"] == []
-    assert any(p.kind == "missing_entity" and p.entity_id == "light.ghost" for p in problems)
+    assert any(p.kind == "missing_entity" and p.ref == "light.ghost" for p in problems)
 
 
 async def test_scan_dedups_same_scene_refs_and_skips_malformed(hass, installed) -> None:
@@ -199,9 +199,9 @@ async def test_scan_dedups_same_scene_refs_and_skips_malformed(hass, installed) 
     )
     missing = [p for p in scan(hass, [("area", "a", cfg)]) if p.kind == "missing_entity"]
     # "" and 123 are skipped; only the real id is a problem.
-    assert {p.entity_id for p in missing} == {"binary_sensor.ghost"}
+    assert {p.ref for p in missing} == {"binary_sensor.ghost"}
     # Condition + action references in the same scene dedup to one location.
-    ghost = next(p for p in missing if p.entity_id == "binary_sensor.ghost")
+    ghost = next(p for p in missing if p.ref == "binary_sensor.ghost")
     assert len(ghost.locations) == 1
 
 
@@ -238,7 +238,7 @@ async def test_scan_aggregates_one_entity_across_scenes(hass: HomeAssistant, ins
         ]
     )
     problems = scan(hass, [("area", "a", cfg)])
-    missing = [p for p in problems if p.kind == "missing_entity" and p.entity_id == "light.ghost"]
+    missing = [p for p in problems if p.kind == "missing_entity" and p.ref == "light.ghost"]
     assert len(missing) == 1  # aggregated into ONE Problem
     scene_names = {loc.scene_name for loc in missing[0].locations}
     assert scene_names == {"s1", "s2"}  # both referencing scenes recorded

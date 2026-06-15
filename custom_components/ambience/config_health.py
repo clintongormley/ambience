@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -36,13 +36,14 @@ class Location:
 class Problem:
     """One config-health problem.
 
-    `kind` is "missing_entity" (aggregated per (scope, entity); covers both
-    monitored and acted references) or "action_overlap" (an acted entity shared
-    by >=2 distinct (scope, category) groups).
+    `kind` selects the problem type (see scan()); `ref` is whatever identifies
+    it — an entity id, a service id, a period/lux/weather-group id, or a fixed
+    sentinel like "workday_sensor" for the config-flag kinds. `locations` lists
+    every (scope, category, scene) the problem was found in.
     """
 
-    kind: Literal["missing_entity", "action_overlap"]
-    entity_id: str
+    kind: str
+    ref: str
     locations: tuple[Location, ...]
 
 
@@ -153,7 +154,7 @@ def overlap_entity_ids(hass: HomeAssistant) -> frozenset[str]:
     overlap flag can't diverge from the overlap issue."""
     store = hass.data[DOMAIN][DATA_STORE]
     return frozenset(
-        p.entity_id for p in scan(hass, store.all_scope_configs()) if p.kind == "action_overlap"
+        p.ref for p in scan(hass, store.all_scope_configs()) if p.kind == "action_overlap"
     )
 
 

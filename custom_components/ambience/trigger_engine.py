@@ -332,11 +332,17 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     None,
                 )
             return None
-        # A drop-out (the triggering entity went unavailable/unknown) is not a
-        # real-world event worth re-applying for — leave devices as they are.
+        # A drop-out (the triggering entity went unavailable/unknown, or was
+        # removed entirely → cause.new is None) is not a real-world event worth
+        # re-applying for — leave devices as they are. This mirrors the
+        # `unavailable` condition, which counts an absent entity as unavailable.
         # predicate_state/tenure were already updated by _recompute; the
         # DEBOUNCED guard absorbs any redundant re-eval when the entity recovers.
-        if cause is not None and cause.kind == CauseKind.ENTITY and cause.new in UNAVAILABLE:
+        if (
+            cause is not None
+            and cause.kind == CauseKind.ENTITY
+            and (cause.new in UNAVAILABLE or cause.new is None)
+        ):
             if active:
                 return UnitTrace(
                     scope_kind,

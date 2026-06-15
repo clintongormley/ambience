@@ -1945,6 +1945,24 @@ async def test_dropout_to_unknown_is_suppressed(hass) -> None:
     assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
 
 
+async def test_dropout_to_removed_entity_is_suppressed(hass) -> None:
+    """Cause = entity removed entirely (cause.new is None): also a drop-out —
+    the `unavailable` condition counts an absent entity as unavailable, so the
+    engine must not re-apply on removal either."""
+    from custom_components.ambience.trace import CauseKind, Outcome, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="binary_sensor.x", old="off", new=None)
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g", cause=cause)
+        assert result is not None
+        assert result.outcome == Outcome.SKIPPED_UNAVAILABLE
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
 async def test_recovery_from_unavailable_is_not_suppressed(hass) -> None:
     """Cause = entity → a real state: evaluates and applies normally."""
     from custom_components.ambience.trace import CauseKind, TriggerCause

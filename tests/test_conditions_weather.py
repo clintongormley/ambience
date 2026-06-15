@@ -515,3 +515,57 @@ def test_is_constraining_only_with_groups_or_thresholds() -> None:
     assert m.is_constraining({"groups": [], "thresholds": []}) is False
     assert m.is_constraining({}) is False
     assert m.is_constraining("not-a-dict") is False
+
+
+# ---------------------------------------------------------------------------
+# unconfigured_reason — lines 192-201
+# ---------------------------------------------------------------------------
+
+
+def test_unconfigured_reason_inactive_predicate_returns_none(hass: HomeAssistant) -> None:
+    """Inactive predicate (no groups, no thresholds) → no reason regardless of entity."""
+    _install_store_stub_groups(hass, entity=None, groups=[])
+    m = WeatherCondition(hass=hass)
+    assert m.unconfigured_reason({"groups": [], "thresholds": []}, _snap()) is None
+    assert m.unconfigured_reason(None, _snap()) is None
+    assert m.unconfigured_reason({}, _snap()) is None
+
+
+def test_unconfigured_reason_no_entity_returns_reason(hass: HomeAssistant) -> None:
+    """Active predicate + no entity configured → 'weather entity not configured'."""
+    _install_store_stub_groups(hass, entity=None, groups=[])
+    m = WeatherCondition(hass=hass)
+    reason = m.unconfigured_reason({"groups": ["sunny"]}, _snap())
+    assert reason == "weather entity not configured"
+
+
+def test_unconfigured_reason_unknown_group_returns_reason(hass: HomeAssistant) -> None:
+    """Active predicate + entity set + group id unknown → reason naming the group."""
+    _install_store_stub_groups(
+        hass,
+        entity="weather.home",
+        groups=[{"id": "sunny", "label": "Sunny", "conditions": ["sunny"]}],
+    )
+    m = WeatherCondition(hass=hass)
+    reason = m.unconfigured_reason({"groups": ["ghost"]}, _snap())
+    assert reason is not None
+    assert "ghost" in reason
+
+
+def test_unconfigured_reason_all_configured_returns_none(hass: HomeAssistant) -> None:
+    """Active predicate + entity set + all groups known → None."""
+    _install_store_stub_groups(
+        hass,
+        entity="weather.home",
+        groups=[{"id": "sunny", "label": "Sunny", "conditions": ["sunny"]}],
+    )
+    m = WeatherCondition(hass=hass)
+    assert m.unconfigured_reason({"groups": ["sunny"]}, _snap()) is None
+
+
+def test_unconfigured_reason_skips_non_string_group_ids(hass: HomeAssistant) -> None:
+    """Non-string group ids in the predicate are skipped (not flagged as unknown)."""
+    _install_store_stub_groups(hass, entity="weather.home", groups=[])
+    m = WeatherCondition(hass=hass)
+    # groups contains a non-string — must not raise and must not flag it
+    assert m.unconfigured_reason({"groups": [None, 42]}, _snap()) is None

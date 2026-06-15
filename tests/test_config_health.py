@@ -561,3 +561,161 @@ async def test_scene_annotations_emits_config_issues(hass: HomeAssistant, instal
     annos = scene_annotations(hass, cfg)
     assert annos[0]["config_issues"] == [{"kind": "missing_workday_sensor", "ref": "workday_sensor"}]
     assert annos[1]["config_issues"] == []
+
+
+# ---------------------------------------------------------------------------
+# Branch 121->123: weather entity IS set, predicate active → no "missing_entity"
+# issue, jumps straight to the group loop.
+# ---------------------------------------------------------------------------
+
+
+async def test_scene_config_issues_entity_set_checks_groups(
+    hass: HomeAssistant, installed
+) -> None:
+    """With entity configured, the 'missing_weather_entity' issue is NOT emitted;
+    a dangling group id IS (exercises the 121->123 branch where entity is truthy)."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_condition_config(
+        "weather",
+        {
+            "entity": "weather.home",
+            "groups": [{"id": "sunny", "label": "Sunny", "conditions": ["sunny"]}],
+        },
+    )
+    ctx = _build_ref_context(hass)
+    scene = {"when": {"weather": {"groups": ["ghost"]}}, "actions": []}
+    issues = scene_config_issues(ctx, scene)
+    kinds = {k for k, _ in issues}
+    assert "missing_weather_entity" not in kinds
+    assert ("missing_weather_group", "ghost") in issues
+
+
+# ---------------------------------------------------------------------------
+# Branch 141->140: dedup in scene_config_issues — same issue emitted twice from
+# different slots must collapse to one entry.
+# ---------------------------------------------------------------------------
+
+
+async def test_scene_config_issues_deduplicates_same_issue(
+    hass: HomeAssistant, installed
+) -> None:
+    """Two day-slots of the same kind both missing the workday sensor → one entry."""
+    ctx = _build_ref_context(hass)
+    scene = {
+        "name": "wd",
+        "category": "c1",
+        "when": {
+            "day": {
+                "include": [{"kind": "workday"}, {"kind": "workday"}]
+            }
+        },
+        "actions": [],
+    }
+    issues = scene_config_issues(ctx, scene)
+    assert issues.count(("missing_workday_sensor", "workday_sensor")) == 1
+
+
+# ---------------------------------------------------------------------------
+# Branch 230->exit: dedup in note_missing — same Location not added twice.
+# Two separate scope-configs whose matching scenes share (scope_kind, scope_id,
+# category, name) produce the same Location; the second call must be a no-op.
+# ---------------------------------------------------------------------------
+
+
+async def test_scan_note_missing_deduplicates_identical_locations(
+    hass: HomeAssistant, installed
+) -> None:
+    """Passing the same config twice → note_missing hits loc-in-bucket path (230->exit)."""
+    # Two configs for the SAME scope (same scope_kind/scope_id) that share the
+    # same scene name/category — both reference the missing entity so note_missing
+    # is called twice with identical Location objects.
+    cfg = _cfg(
+        [
+            {
+                "name": "s",
+                "category": "c1",
+                "when": {},
+                "actions": [{"service": "light.turn_on", "entity_ids": ["light.ghost"]}],
+            }
+        ]
+    )
+    # Pass the same config twice with the same scope triple → identical Location
+    # entries for light.ghost; second call exercises the 230->exit branch.
+    problems = scan(hass, [("area", "a", cfg), ("area", "a", cfg)])
+    missing = [p for p in problems if p.kind == "missing_entity" and p.ref == "light.ghost"]
+    assert len(missing) == 1
+    # Only one unique location (duplicates collapsed).
+    assert len(missing[0].locations) == 1
+
+
+# ---------------------------------------------------------------------------
+# Branch 278->275: dedup in config_refs — same (kind, ref) location not added twice.
+# ---------------------------------------------------------------------------
+
+
+async def test_scan_config_refs_dedup_identical_locations(
+    hass: HomeAssistant, installed
+) -> None:
+    """Passing the same config twice → config_refs hits loc-in-bucket (278->275)."""
+    cfg = _cfg(
+        [
+            {
+                "name": "wd",
+                "category": "c1",
+                "when": {"day": {"include": [{"kind": "workday"}]}},
+                "actions": [],
+            }
+        ]
+    )
+    # Same scope triple repeated → identical Location; second call exercises 278->275.
+    problems = scan(hass, [("area", "a", cfg), ("area", "a", cfg)])
+    wd = [p for p in problems if p.kind == "missing_workday_sensor"]
+    assert len(wd) == 1
+    # Location deduped: only one entry despite two identical configs.
+    assert len(wd[0].locations) == 1
+
+
+# ---------------------------------------------------------------------------
+# Branch 134->132: action service IS exposed or empty/non-string — loop continues.
+# ---------------------------------------------------------------------------
+
+
+async def test_scene_config_issues_exposed_service_not_flagged(
+    hass: HomeAssistant, installed
+) -> None:
+    """An action whose service IS in exposed_services must not produce an issue
+    (exercises the 134->132 branch where the condition is False and we loop back)."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    # Register one exposed service so it IS in ctx.exposed_services.
+    await store.async_save_exposed_actions([
+        {"id": "light.turn_on", "visible_fields": [], "defaults": {}},
+    ])
+    ctx = _build_ref_context(hass)
+    scene = {
+        "when": {},
+        "actions": [
+            {"service": "light.turn_on", "entity_ids": []},   # exposed → no issue
+            {"service": "fan.toggle", "entity_ids": []},       # unexposed → issue
+        ],
+    }
+    issues = scene_config_issues(ctx, scene)
+    assert ("unexposed_action", "fan.toggle") in issues
+    assert ("unexposed_action", "light.turn_on") not in issues
+
+
+# ---------------------------------------------------------------------------
+# Branch 156->160: missing_period_refs with a dict that has no "period" key.
+# ---------------------------------------------------------------------------
+
+
+def test_missing_period_refs_dict_without_period_key_returns_empty() -> None:
+    """A dict predicate without a 'period' key (e.g. inline range) → [] (156->160)."""
+    # An inline {from/to} dict: not None, not a list, is a dict but has no "period"
+    result = missing_period_refs({"from": {"kind": "time", "hh": 8, "mm": 0}, "to": {"kind": "time", "hh": 12, "mm": 0}}, {"morning"})
+    assert result == []
+
+
+def test_missing_period_refs_non_dict_non_list_non_none_returns_empty() -> None:
+    """A non-dict, non-list, non-None predicate (e.g. a string) → [] (156->160)."""
+    assert missing_period_refs("garbage", {"morning"}) == []
+    assert missing_period_refs(42, {"morning"}) == []

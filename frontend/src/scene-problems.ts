@@ -62,7 +62,7 @@ const _CONFIG_ISSUE_KEYS: Record<string, [string, string]> = {
 
 /** Localized one-line label for a config issue, with `{id}` replaced by its ref. */
 export function configIssueLabel(hass: HassLike | undefined, issue: ConfigIssue): string {
-  const [key, fallback] = _CONFIG_ISSUE_KEYS[issue.kind] ?? ["", issue.kind];
-  const text = key ? localize(hass, key, fallback) : fallback;
+  const entry = _CONFIG_ISSUE_KEYS[issue.kind];
+  const text = entry ? localize(hass, entry[0], entry[1]) : issue.kind;
   return text.replace("{id}", issue.ref);
 }

@@ -20,14 +20,18 @@ from .naming import category_names, scope_display_name
 # Issue-id prefixes this module owns. The reconcile delete-pass only touches ids
 # with these prefixes, so it never deletes a Repairs issue some other part of the
 # integration might raise under DOMAIN.
-_NEW_KINDS = (
-    "missing_workday_sensor",
-    "missing_workday_calendar",
-    "missing_weather_entity",
-    "missing_weather_group",
-    "missing_period",
-    "missing_lux_range",
-    "unexposed_action",
+# Keep in sync with the kinds `config_health.scene_config_issues()` can emit:
+# any kind missing here would have its Repairs issue orphaned by the delete-pass.
+_NEW_KINDS = frozenset(
+    {
+        "missing_workday_sensor",
+        "missing_workday_calendar",
+        "missing_weather_entity",
+        "missing_weather_group",
+        "missing_period",
+        "missing_lux_range",
+        "unexposed_action",
+    }
 )
 _ISSUE_PREFIXES = ("missing_entity:", "action_overlap:") + tuple(f"{k}:" for k in _NEW_KINDS)
 

@@ -17,6 +17,12 @@ from ._common import predicate_has_any
 
 _LOGGER = logging.getLogger(__name__)
 
+# Day-item kinds whose evaluation needs the Workday integration's sensor /
+# calendar. The single definition — config_health imports these so the
+# dangling-reference scan and this condition agree on which kinds depend on what.
+SENSOR_DEPENDENT_KINDS = {"workday", "holiday"}
+CALENDAR_DEPENDENT_KINDS = {"first_workday", "last_workday"}
+
 
 @dataclass(frozen=True)
 class DaySnapshot:
@@ -226,9 +232,9 @@ class DayCondition:
         cfg = self._day_config()
         for slot in (predicate.get("include") or []) + (predicate.get("exclude") or []):
             kind = (slot or {}).get("kind")
-            if kind in ("workday", "holiday") and not cfg.get("workday_sensor"):
+            if kind in SENSOR_DEPENDENT_KINDS and not cfg.get("workday_sensor"):
                 return "workday sensor not configured"
-            if kind in ("first_workday", "last_workday") and not cfg.get("workday_calendar"):
+            if kind in CALENDAR_DEPENDENT_KINDS and not cfg.get("workday_calendar"):
                 return "workday calendar not configured"
         return None
 

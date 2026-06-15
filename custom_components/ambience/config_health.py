@@ -15,6 +15,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
+from .conditions.day import CALENDAR_DEPENDENT_KINDS, SENSOR_DEPENDENT_KINDS
 from .conditions.weather import weather_predicate_active
 from .const import (
     DATA_CONDITIONS,
@@ -54,13 +55,6 @@ class Problem:
     kind: str
     ref: str
     locations: tuple[Location, ...]
-
-
-# Day-item kinds whose evaluation needs the Workday integration's sensor /
-# calendar. Moved here from websocket_helpers so scan() and scene_annotations
-# share one definition. (The websocket dangling_* copies are deleted in Phase 7.)
-_SENSOR_DEPENDENT_KINDS = {"workday", "holiday"}
-_CALENDAR_DEPENDENT_KINDS = {"first_workday", "last_workday"}
 
 
 @dataclass(frozen=True)
@@ -111,9 +105,9 @@ def scene_config_issues(ctx: _RefContext, scene: dict[str, Any]) -> list[tuple[s
     if isinstance(day_pred, dict):
         for slot in (day_pred.get("include") or []) + (day_pred.get("exclude") or []):
             kind = (slot or {}).get("kind")
-            if kind in _SENSOR_DEPENDENT_KINDS and not ctx.workday_sensor:
+            if kind in SENSOR_DEPENDENT_KINDS and not ctx.workday_sensor:
                 issues.append(("missing_workday_sensor", "workday_sensor"))
-            if kind in _CALENDAR_DEPENDENT_KINDS and not ctx.workday_calendar:
+            elif kind in CALENDAR_DEPENDENT_KINDS and not ctx.workday_calendar:
                 issues.append(("missing_workday_calendar", "workday_calendar"))
 
     weather_pred = when.get("weather")
@@ -124,9 +118,9 @@ def scene_config_issues(ctx: _RefContext, scene: dict[str, Any]) -> list[tuple[s
             if isinstance(gid, str) and gid not in ctx.weather_group_ids:
                 issues.append(("missing_weather_group", gid))
 
-    for pid in missing_period_refs(when.get("time_of_day"), set(ctx.period_ids)):
+    for pid in missing_period_refs(when.get("time_of_day"), ctx.period_ids):
         issues.append(("missing_period", pid))
-    for rid in missing_lux_refs(when.get("lux"), set(ctx.lux_ids)):
+    for rid in missing_lux_refs(when.get("lux"), ctx.lux_ids):
         issues.append(("missing_lux_range", rid))
 
     for action in scene.get("actions", []) or []:
@@ -134,17 +128,11 @@ def scene_config_issues(ctx: _RefContext, scene: dict[str, Any]) -> list[tuple[s
         if isinstance(sid, str) and sid and sid not in ctx.exposed_services:
             issues.append(("unexposed_action", sid))
 
-    # De-dup while preserving first-seen order.
-    seen: set[tuple[str, str]] = set()
-    out: list[tuple[str, str]] = []
-    for item in issues:
-        if item not in seen:
-            seen.add(item)
-            out.append(item)
-    return out
+    # dict.fromkeys de-duplicates while preserving first-seen order.
+    return list(dict.fromkeys(issues))
 
 
-def missing_period_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
+def missing_period_refs(predicate: Any, effective_ids: frozenset[str] | set[str]) -> list[str]:
     """Period ids referenced by `predicate` that are not in `effective_ids`."""
     if predicate is None:
         return []
@@ -160,7 +148,7 @@ def missing_period_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
     return []
 
 
-def missing_lux_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
+def missing_lux_refs(predicate: Any, effective_ids: frozenset[str] | set[str]) -> list[str]:
     """Lux-range ids referenced by `predicate` that are not in `effective_ids`."""
     if isinstance(predicate, dict) and "range" in predicate:
         rid = predicate["range"]

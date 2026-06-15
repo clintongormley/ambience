@@ -256,12 +256,11 @@ class DayCondition:
             )
         elif kind == "last_day":
             pass
-        elif kind in ("workday", "holiday"):
-            if not self._day_config().get("workday_sensor"):
-                raise ValueError(f"day item {kind!r} requires `workday_sensor` to be configured")
-        elif kind in ("first_workday", "last_workday"):
-            if not self._day_config().get("workday_calendar"):
-                raise ValueError(f"day item {kind!r} requires `workday_calendar` to be configured")
+        elif kind in ("workday", "holiday", "first_workday", "last_workday"):
+            # Structurally valid. Whether the workday sensor/calendar is configured
+            # is a config-health concern (Repairs + scene badge), not a malformed
+            # predicate — so don't block the save here.
+            pass
         else:
             raise ValueError(f"unknown day item kind: {kind!r}")
 

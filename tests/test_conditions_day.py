@@ -360,26 +360,6 @@ def test_validate_rejects_bad_date_range(m_no_entities: DayCondition) -> None:
         )
 
 
-def test_validate_workday_item_requires_sensor(m_no_entities: DayCondition) -> None:
-    with pytest.raises(ValueError, match="workday_sensor"):
-        m_no_entities.validate_predicate(
-            {
-                "include": [{"kind": "workday"}],
-                "exclude": [],
-            }
-        )
-
-
-def test_validate_first_workday_requires_calendar(m_no_entities: DayCondition) -> None:
-    with pytest.raises(ValueError, match="workday_calendar"):
-        m_no_entities.validate_predicate(
-            {
-                "include": [{"kind": "first_workday"}],
-                "exclude": [],
-            }
-        )
-
-
 def test_validate_with_entities_accepts_workday_items(m_with_entities: DayCondition) -> None:
     m_with_entities.validate_predicate(
         {
@@ -387,6 +367,12 @@ def test_validate_with_entities_accepts_workday_items(m_with_entities: DayCondit
             "exclude": [{"kind": "holiday"}, {"kind": "last_workday"}],
         }
     )
+
+
+def test_day_validate_predicate_allows_workday_without_sensor() -> None:
+    # Structurally valid; the missing sensor is a config-health problem, not malformed data.
+    DayCondition(hass=None).validate_predicate({"include": [{"kind": "workday"}]})  # no raise
+    DayCondition(hass=None).validate_predicate({"include": [{"kind": "first_workday"}]})  # no raise
 
 
 def _condition_with_workday_sensor(sensor: str | None) -> DayCondition:

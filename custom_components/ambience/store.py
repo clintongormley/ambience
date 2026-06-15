@@ -403,17 +403,21 @@ class AmbienceStore:
 
     @staticmethod
     def _validate_exposed_assistants(payload: dict[str, Any]) -> None:
-        for assistant, value in payload.items():
-            if assistant not in DEFAULT_EXPOSED_ASSISTANTS:
-                raise ValueError(f"unknown assistant: {assistant!r}")
+        # A save carries the complete exposure state — require every known key
+        # (like the reapply/switch-defaults validators) and reject anything else,
+        # so a partial payload can't silently reset the omitted assistants.
+        for assistant in DEFAULT_EXPOSED_ASSISTANTS:
+            value = payload.get(assistant)
             if not isinstance(value, bool):
                 raise ValueError(f"exposure for {assistant!r} must be a bool: {value!r}")
+        unknown = set(payload) - set(DEFAULT_EXPOSED_ASSISTANTS)
+        if unknown:
+            raise ValueError(f"unknown assistant(s): {sorted(unknown)}")
 
     async def async_save_exposed_assistants(self, payload: dict[str, Any]) -> None:
         self._validate_exposed_assistants(payload)
         self._data["exposed_assistants"] = {
-            assistant: bool(payload.get(assistant, default))
-            for assistant, default in DEFAULT_EXPOSED_ASSISTANTS.items()
+            assistant: payload[assistant] for assistant in DEFAULT_EXPOSED_ASSISTANTS
         }
         await self._store.async_save(self._data)
 

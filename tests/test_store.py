@@ -711,8 +711,27 @@ async def test_save_exposed_assistants_rejects_non_bool(hass: HomeAssistant) -> 
 async def test_save_exposed_assistants_rejects_unknown_assistant(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
+    # A complete, valid map plus an extra unknown key — exercises the unknown
+    # rejection specifically (a bare {"cloud.bixby": True} would be rejected for
+    # missing the known keys instead).
     with pytest.raises(ValueError):
-        await store.async_save_exposed_assistants({"cloud.bixby": True})
+        await store.async_save_exposed_assistants(
+            {
+                "conversation": True,
+                "cloud.google_assistant": False,
+                "cloud.alexa": False,
+                "cloud.bixby": True,
+            }
+        )
+
+
+async def test_save_exposed_assistants_rejects_partial_map(hass: HomeAssistant) -> None:
+    # A partial payload must be rejected, not silently backfilled with defaults
+    # (which would reset the omitted assistants).
+    store = AmbienceStore(hass)
+    await store.async_load()
+    with pytest.raises(ValueError):
+        await store.async_save_exposed_assistants({"conversation": False})
 
 
 def test_known_assistants_match_default_map_and_fields() -> None:

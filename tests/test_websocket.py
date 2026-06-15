@@ -2727,14 +2727,21 @@ async def test_exposed_assistants_list_returns_defaults(
 async def test_exposed_assistants_save_persists_and_signals(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
+    from homeassistant.core import callback
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
     from custom_components.ambience.const import SIGNAL_EXPOSED_ASSISTANTS_UPDATED
 
     fired = []
-    async_dispatcher_connect(
-        hass, SIGNAL_EXPOSED_ASSISTANTS_UPDATED, lambda *_a: fired.append(True)
-    )
+
+    # @callback so the dispatcher runs it synchronously inline — a bare lambda is
+    # run in the executor and `fired` may not be populated before the assert below
+    # (see the dispatcher-test-callback-flake lesson).
+    @callback
+    def _on_signal(*_a: object) -> None:
+        fired.append(True)
+
+    async_dispatcher_connect(hass, SIGNAL_EXPOSED_ASSISTANTS_UPDATED, _on_signal)
     client = await hass_ws_client()
     await client.send_json(
         {
@@ -2753,6 +2760,16 @@ async def test_exposed_assistants_save_persists_and_signals(
         "conversation": False,
         "cloud.google_assistant": True,
         "cloud.alexa": False,
+    }
+    # Round-trip: list must reflect the saved non-default values, mapped back to
+    # the dot-free wire fields (guards the assistant-id ↔ field translation).
+    await client.send_json({"id": 2, "type": "ambience/exposed_assistants/list"})
+    list_msg = await client.receive_json()
+    assert list_msg["success"]
+    assert list_msg["result"] == {
+        "expose_assist": False,
+        "expose_google": True,
+        "expose_alexa": False,
     }
 
 

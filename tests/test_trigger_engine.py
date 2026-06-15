@@ -1982,6 +1982,91 @@ async def test_dropout_returns_none_when_tracing_inactive(hass) -> None:
     assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
 
 
+async def test_dropout_runs_an_unavailable_guard_with_actions(hass) -> None:
+    """On a drop-out, an `unavailable`-guard winner still ACTS (its actions run);
+    only a non-guard fall-through winner is suppressed. 'Run just the blocker.'"""
+    from custom_components.ambience.conditions.unavailable import UnavailableCondition
+    from custom_components.ambience.trace import CauseKind, Outcome, TriggerCause
+
+    hass.states.async_set("binary_sensor.x", "unavailable")
+    act = _light_action(hass)
+    scopes = [
+        (
+            "area",
+            "a",
+            {
+                "scenes": [
+                    {
+                        "when": {"unavailable": {"entities": ["binary_sensor.x"]}},
+                        "category": "g",
+                        "actions": act,
+                    },
+                ]
+            },
+        )
+    ]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"unavailable": UnavailableCondition(hass=hass)},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    await engine._refresh_all_snapshots()
+    cause = TriggerCause(
+        kind=CauseKind.ENTITY, entity_id="binary_sensor.x", old="off", new="unavailable"
+    )
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g", cause=cause)
+        assert result is not None
+        assert result.outcome == Outcome.ACTED
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
+async def test_dropout_suppresses_a_non_guard_fall_through_winner(hass) -> None:
+    """On a drop-out, a winner that does NOT carry an `unavailable` predicate is
+    still suppressed (a sensor blip must not drive an unrelated scene)."""
+    from custom_components.ambience.trace import CauseKind, Outcome, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    engine._snapshots = {"tod": "evening"}  # scene 0 (tod=evening, no unavailable) would win
+    cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="binary_sensor.x", new="unavailable")
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g", cause=cause)
+        assert result is not None
+        assert result.outcome == Outcome.SKIPPED_UNAVAILABLE
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
+def test_winner_has_unavailable_guard_detection(hass) -> None:
+    """`_winner_has_unavailable` is True only for a winner whose `when` carries a
+    non-wildcard `unavailable` predicate; False for no winner, an unknown scope,
+    an out-of-range index (config drift between rebuild and resolve), or a
+    non-guard winner."""
+    engine = AutoTriggerEngine(hass)
+    engine._scope_cfgs = {
+        ("area", "a"): {
+            "scenes": [
+                {"when": {"unavailable": {"entities": ["binary_sensor.x"]}}, "category": "g"},
+                {"when": {"tod": "evening"}, "category": "g"},
+            ]
+        }
+    }
+    assert engine._winner_has_unavailable("area", "a", 0) is True  # the guard
+    assert engine._winner_has_unavailable("area", "a", 1) is False  # non-guard winner
+    assert engine._winner_has_unavailable("area", "a", None) is False  # no winner
+    assert engine._winner_has_unavailable("area", "ghost", 0) is False  # scope gone (cfg None)
+    assert engine._winner_has_unavailable("area", "a", 9) is False  # index out of range
+
+
 async def test_recovery_from_unavailable_is_not_suppressed(hass) -> None:
     """Cause = entity → a real state: evaluates and applies normally."""
     from custom_components.ambience.trace import CauseKind, TriggerCause

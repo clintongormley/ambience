@@ -199,6 +199,27 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             return scenes[scene_index].get("category")
         return None
 
+    def _winner_has_unavailable(
+        self, scope_kind: str, scope_id: str | None, scene_index: int | None
+    ) -> bool:
+        """Whether the winning scene carries a non-wildcard `unavailable` predicate.
+
+        Such a scene is an availability guard — the one scene allowed to act on an
+        entity drop-out (a winner that won *because* an entity is unavailable). A
+        winning `unavailable` predicate is necessarily non-None and matched true,
+        so its presence in the winner's `when` is sufficient. `scene_index` is the
+        full-scene index (`matched_scene_index`), aligned with `self._scope_cfgs`.
+        """
+        if scene_index is None:
+            return False
+        cfg = self._scope_cfgs.get((scope_kind, scope_id))
+        if cfg is None:
+            return False
+        scenes = cfg.get("scenes", [])
+        if not 0 <= scene_index < len(scenes):
+            return False
+        return scenes[scene_index].get("when", {}).get("unavailable") is not None
+
     def _recompute(
         self, fired: set[PredKey], snapshots: dict[str, Any], *, seed: bool = False
     ) -> set[tuple[str, str | None, str]]:
@@ -332,27 +353,6 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     None,
                 )
             return None
-        # A drop-out (the triggering entity went unavailable/unknown, or was
-        # removed entirely → cause.new is None) is not a real-world event worth
-        # re-applying for — leave devices as they are. This mirrors the
-        # `unavailable` condition, which counts an absent entity as unavailable.
-        # predicate_state/tenure were already updated by _recompute; the
-        # DEBOUNCED guard absorbs any redundant re-eval when the entity recovers.
-        if (
-            cause is not None
-            and cause.kind == CauseKind.ENTITY
-            and (cause.new in UNAVAILABLE or cause.new is None)
-        ):
-            if active:
-                return UnitTrace(
-                    scope_kind,
-                    scope_id,
-                    category_id,
-                    switch_state,
-                    Outcome.SKIPPED_UNAVAILABLE,
-                    None,
-                )
-            return None
         # Serialize resolve+apply per (scope, category): a burst of triggers on
         # one unit arrives as separate tasks. Without this, while one task is
         # suspended running its actions, another resolves and applies the same
@@ -372,6 +372,28 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             )
             index = plan["matched_scene_index"]
             explanation = plan.get("explanation")
+            # Drop-out (the triggering entity went unavailable/unknown, or was
+            # removed → cause.new is None): only an `unavailable`-guard winner may
+            # act on it. A non-guard fall-through winner (or a no-match) is
+            # suppressed so a sensor blip can't drive an unrelated scene — devices
+            # and last_applied are left untouched. The guard itself runs normally
+            # below (its actions, or its NO_OP block).
+            if (
+                cause is not None
+                and cause.kind == CauseKind.ENTITY
+                and (cause.new in UNAVAILABLE or cause.new is None)
+                and not self._winner_has_unavailable(scope_kind, scope_id, index)
+            ):
+                if active:
+                    return UnitTrace(
+                        scope_kind,
+                        scope_id,
+                        category_id,
+                        switch_state,
+                        Outcome.SKIPPED_UNAVAILABLE,
+                        explanation,
+                    )
+                return None
             if index is None:
                 # A no-match is a transition away from the previous winner: drop
                 # the last-applied record so a later win of the same scene re-applies.

@@ -492,3 +492,41 @@ async def test_scene_config_issues_ignores_non_string_weather_group(
     # a spurious ("missing_weather_group", None) tuple.
     scene = {"when": {"weather": {"groups": [None]}}, "actions": []}
     assert ("missing_weather_group", None) not in scene_config_issues(ctx, scene)
+
+
+async def test_scene_config_issues_workday_calendar(hass: HomeAssistant, installed) -> None:
+    ctx = _build_ref_context(hass)
+    scene = {"when": {"day": {"include": [{"kind": "first_workday"}]}}, "actions": []}
+    assert scene_config_issues(ctx, scene) == [("missing_workday_calendar", "workday_calendar")]
+
+
+async def test_scene_config_issues_weather_entity_and_group(
+    hass: HomeAssistant, installed
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    # entity unset + a group id that isn't among the configured groups.
+    await store.async_save_condition_config(
+        "weather", {"entity": None, "groups": [{"id": "sunny", "label": "S", "conditions": []}]}
+    )
+    ctx = _build_ref_context(hass)
+    scene = {"when": {"weather": {"groups": ["sunny", "ghost"]}}, "actions": []}
+    assert scene_config_issues(ctx, scene) == [
+        ("missing_weather_entity", "weather_entity"),
+        ("missing_weather_group", "ghost"),
+    ]
+
+
+async def test_scene_config_issues_period_and_lux(hass: HomeAssistant, installed) -> None:
+    ctx = _build_ref_context(hass)
+    scene = {
+        "when": {"time_of_day": {"period": "ghost"}, "lux": {"range": "gone"}},
+        "actions": [],
+    }
+    assert ("missing_period", "ghost") in scene_config_issues(ctx, scene)
+    assert ("missing_lux_range", "gone") in scene_config_issues(ctx, scene)
+
+
+async def test_scene_config_issues_unexposed_action(hass: HomeAssistant, installed) -> None:
+    ctx = _build_ref_context(hass)
+    scene = {"when": {}, "actions": [{"service": "fan.toggle", "entity_ids": ["fan.x"]}]}
+    assert scene_config_issues(ctx, scene) == [("unexposed_action", "fan.toggle")]

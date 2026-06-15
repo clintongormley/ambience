@@ -395,11 +395,14 @@ class AmbienceStore:
         await self._store.async_save(self._data)
 
     def get_exposed_assistants(self) -> dict[str, bool]:
+        # Fall back to the default for any missing or non-bool stored value —
+        # bool() would coerce a corrupted string like "false" to True.
         ea = self._data.get("exposed_assistants", {})
-        return {
-            assistant: bool(ea.get(assistant, default))
-            for assistant, default in DEFAULT_EXPOSED_ASSISTANTS.items()
-        }
+        result: dict[str, bool] = {}
+        for assistant, default in DEFAULT_EXPOSED_ASSISTANTS.items():
+            value = ea.get(assistant, default)
+            result[assistant] = value if isinstance(value, bool) else default
+        return result
 
     @staticmethod
     def _validate_exposed_assistants(payload: dict[str, Any]) -> None:

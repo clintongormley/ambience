@@ -701,6 +701,23 @@ async def test_ensure_exposed_assistants_backfills_partial_map(hass: HomeAssista
     }
 
 
+async def test_get_exposed_assistants_falls_back_on_non_bool(hass: HomeAssistant) -> None:
+    # Corrupted/hand-edited storage: a non-bool value falls back to the default,
+    # not bool(...) coercion (bool("false") would wrongly be True).
+    store = AmbienceStore(hass)
+    await store.async_load()
+    store._data["exposed_assistants"] = {
+        "conversation": True,
+        "cloud.google_assistant": "false",  # truthy string under bool(), default is False
+        "cloud.alexa": False,
+    }
+    assert store.get_exposed_assistants() == {
+        "conversation": True,
+        "cloud.google_assistant": False,
+        "cloud.alexa": False,
+    }
+
+
 async def test_save_exposed_assistants_rejects_non_bool(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()

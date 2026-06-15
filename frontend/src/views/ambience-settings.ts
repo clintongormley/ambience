@@ -15,6 +15,34 @@ import { localize } from "../i18n.js";
 import type { ExposedAssistants, ReapplySettings, SwitchDefaults } from "../types.js";
 import "./ambience-help.js";
 
+/** The voice-assistant exposure toggles, in display order. One row per assistant
+ *  — rendered identically, so a table avoids three copy-pasted blocks. */
+const EXPOSE_ROWS: ReadonlyArray<{
+  field: keyof ExposedAssistants;
+  labelKey: string;
+  label: string;
+  dataTest: string;
+}> = [
+  {
+    field: "expose_assist",
+    labelKey: "ui.settings_expose_assist",
+    label: "Assist",
+    dataTest: "expose-assist",
+  },
+  {
+    field: "expose_google",
+    labelKey: "ui.settings_expose_google",
+    label: "Google Assistant",
+    dataTest: "expose-google",
+  },
+  {
+    field: "expose_alexa",
+    labelKey: "ui.settings_expose_alexa",
+    label: "Alexa",
+    dataTest: "expose-alexa",
+  },
+];
+
 @customElement("ambience-ambience-settings")
 export class AmbienceAmbienceSettings extends LitElement {
   static override styles = css`
@@ -283,33 +311,19 @@ export class AmbienceAmbienceSettings extends LitElement {
             ></ambience-help>
           </label>
         </div>
-        <div class="row">
-          <label>${localize(this.hass, "ui.settings_expose_assist", "Assist")}</label>
-          ${this._renderToggle(
-            this._exposed.expose_assist,
-            "expose-assist",
-            (e) => this._onExpose("expose_assist", e),
-            !this._defaults.create_switches,
-          )}
-        </div>
-        <div class="row">
-          <label>${localize(this.hass, "ui.settings_expose_google", "Google Assistant")}</label>
-          ${this._renderToggle(
-            this._exposed.expose_google,
-            "expose-google",
-            (e) => this._onExpose("expose_google", e),
-            !this._defaults.create_switches,
-          )}
-        </div>
-        <div class="row">
-          <label>${localize(this.hass, "ui.settings_expose_alexa", "Alexa")}</label>
-          ${this._renderToggle(
-            this._exposed.expose_alexa,
-            "expose-alexa",
-            (e) => this._onExpose("expose_alexa", e),
-            !this._defaults.create_switches,
-          )}
-        </div>
+        ${EXPOSE_ROWS.map(
+          (row) => html`
+            <div class="row">
+              <label>${localize(this.hass, row.labelKey, row.label)}</label>
+              ${this._renderToggle(
+                this._exposed[row.field],
+                row.dataTest,
+                (e) => this._onExpose(row.field, e),
+                !this._defaults.create_switches,
+              )}
+            </div>
+          `,
+        )}
       </div>
 
       <div class="card">

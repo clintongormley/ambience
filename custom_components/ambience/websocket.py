@@ -872,12 +872,12 @@ async def _ws_exposed_assistants_list(
     msg: dict[str, Any],
 ) -> None:
     exposed = hass.data[DOMAIN][DATA_STORE].get_exposed_assistants()
+    # get_exposed_assistants() returns a complete bool map over every assistant,
+    # so a plain lookup is safe — no re-cast/fallback needed (matches the
+    # zero-processing of _ws_switch_defaults_list / _ws_reapply_list).
     connection.send_result(
         msg["id"],
-        {
-            field: bool(exposed.get(assistant, False))
-            for assistant, field in ASSISTANT_FIELDS.items()
-        },
+        {field: exposed[assistant] for assistant, field in ASSISTANT_FIELDS.items()},
     )
 
 

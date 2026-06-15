@@ -626,3 +626,25 @@ def test_is_constraining_only_with_items() -> None:
     assert m.is_constraining({"include": [], "exclude": []}) is False
     assert m.is_constraining({}) is False
     assert m.is_constraining("not-a-dict") is False
+
+
+# ---------------------------------------------------------------------------
+# Regression: unconfigured workday dependency → matches() is False, never raises
+# ---------------------------------------------------------------------------
+
+
+def test_day_matches_workday_no_sensor_is_false() -> None:
+    """workday/first_workday predicates with no sensor configured must return
+    False at runtime rather than raising — the missing sensor is a config-health
+    concern surfaced via Repairs, not a crash path (Task 16 regression guard)."""
+    from datetime import date
+
+    snap = DaySnapshot(
+        today=date(2026, 6, 15),
+        weekday=0,  # Monday
+        days_in_month=30,
+        workday_state=None,
+        month_workdays=None,
+    )
+    assert DayCondition().matches({"include": [{"kind": "workday"}]}, snap) is False
+    assert DayCondition().matches({"include": [{"kind": "first_workday"}]}, snap) is False

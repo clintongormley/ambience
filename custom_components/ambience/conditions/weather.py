@@ -206,15 +206,8 @@ class WeatherCondition:
         for g in groups:
             if not isinstance(g, str) or not g:
                 raise ValueError(f"weather group id must be a non-empty string: {g!r}")
-        if groups and self._hass is not None:
-            known = {gr.get("id") for gr in self._configured_groups()}
-            for g in groups:
-                if g not in known:
-                    raise ValueError(f"unknown weather group: {g!r}")
         for t in thresholds:
             self._validate_threshold(t)
-        if (groups or thresholds) and self._hass is not None and not self._entity():
-            raise ValueError("weather predicate requires the weather entity to be configured")
 
     # --- sorting (containment lattice) ----------------------------------
 

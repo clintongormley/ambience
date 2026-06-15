@@ -174,20 +174,8 @@ def test_validate_rejects_non_dict(m_no_entity: WeatherCondition) -> None:
         m_no_entity.validate_predicate(42)
 
 
-def test_validate_rejects_unknown_group(hass: HomeAssistant) -> None:
-    _install_store_stub_groups(
-        hass,
-        groups=[
-            {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
-        ],
-    )
-    m = WeatherCondition(hass=hass)
-    with pytest.raises(ValueError, match="weather group"):
-        m.validate_predicate({"groups": ["bogus"], "thresholds": []})
-
-
 def test_validate_skips_group_existence_when_no_hass() -> None:
-    # no hass → no group-existence check; shape checks still apply
+    # no hass → shape checks still apply; unknown group ids are not rejected
     m = WeatherCondition()
     m.validate_predicate({"groups": ["anything"], "thresholds": []})
 
@@ -205,15 +193,6 @@ def test_validate_skips_group_existence_when_no_hass() -> None:
 def test_validate_rejects_bad_threshold(m_with_entity: WeatherCondition, threshold) -> None:
     with pytest.raises(ValueError):
         m_with_entity.validate_predicate({"groups": [], "thresholds": [threshold]})
-
-
-def test_validate_active_predicate_requires_entity(m_no_entity: WeatherCondition) -> None:
-    with pytest.raises(ValueError, match="weather entity"):
-        m_no_entity.validate_predicate({"groups": ["sunny"], "thresholds": []})
-    with pytest.raises(ValueError, match="weather entity"):
-        m_no_entity.validate_predicate(
-            {"groups": [], "thresholds": [{"attribute": "temperature", "op": "<", "value": 5}]}
-        )
 
 
 def test_validate_accepts_well_formed(hass: HomeAssistant) -> None:
@@ -512,6 +491,14 @@ def test_validate_threshold_rejects_non_dict(m_no_entity: WeatherCondition) -> N
         m_no_entity.validate_predicate({"groups": [], "thresholds": ["temp < 5"]})
     with pytest.raises(ValueError, match="threshold must be an object"):
         m_no_entity.validate_predicate({"groups": [], "thresholds": [42]})
+
+
+def test_weather_validate_predicate_allows_unknown_group_and_unset_entity(
+    hass: HomeAssistant,
+) -> None:
+    _install_store_stub_groups(hass, entity=None, groups=[])
+    cond = WeatherCondition(hass=hass)
+    cond.validate_predicate({"groups": ["ghost"]})  # must not raise
 
 
 def test_is_constraining_only_with_groups_or_thresholds() -> None:

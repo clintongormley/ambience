@@ -40,7 +40,7 @@ Each switch lives on its own device. The House switch is the main **Ambience** d
 
 If a scope is disabled (removed from Ambience's configuration) while per-scope switches are enabled, its switch entity is deleted automatically.
 
-You can choose which voice assistants the switches are exposed to in the integration's **Configure** dialog (Settings → Devices & Services → Ambience → Configure) — see [Installation](../installation.md#voice-assistants).
+You can choose which voice assistants the switches are exposed to in the Ambience panel's Settings modal (cogwheel ⚙), on the **Advanced** tab — see [Installation](../installation.md#voice-assistants).
 
 When per-scope switches exist, they appear in the Ambience panel as a toggle on each scope row. You can also control them from HA's developer tools, automations, or dashboards like any other switch entity. When per-scope switches are not enabled, the panel's scope toggles still work — they pause and resume Ambience for that scope — but no HA entity is created.
 

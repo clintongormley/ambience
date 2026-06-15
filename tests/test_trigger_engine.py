@@ -1963,6 +1963,25 @@ async def test_dropout_to_removed_entity_is_suppressed(hass) -> None:
     assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
 
 
+async def test_dropout_returns_none_when_tracing_inactive(hass) -> None:
+    """Drop-out suppression with tracing OFF returns None (no UnitTrace built)."""
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="binary_sensor.x", new="unavailable")
+    # Pin the trace logger below DEBUG so tracing_active is False (no buffer is
+    # registered by _apply_engine either) — the suppression path returns None.
+    trace_logger = logging.getLogger("custom_components.ambience.trace")
+    original_level = trace_logger.level
+    trace_logger.setLevel(logging.WARNING)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g", cause=cause)
+    finally:
+        trace_logger.setLevel(original_level)
+    assert result is None
+    assert ("area", "a", "g") not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+
 async def test_recovery_from_unavailable_is_not_suppressed(hass) -> None:
     """Cause = entity → a real state: evaluates and applies normally."""
     from custom_components.ambience.trace import CauseKind, TriggerCause

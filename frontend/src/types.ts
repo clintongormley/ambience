@@ -379,7 +379,8 @@ export type TraceOutcome =
   | "no_op"
   | "no_match"
   | "skipped_switch_off"
-  | "skipped_scope_disabled";
+  | "skipped_scope_disabled"
+  | "skipped_unavailable";
 export type BufferedUnit = {
   event_id: string | null;
   timestamp: string | null;

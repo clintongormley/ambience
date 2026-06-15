@@ -32,6 +32,11 @@ export class AmbienceKebabMenu extends LitElement {
   };
   /** Overrides the trigger aria-label (default "More actions"). */
   @property() label?: string;
+  /** Dim the trigger to signal a disabled/off owner. Reflected so a parent can
+   *  drive it with `?muted`. Applies opacity to the trigger ONLY — never the
+   *  popup, which is a shadow-DOM descendant and would inherit a host opacity,
+   *  greying the open menu's items. */
+  @property({ type: Boolean, reflect: true }) muted = false;
 
   @state() private _open = false;
 
@@ -45,6 +50,9 @@ export class AmbienceKebabMenu extends LitElement {
       cursor: pointer; font: inherit;
     }
     .kebab-trigger:hover { background: var(--secondary-background-color, #f5f5f5); }
+    /* Muted: dim the trigger glyph only. The popup keeps full opacity so an
+       open menu stays legible even on a disabled/off owner. */
+    :host([muted]) .kebab-trigger { opacity: 0.4; }
     .kebab-backdrop { position: fixed; inset: 0; z-index: 10; }
     .kebab-menu {
       position: absolute; top: calc(100% + 4px); right: 0; z-index: 11;

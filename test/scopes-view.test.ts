@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import "../frontend/src/views/scopes-view";
 import type {
   AreaListItem,
   ConditionInfo,
@@ -14,6 +13,7 @@ import type {
   ScopeSwitch,
   WeatherConfig,
 } from "../frontend/src/types";
+import { AmbienceScopesView } from "../frontend/src/views/scopes-view";
 
 // Mock the api module — same shape as test/areas-list-view.test.ts but with
 // the floor + house additions.
@@ -1648,6 +1648,50 @@ describe("ambience-scopes-view", () => {
       ".scope-row.area[data-id='living_room']",
     ) as HTMLElement;
     expect(row.classList.contains("scope-disabled")).toBe(false);
+  });
+
+  test("dims an off/disabled kebab via [muted], never opacity on the host", () => {
+    // The dim must reach only the kebab *trigger*: `opacity` on the
+    // <ambience-kebab-menu> host bleeds into the open popup (a shadow-DOM
+    // descendant), greying the menu items. So scopes-view drives the dim
+    // through the component's reflected `muted` attribute, never a descendant
+    // opacity rule on the host.
+    const raw = (AmbienceScopesView as unknown as { styles: unknown }).styles;
+    const css = (Array.isArray(raw) ? raw : [raw])
+      .map((s) => (s as { cssText?: string }).cssText ?? "")
+      .join("\n")
+      .replace(/\/\*[\s\S]*?\*\//g, ""); // strip comments so they can't match
+    const offending = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((m) => m[1].includes("ambience-kebab-menu") && /\bopacity\b/.test(m[2]))
+      .map((m) => m[1].replace(/\s+/g, " ").trim());
+    expect(offending).toEqual([]);
+  });
+
+  const kebabOf = (e: any, sel: string): HTMLElement =>
+    e.shadowRoot.querySelector(`${sel} ambience-kebab-menu`) as HTMLElement;
+
+  test("a permanently-disabled scope mutes its kebab (greys the trigger)", async () => {
+    el = await mount({ areaConfigs: { bedroom: { scenes: [], enabled: false } } });
+    expect(kebabOf(el, ".scope-row.area[data-id='bedroom']").hasAttribute("muted")).toBe(true);
+  });
+
+  test("a switched-off scope mutes its kebab", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.bedroom_ambience": { state: "off" } },
+    });
+    expect(kebabOf(el, ".scope-row.area[data-id='bedroom']").hasAttribute("muted")).toBe(true);
+  });
+
+  test("an enabled, switched-on scope does not mute its kebab", async () => {
+    el = await mount({
+      switches: baseSwitches,
+      states: { "switch.living_room_ambience": { state: "on" } },
+      areaConfigs: {
+        living_room: { scenes: [{ when: {}, actions: [], category: "a" }], enabled: true },
+      },
+    });
+    expect(kebabOf(el, ".scope-row.area[data-id='living_room']").hasAttribute("muted")).toBe(false);
   });
 
   // --- apply-scenes / run-scene-actions ----------------------------------------

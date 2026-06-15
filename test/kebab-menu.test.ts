@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
-import "../frontend/src/views/kebab-menu";
 import type { KebabItem } from "../frontend/src/views/kebab-menu";
+import { AmbienceKebabMenu } from "../frontend/src/views/kebab-menu";
 
 const items: KebabItem[] = [
   { id: "duplicate", label: "Duplicate", icon: "mdi:content-duplicate" },
@@ -145,5 +145,32 @@ describe("ambience-kebab-menu", () => {
     expect(el.shadowRoot.querySelector(".kebab-trigger")?.getAttribute("aria-expanded")).toBe(
       "true",
     );
+  });
+
+  test("reflects the muted property to a host attribute so parents can dim it", async () => {
+    el = await mount({ muted: true });
+    expect(el.hasAttribute("muted")).toBe(true);
+  });
+
+  test("is not muted by default", async () => {
+    el = await mount();
+    expect(el.hasAttribute("muted")).toBe(false);
+  });
+
+  test("muting dims only the trigger — never the open menu popup", () => {
+    // `opacity` on the popup (or the host, which contains it) would grey the
+    // menu items when the kebab is dimmed. The mute must touch only the
+    // trigger glyph, leaving an open menu fully legible.
+    const raw = (AmbienceKebabMenu as unknown as { styles: unknown }).styles;
+    const css = (Array.isArray(raw) ? raw : [raw])
+      .map((s) => (s as { cssText?: string }).cssText ?? "")
+      .join("\n")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    const opacityRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((m) => /\bopacity\b/.test(m[2]))
+      .map((m) => m[1].replace(/\s+/g, " ").trim());
+    // The trigger glyph is the SOLE opacity target — never the popup, its
+    // items, or the host, any of which would grey an open menu.
+    expect(opacityRules).toEqual([":host([muted]) .kebab-trigger"]);
   });
 });

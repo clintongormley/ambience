@@ -218,7 +218,9 @@ export class AmbienceScopesView extends LitElement {
       }
       /* Disabled ("off"): the scope's switch is off. Read more emphatically
        disabled than the faded state — flatten the header tint and dim its
-       contents harder — while leaving the switch fully lit to re-enable. */
+       contents harder — while leaving the switch fully lit to re-enable. The
+       kebab dims too, but via its own "muted" attribute (see the row below)
+       so the dim reaches only the trigger, not the open menu popup. */
       .scope-header.off {
         /* A barely-there grey (≈ #f8f8f8 on the default light theme) — paler
          than the active header so a disabled scope reads washed-out. */
@@ -231,13 +233,7 @@ export class AmbienceScopesView extends LitElement {
       .scope-header.off .chevron,
       .scope-header.off .scope-icon,
       .scope-header.off .scope-name,
-      .scope-header.off .scope-summary,
-      .scope-header.off ambience-kebab-menu {
-        opacity: 0.4;
-      }
-      /* Permanently disabled scope: dim its kebab menu to signal the state.
-       Opacity only — the menu stays fully clickable. */
-      .scope-disabled ambience-kebab-menu {
+      .scope-header.off .scope-summary {
         opacity: 0.4;
       }
       .chevron {
@@ -1088,6 +1084,7 @@ export class AmbienceScopesView extends LitElement {
           ${this._renderScopeSwitch(scope, cfg)}
           <ambience-kebab-menu
             data-test="scope-kebab"
+            ?muted=${stateClass === "off" || disabled}
             .hass=${this.hass}
             .items=${
               [

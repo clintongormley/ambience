@@ -97,6 +97,12 @@ export type ReapplySettings = {
   interval_seconds: number;
 };
 
+export type ExposedAssistants = {
+  expose_assist: boolean;
+  expose_google: boolean;
+  expose_alexa: boolean;
+};
+
 // One scope's Ambience switch entity, as resolved by the backend (the
 // entity_id can be user-renamed, so it can't be derived client-side).
 export type ScopeSwitch = {

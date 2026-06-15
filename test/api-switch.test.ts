@@ -1,7 +1,9 @@
 import { describe, expect, test, vi } from "vitest";
 import {
+  getExposedAssistants,
   getSwitchDefaults,
   listSwitches,
+  saveExposedAssistants,
   saveSwitchDefaults,
   setScopeEnabled,
 } from "../frontend/src/api.js";
@@ -35,6 +37,28 @@ describe("switch API wrappers", () => {
     const r = await listSwitches(hass);
     expect(hass.callWS).toHaveBeenCalledWith({ type: "ambience/switches/list" });
     expect(r).toEqual(rows);
+  });
+
+  test("getExposedAssistants", async () => {
+    const hass = mockHass(() => ({
+      expose_assist: true,
+      expose_google: false,
+      expose_alexa: false,
+    }));
+    const r = await getExposedAssistants(hass);
+    expect(hass.callWS).toHaveBeenCalledWith({ type: "ambience/exposed_assistants/list" });
+    expect(r).toEqual({ expose_assist: true, expose_google: false, expose_alexa: false });
+  });
+
+  test("saveExposedAssistants", async () => {
+    const hass = mockHass(() => ({ ok: true }));
+    await saveExposedAssistants(hass, false, true, false);
+    expect(hass.callWS).toHaveBeenCalledWith({
+      type: "ambience/exposed_assistants/save",
+      expose_assist: false,
+      expose_google: true,
+      expose_alexa: false,
+    });
   });
 });
 

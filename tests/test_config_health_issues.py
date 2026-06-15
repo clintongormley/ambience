@@ -74,10 +74,12 @@ async def test_reconcile_clears_issue_when_entity_appears(hass, installed, area_
         },
     )
     reconcile_issues(hass)
-    assert _domain_issue_ids(hass)
+    assert any(iid.startswith("missing_entity:") for iid in _domain_issue_ids(hass))
     hass.states.async_set("light.ghost", "on")
     reconcile_issues(hass)
-    assert _domain_issue_ids(hass) == set()
+    # Narrowed: assert the missing_entity issue cleared (scan() may now also emit
+    # unexposed_action for light.turn_on, which is fine — that's a different kind).
+    assert not any(iid.startswith("missing_entity:") for iid in _domain_issue_ids(hass))
 
 
 async def test_reconcile_is_idempotent(hass, installed, area_id) -> None:
@@ -254,3 +256,35 @@ async def test_missing_entity_message_collapses_newline_in_scene_name(
     iid = next(i for (dom, i) in issues if dom == DOMAIN and i.startswith("missing_entity:"))
     scenes = issues[(DOMAIN, iid)].translation_placeholders["scenes"]
     assert scenes == '\n- "two lines" — uncategorised'
+
+
+async def test_reconcile_creates_workday_sensor_issue(hass: HomeAssistant, installed) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    a = ar.async_get(hass).async_create("Kitchen").id
+    await store.async_save_area(
+        a,
+        {"scenes": [{"name": "wd", "category": "c1",
+                     "when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []}]},
+    )
+    reconcile_issues(hass)
+    reg = ir.async_get(hass)
+    issue = reg.async_get_issue(DOMAIN, "missing_workday_sensor:workday_sensor")
+    assert issue is not None
+    assert issue.translation_key == "missing_workday_sensor"
+    assert "Kitchen" in issue.translation_placeholders["scenes"]
+
+
+async def test_reconcile_clears_workday_sensor_issue_when_fixed(
+    hass: HomeAssistant, installed
+) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    a = ar.async_get(hass).async_create("Kitchen").id
+    await store.async_save_area(
+        a,
+        {"scenes": [{"name": "wd", "category": "c1",
+                     "when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []}]},
+    )
+    reconcile_issues(hass)
+    await store.async_save_condition_config("day", {"workday_sensor": "binary_sensor.wd"})
+    reconcile_issues(hass)
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "missing_workday_sensor:workday_sensor") is None

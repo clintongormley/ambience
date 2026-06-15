@@ -20,7 +20,16 @@ from .naming import category_names, scope_display_name
 # Issue-id prefixes this module owns. The reconcile delete-pass only touches ids
 # with these prefixes, so it never deletes a Repairs issue some other part of the
 # integration might raise under DOMAIN.
-_ISSUE_PREFIXES = ("missing_entity:", "action_overlap:")
+_NEW_KINDS = (
+    "missing_workday_sensor",
+    "missing_workday_calendar",
+    "missing_weather_entity",
+    "missing_weather_group",
+    "missing_period",
+    "missing_lux_range",
+    "unexposed_action",
+)
+_ISSUE_PREFIXES = ("missing_entity:", "action_overlap:") + tuple(f"{k}:" for k in _NEW_KINDS)
 
 
 def _issue_id(problem: Problem) -> str:
@@ -32,7 +41,9 @@ def _issue_id(problem: Problem) -> str:
         loc = problem.locations[0]  # all locations share one scope for this kind
         sid = loc.scope_id or loc.scope_kind
         return f"missing_entity:{loc.scope_kind}:{sid}:{problem.ref}"
-    return f"action_overlap:{problem.ref}"
+    if problem.kind == "action_overlap":
+        return f"action_overlap:{problem.ref}"
+    return f"{problem.kind}:{problem.ref}"          # new kinds: global per (kind, ref)
 
 
 def _clean(text: str) -> str:
@@ -51,6 +62,24 @@ def _scope_phrase(hass: HomeAssistant, scope_kind: str, scope_id: str | None) ->
 def _category_clause(category_name: str) -> str:
     """'category: Security' for a named category, else 'uncategorised'."""
     return f"category: {_clean(category_name)}" if category_name else "uncategorised"
+
+
+def _scene_bullets(hass: HomeAssistant, cats: dict[str, str], problem: Problem) -> str:
+    """Markdown bullets naming each affected scope · scene · category. Used by the
+    new dangling-config-reference issue kinds (which aggregate across scopes)."""
+    rows = sorted(
+        {
+            (
+                _scope_phrase(hass, loc.scope_kind, loc.scope_id),
+                cats.get(loc.category_id) or "",
+                loc.scene_name or "(unnamed)",
+            )
+            for loc in problem.locations
+        }
+    )
+    return "".join(
+        f'\n- {phrase} · "{_clean(name)}" — {_category_clause(cat)}' for phrase, cat, name in rows
+    )
 
 
 @callback
@@ -114,7 +143,13 @@ def reconcile_issues(hass: HomeAssistant) -> None:
             )
             translation_key = "action_overlap"
             placeholders = {"entity_id": problem.ref, "groups": groups}
-        else:  # pragma: no cover - unreachable; kind is a closed Literal
+        elif problem.kind in _NEW_KINDS:
+            translation_key = problem.kind
+            placeholders = {
+                "ref": problem.ref,
+                "scenes": _scene_bullets(hass, cats, problem),
+            }
+        else:  # pragma: no cover - unknown future kind; skip rather than crash
             continue
         ir.async_create_issue(
             hass,

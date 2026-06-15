@@ -10,6 +10,8 @@ from homeassistant.helpers import area_registry as ar
 
 from custom_components.ambience.config_health import (
     entity_exists,
+    missing_lux_refs,
+    missing_period_refs,
     referenced_entities_by_scene,
     scan,
     scene_annotations,
@@ -433,3 +435,16 @@ async def test_scene_annotations_fresh_overlap_ignores_stale_cache(
     annos = scene_annotations(hass, _OVERLAP_CFG, fresh_overlap=True)
     assert annos[0]["overlap_entities"] == ["light.shared"]
     assert hass.data[DOMAIN][DATA_OVERLAP_SET] == frozenset({"light.shared"})
+
+
+def test_missing_period_refs_flags_unknown_id() -> None:
+    assert missing_period_refs({"period": "gone"}, {"morning"}) == ["gone"]
+    assert missing_period_refs({"period": "morning"}, {"morning"}) == []
+    assert missing_period_refs(None, {"morning"}) == []
+    assert missing_period_refs([{"period": "gone"}, {"period": "morning"}], {"morning"}) == ["gone"]
+
+
+def test_missing_lux_refs_flags_unknown_id() -> None:
+    assert missing_lux_refs({"range": "gone"}, {"dim"}) == ["gone"]
+    assert missing_lux_refs({"range": "dim"}, {"dim"}) == []
+    assert missing_lux_refs({"min": 0, "max": 5}, {"dim"}) == []

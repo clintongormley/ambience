@@ -47,6 +47,38 @@ class Problem:
     locations: tuple[Location, ...]
 
 
+# Day-item kinds whose evaluation needs the Workday integration's sensor /
+# calendar. Moved here from websocket_helpers so scan() and scene_annotations
+# share one definition. (The websocket dangling_* copies are deleted in Phase 7.)
+_SENSOR_DEPENDENT_KINDS = {"workday", "holiday"}
+_CALENDAR_DEPENDENT_KINDS = {"first_workday", "last_workday"}
+
+
+def missing_period_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
+    """Period ids referenced by `predicate` that are not in `effective_ids`."""
+    if predicate is None:
+        return []
+    if isinstance(predicate, list):
+        result: list[str] = []
+        for item in predicate:
+            result.extend(missing_period_refs(item, effective_ids))
+        return result
+    if isinstance(predicate, dict) and "period" in predicate:
+        pid = predicate["period"]
+        if isinstance(pid, str) and pid not in effective_ids:
+            return [pid]
+    return []
+
+
+def missing_lux_refs(predicate: Any, effective_ids: set[str]) -> list[str]:
+    """Lux-range ids referenced by `predicate` that are not in `effective_ids`."""
+    if isinstance(predicate, dict) and "range" in predicate:
+        rid = predicate["range"]
+        if isinstance(rid, str) and rid not in effective_ids:
+            return [rid]
+    return []
+
+
 def entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
     """True if the entity has a state OR is in the entity registry.
 

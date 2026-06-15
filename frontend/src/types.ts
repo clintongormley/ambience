@@ -364,6 +364,9 @@ export type TraceAction = {
   service: string;
   entity_ids?: string[];
   params?: Record<string, unknown>;
+  // Transient (response-only): true when the action's service was not exposed at
+  // apply time, so the engine skipped it. The trace renders it as skipped.
+  unexposed?: boolean;
 };
 export type TracePredicate = {
   condition_key: string;

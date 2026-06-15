@@ -1204,4 +1204,28 @@ describe("review fixes", () => {
     expect(host.textContent).toContain("Calmer evenings");
     expect(host.textContent).not.toContain("wind_down");
   });
+
+  test("outcomeSummary notes how many actions were skipped (unexposed)", () => {
+    const summary = outcomeSummary(
+      unit({
+        actions: [
+          { service: "light.turn_on", entity_ids: ["light.k"], params: {} },
+          { service: "light.toggle", entity_ids: ["light.b"], params: {}, unexposed: true },
+        ],
+      }),
+    );
+    expect(summary).toContain("1 skipped");
+  });
+
+  test("renderEvaluation marks an unexposed action as not exposed", () => {
+    const host = renderToHost(
+      {
+        actions: [
+          { service: "light.toggle", entity_ids: ["light.b"], params: {}, unexposed: true },
+        ],
+      },
+      true,
+    );
+    expect(host.textContent).toContain("not exposed");
+  });
 });

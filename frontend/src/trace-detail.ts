@@ -78,7 +78,9 @@ export const traceDetailStyles = css`
   .pred.fail { color: var(--error-color, #e57373); }
   .pred .dim { color: var(--secondary-text-color, #888); }
   .action-block { font-family: monospace; font-size: 0.8rem; line-height: 1.6; margin-bottom: 0.3rem; }
+  .action-block.unexposed { opacity: 0.6; }
   .action-head { color: var(--primary-text-color, #ddd); }
+  .skipped-tag { color: var(--error-color, #db4437); }
   .action-block .entity { padding-left: 1rem; color: var(--secondary-text-color, #aaa); }
   .entity-link { cursor: pointer; color: var(--primary-color, #03a9f4); }
   .entity-link:hover { text-decoration: underline; }
@@ -298,11 +300,16 @@ export function outcomeSummary(u: BufferedUnit): string {
   const winner = u.winner_name ?? "The matching scene";
   switch (u.outcome) {
     case "acted": {
-      const acts = pluralize(u.actions.length, "action", "actions");
-      const e = entityCount(u.actions);
+      // Actions whose service is no longer exposed were skipped at dispatch, so
+      // count only the ones that actually ran and note the rest.
+      const ran = u.actions.filter((a) => !a.unexposed);
+      const skipped = u.actions.length - ran.length;
+      const acts = pluralize(ran.length, "action", "actions");
+      const e = entityCount(ran);
+      const tail = skipped ? ` (${skipped} skipped — not exposed)` : "";
       return e
-        ? `Applied ${winner} — ${acts} on ${pluralize(e, "entity", "entities")}.`
-        : `Applied ${winner} — ${acts}.`;
+        ? `Applied ${winner} — ${acts} on ${pluralize(e, "entity", "entities")}.${tail}`
+        : `Applied ${winner} — ${acts}.${tail}`;
     }
     case "no_op":
       return `${winner} matched but has no actions — it blocks lower scenes from applying. Nothing changed.`;
@@ -485,8 +492,12 @@ function renderExpansion(
           ? html`<div class="section">
             <div class="section-title">Actions taken</div>
             ${u.actions.map(
-              (a) => html`<div class="action-block">
-                <div class="action-head">${formatActionHeader(a, hass, schemas, exposedActions)}</div>
+              (a) => html`<div class="action-block ${a.unexposed ? "unexposed" : ""}">
+                <div class="action-head">
+                  ${formatActionHeader(a, hass, schemas, exposedActions)}${a.unexposed
+                    ? html`<span class="skipped-tag"> — skipped (not exposed)</span>`
+                    : nothing}
+                </div>
                 ${(a.entity_ids ?? []).map(
                   (e) => html`<div class="entity">${clickableEntity(hass, e)}</div>`,
                 )}

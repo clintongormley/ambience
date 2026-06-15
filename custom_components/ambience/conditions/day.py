@@ -231,7 +231,7 @@ class DayCondition:
             return None
         cfg = self._day_config()
         for slot in (predicate.get("include") or []) + (predicate.get("exclude") or []):
-            kind = (slot or {}).get("kind")
+            kind = slot.get("kind") if isinstance(slot, dict) else None
             if kind in SENSOR_DEPENDENT_KINDS and not cfg.get("workday_sensor"):
                 return "workday sensor not configured"
             if kind in CALENDAR_DEPENDENT_KINDS and not cfg.get("workday_calendar"):

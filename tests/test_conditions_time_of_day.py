@@ -950,3 +950,9 @@ def test_unconfigured_reason_list_with_dangling_period_returns_reason() -> None:
     reason = m.unconfigured_reason([{"period": "morning"}, {"period": "gone"}], snap)
     assert reason is not None
     assert "gone" in reason
+
+
+def test_unconfigured_reason_ignores_non_string_period() -> None:
+    cond = TimeOfDayCondition(period_lookup=lambda: {})
+    # A corrupt non-string period must not yield a misleading "no longer exists" reason.
+    assert cond.unconfigured_reason({"period": 42}, None) is None

@@ -82,12 +82,16 @@ def _build_ref_context(hass: HomeAssistant) -> _RefContext:
         workday_calendar=bool(day.get("workday_calendar")),
         weather_entity=bool(weather.get("entity")),
         weather_group_ids=frozenset(
-            g.get("id") for g in (weather.get("groups") or []) if isinstance(g.get("id"), str)
+            g.get("id")
+            for g in (weather.get("groups") or [])
+            if isinstance(g, dict) and isinstance(g.get("id"), str)
         ),
         period_ids=frozenset(domain[DATA_PERIODS].effective()),
         lux_ids=frozenset(domain[DATA_LUX_RANGES].effective()),
         exposed_services=frozenset(
-            sid for a in exposed.list() if isinstance((sid := a.get("id")), str)
+            sid
+            for a in exposed.list()
+            if isinstance(a, dict) and isinstance((sid := a.get("id")), str)
         ),
     )
 
@@ -104,7 +108,7 @@ def scene_config_issues(ctx: _RefContext, scene: dict[str, Any]) -> list[tuple[s
     day_pred = when.get("day")
     if isinstance(day_pred, dict):
         for slot in (day_pred.get("include") or []) + (day_pred.get("exclude") or []):
-            kind = (slot or {}).get("kind")
+            kind = slot.get("kind") if isinstance(slot, dict) else None
             if kind in SENSOR_DEPENDENT_KINDS and not ctx.workday_sensor:
                 issues.append(("missing_workday_sensor", "workday_sensor"))
             elif kind in CALENDAR_DEPENDENT_KINDS and not ctx.workday_calendar:

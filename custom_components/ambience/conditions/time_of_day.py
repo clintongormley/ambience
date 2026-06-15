@@ -243,7 +243,11 @@ class TimeOfDayCondition:
         known = set(self._period_lookup())
         items = predicate if isinstance(predicate, list) else [predicate]
         for item in items:
-            if isinstance(item, dict) and item.get("period") and item["period"] not in known:
+            if (
+                isinstance(item, dict)
+                and isinstance(item.get("period"), str)
+                and item["period"] not in known
+            ):
                 return f"time-of-day period {item['period']!r} no longer exists"
         return None
 

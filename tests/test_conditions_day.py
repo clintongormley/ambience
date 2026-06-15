@@ -648,3 +648,9 @@ def test_day_matches_workday_no_sensor_is_false() -> None:
     )
     assert DayCondition().matches({"include": [{"kind": "workday"}]}, snap) is False
     assert DayCondition().matches({"include": [{"kind": "first_workday"}]}, snap) is False
+
+
+def test_unconfigured_reason_tolerates_non_dict_slot(m_no_entities: DayCondition) -> None:
+    # A corrupt non-dict slot must not crash; the workday slot still yields the reason.
+    pred = {"include": ["garbage", {"kind": "workday"}]}
+    assert m_no_entities.unconfigured_reason(pred, None) == "workday sensor not configured"

@@ -20,6 +20,7 @@ from custom_components.ambience.config_health import (
 )
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
+    DATA_EXPOSED_ACTIONS,
     DATA_OVERLAP_SET,
     DATA_STORE,
     DOMAIN,
@@ -721,3 +722,34 @@ def test_missing_period_refs_non_dict_non_list_non_none_returns_empty() -> None:
     """A non-dict, non-list, non-None predicate (e.g. a string) → [] (156->160)."""
     assert missing_period_refs("garbage", {"morning"}) == []
     assert missing_period_refs(42, {"morning"}) == []
+
+
+async def test_build_ref_context_tolerates_corrupt_non_dict_weather_group(
+    hass: HomeAssistant, installed
+) -> None:
+    # Hand-edited/corrupt storage: a non-dict weather group must not crash the scan.
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_condition_config(
+        "weather", {"entity": None, "groups": ["not-a-dict", {"id": "sunny", "conditions": []}]}
+    )
+    ctx = _build_ref_context(hass)  # must not raise
+    assert "sunny" in ctx.weather_group_ids
+
+
+async def test_build_ref_context_tolerates_corrupt_exposed_entry(
+    hass: HomeAssistant, installed, monkeypatch
+) -> None:
+    # A non-dict exposed-action entry must not crash _build_ref_context.
+    exposed = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
+    monkeypatch.setattr(exposed, "list", lambda: ["garbage", {"id": "light.toggle"}])
+    ctx = _build_ref_context(hass)  # must not raise
+    assert "light.toggle" in ctx.exposed_services
+
+
+async def test_scene_config_issues_tolerates_non_dict_day_slot(
+    hass: HomeAssistant, installed
+) -> None:
+    ctx = _build_ref_context(hass)
+    scene = {"when": {"day": {"include": ["garbage", {"kind": "workday"}]}}, "actions": []}
+    # The non-dict slot is skipped; the workday slot still flags (no sensor configured).
+    assert scene_config_issues(ctx, scene) == [("missing_workday_sensor", "workday_sensor")]

@@ -288,3 +288,33 @@ async def test_reconcile_clears_workday_sensor_issue_when_fixed(
     await store.async_save_condition_config("day", {"workday_sensor": "binary_sensor.wd"})
     reconcile_issues(hass)
     assert ir.async_get(hass).async_get_issue(DOMAIN, "missing_workday_sensor:workday_sensor") is None
+
+
+async def test_reconcile_creates_ref_kind_issues(hass: HomeAssistant, installed) -> None:
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_condition_config(
+        "weather", {"entity": None, "groups": [{"id": "sunny", "label": "S", "conditions": []}]}
+    )
+    a = ar.async_get(hass).async_create("Kitchen").id
+    await store.async_save_area(
+        a,
+        {"scenes": [{
+            "name": "x", "category": "c1",
+            "when": {
+                "weather": {"groups": ["ghost"]},
+                "time_of_day": {"period": "ghost_p"},
+                "lux": {"range": "ghost_l"},
+            },
+            "actions": [{"service": "fan.toggle", "entity_ids": ["fan.x"]}],
+        }]},
+    )
+    reconcile_issues(hass)
+    reg = ir.async_get(hass)
+    for iid in (
+        "missing_weather_entity:weather_entity",
+        "missing_weather_group:ghost",
+        "missing_period:ghost_p",
+        "missing_lux_range:ghost_l",
+        "unexposed_action:fan.toggle",
+    ):
+        assert reg.async_get_issue(DOMAIN, iid) is not None, iid

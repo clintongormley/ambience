@@ -337,9 +337,9 @@ async def test_update_listener_triggers_reload(
 def test_exposure_constants_shape():
     from custom_components.ambience.const import (
         ASSISTANT_FIELDS,
-        DEFAULT_EXPOSED_ASSISTANTS,
         KNOWN_ASSISTANTS,
     )
+    from custom_components.ambience.store import DEFAULT_EXPOSED_ASSISTANTS
 
     assert KNOWN_ASSISTANTS == ("conversation", "cloud.google_assistant", "cloud.alexa")
     # Assist exposed by default; Google/Alexa off.

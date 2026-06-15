@@ -87,27 +87,21 @@ GENERAL_CATEGORY = {
 CONF_SHOW_SIDEBAR_PANEL = "show_sidebar_panel"
 DEFAULT_SHOW_SIDEBAR_PANEL = True
 
-# Voice-assistant exposure (options flow).
-CONF_EXPOSED_ASSISTANTS = "exposed_assistants"
+# Voice-assistant exposure. The per-assistant on/off map is stored in the
+# Ambience store (store.DEFAULT_EXPOSED_ASSISTANTS) and edited on the panel's
+# Advanced page. KNOWN_ASSISTANTS / ASSISTANT_FIELDS must stay key-aligned with
+# store.DEFAULT_EXPOSED_ASSISTANTS (guarded by a store test).
 # Pinned copy of homeassistant.components.homeassistant.exposed_entities.
-# KNOWN_ASSISTANTS, ordered Assist-first for the options form. Update this if HA
-# adds a new assistant (otherwise it would silently never be exposed).
+# KNOWN_ASSISTANTS, Assist first. Update this if HA adds a new assistant
+# (otherwise it would silently never be exposed).
 KNOWN_ASSISTANTS = ("conversation", "cloud.google_assistant", "cloud.alexa")
-# Default: switches exposed to local Assist only.
-DEFAULT_EXPOSED_ASSISTANTS = {
-    "conversation": True,
-    "cloud.google_assistant": False,
-    "cloud.alexa": False,
-}
-# Assistant id -> options-form field name (dot-free, so it is a valid form +
-# translation key).
+# Assistant id -> dot-free key used on the websocket wire, in the frontend, and
+# as the i18n / test key.
 ASSISTANT_FIELDS = {
     "conversation": "expose_assist",
     "cloud.google_assistant": "expose_google",
     "cloud.alexa": "expose_alexa",
 }
-# hass.data key holding the resolved {assistant: bool} exposure map for this entry.
-DATA_EXPOSED_ASSISTANTS = "exposed_assistants_map"
 
 # hass.data key holding the Lovelace resource id registered for the card, so it
 # can be removed on unload.

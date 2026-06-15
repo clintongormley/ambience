@@ -46,13 +46,11 @@ from .conditions.unavailable import UnavailableCondition
 from .conditions.weather import WeatherCondition
 from .config_health_issues import reconcile_issues
 from .const import (
-    CONF_EXPOSED_ASSISTANTS,
     CONF_SHOW_SIDEBAR_PANEL,
     DATA_CARD_RESOURCE_URL,
     DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
-    DATA_EXPOSED_ASSISTANTS,
     DATA_LAST_APPLIED,
     DATA_LUX_RANGES,
     DATA_PERIODS,
@@ -61,15 +59,16 @@ from .const import (
     DATA_SWITCHES,
     DATA_TRACE_BUFFER,
     DATA_TRACE_SINKS,
-    DEFAULT_EXPOSED_ASSISTANTS,
     DEFAULT_SHOW_SIDEBAR_PANEL,
     DOMAIN,
     SIGNAL_CONFIG_CHANGED,
+    SIGNAL_EXPOSED_ASSISTANTS_UPDATED,
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
     SIGNAL_UNIT_APPLIED,
 )
 from .exposed_actions import ExposedActionsStore
+from .exposure import async_reapply_all_switch_exposure
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .service import (
@@ -195,10 +194,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     async_register_commands(hass)
-
-    domain_data[DATA_EXPOSED_ASSISTANTS] = entry.options.get(
-        CONF_EXPOSED_ASSISTANTS, DEFAULT_EXPOSED_ASSISTANTS
-    )
 
     await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
 
@@ -350,6 +345,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(
         async_dispatcher_connect(
             hass, SIGNAL_REAPPLY_CONFIG_UPDATED, engine.note_reapply_config_changed
+        )
+    )
+
+    @callback
+    def _on_exposed_assistants_updated(_: object = None) -> None:
+        async_reapply_all_switch_exposure(hass)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(
+            hass, SIGNAL_EXPOSED_ASSISTANTS_UPDATED, _on_exposed_assistants_updated
         )
     )
     entry.async_on_unload(engine.async_shutdown)

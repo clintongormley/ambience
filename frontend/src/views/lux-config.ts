@@ -17,8 +17,8 @@ export class AmbienceLuxConfig extends AmbienceNamedDefConfig<LuxRangeDef> {
   protected _list(): Promise<NamedDefView<LuxRangeDef>> {
     return listLuxRanges(this.hass);
   }
-  protected _save(custom: Record<string, LuxRangeDef>, hidden: string[]) {
-    return saveLuxRanges(this.hass, custom, hidden);
+  protected async _save(custom: Record<string, LuxRangeDef>, hidden: string[]): Promise<void> {
+    await saveLuxRanges(this.hass, custom, hidden);
   }
   protected _label(id: string, custom: Record<string, LuxRangeDef>): string {
     return luxLabel(this.hass as never, id, custom);
@@ -31,9 +31,6 @@ export class AmbienceLuxConfig extends AmbienceNamedDefConfig<LuxRangeDef> {
   }
   protected _addKey(): [string, string] {
     return ["ui.add_custom_lux_range", "+ Add custom lux range"];
-  }
-  protected _warningTextKey(): [string, string] {
-    return ["ui.lux_warning_text", "some scenes now reference missing lux ranges:"];
   }
 
   protected _renderModal() {

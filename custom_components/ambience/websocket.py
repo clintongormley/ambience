@@ -49,11 +49,6 @@ from .websocket_helpers import (
     annotate_scenes,
     canonicalise,
     coerce_scene_categories,
-    collect_dangling_ref_warnings,
-    dangling_day_entity_warnings,
-    dangling_weather_warnings,
-    missing_lux_refs,
-    missing_period_refs,
     validate_scope_config,
     validate_weather_groups,
 )
@@ -199,56 +194,9 @@ async def _ws_exposed_actions_save(
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
 
-    old_list = exposed_store.list()
-    old_by_id = {a["id"]: a for a in old_list}
-    new_by_id = {a["id"]: a for a in actions}
-
     await exposed_store.save(actions)
 
-    # Dangling-scene warnings: walk every scope and flag any scene whose
-    # action references a removed service or sets a param for a field
-    # that is no longer visible.
-    store = hass.data[DOMAIN][DATA_STORE]
-    warnings: list[dict[str, Any]] = []
-    for scope_kind, scope_id, scope_cfg in store.all_scope_configs():
-        for scene in scope_cfg.get("scenes", []):
-            for action_spec in scene.get("actions", []):
-                sid = action_spec.get("service")
-                if not isinstance(sid, str):
-                    continue
-                old_entry = old_by_id.get(sid)
-                new_entry = new_by_id.get(sid)
-                if new_entry is None and old_entry is not None:
-                    warnings.append(
-                        {
-                            "scope_kind": scope_kind,
-                            "scope_id": scope_id,
-                            "scene_name": scene.get("name", ""),
-                            "reason": f"scene references {sid!r} which is no longer exposed",
-                        }
-                    )
-                    continue
-                if new_entry is None:
-                    continue
-                exposed_keys = set(new_entry.get("visible_fields", [])) | set(
-                    new_entry.get("defaults", {})
-                )
-                extra = set(action_spec.get("params", {})) - exposed_keys
-                if extra:
-                    warnings.append(
-                        {
-                            "scope_kind": scope_kind,
-                            "scope_id": scope_id,
-                            "scene_name": scene.get("name", ""),
-                            "reason": (
-                                f"scene sets {sorted(extra)!r} on {sid!r} but those "
-                                f"fields are not currently exposed (the scene will "
-                                f"still send them at execution)"
-                            ),
-                        }
-                    )
-
-    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
+    connection.send_result(msg["id"], {"ok": True})
 
 
 @websocket_api.require_admin
@@ -597,13 +545,7 @@ async def _ws_periods_save(
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
 
-    warnings = collect_dangling_ref_warnings(
-        hass.data[DOMAIN][DATA_STORE],
-        "time_of_day",
-        missing_period_refs,
-        set(period_store.effective()),
-    )
-    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
+    connection.send_result(msg["id"], {"ok": True})
 
 
 @websocket_api.require_admin
@@ -652,13 +594,7 @@ async def _ws_lux_ranges_save(
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
 
-    warnings = collect_dangling_ref_warnings(
-        hass.data[DOMAIN][DATA_STORE],
-        "lux",
-        missing_lux_refs,
-        set(lux_store.effective()),
-    )
-    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
+    connection.send_result(msg["id"], {"ok": True})
 
 
 @websocket_api.require_admin
@@ -706,8 +642,7 @@ async def _ws_day_config_save(
     }
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_condition_config("day", new_cfg)
-    warnings = dangling_day_entity_warnings(hass, new_cfg)
-    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
+    connection.send_result(msg["id"], {"ok": True})
 
 
 @websocket_api.require_admin
@@ -743,10 +678,8 @@ async def _ws_weather_config_save(
         return
     new_cfg = {"entity": msg.get("entity"), "groups": groups}
     store = hass.data[DOMAIN][DATA_STORE]
-    old_cfg = store.get_condition_config("weather")
     await store.async_save_condition_config("weather", new_cfg)
-    warnings = dangling_weather_warnings(hass, old_cfg, new_cfg)
-    connection.send_result(msg["id"], {"ok": True, "warnings": warnings})
+    connection.send_result(msg["id"], {"ok": True})
 
 
 @websocket_api.require_admin

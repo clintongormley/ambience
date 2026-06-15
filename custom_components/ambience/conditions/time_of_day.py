@@ -232,8 +232,24 @@ class TimeOfDayCondition:
         # `end <= start` wrap in _in_range), harmless, and rejecting it here
         # would block saving any scope holding such a previously-valid config.
         synthetic = _synthetic_snapshot()
+        known = set(self._period_lookup())
         for item in items:
+            pid = item.get("period") if isinstance(item, dict) else None
+            if isinstance(pid, str) and pid not in known:
+                continue  # dangling period ref is a config-health problem, not malformed
             self._match_one(item, synthetic)
+
+    def unconfigured_reason(self, predicate: Any, snapshot: TimeOfDaySnapshot) -> str | None:
+        known = set(self._period_lookup())
+        items = predicate if isinstance(predicate, list) else [predicate]
+        for item in items:
+            if (
+                isinstance(item, dict)
+                and isinstance(item.get("period"), str)
+                and item["period"] not in known
+            ):
+                return f"time-of-day period {item['period']!r} no longer exists"
+        return None
 
     def describe(self, snapshot: TimeOfDaySnapshot, predicate: Any = None) -> str | None:
         periods = self._period_lookup()

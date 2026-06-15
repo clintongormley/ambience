@@ -1042,6 +1042,57 @@ async def test_apply_scene_emits_manual_trace_event(hass: HomeAssistant) -> None
         trace_logger.setLevel(logging.NOTSET)
 
 
+async def test_apply_scene_trace_marks_unexposed_action(hass: HomeAssistant) -> None:
+    """A winning scene whose action's service is no longer exposed records that
+    action as `unexposed` in the trace, so the UI can show it skipped (not applied)
+    instead of silently claiming it ran."""
+    areas = {
+        "a": {
+            "scenes": [
+                {
+                    "name": "evening-lights",
+                    "category": "lighting",
+                    "when": {"tod": "evening"},
+                    "actions": [
+                        {"service": "light.toggle", "entity_ids": ["light.a"], "params": {}}
+                    ],
+                }
+            ]
+        }
+    }
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(areas),
+        DATA_CONDITIONS: {"tod": FixedCondition("evening")},
+        DATA_SWITCHES: {("area", "a"): _switch(True)},
+        # light.toggle is NOT exposed (e.g. deleted from Settings → Actions).
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+
+    captured: list[TraceEvent] = []
+
+    class CaptureSink:
+        def emit(self, event: TraceEvent) -> None:
+            captured.append(event)
+
+    hass.data[DOMAIN][DATA_TRACE_SINKS] = [CaptureSink()]
+    trace_logger = logging.getLogger("custom_components.ambience.trace")
+    trace_logger.setLevel(logging.DEBUG)
+    try:
+        await async_apply_scene(hass, "area", "a")
+        acted = [u for u in captured[-1].units if u.outcome == "acted"]
+        assert acted, "expected an acted unit"
+        assert acted[0].actions == [
+            {
+                "service": "light.toggle",
+                "entity_ids": ["light.a"],
+                "params": {},
+                "unexposed": True,
+            }
+        ]
+    finally:
+        trace_logger.setLevel(logging.NOTSET)
+
+
 async def test_apply_scene_manual_trace_includes_no_match_category(hass: HomeAssistant) -> None:
     """apply_scene must emit a manual TraceEvent with a no_match unit when no scene wins."""
     # Area 'b' has one lighting scene that requires tod=morning, but the condition

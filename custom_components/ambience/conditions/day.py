@@ -17,6 +17,12 @@ from ._common import predicate_has_any
 
 _LOGGER = logging.getLogger(__name__)
 
+# Day-item kinds whose evaluation needs the Workday integration's sensor /
+# calendar. The single definition — config_health imports these so the
+# dangling-reference scan and this condition agree on which kinds depend on what.
+SENSOR_DEPENDENT_KINDS = {"workday", "holiday"}
+CALENDAR_DEPENDENT_KINDS = {"first_workday", "last_workday"}
+
 
 @dataclass(frozen=True)
 class DaySnapshot:
@@ -220,6 +226,18 @@ class DayCondition:
         # wraparound (e.g. Dec 20 -> Jan 5)
         return today_md >= from_md or today_md <= to_md
 
+    def unconfigured_reason(self, predicate: Any, snapshot: DaySnapshot) -> str | None:
+        if not isinstance(predicate, dict):
+            return None
+        cfg = self._day_config()
+        for slot in (predicate.get("include") or []) + (predicate.get("exclude") or []):
+            kind = slot.get("kind") if isinstance(slot, dict) else None
+            if kind in SENSOR_DEPENDENT_KINDS and not cfg.get("workday_sensor"):
+                return "workday sensor not configured"
+            if kind in CALENDAR_DEPENDENT_KINDS and not cfg.get("workday_calendar"):
+                return "workday calendar not configured"
+        return None
+
     def describe(self, snapshot: DaySnapshot, predicate: Any = None) -> str | None:
         return None
 
@@ -256,12 +274,11 @@ class DayCondition:
             )
         elif kind == "last_day":
             pass
-        elif kind in ("workday", "holiday"):
-            if not self._day_config().get("workday_sensor"):
-                raise ValueError(f"day item {kind!r} requires `workday_sensor` to be configured")
-        elif kind in ("first_workday", "last_workday"):
-            if not self._day_config().get("workday_calendar"):
-                raise ValueError(f"day item {kind!r} requires `workday_calendar` to be configured")
+        elif kind in ("workday", "holiday", "first_workday", "last_workday"):
+            # Structurally valid. Whether the workday sensor/calendar is configured
+            # is a config-health concern (Repairs + scene badge), not a malformed
+            # predicate — so don't block the save here.
+            pass
         else:
             raise ValueError(f"unknown day item kind: {kind!r}")
 

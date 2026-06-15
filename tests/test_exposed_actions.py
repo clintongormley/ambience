@@ -373,3 +373,28 @@ async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
                     },
                 ],
             )
+
+
+def test_annotate_unexposed_marks_actions_whose_service_is_not_exposed() -> None:
+    store = ExposedActionsStore(
+        _FakeStorage([{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}}])
+    )
+    actions = [
+        {"service": "light.turn_on", "entity_ids": ["light.a"]},
+        {"service": "light.toggle", "entity_ids": ["light.b"]},  # deleted / not exposed
+    ]
+    result = store.annotate_unexposed(actions)
+    # Exposed action is returned unchanged (no `unexposed` key).
+    assert result[0] == {"service": "light.turn_on", "entity_ids": ["light.a"]}
+    # Unexposed action is tagged so the trace can render it as skipped.
+    assert result[1] == {"service": "light.toggle", "entity_ids": ["light.b"], "unexposed": True}
+    # The caller's original list/dicts are not mutated.
+    assert "unexposed" not in actions[1]
+
+
+def test_annotate_unexposed_ignores_malformed_service() -> None:
+    # A service without a `.` can't be an exposed action; leave it untouched
+    # (the unexposed_action problem kind only applies to valid service ids).
+    store = ExposedActionsStore(_FakeStorage([]))
+    actions = [{"service": "garbage", "entity_ids": []}, {"entity_ids": []}]
+    assert store.annotate_unexposed(actions) == actions

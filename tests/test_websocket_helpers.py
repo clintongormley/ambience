@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.ambience.conditions.weather import weather_predicate_active
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -23,13 +24,8 @@ from custom_components.ambience.websocket_helpers import (
     annotate_scenes,
     canonicalise,
     coerce_scene_categories,
-    dangling_day_entity_warnings,
-    dangling_weather_warnings,
-    missing_lux_refs,
-    missing_period_refs,
     validate_scope_config,
     validate_weather_groups,
-    weather_predicate_active,
 )
 
 # ---------------------------------------------------------------------------
@@ -103,18 +99,16 @@ class TestValidateScopeConfig:
         with pytest.raises(ValueError, match="missing or malformed"):
             validate_scope_config(hass, config)
 
-    def test_rejects_service_not_exposed(self) -> None:
-        hass = _make_hass(exposed_actions={})  # nothing exposed
-        config = {
+    def test_allows_unexposed_action(self) -> None:
+        # A well-formed action whose service isn't exposed must no longer block the
+        # save; it surfaces via Repairs + the scene badge instead.
+        hass = _make_hass(conditions={}, exposed_actions=_make_exposed([]))
+        cfg = {
             "scenes": [
-                {
-                    "when": {},
-                    "actions": [{"service": "light.turn_on", "entity_ids": [], "params": {}}],
-                }
+                {"when": {}, "actions": [{"service": "fan.toggle", "entity_ids": ["fan.x"]}]}
             ]
         }
-        with pytest.raises(ValueError, match="not exposed"):
-            validate_scope_config(hass, config)
+        validate_scope_config(hass, cfg)  # must not raise
 
     def test_rejects_non_list_entity_ids(self) -> None:
         exposed = _make_exposed(["light.turn_on"])
@@ -264,283 +258,6 @@ class TestValidateScopeConfig:
 
 
 # ---------------------------------------------------------------------------
-# missing_period_refs
-# ---------------------------------------------------------------------------
-
-
-class TestMissingPeriodRefs:
-    def test_none_predicate_returns_empty(self) -> None:
-        # Line 128: early-return for None predicate
-        result = missing_period_refs(None, {"morning", "evening"})
-        assert result == []
-
-    def test_list_predicate_recurses_and_aggregates(self) -> None:
-        # Lines 130-133: list branch
-        predicate = [
-            {"period": "morning"},
-            {"period": "ghost"},
-        ]
-        result = missing_period_refs(predicate, {"morning"})
-        assert result == ["ghost"]
-
-    def test_list_predicate_all_present_returns_empty(self) -> None:
-        predicate = [{"period": "morning"}, {"period": "evening"}]
-        result = missing_period_refs(predicate, {"morning", "evening"})
-        assert result == []
-
-    def test_dict_with_period_missing_returns_id(self) -> None:
-        predicate = {"period": "nonexistent"}
-        result = missing_period_refs(predicate, {"morning"})
-        assert result == ["nonexistent"]
-
-    def test_dict_with_period_present_returns_empty(self) -> None:
-        predicate = {"period": "morning"}
-        result = missing_period_refs(predicate, {"morning"})
-        assert result == []
-
-    def test_dict_without_period_key_returns_empty(self) -> None:
-        # Line 138: fallthrough for dict with no 'period' key
-        predicate = {"some_other_key": "value"}
-        result = missing_period_refs(predicate, {"morning"})
-        assert result == []
-
-    def test_non_string_period_value_not_reported(self) -> None:
-        # period value must be a str — non-string ids are ignored
-        predicate = {"period": 42}
-        result = missing_period_refs(predicate, {"morning"})
-        assert result == []
-
-    def test_scalar_non_dict_non_list_returns_empty(self) -> None:
-        # Line 138: arbitrary non-list, non-dict value → empty
-        result = missing_period_refs("some string", {"morning"})
-        assert result == []
-
-    def test_nested_list_recurses_fully(self) -> None:
-        predicate = [
-            [{"period": "missing1"}, {"period": "morning"}],
-            {"period": "missing2"},
-        ]
-        result = missing_period_refs(predicate, {"morning"})
-        assert "missing1" in result
-        assert "missing2" in result
-        assert "morning" not in result
-
-
-# ---------------------------------------------------------------------------
-# missing_lux_refs
-# ---------------------------------------------------------------------------
-
-
-class TestMissingLuxRefs:
-    def test_dict_with_unknown_range_returns_id(self) -> None:
-        assert missing_lux_refs({"range": "ghost"}, {"dark", "bright"}) == ["ghost"]
-
-    def test_dict_with_known_range_returns_empty(self) -> None:
-        # Range present and resolvable → fall through to the empty return.
-        assert missing_lux_refs({"range": "dark"}, {"dark"}) == []
-
-    def test_dict_without_range_key_returns_empty(self) -> None:
-        assert missing_lux_refs({"min": 0, "max": 10}, {"dark"}) == []
-
-    def test_non_string_range_value_returns_empty(self) -> None:
-        assert missing_lux_refs({"range": 42}, {"dark"}) == []
-
-    def test_non_dict_predicate_returns_empty(self) -> None:
-        assert missing_lux_refs("nope", {"dark"}) == []
-        assert missing_lux_refs(None, {"dark"}) == []
-
-
-# ---------------------------------------------------------------------------
-# dangling_day_entity_warnings
-# ---------------------------------------------------------------------------
-
-
-def _make_store_with_scenes(scenes_per_scope: list[tuple[str, str | None, dict]]) -> Any:
-    """Return a store stub whose all_scope_configs() yields the given triples."""
-    store = MagicMock()
-    store.all_scope_configs.return_value = scenes_per_scope
-    return store
-
-
-class TestDanglingDayEntityWarnings:
-    def test_no_scenes_returns_empty(self) -> None:
-        store = _make_store_with_scenes([])
-        hass = _make_hass(store=store)
-        result = dangling_day_entity_warnings(hass, {"workday_sensor": None})
-        assert result == []
-
-    def test_scene_with_non_dict_day_pred_is_skipped(self) -> None:
-        # Line 150: non-dict day predicate → continue
-        store = _make_store_with_scenes(
-            [
-                (
-                    "area",
-                    "area_1",
-                    {
-                        "scenes": [
-                            {
-                                "name": "test",
-                                "when": {"day": "not_a_dict"},
-                            }
-                        ]
-                    },
-                )
-            ]
-        )
-        hass = _make_hass(store=store)
-        cfg = {"workday_sensor": None, "workday_calendar": None}
-        result = dangling_day_entity_warnings(hass, cfg)
-        assert result == []
-
-    def test_workday_kind_without_sensor_emits_warning(self) -> None:
-        # Lines 153→162: workday kind, sensor unset
-        store = _make_store_with_scenes(
-            [
-                (
-                    "area",
-                    "area_1",
-                    {
-                        "scenes": [
-                            {
-                                "name": "Pay day",
-                                "when": {
-                                    "day": {
-                                        "include": [{"kind": "workday"}],
-                                        "exclude": [],
-                                    }
-                                },
-                            }
-                        ]
-                    },
-                )
-            ]
-        )
-        hass = _make_hass(store=store)
-        cfg = {"workday_sensor": None, "workday_calendar": None}
-        result = dangling_day_entity_warnings(hass, cfg)
-        assert len(result) == 1
-        w = result[0]
-        assert w["scope_kind"] == "area"
-        assert w["scope_id"] == "area_1"
-        assert w["scene_name"] == "Pay day"
-        assert "workday_sensor" in w["reason"]
-
-    def test_holiday_kind_without_sensor_emits_warning(self) -> None:
-        # holiday is also in _SENSOR_DEPENDENT_KINDS
-        store = _make_store_with_scenes(
-            [
-                (
-                    "area",
-                    "area_2",
-                    {
-                        "scenes": [
-                            {
-                                "name": "Holiday scene",
-                                "when": {
-                                    "day": {
-                                        "include": [{"kind": "holiday"}],
-                                        "exclude": [],
-                                    }
-                                },
-                            }
-                        ]
-                    },
-                )
-            ]
-        )
-        hass = _make_hass(store=store)
-        cfg = {"workday_sensor": None, "workday_calendar": "calendar.work"}
-        result = dangling_day_entity_warnings(hass, cfg)
-        assert any("workday_sensor" in w["reason"] for w in result)
-
-    def test_first_workday_kind_without_calendar_emits_warning(self) -> None:
-        # Line 163: calendar-dependent kind, calendar_ok = False
-        store = _make_store_with_scenes(
-            [
-                (
-                    "floor",
-                    "floor_1",
-                    {
-                        "scenes": [
-                            {
-                                "name": "First workday",
-                                "when": {
-                                    "day": {
-                                        "include": [{"kind": "first_workday"}],
-                                        "exclude": [],
-                                    }
-                                },
-                            }
-                        ]
-                    },
-                )
-            ]
-        )
-        hass = _make_hass(store=store)
-        cfg = {"workday_sensor": "binary_sensor.workday", "workday_calendar": None}
-        result = dangling_day_entity_warnings(hass, cfg)
-        assert len(result) == 1
-        w = result[0]
-        assert w["scope_kind"] == "floor"
-        assert "workday_calendar" in w["reason"]
-
-    def test_last_workday_kind_without_calendar_emits_warning(self) -> None:
-        # last_workday is in _CALENDAR_DEPENDENT_KINDS
-        store = _make_store_with_scenes(
-            [
-                (
-                    "area",
-                    "area_3",
-                    {
-                        "scenes": [
-                            {
-                                "name": "Month end",
-                                "when": {
-                                    "day": {
-                                        "include": [],
-                                        "exclude": [{"kind": "last_workday"}],
-                                    }
-                                },
-                            }
-                        ]
-                    },
-                )
-            ]
-        )
-        hass = _make_hass(store=store)
-        cfg = {"workday_sensor": None, "workday_calendar": None}
-        result = dangling_day_entity_warnings(hass, cfg)
-        assert any("workday_calendar" in w["reason"] for w in result)
-
-    def test_no_warning_when_sensor_is_set(self) -> None:
-        store = _make_store_with_scenes(
-            [
-                (
-                    "area",
-                    "area_1",
-                    {
-                        "scenes": [
-                            {
-                                "name": "Workday scene",
-                                "when": {
-                                    "day": {
-                                        "include": [{"kind": "workday"}],
-                                        "exclude": [],
-                                    }
-                                },
-                            }
-                        ]
-                    },
-                )
-            ]
-        )
-        hass = _make_hass(store=store)
-        cfg = {"workday_sensor": "binary_sensor.workday", "workday_calendar": None}
-        result = dangling_day_entity_warnings(hass, cfg)
-        assert result == []
-
-
-# ---------------------------------------------------------------------------
 # validate_weather_groups
 # ---------------------------------------------------------------------------
 
@@ -638,127 +355,6 @@ class TestWeatherPredicateActive:
 
 
 # ---------------------------------------------------------------------------
-# dangling_weather_warnings
-# ---------------------------------------------------------------------------
-
-
-class TestDanglingWeatherWarnings:
-    def _make_hass_with_scenes(self, scenes_per_scope: list[tuple[str, str | None, dict]]) -> Any:
-        store = _make_store_with_scenes(scenes_per_scope)
-        return _make_hass(store=store)
-
-    def test_no_scopes_returns_empty(self) -> None:
-        hass = self._make_hass_with_scenes([])
-        result = dangling_weather_warnings(hass, {"groups": []}, {"groups": [], "entity": None})
-        assert result == []
-
-    def test_entity_cleared_emits_warning_for_active_weather_scene(self) -> None:
-        # Line 223: entity_cleared branch
-        hass = self._make_hass_with_scenes(
-            [
-                (
-                    "area",
-                    "area_1",
-                    {
-                        "scenes": [
-                            {
-                                "name": "Rainy",
-                                "when": {"weather": {"groups": ["wet"], "thresholds": []}},
-                            }
-                        ]
-                    },
-                )
-            ]
-        )
-        old_cfg = {"entity": "weather.home", "groups": [{"id": "wet"}]}
-        new_cfg = {"entity": None, "groups": [{"id": "wet"}]}  # entity cleared
-        result = dangling_weather_warnings(hass, old_cfg, new_cfg)
-        assert len(result) == 1
-        w = result[0]
-        assert w["scope_kind"] == "area"
-        assert w["scope_id"] == "area_1"
-        assert w["scene_name"] == "Rainy"
-        assert "weather entity is unset" in w["reason"]
-
-    def test_removed_group_emits_warning(self) -> None:
-        hass = self._make_hass_with_scenes(
-            [
-                (
-                    "area",
-                    "area_1",
-                    {
-                        "scenes": [
-                            {
-                                "name": "Wet scene",
-                                "when": {"weather": {"groups": ["wet"], "thresholds": []}},
-                            }
-                        ]
-                    },
-                )
-            ]
-        )
-        old_cfg = {
-            "entity": "weather.home",
-            "groups": [{"id": "wet"}, {"id": "sunny"}],
-        }
-        new_cfg = {
-            "entity": "weather.home",
-            "groups": [{"id": "sunny"}],  # "wet" removed
-        }
-        result = dangling_weather_warnings(hass, old_cfg, new_cfg)
-        assert len(result) == 1
-        w = result[0]
-        assert "wet" in w["reason"]
-
-    def test_no_warning_when_nothing_changed(self) -> None:
-        hass = self._make_hass_with_scenes(
-            [
-                (
-                    "area",
-                    "area_1",
-                    {
-                        "scenes": [
-                            {
-                                "name": "Wet scene",
-                                "when": {"weather": {"groups": ["wet"], "thresholds": []}},
-                            }
-                        ]
-                    },
-                )
-            ]
-        )
-        cfg = {
-            "entity": "weather.home",
-            "groups": [{"id": "wet"}],
-        }
-        result = dangling_weather_warnings(hass, cfg, cfg)
-        assert result == []
-
-    def test_inactive_weather_predicate_is_not_warned(self) -> None:
-        # weather predicate present but inactive (empty groups + empty thresholds)
-        hass = self._make_hass_with_scenes(
-            [
-                (
-                    "area",
-                    "area_1",
-                    {
-                        "scenes": [
-                            {
-                                "name": "No weather",
-                                "when": {"weather": {"groups": [], "thresholds": []}},
-                            }
-                        ]
-                    },
-                )
-            ]
-        )
-        old_cfg = {"entity": "weather.home", "groups": [{"id": "wet"}]}
-        new_cfg = {"entity": None, "groups": []}
-        result = dangling_weather_warnings(hass, old_cfg, new_cfg)
-        assert result == []
-
-
-# ---------------------------------------------------------------------------
 # coerce_scene_categories
 # ---------------------------------------------------------------------------
 
@@ -840,6 +436,7 @@ class TestCanonicalise:
                     "shadowed_by": 0,
                     "missing_entities": ["light.x"],
                     "overlap_entities": ["light.y"],
+                    "config_issues": [{"kind": "missing_workday_sensor", "ref": "workday_sensor"}],
                 },
             ]
         }
@@ -847,6 +444,7 @@ class TestCanonicalise:
         assert "shadowed_by" not in result["scenes"][0]
         assert "missing_entities" not in result["scenes"][0]
         assert "overlap_entities" not in result["scenes"][0]
+        assert "config_issues" not in result["scenes"][0]
 
 
 # ---------------------------------------------------------------------------

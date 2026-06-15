@@ -38,6 +38,34 @@
     "action_overlap": {
       "title": "Ambience: an entity is controlled by multiple groups",
       "description": "The entity `{entity_id}` is controlled by more than one Ambience category/scope group:\n{groups}\n\nEach group is an independent control loop with its own state, so they can fight over this entity and produce stale or no-op applies. Consider moving it into a single group. This message clears automatically once the overlap is resolved."
+    },
+    "missing_workday_sensor": {
+      "title": "Ambience: scenes use a workday item but no workday sensor is configured",
+      "description": "These Ambience scenes use a `workday` or `holiday` day-item, but no **workday sensor** is configured (Settings → Ambience → Conditions → Day), so they can never match:\n{scenes}\n\nConfigure a workday sensor, or remove the workday/holiday items. This message clears automatically once it's resolved."
+    },
+    "missing_workday_calendar": {
+      "title": "Ambience: scenes use a workday-calendar item but no calendar is configured",
+      "description": "These Ambience scenes use a `first_workday`/`last_workday` day-item, but no **workday calendar** is configured (Settings → Ambience → Conditions → Day), so they can never match:\n{scenes}\n\nConfigure a workday calendar, or remove those items. This message clears automatically once it's resolved."
+    },
+    "missing_weather_entity": {
+      "title": "Ambience: scenes use a weather condition but no weather entity is configured",
+      "description": "These Ambience scenes use a weather condition, but no **weather entity** is configured (Settings → Ambience → Conditions → Weather), so they can never match:\n{scenes}\n\nConfigure a weather entity, or remove the weather conditions. This message clears automatically once it's resolved."
+    },
+    "missing_weather_group": {
+      "title": "Ambience: scenes reference a deleted weather group",
+      "description": "The weather group `{ref}` no longer exists, but is referenced by these Ambience scenes:\n{scenes}\n\nA condition referencing it will never match. Re-create the group or remove the reference. This message clears automatically once it's resolved."
+    },
+    "missing_period": {
+      "title": "Ambience: scenes reference a deleted time-of-day period",
+      "description": "The time-of-day period `{ref}` no longer exists, but is referenced by these Ambience scenes:\n{scenes}\n\nA condition referencing it will never match. Re-create the period or remove the reference. This message clears automatically once it's resolved."
+    },
+    "missing_lux_range": {
+      "title": "Ambience: scenes reference a deleted lux range",
+      "description": "The lux range `{ref}` no longer exists, but is referenced by these Ambience scenes:\n{scenes}\n\nA condition referencing it will never match. Re-create the range or remove the reference. This message clears automatically once it's resolved."
+    },
+    "unexposed_action": {
+      "title": "Ambience: scenes use an action that is no longer exposed",
+      "description": "The action `{ref}` is no longer exposed (Settings → Ambience → Actions), but is used by these Ambience scenes:\n{scenes}\n\nThe action will be skipped when the scene applies. Re-expose the action or remove it from the scenes. This message clears automatically once it's resolved."
     }
   }
 }

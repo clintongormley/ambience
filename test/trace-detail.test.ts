@@ -1204,4 +1204,56 @@ describe("review fixes", () => {
     expect(host.textContent).toContain("Calmer evenings");
     expect(host.textContent).not.toContain("wind_down");
   });
+
+  test("outcomeSummary notes how many actions were skipped (unexposed)", () => {
+    const summary = outcomeSummary(
+      unit({
+        actions: [
+          { service: "light.turn_on", entity_ids: ["light.k"], params: {} },
+          { service: "light.toggle", entity_ids: ["light.b"], params: {}, unexposed: true },
+        ],
+      }),
+    );
+    expect(summary).toContain("1 skipped");
+  });
+
+  test("renderEvaluation marks an unexposed action as not exposed", () => {
+    const host = renderToHost(
+      {
+        actions: [
+          { service: "light.toggle", entity_ids: ["light.b"], params: {}, unexposed: true },
+        ],
+      },
+      true,
+    );
+    expect(host.textContent).toContain("not exposed");
+  });
+
+  test("collapsed summary does not present an all-skipped unit's action as taken", () => {
+    const host = renderToHost(
+      {
+        actions: [
+          { service: "light.toggle", entity_ids: ["light.b"], params: {}, unexposed: true },
+        ],
+      },
+      false,
+    );
+    // The one-line summary must not read like the skipped action ran; it falls
+    // through to the outcome summary, which notes the skip.
+    expect(host.textContent).toContain("skipped");
+    expect(host.textContent).not.toContain("· 1 entity");
+  });
+
+  test("outcomeSummary reads sensibly when every action was skipped", () => {
+    const summary = outcomeSummary(
+      unit({
+        actions: [
+          { service: "light.toggle", entity_ids: ["light.b"], params: {}, unexposed: true },
+        ],
+      }),
+    );
+    expect(summary).toContain("skipped");
+    expect(summary).not.toContain("0 actions");
+    expect(summary).not.toMatch(/^Applied/);
+  });
 });

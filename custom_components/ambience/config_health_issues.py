@@ -20,7 +20,23 @@ from .naming import category_names, scope_display_name
 # Issue-id prefixes this module owns. The reconcile delete-pass only touches ids
 # with these prefixes, so it never deletes a Repairs issue some other part of the
 # integration might raise under DOMAIN.
-_ISSUE_PREFIXES = ("missing_entity:", "action_overlap:")
+# Keep in sync with the kinds `config_health.scene_config_issues()` can emit:
+# any kind missing here would have its Repairs issue orphaned by the delete-pass.
+_NEW_KINDS = frozenset(
+    {
+        "missing_workday_sensor",
+        "missing_workday_calendar",
+        "missing_weather_entity",
+        "missing_weather_group",
+        "missing_period",
+        "missing_lux_range",
+        "unexposed_action",
+    }
+)
+_ISSUE_PREFIXES = ("missing_entity:", "action_overlap:") + tuple(
+    f"{k}:"
+    for k in sorted(_NEW_KINDS)  # sorted → deterministic regardless of frozenset order
+)
 
 
 def _issue_id(problem: Problem) -> str:
@@ -31,8 +47,10 @@ def _issue_id(problem: Problem) -> str:
     if problem.kind == "missing_entity":
         loc = problem.locations[0]  # all locations share one scope for this kind
         sid = loc.scope_id or loc.scope_kind
-        return f"missing_entity:{loc.scope_kind}:{sid}:{problem.entity_id}"
-    return f"action_overlap:{problem.entity_id}"
+        return f"missing_entity:{loc.scope_kind}:{sid}:{problem.ref}"
+    if problem.kind == "action_overlap":
+        return f"action_overlap:{problem.ref}"
+    return f"{problem.kind}:{problem.ref}"  # new kinds: global per (kind, ref)
 
 
 def _clean(text: str) -> str:
@@ -53,6 +71,24 @@ def _category_clause(category_name: str) -> str:
     return f"category: {_clean(category_name)}" if category_name else "uncategorised"
 
 
+def _scene_bullets(hass: HomeAssistant, cats: dict[str, str], problem: Problem) -> str:
+    """Markdown bullets naming each affected scope · scene · category. Used by the
+    new dangling-config-reference issue kinds (which aggregate across scopes)."""
+    rows = sorted(
+        {
+            (
+                _scope_phrase(hass, loc.scope_kind, loc.scope_id),
+                cats.get(loc.category_id) or "",
+                loc.scene_name or "(unnamed)",
+            )
+            for loc in problem.locations
+        }
+    )
+    return "".join(
+        f'\n- {phrase} · "{_clean(name)}" — {_category_clause(cat)}' for phrase, cat, name in rows
+    )
+
+
 @callback
 def reconcile_issues(hass: HomeAssistant) -> None:
     """Make the Repairs issue set match the current config-health problems."""
@@ -67,9 +103,7 @@ def reconcile_issues(hass: HomeAssistant) -> None:
     # Refresh the overlap-set cache the frontend flag reads (see
     # config_health.scene_annotations) from this same scan — no extra work, and it
     # keeps the flag on the same config-change/registry cadence as the Repairs issue.
-    domain_data[DATA_OVERLAP_SET] = frozenset(
-        p.entity_id for p in problems if p.kind == "action_overlap"
-    )
+    domain_data[DATA_OVERLAP_SET] = frozenset(p.ref for p in problems if p.kind == "action_overlap")
     desired: dict[str, Problem] = {_issue_id(p): p for p in problems}
     cats = category_names(hass)  # category id -> friendly name
 
@@ -98,7 +132,7 @@ def reconcile_issues(hass: HomeAssistant) -> None:
                 f'\n- "{_clean(name)}" — {_category_clause(category)}' for name, category in bullets
             )
             translation_key = "missing_entity"
-            placeholders = {"entity_id": problem.entity_id, "scope": scope, "scenes": scenes}
+            placeholders = {"entity_id": problem.ref, "scope": scope, "scenes": scenes}
         elif problem.kind == "action_overlap":
             group_bullets = sorted(
                 {
@@ -113,8 +147,14 @@ def reconcile_issues(hass: HomeAssistant) -> None:
                 f"\n- {phrase} · {_category_clause(category)}" for phrase, category in group_bullets
             )
             translation_key = "action_overlap"
-            placeholders = {"entity_id": problem.entity_id, "groups": groups}
-        else:  # pragma: no cover - unreachable; kind is a closed Literal
+            placeholders = {"entity_id": problem.ref, "groups": groups}
+        elif problem.kind in _NEW_KINDS:
+            translation_key = problem.kind
+            placeholders = {
+                "ref": problem.ref,
+                "scenes": _scene_bullets(hass, cats, problem),
+            }
+        else:  # pragma: no cover - unknown future kind; skip rather than crash
             continue
         ir.async_create_issue(
             hass,

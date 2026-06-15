@@ -266,6 +266,8 @@ def _format_action(action: dict[str, Any]) -> str:
     params = action.get("params") or {}
     if params:
         parts.append(str(params))
+    if action.get("unexposed"):
+        parts.append("(skipped — not exposed)")
     return " ".join(parts)
 
 

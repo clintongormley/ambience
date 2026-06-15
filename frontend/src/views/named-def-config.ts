@@ -2,19 +2,11 @@ import { css, html, LitElement, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { localize } from "../i18n.js";
-import { scopeLabel } from "../scope-label.js";
 
 export type NamedDefView<Def> = {
   builtins: Record<string, Def>;
   custom: Record<string, Def>;
   hidden: string[];
-};
-
-type DefWarning = {
-  scope_kind: string;
-  scope_id: string | null;
-  scene_name: string;
-  missing_id: string; // the referenced builtin/custom id that no longer exists
 };
 
 type ModalState<Def> =
@@ -43,9 +35,9 @@ export function effectiveDefIds<Def>(
 /**
  * Abstract base for a named-definition management screen (periods, lux ranges):
  * effective list with provenance badges, per-row override/edit/delete actions,
- * an Add button, dangling-reference warnings, and the add/edit modal. Subclasses
- * supply the api calls, the label/format helpers, the i18n keys, and the modal
- * element (via {@link _renderModal}).
+ * an Add button, and the add/edit modal. Subclasses supply the api calls, the
+ * label/format helpers, the i18n keys, and the modal element (via
+ * {@link _renderModal}).
  */
 export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
   static override styles = css`
@@ -75,11 +67,6 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
     }
     button.icon:hover { color: var(--primary-color); }
     button.add { margin-top: 1rem; padding: 0.5rem 1rem; cursor: pointer; }
-    .warnings {
-      background: var(--warning-color, #ffd); border: 1px solid var(--warning-color, #cc9);
-      padding: 0.5rem 1rem; border-radius: 4px; margin-bottom: 1rem;
-    }
-    .warnings ul { margin: 0.3rem 0 0 0; padding-left: 1.2rem; }
     .error { color: var(--error-color, #d32f2f); margin-bottom: 1rem; }
   `;
 
@@ -87,20 +74,15 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
 
   @state() protected _view: NamedDefView<Def> = { builtins: {}, custom: {}, hidden: [] };
   @state() protected _modal: ModalState<Def> = { mode: "closed" };
-  @state() protected _warnings: DefWarning[] = [];
   @state() protected _error = "";
 
   // --- subclass hooks ------------------------------------------------------
   protected abstract _list(): Promise<NamedDefView<Def>>;
-  protected abstract _save(
-    custom: Record<string, Def>,
-    hidden: string[],
-  ): Promise<{ warnings: DefWarning[] }>;
+  protected abstract _save(custom: Record<string, Def>, hidden: string[]): Promise<void>;
   protected abstract _label(id: string, custom: Record<string, Def>): string;
   protected abstract _formatDef(defn: Def): string;
   protected abstract _headingKey(): [string, string];
   protected abstract _addKey(): [string, string];
-  protected abstract _warningTextKey(): [string, string];
   protected abstract _renderModal(): TemplateResult;
 
   override async connectedCallback(): Promise<void> {
@@ -122,8 +104,7 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
   // Returns whether the save succeeded (the modal closes only on success).
   protected async _saveState(custom: Record<string, Def>): Promise<boolean> {
     try {
-      const res = await this._save(custom, this._view.hidden);
-      this._warnings = res.warnings;
+      await this._save(custom, this._view.hidden);
       this._error = "";
     } catch (e) {
       this._error = (e as Error).message || String(e);
@@ -203,24 +184,11 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
     const custom = this._view.custom;
     const [headingKey, headingFb] = this._headingKey();
     const [addKey, addFb] = this._addKey();
-    const [warnKey, warnFb] = this._warningTextKey();
     return html`
       <header>
         <h2>${localize(this.hass, headingKey, headingFb)}</h2>
       </header>
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
-      ${
-        this._warnings.length
-          ? html`<div class="warnings">
-            <strong>${localize(this.hass, "ui.period_warning_prefix", "Warning:")}</strong> ${localize(this.hass, warnKey, warnFb)}
-            <ul>
-              ${this._warnings.map(
-                (w) => html`<li>${scopeLabel(w)} / "${w.scene_name}" → ${w.missing_id}</li>`,
-              )}
-            </ul>
-          </div>`
-          : ""
-      }
       ${Object.entries(this._view.builtins).map(([id, defn]) => {
         const override = custom[id];
         return html`

@@ -36,6 +36,23 @@ def test_format_uses_scope_name_when_present():
     assert "area/Master Bedroom/g: acted" in text
 
 
+def test_format_action_marks_unexposed():
+    # An unexposed action is log-and-skipped at dispatch; the log line says so too.
+    unit = UnitTrace(
+        "area",
+        "kitchen",
+        "g",
+        "on",
+        "acted",
+        None,
+        winner_name="r",
+        actions=[{"service": "light.toggle", "entity_ids": ["light.b"], "unexposed": True}],
+    )
+    text = "\n".join(format_trace_event(TraceEvent(TriggerCause(kind="manual"), [unit])))
+    assert "light.toggle" in text
+    assert "not exposed" in text
+
+
 async def test_emit_trace_resolves_scope_name_for_log(hass, caplog):
     from homeassistant.helpers import area_registry as ar
 

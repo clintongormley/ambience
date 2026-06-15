@@ -3,7 +3,7 @@ import type { LuxRangeStoreView } from "../frontend/src/types";
 
 vi.mock("../frontend/src/api.js", () => ({
   listLuxRanges: vi.fn(async () => ({ builtins: {}, custom: {}, hidden: [] })),
-  saveLuxRanges: vi.fn(async () => ({ ok: true, warnings: [] })),
+  saveLuxRanges: vi.fn(async () => ({ ok: true })),
   resetLuxRanges: vi.fn(async () => ({ ok: true })),
 }));
 
@@ -22,7 +22,7 @@ const baseView: LuxRangeStoreView = {
 
 async function mount(view: LuxRangeStoreView = baseView): Promise<any> {
   vi.mocked(api.listLuxRanges).mockResolvedValue(structuredClone(view));
-  vi.mocked(api.saveLuxRanges).mockResolvedValue({ ok: true as const, warnings: [] });
+  vi.mocked(api.saveLuxRanges).mockResolvedValue({ ok: true as const });
   vi.mocked(api.resetLuxRanges).mockResolvedValue({ ok: true as const });
   const el: any = document.createElement("ambience-lux-config");
   el.hass = {} as any;
@@ -117,24 +117,6 @@ describe("ambience-lux-config", () => {
       { gloomy: { min: 5, max: 30, label: "Gloomy" } },
       ["dim"],
     );
-  });
-
-  test("warnings render when a save reports dangling references", async () => {
-    el = await mount();
-    vi.mocked(api.saveLuxRanges).mockResolvedValueOnce({
-      ok: true as const,
-      warnings: [
-        {
-          scope_kind: "area",
-          scope_id: "lr",
-          scene_name: "Movie",
-          missing_id: "gloomy",
-        },
-      ],
-    });
-    await el._saveState({});
-    await el.updateComplete;
-    expect(el.shadowRoot.textContent).toContain("gloomy");
   });
 });
 

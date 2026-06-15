@@ -130,6 +130,13 @@ class LuxCondition:
             return as_float(defn.get("min")), as_float(defn.get("max"))
         return as_float(predicate.get("min")), as_float(predicate.get("max"))
 
+    def unconfigured_reason(self, predicate: Any, snapshot: LuxSnapshot) -> str | None:
+        if isinstance(predicate, dict) and "range" in predicate:
+            rid = predicate["range"]
+            if isinstance(rid, str) and rid not in self._range_lookup():
+                return f"lux range {rid!r} no longer exists"
+        return None
+
     def describe(self, snapshot: LuxSnapshot, predicate: Any = None) -> str | None:
         # No predicate: whole-snapshot summary (used by `snapshots_described`).
         if predicate is None:
@@ -203,11 +210,6 @@ class LuxCondition:
                 raise ValueError(f"`range` must be a string, got {rid!r}")
             if has_inline:
                 raise ValueError("specify `range` or `min`/`max`, not both")
-            # Reject a dangling range id at save time (mirrors time_of_day, which
-            # rejects unknown period ids). Runtime matches() stays tolerant for
-            # ranges hidden *after* a scene was saved.
-            if rid not in self._range_lookup():
-                raise ValueError(f"unknown lux range: {rid!r}")
         else:
             validate_int_bound(predicate.get("min"), "min")
             validate_int_bound(predicate.get("max"), "max")

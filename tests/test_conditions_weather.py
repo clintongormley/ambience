@@ -174,20 +174,8 @@ def test_validate_rejects_non_dict(m_no_entity: WeatherCondition) -> None:
         m_no_entity.validate_predicate(42)
 
 
-def test_validate_rejects_unknown_group(hass: HomeAssistant) -> None:
-    _install_store_stub_groups(
-        hass,
-        groups=[
-            {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
-        ],
-    )
-    m = WeatherCondition(hass=hass)
-    with pytest.raises(ValueError, match="weather group"):
-        m.validate_predicate({"groups": ["bogus"], "thresholds": []})
-
-
 def test_validate_skips_group_existence_when_no_hass() -> None:
-    # no hass → no group-existence check; shape checks still apply
+    # no hass → shape checks still apply; unknown group ids are not rejected
     m = WeatherCondition()
     m.validate_predicate({"groups": ["anything"], "thresholds": []})
 
@@ -205,15 +193,6 @@ def test_validate_skips_group_existence_when_no_hass() -> None:
 def test_validate_rejects_bad_threshold(m_with_entity: WeatherCondition, threshold) -> None:
     with pytest.raises(ValueError):
         m_with_entity.validate_predicate({"groups": [], "thresholds": [threshold]})
-
-
-def test_validate_active_predicate_requires_entity(m_no_entity: WeatherCondition) -> None:
-    with pytest.raises(ValueError, match="weather entity"):
-        m_no_entity.validate_predicate({"groups": ["sunny"], "thresholds": []})
-    with pytest.raises(ValueError, match="weather entity"):
-        m_no_entity.validate_predicate(
-            {"groups": [], "thresholds": [{"attribute": "temperature", "op": "<", "value": 5}]}
-        )
 
 
 def test_validate_accepts_well_formed(hass: HomeAssistant) -> None:
@@ -514,6 +493,14 @@ def test_validate_threshold_rejects_non_dict(m_no_entity: WeatherCondition) -> N
         m_no_entity.validate_predicate({"groups": [], "thresholds": [42]})
 
 
+def test_weather_validate_predicate_allows_unknown_group_and_unset_entity(
+    hass: HomeAssistant,
+) -> None:
+    _install_store_stub_groups(hass, entity=None, groups=[])
+    cond = WeatherCondition(hass=hass)
+    cond.validate_predicate({"groups": ["ghost"]})  # must not raise
+
+
 def test_is_constraining_only_with_groups_or_thresholds() -> None:
     """{groups: [], thresholds: []} matches everything — a sorting wildcard,
     not a real constraint (mirrors lux/occupancy)."""
@@ -528,3 +515,57 @@ def test_is_constraining_only_with_groups_or_thresholds() -> None:
     assert m.is_constraining({"groups": [], "thresholds": []}) is False
     assert m.is_constraining({}) is False
     assert m.is_constraining("not-a-dict") is False
+
+
+# ---------------------------------------------------------------------------
+# unconfigured_reason — lines 192-201
+# ---------------------------------------------------------------------------
+
+
+def test_unconfigured_reason_inactive_predicate_returns_none(hass: HomeAssistant) -> None:
+    """Inactive predicate (no groups, no thresholds) → no reason regardless of entity."""
+    _install_store_stub_groups(hass, entity=None, groups=[])
+    m = WeatherCondition(hass=hass)
+    assert m.unconfigured_reason({"groups": [], "thresholds": []}, _snap()) is None
+    assert m.unconfigured_reason(None, _snap()) is None
+    assert m.unconfigured_reason({}, _snap()) is None
+
+
+def test_unconfigured_reason_no_entity_returns_reason(hass: HomeAssistant) -> None:
+    """Active predicate + no entity configured → 'weather entity not configured'."""
+    _install_store_stub_groups(hass, entity=None, groups=[])
+    m = WeatherCondition(hass=hass)
+    reason = m.unconfigured_reason({"groups": ["sunny"]}, _snap())
+    assert reason == "weather entity not configured"
+
+
+def test_unconfigured_reason_unknown_group_returns_reason(hass: HomeAssistant) -> None:
+    """Active predicate + entity set + group id unknown → reason naming the group."""
+    _install_store_stub_groups(
+        hass,
+        entity="weather.home",
+        groups=[{"id": "sunny", "label": "Sunny", "conditions": ["sunny"]}],
+    )
+    m = WeatherCondition(hass=hass)
+    reason = m.unconfigured_reason({"groups": ["ghost"]}, _snap())
+    assert reason is not None
+    assert "ghost" in reason
+
+
+def test_unconfigured_reason_all_configured_returns_none(hass: HomeAssistant) -> None:
+    """Active predicate + entity set + all groups known → None."""
+    _install_store_stub_groups(
+        hass,
+        entity="weather.home",
+        groups=[{"id": "sunny", "label": "Sunny", "conditions": ["sunny"]}],
+    )
+    m = WeatherCondition(hass=hass)
+    assert m.unconfigured_reason({"groups": ["sunny"]}, _snap()) is None
+
+
+def test_unconfigured_reason_skips_non_string_group_ids(hass: HomeAssistant) -> None:
+    """Non-string group ids in the predicate are skipped (not flagged as unknown)."""
+    _install_store_stub_groups(hass, entity="weather.home", groups=[])
+    m = WeatherCondition(hass=hass)
+    # groups contains a non-string — must not raise and must not flag it
+    assert m.unconfigured_reason({"groups": [None, 42]}, _snap()) is None

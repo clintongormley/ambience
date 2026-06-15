@@ -584,7 +584,7 @@ async def async_apply_scene(
                 Outcome.ACTED,
                 explanation,
                 winner_name=plan["scene_name"],
-                actions=plan["actions"],
+                actions=hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].annotate_unexposed(plan["actions"]),
             )
         return None
 

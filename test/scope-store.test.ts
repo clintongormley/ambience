@@ -239,6 +239,26 @@ describe("ScopeStore", () => {
       expect(Object.keys(store.schemas)).toEqual(["switch.turn_on"]);
     });
 
+    test("ambience-exposed-actions-changed re-fetches scope configs so badges refresh", async () => {
+      const { store } = makeStore();
+      connect(store);
+      await store.refreshAreas();
+      await store.refreshFloors();
+      vi.mocked(api.getArea).mockClear();
+      vi.mocked(api.getFloor).mockClear();
+      vi.mocked(api.getHouse).mockClear();
+      window.dispatchEvent(new Event("ambience-exposed-actions-changed"));
+      await tick();
+      // Deleting an action re-derives every scene's config_issues badge on the
+      // backend, so the open panel must re-fetch each scope's config — the
+      // actions-list refresh alone leaves the badges stale until a full reload.
+      expect(vi.mocked(api.getArea).mock.calls.map((c) => c[1])).toEqual(
+        expect.arrayContaining(["living_room", "bedroom"]),
+      );
+      expect(api.getFloor).toHaveBeenCalled();
+      expect(api.getHouse).toHaveBeenCalled();
+    });
+
     test("ambience-categories-changed refetches categories", async () => {
       const { store } = makeStore();
       connect(store);
@@ -282,6 +302,18 @@ describe("ScopeStore", () => {
       window.dispatchEvent(new Event("ambience-exposed-actions-changed"));
       await tick();
       expect(store.actions).toEqual(actions);
+      expect(store.error).toBe("");
+    });
+
+    test("an exposed-actions-changed config refetch failure is silently swallowed", async () => {
+      const { store } = makeStore();
+      connect(store);
+      await store.refreshAreas();
+      vi.mocked(api.getArea).mockRejectedValue(new Error("transient"));
+      window.dispatchEvent(new Event("ambience-exposed-actions-changed"));
+      await tick();
+      // A transient config refetch failure right after a successful save must not
+      // flash the page error banner — same silent contract as the actions refetch.
       expect(store.error).toBe("");
     });
 

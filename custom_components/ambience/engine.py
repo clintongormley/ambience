@@ -114,6 +114,11 @@ def evaluate_explained(
             # Pass the predicate so the trace detail is scoped to the sensors/
             # persons THIS scene references, not the whole shared snapshot.
             detail = condition.describe(snap, predicate) if describe else None
+            if describe and not passed:
+                reason_fn = getattr(condition, "unconfigured_reason", None)
+                reason = reason_fn(predicate, snap) if reason_fn else None
+                if reason:
+                    detail = reason
             # Reuse the condition's own dependency analysis for the entity_ids
             # the trace UI links to — sorted so the (unordered) set serialises
             # deterministically. Only a predicate that renders a detail string can

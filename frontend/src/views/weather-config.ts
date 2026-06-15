@@ -4,7 +4,6 @@ import { customElement, property, state } from "lit/decorators.js";
 import { getWeatherConfig, type HassConnection, saveWeatherConfig } from "../api.js";
 import { watchHaComponents } from "../ha-components.js";
 import { localize, weatherConditionLabel } from "../i18n.js";
-import { scopeLabel } from "../scope-label.js";
 import type { WeatherConfig, WeatherGroup } from "../types.js";
 import { renderEntityPicker } from "./form-controls.js";
 
@@ -25,8 +24,6 @@ const ALL_CONDITIONS = [
   "windy-variant",
   "exceptional",
 ];
-
-type Warning = { scope_kind: string; scope_id: string | null; scene_name: string; reason: string };
 
 @customElement("ambience-weather-config")
 export class AmbienceWeatherConfig extends LitElement {
@@ -77,17 +74,10 @@ export class AmbienceWeatherConfig extends LitElement {
       padding: 0.4rem 0.75rem; border-radius: 4px; cursor: pointer;
       color: var(--primary-text-color, inherit);
     }
-    .warnings {
-      background: var(--warning-color, #ffd);
-      border: 1px solid var(--warning-color, #cc9);
-      padding: 0.5rem 1rem; border-radius: 4px; margin-top: 0.5rem;
-    }
-    .warnings ul { margin: 0.3rem 0 0 0; padding-left: 1.2rem; }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
   @state() private _config: WeatherConfig = { entity: null, groups: [] };
-  @state() private _warnings: Warning[] = [];
   // Ids of currently-expanded group rows. Collapsed by default; only the
   // expanded body shows the label input + ha-form conditions selector.
   @state() private _expanded = new Set<string>();
@@ -100,8 +90,7 @@ export class AmbienceWeatherConfig extends LitElement {
   }
 
   private async _persist() {
-    const res = await saveWeatherConfig(this.hass, this._config.entity, this._config.groups);
-    this._warnings = res.warnings ?? [];
+    await saveWeatherConfig(this.hass, this._config.entity, this._config.groups);
     // Tell the scopes view to re-evaluate its conditions hint against live state.
     window.dispatchEvent(new CustomEvent("ambience-conditions-changed"));
   }
@@ -252,18 +241,6 @@ export class AmbienceWeatherConfig extends LitElement {
       <button class="add" @click=${() => this._addGroup()}>
         ${localize(this.hass, "ui.add_group", "+ Add group")}
       </button>
-
-      ${
-        this._warnings.length
-          ? html`
-        <div class="warnings">
-          <strong>${localize(this.hass, "ui.day_warning_prefix", "Warning:")}</strong>
-          ${localize(this.hass, "ui.weather_warning_text", "scenes now reference an unconfigured weather entity:")}
-          <ul>${this._warnings.map((w) => html`<li>${scopeLabel(w)} / "${w.scene_name}" → ${w.reason}</li>`)}</ul>
-        </div>
-      `
-          : ""
-      }
     `;
   }
 }

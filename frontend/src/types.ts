@@ -3,6 +3,9 @@
  * Keep in sync with custom_components/ambience/store.py and websocket.py.
  */
 
+// One dangling-config-reference problem on a scene (transient, response-only).
+export type ConfigIssue = { kind: string; ref: string };
+
 export type Scene = {
   name?: string;
   // The category this scene belongs to (SceneCategory.id). Required — every scene is
@@ -27,6 +30,7 @@ export type Scene = {
   // reference missing / multiply-controlled entities.
   missing_entities?: string[];
   overlap_entities?: string[];
+  config_issues?: ConfigIssue[];
 };
 
 // A user-defined grouping of scenes. Stored separately; scenes reference it by id.
@@ -76,14 +80,6 @@ export type ServiceField = {
   required?: boolean;
   default?: unknown;
   example?: unknown;
-};
-
-// Warning shape returned by exposed_actions/save (parallels other warnings).
-export type ExposedActionWarning = {
-  scope_kind: string;
-  scope_id: string | null;
-  scene_name: string;
-  reason: string;
 };
 
 export type SwitchDefaults = {
@@ -368,6 +364,9 @@ export type TraceAction = {
   service: string;
   entity_ids?: string[];
   params?: Record<string, unknown>;
+  // Transient (response-only): true when the action's service was not exposed at
+  // apply time, so the engine skipped it. The trace renders it as skipped.
+  unexposed?: boolean;
 };
 export type TracePredicate = {
   condition_key: string;

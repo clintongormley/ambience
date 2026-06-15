@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../frontend/src/api.js", () => ({
   getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
-  saveDayConfig: vi.fn(async () => ({ ok: true, warnings: [] })),
+  saveDayConfig: vi.fn(async () => ({ ok: true })),
 }));
 
 import "../frontend/src/views/day-config";
@@ -64,17 +64,6 @@ describe("ambience-day-config", () => {
     // An empty string value should be coerced to null via `|| null`.
     el._onCalendarChange({ detail: { value: "" } });
     expect(saveDayConfig).toHaveBeenCalledWith(expect.anything(), null, null);
-  });
-
-  test("saveDayConfig response with no warnings field defaults to empty array", async () => {
-    // When `res.warnings` is undefined the `?? []` branch fires.
-    vi.mocked(saveDayConfig).mockResolvedValueOnce({ ok: true } as any);
-    el = await mount();
-    el._onSensorChange({ detail: { value: "binary_sensor.workday" } });
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-    // No warnings div rendered — confirms _warnings stayed []
-    expect(el.shadowRoot.querySelector(".warnings")).toBeNull();
   });
 
   test("ha-form value-changed for sensor triggers _onSensorChange via DOM event", async () => {
@@ -145,41 +134,6 @@ describe("ambience-day-config", () => {
       }),
     );
     expect(saveDayConfig).toHaveBeenCalledWith(expect.anything(), null, null);
-  });
-
-  test("renders dangling warnings with scope labels for area, floor and house", async () => {
-    vi.mocked(saveDayConfig).mockResolvedValueOnce({
-      ok: true,
-      warnings: [
-        {
-          scope_kind: "area",
-          scope_id: "kitchen",
-          scene_name: "Area scene",
-          reason: "missing sensor",
-        },
-        {
-          scope_kind: "floor",
-          scope_id: "upstairs",
-          scene_name: "Floor scene",
-          reason: "missing sensor",
-        },
-        {
-          scope_kind: "house",
-          scope_id: null,
-          scene_name: "House scene",
-          reason: "missing sensor",
-        },
-      ],
-    });
-    el = await mount();
-    el._onSensorChange({ detail: { value: "binary_sensor.workday" } });
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-    const txt = el.shadowRoot.querySelector(".warnings").textContent;
-    expect(txt).toContain("kitchen"); // area scope renders the id
-    expect(txt).toContain("Floor: upstairs"); // floor scope renders with prefix
-    expect(txt).toContain("House"); // house scope renders the literal label
-    expect(txt).not.toContain("undefined");
   });
 
   test("a failed load shows an error instead of a blank panel", async () => {

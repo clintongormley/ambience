@@ -25,7 +25,7 @@ vi.mock("../frontend/src/api.js", () => ({
     }
     return { fields: {}, target: null };
   }),
-  saveExposedActions: vi.fn(async () => ({ ok: true, warnings: [] })),
+  saveExposedActions: vi.fn(async () => ({ ok: true })),
 }));
 
 import "../frontend/src/views/actions-settings";
@@ -1088,33 +1088,6 @@ describe("ambience-actions-settings", () => {
     expect(option!.textContent).toContain("alarm_control_panel.alarm_arm_away");
   });
 
-  test("renders warnings returned by saveExposedActions after auto-save", async () => {
-    vi.mocked(saveExposedActions).mockResolvedValueOnce({
-      ok: true,
-      warnings: [
-        { scope_kind: "area", scope_id: "lounge", scene_name: "Evening", reason: "field removed" },
-      ],
-    });
-    el = await mount();
-    clickToggle(el.shadowRoot);
-    await el.updateComplete;
-
-    // Trigger an auto-save via checkbox toggle.
-    const checkbox = el.shadowRoot.querySelector(
-      "input[type='checkbox'][data-show-in-editor='brightness_pct']",
-    ) as HTMLInputElement;
-    checkbox.checked = false;
-    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
-    await flush(el);
-
-    const warnings = el.shadowRoot.querySelector(".warning");
-    expect(warnings).not.toBeNull();
-    const txt = warnings.textContent ?? "";
-    expect(txt).toContain("lounge");
-    expect(txt).toContain("Evening");
-    expect(txt).toContain("field removed");
-  });
-
   test("surfaces save errors inline after auto-save", async () => {
     vi.mocked(saveExposedActions).mockRejectedValueOnce(new Error("validation_error: bad"));
     el = await mount();
@@ -1406,61 +1379,6 @@ describe("ambience-actions-settings", () => {
     expect(nameSpan.textContent).toContain("0–100%");
   });
 
-  test("_renderWarnings omits '/scope_id' when scope_id is absent", async () => {
-    vi.mocked(saveExposedActions).mockResolvedValueOnce({
-      ok: true,
-      warnings: [
-        // No scope_id — the "/${w.scope_id}" branch should be skipped.
-        { scope_kind: "house", scope_id: "", scene_name: "Night", reason: "field removed" },
-      ],
-    });
-    el = await mount();
-    clickToggle(el.shadowRoot);
-    await el.updateComplete;
-
-    const checkbox = el.shadowRoot.querySelector(
-      "input[type='checkbox'][data-show-in-editor='brightness_pct']",
-    ) as HTMLInputElement;
-    checkbox.checked = false;
-    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
-    await flush(el);
-
-    const warnings = el.shadowRoot.querySelector(".warning");
-    expect(warnings).not.toBeNull();
-    const txt = warnings!.textContent ?? "";
-    // Rendered via the shared scopeLabel helper: "House", no scope_id suffix.
-    expect(txt).toContain("House");
-    expect(txt).not.toMatch(/House[:/]/);
-    expect(txt).toContain("Night");
-  });
-
-  test("_renderWarnings omits scene_name annotation when scene_name is absent", async () => {
-    vi.mocked(saveExposedActions).mockResolvedValueOnce({
-      ok: true,
-      warnings: [
-        // No scene_name — the "— scene_name" branch should be skipped.
-        { scope_kind: "area", scope_id: "bedroom", scene_name: "", reason: "field removed" },
-      ],
-    });
-    el = await mount();
-    clickToggle(el.shadowRoot);
-    await el.updateComplete;
-
-    const checkbox = el.shadowRoot.querySelector(
-      "input[type='checkbox'][data-show-in-editor='brightness_pct']",
-    ) as HTMLInputElement;
-    checkbox.checked = false;
-    checkbox.dispatchEvent(new Event("change", { bubbles: true }));
-    await flush(el);
-
-    const warnings = el.shadowRoot.querySelector(".warning");
-    expect(warnings).not.toBeNull();
-    const txt = warnings!.textContent ?? "";
-    expect(txt).toContain("bedroom");
-    // The "— scene_name" annotation should not be present.
-    expect(txt).not.toContain("—");
-  });
-
   test("service with no fields renders 'no fields' message in body", async () => {
     vi.mocked(listExposedActions).mockResolvedValueOnce([
       { id: "script.adjust_covers", label: "", visible_fields: [], defaults: {} },
@@ -1494,17 +1412,6 @@ describe("ambience-actions-settings", () => {
     } finally {
       overlay.remove();
     }
-  });
-
-  test("warning rows render the scope via scopeLabel, like the sibling views", async () => {
-    el = await mount();
-    (el as any)._warnings = [
-      { scope_kind: "floor", scope_id: "ground", scene_name: "Evening", reason: "test reason" },
-    ];
-    await el.updateComplete;
-    const warning = el.shadowRoot.querySelector(".warning");
-    expect(warning?.textContent).toContain("Floor: ground");
-    expect(warning?.textContent).not.toContain("floor/ground");
   });
 
   test("picking an already-exposed service expands its card as feedback", async () => {

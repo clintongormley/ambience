@@ -247,11 +247,10 @@ def test_validate_rejects(bad) -> None:
         _cond().validate_predicate(bad)
 
 
-def test_validate_rejects_unknown_range_id() -> None:
-    # Save-time check (mirrors time_of_day rejecting unknown periods); runtime
-    # matches() stays tolerant for ranges hidden after the scene was saved.
-    with pytest.raises(ValueError, match="unknown lux range"):
-        _cond().validate_predicate({"sensors": ["sensor.a"], "range": "nope"})
+def test_lux_validate_predicate_allows_unknown_range() -> None:
+    LuxCondition(range_lookup=lambda: {}).validate_predicate(
+        {"sensors": ["sensor.x"], "range": "gone"}
+    )  # must not raise
 
 
 def test_trigger_deps_watches_sensors() -> None:
@@ -371,3 +370,53 @@ def test_contains_all_over_more_sensors_within_all_over_fewer() -> None:
     }
     assert m.contains(outer, inner) is True
     assert m.contains(inner, outer) is False
+
+
+# ---------------------------------------------------------------------------
+# unconfigured_reason — lines 133-138
+# ---------------------------------------------------------------------------
+
+
+def test_unconfigured_reason_dangling_range_returns_reason() -> None:
+    """A range id that is no longer in the lookup → descriptive reason string."""
+    m = LuxCondition(range_lookup=lambda: {})
+    snap = _snap()
+    reason = m.unconfigured_reason({"sensors": ["sensor.a"], "range": "gone"}, snap)
+    assert reason is not None
+    assert "gone" in reason
+
+
+def test_unconfigured_reason_known_range_returns_none() -> None:
+    """A range id that IS in the lookup → None."""
+    from custom_components.ambience.lux_ranges import BUILTIN_LUX_RANGES
+
+    m = LuxCondition(range_lookup=lambda: BUILTIN_LUX_RANGES)
+    snap = _snap()
+    assert m.unconfigured_reason({"sensors": ["sensor.a"], "range": "dark"}, snap) is None
+
+
+def test_unconfigured_reason_no_range_key_returns_none() -> None:
+    """A predicate without a 'range' key (inline band) → None."""
+    m = LuxCondition(range_lookup=lambda: {})
+    snap = _snap()
+    assert m.unconfigured_reason({"sensors": ["sensor.a"], "min": 0, "max": 100}, snap) is None
+
+
+def test_unconfigured_reason_non_string_rid_returns_none() -> None:
+    """A non-string range id is not flagged as dangling."""
+    m = LuxCondition(range_lookup=lambda: {})
+    snap = _snap()
+    # range is an integer, not a string — must not flag it
+    assert m.unconfigured_reason({"sensors": ["sensor.a"], "range": 42}, snap) is None
+
+
+def test_unconfigured_reason_none_predicate_returns_none() -> None:
+    """None predicate (match-anything) → None."""
+    m = LuxCondition(range_lookup=lambda: {})
+    assert m.unconfigured_reason(None, _snap()) is None
+
+
+def test_unconfigured_reason_non_dict_predicate_returns_none() -> None:
+    """Non-dict predicate → None (no 'range' key possible)."""
+    m = LuxCondition(range_lookup=lambda: {})
+    assert m.unconfigured_reason("not-a-dict", _snap()) is None

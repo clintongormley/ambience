@@ -49,7 +49,7 @@ function makeFakeHass() {
       return [{ id: "light.turn_on", label: "", visible_fields: [], defaults: {} }];
     }
     if (msg.type === "ambience/exposed_actions/save") {
-      return { ok: true, warnings: [] };
+      return { ok: true };
     }
     if (msg.type === "ambience/services/list") {
       return [{ id: "light.turn_on", description: "Turn on", target: null }];
@@ -121,14 +121,14 @@ describe("API: listExposedActions", () => {
 });
 
 describe("API: saveExposedActions", () => {
-  test("sends actions list and returns warnings result", async () => {
+  test("sends actions list and returns ok", async () => {
     const { callWS, sent } = makeFakeHass();
     const actions = [
       { id: "light.turn_on", label: "", visible_fields: ["brightness_pct"], defaults: {} },
     ];
     const res = await saveExposedActions({ callWS } as any, actions);
     expect(sent[0]).toEqual({ type: "ambience/exposed_actions/save", actions });
-    expect(res).toEqual({ ok: true, warnings: [] });
+    expect(res).toEqual({ ok: true });
   });
 });
 
@@ -277,8 +277,8 @@ describe("API: getDayConfig", () => {
 });
 
 describe("API: saveDayConfig", () => {
-  test("sends workday_sensor and workday_calendar and returns ok + warnings", async () => {
-    const callWS = vi.fn().mockResolvedValue({ ok: true, warnings: [] });
+  test("sends workday_sensor and workday_calendar and returns ok", async () => {
+    const callWS = vi.fn().mockResolvedValue({ ok: true });
     const res = await saveDayConfig(
       { callWS } as any,
       "binary_sensor.workday",
@@ -290,29 +290,16 @@ describe("API: saveDayConfig", () => {
       workday_calendar: "calendar.holidays",
     });
     expect(res.ok).toBe(true);
-    expect(res.warnings).toEqual([]);
   });
 
   test("saveDayConfig accepts null values for both sensor and calendar", async () => {
-    const callWS = vi.fn().mockResolvedValue({
-      ok: true,
-      warnings: [
-        {
-          scope_kind: "area",
-          scope_id: "living_room",
-          scene_name: "Workday scene",
-          reason: "no workday sensor",
-        },
-      ],
-    });
-    const res = await saveDayConfig({ callWS } as any, null, null);
+    const callWS = vi.fn().mockResolvedValue({ ok: true });
+    await saveDayConfig({ callWS } as any, null, null);
     expect(callWS).toHaveBeenCalledWith({
       type: "ambience/conditions/day/config/save",
       workday_sensor: null,
       workday_calendar: null,
     });
-    expect(res.warnings).toHaveLength(1);
-    expect(res.warnings[0].reason).toBe("no workday sensor");
   });
 });
 
@@ -334,11 +321,11 @@ describe("API: getWeatherConfig", () => {
 });
 
 describe("API: saveWeatherConfig", () => {
-  test("sends entity and groups and returns ok + warnings", async () => {
+  test("sends entity and groups and returns ok", async () => {
     const groups: WeatherGroup[] = [
       { id: "rainy", label: "Rainy", conditions: ["rainy", "pouring"] },
     ];
-    const callWS = vi.fn().mockResolvedValue({ ok: true, warnings: [] });
+    const callWS = vi.fn().mockResolvedValue({ ok: true });
     const res = await saveWeatherConfig({ callWS } as any, "weather.home", groups);
     expect(callWS).toHaveBeenCalledWith({
       type: "ambience/conditions/weather/config/save",
@@ -346,34 +333,16 @@ describe("API: saveWeatherConfig", () => {
       groups,
     });
     expect(res.ok).toBe(true);
-    expect(res.warnings).toEqual([]);
   });
 
   test("saveWeatherConfig accepts null entity", async () => {
-    const callWS = vi.fn().mockResolvedValue({ ok: true, warnings: [] });
+    const callWS = vi.fn().mockResolvedValue({ ok: true });
     await saveWeatherConfig({ callWS } as any, null, []);
     expect(callWS).toHaveBeenCalledWith({
       type: "ambience/conditions/weather/config/save",
       entity: null,
       groups: [],
     });
-  });
-
-  test("saveWeatherConfig propagates warnings from backend", async () => {
-    const callWS = vi.fn().mockResolvedValue({
-      ok: true,
-      warnings: [
-        {
-          scope_kind: "area",
-          scope_id: "bedroom",
-          scene_name: "Rainy scene",
-          reason: "unknown group",
-        },
-      ],
-    });
-    const res = await saveWeatherConfig({ callWS } as any, null, []);
-    expect(res.warnings).toHaveLength(1);
-    expect(res.warnings[0].scope_id).toBe("bedroom");
   });
 });
 

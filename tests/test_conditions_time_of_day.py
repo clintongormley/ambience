@@ -386,9 +386,16 @@ def test_validate_predicate_rejects_invalid(pred: Any) -> None:
         _condition().validate_predicate(pred)
 
 
-def test_validate_predicate_rejects_missing_period() -> None:
-    with pytest.raises(ValueError, match="unknown time_of_day period"):
-        _condition().validate_predicate({"period": "nonexistent"})
+def test_time_of_day_validate_predicate_allows_unknown_period() -> None:
+    TimeOfDayCondition(period_lookup=lambda: {}).validate_predicate({"period": "gone"})  # no raise
+
+
+def test_time_of_day_validate_predicate_still_rejects_malformed_endpoint() -> None:
+    cond = TimeOfDayCondition(period_lookup=lambda: {})
+    with pytest.raises(ValueError):
+        cond.validate_predicate(
+            {"from": {"kind": "lunar", "hh": 8, "mm": 0}, "to": {"kind": "time", "hh": 10, "mm": 0}}
+        )
 
 
 def test_validate_predicate_accepts_identical_endpoints() -> None:
@@ -898,3 +905,54 @@ def test_degenerate_clamp_in_named_period_never_matches() -> None:
         cond.matches({"period": "bad"}, _build_snapshot(datetime(2026, 5, 13, 4, 0, tzinfo=UTC)))
         is False
     )
+
+
+# ---------------------------------------------------------------------------
+# unconfigured_reason — lines 242-248
+# ---------------------------------------------------------------------------
+
+
+def test_unconfigured_reason_dangling_period_returns_reason() -> None:
+    """A period id that is no longer in the lookup → descriptive reason string."""
+    m = TimeOfDayCondition(period_lookup=lambda: {"morning": _range(_time(6, 0), _time(12, 0))})
+    snap = _build_snapshot(datetime(2026, 5, 13, 10, 0, tzinfo=UTC))
+    reason = m.unconfigured_reason({"period": "gone"}, snap)
+    assert reason is not None
+    assert "gone" in reason
+
+
+def test_unconfigured_reason_known_period_returns_none() -> None:
+    """A period id that IS in the lookup → None."""
+    m = TimeOfDayCondition(period_lookup=lambda: {"morning": _range(_time(6, 0), _time(12, 0))})
+    snap = _build_snapshot(datetime(2026, 5, 13, 10, 0, tzinfo=UTC))
+    assert m.unconfigured_reason({"period": "morning"}, snap) is None
+
+
+def test_unconfigured_reason_no_period_key_returns_none() -> None:
+    """A predicate without a 'period' key (inline range) → None."""
+    m = TimeOfDayCondition(period_lookup=lambda: {})
+    snap = _build_snapshot(datetime(2026, 5, 13, 10, 0, tzinfo=UTC))
+    assert m.unconfigured_reason(_range(_time(8, 0), _time(12, 0)), snap) is None
+
+
+def test_unconfigured_reason_non_dict_item_in_list_returns_none() -> None:
+    """Non-dict items in a list predicate are skipped (not treated as dangling)."""
+    m = TimeOfDayCondition(period_lookup=lambda: {})
+    snap = _build_snapshot(datetime(2026, 5, 13, 10, 0, tzinfo=UTC))
+    # "garbage" is not a dict — must not raise, must return None
+    assert m.unconfigured_reason(["garbage", 42], snap) is None
+
+
+def test_unconfigured_reason_list_with_dangling_period_returns_reason() -> None:
+    """A list predicate containing a dangling period → reason for that period."""
+    m = TimeOfDayCondition(period_lookup=lambda: {"morning": _range(_time(6, 0), _time(12, 0))})
+    snap = _build_snapshot(datetime(2026, 5, 13, 10, 0, tzinfo=UTC))
+    reason = m.unconfigured_reason([{"period": "morning"}, {"period": "gone"}], snap)
+    assert reason is not None
+    assert "gone" in reason
+
+
+def test_unconfigured_reason_ignores_non_string_period() -> None:
+    cond = TimeOfDayCondition(period_lookup=lambda: {})
+    # A corrupt non-string period must not yield a misleading "no longer exists" reason.
+    assert cond.unconfigured_reason({"period": 42}, None) is None

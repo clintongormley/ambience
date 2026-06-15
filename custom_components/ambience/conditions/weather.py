@@ -189,6 +189,17 @@ class WeatherCondition:
             return False
         return _op_satisfied(snap.attributes[attr], t.get("op"), float(value))
 
+    def unconfigured_reason(self, predicate: Any, snapshot: WeatherSnapshot) -> str | None:
+        if not weather_predicate_active(predicate):
+            return None
+        if not self._entity():
+            return "weather entity not configured"
+        known = {g.get("id") for g in self._configured_groups()}
+        for gid in predicate.get("groups") or []:
+            if isinstance(gid, str) and gid not in known:
+                return f"weather group {gid!r} no longer exists"
+        return None
+
     def describe(self, snapshot: WeatherSnapshot, predicate: Any = None) -> str | None:
         return snapshot.condition
 
@@ -206,15 +217,8 @@ class WeatherCondition:
         for g in groups:
             if not isinstance(g, str) or not g:
                 raise ValueError(f"weather group id must be a non-empty string: {g!r}")
-        if groups and self._hass is not None:
-            known = {gr.get("id") for gr in self._configured_groups()}
-            for g in groups:
-                if g not in known:
-                    raise ValueError(f"unknown weather group: {g!r}")
         for t in thresholds:
             self._validate_threshold(t)
-        if (groups or thresholds) and self._hass is not None and not self._entity():
-            raise ValueError("weather predicate requires the weather entity to be configured")
 
     # --- sorting (containment lattice) ----------------------------------
 

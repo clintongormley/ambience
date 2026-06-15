@@ -248,3 +248,27 @@ def test_enabled_scene_defaults_disabled_false(
     scenes = [{"name": "a", "when": {"mode": "day"}}]
     explanation = evaluate_explained(scenes, {"mode": "day"}, conditions)
     assert explanation.scenes[0].disabled is False
+
+
+def test_trace_records_unconfigured_reason() -> None:
+    from datetime import date
+
+    from custom_components.ambience.conditions.day import DayCondition, DaySnapshot
+
+    day = DayCondition()  # hass=None → _day_config() reports no workday sensor
+    snap = DaySnapshot(
+        today=date(2026, 6, 15),
+        weekday=0,
+        days_in_month=30,
+        workday_state=None,
+        month_workdays=None,
+    )
+    scenes = [
+        {"when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []},
+        {"when": {}, "actions": []},
+    ]
+    explanation = evaluate_explained(scenes, {"day": snap}, {"day": day}, describe=True)
+    p0 = explanation.scenes[0].predicates[0]
+    assert p0.passed is False
+    assert "workday sensor" in (p0.detail or "")
+    assert explanation.winner_index == 1

@@ -360,26 +360,6 @@ def test_validate_rejects_bad_date_range(m_no_entities: DayCondition) -> None:
         )
 
 
-def test_validate_workday_item_requires_sensor(m_no_entities: DayCondition) -> None:
-    with pytest.raises(ValueError, match="workday_sensor"):
-        m_no_entities.validate_predicate(
-            {
-                "include": [{"kind": "workday"}],
-                "exclude": [],
-            }
-        )
-
-
-def test_validate_first_workday_requires_calendar(m_no_entities: DayCondition) -> None:
-    with pytest.raises(ValueError, match="workday_calendar"):
-        m_no_entities.validate_predicate(
-            {
-                "include": [{"kind": "first_workday"}],
-                "exclude": [],
-            }
-        )
-
-
 def test_validate_with_entities_accepts_workday_items(m_with_entities: DayCondition) -> None:
     m_with_entities.validate_predicate(
         {
@@ -387,6 +367,12 @@ def test_validate_with_entities_accepts_workday_items(m_with_entities: DayCondit
             "exclude": [{"kind": "holiday"}, {"kind": "last_workday"}],
         }
     )
+
+
+def test_day_validate_predicate_allows_workday_without_sensor() -> None:
+    # Structurally valid; the missing sensor is a config-health problem, not malformed data.
+    DayCondition(hass=None).validate_predicate({"include": [{"kind": "workday"}]})  # no raise
+    DayCondition(hass=None).validate_predicate({"include": [{"kind": "first_workday"}]})  # no raise
 
 
 def _condition_with_workday_sensor(sensor: str | None) -> DayCondition:
@@ -640,3 +626,31 @@ def test_is_constraining_only_with_items() -> None:
     assert m.is_constraining({"include": [], "exclude": []}) is False
     assert m.is_constraining({}) is False
     assert m.is_constraining("not-a-dict") is False
+
+
+# ---------------------------------------------------------------------------
+# Regression: unconfigured workday dependency → matches() is False, never raises
+# ---------------------------------------------------------------------------
+
+
+def test_day_matches_workday_no_sensor_is_false() -> None:
+    """workday/first_workday predicates with no sensor configured must return
+    False at runtime rather than raising — the missing sensor is a config-health
+    concern surfaced via Repairs, not a crash path (Task 16 regression guard)."""
+    from datetime import date
+
+    snap = DaySnapshot(
+        today=date(2026, 6, 15),
+        weekday=0,  # Monday
+        days_in_month=30,
+        workday_state=None,
+        month_workdays=None,
+    )
+    assert DayCondition().matches({"include": [{"kind": "workday"}]}, snap) is False
+    assert DayCondition().matches({"include": [{"kind": "first_workday"}]}, snap) is False
+
+
+def test_unconfigured_reason_tolerates_non_dict_slot(m_no_entities: DayCondition) -> None:
+    # A corrupt non-dict slot must not crash; the workday slot still yields the reason.
+    pred = {"include": ["garbage", {"kind": "workday"}]}
+    assert m_no_entities.unconfigured_reason(pred, None) == "workday sensor not configured"

@@ -1,6 +1,6 @@
 """Pure helpers for the Ambience websocket API.
 
-Validation, canonicalisation and dangling-reference warning logic, factored out
+Validation, canonicalisation and scene-annotation helpers, factored out
 of websocket.py so that file holds just the command handlers + registration.
 None of these touch the connection; they take plain data (and `hass` for store
 lookups) and return values or raise ValueError.
@@ -107,8 +107,8 @@ _TRANSIENT_SCENE_FIELDS = ("shadowed_by", "missing_entities", "overlap_entities"
 
 def canonicalise(hass: HomeAssistant, config: dict[str, Any]) -> dict[str, Any]:
     """Resolve scene order + numbers for storage. Strips the transient per-scene
-    frontend hints (`shadowed_by`, `missing_entities`, `overlap_entities`) so they
-    aren't persisted."""
+    frontend hints (`shadowed_by`, `missing_entities`, `overlap_entities`,
+    `config_issues`) so they aren't persisted."""
     conditions_registry = hass.data[DOMAIN][DATA_CONDITIONS]
     out = dict(config)
     scenes = [
@@ -123,8 +123,8 @@ def annotate_scenes(
     hass: HomeAssistant, config: dict[str, Any], *, fresh_overlap: bool = False
 ) -> dict[str, Any]:
     """Return a copy whose scenes carry transient frontend-only problem hints:
-    `shadowed_by` (index or None), `missing_entities`, and `overlap_entities`.
-    Not persisted — canonicalise() strips all three before storage.
+    `shadowed_by` (index or None), `missing_entities`, `overlap_entities`, and
+    `config_issues`. Not persisted — canonicalise() strips them before storage.
 
     `fresh_overlap=True` recomputes the global overlap set instead of reading the
     cache; pass it on the save path so the save response reflects the new config."""

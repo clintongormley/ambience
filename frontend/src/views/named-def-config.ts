@@ -35,9 +35,9 @@ export function effectiveDefIds<Def>(
 /**
  * Abstract base for a named-definition management screen (periods, lux ranges):
  * effective list with provenance badges, per-row override/edit/delete actions,
- * an Add button, dangling-reference warnings, and the add/edit modal. Subclasses
- * supply the api calls, the label/format helpers, the i18n keys, and the modal
- * element (via {@link _renderModal}).
+ * an Add button, and the add/edit modal. Subclasses supply the api calls, the
+ * label/format helpers, the i18n keys, and the modal element (via
+ * {@link _renderModal}).
  */
 export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
   static override styles = css`

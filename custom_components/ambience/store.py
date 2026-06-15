@@ -214,8 +214,8 @@ class AmbienceStore:
     def all_scope_configs(self) -> list[tuple[str, str | None, dict[str, Any]]]:
         """Yield (kind, scope_id, config) for every configured scope.
 
-        `scope_id` is None for the house. Used by handlers that walk every
-        scene list to gather dangling-reference warnings.
+        `scope_id` is None for the house. Used by the config-health scan that
+        walks every scene list to detect dangling references.
         """
         triples: list[tuple[str, str | None, dict[str, Any]]] = []
         for area_id, cfg in self._data.get("areas", {}).items():

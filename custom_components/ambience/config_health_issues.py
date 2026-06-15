@@ -33,7 +33,10 @@ _NEW_KINDS = frozenset(
         "unexposed_action",
     }
 )
-_ISSUE_PREFIXES = ("missing_entity:", "action_overlap:") + tuple(f"{k}:" for k in _NEW_KINDS)
+_ISSUE_PREFIXES = ("missing_entity:", "action_overlap:") + tuple(
+    f"{k}:"
+    for k in sorted(_NEW_KINDS)  # sorted → deterministic regardless of frozenset order
+)
 
 
 def _issue_id(problem: Problem) -> str:

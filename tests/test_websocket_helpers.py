@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.ambience.conditions.weather import weather_predicate_active
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -19,7 +20,6 @@ from custom_components.ambience.const import (
     DOMAIN,
     GENERAL_CATEGORY_ID,
 )
-from custom_components.ambience.conditions.weather import weather_predicate_active
 from custom_components.ambience.websocket_helpers import (
     annotate_scenes,
     canonicalise,
@@ -103,8 +103,11 @@ class TestValidateScopeConfig:
         # A well-formed action whose service isn't exposed must no longer block the
         # save; it surfaces via Repairs + the scene badge instead.
         hass = _make_hass(conditions={}, exposed_actions=_make_exposed([]))
-        cfg = {"scenes": [{"when": {}, "actions": [
-            {"service": "fan.toggle", "entity_ids": ["fan.x"]}]}]}
+        cfg = {
+            "scenes": [
+                {"when": {}, "actions": [{"service": "fan.toggle", "entity_ids": ["fan.x"]}]}
+            ]
+        }
         validate_scope_config(hass, cfg)  # must not raise
 
     def test_rejects_non_list_entity_ids(self) -> None:

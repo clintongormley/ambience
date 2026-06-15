@@ -43,7 +43,7 @@ def _issue_id(problem: Problem) -> str:
         return f"missing_entity:{loc.scope_kind}:{sid}:{problem.ref}"
     if problem.kind == "action_overlap":
         return f"action_overlap:{problem.ref}"
-    return f"{problem.kind}:{problem.ref}"          # new kinds: global per (kind, ref)
+    return f"{problem.kind}:{problem.ref}"  # new kinds: global per (kind, ref)
 
 
 def _clean(text: str) -> str:
@@ -96,9 +96,7 @@ def reconcile_issues(hass: HomeAssistant) -> None:
     # Refresh the overlap-set cache the frontend flag reads (see
     # config_health.scene_annotations) from this same scan — no extra work, and it
     # keeps the flag on the same config-change/registry cadence as the Repairs issue.
-    domain_data[DATA_OVERLAP_SET] = frozenset(
-        p.ref for p in problems if p.kind == "action_overlap"
-    )
+    domain_data[DATA_OVERLAP_SET] = frozenset(p.ref for p in problems if p.kind == "action_overlap")
     desired: dict[str, Problem] = {_issue_id(p): p for p in problems}
     cats = category_names(hass)  # category id -> friendly name
 

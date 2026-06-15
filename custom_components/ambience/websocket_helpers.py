@@ -184,5 +184,3 @@ def validate_weather_groups(groups: Any) -> list[dict[str, Any]]:
             raise ValueError(f"group {gid!r} has invalid condition(s)")
         cleaned.append({"id": gid, "label": label, "conditions": list(conds)})
     return cleaned
-
-

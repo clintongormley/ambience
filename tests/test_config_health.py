@@ -478,9 +478,7 @@ async def test_scene_config_issues_clean_when_workday_sensor_set(
     assert scene_config_issues(ctx, scene) == []
 
 
-async def test_scene_config_issues_disabled_scene_is_clean(
-    hass: HomeAssistant, installed
-) -> None:
+async def test_scene_config_issues_disabled_scene_is_clean(hass: HomeAssistant, installed) -> None:
     ctx = _build_ref_context(hass)
     scene = {"enabled": False, "when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []}
     assert scene_config_issues(ctx, scene) == []
@@ -502,9 +500,7 @@ async def test_scene_config_issues_workday_calendar(hass: HomeAssistant, install
     assert scene_config_issues(ctx, scene) == [("missing_workday_calendar", "workday_calendar")]
 
 
-async def test_scene_config_issues_weather_entity_and_group(
-    hass: HomeAssistant, installed
-) -> None:
+async def test_scene_config_issues_weather_entity_and_group(hass: HomeAssistant, installed) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     # entity unset + a group id that isn't among the configured groups.
     await store.async_save_condition_config(
@@ -534,32 +530,43 @@ async def test_scene_config_issues_unexposed_action(hass: HomeAssistant, install
     assert scene_config_issues(ctx, scene) == [("unexposed_action", "fan.toggle")]
 
 
-async def test_scan_aggregates_config_refs_globally_per_ref(
-    hass: HomeAssistant, installed
-) -> None:
+async def test_scan_aggregates_config_refs_globally_per_ref(hass: HomeAssistant, installed) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     a1 = ar.async_get(hass).async_create("Kitchen").id
     a2 = ar.async_get(hass).async_create("Hall").id
-    wd_scene = {"name": "wd", "category": "c1", "when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []}
+    wd_scene = {
+        "name": "wd",
+        "category": "c1",
+        "when": {"day": {"include": [{"kind": "workday"}]}},
+        "actions": [],
+    }
     await store.async_save_area(a1, {"scenes": [wd_scene]})
     await store.async_save_area(a2, {"scenes": [wd_scene]})
     problems = scan(hass, store.all_scope_configs())
     wd = [p for p in problems if p.kind == "missing_workday_sensor"]
-    assert len(wd) == 1                       # one issue, global per ref
+    assert len(wd) == 1  # one issue, global per ref
     assert wd[0].ref == "workday_sensor"
-    assert len(wd[0].locations) == 2          # both scopes listed
+    assert len(wd[0].locations) == 2  # both scopes listed
 
 
 async def test_scene_annotations_emits_config_issues(hass: HomeAssistant, installed) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
-    cfg = {"scenes": [
-        {"name": "wd", "category": "c1",
-         "when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []},
-        {"name": "ok", "category": "c1", "when": {}, "actions": []},
-    ]}
+    cfg = {
+        "scenes": [
+            {
+                "name": "wd",
+                "category": "c1",
+                "when": {"day": {"include": [{"kind": "workday"}]}},
+                "actions": [],
+            },
+            {"name": "ok", "category": "c1", "when": {}, "actions": []},
+        ]
+    }
     await store.async_save_area(ar.async_get(hass).async_create("LR").id, cfg)
     annos = scene_annotations(hass, cfg)
-    assert annos[0]["config_issues"] == [{"kind": "missing_workday_sensor", "ref": "workday_sensor"}]
+    assert annos[0]["config_issues"] == [
+        {"kind": "missing_workday_sensor", "ref": "workday_sensor"}
+    ]
     assert annos[1]["config_issues"] == []
 
 
@@ -569,9 +576,7 @@ async def test_scene_annotations_emits_config_issues(hass: HomeAssistant, instal
 # ---------------------------------------------------------------------------
 
 
-async def test_scene_config_issues_entity_set_checks_groups(
-    hass: HomeAssistant, installed
-) -> None:
+async def test_scene_config_issues_entity_set_checks_groups(hass: HomeAssistant, installed) -> None:
     """With entity configured, the 'missing_weather_entity' issue is NOT emitted;
     a dangling group id IS (exercises the 121->123 branch where entity is truthy)."""
     store = hass.data[DOMAIN][DATA_STORE]
@@ -596,19 +601,13 @@ async def test_scene_config_issues_entity_set_checks_groups(
 # ---------------------------------------------------------------------------
 
 
-async def test_scene_config_issues_deduplicates_same_issue(
-    hass: HomeAssistant, installed
-) -> None:
+async def test_scene_config_issues_deduplicates_same_issue(hass: HomeAssistant, installed) -> None:
     """Two day-slots of the same kind both missing the workday sensor → one entry."""
     ctx = _build_ref_context(hass)
     scene = {
         "name": "wd",
         "category": "c1",
-        "when": {
-            "day": {
-                "include": [{"kind": "workday"}, {"kind": "workday"}]
-            }
-        },
+        "when": {"day": {"include": [{"kind": "workday"}, {"kind": "workday"}]}},
         "actions": [],
     }
     issues = scene_config_issues(ctx, scene)
@@ -653,9 +652,7 @@ async def test_scan_note_missing_deduplicates_identical_locations(
 # ---------------------------------------------------------------------------
 
 
-async def test_scan_config_refs_dedup_identical_locations(
-    hass: HomeAssistant, installed
-) -> None:
+async def test_scan_config_refs_dedup_identical_locations(hass: HomeAssistant, installed) -> None:
     """Passing the same config twice → config_refs hits loc-in-bucket (278->275)."""
     cfg = _cfg(
         [
@@ -687,15 +684,17 @@ async def test_scene_config_issues_exposed_service_not_flagged(
     (exercises the 134->132 branch where the condition is False and we loop back)."""
     store = hass.data[DOMAIN][DATA_STORE]
     # Register one exposed service so it IS in ctx.exposed_services.
-    await store.async_save_exposed_actions([
-        {"id": "light.turn_on", "visible_fields": [], "defaults": {}},
-    ])
+    await store.async_save_exposed_actions(
+        [
+            {"id": "light.turn_on", "visible_fields": [], "defaults": {}},
+        ]
+    )
     ctx = _build_ref_context(hass)
     scene = {
         "when": {},
         "actions": [
-            {"service": "light.turn_on", "entity_ids": []},   # exposed → no issue
-            {"service": "fan.toggle", "entity_ids": []},       # unexposed → issue
+            {"service": "light.turn_on", "entity_ids": []},  # exposed → no issue
+            {"service": "fan.toggle", "entity_ids": []},  # unexposed → issue
         ],
     }
     issues = scene_config_issues(ctx, scene)
@@ -711,7 +710,10 @@ async def test_scene_config_issues_exposed_service_not_flagged(
 def test_missing_period_refs_dict_without_period_key_returns_empty() -> None:
     """A dict predicate without a 'period' key (e.g. inline range) → [] (156->160)."""
     # An inline {from/to} dict: not None, not a list, is a dict but has no "period"
-    result = missing_period_refs({"from": {"kind": "time", "hh": 8, "mm": 0}, "to": {"kind": "time", "hh": 12, "mm": 0}}, {"morning"})
+    result = missing_period_refs(
+        {"from": {"kind": "time", "hh": 8, "mm": 0}, "to": {"kind": "time", "hh": 12, "mm": 0}},
+        {"morning"},
+    )
     assert result == []
 
 

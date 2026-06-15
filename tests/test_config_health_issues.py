@@ -263,8 +263,16 @@ async def test_reconcile_creates_workday_sensor_issue(hass: HomeAssistant, insta
     a = ar.async_get(hass).async_create("Kitchen").id
     await store.async_save_area(
         a,
-        {"scenes": [{"name": "wd", "category": "c1",
-                     "when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []}]},
+        {
+            "scenes": [
+                {
+                    "name": "wd",
+                    "category": "c1",
+                    "when": {"day": {"include": [{"kind": "workday"}]}},
+                    "actions": [],
+                }
+            ]
+        },
     )
     reconcile_issues(hass)
     reg = ir.async_get(hass)
@@ -281,13 +289,23 @@ async def test_reconcile_clears_workday_sensor_issue_when_fixed(
     a = ar.async_get(hass).async_create("Kitchen").id
     await store.async_save_area(
         a,
-        {"scenes": [{"name": "wd", "category": "c1",
-                     "when": {"day": {"include": [{"kind": "workday"}]}}, "actions": []}]},
+        {
+            "scenes": [
+                {
+                    "name": "wd",
+                    "category": "c1",
+                    "when": {"day": {"include": [{"kind": "workday"}]}},
+                    "actions": [],
+                }
+            ]
+        },
     )
     reconcile_issues(hass)
     await store.async_save_condition_config("day", {"workday_sensor": "binary_sensor.wd"})
     reconcile_issues(hass)
-    assert ir.async_get(hass).async_get_issue(DOMAIN, "missing_workday_sensor:workday_sensor") is None
+    assert (
+        ir.async_get(hass).async_get_issue(DOMAIN, "missing_workday_sensor:workday_sensor") is None
+    )
 
 
 async def test_reconcile_creates_ref_kind_issues(hass: HomeAssistant, installed) -> None:
@@ -298,15 +316,20 @@ async def test_reconcile_creates_ref_kind_issues(hass: HomeAssistant, installed)
     a = ar.async_get(hass).async_create("Kitchen").id
     await store.async_save_area(
         a,
-        {"scenes": [{
-            "name": "x", "category": "c1",
-            "when": {
-                "weather": {"groups": ["ghost"]},
-                "time_of_day": {"period": "ghost_p"},
-                "lux": {"range": "ghost_l"},
-            },
-            "actions": [{"service": "fan.toggle", "entity_ids": ["fan.x"]}],
-        }]},
+        {
+            "scenes": [
+                {
+                    "name": "x",
+                    "category": "c1",
+                    "when": {
+                        "weather": {"groups": ["ghost"]},
+                        "time_of_day": {"period": "ghost_p"},
+                        "lux": {"range": "ghost_l"},
+                    },
+                    "actions": [{"service": "fan.toggle", "entity_ids": ["fan.x"]}],
+                }
+            ]
+        },
     )
     reconcile_issues(hass)
     reg = ir.async_get(hass)

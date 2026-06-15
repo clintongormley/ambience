@@ -67,9 +67,9 @@ _CALENDAR_DEPENDENT_KINDS = {"first_workday", "last_workday"}
 class _RefContext:
     """Live config snapshot for dangling-reference detection, built once per scan."""
 
-    workday_sensor: bool          # True when a workday sensor is configured
-    workday_calendar: bool        # True when a workday calendar is configured
-    weather_entity: bool          # True when a weather entity is configured
+    workday_sensor: bool  # True when a workday sensor is configured
+    workday_calendar: bool  # True when a workday calendar is configured
+    weather_entity: bool  # True when a weather entity is configured
     weather_group_ids: frozenset[str]
     period_ids: frozenset[str]
     lux_ids: frozenset[str]

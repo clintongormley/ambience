@@ -203,11 +203,6 @@ class LuxCondition:
                 raise ValueError(f"`range` must be a string, got {rid!r}")
             if has_inline:
                 raise ValueError("specify `range` or `min`/`max`, not both")
-            # Reject a dangling range id at save time (mirrors time_of_day, which
-            # rejects unknown period ids). Runtime matches() stays tolerant for
-            # ranges hidden *after* a scene was saved.
-            if rid not in self._range_lookup():
-                raise ValueError(f"unknown lux range: {rid!r}")
         else:
             validate_int_bound(predicate.get("min"), "min")
             validate_int_bound(predicate.get("max"), "max")

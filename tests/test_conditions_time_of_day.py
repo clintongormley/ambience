@@ -386,9 +386,16 @@ def test_validate_predicate_rejects_invalid(pred: Any) -> None:
         _condition().validate_predicate(pred)
 
 
-def test_validate_predicate_rejects_missing_period() -> None:
-    with pytest.raises(ValueError, match="unknown time_of_day period"):
-        _condition().validate_predicate({"period": "nonexistent"})
+def test_time_of_day_validate_predicate_allows_unknown_period() -> None:
+    TimeOfDayCondition(period_lookup=lambda: {}).validate_predicate({"period": "gone"})  # no raise
+
+
+def test_time_of_day_validate_predicate_still_rejects_malformed_endpoint() -> None:
+    cond = TimeOfDayCondition(period_lookup=lambda: {})
+    with pytest.raises(ValueError):
+        cond.validate_predicate(
+            {"from": {"kind": "lunar", "hh": 8, "mm": 0}, "to": {"kind": "time", "hh": 10, "mm": 0}}
+        )
 
 
 def test_validate_predicate_accepts_identical_endpoints() -> None:

@@ -247,11 +247,10 @@ def test_validate_rejects(bad) -> None:
         _cond().validate_predicate(bad)
 
 
-def test_validate_rejects_unknown_range_id() -> None:
-    # Save-time check (mirrors time_of_day rejecting unknown periods); runtime
-    # matches() stays tolerant for ranges hidden after the scene was saved.
-    with pytest.raises(ValueError, match="unknown lux range"):
-        _cond().validate_predicate({"sensors": ["sensor.a"], "range": "nope"})
+def test_lux_validate_predicate_allows_unknown_range() -> None:
+    LuxCondition(range_lookup=lambda: {}).validate_predicate(
+        {"sensors": ["sensor.x"], "range": "gone"}
+    )  # must not raise
 
 
 def test_trigger_deps_watches_sensors() -> None:

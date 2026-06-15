@@ -2710,6 +2710,52 @@ async def test_reapply_save_rejects_bad_interval(
     assert msg["error"]["code"] == "validation_error"
 
 
+async def test_exposed_assistants_list_returns_defaults(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    client = await hass_ws_client()
+    await client.send_json({"id": 1, "type": "ambience/exposed_assistants/list"})
+    msg = await client.receive_json()
+    assert msg["success"]
+    assert msg["result"] == {
+        "expose_assist": True,
+        "expose_google": False,
+        "expose_alexa": False,
+    }
+
+
+async def test_exposed_assistants_save_persists_and_signals(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    from custom_components.ambience.const import SIGNAL_EXPOSED_ASSISTANTS_UPDATED
+
+    fired = []
+    async_dispatcher_connect(
+        hass, SIGNAL_EXPOSED_ASSISTANTS_UPDATED, lambda *_a: fired.append(True)
+    )
+    client = await hass_ws_client()
+    await client.send_json(
+        {
+            "id": 1,
+            "type": "ambience/exposed_assistants/save",
+            "expose_assist": False,
+            "expose_google": True,
+            "expose_alexa": False,
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["success"] and msg["result"] == {"ok": True}
+    assert fired == [True]
+    store = hass.data[DOMAIN][DATA_STORE]
+    assert store.get_exposed_assistants() == {
+        "conversation": False,
+        "cloud.google_assistant": True,
+        "cloud.alexa": False,
+    }
+
+
 async def test_switch_defaults_save_persists_create_switches(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:

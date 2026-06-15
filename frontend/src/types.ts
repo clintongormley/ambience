@@ -3,6 +3,9 @@
  * Keep in sync with custom_components/ambience/store.py and websocket.py.
  */
 
+// One dangling-config-reference problem on a scene (transient, response-only).
+export type ConfigIssue = { kind: string; ref: string };
+
 export type Scene = {
   name?: string;
   // The category this scene belongs to (SceneCategory.id). Required — every scene is
@@ -27,6 +30,7 @@ export type Scene = {
   // reference missing / multiply-controlled entities.
   missing_entities?: string[];
   overlap_entities?: string[];
+  config_issues?: ConfigIssue[];
 };
 
 // A user-defined grouping of scenes. Stored separately; scenes reference it by id.

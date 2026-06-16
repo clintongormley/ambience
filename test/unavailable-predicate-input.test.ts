@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest";
-import "../frontend/src/views/unavailable-predicate-input";
+// The named import also evaluates the module, registering the custom element.
 import { unavailablePredicateError } from "../frontend/src/views/unavailable-predicate-input";
 
 describe("ambience-unavailable-predicate-input", () => {

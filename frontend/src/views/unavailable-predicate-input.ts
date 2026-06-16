@@ -4,8 +4,23 @@ import { customElement, property } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
+import { localize } from "../i18n.js";
 import type { UnavailablePredicate } from "../types.js";
 import { renderSensorField } from "./form-controls.js";
+
+/** Pure structural validator for an `unavailable` predicate, used by the scene
+ *  editor's save gate for slots that were never expanded (the widget only mounts
+ *  when its slot is open, so it can't self-report via `render-invalid-changed`).
+ *  A null predicate is a valid wildcard; a present predicate must carry at least
+ *  one entity — the backend rejects an empty list. */
+export function unavailablePredicateError(pred: unknown, hass?: HassConnection): string | null {
+  if (pred == null) return null;
+  const entities = (pred as { entities?: unknown }).entities;
+  if (!Array.isArray(entities) || entities.length === 0) {
+    return localize(hass, "ui.unavailable_select_one", "Select at least one entity");
+  }
+  return null;
+}
 
 // Static schema, hoisted to module scope so `ha-form` sees a stable reference
 // across re-renders (per the project's "memoise the schema" guidance) rather

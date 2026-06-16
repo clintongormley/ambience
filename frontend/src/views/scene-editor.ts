@@ -24,6 +24,7 @@ import "./condition-input.js";
 import { dayPredicateError } from "./day-predicate-input.js";
 import { luxPredicateError } from "./lux-input.js";
 import { statePredicateError } from "./state-predicate-input.js";
+import { unavailablePredicateError } from "./unavailable-predicate-input.js";
 
 type OpenSlot =
   | { kind: "name" }
@@ -75,6 +76,7 @@ const STRUCTURAL_VALIDATORS: Record<
   state: statePredicateError,
   day: dayPredicateError,
   lux: luxPredicateError,
+  unavailable: unavailablePredicateError,
 };
 
 @customElement("ambience-scene-editor")

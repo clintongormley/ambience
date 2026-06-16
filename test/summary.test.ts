@@ -91,6 +91,26 @@ describe("summariseCondition", () => {
   test("null template predicate renders as '(any)'", () => {
     expect(summariseCondition("template", null, { hass: noLocalize, periods })).toBe("(any)");
   });
+
+  test("unavailable predicate delegates to summariseUnavailable (not [object Object])", () => {
+    expect(
+      summariseCondition("unavailable", { entities: ["binary_sensor.a"] }, { hass: noLocalize }),
+    ).toBe("binary_sensor.a unavailable");
+  });
+
+  test("unavailable with multiple entities reads 'any of (...) unavailable'", () => {
+    expect(
+      summariseCondition(
+        "unavailable",
+        { entities: ["binary_sensor.a", "light.b"] },
+        { hass: noLocalize },
+      ),
+    ).toBe("any of (binary_sensor.a, light.b) unavailable");
+  });
+
+  test("unavailable with no entities renders as 'any'", () => {
+    expect(summariseCondition("unavailable", { entities: [] }, { hass: noLocalize })).toBe("any");
+  });
 });
 
 describe("summarisePeople", () => {

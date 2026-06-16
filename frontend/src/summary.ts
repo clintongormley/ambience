@@ -33,6 +33,7 @@ import type {
   TemplatePredicate,
   TimeEndpoint,
   TimeOfDayPredicate,
+  UnavailablePredicate,
   WeatherGroup,
   WeatherPredicate,
 } from "./types.js";
@@ -116,6 +117,9 @@ export function summariseCondition(
   }
   if (conditionName === "occupancy") {
     return summariseOccupancy(predicate as OccupancyPredicate, ctx);
+  }
+  if (conditionName === "unavailable") {
+    return summariseUnavailable(predicate as UnavailablePredicate, ctx);
   }
   if (conditionName === "lux") {
     return summariseLux(predicate as LuxPredicate, ctx);
@@ -438,6 +442,25 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
   }
   return head;
+}
+
+/**
+ * "<Entity> unavailable" for one entity, or "any of (A, B) unavailable" for
+ * several — matching the condition's "any of these is down" semantics. Names use
+ * friendly_name when set, else the raw entity_id.
+ */
+export function summariseUnavailable(
+  pred: UnavailablePredicate,
+  ctx: ConditionContext = {},
+): string {
+  if (pred == null || !pred.entities?.length) return localize(ctx.hass, "ui.summary_any", "any");
+  const names = pred.entities.map((id) => entityName(ctx.hass as HassWithStates | undefined, id));
+  const word = localize(ctx.hass, "unavailable_summary.unavailable", "unavailable");
+  if (names.length === 1) {
+    return `${names[0]} ${word}`;
+  }
+  const anyOf = localize(ctx.hass, "unavailable_summary.any_of", "any of");
+  return `${anyOf} (${names.join(", ")}) ${word}`;
 }
 
 /** Render an inline lux band: "<10 lx", "≥1000 lx", "50–300 lx". `empty` is the

@@ -499,19 +499,31 @@ export function summariseBlocker(scene: Scene, ctx: ConditionContext = {}): stri
     }
   }
 
-  const parts: string[] = [block];
+  const until = localize(ctx.hass, "blocker_summary.until", "until");
+  const or = ` ${localize(ctx.hass, "blocker_summary.or", "or")} `;
+  const and = ` ${localize(ctx.hass, "blocker_summary.and", "and")} `;
+  const releaseStr = releases.join(or);
+  const guardStr = guards.join(and);
+
+  // Lead with the guard/context when there is BOTH a guard and a release:
+  // "While <guards>, block until <releases>" reads more naturally than
+  // "Block until <releases> while <guards>" — the guard sets the context, then
+  // the hold. The guard-only and release-only forms keep "Block …" first:
+  // "While <guard>, block" reads truncated with no "until" to follow, and a
+  // release-only block has no guard to lead with.
+  if (releases.length && guards.length) {
+    const whileLead = localize(ctx.hass, "blocker_summary.while_lead", "While");
+    const blockMid = localize(ctx.hass, "blocker_summary.block_mid", "block");
+    return `${whileLead} ${guardStr}, ${blockMid} ${until} ${releaseStr}`;
+  }
   if (releases.length) {
-    const or = ` ${localize(ctx.hass, "blocker_summary.or", "or")} `;
-    parts.push(localize(ctx.hass, "blocker_summary.until", "until"), releases.join(or));
+    return `${block} ${until} ${releaseStr}`;
   }
   if (guards.length) {
-    const and = ` ${localize(ctx.hass, "blocker_summary.and", "and")} `;
-    parts.push(localize(ctx.hass, "blocker_summary.while", "while"), guards.join(and));
+    const whileWord = localize(ctx.hass, "blocker_summary.while", "while");
+    return `${block} ${whileWord} ${guardStr}`;
   }
-  if (!releases.length && !guards.length) {
-    parts.push(localize(ctx.hass, "blocker_summary.always", "always"));
-  }
-  return parts.join(" ");
+  return `${block} ${localize(ctx.hass, "blocker_summary.always", "always")}`;
 }
 
 /**

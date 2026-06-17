@@ -1351,7 +1351,7 @@ describe("summariseBlocker", () => {
     expect(summariseBlocker(blocker(when), ctx)).toBe("Block until Island is clear for ≥3m");
   });
 
-  test("release + guard: 'until <release> while <guard>'", () => {
+  test("release + guard: lead with the guard — 'While <guard>, block until <release>'", () => {
     const when = {
       occupancy: {
         sensors: ["binary_sensor.island"],
@@ -1362,7 +1362,23 @@ describe("summariseBlocker", () => {
       time_of_day: { period: "daytime" },
     };
     expect(summariseBlocker(blocker(when), ctx)).toBe(
-      "Block until Island is clear for ≥3m while Daytime",
+      "While Daytime, block until Island is clear for ≥3m",
+    );
+  });
+
+  test("release + multiple guards: 'While <g1> and <g2>, block until <release>'", () => {
+    const when = {
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+      time_of_day: { period: "daytime" },
+      people: { who: ["person.alice"], where: "home" } as PeoplePredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      "While Daytime and Alice is at Home, block until Island is clear for ≥3m",
     );
   });
 

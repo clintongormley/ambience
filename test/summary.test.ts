@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   sceneDisplayName,
   summariseAction,
+  summariseBlocker,
   summariseCondition,
   summariseDay,
   summarisePeople,
@@ -15,7 +16,11 @@ import type {
   ActionSpec,
   DayPredicate,
   ExposedAction,
+  OccupancyPredicate,
+  PeoplePredicate,
   PeriodStoreView,
+  Scene,
+  StatePredicate,
 } from "../frontend/src/types";
 
 const noLocalize = { localize: () => undefined };
@@ -1316,4 +1321,101 @@ test("summariseCondition dispatches script with args (sorted)", () => {
 
 test("summariseCondition script with null predicate yields '(any)'", () => {
   expect(summariseCondition("script", null, { hass: noLocalize })).toBe("(any)");
+});
+
+describe("summariseBlocker", () => {
+  // hass with no translations (use English fallbacks) + a couple of friendly names.
+  const hass = {
+    localize: () => undefined,
+    states: {
+      "binary_sensor.island": { attributes: { friendly_name: "Island" } },
+    },
+  };
+  const ctx = { hass };
+
+  const blocker = (when: Record<string, unknown>): Scene => ({
+    name: "x",
+    when,
+    actions: [],
+  });
+
+  test("pure dwell: negated occupancy renders as a positive 'until' release", () => {
+    const when = {
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe("Block until Island is clear for ≥3m");
+  });
+
+  test("release + guard: 'until <release> while <guard>'", () => {
+    const when = {
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+      time_of_day: { period: "daytime" },
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      "Block until Island is clear for ≥3m while Daytime",
+    );
+  });
+
+  test("pure guard (no negation): 'Block while …'", () => {
+    const when = {
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe("Block while Island is detected");
+  });
+
+  test("two guards join with 'and'", () => {
+    const when = {
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+      time_of_day: { period: "daytime" },
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe("Block while Island is detected and Daytime");
+  });
+
+  test("two releases (different types) join with 'or'", () => {
+    const when = {
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+      people: { who: ["person.alice"], where: "home", negate: true } as PeoplePredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      "Block until Island is clear for ≥3m or Alice is at Home",
+    );
+  });
+
+  test("state top-level 'not' de-negates to its inner clause", () => {
+    const inner = { kind: "is", entity_id: "light.lounge", states: ["on"] };
+    const when = { state: { kind: "not", item: inner } as StatePredicate };
+    // Tie to whatever summariseState produces for the inner clause, robust to
+    // its exact wording — the point is the 'not' wrapper is gone.
+    const expected = `Block until ${summariseCondition("state", inner, ctx)}`;
+    const out = summariseBlocker(blocker(when), ctx);
+    expect(out).toBe(expected);
+    expect(out.toLowerCase()).not.toContain("not");
+  });
+
+  test("zero-condition blocker reads 'Block always'", () => {
+    expect(summariseBlocker(blocker({}), ctx)).toBe("Block always");
+  });
+
+  test("null condition values are ignored", () => {
+    const when = {
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+      time_of_day: null,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe("Block while Island is detected");
+  });
 });

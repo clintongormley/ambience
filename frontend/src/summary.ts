@@ -44,7 +44,7 @@ interface HassLike {
   [key: string]: unknown;
 }
 
-interface ConditionContext {
+export interface ConditionContext {
   hass?: HassLike;
   periods?: PeriodStoreView;
   luxRanges?: LuxRangeStoreView;
@@ -442,6 +442,70 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
   }
   return head;
+}
+
+/** Is this condition stored in its negated form? In a blocker, negated
+ *  conditions are RELEASES ("until <positive>") and non-negated ones are
+ *  GUARDS ("while <as-is>"). Only types with a negation operator can be a
+ *  release. People's `quant: "nobody"` is deliberately NOT a release — it reads
+ *  fine as a guard ("while Nobody is at Home") and de-negating it is ambiguous;
+ *  only the explicit `negate` flag flips a person/occupancy condition. */
+function isReleaseCondition(name: string, predicate: unknown): boolean {
+  if (predicate == null || typeof predicate !== "object") return false;
+  if (name === "occupancy" || name === "people") {
+    return Boolean((predicate as { negate?: unknown }).negate);
+  }
+  if (name === "state") {
+    return (predicate as { kind?: unknown }).kind === "not";
+  }
+  return false;
+}
+
+/** The positive form of a release condition (only called when
+ *  isReleaseCondition is true). occupancy/people drop the `negate` flag; a
+ *  top-level state `not` unwraps to its inner expression. */
+function deNegateCondition(name: string, predicate: unknown): unknown {
+  if (name === "state") {
+    return (predicate as { item: unknown }).item;
+  }
+  return { ...(predicate as object), negate: false };
+}
+
+/**
+ * Positive "Block until <releases> while <guards>" summary for a zero-action
+ * scene (a pure blocker). A blocker matches the COMPLEMENT of the world it is
+ * waiting for, so its negated conditions are RELEASES (de-negated, joined by
+ * "or" — the hold ends when any fires) and its non-negated conditions are
+ * GUARDS (rendered as-is, joined by "and" — the hold applies while all hold).
+ * Callers gate on `scene.actions.length === 0`.
+ */
+export function summariseBlocker(scene: Scene, ctx: ConditionContext = {}): string {
+  const block = localize(ctx.hass, "blocker_summary.block", "Block");
+  const releases: string[] = [];
+  const guards: string[] = [];
+  for (const k of Object.keys(scene.when)) {
+    const pred = scene.when[k];
+    if (pred == null) continue;
+    if (isReleaseCondition(k, pred)) {
+      releases.push(summariseCondition(k, deNegateCondition(k, pred), ctx));
+    } else {
+      guards.push(summariseCondition(k, pred, ctx));
+    }
+  }
+
+  const parts: string[] = [block];
+  if (releases.length) {
+    const or = ` ${localize(ctx.hass, "blocker_summary.or", "or")} `;
+    parts.push(localize(ctx.hass, "blocker_summary.until", "until"), releases.join(or));
+  }
+  if (guards.length) {
+    const and = ` ${localize(ctx.hass, "blocker_summary.and", "and")} `;
+    parts.push(localize(ctx.hass, "blocker_summary.while", "while"), guards.join(and));
+  }
+  if (!releases.length && !guards.length) {
+    parts.push(localize(ctx.hass, "blocker_summary.always", "always"));
+  }
+  return parts.join(" ");
 }
 
 /**

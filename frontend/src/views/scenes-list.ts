@@ -623,7 +623,7 @@ export class AmbienceScenesList extends LitElement {
               this._expanded.has(i)
                 ? ""
                 : scene.actions.length === 0
-                  ? html`${this._blockerSummary(scene)}`
+                  ? this._blockerSummary(scene)
                   : html`${this._whenSummary(scene)} ·
                     <span class="action-count"
                       >${this._actionCountLabel(scene)}</span

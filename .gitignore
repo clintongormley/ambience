@@ -35,5 +35,9 @@ frontend/dist/
 .venv-docs/
 site/
 
+# Local test/dev venvs (e.g. `uv venv --python 3.14 .venv-test`)
+.venv/
+.venv-test/
+
 # Editor
 .vscode/

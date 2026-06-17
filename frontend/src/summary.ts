@@ -448,14 +448,23 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
 
 /** Is this condition stored in its negated form? In a blocker, negated
  *  conditions are RELEASES ("until <positive>") and non-negated ones are
- *  GUARDS ("while <as-is>"). Only types with a negation operator can be a
- *  release. People's `quant: "nobody"` is deliberately NOT a release — it reads
- *  fine as a guard ("while Nobody is at Home") and de-negating it is ambiguous;
- *  only the explicit `negate` flag flips a person/occupancy condition. */
+ *  GUARDS ("while <as-is>"). De-negation (see `deNegateCondition`) just drops
+ *  the negation flag, which only yields the correct complement when the negation
+ *  wraps the WHOLE match. That holds for occupancy (`kleene_not` outside the
+ *  quantifier) and a top-level state `not`. It does NOT hold for people, where
+ *  `negate` is applied per-person INSIDE the quantifier — complementing a
+ *  multi-person `everyone`/`any` predicate needs a de Morgan quantifier swap,
+ *  not a flag drop. So only a SINGLE-person negated people predicate is a
+ *  release (the quantifier is moot with one person); multi-person / all-persons
+ *  stay guards, where `summarisePeople` renders the negated form truthfully. */
 function isReleaseCondition(name: string, predicate: unknown): boolean {
   if (predicate == null || typeof predicate !== "object") return false;
-  if (name === "occupancy" || name === "people") {
+  if (name === "occupancy") {
     return Boolean((predicate as { negate?: unknown }).negate);
+  }
+  if (name === "people") {
+    const p = predicate as { negate?: unknown; who?: unknown };
+    return Boolean(p.negate) && Array.isArray(p.who) && p.who.length === 1;
   }
   if (name === "state") {
     return (predicate as { kind?: unknown }).kind === "not";

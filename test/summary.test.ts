@@ -1430,6 +1430,23 @@ describe("summariseBlocker", () => {
     );
   });
 
+  test("multi-person quantified people stays a guard (negate is per-person, not an outer wrap)", () => {
+    // {everyone, negate} matches "all away" and releases when ANY arrives, so
+    // dropping `negate` would mis-render "All of … is at Home" (wrong quantifier,
+    // false to the engine). Render the truthful negated form as a guard instead.
+    const when = {
+      people: {
+        who: ["person.alice", "person.bob"],
+        quant: "everyone",
+        where: "home",
+        negate: true,
+      } as PeoplePredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      "Block while All of: (Alice, Bob) is not at Home",
+    );
+  });
+
   test("state top-level 'not' de-negates to its inner clause", () => {
     const inner = { kind: "is", entity_id: "light.lounge", states: ["on"] };
     const when = { state: { kind: "not", item: inner } as StatePredicate };

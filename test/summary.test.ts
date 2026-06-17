@@ -21,6 +21,7 @@ import type {
   PeriodStoreView,
   Scene,
   StatePredicate,
+  SunPredicate,
 } from "../frontend/src/types";
 
 const noLocalize = { localize: () => undefined };
@@ -1363,6 +1364,23 @@ describe("summariseBlocker", () => {
     };
     expect(summariseBlocker(blocker(when), ctx)).toBe(
       "While Daytime, block until Island is clear for ≥3m",
+    );
+  });
+
+  test("ambient guard (sun) carries its type label so the value makes sense", () => {
+    // Sun renders abstract geometry ("N/NE") that is opaque without "Sun:".
+    // The entity-naming occupancy release stays bare (it names its sensor).
+    const when = {
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+      sun: { azimuth: { sectors: ["N", "NE"] } } as SunPredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      "While Sun: N/NE, block until Island is clear for ≥3m",
     );
   });
 

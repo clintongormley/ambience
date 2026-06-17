@@ -1,6 +1,7 @@
 import {
   actionLabel,
   anchorLabel,
+  conditionLabel,
   exposedActionLabel,
   humanizeId,
   localize,
@@ -472,6 +473,35 @@ function deNegateCondition(name: string, predicate: unknown): unknown {
   return { ...(predicate as object), negate: false };
 }
 
+// Condition types whose summary already names a concrete entity (occupancy,
+// people, state, lux, unavailable, script) or reads as a recognizable word
+// (day → "Mon/Tue", time_of_day → "Daytime", weather → "Rainy"). These render
+// bare in the blocker sentence. Every OTHER type — notably `sun`, whose body is
+// abstract geometry like "N/NE", plus any future/opaque type — gets a "<Type>:"
+// prefix so the value makes sense in prose. Defaulting the unknown case to
+// labelled means a new opaque condition can never render as an orphan value.
+const _BLOCKER_BARE_CONDITIONS = new Set([
+  "occupancy",
+  "people",
+  "state",
+  "lux",
+  "unavailable",
+  "script",
+  "template",
+  "day",
+  "time_of_day",
+  "weather",
+]);
+
+/** One condition's text for the blocker sentence: the bare body for a
+ *  self-describing type, else "<Type>: <body>" so an abstract value (e.g. the
+ *  sun's "N/NE") is legible. */
+function _blockerConditionText(name: string, predicate: unknown, ctx: ConditionContext): string {
+  const body = summariseCondition(name, predicate, ctx);
+  if (_BLOCKER_BARE_CONDITIONS.has(name)) return body;
+  return `${conditionLabel(ctx.hass, name)}: ${body}`;
+}
+
 /**
  * Positive "Block until <releases> while <guards>" summary for a zero-action
  * scene (a pure blocker). A blocker matches the COMPLEMENT of the world it is
@@ -493,9 +523,9 @@ export function summariseBlocker(scene: Scene, ctx: ConditionContext = {}): stri
     const pred = scene.when[k];
     // pred is already non-null — filtered above
     if (isReleaseCondition(k, pred)) {
-      releases.push(summariseCondition(k, deNegateCondition(k, pred), ctx));
+      releases.push(_blockerConditionText(k, deNegateCondition(k, pred), ctx));
     } else {
-      guards.push(summariseCondition(k, pred, ctx));
+      guards.push(_blockerConditionText(k, pred, ctx));
     }
   }
 

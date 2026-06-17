@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
+import { AMBIENCE_STRINGS } from "../frontend/src/i18n-data";
 import {
   sceneDisplayName,
   summariseAction,
+  summariseBlocker,
   summariseCondition,
   summariseDay,
   summarisePeople,
@@ -15,7 +17,12 @@ import type {
   ActionSpec,
   DayPredicate,
   ExposedAction,
+  OccupancyPredicate,
+  PeoplePredicate,
   PeriodStoreView,
+  Scene,
+  StatePredicate,
+  SunPredicate,
 } from "../frontend/src/types";
 
 const noLocalize = { localize: () => undefined };
@@ -1316,4 +1323,216 @@ test("summariseCondition dispatches script with args (sorted)", () => {
 
 test("summariseCondition script with null predicate yields '(any)'", () => {
   expect(summariseCondition("script", null, { hass: noLocalize })).toBe("(any)");
+});
+
+describe("summariseBlocker", () => {
+  // hass with no translations (use English fallbacks) + a couple of friendly names.
+  const hass = {
+    localize: () => undefined,
+    states: {
+      "binary_sensor.island": { attributes: { friendly_name: "Island" } },
+    },
+  };
+  const ctx = { hass };
+
+  const blocker = (when: Record<string, unknown>): Scene => ({
+    name: "x",
+    when,
+    actions: [],
+  });
+
+  test("pure dwell: negated occupancy renders as a positive 'until' release", () => {
+    const when = {
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe("Block until Island is clear for ≥3m");
+  });
+
+  test("release + guard: lead with the guard — 'While <guard>, block until <release>'", () => {
+    const when = {
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+      time_of_day: { period: "daytime" },
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      "While Daytime, block until Island is clear for ≥3m",
+    );
+  });
+
+  test("ambient guard (sun) carries its type label so the value makes sense", () => {
+    // Sun renders abstract geometry ("N/NE") that is opaque without "Sun:".
+    // The entity-naming occupancy release stays bare (it names its sensor).
+    const when = {
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+      sun: { azimuth: { sectors: ["N", "NE"] } } as SunPredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      "While Sun: N/NE, block until Island is clear for ≥3m",
+    );
+  });
+
+  test("release + multiple guards: 'While <g1> and <g2>, block until <release>'", () => {
+    const when = {
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+      time_of_day: { period: "daytime" },
+      people: { who: ["person.alice"], where: "home" } as PeoplePredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      "While Daytime and Alice is at Home, block until Island is clear for ≥3m",
+    );
+  });
+
+  test("pure guard (no negation): 'Block while …'", () => {
+    const when = {
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe("Block while Island is detected");
+  });
+
+  test("two guards join with 'and'", () => {
+    const when = {
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+      time_of_day: { period: "daytime" },
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe("Block while Island is detected and Daytime");
+  });
+
+  test("two releases (different types) join with 'or'", () => {
+    const when = {
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+      people: { who: ["person.alice"], where: "home", negate: true } as PeoplePredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      "Block until Island is clear for ≥3m or Alice is at Home",
+    );
+  });
+
+  test("multi-person quantified people stays a guard (negate is per-person, not an outer wrap)", () => {
+    // {everyone, negate} matches "all away" and releases when ANY arrives, so
+    // dropping `negate` would mis-render "All of … is at Home" (wrong quantifier,
+    // false to the engine). Render the truthful negated form as a guard instead.
+    const when = {
+      people: {
+        who: ["person.alice", "person.bob"],
+        quant: "everyone",
+        where: "home",
+        negate: true,
+      } as PeoplePredicate,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      "Block while All of: (Alice, Bob) is not at Home",
+    );
+  });
+
+  test("state top-level 'not' de-negates to its inner clause", () => {
+    const inner = { kind: "is", entity_id: "light.lounge", states: ["on"] };
+    const when = { state: { kind: "not", item: inner } as StatePredicate };
+    // Tie to whatever summariseState produces for the inner clause, robust to
+    // its exact wording — the point is the 'not' wrapper is gone.
+    const expected = `Block until ${summariseCondition("state", inner, ctx)}`;
+    const out = summariseBlocker(blocker(when), ctx);
+    expect(out).toBe(expected);
+    expect(out.toLowerCase()).not.toContain("not");
+  });
+
+  test("zero-condition blocker reads 'Block always'", () => {
+    expect(summariseBlocker(blocker({}), ctx)).toBe("Block always");
+  });
+
+  test("null condition values are ignored", () => {
+    const when = {
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+      time_of_day: null,
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe("Block while Island is detected");
+  });
+
+  test("priority ordering: higher-priority condition appears first regardless of insertion order", () => {
+    // Insertion order: occupancy first, time_of_day second.
+    // Priority map: time_of_day=10 (higher), occupancy=5 (lower).
+    // With priorities, time_of_day should appear FIRST in the guards list.
+    const when = {
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+      time_of_day: { period: "daytime" },
+    };
+    const priorities = new Map([
+      ["time_of_day", 10],
+      ["occupancy", 5],
+    ]);
+    expect(summariseBlocker(blocker(when), { ...ctx, priorities })).toBe(
+      "Block while Daytime and Island is detected",
+    );
+  });
+
+  test("without priorities, insertion order is preserved", () => {
+    // Same scene as above but no priorities → occupancy (inserted first) comes first.
+    const when = {
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+      time_of_day: { period: "daytime" },
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe("Block while Island is detected and Daytime");
+  });
+
+  test("conditions absent from a non-empty priority map keep insertion order", () => {
+    // Both keys are missing from the map, so the comparator must treat them as
+    // equal (return 0) and preserve insertion order — never produce NaN.
+    const when = {
+      time_of_day: { period: "daytime" },
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+    };
+    const priorities = new Map([["weather", 999]]); // non-empty, neither key present
+    expect(summariseBlocker(blocker(when), { ...ctx, priorities })).toBe(
+      "Block while Daytime and Island is detected",
+    );
+  });
+
+  test("defaults to English fallbacks when ctx is omitted", () => {
+    expect(summariseBlocker(blocker({}))).toBe("Block always");
+  });
+});
+
+describe("blocker_summary i18n bundle", () => {
+  test("every blocker_summary string is bundled (translatable), not inline-only", () => {
+    // The inline fallbacks in summariseBlocker are a last resort; the canonical
+    // source must live in the bundle so the strings are localizable like
+    // day_summary (and unlike the still-inline occupancy/people/lux/unavailable
+    // families — tracked for a separate i18n cleanup).
+    const ns = AMBIENCE_STRINGS.blocker_summary as Record<string, unknown> | undefined;
+    for (const key of [
+      "block",
+      "block_mid",
+      "until",
+      "while",
+      "while_lead",
+      "or",
+      "and",
+      "always",
+    ]) {
+      expect(typeof ns?.[key]).toBe("string");
+    }
+  });
 });

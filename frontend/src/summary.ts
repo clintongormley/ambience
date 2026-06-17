@@ -1,6 +1,7 @@
 import {
   actionLabel,
   anchorLabel,
+  conditionLabel,
   exposedActionLabel,
   humanizeId,
   localize,
@@ -44,11 +45,12 @@ interface HassLike {
   [key: string]: unknown;
 }
 
-interface ConditionContext {
+export interface ConditionContext {
   hass?: HassLike;
   periods?: PeriodStoreView;
   luxRanges?: LuxRangeStoreView;
   weatherGroups?: WeatherGroup[];
+  priorities?: ReadonlyMap<string, number>;
 }
 
 interface ActionContext {
@@ -442,6 +444,132 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
     return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
   }
   return head;
+}
+
+/** Is this condition stored in its negated form? In a blocker, negated
+ *  conditions are RELEASES ("until <positive>") and non-negated ones are
+ *  GUARDS ("while <as-is>"). De-negation (see `deNegateCondition`) just drops
+ *  the negation flag, which only yields the correct complement when the negation
+ *  wraps the WHOLE match. That holds for occupancy (`kleene_not` outside the
+ *  quantifier) and a top-level state `not`. It does NOT hold for people, where
+ *  `negate` is applied per-person INSIDE the quantifier — complementing a
+ *  multi-person `everyone`/`any` predicate needs a de Morgan quantifier swap,
+ *  not a flag drop. So only a SINGLE-person negated people predicate is a
+ *  release (the quantifier is moot with one person); multi-person / all-persons
+ *  stay guards, where `summarisePeople` renders the negated form truthfully. */
+function isReleaseCondition(name: string, predicate: unknown): boolean {
+  if (predicate == null || typeof predicate !== "object") return false;
+  if (name === "occupancy") {
+    return Boolean((predicate as { negate?: unknown }).negate);
+  }
+  if (name === "people") {
+    const p = predicate as { negate?: unknown; who?: unknown };
+    return Boolean(p.negate) && Array.isArray(p.who) && p.who.length === 1;
+  }
+  if (name === "state") {
+    return (predicate as { kind?: unknown }).kind === "not";
+  }
+  return false;
+}
+
+/** The positive form of a release condition (only called when
+ *  isReleaseCondition is true). occupancy/people drop the `negate` flag; a
+ *  top-level state `not` unwraps to its inner expression. */
+function deNegateCondition(name: string, predicate: unknown): unknown {
+  if (name === "state") {
+    return (predicate as { item: unknown }).item;
+  }
+  return { ...(predicate as object), negate: false };
+}
+
+// Condition types whose summary already names a concrete entity (occupancy,
+// people, state, lux, unavailable, script) or reads as a recognizable word
+// (day → "Mon/Tue", time_of_day → "Daytime", weather → "Rainy"). These render
+// bare in the blocker sentence. Every OTHER type — notably `sun`, whose body is
+// abstract geometry like "N/NE", plus any future/opaque type — gets a "<Type>:"
+// prefix so the value makes sense in prose. Defaulting the unknown case to
+// labelled means a new opaque condition can never render as an orphan value.
+const _BLOCKER_BARE_CONDITIONS = new Set([
+  "occupancy",
+  "people",
+  "state",
+  "lux",
+  "unavailable",
+  "script",
+  "template",
+  "day",
+  "time_of_day",
+  "weather",
+]);
+
+/** One condition's text for the blocker sentence: the bare body for a
+ *  self-describing type, else "<Type>: <body>" so an abstract value (e.g. the
+ *  sun's "N/NE") is legible. */
+function _blockerConditionText(name: string, predicate: unknown, ctx: ConditionContext): string {
+  const body = summariseCondition(name, predicate, ctx);
+  if (_BLOCKER_BARE_CONDITIONS.has(name)) return body;
+  return `${conditionLabel(ctx.hass, name)}: ${body}`;
+}
+
+/**
+ * Positive "Block until <releases> while <guards>" summary for a zero-action
+ * scene (a pure blocker). A blocker matches the COMPLEMENT of the world it is
+ * waiting for, so its negated conditions are RELEASES (de-negated, joined by
+ * "or" — the hold ends when any fires) and its non-negated conditions are
+ * GUARDS (rendered as-is, joined by "and" — the hold applies while all hold).
+ * Callers gate on `scene.actions.length === 0`.
+ */
+export function summariseBlocker(scene: Scene, ctx: ConditionContext = {}): string {
+  const block = localize(ctx.hass, "blocker_summary.block", "Block");
+  let keys = Object.keys(scene.when).filter((k) => scene.when[k] != null);
+  if (ctx.priorities) {
+    const p = ctx.priorities;
+    keys = keys.sort((a, b) => {
+      const pa = p.get(a);
+      const pb = p.get(b);
+      // Both unknown → equal, so the stable sort keeps insertion order (never
+      // `-Infinity - -Infinity = NaN`, which is an inconsistent comparator).
+      if (pa === undefined && pb === undefined) return 0;
+      return (pb ?? -Infinity) - (pa ?? -Infinity);
+    });
+  }
+  const releases: string[] = [];
+  const guards: string[] = [];
+  for (const k of keys) {
+    const pred = scene.when[k];
+    // pred is already non-null — filtered above
+    if (isReleaseCondition(k, pred)) {
+      releases.push(_blockerConditionText(k, deNegateCondition(k, pred), ctx));
+    } else {
+      guards.push(_blockerConditionText(k, pred, ctx));
+    }
+  }
+
+  const until = localize(ctx.hass, "blocker_summary.until", "until");
+  const or = ` ${localize(ctx.hass, "blocker_summary.or", "or")} `;
+  const and = ` ${localize(ctx.hass, "blocker_summary.and", "and")} `;
+  const releaseStr = releases.join(or);
+  const guardStr = guards.join(and);
+
+  // Lead with the guard/context when there is BOTH a guard and a release:
+  // "While <guards>, block until <releases>" reads more naturally than
+  // "Block until <releases> while <guards>" — the guard sets the context, then
+  // the hold. The guard-only and release-only forms keep "Block …" first:
+  // "While <guard>, block" reads truncated with no "until" to follow, and a
+  // release-only block has no guard to lead with.
+  if (releases.length && guards.length) {
+    const whileLead = localize(ctx.hass, "blocker_summary.while_lead", "While");
+    const blockMid = localize(ctx.hass, "blocker_summary.block_mid", "block");
+    return `${whileLead} ${guardStr}, ${blockMid} ${until} ${releaseStr}`;
+  }
+  if (releases.length) {
+    return `${block} ${until} ${releaseStr}`;
+  }
+  if (guards.length) {
+    const whileWord = localize(ctx.hass, "blocker_summary.while", "while");
+    return `${block} ${whileWord} ${guardStr}`;
+  }
+  return `${block} ${localize(ctx.hass, "blocker_summary.always", "always")}`;
 }
 
 /**

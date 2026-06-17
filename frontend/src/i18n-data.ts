@@ -362,6 +362,16 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     state_where: "Where",
     state_wrap: "Wrap in group",
   },
+  blocker_summary: {
+    block: "Block",
+    block_mid: "block",
+    until: "until",
+    while: "while",
+    while_lead: "While",
+    or: "or",
+    and: "and",
+    always: "always",
+  },
   day_summary: {
     any: "any",
     any_day: "any day",

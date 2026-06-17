@@ -524,7 +524,14 @@ export function summariseBlocker(scene: Scene, ctx: ConditionContext = {}): stri
   let keys = Object.keys(scene.when).filter((k) => scene.when[k] != null);
   if (ctx.priorities) {
     const p = ctx.priorities;
-    keys = keys.sort((a, b) => (p.get(b) ?? -Infinity) - (p.get(a) ?? -Infinity));
+    keys = keys.sort((a, b) => {
+      const pa = p.get(a);
+      const pb = p.get(b);
+      // Both unknown → equal, so the stable sort keeps insertion order (never
+      // `-Infinity - -Infinity = NaN`, which is an inconsistent comparator).
+      if (pa === undefined && pb === undefined) return 0;
+      return (pb ?? -Infinity) - (pa ?? -Infinity);
+    });
   }
   const releases: string[] = [];
   const guards: string[] = [];

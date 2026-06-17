@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { AMBIENCE_STRINGS } from "../frontend/src/i18n-data";
 import {
   sceneDisplayName,
   summariseAction,
@@ -1496,7 +1497,42 @@ describe("summariseBlocker", () => {
     expect(summariseBlocker(blocker(when), ctx)).toBe("Block while Island is detected and Daytime");
   });
 
+  test("conditions absent from a non-empty priority map keep insertion order", () => {
+    // Both keys are missing from the map, so the comparator must treat them as
+    // equal (return 0) and preserve insertion order — never produce NaN.
+    const when = {
+      time_of_day: { period: "daytime" },
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+    };
+    const priorities = new Map([["weather", 999]]); // non-empty, neither key present
+    expect(summariseBlocker(blocker(when), { ...ctx, priorities })).toBe(
+      "Block while Daytime and Island is detected",
+    );
+  });
+
   test("defaults to English fallbacks when ctx is omitted", () => {
     expect(summariseBlocker(blocker({}))).toBe("Block always");
+  });
+});
+
+describe("blocker_summary i18n bundle", () => {
+  test("every blocker_summary string is bundled (translatable), not inline-only", () => {
+    // The inline fallbacks in summariseBlocker are a last resort; the canonical
+    // source must live in the bundle so the strings are localizable like
+    // day_summary (and unlike the still-inline occupancy/people/lux/unavailable
+    // families — tracked for a separate i18n cleanup).
+    const ns = AMBIENCE_STRINGS.blocker_summary as Record<string, unknown> | undefined;
+    for (const key of [
+      "block",
+      "block_mid",
+      "until",
+      "while",
+      "while_lead",
+      "or",
+      "and",
+      "always",
+    ]) {
+      expect(typeof ns?.[key]).toBe("string");
+    }
   });
 });

@@ -441,6 +441,7 @@ export class AmbienceScenesList extends LitElement {
       periods: this.periods,
       luxRanges: this.luxRanges,
       weatherGroups: this.weatherConfig?.groups,
+      priorities: this._priorityMap(),
     });
   }
 

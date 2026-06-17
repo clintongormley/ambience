@@ -49,6 +49,7 @@ export interface ConditionContext {
   periods?: PeriodStoreView;
   luxRanges?: LuxRangeStoreView;
   weatherGroups?: WeatherGroup[];
+  priorities?: ReadonlyMap<string, number>;
 }
 
 interface ActionContext {
@@ -481,11 +482,16 @@ function deNegateCondition(name: string, predicate: unknown): unknown {
  */
 export function summariseBlocker(scene: Scene, ctx: ConditionContext = {}): string {
   const block = localize(ctx.hass, "blocker_summary.block", "Block");
+  let keys = Object.keys(scene.when).filter((k) => scene.when[k] != null);
+  if (ctx.priorities) {
+    const p = ctx.priorities;
+    keys = keys.sort((a, b) => (p.get(b) ?? -Infinity) - (p.get(a) ?? -Infinity));
+  }
   const releases: string[] = [];
   const guards: string[] = [];
-  for (const k of Object.keys(scene.when)) {
+  for (const k of keys) {
     const pred = scene.when[k];
-    if (pred == null) continue;
+    // pred is already non-null — filtered above
     if (isReleaseCondition(k, pred)) {
       releases.push(summariseCondition(k, deNegateCondition(k, pred), ctx));
     } else {

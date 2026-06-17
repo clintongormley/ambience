@@ -1418,4 +1418,34 @@ describe("summariseBlocker", () => {
     };
     expect(summariseBlocker(blocker(when), ctx)).toBe("Block while Island is detected");
   });
+
+  test("priority ordering: higher-priority condition appears first regardless of insertion order", () => {
+    // Insertion order: occupancy first, time_of_day second.
+    // Priority map: time_of_day=10 (higher), occupancy=5 (lower).
+    // With priorities, time_of_day should appear FIRST in the guards list.
+    const when = {
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+      time_of_day: { period: "daytime" },
+    };
+    const priorities = new Map([
+      ["time_of_day", 10],
+      ["occupancy", 5],
+    ]);
+    expect(summariseBlocker(blocker(when), { ...ctx, priorities })).toBe(
+      "Block while Daytime and Island is detected",
+    );
+  });
+
+  test("without priorities, insertion order is preserved", () => {
+    // Same scene as above but no priorities → occupancy (inserted first) comes first.
+    const when = {
+      occupancy: { sensors: ["binary_sensor.island"], occupied: true } as OccupancyPredicate,
+      time_of_day: { period: "daytime" },
+    };
+    expect(summariseBlocker(blocker(when), ctx)).toBe("Block while Island is detected and Daytime");
+  });
+
+  test("defaults to English fallbacks when ctx is omitted", () => {
+    expect(summariseBlocker(blocker({}))).toBe("Block always");
+  });
 });

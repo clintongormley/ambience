@@ -859,15 +859,19 @@ describe("ambience-scenes-list", () => {
   });
 
   test("expanding actions for one scene does not expand actions for others", async () => {
-    el = await mount([movieScene, eveningScene]);
+    const secondScene: Scene = { ...movieScene, name: "Second movie" };
+    el = await mount([movieScene, secondScene]);
     const counts = el.shadowRoot.querySelectorAll(".action-count");
+    // Both scenes must carry an action-count span for this test to be meaningful
+    expect(counts.length).toBe(2);
     (counts[0] as HTMLElement).click();
     await el.updateComplete;
     const details = el.shadowRoot.querySelectorAll(".actions-detail");
     expect(details.length).toBe(1);
     // The expanded one should be inside the first scene's li
-    const firstLi = el.shadowRoot.querySelectorAll("li")[0];
+    const [firstLi, secondLi] = el.shadowRoot.querySelectorAll("li");
     expect(firstLi.querySelector(".actions-detail")).toBeTruthy();
+    expect(secondLi.querySelector(".actions-detail")).toBeFalsy();
   });
 
   test("expanded action with 0 entity_ids renders '(no targets)'", async () => {

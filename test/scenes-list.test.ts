@@ -348,7 +348,11 @@ describe("ambience-scenes-list", () => {
   });
 
   test("summary shows 'any' for scene with no when predicates", async () => {
-    const noPredicateScene: Scene = { name: "Catch all", when: {}, actions: [] };
+    const noPredicateScene: Scene = {
+      name: "Catch all",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: {} }],
+    };
     el = await mount([noPredicateScene]);
     expect(el.shadowRoot.querySelector(".summary")?.textContent).toContain("any");
   });
@@ -358,10 +362,33 @@ describe("ambience-scenes-list", () => {
     expect(el.shadowRoot.querySelector(".summary")?.textContent).toContain("movie");
   });
 
-  test("summary flags a no-op (no actions) as 'NOOP - 0 actions'", async () => {
+  test("summary of a zero-condition blocker reads 'Block always'", async () => {
     const r: Scene = { name: "x", when: {}, actions: [] };
     el = await mount([r]);
-    expect(el.shadowRoot.querySelector(".summary")?.textContent).toContain("NOOP - 0 actions");
+    const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
+    expect(summary).toContain("Block always");
+    expect(summary).not.toContain("NOOP");
+  });
+
+  test("a blocker with a negated occupancy condition reads 'Block until … clear …'", async () => {
+    const r: Scene = {
+      name: "recently vacant",
+      when: {
+        occupancy: {
+          sensors: ["binary_sensor.island"],
+          occupied: false,
+          for: { h: 0, m: 3, s: 0 },
+          negate: true,
+        },
+      },
+      actions: [],
+    };
+    el = await mount([r]);
+    const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
+    expect(summary).toContain("Block until");
+    expect(summary).toContain("clear");
+    expect(summary.toLowerCase()).not.toContain("not clear");
+    expect(el.shadowRoot.querySelector(".action-count")).toBeNull();
   });
 
   test("summary shows period label for time_of_day predicate", async () => {
@@ -602,7 +629,7 @@ describe("ambience-scenes-list", () => {
       {
         name: "test",
         when: { time_of_day: { period: "afternoon" }, mode: "movie" },
-        actions: [],
+        actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: {} }],
       },
     ];
     el = await mount(scenes);
@@ -856,14 +883,15 @@ describe("ambience-scenes-list", () => {
     expect(el.shadowRoot.querySelector(".entity-list")).toBeFalsy();
   });
 
-  test("expanded no-op scene shows 'NOOP - 0 actions' in the detail", async () => {
+  test("expanded blocker shows the 'Block …' summary in the detail", async () => {
     const r: Scene = { name: "x", when: {}, actions: [] };
     el = await mount([r]);
     (el.shadowRoot.querySelector(".name") as HTMLElement).click();
     await el.updateComplete;
     const detail = el.shadowRoot.querySelector(".scene-detail");
     expect(detail).toBeTruthy();
-    expect(detail?.textContent).toContain("NOOP - 0 actions");
+    expect(detail?.textContent).toContain("Block always");
+    expect(detail?.textContent).not.toContain("NOOP");
   });
 
   test("summary lists conditions in priority order (mode, day, time_of_day, weather)", async () => {
@@ -878,7 +906,7 @@ describe("ambience-scenes-list", () => {
           mode: "movie",
           day: [{ kind: "weekday", days: [0] }],
         },
-        actions: [],
+        actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: {} }],
       },
     ];
     el = await mount(scenes);

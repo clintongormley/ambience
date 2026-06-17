@@ -152,7 +152,6 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     target_noun: "target",
     action_singular: "action",
     action_plural: "actions",
-    noop_prefix: "NOOP",
     scene_n: "Scene {n}",
     drag_to_reorder: "Drag to reorder",
     unpin: "Unpin (return to automatic order)",

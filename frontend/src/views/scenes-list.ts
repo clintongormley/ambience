@@ -6,7 +6,13 @@ import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
 import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
 import { configIssueLabel, sceneProblems } from "../scene-problems.js";
-import { formatArgValue, paramLabel, sceneDisplayName, summariseCondition } from "../summary.js";
+import {
+  formatArgValue,
+  paramLabel,
+  sceneDisplayName,
+  summariseBlocker,
+  summariseCondition,
+} from "../summary.js";
 import type {
   ActionSpec,
   ConditionInfo,
@@ -428,6 +434,16 @@ export class AmbienceScenesList extends LitElement {
     });
   }
 
+  /** Positive "Block until … while …" summary for a zero-action blocker scene. */
+  private _blockerSummary(scene: Scene): string {
+    return summariseBlocker(scene, {
+      hass: this.hass as any,
+      periods: this.periods,
+      luxRanges: this.luxRanges,
+      weatherGroups: this.weatherConfig?.groups,
+    });
+  }
+
   /** Expanded "when" detail: one condition per line. */
   private _whenStacked(scene: Scene) {
     const keys = this._whenKeys(scene);
@@ -450,16 +466,16 @@ export class AmbienceScenesList extends LitElement {
     });
   }
 
-  /** "N actions" / "1 action" label. A scene with no actions is a no-op — it
-   *  matches but does nothing — so flag it as "NOOP - 0 actions". */
+  /** "N actions" / "1 action" label. Only rendered for scenes that HAVE
+   *  actions; a zero-action scene is a blocker and renders via
+   *  {@link summariseBlocker} instead. */
   private _actionCountLabel(scene: Scene): string {
     const n = scene.actions.length;
     const word =
       n === 1
         ? localize(this.hass, "ui.action_singular", "action")
         : localize(this.hass, "ui.action_plural", "actions");
-    const count = `${n} ${word}`;
-    return n === 0 ? `${localize(this.hass, "ui.noop_prefix", "NOOP")} - ${count}` : count;
+    return `${n} ${word}`;
   }
 
   private _toggleScene(i: number) {
@@ -605,10 +621,12 @@ export class AmbienceScenesList extends LitElement {
             ${
               this._expanded.has(i)
                 ? ""
-                : html`${this._whenSummary(scene)} ·
-                  <span class="action-count"
-                    >${this._actionCountLabel(scene)}</span
-                  >`
+                : scene.actions.length === 0
+                  ? html`${this._blockerSummary(scene)}`
+                  : html`${this._whenSummary(scene)} ·
+                    <span class="action-count"
+                      >${this._actionCountLabel(scene)}</span
+                    >`
             }
           </div>
           ${
@@ -619,7 +637,7 @@ export class AmbienceScenesList extends LitElement {
                   ${
                     scene.actions.length === 0
                       ? html`<div class="noop-detail">
-                        ${this._actionCountLabel(scene)}
+                        ${this._blockerSummary(scene)}
                       </div>`
                       : html`<div class="actions-detail">
                         ${scene.actions.map((a) => {

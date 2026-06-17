@@ -336,6 +336,7 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     people_mode_none: "None of:",
     people_none_tracked: "No people tracked",
     people_select_one: "Select at least one person",
+    unavailable_select_one: "Select at least one entity",
     people_where_home: "Home",
     scope_house: "House",
     script_triggers: "Triggers",

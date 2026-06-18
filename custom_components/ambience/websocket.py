@@ -39,6 +39,7 @@ from .service import (
     async_resolve_only,
     async_run_scene_actions,
     async_snapshot_all,
+    category_config,
 )
 from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import condition_priority
@@ -357,6 +358,7 @@ async def _ws_house_save(
         vol.Required("type"): "ambience/auto_triggers/list",
         vol.Required("scope_kind"): str,
         vol.Optional("scope_id"): vol.Any(str, None),
+        vol.Optional("category"): str,
     }
 )
 @websocket_api.async_response
@@ -379,6 +381,9 @@ async def _ws_auto_triggers_list(
     except ValueError as exc:
         connection.send_error(msg["id"], "validation_error", str(exc))
         return
+    category = msg.get("category")
+    if category is not None:
+        cfg = category_config(cfg, category)
     spec = scope_trigger_spec(conditions, cfg)
     triggers = trigger_descriptors(spec)
     connection.send_result(msg["id"], {"triggers": triggers, "opaque": spec.opaque})

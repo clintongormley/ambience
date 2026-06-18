@@ -453,12 +453,13 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
  *  GUARDS ("while <as-is>"). De-negation (see `deNegateCondition`) just drops
  *  the negation flag, which only yields the correct complement when the negation
  *  wraps the WHOLE match. That holds for occupancy (`kleene_not` outside the
- *  quantifier) and a top-level state `not`. It does NOT hold for people, where
- *  `negate` is applied per-person INSIDE the quantifier — complementing a
- *  multi-person `everyone`/`any` predicate needs a de Morgan quantifier swap,
- *  not a flag drop. So only a SINGLE-person negated people predicate is a
- *  release (the quantifier is moot with one person); multi-person / all-persons
- *  stay guards, where `summarisePeople` renders the negated form truthfully. */
+ *  quantifier). It does NOT hold for people, where `negate` is applied
+ *  per-person INSIDE the quantifier — complementing a multi-person
+ *  `everyone`/`any` predicate needs a de Morgan quantifier swap, not a flag
+ *  drop. So only a SINGLE-person negated people predicate is a release (the
+ *  quantifier is moot with one person); multi-person / all-persons stay guards,
+ *  where `summarisePeople` renders the negated form truthfully. `state` is not
+ *  handled here — its richer boolean shape is split by `_splitStateBlocker`. */
 function isReleaseCondition(name: string, predicate: unknown): boolean {
   if (predicate == null || typeof predicate !== "object") return false;
   if (name === "occupancy") {
@@ -468,20 +469,97 @@ function isReleaseCondition(name: string, predicate: unknown): boolean {
     const p = predicate as { negate?: unknown; who?: unknown };
     return Boolean(p.negate) && Array.isArray(p.who) && p.who.length === 1;
   }
-  if (name === "state") {
-    return (predicate as { kind?: unknown }).kind === "not";
-  }
   return false;
 }
 
-/** The positive form of a release condition (only called when
- *  isReleaseCondition is true). occupancy/people drop the `negate` flag; a
- *  top-level state `not` unwraps to its inner expression. */
-function deNegateCondition(name: string, predicate: unknown): unknown {
-  if (name === "state") {
-    return (predicate as { item: unknown }).item;
-  }
+/** The positive form of an occupancy/people release condition (only called when
+ *  isReleaseCondition is true): drop the `negate` flag. `state` releases are
+ *  de-negated separately by `_asStateRelease`. */
+function deNegateCondition(predicate: unknown): unknown {
   return { ...(predicate as object), negate: false };
+}
+
+/** Collapse a degenerate single-child `and`/`or` group to its sole item,
+ *  recursively. An `AND`/`OR` of one element *is* that element, so this is a
+ *  pure simplification — it lets a redundant editor wrapper (e.g. the
+ *  `AND[ NOT(AND[…]) ]` the UI produces when negating the root group) classify
+ *  by its meaningful core. */
+function _collapseSingleChild(expr: StateExpr): StateExpr {
+  if (expr.kind === "and" || expr.kind === "or") {
+    const items = expr.items.map(_collapseSingleChild);
+    return items.length === 1 ? items[0] : { ...expr, items };
+  }
+  if (expr.kind === "not") {
+    return { ...expr, item: _collapseSingleChild(expr.item) };
+  }
+  return expr;
+}
+
+/** If this expression reads as a single NEGATED atom, return its positive
+ *  ("until" release) form; otherwise null. This is the only `state` shape that
+ *  decomposes cleanly into a positive release: a non-durational `is_not` atom
+ *  (flipped back to `is`) or a `not` wrapping one non-group atom (`is`/numeric,
+ *  unwrapped). A `not` wrapping a GROUP, an `or`, or a nested group returns null
+ *  — its complement is not a single positive atom (de Morgan). Returning null
+ *  only means "not a single-atom release"; `_splitStateBlocker` decides the rest
+ *  — a top-level `not(group)` is unwrapped to a whole-predicate release, while
+ *  the same node sitting inside an AND-group stays a guard.
+ *
+ *  Duration asymmetry: a `not` wrapping an `is X for D` carries `D` through
+ *  correctly — the engine gates `for` on the positive `is`, so the release is
+ *  genuinely "X for D". But an `is_not X for D` atom gates `for` on the NEGATED
+ *  test (`not (X in states)`, see conditions/state.py `_atom_instant` /
+ *  `_eval_atom`): it holds while "(not X) has lasted D" and releases the instant
+ *  X returns, so the dwell does NOT transfer to "until X for D". Rather than drop
+ *  the user's `D` silently and overstate the release, a durational `is_not` atom
+ *  returns null and stays a truthful guard; only a bare `is_not` (clean
+ *  instantaneous complement) becomes a release. */
+function _asStateRelease(expr: StateExpr): StateExpr | null {
+  if (expr.kind === "is_not") {
+    if (expr.for && _hasStateDuration(expr.for)) return null;
+    return { ...(expr as StateAtom), kind: "is" };
+  }
+  if (expr.kind === "not") {
+    const k = expr.item.kind;
+    if (k === "is" || k === ">" || k === ">=" || k === "<" || k === "<=") return expr.item;
+  }
+  return null;
+}
+
+/** Split a blocker's `state` predicate into its guard (rendered as-is, "while
+ *  …") and release (de-negated, "until …") parts. Only a flat top-level `AND`
+ *  group is decomposed atom-by-atom; a bare negated atom or a top-level `not`
+ *  is a whole-predicate release; everything else stays a single guard. */
+function _splitStateBlocker(pred: StateExpr): { guard: StateExpr | null; releases: StateExpr[] } {
+  const expr = _collapseSingleChild(pred);
+  if (expr.kind === "and") {
+    const guardItems: StateExpr[] = [];
+    const releases: StateExpr[] = [];
+    for (const it of expr.items) {
+      const rel = _asStateRelease(it);
+      if (rel) releases.push(rel);
+      else guardItems.push(it);
+    }
+    const guard =
+      guardItems.length === 0
+        ? null
+        : guardItems.length === 1
+          ? guardItems[0]
+          : { kind: "and" as const, items: guardItems };
+    return { guard, releases };
+  }
+  // A single negated atom (is_not, or a not-wrapped atom) is a whole release.
+  const rel = _asStateRelease(expr);
+  if (rel) {
+    return { guard: null, releases: [rel] };
+  }
+  // A top-level `not` wrapping a group de-negates to that group as the release
+  // ("block until <inner becomes true>" is the correct complement).
+  if (expr.kind === "not") {
+    return { guard: null, releases: [expr.item] };
+  }
+  // Positive atom, comparison, OR-group, nested group: a single guard.
+  return { guard: expr, releases: [] };
 }
 
 // Condition types whose summary already names a concrete entity (occupancy,
@@ -540,8 +618,16 @@ export function summariseBlocker(scene: Scene, ctx: ConditionContext = {}): stri
   for (const k of keys) {
     const pred = scene.when[k];
     // pred is already non-null — filtered above
+    if (k === "state") {
+      // `state` carries a boolean expression, so it can contribute BOTH guards
+      // and releases (e.g. an AND-group where one atom is a negated dwell).
+      const { guard, releases: stateReleases } = _splitStateBlocker(pred as StateExpr);
+      if (guard) guards.push(_blockerConditionText("state", guard, ctx));
+      for (const r of stateReleases) releases.push(_blockerConditionText("state", r, ctx));
+      continue;
+    }
     if (isReleaseCondition(k, pred)) {
-      releases.push(_blockerConditionText(k, deNegateCondition(k, pred), ctx));
+      releases.push(_blockerConditionText(k, deNegateCondition(pred), ctx));
     } else {
       guards.push(_blockerConditionText(k, pred, ctx));
     }

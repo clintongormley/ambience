@@ -857,6 +857,70 @@ describe("ambience-state-expr-atom", () => {
     el._setForDuration({ h: 0, m: 5, s: 0 });
     expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
   });
+
+  // --- for_mode ("at least" / "less than") ---------------------------------
+
+  test("setting a less_than mode with a non-zero duration stores for_mode", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setForDuration({ h: 0, m: 5, s: 0, mode: "less_than" });
+    expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
+    expect(captured.for_mode).toBe("less_than");
+  });
+
+  test("for_mode is normalised out when the mode is at_least", async () => {
+    el = await mount({
+      kind: "is",
+      entity_id: "x",
+      states: ["on"],
+      for: { h: 0, m: 5, s: 0 },
+      for_mode: "less_than",
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setForDuration({ h: 0, m: 5, s: 0, mode: "at_least" });
+    expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
+    expect(captured.for_mode).toBeUndefined();
+  });
+
+  test("for_mode is normalised out when the duration is zeroed", async () => {
+    el = await mount({
+      kind: "is",
+      entity_id: "x",
+      states: ["on"],
+      for: { h: 0, m: 5, s: 0 },
+      for_mode: "less_than",
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setForDuration({ h: 0, m: 0, s: 0, mode: "less_than" });
+    expect(captured.for).toBeNull();
+    expect(captured.for_mode).toBeUndefined();
+  });
+
+  test("an existing less_than for_mode survives an unrelated edit", async () => {
+    el = await mount({
+      kind: "is",
+      entity_id: "x",
+      states: ["on"],
+      for: { h: 0, m: 5, s: 0 },
+      for_mode: "less_than",
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setAttribute("brightness");
+    expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
+    expect(captured.for_mode).toBe("less_than");
+  });
 });
 
 describe("out-of-order fetches (review fix)", () => {

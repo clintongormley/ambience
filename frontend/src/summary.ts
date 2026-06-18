@@ -39,6 +39,7 @@ import type {
   WeatherPredicate,
 } from "./types.js";
 import { entityName, type HassWithStates } from "./views/entity-row.js";
+import { forComparatorSymbol } from "./views/for-duration.js";
 
 interface HassLike {
   localize?: (k: string) => string | undefined;
@@ -228,7 +229,7 @@ export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {
       : localize(ctx.hass, "people_summary.is_at", "is at");
     const head = `${name} ${conn} ${_whereLabel(where, ctx)}`;
     if (pred.for && _hasStateDuration(pred.for)) {
-      return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
+      return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(pred.for_mode)}${_fmtStateDur(pred.for)}`;
     }
     return head;
   }
@@ -262,7 +263,7 @@ export function summarisePeople(pred: PeoplePredicate, ctx: ConditionContext = {
     : localize(ctx.hass, "people_summary.is_at", "is at");
   const head = `${subject} ${connector} ${_whereLabel(where, ctx)}`;
   if (pred.for && _hasStateDuration(pred.for)) {
-    return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
+    return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(pred.for_mode)}${_fmtStateDur(pred.for)}`;
   }
   return head;
 }
@@ -418,7 +419,8 @@ export function entityDisplayName(hass: HassLike | undefined, entity_id: string)
 /**
  * "<Sensor> is detected/clear" for one sensor, or
  * "any of (A, B) detected" / "all of (A, B) clear" for several, with an
- * optional "for ≥<dur>" suffix. Sensor names use friendly_name when set.
+ * optional "for ≥20m" / "for <20m" suffix (the comparator follows
+ * `for_mode`). Sensor names use friendly_name when set.
  */
 export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionContext = {}): string {
   if (pred == null || !pred.sensors?.length) return localize(ctx.hass, "ui.summary_any", "any");
@@ -441,7 +443,7 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
     head = `${q} (${names.join(", ")}) ${not}${verb}`;
   }
   if (pred.for && _hasStateDuration(pred.for)) {
-    return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(pred.for)}`;
+    return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(pred.for_mode)}${_fmtStateDur(pred.for)}`;
   }
   return head;
 }
@@ -630,7 +632,7 @@ export function summariseState(pred: StatePredicate, ctx: ConditionContext = {})
   return _renderStateExpr(pred, ctx);
 }
 
-/** One atom clause: `<entity[.attr]> <verb> [NOT ]<value> [for ≥…]`. When
+/** One atom clause: `<entity[.attr]> <verb> [NOT ]<value> [for ≥…|<…]`. When
  *  `negate` is set the NOT sits inline before the value ("a is NOT on"), which
  *  reads more naturally than a leading "NOT a is on" for a simple `is` clause. */
 function _renderAtomClause(expr: StateAtom, ctx: ConditionContext, negate: boolean): string {
@@ -656,7 +658,7 @@ function _renderAtomClause(expr: StateAtom, ctx: ConditionContext, negate: boole
   const not = negate ? `${stateOpLabel(ctx.hass, "not")} ` : "";
   const head = `${lhs} ${verb} ${not}${rhs}`;
   if (expr.for && _hasStateDuration(expr.for)) {
-    return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ≥${_fmtStateDur(expr.for)}`;
+    return `${head} ${localize(ctx.hass, "ui.for_prefix", "for")} ${forComparatorSymbol(expr.for_mode)}${_fmtStateDur(expr.for)}`;
   }
   return head;
 }

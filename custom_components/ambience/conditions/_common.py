@@ -80,6 +80,36 @@ def tenure_held(tenure: Mapping[str, datetime], key: str, now: datetime, seconds
     return since is not None and (now - since).total_seconds() >= seconds
 
 
+def tenure_within(tenure: Mapping[str, datetime], key: str, now: datetime, seconds: float) -> bool:
+    """Whether the duration gate ``key``'s instant predicate has held true for
+    *less* than ``seconds`` — the "for less than" mirror of :func:`tenure_held`.
+
+    Callers must have already confirmed the gate's instant test is currently
+    true; this only times how long that has been the case. ``tenure`` maps a
+    gate fingerprint to the time its instant test last became true. An absent
+    key means the instant test only just became true (elapsed ~0), so it is
+    still within the window. The boundary is exclusive: holding for exactly
+    ``seconds`` is no longer within."""
+    since = tenure.get(key)
+    return since is None or (now - since).total_seconds() < seconds
+
+
+def for_comparator_symbol(for_mode: Any) -> str:
+    """The comparator symbol for a `for:` gate's describe/trace render: ``<`` for
+    the "less than" maximum gate, ``≥`` for "at least" (the default)."""
+    return "<" if for_mode == "less_than" else "≥"
+
+
+def for_elapsed_satisfied(elapsed: float, seconds: float, for_mode: Any) -> bool:
+    """Whether an instant test that has held for ``elapsed`` seconds satisfies a
+    legacy/fallback (no-engine) `for:` gate of ``seconds``: ``< seconds`` for
+    "less than", ``>= seconds`` for "at least" (the default). The tenure-map
+    mirror of this pair is :func:`tenure_within` / :func:`tenure_held`."""
+    if for_mode == "less_than":
+        return elapsed < seconds
+    return elapsed >= seconds
+
+
 def fmt_duration(seconds: float) -> str:
     """Compact h/m/s render of a whole-second duration, for diagnostics: 1500 ->
     '25m', 90 -> '1m30s', 3661 -> '1h1m1s', 0 -> '0s'. Fractions floor."""
@@ -111,6 +141,16 @@ def validate_for(dur: Any) -> None:
         v = dur.get(k, 0)
         if not isinstance(v, int) or isinstance(v, bool) or v < 0:
             raise ValueError(f"`for.{k}` must be a non-negative int")
+
+
+def validate_for_mode(mode: Any) -> None:
+    """Validate the optional `for_mode` field at save time. None is allowed
+    (means "at_least" — the duration gate must have held at least `for`). The
+    only other allowed values are the strings "at_least" and "less_than"."""
+    if mode is None:
+        return
+    if mode not in ("at_least", "less_than"):
+        raise ValueError('`for_mode` must be "at_least", "less_than" or null')
 
 
 def predicate_has_any(predicate: Any, *keys: str) -> bool:

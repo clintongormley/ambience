@@ -92,4 +92,67 @@ describe("ambience-occupancy-predicate-input", () => {
     expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
     el.remove();
   });
+
+  test("a less_than for_mode round-trips into the emitted predicate", async () => {
+    const el = await mount({ sensors: ["binary_sensor.a"], occupied: true });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setFor({ h: 0, m: 5, s: 0, mode: "less_than" });
+    expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
+    expect(captured.for_mode).toBe("less_than");
+    el.remove();
+  });
+
+  test("for_mode is dropped when the mode is at_least", async () => {
+    const el = await mount({
+      sensors: ["binary_sensor.a"],
+      occupied: true,
+      for: { h: 0, m: 5, s: 0 },
+      for_mode: "less_than",
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setFor({ h: 0, m: 5, s: 0, mode: "at_least" });
+    expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
+    expect(captured.for_mode).toBeUndefined();
+    el.remove();
+  });
+
+  test("for_mode is dropped when the duration is zeroed", async () => {
+    const el = await mount({
+      sensors: ["binary_sensor.a"],
+      occupied: true,
+      for: { h: 0, m: 5, s: 0 },
+      for_mode: "less_than",
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setFor({ h: 0, m: 0, s: 0, mode: "less_than" });
+    expect(captured.for).toBeUndefined();
+    expect(captured.for_mode).toBeUndefined();
+    el.remove();
+  });
+
+  test("an existing less_than for_mode survives a non-for change", async () => {
+    const el = await mount({
+      sensors: ["binary_sensor.a"],
+      occupied: true,
+      for: { h: 0, m: 5, s: 0 },
+      for_mode: "less_than",
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._setOccupied(false);
+    expect(captured.for).toEqual({ h: 0, m: 5, s: 0 });
+    expect(captured.for_mode).toBe("less_than");
+    el.remove();
+  });
 });

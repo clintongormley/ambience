@@ -15,12 +15,16 @@ from ._common import (
     UNAVAILABLE,
     dur_seconds,
     fmt_duration,
+    for_comparator_symbol,
+    for_elapsed_satisfied,
     kleene_all,
     kleene_any,
     kleene_not,
     state_sources,
     tenure_held,
+    tenure_within,
     validate_for,
+    validate_for_mode,
 )
 
 
@@ -167,7 +171,9 @@ class StateCondition:
                 elapsed = ""
         mark = "✓" if self._eval_atom(atom, snap) is True else "✗"
         comparison = self._describe_comparison(atom)
-        for_clause = f", for ≥{fmt_duration(seconds)}" if seconds > 0 else ""
+        # Comparator follows for_mode: ≥ for at_least (default), < for less_than.
+        for_cmp = for_comparator_symbol(atom.get("for_mode"))
+        for_clause = f", for {for_cmp}{fmt_duration(seconds)}" if seconds > 0 else ""
         return f"{label}: {current}{elapsed} {mark} ({comparison}{for_clause})"
 
     def _describe_comparison(self, atom: dict) -> str:
@@ -259,12 +265,21 @@ class StateCondition:
         seconds = dur_seconds(atom.get("for"))
         if seconds <= 0:
             return True
+        # `for_mode` picks the comparator on the held duration: the default
+        # "at_least" (None) gates on the gate having held ≥ `for`; "less_than"
+        # is its mirror — the gate has held < `for` (boundary exclusive). The
+        # instant test above is identical for both; only the duration verdict
+        # differs, so the two share one tenure clock by design.
+        less_than = atom.get("for_mode") == "less_than"
         if snap.tenure is not None:
             # Engine-tracked predicate tenure: the instant test (set membership
             # / comparison) has held this long, surviving in-set state flips
             # (an `is [A, B] for` atom no longer resets when the entity flips
             # A→B, since the gate fingerprint ignores which of A/B is current).
-            return tenure_held(snap.tenure, self._atom_gate_key(atom), snap.now, seconds)
+            key = self._atom_gate_key(atom)
+            if less_than:
+                return tenure_within(snap.tenure, key, snap.now, seconds)
+            return tenure_held(snap.tenure, key, snap.now, seconds)
         # Legacy exact-state clock (the simulator / direct callers with no
         # engine): state-mode atoms clock off last_changed (the state string has
         # been stable that long); attribute-mode atoms off last_updated (an
@@ -272,7 +287,8 @@ class StateCondition:
         # exact state that long" — only used where no tenure history exists.
         _state, last_changed, last_updated = snap.states[atom["entity_id"]]
         since = last_updated if atom.get("attribute") else last_changed
-        return (snap.now - since).total_seconds() >= seconds
+        elapsed = (snap.now - since).total_seconds()
+        return for_elapsed_satisfied(elapsed, seconds, atom.get("for_mode"))
 
     def gate_states(self, predicate: Any, snap: StateSnapshot) -> dict[str, GateReading]:
         """For each `for:`-bearing atom in the tree, report `(instant_truth,
@@ -390,6 +406,7 @@ class StateCondition:
         if attribute is not None and (not isinstance(attribute, str) or not attribute.strip()):
             raise ValueError("The attribute name must not be blank.")
         validate_for(atom.get("for"))
+        validate_for_mode(atom.get("for_mode"))
 
     # --- linearisation --------------------------------------------------
 

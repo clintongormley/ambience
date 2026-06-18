@@ -5,8 +5,8 @@ import type { HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { localize } from "../i18n.js";
-import type { OccupancyPredicate, OccupancyQuant, StateForDuration } from "../types.js";
-import "./for-duration.js";
+import type { ForMode, OccupancyPredicate, OccupancyQuant } from "../types.js";
+import { type ForDurationValue, hasForDuration, persistedForMode } from "./for-duration.js";
 import { renderSelect, renderSensorField } from "./form-controls.js";
 
 /**
@@ -65,19 +65,20 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
     return this._sensors().length > 1;
   }
 
-  private _hasFor(dur: OccupancyPredicate["for"]): boolean {
-    return !!dur && (dur.h !== 0 || dur.m !== 0 || dur.s !== 0);
-  }
-
   /** Build a clean predicate from the current value + overrides. Defaults
    *  (occupied:true, quant:"any") and a zero `for` are dropped to keep the
-   *  wire format small. */
+   *  wire format small. `for_mode` is dropped unless `for` is non-zero AND the
+   *  mode is "less_than" (mirroring the zero-`for` normalisation). */
   private _build(overrides: Partial<OccupancyPredicate>): OccupancyPredicate {
     const merged = { ...this._cur(), ...overrides };
     const out: OccupancyPredicate = { sensors: merged.sensors ?? [] };
     if (merged.occupied === false) out.occupied = false;
     if (merged.quant === "all") out.quant = "all";
-    if (this._hasFor(merged.for)) out.for = merged.for;
+    if (hasForDuration(merged.for)) {
+      out.for = merged.for;
+      const m = persistedForMode(merged.for, merged.for_mode);
+      if (m) out.for_mode = m;
+    }
     if (merged.negate === true) out.negate = true;
     return out;
   }
@@ -103,8 +104,9 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
     this._emit(this._build({ quant }));
   }
 
-  _setFor(dur: { h: number; m: number; s: number }) {
-    this._emit(this._build({ for: dur }));
+  _setFor(dur: { h: number; m: number; s: number; mode?: ForMode }) {
+    const { mode, ...d } = dur;
+    this._emit(this._build({ for: d, for_mode: mode ?? "at_least" }));
   }
 
   // --- schemas -------------------------------------------------------------
@@ -179,12 +181,14 @@ export class AmbienceOccupancyPredicateInput extends LitElement {
   }
 
   private _renderFor() {
-    // Shared h:m:s editor (see for-duration.ts).
+    // Shared h:m:s editor with the at-least/less-than mode toggle (see
+    // for-duration.ts).
     return html`<ambience-for-duration
       data-field="for"
       .hass=${this.hass}
       .value=${this._cur().for ?? null}
-      @value-changed=${(e: CustomEvent<{ value: StateForDuration }>) => {
+      .mode=${this._cur().for_mode ?? "at_least"}
+      @value-changed=${(e: CustomEvent<{ value: ForDurationValue }>) => {
         e.stopPropagation();
         this._setFor(e.detail.value);
       }}

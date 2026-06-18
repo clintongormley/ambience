@@ -218,6 +218,21 @@ describe("summarisePeople", () => {
     ).toBe("Clinton is at Home for ≥10m");
   });
 
+  test("'for' suffix uses '<' for less_than", () => {
+    expect(
+      summarisePeople(
+        {
+          who: ["person.clinton"],
+          quant: "any",
+          where: "home",
+          for: { h: 0, m: 10, s: 0 },
+          for_mode: "less_than",
+        },
+        { hass: hassPeople },
+      ),
+    ).toBe("Clinton is at Home for <10m");
+  });
+
   test("zone location renders as 'is at <Zone>' (multi-person keeps wrapper)", () => {
     expect(
       summarisePeople(
@@ -666,6 +681,24 @@ test("summariseOccupancy: vacant with for", () => {
   ).toBe("Lounge is clear for ≥5m");
 });
 
+test("summariseOccupancy: 'for' suffix uses '<' for less_than", () => {
+  const hass = {
+    states: { "binary_sensor.lounge": { attributes: { friendly_name: "Lounge" } } },
+  } as any;
+  expect(
+    summariseCondition(
+      "occupancy",
+      {
+        sensors: ["binary_sensor.lounge"],
+        occupied: false,
+        for: { h: 0, m: 5, s: 0 },
+        for_mode: "less_than",
+      },
+      { hass },
+    ),
+  ).toBe("Lounge is clear for <5m");
+});
+
 test("summariseOccupancy: multiple sensors with quant", () => {
   const hass = {
     states: {
@@ -818,6 +851,21 @@ test("summariseState renders 'for' duration", () => {
       {},
     ),
   ).toBe("binary_sensor.door is on for ≥5m");
+});
+
+test("summariseState renders 'for' with '<' for less_than", () => {
+  expect(
+    summariseState(
+      {
+        kind: "is",
+        entity_id: "binary_sensor.door",
+        states: ["on"],
+        for: { h: 0, m: 5, s: 0 },
+        for_mode: "less_than",
+      },
+      {},
+    ),
+  ).toBe("binary_sensor.door is on for <5m");
 });
 
 test("summariseState renders 'for' with multiple units", () => {

@@ -225,6 +225,11 @@ export type SunPredicate = null | { elevation?: SunElevation; azimuth?: SunAzimu
 
 export type StateForDuration = { h: number; m: number; s: number };
 
+/** Whether the `for` duration is a minimum ("at least", the default/absent
+ *  behaviour) or a strict maximum ("less than"). Omitted on the wire whenever
+ *  `for` is null/zero or the mode is "at_least". */
+export type ForMode = "at_least" | "less_than";
+
 export type StateAtom = {
   /** Comparison operator. For is/is_not, `states` is a list of values
    *  (membership check). For `>`, `>=`, `<`, `<=`, `states` is a single
@@ -236,6 +241,7 @@ export type StateAtom = {
   attribute?: string | null;
   states: string[];
   for?: StateForDuration | null;
+  for_mode?: ForMode | null;
 };
 
 export type StateGroup = { kind: "and" | "or"; items: StateExpr[] };
@@ -256,6 +262,7 @@ export interface PeoplePredicate {
   where?: string; // positive location: "home" | "zone.*"; default "home"
   negate?: boolean; // default false; true = NOT at `where`
   for?: { h: number; m: number; s: number } | null;
+  for_mode?: ForMode | null; // omitted when `for` is null/zero or mode is "at_least"
 }
 
 // --- occupancy condition ----------------------------------------------------
@@ -268,6 +275,7 @@ export interface OccupancyPredicate {
   occupied?: boolean; // default true; false = vacant
   quant?: OccupancyQuant; // default "any"
   for?: { h: number; m: number; s: number } | null;
+  for_mode?: ForMode | null; // omitted when `for` is null/zero or mode is "at_least"
   negate?: boolean; // default false; inverts the whole match (incl. `for`)
 }
 

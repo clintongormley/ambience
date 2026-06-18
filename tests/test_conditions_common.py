@@ -12,12 +12,16 @@ from custom_components.ambience.conditions._common import (
     as_float,
     dur_seconds,
     fmt_duration,
+    for_comparator_symbol,
+    for_elapsed_satisfied,
     kleene_all,
     kleene_any,
     kleene_not,
     merge_intervals,
     tenure_held,
+    tenure_within,
     validate_for,
+    validate_for_mode,
 )
 
 
@@ -33,6 +37,35 @@ def test_tenure_held_requires_recorded_since_at_or_past_window() -> None:
     assert tenure_held({"k": now - timedelta(seconds=600)}, "k", now, 60.0) is True
     # A different gate key is absent -> not held.
     assert tenure_held({"other": now - timedelta(seconds=600)}, "k", now, 60.0) is False
+
+
+def test_tenure_within_holds_for_less_than_window() -> None:
+    now = dt_util.utcnow()
+    # Held for less than the window -> within.
+    assert tenure_within({"k": now - timedelta(seconds=59)}, "k", now, 60.0) is True
+    # Held for exactly the window -> not within (boundary is exclusive).
+    assert tenure_within({"k": now - timedelta(seconds=60)}, "k", now, 60.0) is False
+    # Held well past the window -> not within.
+    assert tenure_within({"k": now - timedelta(seconds=600)}, "k", now, 60.0) is False
+    # Absent key -> instant test only just became true (elapsed ~0) -> within.
+    assert tenure_within({}, "k", now, 60.0) is True
+
+
+def test_for_comparator_symbol_follows_mode() -> None:
+    # "less_than" renders "<"; everything else (at_least default / None) renders "≥".
+    assert for_comparator_symbol("less_than") == "<"
+    assert for_comparator_symbol("at_least") == "≥"
+    assert for_comparator_symbol(None) == "≥"
+
+
+def test_for_elapsed_satisfied_follows_mode() -> None:
+    # less_than: elapsed strictly under the window (boundary exclusive).
+    assert for_elapsed_satisfied(59.0, 60.0, "less_than") is True
+    assert for_elapsed_satisfied(60.0, 60.0, "less_than") is False
+    # at_least (default / None): elapsed at or past the window.
+    assert for_elapsed_satisfied(60.0, 60.0, "at_least") is True
+    assert for_elapsed_satisfied(59.0, 60.0, "at_least") is False
+    assert for_elapsed_satisfied(60.0, 60.0, None) is True
 
 
 def test_kleene_any_truth_table() -> None:
@@ -114,6 +147,27 @@ def test_validate_for_rejects_unknown_keys() -> None:
     would silently evaluate it to a 0-second gate."""
     with pytest.raises(ValueError, match="h/m/s"):
         validate_for({"hours": 1})
+
+
+def test_validate_for_mode_allows_none_and_valid() -> None:
+    validate_for_mode(None)  # no raise (means at_least)
+    validate_for_mode("at_least")  # no raise
+    validate_for_mode("less_than")  # no raise
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "at_most",  # not a recognised mode
+        "AT_LEAST",  # case-sensitive
+        "",
+        5,
+        {},
+    ],
+)
+def test_validate_for_mode_rejects_unknown_values(bad: object) -> None:
+    with pytest.raises(ValueError):
+        validate_for_mode(bad)
 
 
 def test_merge_intervals_merges_overlaps_and_sorts() -> None:

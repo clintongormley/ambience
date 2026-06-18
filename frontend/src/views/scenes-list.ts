@@ -420,7 +420,9 @@ export class AmbienceScenesList extends LitElement {
    *  each condition label wrapped in <strong>. */
   private _whenSummary(scene: Scene) {
     const keys = this._whenKeys(scene);
-    if (keys.length === 0) return localize(this.hass, "ui.summary_any", "any");
+    // A scene with no conditions is always active — read it as "Always" (mirrors
+    // the blocker's "Block always"), not the per-condition wildcard "any".
+    if (keys.length === 0) return localize(this.hass, "ui.summary_always", "Always");
     return keys.map((k, i) => {
       const label = conditionLabel(this.hass as any, k);
       const body = summariseCondition(k, scene.when[k], {
@@ -450,7 +452,7 @@ export class AmbienceScenesList extends LitElement {
     const keys = this._whenKeys(scene);
     if (keys.length === 0) {
       return html`<div class="condition-line">
-        ${localize(this.hass, "ui.summary_any", "any")}
+        ${localize(this.hass, "ui.summary_always", "Always")}
       </div>`;
     }
     return keys.map((k) => {

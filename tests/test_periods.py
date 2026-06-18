@@ -23,7 +23,14 @@ class _FakeStorage:
 
 
 def test_builtin_periods_contains_expected_seeds() -> None:
-    assert set(BUILTIN_PERIODS) == {"morning", "afternoon", "evening", "nighttime", "daytime"}
+    assert set(BUILTIN_PERIODS) == {
+        "dawn",
+        "morning",
+        "afternoon",
+        "evening",
+        "nighttime",
+        "daytime",
+    }
 
 
 def test_builtin_periods_specific_before_broad_daytime() -> None:
@@ -31,6 +38,29 @@ def test_builtin_periods_specific_before_broad_daytime() -> None:
     # come after the narrower periods so a mid-afternoon time reads "afternoon".
     ids = list(BUILTIN_PERIODS)
     assert ids.index("daytime") > ids.index("afternoon")
+
+
+def test_builtin_period_anchors() -> None:
+    # The seeded boundaries, by sun anchor (offsets all zero).
+    def span(pid: str) -> tuple[str, str]:
+        defn = BUILTIN_PERIODS[pid]
+        return defn["from"]["anchor"], defn["to"]["anchor"]
+
+    assert span("dawn") == ("dawn", "sunrise")
+    assert span("morning") == ("sunrise", "noon")
+    assert span("afternoon") == ("noon", "sunset")
+    assert span("evening") == ("sunset", "dusk")
+    assert span("nighttime") == ("sunset", "sunrise")
+    assert span("daytime") == ("sunrise", "sunset")
+
+
+def test_night_containing_periods_precede_nighttime() -> None:
+    # nighttime (sunset→sunrise) now contains both the evening (sunset→dusk) and
+    # dawn (dawn→sunrise) windows, so those must come first or describe() would
+    # read those times as the broad "nighttime".
+    ids = list(BUILTIN_PERIODS)
+    assert ids.index("evening") < ids.index("nighttime")
+    assert ids.index("dawn") < ids.index("nighttime")
 
 
 def test_builtin_periods_have_from_to_endpoints() -> None:

@@ -24,7 +24,7 @@ const DEFAULT_RANGE: TimeRange = {
 // broad span), then the day's natural progression. Independent of the backend's
 // shipped order, which is tuned for describe()'s first-match precedence. Ids not
 // listed here keep their incoming order, after these.
-const BUILTIN_DISPLAY_ORDER = ["daytime", "morning", "afternoon", "evening", "nighttime"];
+const BUILTIN_DISPLAY_ORDER = ["daytime", "dawn", "morning", "afternoon", "evening", "nighttime"];
 
 function _byDisplayOrder(a: string, b: string): number {
   const ia = BUILTIN_DISPLAY_ORDER.indexOf(a);

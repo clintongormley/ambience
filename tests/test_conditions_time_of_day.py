@@ -257,26 +257,34 @@ def test_mixed_range_with_sun_start_after_time_end_wraps() -> None:
 @pytest.mark.parametrize(
     "period,now_hour,now_minute,expected",
     [
+        # dawn: dawn (05:30) → sunrise (06:00)
+        ("dawn", 5, 30, True),  # inclusive start
+        ("dawn", 5, 45, True),
+        ("dawn", 5, 0, False),  # before dawn
+        ("dawn", 6, 0, False),  # sunrise is the exclusive end
+        # morning: sunrise (06:00) → noon (12:00)
+        ("morning", 6, 0, True),  # morning now starts at sunrise, inclusive
         ("morning", 7, 0, True),
-        ("morning", 5, 30, True),  # morning starts at dawn (05:30), inclusive
-        ("morning", 5, 45, True),  # ...so dawn→sunrise is morning, not a gap
-        ("morning", 5, 0, False),  # before dawn is not morning
+        ("morning", 5, 45, False),  # dawn→sunrise is the "dawn" period, not morning
         ("morning", 11, 30, True),  # ...and runs to noon (12:00)
         ("morning", 12, 0, False),  # noon is exclusive end
+        # afternoon: noon (12:00) → sunset (18:00)
+        ("afternoon", 12, 0, True),  # noon belongs to afternoon (inclusive start, no +1m)
         ("afternoon", 14, 0, True),
         ("afternoon", 18, 0, False),
-        ("afternoon", 12, 0, True),  # noon belongs to afternoon (inclusive start, no +1m)
+        # evening: sunset (18:00) → dusk (18:30)
         ("evening", 18, 15, True),
         ("evening", 19, 0, False),
-        ("daytime", 5, 30, True),  # daytime now starts at dawn (05:30), inclusive
-        ("daytime", 5, 45, True),  # ...so dawn→sunrise is daytime, not a gap
-        ("daytime", 5, 0, False),  # before dawn is not daytime
-        ("daytime", 12, 0, True),
-        ("daytime", 18, 0, False),  # sunset is the exclusive end
-        ("daytime", 19, 0, False),
+        # nighttime: sunset (18:00) → sunrise (06:00); contains evening + dawn
+        ("nighttime", 18, 15, True),  # starts at sunset now (overlaps evening)
         ("nighttime", 22, 0, True),
         ("nighttime", 4, 0, True),
         ("nighttime", 10, 0, False),
+        # daytime: sunrise (06:00) → sunset (18:00)
+        ("daytime", 6, 0, True),  # daytime now starts at sunrise, inclusive
+        ("daytime", 5, 45, False),  # dawn→sunrise is no longer daytime
+        ("daytime", 12, 0, True),
+        ("daytime", 18, 0, False),  # sunset is the exclusive end
     ],
 )
 def test_matches_named_period(period: str, now_hour: int, now_minute: int, expected: bool) -> None:
@@ -428,6 +436,21 @@ def test_describe_returns_none_if_no_period_matches() -> None:
     assert _condition(only_evening).describe(snap) is None
 
 
+def test_describe_dawn_window_reads_dawn() -> None:
+    # 05:45 is between dawn (05:30) and sunrise (06:00): the new "dawn" period,
+    # not "morning" (which now starts at sunrise).
+    snap = _build_snapshot(datetime(2026, 5, 13, 5, 45, tzinfo=UTC))
+    assert _condition().describe(snap) == "dawn"
+
+
+def test_describe_evening_precedes_containing_nighttime() -> None:
+    # 18:15 is between sunset (18:00) and dusk (18:30). nighttime now spans
+    # sunset→sunrise and so contains this moment, but the narrower "evening" is
+    # ordered first, so describe() must read "evening".
+    snap = _build_snapshot(datetime(2026, 5, 13, 18, 15, tzinfo=UTC))
+    assert _condition().describe(snap) == "evening"
+
+
 # ── contains ───────────────────────────────────────────────────────────────
 
 
@@ -519,7 +542,8 @@ def test_order_key_list_takes_earliest_start() -> None:
 
 
 def test_order_key_named_period() -> None:
-    assert _condition().order_key({"period": "nighttime"}) == 1110.0
+    # nighttime now starts at sunset (18:00) → 1080 minutes of day.
+    assert _condition().order_key({"period": "nighttime"}) == 1080.0
 
 
 # ── condition metadata ───────────────────────────────────────────────────────

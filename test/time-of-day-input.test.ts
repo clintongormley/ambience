@@ -82,7 +82,14 @@ describe("ambience-time-of-day-input", () => {
     el.value = null;
     el.periods = {
       // Supplied in the backend's "specific-first" order; the chooser reorders.
-      builtins: { morning: def, afternoon: def, evening: def, nighttime: def, daytime: def },
+      builtins: {
+        dawn: def,
+        morning: def,
+        afternoon: def,
+        evening: def,
+        nighttime: def,
+        daytime: def,
+      },
       custom: {},
       hidden: [],
     } as PeriodStoreView;
@@ -93,7 +100,14 @@ describe("ambience-time-of-day-input", () => {
       // Keep only period ids (drop the __any__/__custom__ sentinels and the
       // "──────" separator).
       .filter((v: string) => /^[a-z]/.test(v));
-    expect(builtinOpts).toEqual(["daytime", "morning", "afternoon", "evening", "nighttime"]);
+    expect(builtinOpts).toEqual([
+      "daytime",
+      "dawn",
+      "morning",
+      "afternoon",
+      "evening",
+      "nighttime",
+    ]);
   });
 
   test("selecting a named period emits {period: id}", async () => {

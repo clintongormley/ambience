@@ -931,7 +931,14 @@ async def test_ws_periods_list_returns_builtins_custom_hidden(
 
     assert resp["success"]
     result = resp["result"]
-    assert set(result["builtins"]) == {"morning", "afternoon", "evening", "nighttime", "daytime"}
+    assert set(result["builtins"]) == {
+        "dawn",
+        "morning",
+        "afternoon",
+        "evening",
+        "nighttime",
+        "daytime",
+    }
     assert result["custom"] == {}
     assert result["hidden"] == []
 

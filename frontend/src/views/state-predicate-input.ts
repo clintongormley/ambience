@@ -13,7 +13,26 @@ function _samePath(a: number[] | null, b: number[] | null): boolean {
   return a.every((v, i) => v === b[i]);
 }
 
-import type { StateAtom, StateExpr, StateGroup, StateNot, StatePredicate } from "../types.js";
+/** The meaningful inner node, peeling a top-level `not` wrapper (paths treat the
+ *  `not` as transparent). Used to ask "is this node a group?" / "what's inside?" */
+function _unwrapNot(node: StateExpr): StateExpr;
+function _unwrapNot(node: StateExpr | null): StateExpr | null;
+function _unwrapNot(node: StateExpr | null): StateExpr | null {
+  return node && node.kind === "not" ? node.item : node;
+}
+
+import type {
+  DropPos,
+  StateAtom,
+  StateExpr,
+  StateGroup,
+  StateNot,
+  StatePredicate,
+} from "../types.js";
+
+/** A resolved insertion for a drag: append `into` the destination group, or
+ *  place before/after the item at `index` in the destination parent. */
+type _InsertSpec = { kind: "into" } | { kind: "before" | "after"; index: number };
 
 /** State-predicate node kinds. Used to recognise a state predicate by shape so
  *  {@link statePredicateError} can ignore other condition shapes (template,
@@ -128,6 +147,9 @@ export class AmbienceStatePredicateInput extends LitElement {
   /** Path of the node the pointer is hovering as a drop target during a drag,
    *  threaded down to the node tree to drive the .drag-over highlight. */
   @state() private _dragOverPath: number[] | null = null;
+  /** Which zone of the hovered drop target the pointer is in (before/into/after),
+   *  threaded down to draw the right indicator. */
+  @state() private _dragOverPos: DropPos | null = null;
   /** Detaches the active pointer drag's listeners; null when idle. */
   private _cancelDrag: (() => void) | null = null;
 
@@ -215,21 +237,48 @@ export class AmbienceStatePredicateInput extends LitElement {
     return this._walkNode(this.value, path);
   }
 
-  /** Move the node at `fromPath` to the position currently held by the
-   *  node at `toPath`. Used by drag-and-drop. Cross-group moves work
-   *  naturally; same-parent moves adjust the destination index for the
-   *  source's removal so the source lands where the target visually was.
-   *
-   *  Refuses to move a node into its own descendants (you can't drop a
-   *  group inside itself). */
-  _moveAt(fromPath: number[], toPath: number[]) {
-    if (this._isPrefix(fromPath, toPath)) return;
-    if (fromPath.length === 0) return; // can't drag the root
-    if (toPath.length === 0) return; // can't drop on the root
+  /** Edge-zone drag: insert the dragged node `before`/`after` the target, or
+   *  `into` a target group (append as its last child). Resolves the drop, then
+   *  removes the source and inserts it in a single tree rewrite. */
+  _moveRelative(fromPath: number[], target: { path: number[]; pos: DropPos }) {
+    const ins = this._resolveInsertion(fromPath, target);
+    if (!ins) return;
+    this._emit(
+      this._rewriteInsert(this.value, [], fromPath, ins.destParent, ins.insert, ins.source),
+    );
+  }
+
+  /** Resolve an edge-zone drop to a concrete insertion, or null if it's not a
+   *  valid move (onto itself, into its own subtree, a non-group `into`, or a
+   *  sibling of the root). Pure — used by both the move and the drag-over
+   *  droppability check. The insert is expressed relative to the TARGET (append,
+   *  or before/after the item at `index` in `destParent`) rather than as a fixed
+   *  index, so the rewriter places it correctly even when removing the source
+   *  collapses an empty group ahead of it. */
+  private _resolveInsertion(
+    fromPath: number[],
+    target: { path: number[]; pos: DropPos },
+  ): { destParent: number[]; insert: _InsertSpec; source: StateExpr } | null {
+    if (fromPath.length === 0) return null; // can't move the root
+    if (_samePath(fromPath, target.path)) return null; // not onto itself
     const source = this._nodeAt(fromPath);
-    if (!source) return;
-    const next = this._rewriteForMove(this.value, [], fromPath, toPath, source);
-    this._emit(next);
+    if (!source) return null;
+
+    if (target.pos === "into") {
+      // Only a group (or a NOT wrapping one) can receive children.
+      const inner = _unwrapNot(this._nodeAt(target.path));
+      if (!inner || (inner.kind !== "and" && inner.kind !== "or")) return null;
+      if (this._isPrefix(fromPath, target.path)) return null; // into self / descendant
+      return { destParent: target.path, insert: { kind: "into" }, source };
+    }
+    if (target.path.length === 0) return null; // root has no siblings
+    const destParent = target.path.slice(0, -1);
+    if (this._isPrefix(fromPath, destParent)) return null; // sibling inside self
+    return {
+      destParent,
+      insert: { kind: target.pos, index: target.path[target.path.length - 1] },
+      source,
+    };
   }
 
   private _isPrefix(prefix: number[], path: number[]): boolean {
@@ -237,24 +286,28 @@ export class AmbienceStatePredicateInput extends LitElement {
     return prefix.every((v, i) => v === path[i]);
   }
 
-  /** Single-pass tree rewriter: drops the source from its old position
-   *  AND inserts it at the destination position. Doesn't collapse single-
-   *  child groups (collapses ONLY 0-child groups so an empty parent after
-   *  the move disappears). */
-  private _rewriteForMove(
+  /** Single-pass tree rewriter: drop the source from its old position AND insert
+   *  it into the node at `destParent` per `insert` (append for `into`, else
+   *  before/after the surviving target). Collapses ONLY 0-child groups, so an
+   *  empty parent after the move disappears. The insert index is computed
+   *  against the POST-removal list — the target item is tracked as it survives —
+   *  so a group collapsing ahead of the target doesn't shift the source. */
+  private _rewriteInsert(
     node: StatePredicate,
     nodePath: number[],
     fromPath: number[],
-    toPath: number[],
+    destParent: number[],
+    insert: _InsertSpec,
     source: StateExpr,
   ): StatePredicate {
     if (!node) return node;
     if (node.kind === "not") {
-      const inner = this._rewriteForMove(
+      const inner = this._rewriteInsert(
         (node as StateNot).item,
         nodePath,
         fromPath,
-        toPath,
+        destParent,
+        insert,
         source,
       );
       if (inner == null) return null;
@@ -262,30 +315,39 @@ export class AmbienceStatePredicateInput extends LitElement {
     }
     if (node.kind !== "and" && node.kind !== "or") return node;
 
-    const fromParent = fromPath.slice(0, -1);
-    const toParent = toPath.slice(0, -1);
-    const isFromParent = _samePath(nodePath, fromParent);
-    const isToParent = _samePath(nodePath, toParent);
+    const isFromParent = _samePath(nodePath, fromPath.slice(0, -1));
+    const isToParent = _samePath(nodePath, destParent);
 
-    // First, build the items list with the source removed (if this is its
-    // parent). Other items rewrite recursively; any child that collapses
-    // to null after the move (e.g. its only child WAS the source) is
-    // dropped from the new list.
+    // Rebuild the items with the source removed; recurse into the rest. A child
+    // that collapses to null (its only child WAS the source) is dropped. Track
+    // where the before/after target lands in the SURVIVING list.
     const out: StateExpr[] = [];
+    let targetOutIdx = -1;
     node.items.forEach((child, i) => {
-      const childPath = [...nodePath, i];
-      if (isFromParent && i === fromPath[fromPath.length - 1]) return;
-      const rewritten = this._rewriteForMove(child, childPath, fromPath, toPath, source);
-      if (rewritten !== null) out.push(rewritten as StateExpr);
+      if (isFromParent && i === fromPath[fromPath.length - 1]) return; // drop source
+      const rewritten = this._rewriteInsert(
+        child,
+        [...nodePath, i],
+        fromPath,
+        destParent,
+        insert,
+        source,
+      );
+      if (rewritten === null) return;
+      out.push(rewritten as StateExpr);
+      if (isToParent && insert.kind !== "into" && i === insert.index) targetOutIdx = out.length - 1;
     });
 
-    // Insert the source at the target's ORIGINAL index in the post-
-    // removal list. No adjustment needed — typical drag semantics:
-    // "drop on B → source ends up where B was; B (and later items)
-    // shift to make room."
     if (isToParent) {
-      const insertIdx = toPath[toPath.length - 1];
-      out.splice(insertIdx, 0, source);
+      // A vanished target (can't happen for a valid drop) degrades to append,
+      // never a negative splice — so a node is never silently lost.
+      const at =
+        insert.kind === "into" || targetOutIdx < 0
+          ? out.length
+          : insert.kind === "before"
+            ? targetOutIdx
+            : targetOutIdx + 1;
+      out.splice(at, 0, source);
     }
 
     if (out.length === 0) return null;
@@ -309,24 +371,33 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._endDrag(); // defensively clear any prior drag
     this._dragFrom = from;
     this._dragOverPath = null;
+    this._dragOverPos = null;
     // Drag the grabbed node's card under the pointer for feedback.
     const follow = (pointer.target as Element | null)?.closest(".atom-card, .group");
     this._cancelDrag = startPointerDrag(
       pointer,
       {
         onMove: (x, y) => {
-          const to = this._locatePathAt(x, y);
-          const next = this._isDroppable(from, to) ? to : null;
-          // pointermove fires continuously and _locatePathAt returns a fresh
-          // array each time; only reassign (and re-render the tree) when the
-          // highlighted target actually changes.
-          const changed =
-            next === null ? this._dragOverPath !== null : !_samePath(next, this._dragOverPath);
-          if (changed) this._dragOverPath = next;
+          // A drop is valid only when _resolveInsertion accepts it; otherwise
+          // show no indicator. pointermove fires continuously, so only reassign
+          // (and re-render the tree) when the highlighted target/zone changes.
+          const target = this._locateDropAt(x, y);
+          const ok = target !== null && this._resolveInsertion(from, target) !== null;
+          const path = ok ? target!.path : null;
+          const pos = ok ? target!.pos : null;
+          // Same target when both paths are equal arrays OR both null (a fresh
+          // array each move means `_samePath`, not `===`; and `_samePath(null,
+          // null)` is false, so the both-null case needs its own arm).
+          const samePath =
+            _samePath(path, this._dragOverPath) || (path === null && this._dragOverPath === null);
+          if (!samePath || pos !== this._dragOverPos) {
+            this._dragOverPath = path;
+            this._dragOverPos = pos;
+          }
         },
         onEnd: (x, y) => {
-          const to = this._locatePathAt(x, y);
-          if (this._isDroppable(from, to)) this._moveAt(from, to);
+          const target = this._locateDropAt(x, y);
+          if (target) this._moveRelative(from, target);
           this._endDrag();
         },
         onCancel: () => this._endDrag(),
@@ -340,23 +411,17 @@ export class AmbienceStatePredicateInput extends LitElement {
     this._cancelDrag = null;
     this._dragFrom = null;
     this._dragOverPath = null;
+    this._dragOverPos = null;
   }
 
-  /** A drop target is droppable when it's a real non-root node other than the
-   *  source itself, and not inside the source's own subtree. */
-  private _isDroppable(from: number[], to: number[] | null): to is number[] {
-    return to !== null && to.length > 0 && !_samePath(from, to) && !this._isPrefix(from, to);
-  }
-
-  /** Resolve the path of the node under viewport point (x, y), or null. Lives
-   *  here (not on the node) because it must pierce every node's shadow root.
-   *  Overridable in tests, where there is no layout to hit-test against. */
-  private _locatePathAt(x: number, y: number): number[] | null {
+  /** The nearest `<ambience-state-expr-node>` element under viewport (x, y), or
+   *  null. Lives here (not on the node) because it must pierce every node's
+   *  shadow root. */
+  private _nodeElementAt(x: number, y: number): Element | null {
     let node: Node | null = deepElementFromPoint(x, y);
     while (node) {
       if (node instanceof Element && node.localName === "ambience-state-expr-node") {
-        const path = (node as unknown as { path?: number[] }).path;
-        return path ? [...path] : null;
+        return node;
       }
       const parent = node.parentNode;
       if (parent) node = parent;
@@ -364,6 +429,44 @@ export class AmbienceStatePredicateInput extends LitElement {
       else node = null;
     }
     return null;
+  }
+
+  /** Resolve the full edge-zone drop target (path + before/into/after) under
+   *  viewport point (x, y), or null. Overridable in tests, where there is no
+   *  layout to hit-test against. */
+  private _locateDropAt(x: number, y: number): { path: number[]; pos: DropPos } | null {
+    const el = this._nodeElementAt(x, y);
+    const path = (el as unknown as { path?: number[] } | null)?.path;
+    if (!el || !path) return null;
+    const target = this._nodeAt([...path]);
+    const inner = _unwrapNot(target);
+    const isGroup = Boolean(inner) && (inner!.kind === "and" || inner!.kind === "or");
+    const pos = this._zoneFor(el.getBoundingClientRect(), y, {
+      isGroup,
+      isRoot: path.length === 0,
+    });
+    return pos ? { path: [...path], pos } : null;
+  }
+
+  /** Which edge zone the pointer (viewport `y`) sits in over a node's box.
+   *  A group has a thin top/bottom band (≤8px) for `before`/`after` and a wide
+   *  `into` middle — so hovering the header or padding drops into the group; an
+   *  atom isn't a container, so it splits 50/50 into `before`/`after`. The root
+   *  has no parent, so the only meaningful drop is `into` (a root group) or
+   *  nothing (a root atom). */
+  private _zoneFor(
+    rect: { top: number; bottom: number; height: number },
+    y: number,
+    opts: { isGroup: boolean; isRoot: boolean },
+  ): DropPos | null {
+    if (opts.isRoot) return opts.isGroup ? "into" : null;
+    if (opts.isGroup) {
+      const edge = Math.min(8, rect.height / 3);
+      if (y < rect.top + edge) return "before";
+      if (y > rect.bottom - edge) return "after";
+      return "into";
+    }
+    return y < rect.top + rect.height / 2 ? "before" : "after";
   }
 
   private _walkNode(tree: StateExpr | null, path: number[]): StateExpr | null {
@@ -588,7 +691,7 @@ export class AmbienceStatePredicateInput extends LitElement {
       // Root case: peel the group, keep a single child or clear entirely.
       const root = this.value;
       if (!root) return;
-      const inner = root.kind === "not" ? (root as StateNot).item : root;
+      const inner = _unwrapNot(root);
       if (inner.kind === "and" || inner.kind === "or") {
         if (inner.items.length === 1) {
           this._emit(inner.items[0]);
@@ -713,7 +816,7 @@ export class AmbienceStatePredicateInput extends LitElement {
     // Section-level + Add condition is needed only when the root doesn't
     // already provide one. A group root has its own + Add inside the card.
     // An atom root (or NOT-wrapped atom) doesn't, so we show it here.
-    const inner = this.value.kind === "not" ? (this.value as StateNot).item : this.value;
+    const inner = _unwrapNot(this.value);
     const showSectionAdd = inner.kind !== "and" && inner.kind !== "or";
     return html`
       <ambience-state-expr-node
@@ -722,6 +825,7 @@ export class AmbienceStatePredicateInput extends LitElement {
         .path=${[]}
         .openPath=${this._openPath}
         .dragOverPath=${this._dragOverPath}
+        .dragOverPos=${this._dragOverPos}
         .dragFromPath=${this._dragFrom}
         .errorPath=${errorMessage ? this._openPath : null}
         .errorMessage=${errorMessage}

@@ -523,13 +523,6 @@ describe("ambience-state-expr-node — drag-and-drop (Pointer Events)", () => {
 
   // --- drag-over highlight is driven by dragOverPath from the root ---
 
-  test("atom card gets the drag-over class when dragOverPath matches this node's path", async () => {
-    el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
-    el.dragOverPath = [0];
-    await flush(el);
-    expect(el.shadowRoot.querySelector(".atom-card")?.classList.contains("drag-over")).toBe(true);
-  });
-
   test("atom card has no drag-over class when dragOverPath differs", async () => {
     el = await mount({ kind: "is", entity_id: "sensor.x", states: ["on"] }, { path: [0] });
     el.dragOverPath = [1];
@@ -537,12 +530,13 @@ describe("ambience-state-expr-node — drag-and-drop (Pointer Events)", () => {
     expect(el.shadowRoot.querySelector(".atom-card")?.classList.contains("drag-over")).toBe(false);
   });
 
-  test("group card gets the drag-over class when dragOverPath matches this node's path", async () => {
+  test("group card gets the drag-over class when it is the 'into' drop target", async () => {
     el = await mount(
       { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
       { path: [0] },
     );
     el.dragOverPath = [0];
+    el.dragOverPos = "into";
     await flush(el);
     expect(el.shadowRoot.querySelector(".group")?.classList.contains("drag-over")).toBe(true);
   });
@@ -609,5 +603,57 @@ describe("ambience-state-expr-node — drag-and-drop (Pointer Events)", () => {
     ) as any[];
     expect(children[0].dragOverPath).toEqual([1]);
     expect(children[1].dragOverPath).toEqual([1]);
+  });
+
+  // --- edge-zone drop indicators (before/after line vs into outline) ---
+
+  test("child nodes inherit dragOverPos", async () => {
+    el = await mount(
+      { kind: "and", items: [{ kind: "is", entity_id: "a", states: ["on"] }] },
+      { path: [] },
+    );
+    el.dragOverPath = [0];
+    el.dragOverPos = "into";
+    await flush(el);
+    const child = el.shadowRoot.querySelector("ambience-state-expr-node") as any;
+    expect(child.dragOverPos).toBe("into");
+  });
+
+  test("an into-target group shows the outline, not an insertion line", async () => {
+    el = await mount(
+      { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
+      { path: [0] },
+    );
+    el.dragOverPath = [0];
+    el.dragOverPos = "into";
+    await flush(el);
+    expect(el.shadowRoot.querySelector(".group")?.classList.contains("drag-over")).toBe(true);
+    expect(el.shadowRoot.querySelector(".drop-line")).toBeNull();
+  });
+
+  test("a before-target shows an insertion line above and no outline", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [0] });
+    el.dragOverPath = [0];
+    el.dragOverPos = "before";
+    await flush(el);
+    expect(el.shadowRoot.querySelector(".drop-line.before")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".atom-card")?.classList.contains("drag-over")).toBe(false);
+  });
+
+  test("an after-target shows an insertion line below", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [0] });
+    el.dragOverPath = [0];
+    el.dragOverPos = "after";
+    await flush(el);
+    expect(el.shadowRoot.querySelector(".drop-line.after")).toBeTruthy();
+  });
+
+  test("a node that is not the drop target shows no indicator", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] }, { path: [0] });
+    el.dragOverPath = [1]; // a different node is the target
+    el.dragOverPos = "before";
+    await flush(el);
+    expect(el.shadowRoot.querySelector(".drop-line")).toBeNull();
+    expect(el.shadowRoot.querySelector(".atom-card")?.classList.contains("drag-over")).toBe(false);
   });
 });

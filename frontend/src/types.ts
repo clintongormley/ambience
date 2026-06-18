@@ -251,6 +251,10 @@ export type StateExpr = StateAtom | StateGroup | StateNot;
 /** Top-level state predicate. `null` = no constraint. */
 export type StatePredicate = StateExpr | null;
 
+/** Where a dragged state-expression node lands relative to a drop target: a
+ *  sibling `before`/`after` it, or appended `into` it (target must be a group). */
+export type DropPos = "before" | "into" | "after";
+
 // --- people condition -------------------------------------------------------
 
 export type PeopleQuant = "any" | "everyone" | "nobody";

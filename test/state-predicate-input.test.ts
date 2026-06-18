@@ -864,89 +864,184 @@ describe("ambience-state-predicate-input", () => {
     expect(captured).toBeNull();
   });
 
-  // --- drag-to-regroup --------------------------------------------------
+  // --- _moveRelative (edge-zone before / into / after) ------------------
 
-  test("_moveAt reorders within the same group (move [0] to position 1)", async () => {
-    el = await mount({
-      kind: "and",
-      items: [
-        { kind: "is", entity_id: "a", states: ["on"] },
-        { kind: "is", entity_id: "b", states: ["off"] },
-        { kind: "is", entity_id: "c", states: ["open"] },
-      ],
-    });
+  const abc = () => ({
+    kind: "and" as const,
+    items: [
+      { kind: "is", entity_id: "a", states: ["on"] },
+      { kind: "is", entity_id: "b", states: ["off"] },
+      { kind: "is", entity_id: "c", states: ["open"] },
+    ],
+  });
+  const ids = (g: any) => g.items.map((i: any) => i.entity_id);
+
+  async function moveRel(tree: any, from: number[], path: number[], pos: string) {
+    el = await mount(tree);
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => {
       captured = (e as CustomEvent).detail.value;
     });
-    el._moveAt([0], [1]);
-    // a moved to where b was → [b, a, c]
-    expect(captured.items.map((i: any) => i.entity_id)).toEqual(["b", "a", "c"]);
+    el._moveRelative(from, { path, pos });
+    return captured;
+  }
+
+  test("_moveRelative before a sibling: move c before a", async () => {
+    expect(ids(await moveRel(abc(), [2], [0], "before"))).toEqual(["c", "a", "b"]);
   });
 
-  test("_moveAt across groups: source removed from one, inserted into the other", async () => {
-    el = await mount({
-      kind: "and",
-      items: [
-        { kind: "is", entity_id: "a", states: ["on"] },
-        {
-          kind: "or",
-          items: [
-            { kind: "is", entity_id: "b", states: ["off"] },
-            { kind: "is", entity_id: "c", states: ["open"] },
-          ],
-        },
-      ],
-    });
-    let captured: any;
-    el.addEventListener("value-changed", (e: Event) => {
-      captured = (e as CustomEvent).detail.value;
-    });
-    // Move b (path [1, 0]) onto a (path [0]).
-    el._moveAt([1, 0], [0]);
-    // b lands at index 0 of the AND group; the OR group keeps c.
-    expect(captured.kind).toBe("and");
-    expect(captured.items[0].entity_id).toBe("b");
-    expect(captured.items[1].entity_id).toBe("a");
-    expect(captured.items[2].kind).toBe("or");
-    expect(captured.items[2].items[0].entity_id).toBe("c");
+  test("_moveRelative after a sibling: move a after c", async () => {
+    expect(ids(await moveRel(abc(), [0], [2], "after"))).toEqual(["b", "c", "a"]);
   });
 
-  test("_moveAt where source's parent becomes empty: parent group is removed", async () => {
-    el = await mount({
+  test("_moveRelative before, same parent backward: move c before b", async () => {
+    expect(ids(await moveRel(abc(), [2], [1], "before"))).toEqual(["a", "c", "b"]);
+  });
+
+  test("_moveRelative after, same parent forward: move a after b", async () => {
+    expect(ids(await moveRel(abc(), [0], [1], "after"))).toEqual(["b", "a", "c"]);
+  });
+
+  test("_moveRelative into a group appends the source as the group's last child", async () => {
+    const tree = {
       kind: "and",
       items: [
         { kind: "is", entity_id: "a", states: ["on"] },
         { kind: "or", items: [{ kind: "is", entity_id: "b", states: ["off"] }] },
       ],
-    });
-    let captured: any;
-    el.addEventListener("value-changed", (e: Event) => {
-      captured = (e as CustomEvent).detail.value;
-    });
-    el._moveAt([1, 0], [0]);
-    // After move: a's group keeps b; the OR group, now empty, is gone.
-    expect(captured.kind).toBe("and");
-    expect(captured.items).toHaveLength(2);
-    expect(captured.items[0].entity_id).toBe("b");
-    expect(captured.items[1].entity_id).toBe("a");
+    };
+    const out = await moveRel(tree, [0], [1], "into"); // drop a INTO the OR group
+    expect(out.items).toHaveLength(1);
+    expect(out.items[0].kind).toBe("or");
+    expect(ids(out.items[0])).toEqual(["b", "a"]);
   });
 
-  test("_moveAt rejects a move into the source's own descendants (can't drop into yourself)", async () => {
+  test("_moveRelative into a NOT-wrapped group appends inside the inner group", async () => {
+    const tree = {
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "a", states: ["on"] },
+        {
+          kind: "not",
+          item: { kind: "or", items: [{ kind: "is", entity_id: "b", states: ["off"] }] },
+        },
+      ],
+    };
+    const out = await moveRel(tree, [0], [1], "into");
+    expect(out.items).toHaveLength(1);
+    expect(out.items[0].kind).toBe("not");
+    expect(ids(out.items[0].item)).toEqual(["b", "a"]);
+  });
+
+  test("_moveRelative into the root group appends at the root", async () => {
+    const tree = {
+      kind: "and",
+      items: [
+        {
+          kind: "or",
+          items: [
+            { kind: "is", entity_id: "a", states: ["on"] },
+            { kind: "is", entity_id: "b", states: ["off"] },
+          ],
+        },
+        { kind: "is", entity_id: "c", states: ["open"] },
+      ],
+    };
+    // Move a (deep inside the OR) INTO the root AND group → OR keeps b,
+    // root appends a at the end: [OR(b), c, a].
+    const out = await moveRel(tree, [0, 0], [], "into");
+    expect(out.items).toHaveLength(3);
+    expect(out.items[0].kind).toBe("or");
+    expect(ids(out.items[0])).toEqual(["b"]);
+    expect(out.items[1].entity_id).toBe("c");
+    expect(out.items[2].entity_id).toBe("a");
+  });
+
+  test("_moveRelative refuses dropping a group into its own descendant", async () => {
     el = await mount({
       kind: "and",
       items: [{ kind: "or", items: [{ kind: "is", entity_id: "a", states: ["on"] }] }],
     });
-    let captured: any;
     let fired = false;
-    el.addEventListener("value-changed", (e: Event) => {
+    el.addEventListener("value-changed", () => {
       fired = true;
-      captured = (e as CustomEvent).detail.value;
     });
-    // Try moving [0] (the OR group) onto [0, 0] (its own child a).
-    el._moveAt([0], [0, 0]);
+    el._moveRelative([0], { path: [0, 0], pos: "after" }); // OR after its own child
     expect(fired).toBe(false);
-    void captured;
+  });
+
+  test("_moveRelative refuses dropping a node onto itself", async () => {
+    el = await mount(abc());
+    let fired = false;
+    el.addEventListener("value-changed", () => {
+      fired = true;
+    });
+    el._moveRelative([1], { path: [1], pos: "before" });
+    expect(fired).toBe(false);
+  });
+
+  test("_moveRelative before, when the source's single-child parent collapses earlier", async () => {
+    // AND[ OR[a], b ]: drag a (the OR's only child) before b. Removing a empties
+    // the OR (it collapses to nothing), so b shifts to index 0 — a must still
+    // land BEFORE b → [a, b], NOT [b, a].
+    const tree = {
+      kind: "and",
+      items: [
+        { kind: "or", items: [{ kind: "is", entity_id: "a", states: ["on"] }] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+      ],
+    };
+    expect(ids(await moveRel(tree, [0, 0], [1], "before"))).toEqual(["a", "b"]);
+  });
+
+  test("_moveRelative before/after across a collapsing source parent (3 siblings)", async () => {
+    const mk = () => ({
+      kind: "and",
+      items: [
+        { kind: "or", items: [{ kind: "is", entity_id: "a", states: ["on"] }] },
+        { kind: "is", entity_id: "b", states: ["off"] },
+        { kind: "is", entity_id: "c", states: ["open"] },
+      ],
+    });
+    expect(ids(await moveRel(mk(), [0, 0], [2], "before"))).toEqual(["b", "a", "c"]);
+    expect(ids(await moveRel(mk(), [0, 0], [1], "before"))).toEqual(["a", "b", "c"]);
+    expect(ids(await moveRel(mk(), [0, 0], [1], "after"))).toEqual(["b", "a", "c"]);
+  });
+
+  // --- _zoneFor (pure edge-zone geometry) -------------------------------
+
+  const rect = (top: number, height: number) => ({ top, bottom: top + height, height });
+
+  test("_zoneFor group: top edge → before, middle → into, bottom edge → after", async () => {
+    el = await mount(abc());
+    const r = rect(0, 100); // edge band = min(8, 100/3) = 8px
+    expect(el._zoneFor(r, 3, { isGroup: true, isRoot: false })).toBe("before");
+    expect(el._zoneFor(r, 50, { isGroup: true, isRoot: false })).toBe("into");
+    expect(el._zoneFor(r, 97, { isGroup: true, isRoot: false })).toBe("after");
+  });
+
+  test("_zoneFor group: the header (just below the top edge) is into, not before", async () => {
+    el = await mount(abc());
+    expect(el._zoneFor(rect(0, 100), 12, { isGroup: true, isRoot: false })).toBe("into");
+  });
+
+  test("_zoneFor atom: top half → before, bottom half → after (no into)", async () => {
+    el = await mount(abc());
+    const r = rect(0, 30);
+    expect(el._zoneFor(r, 10, { isGroup: false, isRoot: false })).toBe("before");
+    expect(el._zoneFor(r, 20, { isGroup: false, isRoot: false })).toBe("after");
+  });
+
+  test("_zoneFor root group → into everywhere (no siblings)", async () => {
+    el = await mount(abc());
+    const r = rect(0, 100);
+    expect(el._zoneFor(r, 3, { isGroup: true, isRoot: true })).toBe("into");
+    expect(el._zoneFor(r, 97, { isGroup: true, isRoot: true })).toBe("into");
+  });
+
+  test("_zoneFor root atom → null (nothing to drop relative to)", async () => {
+    el = await mount(abc());
+    expect(el._zoneFor(rect(0, 30), 10, { isGroup: false, isRoot: true })).toBeNull();
   });
 
   test("adding a condition via + Add opens the new (empty) atom", async () => {
@@ -1204,12 +1299,12 @@ describe("ambience-state-predicate-input", () => {
     expect(captured).toBeNull();
   });
 
-  // --- _rewriteForMove through a NOT-wrapped node --------------------------
+  // --- _rewriteInsert through a NOT-wrapped node --------------------------
 
-  test("_moveAt: moves across a NOT-wrapped sibling (rewriteForMove NOT branch, lines 164-173)", async () => {
+  test("_moveRelative: moves across a NOT-wrapped sibling (rewriteInsert NOT branch)", async () => {
     // Tree: AND[ NOT(OR[a, b]), c ]
     // Move c (path [1]) to where a is (path [0, 0]).
-    // _rewriteForMove must enter the NOT branch for the NOT-OR child.
+    // _rewriteInsert must enter the NOT branch for the NOT-OR child.
     el = await mount({
       kind: "and",
       items: [
@@ -1231,7 +1326,7 @@ describe("ambience-state-predicate-input", () => {
       captured = (e as CustomEvent).detail.value;
     });
     // Move c (path [1]) into the NOT-wrapped OR at position 0 (path [0, 0]).
-    el._moveAt([1], [0, 0]);
+    el._moveRelative([1], { path: [0, 0], pos: "before" });
     // c should land at index 0 inside the NOT(OR), with a at index 1.
     expect(captured.kind).toBe("and");
     expect(captured.items[0].kind).toBe("not");
@@ -1246,8 +1341,8 @@ describe("ambience-state-predicate-input", () => {
   // --- pointer-drag coordination (node-drag-start → hit-test → move) ------
   //
   // The root runs the Pointer-Events drag. jsdom has no layout, so the
-  // coordinate→path hit-test (_locatePathAt) is stubbed per test to model what
-  // the pointer is over.
+  // coordinate→drop-target hit-test (_locateDropAt) is stubbed per test to
+  // model what the pointer is over.
 
   function twoAtoms() {
     return {
@@ -1274,40 +1369,42 @@ describe("ambience-state-predicate-input", () => {
     window.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1 }));
   }
 
-  test("releasing a drag over a droppable target moves the node (node-drag-start → _moveAt)", async () => {
+  test("releasing a drag over a droppable target moves the node (node-drag-start → _moveRelative)", async () => {
     el = await mount(twoAtoms());
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => {
       captured = (e as CustomEvent).detail.value;
     });
-    el._locatePathAt = () => [1];
+    el._locateDropAt = () => ({ path: [1], pos: "after" });
     startNodeDrag(el, [0]);
     firePointer("pointerup");
-    // [0]=a moved to where [1]=b was → [b, a].
+    // drop a (path [0]) AFTER b (path [1]) → [b, a].
     expect(captured.items.map((i: any) => i.entity_id)).toEqual(["b", "a"]);
   });
 
-  test("pointer movement over a droppable target highlights it via _dragOverPath", async () => {
+  test("pointer movement over a droppable target highlights its path and zone", async () => {
     el = await mount(twoAtoms());
-    el._locatePathAt = () => [1];
+    el._locateDropAt = () => ({ path: [1], pos: "before" });
     startNodeDrag(el, [0]);
     firePointer("pointermove");
     await el.updateComplete;
     expect(el._dragOverPath).toEqual([1]);
+    expect(el._dragOverPos).toBe("before");
   });
 
   test("hovering a non-droppable spot clears the highlight", async () => {
     el = await mount(twoAtoms());
-    el._locatePathAt = () => [1];
+    el._locateDropAt = () => ({ path: [1], pos: "before" });
     startNodeDrag(el, [0]);
     firePointer("pointermove");
     await el.updateComplete;
     expect(el._dragOverPath).toEqual([1]);
 
-    el._locatePathAt = () => null;
+    el._locateDropAt = () => null;
     firePointer("pointermove");
     await el.updateComplete;
     expect(el._dragOverPath).toBeNull();
+    expect(el._dragOverPos).toBeNull();
   });
 
   test("releasing on the source itself is a no-op", async () => {
@@ -1316,7 +1413,7 @@ describe("ambience-state-predicate-input", () => {
     el.addEventListener("value-changed", () => {
       fired = true;
     });
-    el._locatePathAt = () => [0];
+    el._locateDropAt = () => ({ path: [0], pos: "before" });
     startNodeDrag(el, [0]);
     firePointer("pointerup");
     expect(fired).toBe(false);
@@ -1334,8 +1431,8 @@ describe("ambience-state-predicate-input", () => {
     el.addEventListener("value-changed", () => {
       fired = true;
     });
-    // Drag the inner group [0] and try to drop it inside its own child [0,0].
-    el._locatePathAt = () => [0, 0];
+    // Drag the inner group [0] and try to drop it after its own child [0,0].
+    el._locateDropAt = () => ({ path: [0, 0], pos: "after" });
     startNodeDrag(el, [0]);
     firePointer("pointerup");
     expect(fired).toBe(false);
@@ -1347,41 +1444,43 @@ describe("ambience-state-predicate-input", () => {
     el.addEventListener("value-changed", () => {
       fired = true;
     });
-    el._locatePathAt = () => [1];
+    el._locateDropAt = () => ({ path: [1], pos: "before" });
     startNodeDrag(el, [0]);
     firePointer("pointercancel");
     expect(fired).toBe(false);
     expect(el._dragFrom).toBeNull();
     expect(el._dragOverPath).toBeNull();
+    expect(el._dragOverPos).toBeNull();
   });
 
-  test("the drag-over path is passed down to the rendered node tree", async () => {
+  test("the drag-over path and zone are passed down to the rendered node tree", async () => {
     el = await mount(twoAtoms());
-    el._locatePathAt = () => [1];
+    el._locateDropAt = () => ({ path: [1], pos: "after" });
     startNodeDrag(el, [0]);
     firePointer("pointermove");
     await el.updateComplete;
     const node: any = el.shadowRoot.querySelector("ambience-state-expr-node");
     expect(node.dragOverPath).toEqual([1]);
+    expect(node.dragOverPos).toBe("after");
   });
 
-  test("_locatePathAt returns null when the environment can't hit-test", async () => {
+  test("_locateDropAt returns null when the environment can't hit-test", async () => {
     el = await mount(twoAtoms());
     // jsdom has no elementFromPoint, so deepElementFromPoint yields null.
-    expect(el._locatePathAt(5, 5)).toBeNull();
+    expect(el._locateDropAt(5, 5)).toBeNull();
   });
 
-  test("_locatePathAt resolves the nearest state-expr-node's path under the point", async () => {
+  test("_locateDropAt resolves the nearest state-expr-node's path under the point", async () => {
     el = await mount(twoAtoms());
     const node = document.createElement("ambience-state-expr-node") as any;
-    node.path = [2];
+    node.path = [0];
     const original = Object.getOwnPropertyDescriptor(Document.prototype, "elementFromPoint");
     Object.defineProperty(Document.prototype, "elementFromPoint", {
       configurable: true,
       value: () => node,
     });
     try {
-      expect(el._locatePathAt(5, 5)).toEqual([2]);
+      expect(el._locateDropAt(5, 5)?.path).toEqual([0]);
     } finally {
       if (original) Object.defineProperty(Document.prototype, "elementFromPoint", original);
       else delete (Document.prototype as unknown as Record<string, unknown>).elementFromPoint;
@@ -1660,19 +1759,19 @@ describe("ambience-state-predicate-input", () => {
     expect(captured?.kind).toBe("or");
   });
 
-  // --- _moveAt guards (lines 139-142) ---
+  // --- _moveRelative guards ---
 
-  test("_moveAt: fromPath.length === 0 is a no-op (can't drag the root, line 139)", async () => {
+  test("_moveRelative: dragging the root is a no-op", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     let fired = false;
     el.addEventListener("value-changed", () => {
       fired = true;
     });
-    el._moveAt([], [0]);
+    el._moveRelative([], { path: [0], pos: "before" });
     expect(fired).toBe(false);
   });
 
-  test("_moveAt: toPath.length === 0 is a no-op (can't drop on root, line 140)", async () => {
+  test("_moveRelative: a before/after drop relative to the root is a no-op", async () => {
     el = await mount({
       kind: "and",
       items: [{ kind: "is", entity_id: "a", states: ["on"] }],
@@ -1681,11 +1780,11 @@ describe("ambience-state-predicate-input", () => {
     el.addEventListener("value-changed", () => {
       fired = true;
     });
-    el._moveAt([0], []);
+    el._moveRelative([0], { path: [], pos: "before" });
     expect(fired).toBe(false);
   });
 
-  test("_moveAt: source node not found at fromPath is a no-op (line 142)", async () => {
+  test("_moveRelative: a no-op when the source path resolves to nothing", async () => {
     // fromPath [5] is out of bounds for a 1-item group → _nodeAt returns null.
     el = await mount({
       kind: "and",
@@ -1695,7 +1794,7 @@ describe("ambience-state-predicate-input", () => {
     el.addEventListener("value-changed", () => {
       fired = true;
     });
-    el._moveAt([5], [0]);
+    el._moveRelative([5], { path: [0], pos: "before" });
     expect(fired).toBe(false);
   });
 
@@ -1730,7 +1829,7 @@ describe("ambience-state-predicate-input", () => {
   test("_walkNode: atom at path with remaining indices returns null (line 219)", async () => {
     // _nodeAt([0, 1]) on an AND group where item[0] is a plain atom.
     // The second index tries to descend into an atom → returns null.
-    // This causes _moveAt to bail (no source).
+    // This causes the move to bail (no source).
     el = await mount({
       kind: "and",
       items: [
@@ -1743,7 +1842,7 @@ describe("ambience-state-predicate-input", () => {
       fired = true;
     });
     // fromPath [0, 1] tries to descend into atom at [0] → _nodeAt returns null → no-op.
-    el._moveAt([0, 1], [1]);
+    el._moveRelative([0, 1], { path: [1], pos: "before" });
     expect(fired).toBe(false);
   });
 
@@ -1849,16 +1948,16 @@ describe("ambience-state-predicate-input", () => {
     expect(captured).toBeNull();
   });
 
-  // --- _rewriteForMove: !node early-return (branch 52, line 163) -----------
+  // --- _rewriteInsert: !node early-return (branch 52, line 163) -----------
 
-  test("_rewriteForMove: handles move where the tree root is null (branch 52, line 163)", async () => {
+  test("_rewriteInsert: handles move where the tree root is null (branch 52, line 163)", async () => {
     // This tests an edge case via a deep move where a child path resolves to null.
-    // Use a valid tree; _rewriteForMove hits !node when recursing into an
+    // Use a valid tree; _rewriteInsert hits !node when recursing into an
     // out-of-bounds child. We trigger this indirectly via a cross-group move
     // where one of the recursively-visited child paths is an atom (not null),
     // but the NOT-inner collapse produces null after the move.
     // The direct path: move [1,0] out of the single-item OR → OR collapses to
-    // null → _rewriteForMove(NOT(OR), ...) gets inner==null → returns null.
+    // null → _rewriteInsert(NOT(OR), ...) gets inner==null → returns null.
     el = await mount({
       kind: "and",
       items: [
@@ -1877,8 +1976,8 @@ describe("ambience-state-predicate-input", () => {
       captured = (e as CustomEvent).detail.value;
     });
     // Move b from [1,0] to [0]: the NOT(OR) is now empty → collapses.
-    // _rewriteForMove for the NOT node: inner becomes null → returns null.
-    el._moveAt([1, 0], [0]);
+    // _rewriteInsert for the NOT node: inner becomes null → returns null.
+    el._moveRelative([1, 0], { path: [0], pos: "before" });
     // The AND group should now have 2 items: b (inserted at 0) and a.
     expect(captured.kind).toBe("and");
     expect(captured.items).toHaveLength(2);

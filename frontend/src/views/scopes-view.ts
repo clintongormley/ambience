@@ -329,9 +329,12 @@ export class AmbienceScopesView extends LitElement {
   // closed). Scope+category identity is stored; the live scenes are read from
   // `_store.getConfig` at render time so the modal re-fetches if that scope's
   // config changes.
-  @state() private _autoTriggers:
-    | { scope: Scope; name: string; category: string; categoryName: string | null }
-    | null = null;
+  @state() private _autoTriggers: {
+    scope: Scope;
+    name: string;
+    category: string;
+    categoryName: string | null;
+  } | null = null;
   // Global category filter, driven by the header's <ambience-category-filter>:
   // "" = All, else a category id. Set via Lit property binding only (never an
   // HTML attribute), matching how scenes-list declares the same input.

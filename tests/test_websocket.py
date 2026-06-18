@@ -2105,6 +2105,45 @@ async def test_auto_triggers_list_empty_scope_has_no_triggers(
     assert resp["result"] == {"triggers": [], "opaque": False}
 
 
+async def test_auto_triggers_list_filters_by_category(
+    hass: HomeAssistant, installed, hass_ws_client
+) -> None:
+    hass.data[DOMAIN][DATA_CONDITIONS]["faux"] = _FauxEntityCondition()
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_house(
+        {
+            "scenes": [
+                {"name": "Lit", "category": "lighting", "when": {"faux": {"x": 1}}, "actions": []},
+                {"name": "Bln", "category": "blinds", "when": {}, "actions": []},
+            ]
+        }
+    )
+    # Only the lighting scene carries a watchable predicate.
+    resp = await _ws_send(
+        hass_ws_client,
+        type="ambience/auto_triggers/list",
+        scope_kind="house",
+        category="lighting",
+    )
+    assert resp["success"] is True
+    assert resp["result"]["triggers"] == [
+        {
+            "key": "entity:binary_sensor.motion",
+            "kind": "entity",
+            "entity_id": "binary_sensor.motion",
+        }
+    ]
+    # The blinds category watches nothing.
+    resp2 = await _ws_send(
+        hass_ws_client,
+        type="ambience/auto_triggers/list",
+        scope_kind="house",
+        category="blinds",
+    )
+    assert resp2["success"] is True
+    assert resp2["result"]["triggers"] == []
+
+
 async def test_auto_triggers_list_rejects_unknown_scope_kind(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:

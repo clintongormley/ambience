@@ -76,6 +76,14 @@ def category_ids(cfg: dict[str, Any]) -> list[str]:
     )
 
 
+def category_config(cfg: dict[str, Any], category: str) -> dict[str, Any]:
+    """A scope config narrowed to one category's scenes: ``{"scenes": [...]}``.
+
+    Pure. Shared by the simulator and the per-category Auto-triggers display so
+    both filter scenes the same way the engine resolves a category."""
+    return {"scenes": [s for s in cfg.get("scenes", []) if s.get("category") == category]}
+
+
 def scope_option_value(scope_kind: str, scope_id: str | None) -> str:
     """Encode a scope as the opaque string used by the apply_scene `scope`
     select option (and accepted back by the service)."""

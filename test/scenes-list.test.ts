@@ -1124,6 +1124,14 @@ describe("ambience-scenes-list", () => {
     expect(get()).toEqual({ category: "g1" });
   });
 
+  test("category kebab Auto-triggers emits show-auto-triggers with the category id", async () => {
+    const cats: SceneCategory[] = [{ id: "c1", name: "Cat one" }];
+    el = await mount([{ name: "S", category: "c1", when: {}, actions: [] }], [], {}, cats);
+    const detail = captureEvent(el, "show-auto-triggers");
+    await pickCategoryKebab(el, "auto");
+    expect(detail()).toEqual({ category: "c1" });
+  });
+
   // --- collapsible category sections -----------------------------------------
 
   test("clicking a category header emits toggle-category-collapse with the category id", async () => {

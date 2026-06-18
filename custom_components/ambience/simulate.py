@@ -25,7 +25,7 @@ from .const import DATA_CONDITIONS, DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
 from .engine import evaluate_explained
 from .naming import category_names, scope_display_name
 from .scope_triggers import iter_predicate_specs, referenced_entities, scope_trigger_spec
-from .service import _switch_state
+from .service import _switch_state, category_config
 from .state_options import known_states_for
 from .sun_position import synthetic_sun_state
 from .trace import (
@@ -200,8 +200,7 @@ def _category_config(
 ) -> dict[str, Any]:
     """The scope config narrowed to one category's scenes: {"scenes": [...]}."""
     store = hass.data[DOMAIN][DATA_STORE]
-    cfg = store.scope_config(scope_kind, scope_id)
-    return {"scenes": [r for r in cfg.get("scenes", []) if r.get("category") == category]}
+    return category_config(store.scope_config(scope_kind, scope_id), category)
 
 
 # state-predicate atom kinds that compare numerically (so the attribute is a

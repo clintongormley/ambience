@@ -325,10 +325,25 @@ export class AmbienceScopesView extends LitElement {
     category: string;
     categoryName: string | null;
   } | null = null;
-  // The scope whose read-only Auto-triggers modal is open (null = closed). Only
-  // scope identity is stored; the live scenes are read from `_store.getConfig` at
-  // render time so the modal re-fetches if that scope's config changes.
-  @state() private _autoTriggers: { scope: Scope; name: string } | null = null;
+  // The (scope, category) whose read-only Auto-triggers modal is open (null =
+  // closed). Scope+category identity is stored; the live scenes are read from
+  // `_store.getConfig` at render time so the modal re-fetches if that scope's
+  // config changes.
+  @state() private _autoTriggers: {
+    scope: Scope;
+    category: string;
+    categoryName: string | null;
+  } | null = null;
+  // Cache the category-filtered scenes for the open Auto-triggers modal so its
+  // `.scenes` prop keeps a STABLE reference across re-renders. getConfig().scenes
+  // is itself stable until the config mutates, so memoising on (source, category)
+  // means we recompute — and the modal re-fetches — only when this scope's scenes
+  // actually change, not on every `hass` tick while the modal is open.
+  private _autoTriggerScenesMemo: {
+    source: readonly Scene[] | undefined;
+    category: string;
+    filtered: Scene[];
+  } | null = null;
   // Global category filter, driven by the header's <ambience-category-filter>:
   // "" = All, else a category id. Set via Lit property binding only (never an
   // HTML attribute), matching how scenes-list declares the same input.
@@ -622,9 +637,26 @@ export class AmbienceScopesView extends LitElement {
     this._editing = null;
   }
 
-  private _onScopeMenu(scope: Scope, name: string, _cfg: ScopeConfig, id: string) {
+  private _onScopeMenu(scope: Scope, id: string) {
     if (id === "run") void this._applyScenes(scope);
-    else if (id === "auto") this._autoTriggers = { scope, name };
+  }
+
+  private _showAutoTriggers(scope: Scope, category: string) {
+    const g = this._store.categories.find((x) => x.id === category);
+    this._autoTriggers = { scope, category, categoryName: g?.name ?? null };
+  }
+
+  private _autoTriggerScenes(): Scene[] {
+    if (!this._autoTriggers) return [];
+    const source = this._store.getConfig(this._autoTriggers.scope)?.scenes;
+    const { category } = this._autoTriggers;
+    const memo = this._autoTriggerScenesMemo;
+    if (memo && memo.source === source && memo.category === category) {
+      return memo.filtered;
+    }
+    const filtered = (source ?? []).filter((s) => s.category === category);
+    this._autoTriggerScenesMemo = { source, category, filtered };
+    return filtered;
   }
 
   private _showTraces(scope: Scope, category: string) {
@@ -1024,10 +1056,9 @@ export class AmbienceScopesView extends LitElement {
         ?open=${this._autoTriggers !== null}
         .hass=${this.hass}
         .scope=${this._autoTriggers?.scope ?? { kind: "house" }}
-        .scopeName=${this._autoTriggers?.name ?? ""}
-        .scenes=${
-          this._autoTriggers ? (this._store.getConfig(this._autoTriggers.scope)?.scenes ?? []) : []
-        }
+        .category=${this._autoTriggers?.category}
+        .categoryName=${this._autoTriggers?.categoryName ?? ""}
+        .scenes=${this._autoTriggerScenes()}
         @close=${() => {
           this._autoTriggers = null;
         }}
@@ -1093,15 +1124,10 @@ export class AmbienceScopesView extends LitElement {
                   label: localize(this.hass, "ui.run", "Run"),
                   icon: "mdi:play",
                 },
-                {
-                  id: "auto",
-                  label: localize(this.hass, "ui.auto_triggers_section", "Auto-triggers"),
-                  icon: "mdi:flash-auto",
-                },
               ] satisfies KebabItem[]
             }
             @menu-action=${(e: CustomEvent<{ id: string }>) =>
-              this._onScopeMenu(scope, name, cfg, e.detail.id)}
+              this._onScopeMenu(scope, e.detail.id)}
             @click=${(e: Event) => e.stopPropagation()}
           ></ambience-kebab-menu>
         </div>
@@ -1142,6 +1168,8 @@ export class AmbienceScopesView extends LitElement {
                     this._showTraces(scope, e.detail.category)}
                   @show-simulator=${(e: CustomEvent<{ category: string }>) =>
                     this._showSimulator(scope, e.detail.category)}
+                  @show-auto-triggers=${(e: CustomEvent<{ category: string }>) =>
+                    this._showAutoTriggers(scope, e.detail.category)}
                 ></ambience-scenes-list>
               </div>
             `

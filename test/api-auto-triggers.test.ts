@@ -33,4 +33,19 @@ describe("listAutoTriggers (read-only)", () => {
       scope_id: "lr",
     });
   });
+
+  test("includes category when provided", async () => {
+    const sent: any[] = [];
+    const callWS = vi.fn(async (msg: any) => {
+      sent.push(msg);
+      return { triggers: [], opaque: false };
+    });
+    await listAutoTriggers({ callWS } as any, "area", "lr", "lighting");
+    expect(sent[0]).toEqual({
+      type: "ambience/auto_triggers/list",
+      scope_kind: "area",
+      scope_id: "lr",
+      category: "lighting",
+    });
+  });
 });

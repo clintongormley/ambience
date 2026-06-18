@@ -1507,6 +1507,215 @@ describe("summariseBlocker", () => {
     expect(out.toLowerCase()).not.toContain("not");
   });
 
+  test("state AND-group: a negated dwell atom becomes an 'until' release; the rest stay guards", () => {
+    const bedClear = {
+      kind: "is",
+      entity_id: "binary_sensor.bed_presence",
+      states: ["Clear"],
+      for: { h: 0, m: 2, s: 0 },
+      for_mode: "at_least",
+    };
+    const bedNot = { kind: "not", item: bedClear };
+    const ceiling = { kind: "is", entity_id: "light.ceiling", states: ["off"] };
+    const painting = { kind: "is", entity_id: "light.painting", states: ["off"] };
+    const windowSpots = { kind: "is", entity_id: "light.window_spots", states: ["off"] };
+    const when = {
+      state: { kind: "and", items: [bedNot, ceiling, painting, windowSpots] } as StatePredicate,
+      time_of_day: { period: "daytime" },
+    };
+    // The remaining (positive) atoms render as one guard AND-group; the negated
+    // dwell atom de-negates and moves to a positive 'until' release.
+    const guard = { kind: "and", items: [ceiling, painting, windowSpots] };
+    const expected =
+      `While ${summariseCondition("state", guard, ctx)} and Daytime, ` +
+      `block until ${summariseCondition("state", bedClear, ctx)}`;
+    const out = summariseBlocker(blocker(when), ctx);
+    expect(out).toBe(expected);
+    expect(out).not.toContain("NOT"); // the negation moved into the positive release
+  });
+
+  test("state AND-group with no negated atoms stays a pure guard", () => {
+    const group = {
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "light.a", states: ["on"] },
+        { kind: "is", entity_id: "light.b", states: ["off"] },
+      ],
+    };
+    const when = { state: group as StatePredicate };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while ${summariseCondition("state", group, ctx)}`,
+    );
+  });
+
+  test("state AND-group with multiple negated atoms yields releases joined by 'or'", () => {
+    const lightOff = { kind: "is", entity_id: "light.a", states: ["off"] };
+    const motionNot = { kind: "is_not", entity_id: "binary_sensor.motion", states: ["on"] };
+    const bedNot = {
+      kind: "not",
+      item: { kind: "is", entity_id: "binary_sensor.bed", states: ["Clear"] },
+    };
+    const group = { kind: "and", items: [lightOff, motionNot, bedNot] };
+    const when = { state: group as StatePredicate };
+    const motionPos = { kind: "is", entity_id: "binary_sensor.motion", states: ["on"] };
+    const bedPos = { kind: "is", entity_id: "binary_sensor.bed", states: ["Clear"] };
+    const expected =
+      `While ${summariseCondition("state", lightOff, ctx)}, block until ` +
+      `${summariseCondition("state", motionPos, ctx)} or ${summariseCondition("state", bedPos, ctx)}`;
+    expect(summariseBlocker(blocker(when), ctx)).toBe(expected);
+  });
+
+  test("all-negated state AND-group + a separate guard condition", () => {
+    const group = {
+      kind: "and",
+      items: [
+        { kind: "is_not", entity_id: "light.a", states: ["on"] },
+        { kind: "is_not", entity_id: "light.b", states: ["on"] },
+      ],
+    };
+    const when = { state: group as StatePredicate, time_of_day: { period: "daytime" } };
+    const aPos = { kind: "is", entity_id: "light.a", states: ["on"] };
+    const bPos = { kind: "is", entity_id: "light.b", states: ["on"] };
+    const expected =
+      `While Daytime, block until ${summariseCondition("state", aPos, ctx)} or ` +
+      `${summariseCondition("state", bPos, ctx)}`;
+    expect(summariseBlocker(blocker(when), ctx)).toBe(expected);
+  });
+
+  test("state OR-group of negated atoms stays a guard (de Morgan / duration boundary)", () => {
+    const group = {
+      kind: "or",
+      items: [
+        {
+          kind: "not",
+          item: { kind: "is", entity_id: "binary_sensor.entrances", states: ["Detected"] },
+        },
+        {
+          kind: "not",
+          item: {
+            kind: "is",
+            entity_id: "binary_sensor.presence",
+            states: ["Detected"],
+            for: { h: 0, m: 0, s: 10 },
+            for_mode: "less_than",
+          },
+        },
+      ],
+    };
+    const when = { state: group as StatePredicate };
+    // Untouched — an OR of negated atoms does not factor into a single positive
+    // release, so it renders verbatim as one guard.
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while ${summariseCondition("state", group, ctx)}`,
+    );
+  });
+
+  test("state with nested groups and no negated atoms stays a pure guard", () => {
+    const group = {
+      kind: "and",
+      items: [
+        {
+          kind: "or",
+          items: [
+            { kind: "is", entity_id: "light.a", states: ["on"] },
+            { kind: "is", entity_id: "light.b", states: ["on"] },
+          ],
+        },
+        { kind: "is", entity_id: "light.c", states: ["off"] },
+      ],
+    };
+    const when = { state: group as StatePredicate };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while ${summariseCondition("state", group, ctx)}`,
+    );
+  });
+
+  test("redundant single-child AND wrapper around a top-level NOT collapses to a release", () => {
+    const inner = {
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "binary_sensor.entrances", states: ["Detected"] },
+        {
+          kind: "is",
+          entity_id: "binary_sensor.presence",
+          states: ["Detected"],
+          for: { h: 0, m: 0, s: 10 },
+          for_mode: "less_than",
+        },
+      ],
+    };
+    const wrapped = { kind: "and", items: [{ kind: "not", item: inner }] };
+    const when = { state: wrapped as StatePredicate };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block until ${summariseCondition("state", inner, ctx)}`,
+    );
+  });
+
+  test("a bare top-level is_not state atom is a release", () => {
+    const when = {
+      state: { kind: "is_not", entity_id: "light.a", states: ["on"] } as StatePredicate,
+    };
+    const pos = { kind: "is", entity_id: "light.a", states: ["on"] };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block until ${summariseCondition("state", pos, ctx)}`,
+    );
+  });
+
+  test("a negated dwell release preserves a 'less than' duration (<)", () => {
+    const atomLt = {
+      kind: "is",
+      entity_id: "binary_sensor.bed",
+      states: ["Clear"],
+      for: { h: 0, m: 0, s: 10 },
+      for_mode: "less_than",
+    };
+    const lightOff = { kind: "is", entity_id: "light.a", states: ["off"] };
+    const group = { kind: "and", items: [{ kind: "not", item: atomLt }, lightOff] };
+    const when = { state: group as StatePredicate };
+    const out = summariseBlocker(blocker(when), ctx);
+    expect(out).toBe(
+      `While ${summariseCondition("state", lightOff, ctx)}, block until ` +
+        `${summariseCondition("state", atomLt, ctx)}`,
+    );
+    expect(out).toContain("for <10s");
+  });
+
+  test("a durational is_not atom stays a guard (its 'for' gates the negated test)", () => {
+    // `is_not Clear for ≥2m` means "(not Clear) has held ≥2m"; it releases the
+    // instant the sensor returns to Clear, so the dwell does NOT transfer to a
+    // positive "until … Clear for 2m". Leave it a truthful guard, don't overstate.
+    const atom = {
+      kind: "is_not",
+      entity_id: "binary_sensor.bed",
+      states: ["Clear"],
+      for: { h: 0, m: 2, s: 0 },
+      for_mode: "at_least",
+    };
+    const when = { state: atom as StatePredicate };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while ${summariseCondition("state", atom, ctx)}`,
+    );
+  });
+
+  test("mixed AND-group: a retained OR is parenthesised as a guard while a sibling atom releases", () => {
+    const orGroup = {
+      kind: "or",
+      items: [
+        { kind: "is", entity_id: "light.a", states: ["on"] },
+        { kind: "is", entity_id: "light.b", states: ["on"] },
+      ],
+    };
+    const lightCOff = { kind: "is", entity_id: "light.c", states: ["off"] };
+    const xNot = { kind: "is_not", entity_id: "binary_sensor.x", states: ["on"] };
+    const when = { state: { kind: "and", items: [orGroup, lightCOff, xNot] } as StatePredicate };
+    const guard = { kind: "and", items: [orGroup, lightCOff] };
+    const xPos = { kind: "is", entity_id: "binary_sensor.x", states: ["on"] };
+    const expected =
+      `While ${summariseCondition("state", guard, ctx)}, block until ` +
+      `${summariseCondition("state", xPos, ctx)}`;
+    expect(summariseBlocker(blocker(when), ctx)).toBe(expected);
+  });
+
   test("zero-condition blocker reads 'Block always'", () => {
     expect(summariseBlocker(blocker({}), ctx)).toBe("Block always");
   });

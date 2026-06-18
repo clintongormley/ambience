@@ -5,8 +5,8 @@ import { getKnownAttributeValues, getKnownStates, type HassConnection } from "..
 import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { localize, stateAttributeLabel, stateOpLabel, stateValueLabel } from "../i18n.js";
-import type { StateAtom, StateForDuration } from "../types.js";
-import "./for-duration.js";
+import type { ForMode, StateAtom, StateForDuration } from "../types.js";
+import { type ForDurationValue, persistedForMode } from "./for-duration.js";
 import { type StateObj, statesMap } from "./hass-states.js";
 
 type AttrLabelMaps = { keyToLabel: Map<string, string>; labelToKey: Map<string, string> };
@@ -105,13 +105,17 @@ export class AmbienceStateExprAtom extends LitElement {
     }
   }
 
-  /** Tidy the atom shape before emitting so the wire format stays small. */
+  /** Tidy the atom shape before emitting so the wire format stays small. A
+   *  zero `for` collapses to null; `for_mode` is dropped whenever `for` is
+   *  null/zero or the mode is "at_least" (only `for_mode: "less_than"` next to
+   *  a non-zero `for` survives). */
   private _normalize(atom: StateAtom): StateAtom {
     const out: StateAtom = { ...atom };
     if (out.attribute === "") out.attribute = null;
     if (out.for && out.for.h === 0 && out.for.m === 0 && out.for.s === 0) {
       out.for = null;
     }
+    if (!persistedForMode(out.for, out.for_mode)) delete out.for_mode;
     return out;
   }
 
@@ -232,8 +236,15 @@ export class AmbienceStateExprAtom extends LitElement {
     this._setStates(next);
   }
 
-  _setForDuration(dur: StateForDuration | null) {
-    this._emit({ ...this.value, for: dur });
+  _setForDuration(dur: (StateForDuration & { mode?: ForMode }) | null) {
+    if (dur === null) {
+      this._emit({ ...this.value, for: null, for_mode: null });
+      return;
+    }
+    const { mode, ...d } = dur;
+    // `for_mode` is tidied by `_normalize` (dropped unless `for` is non-zero and
+    // the mode is "less_than"), so emit the raw mode and let it normalise.
+    this._emit({ ...this.value, for: d, for_mode: mode });
   }
 
   // --- schemas ----------------------------------------------------------
@@ -610,13 +621,15 @@ export class AmbienceStateExprAtom extends LitElement {
   }
 
   private _renderForRow() {
-    // Shared h:m:s editor; `{h:0,m:0,s:0}` becomes null on the way out via
-    // _normalize.
+    // Shared h:m:s editor with the at-least/less-than mode toggle;
+    // `{h:0,m:0,s:0}` becomes null and a redundant `for_mode` is dropped on the
+    // way out via _normalize.
     return html`<ambience-for-duration
       data-field="for"
       .hass=${this.hass}
       .value=${this.value.for ?? null}
-      @value-changed=${(e: CustomEvent<{ value: StateForDuration }>) => {
+      .mode=${this.value.for_mode ?? "at_least"}
+      @value-changed=${(e: CustomEvent<{ value: ForDurationValue }>) => {
         e.stopPropagation();
         this._setForDuration(e.detail.value);
       }}

@@ -5,8 +5,8 @@ import type { HassConnection } from "../api.js";
 import { emitValueChanged } from "../dom.js";
 import type { HaFormSchema } from "../ha-form.js";
 import { localize } from "../i18n.js";
-import type { PeoplePredicate, PeopleQuant, StateForDuration } from "../types.js";
-import "./for-duration.js";
+import type { ForMode, PeoplePredicate, PeopleQuant } from "../types.js";
+import { type ForDurationValue, hasForDuration, persistedForMode } from "./for-duration.js";
 import { entitiesOfDomain } from "./hass-states.js";
 
 /** The six user-facing modes. The first three ("base") emit no `who`; the last
@@ -157,8 +157,21 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     }
   }
 
-  private _hasFor(dur: PeoplePredicate["for"]): boolean {
-    return !!dur && (dur.h !== 0 || dur.m !== 0 || dur.s !== 0);
+  /** Copy `for` (and, when non-zero + "less_than", `for_mode`) from a source
+   *  duration/mode onto an outgoing predicate. Mirrors the zero-`for`
+   *  normalisation: `for_mode` is omitted whenever `for` is dropped or the mode
+   *  is "at_least". The single point that decides the on-wire `for`/`for_mode`
+   *  shape, so every build path stays consistent. */
+  private _applyFor(
+    out: PeoplePredicate,
+    dur: PeoplePredicate["for"],
+    mode: ForMode | null | undefined,
+  ): void {
+    if (hasForDuration(dur)) {
+      out.for = dur;
+      const m = persistedForMode(dur, mode);
+      if (m) out.for_mode = m;
+    }
   }
 
   /** True for the "negative quant" modes — Nobody and None of: (quant
@@ -203,7 +216,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
         out.who = this._persons().map((p) => p.id);
       }
     }
-    if (this._hasFor(cur.for)) out.for = cur.for;
+    this._applyFor(out, cur.for, cur.for_mode);
     this._emit(out);
   }
 
@@ -221,7 +234,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where };
     if (this._effectiveNegate()) out.negate = true;
     if (this._hasWhoKey()) out.who = [...this._who()];
-    if (this._hasFor(cur.for)) out.for = cur.for;
+    this._applyFor(out, cur.for, cur.for_mode);
     this._emit(out);
   }
 
@@ -230,7 +243,7 @@ export class AmbiencePeoplePredicateInput extends LitElement {
     const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where: cur.where ?? "home" };
     if (negate) out.negate = true;
     if (this._hasWhoKey()) out.who = [...this._who()];
-    if (this._hasFor(cur.for)) out.for = cur.for;
+    this._applyFor(out, cur.for, cur.for_mode);
     this._emit(out);
   }
 
@@ -244,16 +257,17 @@ export class AmbiencePeoplePredicateInput extends LitElement {
       who: next,
     };
     if (this._effectiveNegate()) out.negate = true;
-    if (this._hasFor(cur.for)) out.for = cur.for;
+    this._applyFor(out, cur.for, cur.for_mode);
     this._emit(out);
   }
 
-  private _setFor(dur: { h: number; m: number; s: number }) {
+  private _setFor(dur: { h: number; m: number; s: number; mode?: ForMode }) {
+    const { mode, ...d } = dur;
     const cur = this._cur();
     const out: PeoplePredicate = { quant: cur.quant ?? "everyone", where: cur.where ?? "home" };
     if (this._effectiveNegate()) out.negate = true;
     if (this._hasWhoKey()) out.who = [...this._who()];
-    if (this._hasFor(dur)) out.for = dur;
+    this._applyFor(out, d, mode ?? "at_least");
     this._emit(out);
   }
 
@@ -409,12 +423,14 @@ export class AmbiencePeoplePredicateInput extends LitElement {
   }
 
   private _renderFor() {
-    // Shared h:m:s editor (see for-duration.ts).
+    // Shared h:m:s editor with the at-least/less-than mode toggle (see
+    // for-duration.ts).
     return html`<ambience-for-duration
       data-field="for"
       .hass=${this.hass}
       .value=${this._cur().for ?? null}
-      @value-changed=${(e: CustomEvent<{ value: StateForDuration }>) => {
+      .mode=${this._cur().for_mode ?? "at_least"}
+      @value-changed=${(e: CustomEvent<{ value: ForDurationValue }>) => {
         e.stopPropagation();
         this._setFor(e.detail.value);
       }}

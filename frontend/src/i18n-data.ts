@@ -290,6 +290,8 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     reset_to_live: "Reset to live",
     true_label: "True",
     false_label: "False",
+    for_at_least: "at least",
+    for_less_than: "less than",
     for_label: "For",
     away: "Away",
     home: "Home",

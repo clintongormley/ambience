@@ -382,6 +382,61 @@ describe("ambience-people-predicate-input — branch coverage", () => {
   });
 
   // -------------------------------------------------------------------------
+  // for_mode ("at least" / "less than")
+  // -------------------------------------------------------------------------
+
+  test("_setFor() with less_than mode round-trips for_mode", async () => {
+    el = await mount({ quant: "everyone", where: "home" });
+    let emitted: PeoplePredicate | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
+    });
+    el._setFor({ h: 0, m: 5, s: 0, mode: "less_than" });
+    expect(emitted?.for).toEqual({ h: 0, m: 5, s: 0 });
+    expect(emitted?.for_mode).toBe("less_than");
+  });
+
+  test("_setFor() drops for_mode when the mode is at_least", async () => {
+    el = await mount({ quant: "everyone", where: "home", for: { h: 0, m: 5, s: 0 } });
+    let emitted: PeoplePredicate | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
+    });
+    el._setFor({ h: 0, m: 5, s: 0, mode: "at_least" });
+    expect(emitted?.for).toEqual({ h: 0, m: 5, s: 0 });
+    expect(emitted?.for_mode).toBeUndefined();
+  });
+
+  test("_setFor() drops for_mode when the duration is zeroed", async () => {
+    el = await mount({ quant: "everyone", where: "home", for: { h: 0, m: 5, s: 0 } });
+    let emitted: PeoplePredicate | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
+    });
+    el._setFor({ h: 0, m: 0, s: 0, mode: "less_than" });
+    expect(emitted?.for).toBeUndefined();
+    expect(emitted?.for_mode).toBeUndefined();
+  });
+
+  test("an existing less_than for_mode survives a where change", async () => {
+    el = await mount({
+      quant: "everyone",
+      where: "home",
+      for: { h: 0, m: 5, s: 0 },
+      for_mode: "less_than",
+    });
+    let emitted: PeoplePredicate | undefined;
+    el.addEventListener("value-changed", (e: Event) => {
+      emitted = (e as CustomEvent<{ value: PeoplePredicate }>).detail.value;
+    });
+    const w = whereSelect(el);
+    w.value = "zone.work";
+    w.dispatchEvent(new Event("change"));
+    expect(emitted?.for).toEqual({ h: 0, m: 5, s: 0 });
+    expect(emitted?.for_mode).toBe("less_than");
+  });
+
+  // -------------------------------------------------------------------------
   // negate-static label — line 473: shown instead of toggle for Nobody/None of:
   // Already tested in condition-input-people but needed here for branch coverage.
   // -------------------------------------------------------------------------

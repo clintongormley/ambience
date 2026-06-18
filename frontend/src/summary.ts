@@ -419,7 +419,7 @@ export function entityDisplayName(hass: HassLike | undefined, entity_id: string)
 /**
  * "<Sensor> is detected/clear" for one sensor, or
  * "any of (A, B) detected" / "all of (A, B) clear" for several, with an
- * optional "for ≥<dur>" / "for <<dur>" suffix (the comparator follows
+ * optional "for ≥20m" / "for <20m" suffix (the comparator follows
  * `for_mode`). Sensor names use friendly_name when set.
  */
 export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionContext = {}): string {

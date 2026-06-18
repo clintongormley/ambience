@@ -11,7 +11,6 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
-from freezegun import freeze_time
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
@@ -2194,7 +2193,7 @@ def _less_than_engine(hass, seconds: float) -> AutoTriggerEngine:
     return engine
 
 
-async def test_less_than_activates_immediately_then_deactivates_at_maturity(hass) -> None:
+async def test_less_than_activates_immediately_then_deactivates_at_maturity(hass, freezer) -> None:
     """`for: 5m`, `for_mode: less_than` STATE atom, end-to-end, with ZERO trigger
     machinery changes:
 
@@ -2205,40 +2204,41 @@ async def test_less_than_activates_immediately_then_deactivates_at_maturity(hass
       2. The SAME one-shot recheck timer that at_least uses (armed at
          `since + 5m`) fires; advancing the clock past the threshold fires it →
          the predicate is now FALSE (elapsed ≥ 5m → tenure_within false), and the
-         winning scene is withdrawn (last-applied cleared)."""
+         winning scene is withdrawn (last-applied cleared).
+
+    The `freezer` fixture (pytest-freezer, pulled in by
+    pytest-homeassistant-custom-component) freezes the clock so the engine's
+    tenure `since`, the snapshot's `now`, and the armed recheck timer all advance
+    together when we tick forward — exactly how real wall-clock time would pass
+    between the state change and maturity."""
     seconds = 300.0  # for: {m: 5}
     last_applied_key = ("area", "a", "g")
     pred_key = ("area", "a", 0, "x")
 
-    # Freeze the clock so the engine's tenure `since`, the snapshot's `now`, and
-    # the armed recheck timer all advance together when we tick forward — exactly
-    # how real wall-clock time would pass between the state change and maturity.
-    base = dt_util.utcnow()
-    with freeze_time(base) as frozen:
-        hass.states.async_set("binary_sensor.x", "off")
-        engine = _less_than_engine(hass, seconds)
-        engine.async_subscribe()
-        await engine.async_initial_sync()  # x=off → no match → not active
-        assert last_applied_key not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+    hass.states.async_set("binary_sensor.x", "off")
+    engine = _less_than_engine(hass, seconds)
+    engine.async_subscribe()
+    await engine.async_initial_sync()  # x=off → no match → not active
+    assert last_applied_key not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
 
-        # (1) Activates immediately: the watched entity enters the desired state.
-        hass.states.async_set("binary_sensor.x", "on")
-        await hass.async_block_till_done()
-        # The less_than predicate is active right away (elapsed ~0 < 5m) — the
-        # winning scene applied. This is well before the 5-minute timer.
-        assert hass.data[DOMAIN][DATA_LAST_APPLIED][last_applied_key] == 0
+    # (1) Activates immediately: the watched entity enters the desired state.
+    hass.states.async_set("binary_sensor.x", "on")
+    await hass.async_block_till_done()
+    # The less_than predicate is active right away (elapsed ~0 < 5m) — the
+    # winning scene applied. This is well before the 5-minute timer.
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][last_applied_key] == 0
 
-        # A single recheck timer was armed at since + 5m — the EXACT same
-        # mechanism at_least uses (no less_than-specific arming).
-        assert pred_key in engine._for_handles
-        assert len(engine._for_handles[pred_key]) == 1  # one gate, one one-shot
+    # A single recheck timer was armed at since + 5m — the EXACT same
+    # mechanism at_least uses (no less_than-specific arming).
+    assert pred_key in engine._for_handles
+    assert len(engine._for_handles[pred_key]) == 1  # one gate, one one-shot
 
-        # (2) Deactivates at maturity: advance the frozen clock past the 5m
-        # threshold and let the armed timer fire. The duration verdict flips
-        # (elapsed ≥ 5m → tenure_within false) and the winning scene is withdrawn.
-        frozen.tick(timedelta(seconds=seconds + 1))
-        async_fire_time_changed(hass, dt_util.utcnow())
-        await hass.async_block_till_done()
-        assert last_applied_key not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+    # (2) Deactivates at maturity: advance the frozen clock past the 5m threshold
+    # and let the armed timer fire. The duration verdict flips (elapsed ≥ 5m →
+    # tenure_within false) and the winning scene is withdrawn.
+    freezer.tick(timedelta(seconds=seconds + 1))
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    assert last_applied_key not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
 
     engine._teardown()

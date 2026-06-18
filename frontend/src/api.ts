@@ -133,9 +133,11 @@ export async function listAutoTriggers(
   hass: HassConnection,
   scope_kind: "area" | "floor" | "house",
   scope_id?: string | null,
+  category?: string,
 ): Promise<AutoTriggerList> {
   const msg: Record<string, unknown> = { type: "ambience/auto_triggers/list", scope_kind };
   if (scope_id != null) msg.scope_id = scope_id;
+  if (category != null) msg.category = category;
   return hass.callWS(msg);
 }
 

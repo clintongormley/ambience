@@ -3,6 +3,7 @@
 // forbids custom top-level keys, so they are bundled with the panel instead.
 export const AMBIENCE_STRINGS: Record<string, unknown> = {
   time_of_day_period: {
+    dawn: "Dawn",
     morning: "Morning",
     afternoon: "Afternoon",
     evening: "Evening",

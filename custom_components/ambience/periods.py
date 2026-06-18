@@ -20,10 +20,17 @@ _VALID_ANCHORS = {"sunrise", "sunset", "noon", "midnight", "dawn", "dusk"}
 
 # Key order is "specific-first, broad-last": `describe()` returns the first
 # matching period, so e.g. a 2pm time reads as "afternoon" rather than the
-# all-day "daytime". (The time-of-day chooser applies its own display order.)
+# all-day "daytime". Likewise the broad "nighttime" (sunset→sunrise) contains
+# both "evening" (sunset→dusk) and "dawn" (dawn→sunrise), so those narrower
+# windows are listed first. (The time-of-day chooser applies its own display
+# order.)
 BUILTIN_PERIODS: dict[str, dict[str, Any]] = {
-    "morning": {
+    "dawn": {
         "from": {"kind": "sun", "anchor": "dawn", "offset_min": 0},
+        "to": {"kind": "sun", "anchor": "sunrise", "offset_min": 0},
+    },
+    "morning": {
+        "from": {"kind": "sun", "anchor": "sunrise", "offset_min": 0},
         "to": {"kind": "sun", "anchor": "noon", "offset_min": 0},
     },
     "afternoon": {
@@ -35,11 +42,11 @@ BUILTIN_PERIODS: dict[str, dict[str, Any]] = {
         "to": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
     },
     "nighttime": {
-        "from": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
-        "to": {"kind": "sun", "anchor": "dawn", "offset_min": 0},
+        "from": {"kind": "sun", "anchor": "sunset", "offset_min": 0},
+        "to": {"kind": "sun", "anchor": "sunrise", "offset_min": 0},
     },
     "daytime": {
-        "from": {"kind": "sun", "anchor": "dawn", "offset_min": 0},
+        "from": {"kind": "sun", "anchor": "sunrise", "offset_min": 0},
         "to": {"kind": "sun", "anchor": "sunset", "offset_min": 0},
     },
 }

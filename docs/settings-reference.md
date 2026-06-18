@@ -47,7 +47,7 @@ The Conditions tab lists the conditions that have configurable settings. Current
 
 ### Time of day
 
-Scenes can match a named time-of-day period (Morning, Afternoon, Evening, Nighttime, Daytime) rather than a raw time range. The Conditions tab lets you view those built-in periods and adjust their boundaries, or add your own custom periods.
+Scenes can match a named time-of-day period (Dawn, Morning, Afternoon, Evening, Nighttime, Daytime) rather than a raw time range. The Conditions tab lets you view those built-in periods and adjust their boundaries, or add your own custom periods.
 
 See [Time of day](conditions/time-of-day.md) for a description of how periods work inside a scene condition.
 

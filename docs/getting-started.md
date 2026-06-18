@@ -40,7 +40,7 @@ Add a second scene for occupied evenings.
 
 1. Click **+ Add scene** again and name it **Evening**.
 2. Add a **People** condition — this time leave it on **Everybody** or switch it to **Anybody** (someone is present).
-3. Add a **Time of day** condition. Click the row and select the **Evening** period. Evening runs from sunset to dusk; if you also want to cover late nights, add **Nighttime** (dusk until dawn) to the same condition — you can select multiple periods.
+3. Add a **Time of day** condition. Click the row and select the **Evening** period. Evening runs from sunset to dusk; if you also want to cover late nights, add **Nighttime** (sunset until sunrise) to the same condition — you can select multiple periods.
 4. Add a light action set to a warm, dim brightness (for example 20 % at 2700 K).
 5. Click **Save scene**.
 
@@ -67,7 +67,7 @@ During the day you probably want more light. When the sky is dull you want even 
 
 1. Click **+ Add scene** and name it **Sunny day**.
 2. Add a **People** condition — someone present.
-3. Add a **Time of day** condition and select **Daytime** (dawn until sunset).
+3. Add a **Time of day** condition and select **Daytime** (sunrise until sunset).
 4. Add a **Weather** condition. Open the condition and pick a group that represents good weather (for example **Sunny**), or add a numeric threshold (such as humidity or temperature) if you prefer.
 5. Add a light action at a moderate daytime brightness (for example 70 %).
 6. Click **Save scene**.

@@ -17,19 +17,23 @@ kinds of entry:
 
 ### Using a named period
 
-Ambience ships five built-in periods that track the sun automatically, so they
+Ambience ships six built-in periods that track the sun automatically, so they
 adjust throughout the year without any configuration:
 
 | Period    | From     | To      |
 |-----------|----------|---------|
-| Morning   | Dawn     | Noon    |
+| Dawn      | Dawn     | Sunrise |
+| Morning   | Sunrise  | Noon    |
 | Afternoon | Noon     | Sunset  |
 | Evening   | Sunset   | Dusk    |
-| Nighttime | Dusk     | Dawn    |
-| Daytime   | Dawn     | Sunset  |
+| Nighttime | Sunset   | Sunrise |
+| Daytime   | Sunrise  | Sunset  |
 
-All five are sun-relative, so "Morning" in summer starts earlier than it does in
-winter, and everything shifts with your latitude automatically.
+All six are sun-relative, so "Morning" in summer starts earlier than it does in
+winter, and everything shifts with your latitude automatically. "Nighttime"
+spans the whole night (sunset to sunrise) and so overlaps the narrower "Evening"
+and "Dawn" windows; where periods overlap, a scene's summary names the most
+specific one.
 
 You can also define your own periods — for example a "Wind down" period from
 21:00 to 23:00 — via **Settings → Conditions**. Once saved, custom periods
@@ -81,6 +85,6 @@ If you prefer a fixed time regardless of the sun, you could instead choose
 
 !!! info "📷 Screenshot"
     The Time of day condition editor in the scene editor, showing the period
-    dropdown open with Morning, Afternoon, Evening, Nighttime, and Daytime
+    dropdown open with Daytime, Dawn, Morning, Afternoon, Evening, and Nighttime
     listed, and a separate custom range entry expanded below with From set to
     "Sun / Sunset / 0" and To set to "Time / 23:00".

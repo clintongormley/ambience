@@ -368,13 +368,39 @@ describe("ambience-state-expr-node — group", () => {
     expect(extNot).toBeTruthy();
   });
 
-  test("root group (path=[]) does NOT render the external NOT toggle", async () => {
+  test("root group (path=[]) renders the external NOT toggle", async () => {
     el = await mount(
       { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
       { path: [] },
     );
     const extNot = el.shadowRoot.querySelector("button.not-toggle.external");
-    expect(extNot).toBeNull();
+    expect(extNot).toBeTruthy();
+  });
+
+  test("clicking the root group's external NOT toggle emits node-toggle-not with path []", async () => {
+    el = await mount(
+      { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
+      { path: [] },
+    );
+    let captured: any;
+    el.addEventListener("node-toggle-not", (e: CustomEvent) => {
+      captured = e.detail;
+    });
+    const extNot = el.shadowRoot.querySelector("button.not-toggle.external") as HTMLButtonElement;
+    extNot.click();
+    expect(captured.path).toEqual([]);
+  });
+
+  test("the root group's external NOT toggle shows 'on' when the root is wrapped in NOT", async () => {
+    el = await mount(
+      {
+        kind: "not",
+        item: { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
+      },
+      { path: [] },
+    );
+    const extNot = el.shadowRoot.querySelector("button.not-toggle.external");
+    expect(extNot?.classList.contains("on")).toBe(true);
   });
 
   test("external NOT toggle has class 'on' when group is wrapped in NOT", async () => {

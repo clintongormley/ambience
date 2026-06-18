@@ -383,16 +383,14 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   private _renderGroupWithExternalNot(group: StateGroup, isNot: boolean) {
-    const isRoot = this.path.length === 0;
+    // The external NOT toggle is shown for every group, including the root: the
+    // data model allows a top-level `not`, and without it the only way to negate
+    // a whole expression was to nest a redundant inner group just to wrap it.
     return html`
       <div class="group-wrap">
-        ${
-          isRoot
-            ? ""
-            : html`<button class="not-toggle external ${isNot ? "on" : ""}"
+        <button class="not-toggle external ${isNot ? "on" : ""}"
           title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
-          @click=${() => this._emit("node-toggle-not")}>${stateOpLabel(this.hass, "not")}</button>`
-        }
+          @click=${() => this._emit("node-toggle-not")}>${stateOpLabel(this.hass, "not")}</button>
         ${this._renderGroup(group)}
       </div>
     `;

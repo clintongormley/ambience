@@ -1143,3 +1143,134 @@ async def test_snapshot_narrows_to_referenced_entities(hass: HomeAssistant) -> N
     snap = await StateCondition().snapshot(hass, entities=frozenset({"light.a", "light.gone"}))
     assert set(snap.states) == {"light.a"}
     assert set(snap.attributes) == {"light.a"}
+
+
+# --- for_mode: "less_than" ---------------------------------------------------
+
+
+def test_for_mode_less_than_tenure_within_window_matches() -> None:
+    """`for_mode: "less_than"` matches while the gate has held for LESS than the
+    threshold — the mirror of the default at_least gate, off engine tenure."""
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    atom = {
+        "kind": "is",
+        "entity_id": "person.bob",
+        "states": ["home"],
+        "for": {"m": 5},
+        "for_mode": "less_than",
+    }
+    key = m._atom_gate_key(atom)
+    states = {"person.bob": ("home", now - timedelta(minutes=1), now - timedelta(minutes=1))}
+    # Gate held only 2m → within the 5m window → matches.
+    assert m.matches(atom, _snap(states, now, tenure={key: now - timedelta(minutes=2)})) is True
+
+
+def test_for_mode_less_than_tenure_held_too_long_does_not_match() -> None:
+    """`less_than` stops matching once the gate has held at least the threshold."""
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    atom = {
+        "kind": "is",
+        "entity_id": "person.bob",
+        "states": ["home"],
+        "for": {"m": 5},
+        "for_mode": "less_than",
+    }
+    key = m._atom_gate_key(atom)
+    states = {"person.bob": ("home", now - timedelta(minutes=10), now - timedelta(minutes=10))}
+    # Gate held 10m → past the 5m window → no match.
+    assert m.matches(atom, _snap(states, now, tenure={key: now - timedelta(minutes=10)})) is False
+
+
+def test_for_mode_less_than_tenure_exact_boundary_excluded() -> None:
+    """The boundary is exclusive: held for EXACTLY the threshold → not within."""
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    atom = {
+        "kind": "is",
+        "entity_id": "person.bob",
+        "states": ["home"],
+        "for": {"m": 5},
+        "for_mode": "less_than",
+    }
+    key = m._atom_gate_key(atom)
+    states = {"person.bob": ("home", now - timedelta(minutes=5), now - timedelta(minutes=5))}
+    # Held for exactly 5m → boundary is exclusive → no match.
+    assert m.matches(atom, _snap(states, now, tenure={key: now - timedelta(minutes=5)})) is False
+
+
+def test_for_mode_absent_and_at_least_behave_identically() -> None:
+    """No `for_mode` (and an explicit "at_least") keep today's at_least gate: the
+    gate must have held AT LEAST the threshold. A regression guard against the
+    new field changing the default."""
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    base = {"kind": "is", "entity_id": "person.bob", "states": ["home"], "for": {"m": 5}}
+    key = m._atom_gate_key(base)
+    states = {"person.bob": ("home", now - timedelta(minutes=10), now - timedelta(minutes=10))}
+    held_long = _snap(states, now, tenure={key: now - timedelta(minutes=10)})
+    held_short = _snap(states, now, tenure={key: now - timedelta(minutes=1)})
+    # Absent for_mode → at_least: 10m held matches, 1m held does not.
+    assert m.matches(base, held_long) is True
+    assert m.matches(base, held_short) is False
+    # Explicit "at_least" behaves identically.
+    explicit = {**base, "for_mode": "at_least"}
+    assert m.matches(explicit, held_long) is True
+    assert m.matches(explicit, held_short) is False
+
+
+def test_for_mode_less_than_legacy_fallback_within_matches() -> None:
+    """With no engine tenure (simulator path), `less_than` clocks off the exact
+    state: elapsed < seconds → matches; elapsed >= seconds → no match."""
+    m = StateCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    atom = {
+        "kind": "is",
+        "entity_id": "person.bob",
+        "states": ["home"],
+        "for": {"m": 5},
+        "for_mode": "less_than",
+    }
+    # last_changed 2m ago, no tenure → within the 5m window → matches.
+    within = _snap({"person.bob": ("home", now - timedelta(minutes=2))}, now=now, tenure=None)
+    assert m.matches(atom, within) is True
+    # last_changed 10m ago, no tenure → past the window → no match.
+    past = _snap({"person.bob": ("home", now - timedelta(minutes=10))}, now=now, tenure=None)
+    assert m.matches(atom, past) is False
+
+
+def test_validate_atom_for_mode_optional_and_rejects_bad_value() -> None:
+    """`for_mode` accepts None/absent, "at_least", "less_than"; a bad value
+    raises at save time."""
+    m = StateCondition()
+    base = {"kind": "is", "entity_id": "x", "states": ["on"], "for": {"m": 5}}
+    # Absent / None / valid modes all accepted.
+    m.validate_predicate(base)
+    m.validate_predicate({**base, "for_mode": None})
+    m.validate_predicate({**base, "for_mode": "at_least"})
+    m.validate_predicate({**base, "for_mode": "less_than"})
+    # A bogus mode is rejected.
+    with pytest.raises(ValueError, match="for_mode"):
+        m.validate_predicate({**base, "for_mode": "at_most"})
+
+
+def test_describe_atom_for_mode_renders_comparator() -> None:
+    """describe renders `for <` for a less_than atom and `for ≥` for at_least."""
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    changed = now - timedelta(minutes=2)
+    snap = _snap(
+        {"binary_sensor.door": ("on", changed)},
+        now=now,
+        attributes={"binary_sensor.door": {"friendly_name": "Front Door"}},
+    )
+    less = {
+        "kind": "is",
+        "entity_id": "binary_sensor.door",
+        "states": ["on"],
+        "for": {"m": 5},
+        "for_mode": "less_than",
+    }
+    assert StateCondition().describe(snap, less) == "Front Door: on 2m ✓ (is on, for <5m)"
+    at_least = {**less, "for_mode": "at_least"}
+    assert StateCondition().describe(snap, at_least) == "Front Door: on 2m ✗ (is on, for ≥5m)"

@@ -590,3 +590,236 @@ def test_contains_empty_sensors_is_a_wildcard_matching_matches() -> None:
     assert m.contains({"sensors": ["binary_sensor.a"]}, {"sensors": []}) is False
     # Two wildcards: universe ⊆ universe.
     assert m.contains({"sensors": []}, {"sensors": []}) is True
+
+
+# --- for_mode: "less_than" (held LESS than `for`) -----------------------
+
+
+def test_occupancy_less_than_tenure_within_window_matches() -> None:
+    """for_mode less_than over engine tenure: the gated verdict is True only
+    while the instant test has held for LESS than `for`."""
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "sensors": ["binary_sensor.a"],
+        "occupied": True,
+        "for": {"m": 20},
+        "for_mode": "less_than",
+    }
+    key = m._gate_key(pred)
+    snap = _snap(
+        {"binary_sensor.a": ("on", now - timedelta(minutes=1))},
+        now=now,
+        tenure={key: now - timedelta(minutes=5)},  # held 5m < 20m
+    )
+    assert m.matches(pred, snap) is True
+
+
+def test_occupancy_less_than_tenure_beyond_window_does_not_match() -> None:
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "sensors": ["binary_sensor.a"],
+        "occupied": True,
+        "for": {"m": 20},
+        "for_mode": "less_than",
+    }
+    key = m._gate_key(pred)
+    snap = _snap(
+        {"binary_sensor.a": ("on", now - timedelta(minutes=1))},
+        now=now,
+        tenure={key: now - timedelta(minutes=25)},  # held 25m >= 20m
+    )
+    assert m.matches(pred, snap) is False
+
+
+def test_occupancy_less_than_tenure_exact_boundary_does_not_match() -> None:
+    """Boundary is exclusive: holding for exactly `for` is no longer within."""
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "sensors": ["binary_sensor.a"],
+        "occupied": True,
+        "for": {"m": 20},
+        "for_mode": "less_than",
+    }
+    key = m._gate_key(pred)
+    snap = _snap(
+        {"binary_sensor.a": ("on", now - timedelta(minutes=1))},
+        now=now,
+        tenure={key: now - timedelta(minutes=20)},  # held exactly 20m
+    )
+    assert m.matches(pred, snap) is False
+
+
+def test_occupancy_less_than_survives_sensor_handover_within_window() -> None:
+    """less_than over a handover: 'any occupied' has held only 5m (a fresh tenure
+    that survived s1→s2), so the <20m window still matches even though each
+    sensor's own last_changed is recent."""
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "sensors": ["binary_sensor.s1", "binary_sensor.s2"],
+        "quant": "any",
+        "for": {"m": 20},
+        "for_mode": "less_than",
+    }
+    key = m._gate_key(pred)
+    # s1 off, s2 just on 1m ago; 'any occupied' tenure has held 5m (< 20m).
+    snap = _snap(
+        {
+            "binary_sensor.s1": ("off", now - timedelta(minutes=1)),
+            "binary_sensor.s2": ("on", now - timedelta(minutes=1)),
+        },
+        now=now,
+        tenure={key: now - timedelta(minutes=5)},
+    )
+    assert m.matches(pred, snap) is True
+    # Same handover but the tenure has matured past the window → miss.
+    snap_matured = _snap(
+        {
+            "binary_sensor.s1": ("off", now - timedelta(minutes=1)),
+            "binary_sensor.s2": ("on", now - timedelta(minutes=1)),
+        },
+        now=now,
+        tenure={key: now - timedelta(minutes=30)},
+    )
+    assert m.matches(pred, snap_matured) is False
+
+
+def test_occupancy_for_mode_absent_or_at_least_is_unchanged() -> None:
+    """Regression: absent for_mode (and explicit "at_least") behaves as today —
+    matches only once the tenure has held AT LEAST `for`."""
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    base = {"sensors": ["binary_sensor.a"], "occupied": True, "for": {"m": 20}}
+    key = m._gate_key(base)
+    matured = _snap(
+        {"binary_sensor.a": ("on", now - timedelta(minutes=1))},
+        now=now,
+        tenure={key: now - timedelta(minutes=25)},  # held 25m >= 20m
+    )
+    fresh = _snap(
+        {"binary_sensor.a": ("on", now - timedelta(minutes=1))},
+        now=now,
+        tenure={key: now - timedelta(minutes=5)},  # held 5m < 20m
+    )
+    # absent for_mode == at_least: matured matches, fresh does not.
+    assert m.matches(base, matured) is True
+    assert m.matches(base, fresh) is False
+    # explicit at_least is identical.
+    at_least = {**base, "for_mode": "at_least"}
+    assert m.matches(at_least, matured) is True
+    assert m.matches(at_least, fresh) is False
+
+
+def test_occupancy_less_than_legacy_clock_uses_holds() -> None:
+    """Without engine tenure the legacy per-sensor last_changed clock applies:
+    less_than matches while elapsed < `for`, misses once elapsed >= `for`."""
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "sensors": ["binary_sensor.a"],
+        "occupied": True,
+        "for": {"m": 20},
+        "for_mode": "less_than",
+    }
+    # On for 5m (< 20m) → within → match.
+    within = _snap({"binary_sensor.a": ("on", datetime(2026, 5, 25, 11, 55, tzinfo=UTC))}, now=now)
+    assert m.matches(pred, within) is True
+    # On for 25m (>= 20m) → past → miss.
+    past = _snap({"binary_sensor.a": ("on", datetime(2026, 5, 25, 11, 35, tzinfo=UTC))}, now=now)
+    assert m.matches(pred, past) is False
+
+
+def test_occupancy_less_than_negate_inverts() -> None:
+    """NOT(occupied for <20m) is False while within the window, True outside it."""
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "sensors": ["binary_sensor.a"],
+        "occupied": True,
+        "for": {"m": 20},
+        "for_mode": "less_than",
+        "negate": True,
+    }
+    key = m._gate_key(pred)
+    # Inner less_than True (held 5m) → negate False.
+    within = _snap(
+        {"binary_sensor.a": ("on", now - timedelta(minutes=1))},
+        now=now,
+        tenure={key: now - timedelta(minutes=5)},
+    )
+    assert m.matches(pred, within) is False
+    # Inner less_than False (held 25m) → negate True.
+    past = _snap(
+        {"binary_sensor.a": ("on", now - timedelta(minutes=1))},
+        now=now,
+        tenure={key: now - timedelta(minutes=25)},
+    )
+    assert m.matches(pred, past) is True
+
+
+def test_validate_accepts_for_mode() -> None:
+    m = OccupancyCondition()
+    m.validate_predicate({"sensors": ["binary_sensor.a"], "for_mode": "less_than"})
+    m.validate_predicate({"sensors": ["binary_sensor.a"], "for_mode": "at_least"})
+    m.validate_predicate({"sensors": ["binary_sensor.a"]})  # absent is fine
+
+
+def test_validate_rejects_bad_for_mode() -> None:
+    with pytest.raises(ValueError):
+        OccupancyCondition().validate_predicate(
+            {"sensors": ["binary_sensor.a"], "for_mode": "sometimes"}
+        )
+
+
+def test_describe_for_mode_less_than_renders_for_lt() -> None:
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    on_5m = ("on", datetime(2026, 5, 25, 11, 55, tzinfo=UTC))
+    snap = _snap({"binary_sensor.bed": on_5m}, now=now, names={"binary_sensor.bed": "Bed"})
+    pred = {"sensors": ["binary_sensor.bed"], "for": {"m": 20}, "for_mode": "less_than"}
+    assert OccupancyCondition().describe(snap, pred) == "Bed: on 5m ✓ (for <20m)"
+
+
+def test_describe_for_mode_at_least_renders_for_ge() -> None:
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    on_5m = ("on", datetime(2026, 5, 25, 11, 55, tzinfo=UTC))
+    snap = _snap({"binary_sensor.bed": on_5m}, now=now, names={"binary_sensor.bed": "Bed"})
+    pred = {"sensors": ["binary_sensor.bed"], "for": {"m": 20}, "for_mode": "at_least"}
+    assert OccupancyCondition().describe(snap, pred) == "Bed: on 5m ✗ (for ≥20m)"
+
+
+def test_describe_for_mode_less_than_tenure_mode() -> None:
+    from datetime import timedelta
+
+    m = OccupancyCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "sensors": ["binary_sensor.a"],
+        "occupied": True,
+        "for": {"m": 20},
+        "for_mode": "less_than",
+    }
+    key = m._gate_key(pred)
+    snap = _snap(
+        {"binary_sensor.a": ("on", now - timedelta(minutes=1))},
+        now=now,
+        names={"binary_sensor.a": "Lounge"},
+        tenure={key: now - timedelta(minutes=5)},
+    )
+    line = m.describe(snap, pred)
+    assert "for <20m" in line
+    assert "held 5m" in line

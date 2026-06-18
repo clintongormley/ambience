@@ -24,13 +24,17 @@ from ._common import (
     UNAVAILABLE,
     dur_seconds,
     fmt_duration,
+    for_comparator_symbol,
+    for_elapsed_satisfied,
     kleene_all,
     kleene_any,
     kleene_not,
     predicate_has_any,
     state_sources,
     tenure_held,
+    tenure_within,
     validate_for,
+    validate_for_mode,
 )
 
 _QUANTS = ("any", "all")
@@ -98,12 +102,19 @@ class OccupancyCondition:
 
     @staticmethod
     def _holds(
-        eid: str, snapshot: OccupancySnapshot, *, want_on: bool, seconds: float
+        eid: str,
+        snapshot: OccupancySnapshot,
+        *,
+        want_on: bool,
+        seconds: float,
+        mode: str | None = None,
     ) -> bool | None:
         """Whether one sensor satisfies the polarity + `for` test.
 
         None = unobservable (entity absent from the snapshot, or unavailable);
-        callers that only need pass/fail collapse None to False.
+        callers that only need pass/fail collapse None to False. `mode`
+        ("at_least"/None vs "less_than") flips the legacy `for` comparator: held
+        iff elapsed >= seconds by default, or elapsed < seconds for "less_than".
         """
         cur = snapshot.sensors.get(eid)
         if cur is None:
@@ -113,7 +124,9 @@ class OccupancyCondition:
             return None
         if (state == "on") is not want_on:
             return False
-        return not (seconds > 0 and (snapshot.now - changed).total_seconds() < seconds)
+        if seconds <= 0:
+            return True
+        return for_elapsed_satisfied((snapshot.now - changed).total_seconds(), seconds, mode)
 
     def matches(self, predicate: Any, snapshot: OccupancySnapshot) -> bool:
         if predicate is None:
@@ -126,6 +139,10 @@ class OccupancyCondition:
         want_on = predicate.get("occupied", True) is not False
         quant = predicate.get("quant") or "any"
         seconds = dur_seconds(predicate.get("for"))
+        # "at_least" (or absent) gates the `for:` clock as "held >= for"; with
+        # "less_than" the same clock means "held LESS than for" (boundary
+        # exclusive: at exactly `for`, at_least holds and less_than does not).
+        mode = predicate.get("for_mode")
 
         # In tenure mode the per-sensor verdicts test only the instant polarity
         # (seconds=0); the `for:` gate is applied once to the combined verdict
@@ -139,13 +156,16 @@ class OccupancyCondition:
         # A generator lets kleene_any/kleene_all short-circuit (settle without
         # evaluating every sensor) on the hot path.
         verdicts = (
-            self._holds(e, snapshot, want_on=want_on, seconds=per_sensor_seconds) for e in sensors
+            self._holds(e, snapshot, want_on=want_on, seconds=per_sensor_seconds, mode=mode)
+            for e in sensors
         )
         result = kleene_all(verdicts) if quant == "all" else kleene_any(verdicts)
         if tenure_mode and result is True:
             # Gate the (observably true) combined verdict on its tenure. A None
-            # result is left untouched so it stays a miss through negate.
-            result = tenure_held(snapshot.tenure, self._gate_key(predicate), snapshot.now, seconds)
+            # result is left untouched so it stays a miss through negate. The
+            # comparator follows `for_mode`: held >= for, or (less_than) < for.
+            gate = tenure_within if mode == "less_than" else tenure_held
+            result = gate(snapshot.tenure, self._gate_key(predicate), snapshot.now, seconds)
         # `negate` wraps the whole match (polarity + quant + `for`): "NOT
         # (vacant for >=20m)" is a different match-set from "occupied for >=20m".
         # An unobservable result (None) stays a miss even under negate.
@@ -208,6 +228,7 @@ class OccupancyCondition:
         want_on = predicate.get("occupied", True) is not False
         quant = predicate.get("quant") or "any"
         seconds = dur_seconds(predicate.get("for"))
+        mode = predicate.get("for_mode")
         # In tenure mode the per-sensor marks show only the instant polarity
         # (seconds=0); how long the combined verdict has held is summarised once.
         tenure_mode = seconds > 0 and snapshot.tenure is not None
@@ -228,7 +249,9 @@ class OccupancyCondition:
                 if seconds and not tenure_mode
                 else ""
             )
-            held = self._holds(eid, snapshot, want_on=want_on, seconds=per_sensor_seconds)
+            held = self._holds(
+                eid, snapshot, want_on=want_on, seconds=per_sensor_seconds, mode=mode
+            )
             parts.append(f"{name}: {state}{elapsed} {'✓' if held else '✗'}")
         body = ", ".join(parts)
         if len(sensors) > 1:
@@ -238,8 +261,10 @@ class OccupancyCondition:
             body = f"not({body})"
         if not seconds:
             return body
-        # State the duration threshold once; in tenure mode also show how long
-        # the gate has actually held (or that it hasn't).
+        # State the duration threshold once; the comparator follows `for_mode`
+        # ("for <" for less_than, "for ≥" otherwise). In tenure mode also show
+        # how long the gate has actually held (or that it hasn't).
+        rel = for_comparator_symbol(mode)
         if tenure_mode:
             since = snapshot.tenure.get(self._gate_key(predicate))
             held_str = (
@@ -247,8 +272,8 @@ class OccupancyCondition:
                 if since
                 else ", not held"
             )
-            return f"{body} (for ≥{fmt_duration(seconds)}{held_str})"
-        return f"{body} (for ≥{fmt_duration(seconds)})"
+            return f"{body} (for {rel}{fmt_duration(seconds)}{held_str})"
+        return f"{body} (for {rel}{fmt_duration(seconds)})"
 
     def _describe_snapshot(self, snapshot: OccupancySnapshot) -> str | None:
         if not snapshot.sensors:
@@ -285,6 +310,7 @@ class OccupancyCondition:
         if negate is not None and not isinstance(negate, bool):
             raise ValueError(f"`negate` must be a bool, got {negate!r}")
         validate_for(predicate.get("for"))
+        validate_for_mode(predicate.get("for_mode"))
 
     # --- trigger dependencies -------------------------------------------
 

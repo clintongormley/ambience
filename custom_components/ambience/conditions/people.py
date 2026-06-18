@@ -11,7 +11,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from ..triggers import EMPTY, DurationGate, GateReading, TriggerSpec
-from ._common import UNAVAILABLE, dur_seconds, fmt_duration, tenure_held, validate_for
+from ._common import (
+    UNAVAILABLE,
+    dur_seconds,
+    fmt_duration,
+    for_comparator_symbol,
+    for_elapsed_satisfied,
+    tenure_held,
+    tenure_within,
+    validate_for,
+    validate_for_mode,
+)
 
 _HOME = "home"
 _QUANTS = ("any", "everyone", "nobody")
@@ -123,6 +133,7 @@ class PeopleCondition:
         where = predicate.get("where") or _HOME
         negate = bool(predicate.get("negate"))
         seconds = dur_seconds(predicate.get("for"))
+        mode = predicate.get("for_mode")
 
         if seconds > 0 and snapshot.tenure is not None:
             # Engine-tracked predicate tenure: evaluate the instant test
@@ -130,8 +141,9 @@ class PeopleCondition:
             # survives a person moving between two away zones, etc.
             if not self._quantified(who, quant, where, negate, 0.0, snapshot):
                 return False
-            return tenure_held(snapshot.tenure, self._gate_key(predicate), snapshot.now, seconds)
-        return self._quantified(who, quant, where, negate, seconds, snapshot)
+            gate = tenure_within if mode == "less_than" else tenure_held
+            return gate(snapshot.tenure, self._gate_key(predicate), snapshot.now, seconds)
+        return self._quantified(who, quant, where, negate, seconds, snapshot, mode)
 
     def _quantified(
         self,
@@ -141,9 +153,11 @@ class PeopleCondition:
         negate: bool,
         seconds: float,
         snapshot: PeopleSnapshot,
+        mode: str | None = None,
     ) -> bool:
         """The quantified location test, clocked off `seconds` of per-person
-        tenure (the legacy/fallback clock). `seconds=0` yields the instant test."""
+        tenure (the legacy/fallback clock). `seconds=0` yields the instant test.
+        `mode` ("at_least" default / "less_than") selects the `for` comparator."""
         person_ids = list(who) if who else list(snapshot.persons)
 
         def holds(pid: str, want_at: bool) -> bool:
@@ -155,7 +169,13 @@ class PeopleCondition:
             if at is None:  # unobservable (unavailable / unknown zone)
                 return False
             return self._holds_at(
-                at, changed, snapshot.now, want_at=want_at, negate=negate, seconds=seconds
+                at,
+                changed,
+                snapshot.now,
+                want_at=want_at,
+                negate=negate,
+                seconds=seconds,
+                mode=mode,
             )
 
         if quant == "everyone":
@@ -289,6 +309,7 @@ class PeopleCondition:
         want_at: bool,
         negate: bool,
         seconds: float,
+        mode: str | None = None,
     ) -> bool:
         """Apply negate/want_at/`for` to an observable location test `at`.
 
@@ -298,12 +319,19 @@ class PeopleCondition:
         `for` means "in the current exact state that long". The engine path
         (see `matches`/`gate_states`) instead tracks predicate tenure, which
         survives a person moving between two away zones (zone A → zone B).
+
+        `mode` only changes the elapsed comparator: "less_than" gates on
+        elapsed < seconds (boundary exclusive), otherwise the default
+        "at_least" gates on elapsed >= seconds. The negate/want_at handling is
+        unchanged.
         """
         if negate:  # "not at <where>" -> invert the observable location test
             at = not at
         if at is not want_at:
             return False
-        return not (seconds > 0 and (now - changed).total_seconds() < seconds)
+        if seconds <= 0:
+            return True
+        return for_elapsed_satisfied((now - changed).total_seconds(), seconds, mode)
 
     def describe(self, snapshot: PeopleSnapshot, predicate: Any = None) -> str | None:
         # No predicate: whole-snapshot summary (used by `snapshots_described`).
@@ -316,6 +344,7 @@ class PeopleCondition:
         where = predicate.get("where") or _HOME
         negate = bool(predicate.get("negate"))
         seconds = dur_seconds(predicate.get("for"))
+        mode = predicate.get("for_mode")
         # Empty `who` means "all persons" (a real constraint, unlike occupancy's
         # empty `sensors` wildcard), so enumerate the snapshot's persons.
         person_ids = list(who) if who else list(snapshot.persons)
@@ -339,7 +368,13 @@ class PeopleCondition:
                 parts.append(f"{name}: unavailable ✗")
                 continue
             held = self._holds_at(
-                at, cur[1], snapshot.now, want_at=want_at, negate=negate, seconds=per_person_seconds
+                at,
+                cur[1],
+                snapshot.now,
+                want_at=want_at,
+                negate=negate,
+                seconds=per_person_seconds,
+                mode=mode,
             )
             loc = self._loc_word(at, where, snapshot)
             # In the legacy clock, show how long each person has held this
@@ -352,7 +387,8 @@ class PeopleCondition:
             parts.append(f"{name}: {loc}{elapsed} {'✓' if held else '✗'}")
         prefix = f"want {self._quant_word(quant)} {self._where_word(where, negate, snapshot)}"
         if seconds:
-            prefix += f" for ≥{fmt_duration(seconds)}"
+            rel = for_comparator_symbol(mode)
+            prefix += f" for {rel}{fmt_duration(seconds)}"
         if tenure_mode:
             since = snapshot.tenure.get(self._gate_key(predicate))
             prefix += (
@@ -415,6 +451,7 @@ class PeopleCondition:
         if negate is not None and not isinstance(negate, bool):
             raise ValueError(f"`negate` must be a bool, got {negate!r}")
         validate_for(predicate.get("for"))
+        validate_for_mode(predicate.get("for_mode"))
 
     # --- sorting (containment lattice) ----------------------------------
     # No `order_key`: there is no meaningful total order among people

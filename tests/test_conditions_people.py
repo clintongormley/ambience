@@ -796,6 +796,203 @@ def test_people_describe_tenure_mode_not_held() -> None:
     assert "not held" in line and "✗" in line
 
 
+# ── for_mode: "less_than" (held LESS than the threshold) ───────────────────────
+
+
+def test_less_than_tenure_held_short_matches() -> None:
+    """less_than: instant test true and held < seconds → matches."""
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "quant": "nobody",
+        "where": "home",
+        "for": {"m": 30},
+        "for_mode": "less_than",
+    }
+    key = m._gate_key(pred)
+    snap = _snap(
+        persons={"person.bob": ("away", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": []},
+        tenure={key: now - timedelta(minutes=10)},  # held 10m < 30m → within
+    )
+    assert m.matches(pred, snap) is True
+
+
+def test_less_than_tenure_held_long_does_not_match() -> None:
+    """less_than: held >= seconds → does NOT match."""
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "quant": "nobody",
+        "where": "home",
+        "for": {"m": 30},
+        "for_mode": "less_than",
+    }
+    key = m._gate_key(pred)
+    snap = _snap(
+        persons={"person.bob": ("away", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": []},
+        tenure={key: now - timedelta(minutes=40)},  # held 40m >= 30m → not within
+    )
+    assert m.matches(pred, snap) is False
+
+
+def test_less_than_tenure_exact_boundary_does_not_match() -> None:
+    """less_than boundary is exclusive: held == seconds → does NOT match."""
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "quant": "nobody",
+        "where": "home",
+        "for": {"m": 30},
+        "for_mode": "less_than",
+    }
+    key = m._gate_key(pred)
+    snap = _snap(
+        persons={"person.bob": ("away", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": []},
+        tenure={key: now - timedelta(minutes=30)},  # exactly 30m → not within
+    )
+    assert m.matches(pred, snap) is False
+
+
+def test_less_than_tenure_requires_instant_truth() -> None:
+    """less_than still requires the instant test to currently be true: someone is
+    home now → 'nobody home' is instantly false → no match regardless of elapsed."""
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "quant": "nobody",
+        "where": "home",
+        "for": {"m": 30},
+        "for_mode": "less_than",
+    }
+    key = m._gate_key(pred)
+    snap = _snap(
+        persons={"person.bob": ("home", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": ["zone.home"]},
+        tenure={key: now - timedelta(minutes=10)},  # within window, but instant false
+    )
+    assert m.matches(pred, snap) is False
+
+
+def test_for_mode_at_least_and_absent_behave_as_today() -> None:
+    """Regression: absent for_mode / 'at_least' is the existing >= behaviour."""
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    base = {"quant": "nobody", "where": "home", "for": {"m": 30}}
+    key = m._gate_key(base)
+    snap_held = _snap(
+        persons={"person.bob": ("away", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": []},
+        tenure={key: now - timedelta(minutes=40)},  # 40m >= 30m
+    )
+    snap_short = _snap(
+        persons={"person.bob": ("away", now - timedelta(minutes=1))},
+        now=now,
+        zone_labels={"zone.home": "home"},
+        in_zones={"person.bob": []},
+        tenure={key: now - timedelta(minutes=10)},  # 10m < 30m
+    )
+    # absent for_mode
+    assert m.matches(base, snap_held) is True
+    assert m.matches(base, snap_short) is False
+    # explicit at_least
+    at_least = {**base, "for_mode": "at_least"}
+    assert m.matches(at_least, snap_held) is True
+    assert m.matches(at_least, snap_short) is False
+
+
+def test_less_than_legacy_fallback_short_matches() -> None:
+    """less_than legacy fallback (no snapshot.tenure): elapsed < seconds → matches."""
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "quant": "any",
+        "where": "home",
+        "for": {"m": 5},
+        "for_mode": "less_than",
+    }
+    # Home for only 1m (< 5m) and instant test true → matches.
+    snap = _snap({"person.a": ("home", now - timedelta(minutes=1))}, now=now)
+    assert m.matches(pred, snap) is True
+
+
+def test_less_than_legacy_fallback_long_does_not_match() -> None:
+    """less_than legacy fallback: elapsed >= seconds → does NOT match."""
+    m = PeopleCondition()
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    pred = {
+        "quant": "any",
+        "where": "home",
+        "for": {"m": 5},
+        "for_mode": "less_than",
+    }
+    # Home for 10m (>= 5m) → outside the less_than window.
+    snap = _snap({"person.a": ("home", now - timedelta(minutes=10))}, now=now)
+    assert m.matches(pred, snap) is False
+
+
+def test_validate_rejects_bad_for_mode() -> None:
+    m = PeopleCondition()
+    with pytest.raises(ValueError, match="for_mode"):
+        m.validate_predicate({"for_mode": "sometimes"})
+
+
+def test_validate_accepts_valid_and_absent_for_mode() -> None:
+    m = PeopleCondition()
+    m.validate_predicate({})  # absent
+    m.validate_predicate({"for_mode": "at_least"})
+    m.validate_predicate({"for_mode": "less_than"})
+
+
+def test_describe_renders_for_less_than() -> None:
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    snap = _snap(
+        {"person.a": ("home", now - timedelta(minutes=1))},
+        now=now,
+        names={"person.a": "Alice"},
+    )
+    pred = {"who": ["person.a"], "for": {"m": 20}, "for_mode": "less_than"}
+    assert "for <20m" in PeopleCondition().describe(snap, pred)
+
+
+def test_describe_renders_for_at_least() -> None:
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    snap = _snap(
+        {"person.a": ("home", now - timedelta(minutes=25))},
+        now=now,
+        names={"person.a": "Alice"},
+    )
+    pred = {"who": ["person.a"], "for": {"m": 20}, "for_mode": "at_least"}
+    assert "for ≥20m" in PeopleCondition().describe(snap, pred)
+
+
+def test_describe_less_than_per_person_mark_uses_mode_in_legacy_clock() -> None:
+    # Legacy clock (no engine tenure): Alice home 2m with `for <5m` is WITHIN the
+    # window, so the per-person mark must be ✓. Regression guard — describe must
+    # thread `for_mode` into the per-person `_holds_at`; defaulting to at_least
+    # would compare 2m >= 5m and wrongly show ✗.
+    now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+    snap = _snap(
+        {"person.a": ("home", now - timedelta(minutes=2))},
+        now=now,
+        names={"person.a": "Alice"},
+    )
+    pred = {"who": ["person.a"], "for": {"m": 5}, "for_mode": "less_than"}
+    assert "Alice: home 2m ✓" in PeopleCondition().describe(snap, pred)
+
+
 def test_subset_all_is_not_subset_of_explicit() -> None:
     # Line 274: _subset(None, explicit_set) → False (ALL ⊈ any finite set).
     result = PeopleCondition._subset(None, frozenset({"person.a"}))

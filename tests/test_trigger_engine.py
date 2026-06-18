@@ -11,11 +11,12 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import patch
 
+from freezegun import freeze_time
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
-from custom_components.ambience.conditions._common import tenure_held
+from custom_components.ambience.conditions._common import tenure_held, tenure_within
 from custom_components.ambience.const import (
     DATA_CONDITIONS,
     DATA_EXPOSED_ACTIONS,
@@ -2147,3 +2148,97 @@ async def test_unavailable_guard_blocks_lower_scene_on_clock_tick(hass) -> None:
     # last-applied: nothing is recorded, and the lower time scene (index 1)
     # never applies.
     assert ("area", "a", "g") not in hass.data[DOMAIN][DATA_LAST_APPLIED]
+
+
+# ---------------------------------------------------------------------------
+# `for_mode: "less_than"` end-to-end through the trigger machinery — regression
+# guard that the trigger/auto-re-evaluation layer needs NO changes for the new
+# mode. The gate, its tenure clock, and the single one-shot recheck timer armed
+# at `since + seconds` are identical to the at_least case; only the duration
+# verdict (tenure_within vs tenure_held) differs, and that lives entirely in the
+# condition's `matches`, not in trigger_subscriptions.py / triggers.py.
+# ---------------------------------------------------------------------------
+
+
+class LessThanGateCondition(GateCondition):
+    """A `for: ... for_mode: less_than` mirror of GateCondition. Identical gate
+    fingerprint, snapshot, and gate_states (so the engine arms the SAME recheck
+    timer) — only the duration verdict is inverted: matches while the instant
+    test has held for LESS than `seconds` (boundary exclusive), exactly as the
+    real StateCondition does for an atom with for_mode == "less_than"."""
+
+    def matches(self, predicate: Any, snap: _GateSnap) -> bool:
+        if snap.value != predicate:
+            return False
+        if snap.tenure is None:
+            return True  # legacy: no engine tenure → instant value match
+        return tenure_within(snap.tenure, self._key, snap.now, self._seconds)
+
+
+def _less_than_engine(hass, seconds: float) -> AutoTriggerEngine:
+    """Engine: area 'a', scene0 (with one exposed action) fires when
+    binary_sensor.x == 'on' AND has been on for LESS than `seconds`. Switch on.
+    A win sets DATA_LAST_APPLIED[("area","a","g")] = 0 (active); no win leaves it
+    absent (inactive) — the same activation signal as test_state_change_fires."""
+    act = _light_action(hass)
+    scopes = [("area", "a", {"scenes": [{"when": {"x": "on"}, "category": "g", "actions": act}]})]
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore(scopes),
+        DATA_CONDITIONS: {"x": LessThanGateCondition("binary_sensor.x", seconds)},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    return engine
+
+
+async def test_less_than_activates_immediately_then_deactivates_at_maturity(hass) -> None:
+    """`for: 5m`, `for_mode: less_than` STATE atom, end-to-end, with ZERO trigger
+    machinery changes:
+
+      1. binary_sensor.x flips on → the predicate becomes active RIGHT AWAY
+         (elapsed ~0 < 5m), recorded as the winning scene — well before the 5m
+         timer. This is the watched state-change event flipping the instant test
+         true; tenure_within reads true at ~0 elapsed.
+      2. The SAME one-shot recheck timer that at_least uses (armed at
+         `since + 5m`) fires; advancing the clock past the threshold fires it →
+         the predicate is now FALSE (elapsed ≥ 5m → tenure_within false), and the
+         winning scene is withdrawn (last-applied cleared)."""
+    seconds = 300.0  # for: {m: 5}
+    last_applied_key = ("area", "a", "g")
+    pred_key = ("area", "a", 0, "x")
+
+    # Freeze the clock so the engine's tenure `since`, the snapshot's `now`, and
+    # the armed recheck timer all advance together when we tick forward — exactly
+    # how real wall-clock time would pass between the state change and maturity.
+    base = dt_util.utcnow()
+    with freeze_time(base) as frozen:
+        hass.states.async_set("binary_sensor.x", "off")
+        engine = _less_than_engine(hass, seconds)
+        engine.async_subscribe()
+        await engine.async_initial_sync()  # x=off → no match → not active
+        assert last_applied_key not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+        # (1) Activates immediately: the watched entity enters the desired state.
+        hass.states.async_set("binary_sensor.x", "on")
+        await hass.async_block_till_done()
+        # The less_than predicate is active right away (elapsed ~0 < 5m) — the
+        # winning scene applied. This is well before the 5-minute timer.
+        assert hass.data[DOMAIN][DATA_LAST_APPLIED][last_applied_key] == 0
+
+        # A single recheck timer was armed at since + 5m — the EXACT same
+        # mechanism at_least uses (no less_than-specific arming).
+        assert pred_key in engine._for_handles
+        assert len(engine._for_handles[pred_key]) == 1  # one gate, one one-shot
+
+        # (2) Deactivates at maturity: advance the frozen clock past the 5m
+        # threshold and let the armed timer fire. The duration verdict flips
+        # (elapsed ≥ 5m → tenure_within false) and the winning scene is withdrawn.
+        frozen.tick(timedelta(seconds=seconds + 1))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+        assert last_applied_key not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
+
+    engine._teardown()

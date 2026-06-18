@@ -13,19 +13,21 @@ const _GROUP_ICON: Record<string, string> = {
 };
 
 /**
- * Read-only "Auto-triggers" modal for one scope. Lists every watch the engine
- * derives from the scope's scenes (entities, clock times, sun events, date
- * rollover, periodic re-check) as a plain list — no
+ * Read-only "Auto-triggers" modal for one category of a scope. Lists every
+ * watch the engine derives from that category's scenes (entities, clock times,
+ * sun events, date rollover, periodic re-check) as a plain list — no
  * enable/disable controls (auto-triggers are always on).
  *
  * Follows the modal pattern of `traces-modal.ts`; fetches lazily on open and
- * re-fetches when `scenes`/`scope` change while open.
+ * re-fetches when `scenes`/`scope`/`category` change while open.
  *
  * Properties:
- *   hass   – HA connection (required)
- *   scope  – the scope to list derived triggers for
- *   scenes – passed by the parent so a scenes change re-fetches the list
- *   open   – whether the modal is visible
+ *   hass         – HA connection (required)
+ *   scope        – the scope whose triggers are listed (supplies scope_kind/id)
+ *   category     – the category id to filter triggers to
+ *   categoryName – the category's display name, shown in the heading
+ *   scenes       – passed by the parent so a scenes change re-fetches the list
+ *   open         – whether the modal is visible
  *
  * Events:
  *   close – dispatched when the user closes the modal
@@ -137,7 +139,6 @@ export class AmbienceAutoTriggersModal extends LitElement {
     states?: Record<string, { attributes?: Record<string, unknown> }>;
   };
   @property({ attribute: false }) scope!: Scope;
-  @property() scopeName = "";
   @property() category?: string;
   @property() categoryName = "";
   // Passed by the parent so a scenes change re-fetches the derived list.
@@ -151,17 +152,12 @@ export class AmbienceAutoTriggersModal extends LitElement {
 
   override willUpdate(changed: Map<string, unknown>) {
     super.willUpdate?.(changed);
-    // Fetch when opened, or when scenes/scope/category change while already open.
-    if (
-      this.open &&
-      (changed.has("open") ||
-        changed.has("scenes") ||
-        changed.has("scope") ||
-        changed.has("category"))
-    ) {
-      if (changed.has("open") || changed.has("scope") || changed.has("category")) {
-        // A (re)open or scope/category switch must not flash the previous list
-        // while the fetch is in flight.
+    // A (re)open or scope/category switch reloads from scratch; a scenes change
+    // only re-fetches (the list may have grown/shrunk) without clearing first.
+    const needsClear = changed.has("open") || changed.has("scope") || changed.has("category");
+    if (this.open && (needsClear || changed.has("scenes"))) {
+      if (needsClear) {
+        // Don't flash the previous list while the fetch is in flight.
         this._triggers = [];
         this._opaque = false;
       }
@@ -318,11 +314,10 @@ export class AmbienceAutoTriggersModal extends LitElement {
   override render() {
     if (!this.open) return nothing;
     const title = localize(this.hass, "ui.auto_triggers_section", "Auto-triggers");
-    const subtitle = this.categoryName || this.scopeName;
     return html`
       <div class="modal" role="dialog" aria-modal="true">
         <div class="header">
-          <h3>${title}${subtitle ? ` — ${subtitle}` : ""}</h3>
+          <h3>${title}${this.categoryName ? ` — ${this.categoryName}` : ""}</h3>
           <button class="close" @click=${this._close} aria-label=${localize(this.hass, "ui.close", "Close")}>✕</button>
         </div>
         <div class="body">${this._renderBody()}</div>

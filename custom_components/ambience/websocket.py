@@ -358,7 +358,7 @@ async def _ws_house_save(
         vol.Required("type"): "ambience/auto_triggers/list",
         vol.Required("scope_kind"): str,
         vol.Optional("scope_id"): vol.Any(str, None),
-        vol.Optional("category"): str,
+        vol.Optional("category"): vol.Any(str, None),
     }
 )
 @websocket_api.async_response

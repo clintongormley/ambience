@@ -1793,6 +1793,8 @@ describe("ambience-scopes-view", () => {
     expect(modal.open).toBe(true);
 
     const callsBefore = vi.mocked(api.listAutoTriggers).mock.calls.length;
+    // The open must have fetched once, so "no extra fetch" can't pass vacuously.
+    expect(callsBefore).toBeGreaterThanOrEqual(1);
 
     // Trigger an unrelated re-render by reassigning hass (simulating a HA tick).
     el.hass = { ...el.hass };
@@ -1831,6 +1833,9 @@ describe("ambience-scopes-view", () => {
     expect(modal.open).toBe(true);
 
     const callsBefore = vi.mocked(api.listAutoTriggers).mock.calls.length;
+    // The open must have fetched once, so the +1 below proves the scenes change
+    // (not the open) drove the re-fetch.
+    expect(callsBefore).toBeGreaterThanOrEqual(1);
 
     // Mutate the scope's scenes via a NEW config object (simulating a backend update).
     const next = new Map(el._store.areaConfigs);

@@ -331,7 +331,6 @@ export class AmbienceScopesView extends LitElement {
   // config changes.
   @state() private _autoTriggers: {
     scope: Scope;
-    name: string;
     category: string;
     categoryName: string | null;
   } | null = null;
@@ -642,9 +641,9 @@ export class AmbienceScopesView extends LitElement {
     if (id === "run") void this._applyScenes(scope);
   }
 
-  private _showAutoTriggers(scope: Scope, name: string, category: string) {
+  private _showAutoTriggers(scope: Scope, category: string) {
     const g = this._store.categories.find((x) => x.id === category);
-    this._autoTriggers = { scope, name, category, categoryName: g?.name ?? null };
+    this._autoTriggers = { scope, category, categoryName: g?.name ?? null };
   }
 
   private _autoTriggerScenes(): Scene[] {
@@ -1057,7 +1056,6 @@ export class AmbienceScopesView extends LitElement {
         ?open=${this._autoTriggers !== null}
         .hass=${this.hass}
         .scope=${this._autoTriggers?.scope ?? { kind: "house" }}
-        .scopeName=${this._autoTriggers?.name ?? ""}
         .category=${this._autoTriggers?.category}
         .categoryName=${this._autoTriggers?.categoryName ?? ""}
         .scenes=${this._autoTriggerScenes()}
@@ -1171,7 +1169,7 @@ export class AmbienceScopesView extends LitElement {
                   @show-simulator=${(e: CustomEvent<{ category: string }>) =>
                     this._showSimulator(scope, e.detail.category)}
                   @show-auto-triggers=${(e: CustomEvent<{ category: string }>) =>
-                    this._showAutoTriggers(scope, name, e.detail.category)}
+                    this._showAutoTriggers(scope, e.detail.category)}
                 ></ambience-scenes-list>
               </div>
             `

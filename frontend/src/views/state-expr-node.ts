@@ -5,7 +5,7 @@ import "./state-expr-atom.js";
 import type { HassConnection } from "../api.js";
 import { localize, stateOpLabel } from "../i18n.js";
 import { summariseState } from "../summary.js";
-import type { StateAtom, StateExpr, StateGroup, StateNot } from "../types.js";
+import type { DropPos, StateAtom, StateExpr, StateGroup, StateNot } from "../types.js";
 
 function _samePath(a: number[] | null, b: number[] | null): boolean {
   if (a === null || b === null) return false;
@@ -142,6 +142,18 @@ export class AmbienceStateExprNode extends LitElement {
       outline: 2px solid var(--primary-color, #03a9f4);
       outline-offset: -2px;
     }
+    /* Insertion line for a before/after (sibling) drop — a thin bar with a
+       leading dot, drawn just above/below the node. */
+    .drop-line { position: relative; height: 0; margin: 1px 0; }
+    .drop-line::before {
+      content: ""; position: absolute; left: 0; right: 0; top: -1px;
+      height: 3px; border-radius: 2px; background: var(--primary-color, #03a9f4);
+    }
+    .drop-line::after {
+      content: ""; position: absolute; left: -2px; top: -3px;
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--primary-color, #03a9f4);
+    }
     /* The node currently being dragged lifts (solid, with a shadow) as it
        tracks the pointer — matching the scene/action lists' dragged-item
        treatment. */
@@ -180,6 +192,9 @@ export class AmbienceStateExprNode extends LitElement {
    *  threaded down the tree. When it equals this node's path, this card
    *  renders the .drag-over highlight. */
   @property({ attribute: false }) dragOverPath: number[] | null = null;
+  /** Which zone of the drop-target node the pointer is in (set by the root):
+   *  `into` outlines the card, `before`/`after` draw an insertion line. */
+  @property({ attribute: false }) dragOverPos: DropPos | null = null;
   /** Path of the node currently being dragged (set by the root). When it
    *  equals this node's path, the card dims to show it's the one moving. */
   @property({ attribute: false }) dragFromPath: number[] | null = null;
@@ -215,6 +230,13 @@ export class AmbienceStateExprNode extends LitElement {
   /** True when the pointer is hovering THIS node as the drop target. */
   private _isDropTarget(): boolean {
     return _samePath(this.path, this.dragOverPath);
+  }
+
+  /** The drop zone for THIS node during a drag, or null when it isn't the
+   *  target. `into` highlights the card outline; `before`/`after` draw an
+   *  insertion line above/below it. */
+  private _dropPos(): DropPos | null {
+    return this._isDropTarget() ? this.dragOverPos : null;
   }
 
   /** True while THIS node is the one being dragged. */
@@ -261,7 +283,7 @@ export class AmbienceStateExprNode extends LitElement {
       ? summariseState(atom, { hass: this.hass })
       : localize(this.hass, "ui.state_new_condition", "(new condition)");
     return html`
-      <div class="atom-card ${expanded ? "expanded" : "collapsed"} ${this._isDropTarget() ? "drag-over" : ""} ${this._isDragging() ? "dragging" : ""}">
+      <div class="atom-card ${expanded ? "expanded" : "collapsed"} ${this._dropPos() === "into" ? "drag-over" : ""} ${this._isDragging() ? "dragging" : ""}">
         <div class="atom-header"
           @click=${() => this._emit("node-open")}>
           ${this._dragHandle()}
@@ -326,6 +348,7 @@ export class AmbienceStateExprNode extends LitElement {
         .path=${childPath}
         .openPath=${this.openPath}
         .dragOverPath=${this.dragOverPath}
+        .dragOverPos=${this.dragOverPos}
         .dragFromPath=${this.dragFromPath}
         .errorPath=${this.errorPath}
         .errorMessage=${this.errorMessage}
@@ -342,7 +365,7 @@ export class AmbienceStateExprNode extends LitElement {
    *  the whole group". */
   private _renderGroup(group: StateGroup) {
     return html`
-      <div class="group ${this._isDropTarget() ? "drag-over" : ""} ${this._isDragging() ? "dragging" : ""}">
+      <div class="group ${this._dropPos() === "into" ? "drag-over" : ""} ${this._isDragging() ? "dragging" : ""}">
         <div class="group-header">
           ${this._dragHandle()}
           <select class="group-op"
@@ -376,10 +399,18 @@ export class AmbienceStateExprNode extends LitElement {
     // the inner content; the isNot flag drives the toggle's 'on' class.
     const isNot = this.value.kind === "not";
     const inner = isNot ? (this.value as StateNot).item : this.value;
-    if (inner.kind === "and" || inner.kind === "or") {
-      return this._renderGroupWithExternalNot(inner as StateGroup, isNot);
-    }
-    return this._renderAtomCard(inner as StateAtom, isNot);
+    const content =
+      inner.kind === "and" || inner.kind === "or"
+        ? this._renderGroupWithExternalNot(inner as StateGroup, isNot)
+        : this._renderAtomCard(inner as StateAtom, isNot);
+    // A `before`/`after` drop draws an insertion line above/below this node;
+    // an `into` drop highlights the card outline (handled inside the card).
+    const pos = this._dropPos();
+    return html`
+      ${pos === "before" ? html`<div class="drop-line before"></div>` : ""}
+      ${content}
+      ${pos === "after" ? html`<div class="drop-line after"></div>` : ""}
+    `;
   }
 
   private _renderGroupWithExternalNot(group: StateGroup, isNot: boolean) {

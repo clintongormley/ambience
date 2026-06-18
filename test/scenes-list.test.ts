@@ -347,14 +347,16 @@ describe("ambience-scenes-list", () => {
     expect(el.shadowRoot.querySelector(".autosort")).toBeFalsy();
   });
 
-  test("summary shows 'any' for scene with no when predicates", async () => {
+  test("summary reads 'Always' for a scene with no when predicates", async () => {
     const noPredicateScene: Scene = {
       name: "Catch all",
       when: {},
       actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: {} }],
     };
     el = await mount([noPredicateScene]);
-    expect(el.shadowRoot.querySelector(".summary")?.textContent).toContain("any");
+    const summary = el.shadowRoot.querySelector(".summary")?.textContent ?? "";
+    expect(summary).toContain("Always");
+    expect(summary).not.toContain("any");
   });
 
   test("summary shows mode predicate value", async () => {
@@ -672,6 +674,22 @@ describe("ambience-scenes-list", () => {
     const texts = lines.map((n: any) => n.textContent?.trim() ?? "");
     expect(texts.some((t: string) => t.startsWith("Mode:"))).toBe(true);
     expect(texts.some((t: string) => t.startsWith("Time of day:"))).toBe(true);
+  });
+
+  test("expanded scene with no conditions reads 'Always' on its own line", async () => {
+    const scenes: Scene[] = [
+      {
+        name: "Catch all",
+        when: {},
+        actions: [{ service: "light.turn_on", entity_ids: ["light.a"], params: {} }],
+      },
+    ];
+    el = await mount(scenes);
+    (el.shadowRoot.querySelector(".summary") as HTMLElement).click();
+    await el.updateComplete;
+    const lines = Array.from(el.shadowRoot.querySelectorAll(".scene-detail .condition-line"));
+    expect(lines.length).toBe(1);
+    expect((lines[0] as HTMLElement).textContent?.trim()).toBe("Always");
   });
 
   test("expanded scene still shows the per-action detail", async () => {

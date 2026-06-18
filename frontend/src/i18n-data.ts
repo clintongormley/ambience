@@ -148,6 +148,7 @@ export const AMBIENCE_STRINGS: Record<string, unknown> = {
     add_scene: "+ Add scene",
     summary_any: "any",
     summary_any_paren: "(any)",
+    summary_always: "Always",
     no_targets: "(no targets)",
     target_noun: "target",
     action_singular: "action",

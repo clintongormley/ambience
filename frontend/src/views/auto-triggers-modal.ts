@@ -138,6 +138,8 @@ export class AmbienceAutoTriggersModal extends LitElement {
   };
   @property({ attribute: false }) scope!: Scope;
   @property() scopeName = "";
+  @property() category?: string;
+  @property() categoryName = "";
   // Passed by the parent so a scenes change re-fetches the derived list.
   @property({ attribute: false }) scenes: Scene[] = [];
   @property({ type: Boolean, reflect: true }) open = false;
@@ -149,10 +151,16 @@ export class AmbienceAutoTriggersModal extends LitElement {
 
   override willUpdate(changed: Map<string, unknown>) {
     super.willUpdate?.(changed);
-    // Fetch when opened, or when scenes/scope change while already open.
-    if (this.open && (changed.has("open") || changed.has("scenes") || changed.has("scope"))) {
-      if (changed.has("open") || changed.has("scope")) {
-        // A (re)open or scope switch must not flash the previous scope's rows
+    // Fetch when opened, or when scenes/scope/category change while already open.
+    if (
+      this.open &&
+      (changed.has("open") ||
+        changed.has("scenes") ||
+        changed.has("scope") ||
+        changed.has("category"))
+    ) {
+      if (changed.has("open") || changed.has("scope") || changed.has("category")) {
+        // A (re)open or scope/category switch must not flash the previous list
         // while the fetch is in flight.
         this._triggers = [];
         this._opaque = false;
@@ -174,7 +182,7 @@ export class AmbienceAutoTriggersModal extends LitElement {
     this._loading = true;
     this._error = "";
     try {
-      const res = await listAutoTriggers(this.hass, this.scope.kind, this._scopeId);
+      const res = await listAutoTriggers(this.hass, this.scope.kind, this._scopeId, this.category);
       if (seq !== this._loadSeq) return;
       this._triggers = res.triggers;
       this._opaque = res.opaque;
@@ -310,10 +318,11 @@ export class AmbienceAutoTriggersModal extends LitElement {
   override render() {
     if (!this.open) return nothing;
     const title = localize(this.hass, "ui.auto_triggers_section", "Auto-triggers");
+    const subtitle = this.categoryName || this.scopeName;
     return html`
       <div class="modal" role="dialog" aria-modal="true">
         <div class="header">
-          <h3>${title}${this.scopeName ? ` — ${this.scopeName}` : ""}</h3>
+          <h3>${title}${subtitle ? ` — ${subtitle}` : ""}</h3>
           <button class="close" @click=${this._close} aria-label=${localize(this.hass, "ui.close", "Close")}>✕</button>
         </div>
         <div class="body">${this._renderBody()}</div>

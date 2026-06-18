@@ -35,6 +35,8 @@ async function mount(opts: {
   opaque?: boolean;
   hass?: any;
   open?: boolean;
+  category?: string;
+  categoryName?: string;
 }): Promise<any> {
   (api.listAutoTriggers as any).mockResolvedValue({
     triggers: opts.triggers ?? sampleTriggers,
@@ -44,6 +46,8 @@ async function mount(opts: {
   el.hass = opts.hass ?? { states: {} };
   el.scope = { kind: "area", id: "lr" };
   el.scenes = [];
+  if (opts.category !== undefined) el.category = opts.category;
+  if (opts.categoryName !== undefined) el.categoryName = opts.categoryName;
   document.body.appendChild(el);
   await el.updateComplete;
   if (opts.open) {
@@ -67,7 +71,7 @@ describe("ambience-auto-triggers-modal", () => {
 
   test("opening fetches listAutoTriggers for the scope", async () => {
     el = await mount({ open: true });
-    expect(api.listAutoTriggers).toHaveBeenCalledWith(el.hass, "area", "lr");
+    expect(api.listAutoTriggers).toHaveBeenCalledWith(el.hass, "area", "lr", undefined);
   });
 
   test("renders triggers as a read-only icon list with NO checkboxes", async () => {
@@ -176,6 +180,16 @@ describe("ambience-auto-triggers-modal", () => {
     el.addEventListener("close", () => (fired = true));
     el.shadowRoot.querySelector(".close").click();
     expect(fired).toBe(true);
+  });
+
+  test("opening fetches with the category", async () => {
+    el = await mount({ open: true, category: "lighting" });
+    expect(api.listAutoTriggers).toHaveBeenCalledWith(el.hass, "area", "lr", "lighting");
+  });
+
+  test("shows the category name in the heading", async () => {
+    el = await mount({ open: true, category: "lighting", categoryName: "Lighting" });
+    expect(el.shadowRoot.querySelector(".header h3")?.textContent).toContain("Lighting");
   });
 
   test("reopening for a different scope does not flash the previous scope's rows", async () => {

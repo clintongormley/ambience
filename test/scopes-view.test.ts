@@ -1764,6 +1764,89 @@ describe("ambience-scopes-view", () => {
     expect(modal.scenes.map((s: Scene) => s.name)).toEqual(["A"]);
   });
 
+  test("the open Auto-triggers modal does NOT re-fetch on an unrelated re-render", async () => {
+    el = await mount({
+      areaConfigs: {
+        living_room: {
+          scenes: [{ name: "A", category: "lighting", when: {}, actions: [] }],
+        },
+      },
+    });
+    // Open the modal via the same sequence as the test above.
+    const header = el.shadowRoot.querySelector(
+      "li.scope-row.area[data-id='living_room'] .scope-header",
+    ) as HTMLElement;
+    header.click();
+    await el.updateComplete;
+    const list = el.shadowRoot.querySelector(
+      "li.scope-row.area[data-id='living_room'] ambience-scenes-list",
+    ) as HTMLElement;
+    list.dispatchEvent(
+      new CustomEvent("show-auto-triggers", {
+        detail: { category: "lighting" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-auto-triggers-modal");
+    expect(modal.open).toBe(true);
+
+    const callsBefore = vi.mocked(api.listAutoTriggers).mock.calls.length;
+
+    // Trigger an unrelated re-render by reassigning hass (simulating a HA tick).
+    el.hass = { ...el.hass };
+    await el.updateComplete;
+    await modal.updateComplete;
+
+    expect(vi.mocked(api.listAutoTriggers).mock.calls.length).toBe(callsBefore);
+  });
+
+  test("the open Auto-triggers modal re-fetches when the category's scenes change", async () => {
+    el = await mount({
+      areaConfigs: {
+        living_room: {
+          scenes: [{ name: "A", category: "lighting", when: {}, actions: [] }],
+        },
+      },
+    });
+    // Open the modal via the same sequence.
+    const header = el.shadowRoot.querySelector(
+      "li.scope-row.area[data-id='living_room'] .scope-header",
+    ) as HTMLElement;
+    header.click();
+    await el.updateComplete;
+    const list = el.shadowRoot.querySelector(
+      "li.scope-row.area[data-id='living_room'] ambience-scenes-list",
+    ) as HTMLElement;
+    list.dispatchEvent(
+      new CustomEvent("show-auto-triggers", {
+        detail: { category: "lighting" },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    await el.updateComplete;
+    const modal: any = el.shadowRoot.querySelector("ambience-auto-triggers-modal");
+    expect(modal.open).toBe(true);
+
+    const callsBefore = vi.mocked(api.listAutoTriggers).mock.calls.length;
+
+    // Mutate the scope's scenes via a NEW config object (simulating a backend update).
+    const next = new Map(el._store.areaConfigs);
+    next.set("living_room", {
+      scenes: [
+        { name: "A", category: "lighting", when: {}, actions: [] },
+        { name: "C", category: "lighting", when: {}, actions: [] },
+      ],
+    });
+    el._store.areaConfigs = next;
+    await el.updateComplete;
+    await modal.updateComplete;
+
+    expect(vi.mocked(api.listAutoTriggers).mock.calls.length).toBe(callsBefore + 1);
+  });
+
   test("run-scene-actions event from a scene list calls api.runSceneActions", async () => {
     el = await mount({
       areaConfigs: {

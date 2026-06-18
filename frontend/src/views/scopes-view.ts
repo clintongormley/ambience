@@ -335,6 +335,16 @@ export class AmbienceScopesView extends LitElement {
     category: string;
     categoryName: string | null;
   } | null = null;
+  // Cache the category-filtered scenes for the open Auto-triggers modal so its
+  // `.scenes` prop keeps a STABLE reference across re-renders. getConfig().scenes
+  // is itself stable until the config mutates, so memoising on (source, category)
+  // means we recompute — and the modal re-fetches — only when this scope's scenes
+  // actually change, not on every `hass` tick while the modal is open.
+  private _autoTriggerScenesMemo: {
+    source: readonly Scene[] | undefined;
+    category: string;
+    filtered: Scene[];
+  } | null = null;
   // Global category filter, driven by the header's <ambience-category-filter>:
   // "" = All, else a category id. Set via Lit property binding only (never an
   // HTML attribute), matching how scenes-list declares the same input.
@@ -635,6 +645,19 @@ export class AmbienceScopesView extends LitElement {
   private _showAutoTriggers(scope: Scope, name: string, category: string) {
     const g = this._store.categories.find((x) => x.id === category);
     this._autoTriggers = { scope, name, category, categoryName: g?.name ?? null };
+  }
+
+  private _autoTriggerScenes(): Scene[] {
+    if (!this._autoTriggers) return [];
+    const source = this._store.getConfig(this._autoTriggers.scope)?.scenes;
+    const { category } = this._autoTriggers;
+    const memo = this._autoTriggerScenesMemo;
+    if (memo && memo.source === source && memo.category === category) {
+      return memo.filtered;
+    }
+    const filtered = (source ?? []).filter((s) => s.category === category);
+    this._autoTriggerScenesMemo = { source, category, filtered };
+    return filtered;
   }
 
   private _showTraces(scope: Scope, category: string) {
@@ -1037,13 +1060,7 @@ export class AmbienceScopesView extends LitElement {
         .scopeName=${this._autoTriggers?.name ?? ""}
         .category=${this._autoTriggers?.category}
         .categoryName=${this._autoTriggers?.categoryName ?? ""}
-        .scenes=${
-          this._autoTriggers
-            ? (this._store.getConfig(this._autoTriggers.scope)?.scenes ?? []).filter(
-                (s) => s.category === this._autoTriggers!.category,
-              )
-            : []
-        }
+        .scenes=${this._autoTriggerScenes()}
         @close=${() => {
           this._autoTriggers = null;
         }}

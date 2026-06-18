@@ -246,6 +246,44 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.items[0].item.entity_id).toBe("x");
   });
 
+  test("_toggleNotAt wraps the whole root group in not (path [])", async () => {
+    el = await mount({
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "x", states: ["on"] },
+        { kind: "is", entity_id: "y", states: ["off"] },
+      ],
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._toggleNotAt([]);
+    expect(captured.kind).toBe("not");
+    expect(captured.item.kind).toBe("and");
+    expect(captured.item.items).toHaveLength(2);
+  });
+
+  test("_toggleNotAt unwraps a negated root group back to the bare group (path [])", async () => {
+    el = await mount({
+      kind: "not",
+      item: {
+        kind: "and",
+        items: [
+          { kind: "is", entity_id: "x", states: ["on"] },
+          { kind: "is", entity_id: "y", states: ["off"] },
+        ],
+      },
+    });
+    let captured: any;
+    el.addEventListener("value-changed", (e: Event) => {
+      captured = (e as CustomEvent).detail.value;
+    });
+    el._toggleNotAt([]);
+    expect(captured.kind).toBe("and");
+    expect(captured.items).toHaveLength(2);
+  });
+
   test("_toggleNotAt unwraps when toggled again", async () => {
     el = await mount({
       kind: "and",

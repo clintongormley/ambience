@@ -1820,11 +1820,11 @@ var qo=Object.defineProperty;var Ko=Object.getOwnPropertyDescriptor;var u=(t,n,e
           </button>
         </div>
       </div>
-    `}render(){let e=this.value.kind==="not",i=e?this.value.item:this.value;return i.kind==="and"||i.kind==="or"?this._renderGroupWithExternalNot(i,e):this._renderAtomCard(i,e)}_renderGroupWithExternalNot(e,i){let r=this.path.length===0;return d`
+    `}render(){let e=this.value.kind==="not",i=e?this.value.item:this.value;return i.kind==="and"||i.kind==="or"?this._renderGroupWithExternalNot(i,e):this._renderAtomCard(i,e)}_renderGroupWithExternalNot(e,i){return d`
       <div class="group-wrap">
-        ${r?"":d`<button class="not-toggle external ${i?"on":""}"
+        <button class="not-toggle external ${i?"on":""}"
           title=${l(this.hass,"ui.state_not_toggle","Negate (NOT)")}
-          @click=${()=>this._emit("node-toggle-not")}>${X(this.hass,"not")}</button>`}
+          @click=${()=>this._emit("node-toggle-not")}>${X(this.hass,"not")}</button>
         ${this._renderGroup(e)}
       </div>
     `}};Z.styles=y`

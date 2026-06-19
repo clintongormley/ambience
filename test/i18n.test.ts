@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   actionLabel,
   anchorLabel,
+  categoryColorLabel,
   conditionLabel,
   dayItemKindLabel,
   exposedActionLabel,
@@ -201,6 +202,25 @@ describe("dayItemKindLabel", () => {
         k === "component.ambience.day_item.workday" ? "Jour ouvré" : undefined,
     };
     expect(dayItemKindLabel(hass, "workday")).toBe("Jour ouvré");
+  });
+});
+
+describe("categoryColorLabel", () => {
+  test("falls back to the passed label when nothing localizes", () => {
+    expect(categoryColorLabel(undefined, "red", "Red")).toBe("Red");
+  });
+  test("resolves the bundled en label, incl. hyphenated ids", () => {
+    expect(categoryColorLabel(undefined, "deep-purple", "fallback")).toBe("Deep purple");
+  });
+  test("resolves the es bundle for a Spanish locale", () => {
+    expect(categoryColorLabel({ language: "es" }, "blue-grey", "Blue grey")).toBe("Gris azulado");
+  });
+  test("prefers hass.localize over the bundle", () => {
+    const hass = {
+      localize: (k: string) =>
+        k === "component.ambience.category_color.teal" ? "Sarcelle" : undefined,
+    };
+    expect(categoryColorLabel(hass, "teal", "Teal")).toBe("Sarcelle");
   });
 });
 

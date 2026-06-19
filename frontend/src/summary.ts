@@ -85,10 +85,17 @@ export function paramLabel(
 
 /**
  * Display name for a scene: explicit `name`, or a default placeholder.
+ *
+ * When no explicit `defaultPlaceholder` is given, the localized "New scene"
+ * default is used (resolved from `hass`, falling back to the English text).
  */
-export function sceneDisplayName(scene: Scene, defaultPlaceholder = "New scene"): string {
+export function sceneDisplayName(
+  scene: Scene,
+  defaultPlaceholder?: string,
+  hass?: HassLike,
+): string {
   if (scene.name?.trim()) return scene.name;
-  return defaultPlaceholder;
+  return defaultPlaceholder ?? localize(hass, "ui.new_scene_default", "New scene");
 }
 
 export function summariseCondition(

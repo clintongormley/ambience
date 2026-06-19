@@ -241,6 +241,18 @@ export function luxLabel(
   return _resolve(hass, `component.ambience.lux_range.${id}`, humanizeId(id));
 }
 
+/** Resolve a category-color id to a display name. Mirrors {@link luxLabel}:
+ *  `component.ambience.category_color.<id>` → the English `fallback` (the
+ *  color's own `label`). The id can contain hyphens (e.g. "deep-purple"),
+ *  which the bundle keys quote verbatim. */
+export function categoryColorLabel(
+  hass: HassLike | undefined,
+  id: string,
+  fallback: string,
+): string {
+  return _resolve(hass, `component.ambience.category_color.${id}`, fallback);
+}
+
 /** Generic localizer: resolves `component.ambience.<subKey>` with an English fallback.
  *  Optional `placeholders` map interpolates `{name}` tokens in the resolved string. */
 export function localize(

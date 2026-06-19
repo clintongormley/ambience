@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { deleteCategory, type HassConnection, listCategories, saveCategories } from "../api.js";
 import { CATEGORY_COLORS, colorHex } from "../category-colors.js";
-import { localize, localizeWsError } from "../i18n.js";
+import { categoryColorLabel, localize, localizeWsError } from "../i18n.js";
 import { randomId } from "../random-id.js";
 import type { SceneCategory } from "../types.js";
 import "./ambience-help.js";
@@ -302,17 +302,18 @@ export class AmbienceCategoriesSettings extends LitElement {
     const current = this._editing!.color;
     return html`
       <div class="swatches">
-        ${CATEGORY_COLORS.map(
-          (c) => html`<button
+        ${CATEGORY_COLORS.map((c) => {
+          const label = categoryColorLabel(this.hass, c.id, c.label);
+          return html`<button
             type="button"
             class="swatch ${current === c.id ? "selected" : ""}"
             style=${`background: ${c.hex}`}
-            title=${c.label}
-            aria-label=${c.label}
+            title=${label}
+            aria-label=${label}
             aria-pressed=${current === c.id}
             @click=${() => this._onColor(c.id)}
-          ></button>`,
-        )}
+          ></button>`;
+        })}
         <button
           type="button"
           class="swatch none ${current == null ? "selected" : ""}"

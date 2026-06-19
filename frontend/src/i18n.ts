@@ -1,4 +1,4 @@
-import { AMBIENCE_STRINGS } from "./i18n-data.js";
+import { AMBIENCE_STRINGS_BY_LOCALE } from "./i18n-data.js";
 import type { ExposedAction, PeriodDef } from "./types.js";
 
 type Localizer = (key: string, ...args: string[]) => string | undefined;
@@ -8,28 +8,61 @@ export interface HassLike {
   [key: string]: unknown;
 }
 
+function _localeOf(hass: HassLike | undefined): string {
+  const lang = (hass?.language as string | undefined)?.toLowerCase().split(/[-_]/)[0];
+  return lang && lang in AMBIENCE_STRINGS_BY_LOCALE ? lang : "en";
+}
+
+function _interp(s: string, ph?: Record<string, string>): string {
+  if (!ph) return s;
+  return s.replace(/\{(\w+)\}/g, (m, k) => (k in ph ? ph[k] : m));
+}
+
 /**
- * Look up a `component.ambience.<subPath>` key in the bundled AMBIENCE_STRINGS.
- * Returns the string value if found, or undefined otherwise.
+ * Look up a `component.ambience.<subPath>` key in the bundled locale catalogue.
+ * Checks the resolved locale first, then falls back to `en`. Returns the string
+ * value if found, or undefined otherwise.
  */
-function _bundleLookup(key: string): string | undefined {
+function _bundleLookup(hass: HassLike | undefined, key: string): string | undefined {
   const PREFIX = "component.ambience.";
   if (!key.startsWith(PREFIX)) return undefined;
   const parts = key.slice(PREFIX.length).split(".");
-  let node: unknown = AMBIENCE_STRINGS;
-  for (const part of parts) {
-    if (node === null || typeof node !== "object") return undefined;
-    node = (node as Record<string, unknown>)[part];
+
+  const _lookupIn = (catalogue: Record<string, unknown>): string | undefined => {
+    let node: unknown = catalogue;
+    for (const part of parts) {
+      if (node === null || typeof node !== "object") return undefined;
+      node = (node as Record<string, unknown>)[part];
+    }
+    return typeof node === "string" ? node : undefined;
+  };
+
+  const locale = _localeOf(hass);
+  const localeBundle = AMBIENCE_STRINGS_BY_LOCALE[locale];
+  if (localeBundle) {
+    const result = _lookupIn(localeBundle);
+    if (result !== undefined) return result;
   }
-  return typeof node === "string" ? node : undefined;
+  // Fall back to en
+  if (locale !== "en") {
+    const enBundle = AMBIENCE_STRINGS_BY_LOCALE.en;
+    if (enBundle) return _lookupIn(enBundle);
+  }
+  return undefined;
 }
 
-function _resolve(hass: HassLike | undefined, key: string, fallback: string): string {
-  const localised = hass?.localize?.(key);
+function _resolve(
+  hass: HassLike | undefined,
+  key: string,
+  fallback: string,
+  ph?: Record<string, string>,
+): string {
+  const pairs = ph ? Object.entries(ph).flat() : [];
+  const localised = hass?.localize?.(key, ...pairs);
   if (localised && localised !== key) return localised;
-  const bundled = _bundleLookup(key);
-  if (bundled !== undefined) return bundled;
-  return fallback;
+  const bundled = _bundleLookup(hass, key);
+  if (bundled !== undefined) return _interp(bundled, ph);
+  return _interp(fallback, ph);
 }
 
 /**
@@ -208,9 +241,15 @@ export function luxLabel(
   return _resolve(hass, `component.ambience.lux_range.${id}`, humanizeId(id));
 }
 
-/** Generic localizer: resolves `component.ambience.<subKey>` with an English fallback. */
-export function localize(hass: HassLike | undefined, subKey: string, fallback: string): string {
-  return _resolve(hass, `component.ambience.${subKey}`, fallback);
+/** Generic localizer: resolves `component.ambience.<subKey>` with an English fallback.
+ *  Optional `placeholders` map interpolates `{name}` tokens in the resolved string. */
+export function localize(
+  hass: HassLike | undefined,
+  subKey: string,
+  fallback: string,
+  placeholders?: Record<string, string>,
+): string {
+  return _resolve(hass, `component.ambience.${subKey}`, fallback, placeholders);
 }
 
 const _WEEKDAY_IDS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -283,6 +322,24 @@ type EntityStateLike = { attributes?: Record<string, unknown> };
  *    4. Metric defaults (`°C`, `m/s`, `hPa`) when nothing else is known.
  *
  *  Returns `""` for unknown attributes. */
+export function weatherAttrUnit(
+  hass: HassLike | undefined,
+  attr: string,
+  entityState?: EntityStateLike,
+): string {
+  if (attr === "humidity") return "%";
+  const entityAttr = _ENTITY_UNIT_ATTR[attr];
+  if (entityAttr) {
+    const value = entityState?.attributes?.[entityAttr];
+    if (typeof value === "string" && value) return value;
+  }
+  const sysKey = _UNIT_SYSTEM_KEY[attr];
+  const sys = (hass as { config?: { unit_system?: Record<string, unknown> } } | undefined)?.config
+    ?.unit_system;
+  if (sysKey && sys && typeof sys[sysKey] === "string") return sys[sysKey] as string;
+  return _DEFAULT_WEATHER_UNITS[attr] ?? "";
+}
+
 /** Localize a websocket error. The backend's send_ambience_error attaches a
  *  `translation_key` (+ `translation_placeholders`) and an English `message`.
  *  Prefer the user's-language translation via hass.localize of the exceptions
@@ -304,24 +361,6 @@ export function localizeWsError(hass: HassLike | undefined, err: unknown): strin
   }
   if (e?.message) return e.message;
   return err instanceof Error ? err.message : String(err);
-}
-
-export function weatherAttrUnit(
-  hass: HassLike | undefined,
-  attr: string,
-  entityState?: EntityStateLike,
-): string {
-  if (attr === "humidity") return "%";
-  const entityAttr = _ENTITY_UNIT_ATTR[attr];
-  if (entityAttr) {
-    const value = entityState?.attributes?.[entityAttr];
-    if (typeof value === "string" && value) return value;
-  }
-  const sysKey = _UNIT_SYSTEM_KEY[attr];
-  const sys = (hass as { config?: { unit_system?: Record<string, unknown> } } | undefined)?.config
-    ?.unit_system;
-  if (sysKey && sys && typeof sys[sysKey] === "string") return sys[sysKey] as string;
-  return _DEFAULT_WEATHER_UNITS[attr] ?? "";
 }
 
 // --- state condition --------------------------------------------------------

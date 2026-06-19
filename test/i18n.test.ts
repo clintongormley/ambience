@@ -152,6 +152,28 @@ describe("localize", () => {
     };
     expect(localize(hass, "ui.include", "Include")).toBe("Inclure");
   });
+
+  // --- multi-locale bundle tests ---
+  test("selects the es bundle when hass.language is Spanish", () => {
+    // ui.close is seeded as "Cerrar" in es
+    expect(localize({ language: "es" } as any, "ui.close", "Close")).toBe("Cerrar");
+  });
+  test("normalizes region locales (es-ES) to the base language", () => {
+    expect(localize({ language: "es-ES" } as any, "ui.close", "Close")).toBe("Cerrar");
+  });
+  test("falls back to en for a key missing in es", () => {
+    // ui.include exists in en but was NOT seeded in es
+    expect(localize({ language: "es" } as any, "ui.include", "X")).toBe("Include");
+  });
+  test("falls back to en for an unknown language", () => {
+    // de is not in the bundle; should use en fallback, which doesn't have this key either
+    expect(localize({ language: "de" } as any, "ui.close", "Close")).toBe("Close");
+  });
+  test("interpolates placeholders in the fallback string", () => {
+    expect(
+      localize({ language: "en" } as any, "nonexistent.key", "Hi {name}", { name: "Bob" }),
+    ).toBe("Hi Bob");
+  });
 });
 
 describe("weekdayLabel", () => {

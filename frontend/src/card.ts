@@ -9,6 +9,7 @@
  */
 
 import { defineElement } from "./define-element.js";
+import { type HassLike, localize } from "./i18n.js";
 import { loadFrontend } from "./lazy-frontend.js";
 
 interface CardConfig {
@@ -79,7 +80,15 @@ class AmbienceCard extends HTMLElement {
       // surface a hint instead of dying as an unhandled rejection (the card
       // would otherwise just stay blank with a console error).
       console.error("ambience-card: failed to load the Ambience frontend", err);
-      this.textContent = "Ambience card failed to load — check the connection and refresh.";
+      // `localize` + the string bundle are statically bundled into this card
+      // loader (NOT the lazy chunk that just failed), so they're available
+      // here. `this._hass` may be unset on an early-mount failure; `localize`
+      // handles undefined hass by returning the English fallback.
+      this.textContent = localize(
+        this._hass as HassLike | undefined,
+        "ui.card_load_failed",
+        "Ambience card failed to load — check the connection and refresh.",
+      );
     } finally {
       this._loading = false;
     }

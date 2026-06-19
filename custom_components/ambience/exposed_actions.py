@@ -22,6 +22,7 @@ from typing import Any, Protocol
 
 from homeassistant.core import HomeAssistant
 
+from .errors import AmbienceError
 from .services_meta import _descriptions_with_status, _flatten_field_groups
 
 
@@ -64,29 +65,29 @@ class ExposedActionsStore:
         That means "shown in the scene editor pre-filled with this value".
         """
         if not isinstance(actions, list):
-            raise ValueError("exposed actions must be a list")
+            raise AmbienceError("exposed_actions_not_list")
         seen: set[str] = set()
         for entry in actions:
             if not isinstance(entry, dict):
-                raise ValueError(f"entry must be an object: {entry!r}")
+                raise AmbienceError("exposed_entry_not_object", entry=entry)
             sid = entry.get("id")
             if not isinstance(sid, str) or "." not in sid:
-                raise ValueError(f"invalid service id: {sid!r}")
+                raise AmbienceError("exposed_invalid_service_id", sid=sid)
             domain, _, name = sid.partition(".")
             if not domain or not name:
-                raise ValueError(f"invalid service id: {sid!r}")
+                raise AmbienceError("exposed_invalid_service_id", sid=sid)
             if sid in seen:
-                raise ValueError(f"duplicate service id: {sid!r}")
+                raise AmbienceError("exposed_duplicate_service_id", sid=sid)
             seen.add(sid)
             label = entry.get("label", "")
             if not isinstance(label, str):
-                raise ValueError(f"{sid}: label must be a string")
+                raise AmbienceError("exposed_label_not_string", sid=sid)
             visible = entry.get("visible_fields", [])
             defaults = entry.get("defaults", {})
             if not isinstance(visible, list) or not all(isinstance(f, str) for f in visible):
-                raise ValueError(f"{sid}: visible_fields must be a list of strings")
+                raise AmbienceError("exposed_visible_fields_not_list", sid=sid)
             if not isinstance(defaults, dict) or not all(isinstance(k, str) for k in defaults):
-                raise ValueError(f"{sid}: defaults must be an object keyed by string")
+                raise AmbienceError("exposed_defaults_not_object", sid=sid)
 
     async def validate_against_catalog(
         self,
@@ -117,7 +118,7 @@ class ExposedActionsStore:
             domain, name = sid.split(".", 1) if "." in sid else (sid, "")
             spec = descriptions.get(domain, {}).get(name)
             if spec is None:
-                raise ValueError(f"unknown service: {sid!r}")
+                raise AmbienceError("exposed_unknown_service", sid=sid)
             if degraded:
                 # Catalog is degraded — only verify the service exists. Field
                 # validation would falsely reject valid entries because the
@@ -128,10 +129,10 @@ class ExposedActionsStore:
             )
             for fname in entry.get("visible_fields", []):
                 if fname not in known_fields:
-                    raise ValueError(f"{sid}: unknown field {fname!r} in visible_fields")
+                    raise AmbienceError("exposed_unknown_visible_field", sid=sid, field=fname)
             for fname in entry.get("defaults", {}):
                 if fname not in known_fields:
-                    raise ValueError(f"{sid}: unknown field {fname!r} in defaults")
+                    raise AmbienceError("exposed_unknown_default_field", sid=sid, field=fname)
 
     async def save(self, actions: list[dict[str, Any]]) -> None:
         self.validate_shape(actions)

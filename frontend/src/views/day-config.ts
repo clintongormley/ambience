@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { getDayConfig, type HassConnection, saveDayConfig } from "../api.js";
 import { watchHaComponents } from "../ha-components.js";
-import { localize } from "../i18n.js";
+import { localize, localizeWsError } from "../i18n.js";
 import type { DayConfig } from "../types.js";
 import { renderEntityPicker } from "./form-controls.js";
 
@@ -27,7 +27,7 @@ export class AmbienceDayConfig extends LitElement {
       this._config = await getDayConfig(this.hass);
     } catch (e) {
       // A failed fetch must not leave a blank panel + unhandled rejection.
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 
@@ -37,7 +37,7 @@ export class AmbienceDayConfig extends LitElement {
       await saveDayConfig(this.hass, next.workday_sensor, next.workday_calendar);
       this._error = "";
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
       return;
     }
     // Tell the scopes view to re-evaluate its conditions hint against live state.

@@ -8,7 +8,7 @@ import {
   type HassConnection,
   listTraces,
 } from "../api.js";
-import { localize } from "../i18n.js";
+import { localize, localizeWsError } from "../i18n.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import type { BufferedUnit, ExposedAction, PeriodStoreView, ServiceSchema } from "../types.js";
 import { ModalDismissController } from "./modal-shell.js";
@@ -159,7 +159,7 @@ export class AmbienceTracesModal extends LitElement {
       // without waiting on these extra round-trips.
       void this._loadSchemas();
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
       this._loading = false;
     }
   }
@@ -210,7 +210,7 @@ export class AmbienceTracesModal extends LitElement {
     try {
       await downloadScopeDiagnostics(this.hass, this.scope, this.category);
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 
@@ -219,7 +219,7 @@ export class AmbienceTracesModal extends LitElement {
       await clearTraces(this.hass);
       await this._load();
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 

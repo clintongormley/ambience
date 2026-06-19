@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, listAutoTriggers } from "../api.js";
-import { anchorLabel, localize } from "../i18n.js";
+import { anchorLabel, localize, localizeWsError } from "../i18n.js";
 import type { AutoTrigger, Scene, Scope } from "../types.js";
 import { DEFAULT_ENTITY_ICON, entityName, renderEntityIcon } from "./entity-row.js";
 
@@ -184,7 +184,7 @@ export class AmbienceAutoTriggersModal extends LitElement {
       this._opaque = res.opaque;
     } catch (e) {
       if (seq !== this._loadSeq) return;
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     } finally {
       if (seq === this._loadSeq) this._loading = false;
     }

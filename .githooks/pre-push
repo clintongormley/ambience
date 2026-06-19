@@ -62,9 +62,8 @@ trans_changed=$(printf '%s\n' "$changed" | grep -E 'strings\.json$|/translations
 if [ -n "$py_changed" ]; then echo "› ruff";       make lint-py; fi
 if [ -n "$js_changed" ]; then echo "› biome+tsc";   make lint-js; fi
 
-# --- Step 2: always-cheap drift checks ---
-if [ -n "$py_changed$trans_changed" ]; then echo "› translations"; make translations; fi
-if [ -n "$bundle_src_changed" ]; then echo "› ui strings"; make ui-strings; fi
+# --- Step 2: always-cheap i18n gates (parity, completeness, no-hardcoded) ---
+if [ -n "$py_changed$trans_changed$bundle_src_changed" ]; then echo "› i18n"; make i18n; fi
 
 # --- Step 3: changed-language tests + coverage ---
 if [ -n "$py_changed" ];          then echo "› backend tests+coverage";  make coverage-py; fi

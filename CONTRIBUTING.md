@@ -24,8 +24,8 @@ the commits you are about to push and runs only what is relevant:
 1. **Fast lint/format first** (this is what usually fails CI):
    - Python changed → `make lint-py` (`ruff check` + `ruff format --check`)
    - Frontend `.ts` changed → `make lint-js` (`npm run ci` Biome + `tsc`)
-2. **Cheap drift checks:**
-   - `make translations` — `strings.json` ↔ `translations/*.json` key parity
+2. **Cheap i18n gates:**
+   - `make i18n` — all five i18n checks: key parity, shipped-locale completeness, exceptions-key validation, and no-hardcoded lints (Python + TypeScript)
 3. **Tests for the changed language + coverage gates:**
    - Python → `make coverage-py` (pytest + `fail_under` from `pyproject.toml`)
    - Frontend → `make coverage-js` (vitest + thresholds from `vitest.config.ts`)
@@ -43,6 +43,7 @@ command (see `Makefile`). Useful ones:
 | --- | --- |
 | `make lint-py` / `make lint-js` | Fast lint + format checks |
 | `make coverage-py` / `make coverage-js` | Tests with coverage gates |
+| `make i18n` | All i18n gates (parity, shipped-locale completeness, no-hardcoded lints) |
 | `make translations` | Translation key-parity check |
 | `make build-check` | Rebuild bundle, fail on drift |
 
@@ -50,8 +51,7 @@ command (see `Makefile`). Useful ones:
 
 - **Frontend bundle:** after any `frontend/src` change run `npm run build` and
   commit `custom_components/ambience/frontend/*.js`.
-- **Translations:** `strings.json` is the source of truth; keep
-  `translations/en.json` in sync (the translation check enforces parity).
+- **Translations:** `strings.json` is the source of truth; `en` and `es` are shipped locales and must stay complete (the i18n checks enforce parity, shipped-locale completeness, that every exceptions key referenced in code exists, and that no user-facing string is hardcoded). `es` is machine-drafted pending native review.
 
 ## CI
 

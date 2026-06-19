@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.services_meta import (
     _flatten_field_groups,
     _registry_is_dict_stubbed,
@@ -96,8 +97,10 @@ async def test_get_service_schema_returns_none_for_unknown_service() -> None:
 async def test_get_service_schema_handles_malformed_id() -> None:
     hass = _make_hass({})
 
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc_info:
         await get_service_schema(hass, "no_dot")
+    assert exc_info.value.translation_key == "invalid_service_id_format"
+    assert exc_info.value.translation_placeholders == {"service_id": "no_dot"}
 
 
 def test_flatten_field_groups_returns_empty_dict_for_non_dict_input() -> None:

@@ -6,7 +6,7 @@ import type { HassConnection } from "../api.js";
 import { applyScenes, runSceneActions, setScopeEnabled } from "../api.js";
 import { sceneNameKey, scopeCategoryKey, scopeKey } from "../entities-for-scope.js";
 import { renderHaSwitch } from "../ha-switch.js";
-import { localize } from "../i18n.js";
+import { localize, localizeWsError } from "../i18n.js";
 import { stripPositionMetadata } from "../scene.js";
 import { scopeIcon } from "../scope-icon.js";
 import type { ConditionInfo, Scene, Scope, ScopeConfig, ScopeOption } from "../types.js";
@@ -619,7 +619,7 @@ export class AmbienceScopesView extends LitElement {
     try {
       await fn();
     } catch (e) {
-      this._store.error = (e as Error).message || String(e);
+      this._store.error = localizeWsError(this.hass, e);
     }
   }
 
@@ -1241,7 +1241,7 @@ export class AmbienceScopesView extends LitElement {
         await setScopeEnabled(this.hass, scope, !enabled);
         await Promise.all([this._store.reloadScope(scope), this._store.refreshSwitches()]);
       } catch (err) {
-        this._store.error = (err as Error).message || String(err);
+        this._store.error = localizeWsError(this.hass, err);
       }
     };
     return renderHaSwitch({

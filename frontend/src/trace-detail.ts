@@ -4,6 +4,7 @@ import {
   deriveActionLabel,
   exposedActionLabel,
   humanizeId,
+  localize,
   periodLabel,
   stateValueLabel,
   weatherConditionLabel,
@@ -100,7 +101,7 @@ function openMoreInfo(e: Event, entityId: string): void {
 // `label` text rendered as a keyboard-operable button that opens the more-info
 // dialog for `entityId`. Guard e.repeat so a held Space/Enter fires once, like
 // <button>. Callers choose the label: the friendly name, or the raw entity_id.
-function entityLink(entityId: string, label: string): TemplateResult {
+function entityLink(hass: HassLike | undefined, entityId: string, label: string): TemplateResult {
   const onKey = (e: KeyboardEvent) => {
     if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
       e.preventDefault();
@@ -111,7 +112,7 @@ function entityLink(entityId: string, label: string): TemplateResult {
     class="entity-link"
     role="button"
     tabindex="0"
-    title="Show more info"
+    title=${localize(hass, "ui.show_more_info", "Show more info")}
     @click=${(e: Event) => openMoreInfo(e, entityId)}
     @keydown=${onKey}
     >${label}</span
@@ -120,7 +121,7 @@ function entityLink(entityId: string, label: string): TemplateResult {
 
 // An entity's friendly display name as a more-info button.
 function clickableEntity(hass: HassLike | undefined, entityId: string): TemplateResult {
-  return entityLink(entityId, entityDisplayName(hass, entityId));
+  return entityLink(hass, entityId, entityDisplayName(hass, entityId));
 }
 
 // Conditions whose `describe()` renders each referenced entity's friendly name
@@ -180,7 +181,7 @@ function renderDetailWithLinks(
   let cursor = 0;
   for (const h of hits) {
     if (h.start > cursor) parts.push(text.slice(cursor, h.start));
-    parts.push(entityLink(h.id, h.name));
+    parts.push(entityLink(hass, h.id, h.name));
     cursor = h.end;
   }
   if (cursor < text.length) parts.push(text.slice(cursor));
@@ -188,21 +189,23 @@ function renderDetailWithLinks(
 }
 
 // Causes whose label is a fixed phrase — the `detail` (a timestamp, an interval,
-// "for", …) is internal and not worth showing to the user.
-const CAUSE_LABELS_FIXED: Record<string, string> = {
-  has_time: "Periodic time check", // template re-checked on the periodic clock sweep
-  switch: "Switch turned on",
-  manual: "Manual apply",
-  startup: "Startup",
-  reloaded: "Reloaded",
-  simulated: "Simulation",
+// "for", …) is internal and not worth showing to the user. Each entry is
+// [localize key, English fallback]; the key literals stay quoted so the bundle
+// parity check (bin/check_ui_strings.py) can see them.
+const CAUSE_LABELS_FIXED: Record<string, [string, string]> = {
+  has_time: ["ui.cause_has_time", "Periodic time check"], // template re-checked on the periodic clock sweep
+  switch: ["ui.cause_switch", "Switch turned on"],
+  manual: ["ui.cause_manual", "Manual apply"],
+  startup: ["ui.cause_startup", "Startup"],
+  reloaded: ["ui.cause_reloaded", "Reloaded"],
+  simulated: ["ui.cause_simulated", "Simulation"],
 };
 
 // Causes that keep their `detail` (which boundary fired) after a friendlier label.
-const CAUSE_LABELS_WITH_DETAIL: Record<string, string> = {
-  clock: "Time of day",
-  sun: "Sun position",
-  reapply: "Reapply", // idle re-apply fired; detail is the inactivity interval (e.g. "1h 30m")
+const CAUSE_LABELS_WITH_DETAIL: Record<string, [string, string]> = {
+  clock: ["ui.cause_clock", "Time of day"],
+  sun: ["ui.cause_sun", "Sun position"],
+  reapply: ["ui.cause_reapply", "Reapply"], // idle re-apply fired; detail is the inactivity interval (e.g. "1h 30m")
 };
 
 // A raw value or "?" when the backend sent null (e.g. an entity with no prior
@@ -212,31 +215,33 @@ function rawOrUnknown(v: string | null): string {
   return v ?? "?";
 }
 
-export function formatCause(c: TraceCause): string {
+export function formatCause(hass: HassLike | undefined, c: TraceCause): string {
   if (c.kind === "entity") return `${c.entity_id} ${rawOrUnknown(c.old)} → ${rawOrUnknown(c.new)}`;
   // A `for:` duration recheck: a single-entity gate names the entity, the state
   // it has held, and how long ("binary_sensor.motion off for 5m"); a
   // multi-entity gate (entity_id null) carries its label in `new`
   // ("nobody home for 30m").
   if (c.kind === "duration") {
+    const forWord = localize(hass, "ui.cause_duration_for", "for");
     return c.entity_id
-      ? `${c.entity_id} ${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`
-      : `${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`;
+      ? `${c.entity_id} ${rawOrUnknown(c.new)} ${forWord} ${rawOrUnknown(c.detail)}`
+      : `${rawOrUnknown(c.new)} ${forWord} ${rawOrUnknown(c.detail)}`;
   }
   const fixed = CAUSE_LABELS_FIXED[c.kind];
-  if (fixed) return fixed;
-  const name = CAUSE_LABELS_WITH_DETAIL[c.kind] ?? humanizeId(c.kind);
+  if (fixed) return localize(hass, fixed[0], fixed[1]);
+  const withDetail = CAUSE_LABELS_WITH_DETAIL[c.kind];
+  const name = withDetail ? localize(hass, withDetail[0], withDetail[1]) : humanizeId(c.kind);
   return c.detail ? `${name} ${c.detail}` : name;
 }
 
 // Same as {@link formatCause}, but the raw entity_id is a clickable button that
 // opens the more-info dialog. Only entity/duration causes carry an entity_id;
 // other kinds fall back to the plain-text label.
-export function renderCause(c: TraceCause): TemplateResult {
-  if (!causeHasRawValues(c) || !c.entity_id) return html`${formatCause(c)}`;
-  const name = entityLink(c.entity_id, c.entity_id);
+export function renderCause(hass: HassLike | undefined, c: TraceCause): TemplateResult {
+  if (!causeHasRawValues(c) || !c.entity_id) return html`${formatCause(hass, c)}`;
+  const name = entityLink(hass, c.entity_id, c.entity_id);
   if (c.kind === "duration")
-    return html`${name} ${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`;
+    return html`${name} ${rawOrUnknown(c.new)} ${localize(hass, "ui.cause_duration_for", "for")} ${rawOrUnknown(c.detail)}`;
   return html`${name} ${rawOrUnknown(c.old)} → ${rawOrUnknown(c.new)}`;
 }
 
@@ -259,10 +264,11 @@ function causeStateValues(c: TraceCause, hass?: HassLike): { old: string; new: s
 }
 
 export function formatCauseFriendly(c: TraceCause, hass?: HassLike): string {
-  if (!causeHasRawValues(c)) return formatCause(c);
+  if (!causeHasRawValues(c)) return formatCause(hass, c);
   const name = c.entity_id ? entityDisplayName(hass, c.entity_id) : "?";
   const v = causeStateValues(c, hass);
-  if (c.kind === "duration") return `${name}: ${v.new} for ${c.detail ?? "?"}`;
+  if (c.kind === "duration")
+    return `${name}: ${v.new} ${localize(hass, "ui.cause_duration_for", "for")} ${c.detail ?? "?"}`;
   return `${name}: ${v.old} → ${v.new}`;
 }
 
@@ -273,31 +279,50 @@ export function renderCauseFriendly(c: TraceCause, hass?: HassLike): TemplateRes
   if (!causeHasRawValues(c) || !c.entity_id) return html`${formatCauseFriendly(c, hass)}`;
   const name = clickableEntity(hass, c.entity_id);
   const v = causeStateValues(c, hass);
-  if (c.kind === "duration") return html`${name}: ${v.new} for ${c.detail ?? "?"}`;
+  if (c.kind === "duration")
+    return html`${name}: ${v.new} ${localize(hass, "ui.cause_duration_for", "for")} ${c.detail ?? "?"}`;
   return html`${name}: ${v.old} → ${v.new}`;
 }
 
 // Friendly badge text for each outcome. The internal id stays the CSS class
-// (so colours don't change); only the displayed word is humanised.
-const OUTCOME_LABELS: Record<string, string> = {
-  acted: "applied",
-  no_op: "blocked",
-  debounced: "unchanged",
-  no_match: "no match",
-  skipped_switch_off: "skipped",
-  skipped_scope_disabled: "skipped",
-  skipped_unavailable: "skipped",
+// (so colours don't change); only the displayed word is humanised. Each entry is
+// [localize key, English fallback]; the three skipped outcomes share one key.
+const OUTCOME_LABELS: Record<string, [string, string]> = {
+  acted: ["ui.outcome_label_acted", "applied"],
+  no_op: ["ui.outcome_label_no_op", "blocked"],
+  debounced: ["ui.outcome_label_debounced", "unchanged"],
+  no_match: ["ui.outcome_label_no_match", "no match"],
+  skipped_switch_off: ["ui.outcome_label_skipped", "skipped"],
+  skipped_scope_disabled: ["ui.outcome_label_skipped", "skipped"],
+  skipped_unavailable: ["ui.outcome_label_skipped", "skipped"],
 };
 
-export function outcomeLabel(outcome: TraceOutcome): string {
-  return OUTCOME_LABELS[outcome] ?? outcome.replace(/_/g, " ");
+export function outcomeLabel(hass: HassLike | undefined, outcome: TraceOutcome): string {
+  const label = OUTCOME_LABELS[outcome];
+  return label ? localize(hass, label[0], label[1]) : outcome.replace(/_/g, " ");
+}
+
+// A count plus its correctly-pluralised, localised noun ("1 action" / "3
+// actions"). Picks the singular or plural key by `n`, passing `{n}` for
+// interpolation. The English fallbacks reproduce the old `pluralize` output.
+function countPhrase(
+  hass: HassLike | undefined,
+  n: number,
+  oneKey: string,
+  otherKey: string,
+  oneEn: string,
+  otherEn: string,
+): string {
+  return n === 1
+    ? localize(hass, oneKey, oneEn, { n: String(n) })
+    : localize(hass, otherKey, otherEn, { n: String(n) });
 }
 
 // A one-line plain-language explanation of what the outcome actually did —
 // shown at the top of the expansion so an empty action list or a suppressed
 // re-fire reads as a deliberate result, not a gap.
-export function outcomeSummary(u: BufferedUnit): string {
-  const winner = u.winner_name ?? "The matching scene";
+export function outcomeSummary(hass: HassLike | undefined, u: BufferedUnit): string {
+  const winner = u.winner_name ?? localize(hass, "ui.winner_default", "The matching scene");
   switch (u.outcome) {
     case "acted": {
       // Actions whose service is no longer exposed were skipped at dispatch, so
@@ -306,27 +331,90 @@ export function outcomeSummary(u: BufferedUnit): string {
       const skipped = u.actions.length - ran.length;
       if (ran.length === 0 && skipped) {
         // Won, but every action was skipped — nothing actually applied.
-        return `${winner} matched — ${pluralize(skipped, "action", "actions")} skipped (not exposed); nothing applied.`;
+        const skipped_phrase = countPhrase(
+          hass,
+          skipped,
+          "ui.count_action_one",
+          "ui.count_action_other",
+          "{n} action",
+          "{n} actions",
+        );
+        return localize(
+          hass,
+          "ui.outcome_summary_acted_all_skipped",
+          "{winner} matched — {skipped_phrase} skipped (not exposed); nothing applied.",
+          { winner, skipped_phrase },
+        );
       }
-      const acts = pluralize(ran.length, "action", "actions");
+      const acts = countPhrase(
+        hass,
+        ran.length,
+        "ui.count_action_one",
+        "ui.count_action_other",
+        "{n} action",
+        "{n} actions",
+      );
       const e = entityCount(ran);
-      const tail = skipped ? ` (${skipped} skipped — not exposed)` : "";
+      const tail = skipped
+        ? localize(hass, "ui.outcome_summary_skipped_tail", " ({skipped} skipped — not exposed)", {
+            skipped: String(skipped),
+          })
+        : "";
+      const entities = countPhrase(
+        hass,
+        e,
+        "ui.count_entity_one",
+        "ui.count_entity_other",
+        "{n} entity",
+        "{n} entities",
+      );
       return e
-        ? `Applied ${winner} — ${acts} on ${pluralize(e, "entity", "entities")}.${tail}`
-        : `Applied ${winner} — ${acts}.${tail}`;
+        ? localize(
+            hass,
+            "ui.outcome_summary_acted_entities",
+            "Applied {winner} — {acts} on {entities}.{tail}",
+            { winner, acts, entities, tail },
+          )
+        : localize(hass, "ui.outcome_summary_acted", "Applied {winner} — {acts}.{tail}", {
+            winner,
+            acts,
+            tail,
+          });
     }
     case "no_op":
-      return `${winner} matched but has no actions — it blocks lower scenes from applying. Nothing changed.`;
+      return localize(
+        hass,
+        "ui.outcome_summary_no_op",
+        "{winner} matched but has no actions — it blocks lower scenes from applying. Nothing changed.",
+        { winner },
+      );
     case "debounced":
-      return `${winner} matched, but it's already applied — nothing was re-sent.`;
+      return localize(
+        hass,
+        "ui.outcome_summary_debounced",
+        "{winner} matched, but it's already applied — nothing was re-sent.",
+        { winner },
+      );
     case "no_match":
-      return "No scene matched — nothing applied.";
+      return localize(hass, "ui.outcome_summary_no_match", "No scene matched — nothing applied.");
     case "skipped_switch_off":
-      return "Skipped — the category switch is off.";
+      return localize(
+        hass,
+        "ui.outcome_summary_skipped_switch_off",
+        "Skipped — the category switch is off.",
+      );
     case "skipped_scope_disabled":
-      return "Skipped — the scope is disabled.";
+      return localize(
+        hass,
+        "ui.outcome_summary_skipped_scope_disabled",
+        "Skipped — the scope is disabled.",
+      );
     case "skipped_unavailable":
-      return "Skipped — the triggering entity went unavailable; devices left as they are.";
+      return localize(
+        hass,
+        "ui.outcome_summary_skipped_unavailable",
+        "Skipped — the triggering entity went unavailable; devices left as they are.",
+      );
     default:
       return "";
   }
@@ -365,11 +453,6 @@ function entityCount(actions: TraceAction[]): number {
   return actions.reduce((n, a) => n + (a.entity_ids?.length ?? 0), 0);
 }
 
-// "1 entity" / "2 entities" — count plus the correctly-pluralised noun.
-function pluralize(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 // Outcomes where the whole unit's evaluation was skipped (switch off / scope
 // disabled). They carry no explanation or actions but still expand to show why.
 function isSkipped(outcome: TraceOutcome): boolean {
@@ -387,14 +470,15 @@ function renderScene(
 ): TemplateResult {
   // `index` is the 0-based position in the scene list; scene numbers are shown 1-based.
   const num = r.index + 1;
+  const scenePrefix = localize(hass, "ui.trace_scene_prefix", "Scene #");
   if (r.disabled) {
-    return html`<div class="scene disabled">Scene #${num} ${r.name ?? "—"}: disabled</div>`;
+    return html`<div class="scene disabled">${scenePrefix}${num} ${r.name ?? "—"}: ${localize(hass, "ui.trace_scene_disabled", "disabled")}</div>`;
   }
   if (!r.evaluated) {
-    return html`<div class="scene skipped">Scene #${num} ${r.name ?? "—"}: not reached</div>`;
+    return html`<div class="scene skipped">${scenePrefix}${num} ${r.name ?? "—"}: ${localize(hass, "ui.trace_scene_not_reached", "not reached")}</div>`;
   }
   return html`
-    <div class="scene ${r.matched ? "won" : ""}">Scene #${num} ${r.name ?? "—"}: ${r.matched ? "✓ matched" : "✗ no match"}</div>
+    <div class="scene ${r.matched ? "won" : ""}">${scenePrefix}${num} ${r.name ?? "—"}: ${r.matched ? localize(hass, "ui.trace_scene_matched", "✓ matched") : localize(hass, "ui.trace_scene_no_match", "✗ no match")}</div>
     ${r.predicates.map(
       (p) => html`
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
@@ -448,23 +532,27 @@ export function renderEvaluation(
         @click=${canExpand ? onToggle : undefined}
         @keydown=${canExpand ? onKey : undefined}
       >
-        <span class="label">${outcomeLabel(u.outcome)}</span>
+        <span class="label">${outcomeLabel(hass, u.outcome)}</span>
         <span class="ts">${u.timestamp ? new Date(u.timestamp).toLocaleTimeString() : ""}</span>
       </div>
       <div class="eval-body">
-        <div class="cause-line">Trigger: ${renderCauseFriendly(u.cause, hass)}</div>
-        ${u.winner_name ? html`<div class="won">Won: <span class="name">${u.winner_name}</span></div>` : nothing}
+        <div class="cause-line">${localize(hass, "ui.trigger_prefix", "Trigger: ")}${renderCauseFriendly(u.cause, hass)}</div>
+        ${u.winner_name ? html`<div class="won">${localize(hass, "ui.trace_won_prefix", "Won: ")}<span class="name">${u.winner_name}</span></div>` : nothing}
         ${
           ran.length
             ? html`<div class="action-summary">→ ${services}
-              ${n ? html`<span class="n">· ${pluralize(n, "entity", "entities")}</span>` : nothing}</div>`
+              ${
+                n
+                  ? html`<span class="n">· ${countPhrase(hass, n, "ui.count_entity_one", "ui.count_entity_other", "{n} entity", "{n} entities")}</span>`
+                  : nothing
+              }</div>`
             : // No actions to list (UNCHANGED, blocked, no match, skipped, …) — fill
               // the slot with the explanation instead. Collapsed only: once expanded,
               // the expansion's outcome-summary carries it, so showing it here too
               // would just duplicate the line.
               expanded
               ? nothing
-              : html`<div class="action-summary">${outcomeSummary(u)}</div>`
+              : html`<div class="action-summary">${outcomeSummary(hass, u)}</div>`
         }
       </div>
       ${expanded ? renderExpansion(u, hass, schemas, periods, exposedActions) : nothing}
@@ -479,18 +567,18 @@ function renderExpansion(
   periods: CustomPeriods,
   exposedActions?: ExposedAction[],
 ): TemplateResult {
-  const summary = outcomeSummary(u);
+  const summary = outcomeSummary(hass, u);
   // Raw entity_id + raw old→new, one click away. Only entity/duration causes
   // carry raw values; other kinds would just duplicate the friendly label.
   const showRawTrigger = causeHasRawValues(u.cause);
   return html`
     <div class="why">
-      ${showRawTrigger ? html`<div class="raw-trigger">Trigger: ${renderCause(u.cause)}</div>` : nothing}
+      ${showRawTrigger ? html`<div class="raw-trigger">${localize(hass, "ui.trigger_prefix", "Trigger: ")}${renderCause(hass, u.cause)}</div>` : nothing}
       ${summary ? html`<div class="outcome-summary">${summary}</div>` : nothing}
       ${
         u.explanation
           ? html`<div class="section">
-            <div class="section-title">Scene evaluation</div>
+            <div class="section-title">${localize(hass, "ui.section_scene_evaluation", "Scene evaluation")}</div>
             <div class="scenes">${u.explanation.scenes.map((r) => renderScene(r, hass, periods))}</div>
           </div>`
           : nothing
@@ -498,13 +586,13 @@ function renderExpansion(
       ${
         u.actions.length
           ? html`<div class="section">
-            <div class="section-title">Actions taken</div>
+            <div class="section-title">${localize(hass, "ui.section_actions_taken", "Actions taken")}</div>
             ${u.actions.map(
               (a) => html`<div class="action-block ${a.unexposed ? "unexposed" : ""}">
                 <div class="action-head">
                   ${formatActionHeader(a, hass, schemas, exposedActions)}${
                     a.unexposed
-                      ? html`<span class="skipped-tag"> — skipped (not exposed)</span>`
+                      ? html`<span class="skipped-tag">${localize(hass, "ui.skipped_not_exposed", " — skipped (not exposed)")}</span>`
                       : nothing
                   }
                 </div>

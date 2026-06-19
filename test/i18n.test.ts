@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   actionLabel,
   anchorLabel,
+  categoryColorLabel,
   conditionLabel,
   dayItemKindLabel,
   exposedActionLabel,
@@ -13,6 +14,7 @@ import {
   weatherConditionLabel,
   weekdayLabel,
 } from "../frontend/src/i18n";
+import { AMBIENCE_STRINGS_BY_LOCALE } from "../frontend/src/i18n-data";
 import type { ExposedAction, PeriodDef } from "../frontend/src/types";
 
 const exposed = (id: string, label: string): ExposedAction => ({
@@ -152,6 +154,27 @@ describe("localize", () => {
     };
     expect(localize(hass, "ui.include", "Include")).toBe("Inclure");
   });
+
+  // --- multi-locale bundle tests ---
+  test("selects the es bundle when hass.language is Spanish", () => {
+    // ui.close is seeded as "Cerrar" in es
+    expect(localize({ language: "es" } as any, "ui.close", "Close")).toBe("Cerrar");
+  });
+  test("normalizes region locales (es-ES) to the base language", () => {
+    expect(localize({ language: "es-ES" } as any, "ui.close", "Close")).toBe("Cerrar");
+  });
+  test("falls back to en for a key missing in es", () => {
+    // es is now a full mirror of en, so test with a key absent from both bundles
+    expect(localize({ language: "es" } as any, "ui.nonexistent_key_xyz", "X")).toBe("X");
+  });
+  test("falls back to en for an unknown language", () => {
+    expect(localize({ language: "de" } as any, "ui.cancel", "FALLBACK")).toBe("Cancel");
+  });
+  test("interpolates placeholders in the fallback string", () => {
+    expect(
+      localize({ language: "en" } as any, "nonexistent.key", "Hi {name}", { name: "Bob" }),
+    ).toBe("Hi Bob");
+  });
 });
 
 describe("weekdayLabel", () => {
@@ -179,6 +202,25 @@ describe("dayItemKindLabel", () => {
         k === "component.ambience.day_item.workday" ? "Jour ouvré" : undefined,
     };
     expect(dayItemKindLabel(hass, "workday")).toBe("Jour ouvré");
+  });
+});
+
+describe("categoryColorLabel", () => {
+  test("falls back to the passed label when nothing localizes", () => {
+    expect(categoryColorLabel(undefined, "red", "Red")).toBe("Red");
+  });
+  test("resolves the bundled en label, incl. hyphenated ids", () => {
+    expect(categoryColorLabel(undefined, "deep-purple", "fallback")).toBe("Deep purple");
+  });
+  test("resolves the es bundle for a Spanish locale", () => {
+    expect(categoryColorLabel({ language: "es" }, "blue-grey", "Blue grey")).toBe("Gris azulado");
+  });
+  test("prefers hass.localize over the bundle", () => {
+    const hass = {
+      localize: (k: string) =>
+        k === "component.ambience.category_color.teal" ? "Sarcelle" : undefined,
+    };
+    expect(categoryColorLabel(hass, "teal", "Teal")).toBe("Sarcelle");
   });
 });
 
@@ -283,5 +325,18 @@ describe("weatherAttrUnit", () => {
       "Pa",
     );
     expect(weatherAttrUnit(hass, "pressure", undefined)).toBe("Pa");
+  });
+});
+
+describe("AMBIENCE_STRINGS_BY_LOCALE parity", () => {
+  test("es bundle mirrors en bundle key-for-key", () => {
+    const flat = (o: any, p = ""): string[] =>
+      Object.entries(o).flatMap(([k, v]) =>
+        v && typeof v === "object" ? flat(v, `${p}${k}.`) : [`${p}${k}`],
+      );
+    const en = new Set(flat(AMBIENCE_STRINGS_BY_LOCALE.en));
+    const es = new Set(flat(AMBIENCE_STRINGS_BY_LOCALE.es));
+    expect([...en].filter((k) => !es.has(k))).toEqual([]); // none missing in es
+    expect([...es].filter((k) => !en.has(k))).toEqual([]); // none extra in es
   });
 });

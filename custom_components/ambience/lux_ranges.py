@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .errors import AmbienceError
 from .named_def_store import NamedDefStore
 
 # Half-open bands (min <= lux < max), contiguous with no gaps/overlaps. Ascending
@@ -31,9 +32,9 @@ def validate_int_bound(value: Any, which: str) -> None:
         return
     # bool is an int subclass — reject it so True/False can't become 1/0.
     if not isinstance(value, int) or isinstance(value, bool):
-        raise ValueError(f"{which} must be an integer: {value!r}")
+        raise AmbienceError("lux_not_integer", which=which, value=value)
     if value < 0:
-        raise ValueError(f"{which} must be >= 0: {value!r}")
+        raise AmbienceError("lux_negative", which=which, value=value)
 
 
 class LuxRangeStore(NamedDefStore):
@@ -52,13 +53,13 @@ class LuxRangeStore(NamedDefStore):
         await self._storage.async_save_lux_ranges(payload)
 
     def validate_definition(self, defn: Any) -> None:
-        """Raise ValueError if defn is not a well-shaped {min?, max?} band."""
+        """Raise AmbienceError if defn is not a well-shaped {min?, max?} band."""
         if not isinstance(defn, dict):
-            raise ValueError(f"lux range definition must be an object: {defn!r}")
+            raise AmbienceError("lux_def_not_object")
         lo, hi = defn.get("min"), defn.get("max")
         if lo is None and hi is None:
-            raise ValueError("lux range needs at least one of 'min'/'max'")
+            raise AmbienceError("lux_def_needs_min_or_max")
         validate_int_bound(lo, "min")
         validate_int_bound(hi, "max")
         if lo is not None and hi is not None and lo >= hi:
-            raise ValueError(f"lux range 'min' must be < 'max': {lo!r} >= {hi!r}")
+            raise AmbienceError("lux_min_not_below_max", min=lo, max=hi)

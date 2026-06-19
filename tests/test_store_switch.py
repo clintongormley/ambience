@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 from homeassistant.core import HomeAssistant
 
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.store import AmbienceStore
 
 # --- defaults ----------------------------------------------------------------
@@ -43,21 +44,26 @@ async def test_switch_defaults_round_trip(hass: HomeAssistant) -> None:
 async def test_switch_defaults_rejects_empty_name(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_switch_defaults({"name": "", "auto_on_delay_seconds": 0})
-    with pytest.raises(ValueError):
+    assert exc.value.translation_key == "store_switch_name_empty"
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_switch_defaults({"name": None, "auto_on_delay_seconds": 0})
+    assert exc.value.translation_key == "store_switch_name_empty"
 
 
 async def test_switch_defaults_rejects_bad_delay(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_switch_defaults({"name": "X", "auto_on_delay_seconds": -1})
-    with pytest.raises(ValueError):
+    assert exc.value.translation_key == "store_switch_auto_on_delay_invalid"
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_switch_defaults({"name": "X", "auto_on_delay_seconds": True})  # bool
-    with pytest.raises(ValueError):
+    assert exc.value.translation_key == "store_switch_auto_on_delay_invalid"
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_switch_defaults({"name": "X", "auto_on_delay_seconds": "abc"})
+    assert exc.value.translation_key == "store_switch_auto_on_delay_invalid"
 
 
 async def test_legacy_load_backfills_switch_defaults(hass: HomeAssistant) -> None:
@@ -94,8 +100,9 @@ async def test_off_at_default_is_none(hass: HomeAssistant) -> None:
 async def test_off_at_unknown_kind_raises(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         store.get_scope_switch_off_at("garbage", "x")
+    assert exc.value.translation_key == "unknown_scope_kind"
 
 
 async def test_set_off_at_house(hass: HomeAssistant) -> None:
@@ -158,22 +165,24 @@ async def test_set_off_at_floor_lazy_create(hass: HomeAssistant) -> None:
 
 
 async def test_scope_container_unknown_kind_raises(hass: HomeAssistant) -> None:
-    """_scope_container raises ValueError for an unknown scope_kind."""
+    """_scope_container raises AmbienceError for an unknown scope_kind."""
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError, match="unknown scope_kind"):
+    with pytest.raises(AmbienceError) as exc:
         store._scope_container("galaxy", "x")  # noqa: SLF001
+    assert exc.value.translation_key == "unknown_scope_kind"
 
 
 # --- async_set_scope_switch_off_at unknown kind (line 304) ------------------
 
 
 async def test_set_off_at_unknown_kind_raises(hass: HomeAssistant) -> None:
-    """async_set_scope_switch_off_at raises ValueError for an unknown scope_kind."""
+    """async_set_scope_switch_off_at raises AmbienceError for an unknown scope_kind."""
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError, match="unknown scope_kind"):
+    with pytest.raises(AmbienceError) as exc:
         await store.async_set_scope_switch_off_at("bogus", "x", "ts")
+    assert exc.value.translation_key == "unknown_scope_kind"
 
 
 # --- scope_config floor branch (line 315) + unknown kind (line 318) ----------
@@ -196,11 +205,12 @@ async def test_scope_config_floor_absent_returns_empty(hass: HomeAssistant) -> N
 
 
 async def test_scope_config_unknown_kind_raises(hass: HomeAssistant) -> None:
-    """scope_config raises ValueError for an unknown scope_kind."""
+    """scope_config raises AmbienceError for an unknown scope_kind."""
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError, match="unknown scope_kind"):
+    with pytest.raises(AmbienceError) as exc:
         store.scope_config("planet", "x")
+    assert exc.value.translation_key == "unknown_scope_kind"
 
 
 # --- per-scope enabled flag --------------------------------------------------
@@ -226,15 +236,17 @@ async def test_scope_enabled_round_trip(hass: HomeAssistant) -> None:
 async def test_scope_enabled_rejects_unknown_kind(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError, match="unknown scope_kind"):
+    with pytest.raises(AmbienceError) as exc:
         store.get_scope_enabled("planet", None)
+    assert exc.value.translation_key == "unknown_scope_kind"
 
 
 async def test_set_scope_enabled_rejects_unknown_kind(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError, match="unknown scope_kind"):
+    with pytest.raises(AmbienceError) as exc:
         await store.async_set_scope_enabled("planet", None, False)
+    assert exc.value.translation_key == "unknown_scope_kind"
 
 
 async def test_set_scope_enabled_notifies_config_changed(hass: HomeAssistant) -> None:

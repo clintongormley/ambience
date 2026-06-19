@@ -24,6 +24,8 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
+from .errors import AmbienceError
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -134,10 +136,10 @@ async def list_services(hass: HomeAssistant) -> list[dict[str, Any]]:
 async def get_service_schema(hass: HomeAssistant, service_id: str) -> dict[str, Any] | None:
     """Return {fields, target} for one service, or None if unknown.
 
-    Raises ValueError if `service_id` is not "domain.service".
+    Raises AmbienceError if `service_id` is not "domain.service".
     """
     if "." not in service_id:
-        raise ValueError(f"service_id must be domain.service: {service_id!r}")
+        raise AmbienceError("invalid_service_id_format", service_id=service_id)
     domain, name = service_id.split(".", 1)
     descriptions = await _descriptions(hass)
     spec = descriptions.get(domain, {}).get(name)

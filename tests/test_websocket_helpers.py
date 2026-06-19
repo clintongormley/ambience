@@ -20,6 +20,7 @@ from custom_components.ambience.const import (
     DOMAIN,
     GENERAL_CATEGORY_ID,
 )
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.websocket_helpers import (
     annotate_scenes,
     canonicalise,
@@ -64,14 +65,17 @@ def _make_exposed(service_ids: list[str]) -> dict:
 class TestValidateScopeConfig:
     def test_rejects_non_dict_config(self) -> None:
         hass = _make_hass()
-        with pytest.raises(ValueError, match="config must be an object"):
+        with pytest.raises(AmbienceError) as exc:
             validate_scope_config(hass, "not a dict")  # type: ignore[arg-type]
+        assert exc.value.translation_key == "scene_config_not_object"
 
     def test_rejects_unknown_condition_key(self) -> None:
         hass = _make_hass(conditions={})  # empty registry → all keys unknown
         config = {"scenes": [{"when": {"nonexistent_condition": {"some": "value"}}, "actions": []}]}
-        with pytest.raises(ValueError, match="unknown condition nonexistent_condition"):
+        with pytest.raises(AmbienceError) as exc:
             validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_unknown_condition"
+        assert exc.value.translation_placeholders["key"] == "nonexistent_condition"
 
     def test_allows_none_predicate_without_validation(self) -> None:
         """A None predicate is treated as 'no constraint' and skipped entirely —
@@ -96,8 +100,9 @@ class TestValidateScopeConfig:
                 }
             ]
         }
-        with pytest.raises(ValueError, match="missing or malformed"):
+        with pytest.raises(AmbienceError) as exc:
             validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_action_service_invalid"
 
     def test_allows_unexposed_action(self) -> None:
         # A well-formed action whose service isn't exposed must no longer block the
@@ -127,8 +132,9 @@ class TestValidateScopeConfig:
                 }
             ]
         }
-        with pytest.raises(ValueError, match="entity_ids must be a list"):
+        with pytest.raises(AmbienceError) as exc:
             validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_action_entity_ids_not_list"
 
     def test_rejects_non_string_entity_id_element(self) -> None:
         exposed = _make_exposed(["light.turn_on"])
@@ -147,8 +153,9 @@ class TestValidateScopeConfig:
                 }
             ]
         }
-        with pytest.raises(ValueError, match="entity_ids must be non-empty strings"):
+        with pytest.raises(AmbienceError) as exc:
             validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_action_entity_ids_not_strings"
 
     def test_rejects_non_dict_params(self) -> None:
         exposed = _make_exposed(["light.turn_on"])
@@ -167,8 +174,9 @@ class TestValidateScopeConfig:
                 }
             ]
         }
-        with pytest.raises(ValueError, match="params must be an object"):
+        with pytest.raises(AmbienceError) as exc:
             validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_action_params_not_object"
 
     def test_accepts_valid_action(self) -> None:
         exposed = _make_exposed(["light.turn_on"])
@@ -209,8 +217,9 @@ class TestValidateScopeConfig:
                 {"name": "Movie", "category": "a", "when": {}, "actions": []},
             ]
         }
-        with pytest.raises(ValueError, match="already exists"):
+        with pytest.raises(AmbienceError) as exc:
             validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_dup_name"
 
     def test_allows_same_scene_name_in_different_categories(self) -> None:
         hass = _make_hass()
@@ -230,8 +239,9 @@ class TestValidateScopeConfig:
                 {"name": "MOVIE", "category": "a", "when": {}, "actions": []},
             ]
         }
-        with pytest.raises(ValueError, match="already exists"):
+        with pytest.raises(AmbienceError) as exc:
             validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_dup_name"
 
     def test_allows_duplicate_empty_or_missing_scene_names(self) -> None:
         # Empty/whitespace/absent names are exempt from the uniqueness check.
@@ -247,14 +257,15 @@ class TestValidateScopeConfig:
 
     def test_non_string_category_raises_value_error_not_typeerror(self) -> None:
         # A corrupted/hand-edited category that isn't a string must surface a
-        # clean ValueError (caught by the websocket handler), not an unhashable
+        # clean AmbienceError (caught by the websocket handler), not an unhashable
         # TypeError that escapes the validation path.
         hass = _make_hass()
         config = {
             "scenes": [{"name": "Movie", "category": ["a"], "when": {}, "actions": []}],
         }
-        with pytest.raises(ValueError, match="category"):
+        with pytest.raises(AmbienceError) as exc:
             validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_category_not_string"
 
 
 # ---------------------------------------------------------------------------
@@ -269,51 +280,60 @@ class TestValidateWeatherGroups:
 
     def test_non_list_raises(self) -> None:
         # Line 178: groups not a list
-        with pytest.raises(ValueError, match="groups must be a list"):
+        with pytest.raises(AmbienceError) as exc:
             validate_weather_groups({"id": "wet"})
+        assert exc.value.translation_key == "weather_groups_not_list"
 
     def test_non_dict_element_raises(self) -> None:
         # Line 184: element not a dict
-        with pytest.raises(ValueError, match="each group must be an object"):
+        with pytest.raises(AmbienceError) as exc:
             validate_weather_groups(["not_a_dict"])
+        assert exc.value.translation_key == "weather_group_not_object"
 
     def test_missing_id_raises(self) -> None:
         # Line 189: id missing
-        with pytest.raises(ValueError, match="group id must be a non-empty string"):
+        with pytest.raises(AmbienceError) as exc:
             validate_weather_groups([{"label": "Wet", "conditions": ["rainy"]}])
+        assert exc.value.translation_key == "weather_group_id_empty"
 
     def test_empty_string_id_raises(self) -> None:
         # Line 189: id is empty string
-        with pytest.raises(ValueError, match="group id must be a non-empty string"):
+        with pytest.raises(AmbienceError) as exc:
             validate_weather_groups([{"id": "", "label": "Wet", "conditions": ["rainy"]}])
+        assert exc.value.translation_key == "weather_group_id_empty"
 
     def test_duplicate_id_raises(self) -> None:
         groups = [
             {"id": "wet", "label": "Wet", "conditions": ["rainy"]},
             {"id": "wet", "label": "Wet again", "conditions": ["pouring"]},
         ]
-        with pytest.raises(ValueError, match="duplicate group id"):
+        with pytest.raises(AmbienceError) as exc:
             validate_weather_groups(groups)
+        assert exc.value.translation_key == "weather_group_id_duplicate"
 
     def test_missing_label_raises(self) -> None:
-        with pytest.raises(ValueError, match="label must be a non-empty string"):
+        with pytest.raises(AmbienceError) as exc:
             validate_weather_groups([{"id": "wet", "conditions": ["rainy"]}])
+        assert exc.value.translation_key == "weather_group_label_empty"
 
     def test_empty_label_raises(self) -> None:
-        with pytest.raises(ValueError, match="label must be a non-empty string"):
+        with pytest.raises(AmbienceError) as exc:
             validate_weather_groups([{"id": "wet", "label": "", "conditions": ["rainy"]}])
+        assert exc.value.translation_key == "weather_group_label_empty"
 
     def test_invalid_condition_raises(self) -> None:
         # Line 194: condition not in WEATHER_CONDITIONS
-        with pytest.raises(ValueError, match="invalid condition"):
+        with pytest.raises(AmbienceError) as exc:
             validate_weather_groups(
                 [{"id": "wet", "label": "Wet", "conditions": ["not-a-real-condition"]}]
             )
+        assert exc.value.translation_key == "weather_group_invalid_conditions"
 
     def test_non_list_conditions_raises(self) -> None:
         # conditions key not a list at all
-        with pytest.raises(ValueError, match="invalid condition"):
+        with pytest.raises(AmbienceError) as exc:
             validate_weather_groups([{"id": "wet", "label": "Wet", "conditions": "rainy"}])
+        assert exc.value.translation_key == "weather_group_invalid_conditions"
 
     def test_valid_groups_returns_cleaned_list(self) -> None:
         groups = [

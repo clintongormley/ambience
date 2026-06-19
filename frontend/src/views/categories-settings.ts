@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { deleteCategory, type HassConnection, listCategories, saveCategories } from "../api.js";
 import { CATEGORY_COLORS, colorHex } from "../category-colors.js";
-import { localize } from "../i18n.js";
+import { categoryColorLabel, localize, localizeWsError } from "../i18n.js";
 import { randomId } from "../random-id.js";
 import type { SceneCategory } from "../types.js";
 import "./ambience-help.js";
@@ -135,7 +135,7 @@ export class AmbienceCategoriesSettings extends LitElement {
     try {
       this._categories = await listCategories(this.hass);
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 
@@ -226,7 +226,7 @@ export class AmbienceCategoriesSettings extends LitElement {
         window.dispatchEvent(new CustomEvent("ambience-categories-changed"));
       })
       .catch((e) => {
-        this._error = (e as Error).message || String(e);
+        this._error = localizeWsError(this.hass, e);
       });
   }
 
@@ -271,7 +271,7 @@ export class AmbienceCategoriesSettings extends LitElement {
             "You can't delete the last category.",
           );
         } else {
-          this._modalError = (e as Error).message || String(e);
+          this._modalError = localizeWsError(this.hass, e);
         }
       });
   }
@@ -302,17 +302,18 @@ export class AmbienceCategoriesSettings extends LitElement {
     const current = this._editing!.color;
     return html`
       <div class="swatches">
-        ${CATEGORY_COLORS.map(
-          (c) => html`<button
+        ${CATEGORY_COLORS.map((c) => {
+          const label = categoryColorLabel(this.hass, c.id, c.label);
+          return html`<button
             type="button"
             class="swatch ${current === c.id ? "selected" : ""}"
             style=${`background: ${c.hex}`}
-            title=${c.label}
-            aria-label=${c.label}
+            title=${label}
+            aria-label=${label}
             aria-pressed=${current === c.id}
             @click=${() => this._onColor(c.id)}
-          ></button>`,
-        )}
+          ></button>`;
+        })}
         <button
           type="button"
           class="swatch none ${current == null ? "selected" : ""}"
@@ -402,7 +403,7 @@ export class AmbienceCategoriesSettings extends LitElement {
         <button class="add" @click=${() => this._addCategory()}>
           ${localize(this.hass, "ui.category_add", "+ Add category")}
         </button>
-        <ambience-help .text=${localize(this.hass, "ui.help_categories_tab", "Categories let one scope have several independent winners at once — one scene wins per category.")}></ambience-help>
+        <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_categories_tab", "Categories let one scope have several independent winners at once — one scene wins per category.")}></ambience-help>
       </div>
       ${this._renderModal()}
     `;

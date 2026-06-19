@@ -9,7 +9,7 @@ apply_scene:
       name: Scopes
       description: >-
         Scopes to apply in (House, a floor, or an area). Leave empty to apply at
-        every scope. Values are "house", "floor:<floor_id>", or "area:<area_id>".
+        every scope. Values are "house", "floor:FLOOR_ID", or "area:AREA_ID".
       required: false
       selector:
         text:

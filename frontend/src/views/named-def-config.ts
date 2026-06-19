@@ -1,7 +1,7 @@
 import { css, html, LitElement, type TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HassConnection } from "../api.js";
-import { localize } from "../i18n.js";
+import { localize, localizeWsError } from "../i18n.js";
 
 export type NamedDefView<Def> = {
   builtins: Record<string, Def>;
@@ -96,7 +96,7 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
       this._error = "";
     } catch (e) {
       // A failed fetch must not leave a blank panel + unhandled rejection.
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 
@@ -107,7 +107,7 @@ export abstract class AmbienceNamedDefConfig<Def> extends LitElement {
       await this._save(custom, this._view.hidden);
       this._error = "";
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
       return false;
     }
     await this._reload();

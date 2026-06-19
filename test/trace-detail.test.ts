@@ -80,25 +80,25 @@ function renderToHost(
 describe("trace-detail", () => {
   test("formatCause renders entity old→new and humanizes other kinds", () => {
     expect(
-      formatCause({ kind: "entity", entity_id: "x", old: "off", new: "on", detail: null }),
+      formatCause({}, { kind: "entity", entity_id: "x", old: "off", new: "on", detail: null }),
     ).toContain("off");
     expect(
-      formatCause({ kind: "clock", entity_id: null, old: null, new: null, detail: "20:00" }),
+      formatCause({}, { kind: "clock", entity_id: null, old: null, new: null, detail: "20:00" }),
     ).toContain("20:00");
   });
 
   test("formatCause labels the idle re-apply cause and keeps its interval detail", () => {
     expect(
-      formatCause({ kind: "reapply", entity_id: null, old: null, new: null, detail: "1h30m" }),
+      formatCause({}, { kind: "reapply", entity_id: null, old: null, new: null, detail: "1h30m" }),
     ).toBe("Reapply 1h30m");
   });
 
   test("formatCause normalizes null state values to '?' (not the string 'null')", () => {
     expect(
-      formatCause({ kind: "entity", entity_id: "x", old: null, new: null, detail: null }),
+      formatCause({}, { kind: "entity", entity_id: "x", old: null, new: null, detail: null }),
     ).toBe("x ? → ?");
     expect(
-      formatCause({ kind: "duration", entity_id: "x", old: null, new: null, detail: null }),
+      formatCause({}, { kind: "duration", entity_id: "x", old: null, new: null, detail: null }),
     ).toBe("x ? for ?");
   });
 
@@ -706,13 +706,16 @@ describe("trace-detail", () => {
   // formatCause — line 61-63: kind != "entity" AND detail is null/falsy
   // Branch 8: returns humanizeId(c.kind) with no detail
   test("formatCause returns humanized kind when kind is not 'entity' and detail is null", () => {
-    const result = formatCause({
-      kind: "startup",
-      entity_id: null,
-      old: null,
-      new: null,
-      detail: null,
-    });
+    const result = formatCause(
+      {},
+      {
+        kind: "startup",
+        entity_id: null,
+        old: null,
+        new: null,
+        detail: null,
+      },
+    );
     // detail is null → falls through to `return humanizeId(c.kind)`
     expect(result).toBe("Startup");
     expect(result).not.toContain("null");
@@ -720,13 +723,16 @@ describe("trace-detail", () => {
 
   // formatCause — line 61: kind != "entity" AND detail is falsy string ""
   test("formatCause returns humanized kind when detail is empty string", () => {
-    const result = formatCause({
-      kind: "manual",
-      entity_id: null,
-      old: null,
-      new: null,
-      detail: "" as unknown as null, // coerce — empty string is falsy
-    });
+    const result = formatCause(
+      {},
+      {
+        kind: "manual",
+        entity_id: null,
+        old: null,
+        new: null,
+        detail: "" as unknown as null, // coerce — empty string is falsy
+      },
+    );
     expect(result).toBe("Manual apply");
   });
 
@@ -944,13 +950,13 @@ describe("trace-detail", () => {
   // -------------------------------------------------------------------------
 
   test("outcomeLabel maps internal ids to friendly badge text", () => {
-    expect(outcomeLabel("acted")).toBe("applied");
-    expect(outcomeLabel("no_op")).toBe("blocked");
-    expect(outcomeLabel("debounced")).toBe("unchanged");
-    expect(outcomeLabel("no_match")).toBe("no match");
-    expect(outcomeLabel("skipped_switch_off")).toBe("skipped");
-    expect(outcomeLabel("skipped_scope_disabled")).toBe("skipped");
-    expect(outcomeLabel("skipped_unavailable")).toBe("skipped");
+    expect(outcomeLabel({}, "acted")).toBe("applied");
+    expect(outcomeLabel({}, "no_op")).toBe("blocked");
+    expect(outcomeLabel({}, "debounced")).toBe("unchanged");
+    expect(outcomeLabel({}, "no_match")).toBe("no match");
+    expect(outcomeLabel({}, "skipped_switch_off")).toBe("skipped");
+    expect(outcomeLabel({}, "skipped_scope_disabled")).toBe("skipped");
+    expect(outcomeLabel({}, "skipped_unavailable")).toBe("skipped");
   });
 
   test("badge shows the friendly label while keeping the internal CSS class", () => {
@@ -960,24 +966,26 @@ describe("trace-detail", () => {
   });
 
   test("outcomeSummary explains each outcome in plain language", () => {
-    const applied = outcomeSummary(unit({ outcome: "acted", winner_name: "Evening" }));
+    const applied = outcomeSummary({}, unit({ outcome: "acted", winner_name: "Evening" }));
     expect(applied).toContain("Applied");
     expect(applied).toContain("Evening");
 
-    expect(outcomeSummary(unit({ outcome: "no_op", winner_name: "Blocker" }))).toContain(
+    expect(outcomeSummary({}, unit({ outcome: "no_op", winner_name: "Blocker" }))).toContain(
       "no actions",
     );
-    expect(outcomeSummary(unit({ outcome: "debounced", winner_name: "Evening" }))).toContain(
+    expect(outcomeSummary({}, unit({ outcome: "debounced", winner_name: "Evening" }))).toContain(
       "already applied",
     );
-    expect(outcomeSummary(unit({ outcome: "no_match", winner_name: null }))).toContain(
+    expect(outcomeSummary({}, unit({ outcome: "no_match", winner_name: null }))).toContain(
       "No scene matched",
     );
-    expect(outcomeSummary(unit({ outcome: "skipped_switch_off" }))).toContain("switch is off");
-    expect(outcomeSummary(unit({ outcome: "skipped_scope_disabled" }))).toContain(
+    expect(outcomeSummary({}, unit({ outcome: "skipped_switch_off" }))).toContain("switch is off");
+    expect(outcomeSummary({}, unit({ outcome: "skipped_scope_disabled" }))).toContain(
       "scope is disabled",
     );
-    expect(outcomeSummary(unit({ outcome: "skipped_unavailable" }))).toContain("went unavailable");
+    expect(outcomeSummary({}, unit({ outcome: "skipped_unavailable" }))).toContain(
+      "went unavailable",
+    );
   });
 
   test("the friendly outcome summary appears at the top of the expansion", () => {
@@ -1003,35 +1011,43 @@ describe("trace-detail", () => {
 
   test("formatCause uses friendly labels for non-entity causes", () => {
     const base = { entity_id: null, old: null, new: null } as const;
-    expect(formatCause({ kind: "switch", ...base, detail: null })).toBe("Switch turned on");
-    expect(formatCause({ kind: "manual", ...base, detail: null })).toBe("Manual apply");
-    expect(formatCause({ kind: "simulated", ...base, detail: "2026-06-01T10:00:00" })).toBe(
+    expect(formatCause({}, { kind: "switch", ...base, detail: null })).toBe("Switch turned on");
+    expect(formatCause({}, { kind: "manual", ...base, detail: null })).toBe("Manual apply");
+    expect(formatCause({}, { kind: "simulated", ...base, detail: "2026-06-01T10:00:00" })).toBe(
       "Simulation",
     );
-    expect(formatCause({ kind: "has_time", ...base, detail: null })).toBe("Periodic time check");
+    expect(formatCause({}, { kind: "has_time", ...base, detail: null })).toBe(
+      "Periodic time check",
+    );
   });
 
   test("formatCause renders a duration cause as 'entity state for duration'", () => {
     expect(
-      formatCause({
-        kind: "duration",
-        entity_id: "binary_sensor.motion",
-        old: null,
-        new: "off",
-        detail: "5m",
-      }),
+      formatCause(
+        {},
+        {
+          kind: "duration",
+          entity_id: "binary_sensor.motion",
+          old: null,
+          new: "off",
+          detail: "5m",
+        },
+      ),
     ).toBe("binary_sensor.motion off for 5m");
   });
 
   test("formatCause renders a multi-entity duration cause as '<label> for duration'", () => {
     expect(
-      formatCause({
-        kind: "duration",
-        entity_id: null,
-        old: null,
-        new: "nobody home",
-        detail: "30m",
-      }),
+      formatCause(
+        {},
+        {
+          kind: "duration",
+          entity_id: null,
+          old: null,
+          new: "nobody home",
+          detail: "30m",
+        },
+      ),
     ).toBe("nobody home for 30m");
   });
 
@@ -1045,7 +1061,7 @@ describe("trace-detail", () => {
 
   test("formatCause renders the reloaded kind as 'Reloaded'", () => {
     expect(
-      formatCause({ kind: "reloaded", entity_id: null, old: null, new: null, detail: null }),
+      formatCause({}, { kind: "reloaded", entity_id: null, old: null, new: null, detail: null }),
     ).toBe("Reloaded");
   });
 });
@@ -1207,6 +1223,7 @@ describe("review fixes", () => {
 
   test("outcomeSummary notes how many actions were skipped (unexposed)", () => {
     const summary = outcomeSummary(
+      {},
       unit({
         actions: [
           { service: "light.turn_on", entity_ids: ["light.k"], params: {} },
@@ -1246,6 +1263,7 @@ describe("review fixes", () => {
 
   test("outcomeSummary reads sensibly when every action was skipped", () => {
     const summary = outcomeSummary(
+      {},
       unit({
         actions: [
           { service: "light.toggle", entity_ids: ["light.b"], params: {}, unexposed: true },

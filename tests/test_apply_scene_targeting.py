@@ -34,8 +34,10 @@ def test_parse_scope_option_round_trips_and_rejects_bad():
     assert parse_scope_option("house") == ("house", None)
     assert parse_scope_option("floor:ground") == ("floor", "ground")
     assert parse_scope_option("area:kitchen") == ("area", "kitchen")
-    with pytest.raises(ServiceValidationError):
+    with pytest.raises(ServiceValidationError) as exc_info:
         parse_scope_option("bogus")
+    assert exc_info.value.translation_key == "invalid_scope"
+    assert exc_info.value.translation_placeholders == {"value": "bogus"}
     with pytest.raises(ServiceValidationError):
         parse_scope_option("zone:x")
     with pytest.raises(ServiceValidationError):
@@ -85,13 +87,17 @@ async def test_resolve_strips_surrounding_whitespace(hass, installed):
 
 
 async def test_resolve_unknown_area_raises(hass, installed):
-    with pytest.raises(ServiceValidationError):
+    with pytest.raises(ServiceValidationError) as exc_info:
         _resolve_target_scopes(hass, {"scope": ["area:ghost"]})
+    assert exc_info.value.translation_key == "unknown_area"
+    assert exc_info.value.translation_placeholders == {"scope_id": "ghost"}
 
 
 async def test_resolve_unknown_floor_raises(hass, installed):
-    with pytest.raises(ServiceValidationError):
+    with pytest.raises(ServiceValidationError) as exc_info:
         _resolve_target_scopes(hass, {"scope": ["floor:ghost"]})
+    assert exc_info.value.translation_key == "unknown_floor"
+    assert exc_info.value.translation_placeholders == {"scope_id": "ghost"}
 
 
 async def test_resolve_dedups_repeated_ids(hass, installed):

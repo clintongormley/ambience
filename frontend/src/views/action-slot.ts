@@ -4,7 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import { getServiceSchema, type HassConnection } from "../api.js";
 import { entitiesForScope, type HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
-import { humanizeId, localize } from "../i18n.js";
+import { humanizeId, localize, localizeWsError } from "../i18n.js";
 import { formatArgValue, selectorUnit } from "../summary.js";
 import type { ExposedAction, Scope, ServiceSchema } from "../types.js";
 import "./target-picker.js";
@@ -187,7 +187,7 @@ export class AmbienceActionSlot extends LitElement {
     } catch (e) {
       if (this._schemaServiceId !== id) return;
       this._schema = null;
-      this._schemaError = e instanceof Error ? e.message : String(e);
+      this._schemaError = localizeWsError(this.hass, e);
     }
   }
 

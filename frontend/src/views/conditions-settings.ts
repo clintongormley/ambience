@@ -2,7 +2,7 @@ import { css, html, LitElement, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, listConditions } from "../api.js";
-import { localize } from "../i18n.js";
+import { localize, localizeWsError } from "../i18n.js";
 import type { ConditionInfo } from "../types.js";
 import "./ambience-help.js";
 import "./condition-card.js";
@@ -46,7 +46,7 @@ export class AmbienceConditionsSettings extends LitElement {
     try {
       this._conditions = await listConditions(this.hass);
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 
@@ -58,7 +58,7 @@ export class AmbienceConditionsSettings extends LitElement {
     return html`
       <div class="tab-heading">
         <span>${localize(this.hass, "ui.settings_tab_conditions", "Conditions")}</span>
-        <ambience-help .text=${localize(this.hass, "ui.help_conditions_tab", "Conditions are the inputs scenes match on (time of day, presence, weather, …). A scene wins when all its conditions pass.")}></ambience-help>
+        <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_conditions_tab", "Conditions are the inputs scenes match on (time of day, presence, weather, …). A scene wins when all its conditions pass.")}></ambience-help>
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
       ${configurable.map(

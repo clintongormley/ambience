@@ -8,7 +8,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import floor_registry as fr
@@ -31,6 +31,7 @@ from .const import (
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from .diagnostics import scope_diagnostics
+from .errors import AmbienceError, render_en, service_validation_error
 from .exposed_actions import ExposedActionsStore
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
@@ -60,6 +61,65 @@ _LOGGER = logging.getLogger(__name__)
 # tweaks a handful of inputs; this cap stops a malformed/abusive admin request
 # from materialising an unbounded number of State objects on the event loop.
 MAX_SIMULATE_ENTRIES = 1000
+
+
+def send_ambience_error(
+    connection: websocket_api.ActiveConnection,
+    msg_id: int,
+    err: Exception,
+    *,
+    code: str = "validation_error",
+) -> None:
+    """Send a websocket error for a handler exception (the single chokepoint).
+
+    - An Ambience ``HomeAssistantError`` (``AmbienceError`` / a
+      ``translation_domain == DOMAIN`` error) with a ``translation_key``
+      -> a localizable error payload carrying ``translation_key`` +
+      ``translation_placeholders`` (plus the English message via ``render_en``
+      for fallback/logging). Built with ``send_message`` so the extra fields ride
+      on the error object — ``connection.send_error`` cannot carry them.
+    - ``ValueError``, or a ``HomeAssistantError`` without a ``translation_key`` or
+      from a different ``translation_domain`` (e.g. an HA-core error) ->
+      ``connection.send_error(code, str(err))`` — its real message; the generic
+      ``unexpected_error`` is reserved for non-HomeAssistantError/non-ValueError
+      exceptions (real bugs).
+    - Anything else -> log with traceback + a generic ``unexpected_error`` (the
+      internal detail is never leaked to the user).
+    """
+    if (
+        isinstance(err, HomeAssistantError)
+        and getattr(err, "translation_key", None)
+        and getattr(err, "translation_domain", None) == DOMAIN
+    ):
+        key = err.translation_key
+        ph = getattr(err, "translation_placeholders", {}) or {}
+        connection.send_message(
+            websocket_api.error_message(
+                msg_id,
+                code,
+                render_en(key, ph),
+                translation_key=key,
+                translation_domain=DOMAIN,
+                translation_placeholders=ph,
+            )
+        )
+        return
+    if isinstance(err, (HomeAssistantError, ValueError)):
+        connection.send_error(msg_id, code, str(err))
+        return
+    _LOGGER.exception("ambience websocket handler error", exc_info=err)
+    # Carry the translation_key so a non-English user sees their localized
+    # "unexpected error" (es.json has it); the internal detail is never leaked.
+    connection.send_message(
+        websocket_api.error_message(
+            msg_id,
+            "unexpected_error",
+            render_en("unexpected_error", {}),
+            translation_key="unexpected_error",
+            translation_domain=DOMAIN,
+            translation_placeholders={},
+        )
+    )
 
 
 def async_register_commands(hass: HomeAssistant) -> None:
@@ -152,11 +212,16 @@ async def _ws_services_get_schema(
 
     try:
         schema = await get_service_schema(hass, msg["service"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     if schema is None:
-        connection.send_error(msg["id"], "unknown_service", f"unknown service: {msg['service']!r}")
+        send_ambience_error(
+            connection,
+            msg["id"],
+            AmbienceError("unknown_service", service=msg["service"]),
+            code="unknown_service",
+        )
         return
     connection.send_result(msg["id"], schema)
 
@@ -191,8 +256,8 @@ async def _ws_exposed_actions_save(
     try:
         exposed_store.validate_shape(actions)
         await exposed_store.validate_against_catalog(hass, actions)
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
 
     await exposed_store.save(actions)
@@ -215,7 +280,9 @@ async def _ws_area_get(
 ) -> None:
     area_id = msg["area_id"]
     if ar.async_get(hass).async_get_area(area_id) is None:
-        connection.send_error(msg["id"], "unknown_area", "area not found")
+        send_ambience_error(
+            connection, msg["id"], AmbienceError("area_not_found"), code="unknown_area"
+        )
         return
     store = hass.data[DOMAIN][DATA_STORE]
     area = store.get_area(area_id) or {"scenes": []}
@@ -233,8 +300,8 @@ async def _save_scope(
     scope exists in the relevant registry). `save_fn(store, config)` persists."""
     try:
         validate_scope_config(hass, msg["config"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     # Coerce categories BEFORE canonicalising so each scene is ordered in its final
     # (post-coercion) category bucket, not a transient unknown/empty one.
@@ -265,10 +332,11 @@ async def _ws_area_save(
 ) -> None:
     area_id = msg["area_id"]
     if ar.async_get(hass).async_get_area(area_id) is None:
-        connection.send_error(
+        send_ambience_error(
+            connection,
             msg["id"],
-            "validation_error",
-            f"unknown area: {area_id}",
+            AmbienceError("unknown_area", scope_id=area_id),
+            code="validation_error",
         )
         return
     await _save_scope(hass, connection, msg, lambda store, cfg: store.async_save_area(area_id, cfg))
@@ -289,7 +357,9 @@ async def _ws_floor_get(
 ) -> None:
     floor_id = msg["floor_id"]
     if fr.async_get(hass).async_get_floor(floor_id) is None:
-        connection.send_error(msg["id"], "unknown_floor", "floor not found")
+        send_ambience_error(
+            connection, msg["id"], AmbienceError("floor_not_found"), code="unknown_floor"
+        )
         return
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = store.get_floor(floor_id) or {"scenes": []}
@@ -312,10 +382,11 @@ async def _ws_floor_save(
 ) -> None:
     floor_id = msg["floor_id"]
     if fr.async_get(hass).async_get_floor(floor_id) is None:
-        connection.send_error(
+        send_ambience_error(
+            connection,
             msg["id"],
-            "validation_error",
-            f"unknown floor: {floor_id}",
+            AmbienceError("unknown_floor", scope_id=floor_id),
+            code="validation_error",
         )
         return
     await _save_scope(
@@ -378,8 +449,8 @@ async def _ws_auto_triggers_list(
     conditions = hass.data[DOMAIN][DATA_CONDITIONS]
     try:
         cfg = store.scope_config(msg["scope_kind"], msg.get("scope_id"))
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     category = msg.get("category")
     if category is not None:
@@ -404,14 +475,15 @@ async def _ws_validate(
 ) -> None:
     try:
         validate_scope_config(hass, msg["config"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], {"ok": True})
 
 
 def _house_must_be_true(v: Any) -> bool:
     if v is not True:
+        # i18n: voluptuous schema validator — English-only (framework layer)
         raise vol.Invalid("house must be true")
     return v
 
@@ -424,8 +496,8 @@ def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     """
     present = [k for k in ("area_id", "floor_id", "house") if k in msg]
     if len(present) != 1:
-        raise ServiceValidationError(
-            f"{command} requires exactly one of area_id/floor_id/house, got: {present!r}"
+        raise service_validation_error(
+            "scope_selector_invalid", command=command, present=", ".join(present) or "(none)"
         )
     if "area_id" in msg:
         return "area", msg["area_id"]
@@ -459,8 +531,8 @@ async def _ws_dry_run(
         result["categories"] = await async_resolve_categories_only(
             hass, scope_kind, scope_id, snapshots=snapshots
         )
-    except ServiceValidationError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
 
@@ -486,8 +558,8 @@ async def _ws_apply(
         await async_apply_scene(
             hass, scope_kind, scope_id, category=msg.get("category_id"), force=True
         )
-    except ServiceValidationError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], {"ok": True})
 
@@ -511,8 +583,8 @@ async def _ws_run_scene_actions(
     try:
         scope_kind, scope_id = _parse_scope(msg, "run_actions")
         result = await async_run_scene_actions(hass, scope_kind, scope_id, msg["scene_index"])
-    except ServiceValidationError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
 
@@ -546,8 +618,8 @@ async def _ws_periods_save(
     period_store = hass.data[DOMAIN][DATA_PERIODS]
     try:
         await period_store.save(msg["custom"], msg["hidden"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
 
     connection.send_result(msg["id"], {"ok": True})
@@ -595,8 +667,8 @@ async def _ws_lux_ranges_save(
     lux_store = hass.data[DOMAIN][DATA_LUX_RANGES]
     try:
         await lux_store.save(msg["custom"], msg["hidden"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
 
     connection.send_result(msg["id"], {"ok": True})
@@ -678,8 +750,8 @@ async def _ws_weather_config_save(
 ) -> None:
     try:
         groups = validate_weather_groups(msg.get("groups"))
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     new_cfg = {"entity": msg.get("entity"), "groups": groups}
     store = hass.data[DOMAIN][DATA_STORE]
@@ -757,8 +829,8 @@ async def _ws_switch_defaults_save(
                 "create_switches": msg["create_switches"],
             }
         )
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     connection.send_result(msg["id"], {"ok": True})
@@ -794,8 +866,8 @@ async def _ws_reapply_save(
         await store.async_save_reapply_settings(
             {"enabled": msg["enabled"], "interval_seconds": msg["interval_seconds"]}
         )
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     async_dispatcher_send(hass, SIGNAL_REAPPLY_CONFIG_UPDATED, None)
     connection.send_result(msg["id"], {"ok": True})
@@ -885,16 +957,26 @@ async def _ws_set_scope_enabled(
 ) -> None:
     try:
         scope_kind, scope_id = _parse_scope(msg, "set_scope_enabled")
-    except ServiceValidationError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     # Validate the id against the registry (like the save handlers): the store
     # setdefaults a scope bucket, so a typo'd/stale id would persist junk.
     if scope_kind == "area" and ar.async_get(hass).async_get_area(scope_id) is None:
-        connection.send_error(msg["id"], "validation_error", f"unknown area: {scope_id}")
+        send_ambience_error(
+            connection,
+            msg["id"],
+            AmbienceError("unknown_area", scope_id=scope_id),
+            code="validation_error",
+        )
         return
     if scope_kind == "floor" and fr.async_get(hass).async_get_floor(scope_id) is None:
-        connection.send_error(msg["id"], "validation_error", f"unknown floor: {scope_id}")
+        send_ambience_error(
+            connection,
+            msg["id"],
+            AmbienceError("unknown_floor", scope_id=scope_id),
+            code="validation_error",
+        )
         return
     enabled = msg["enabled"]
     store = hass.data[DOMAIN][DATA_STORE]
@@ -957,25 +1039,34 @@ async def _ws_categories_save(
         cid = category.get("id")
         name = category.get("name")
         if not isinstance(cid, str) or not cid.strip():
-            connection.send_error(
-                msg["id"], "invalid_categories", "category id must be a non-empty string"
+            send_ambience_error(
+                connection, msg["id"], AmbienceError("category_id_empty"), code="invalid_categories"
             )
             return
         if cid in seen_ids:
-            connection.send_error(
-                msg["id"], "invalid_categories", f"duplicate category id: {cid!r}"
+            send_ambience_error(
+                connection,
+                msg["id"],
+                AmbienceError("duplicate_category_id", cid=cid),
+                code="invalid_categories",
             )
             return
         seen_ids.add(cid)
         if not isinstance(name, str) or not name.strip():
-            connection.send_error(
-                msg["id"], "invalid_categories", f"category {cid!r} name must be a non-empty string"
+            send_ambience_error(
+                connection,
+                msg["id"],
+                AmbienceError("category_name_empty", cid=cid),
+                code="invalid_categories",
             )
             return
         key = name.strip().casefold()
         if key in seen_names:
-            connection.send_error(
-                msg["id"], "invalid_categories", f"duplicate category name: {name.strip()!r}"
+            send_ambience_error(
+                connection,
+                msg["id"],
+                AmbienceError("duplicate_category_name", name=name.strip()),
+                code="invalid_categories",
             )
             return
         seen_names.add(key)
@@ -984,10 +1075,10 @@ async def _ws_categories_save(
     try:
         await store.async_save_categories(categories)
     except LastCategoryError as exc:
-        connection.send_error(msg["id"], "category_last", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="category_last")
         return
     except CategoryInUseError as exc:
-        connection.send_error(msg["id"], "category_in_use", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="category_in_use")
         return
     connection.send_result(msg["id"])
 
@@ -1009,13 +1100,13 @@ async def _ws_categories_delete(
     try:
         await store.async_delete_category(msg["category_id"])
     except LastCategoryError as exc:
-        connection.send_error(msg["id"], "category_last", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="category_last")
         return
     except CategoryInUseError as exc:
-        connection.send_error(msg["id"], "category_in_use", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="category_in_use")
         return
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"])
 
@@ -1072,8 +1163,8 @@ async def _ws_scope_diagnostics(
 ) -> None:
     try:
         result = scope_diagnostics(hass, msg["scope_kind"], msg.get("scope_id"), msg["category"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
 
@@ -1098,8 +1189,8 @@ async def _ws_simulate_inputs(
         result = await simulate_inputs(
             hass, msg["scope_kind"], msg.get("scope_id"), msg["category"]
         )
-    except (ValueError, ServiceValidationError) as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
 
@@ -1141,13 +1232,21 @@ async def _ws_simulate(
     """Resolve a category against a hypothetical world (read-only)."""
     now = dt_util.parse_datetime(msg["now"])
     if now is None:
-        connection.send_error(msg["id"], "validation_error", f"unparseable now: {msg['now']!r}")
+        send_ambience_error(
+            connection,
+            msg["id"],
+            AmbienceError("unparseable_now", now=msg["now"]),
+            code="validation_error",
+        )
         return
     if now.tzinfo is None:
         # A naive now produces naive-vs-aware TypeErrors inside condition
         # snapshots, which silently distort results (per-condition None).
-        connection.send_error(
-            msg["id"], "validation_error", f"`now` must be timezone-aware: {msg['now']!r}"
+        send_ambience_error(
+            connection,
+            msg["id"],
+            AmbienceError("now_not_timezone_aware", now=msg["now"]),
+            code="validation_error",
         )
         return
     world = SimulatedWorld(
@@ -1159,8 +1258,8 @@ async def _ws_simulate(
         result = await run_simulation(
             hass, msg["scope_kind"], msg.get("scope_id"), msg["category"], world
         )
-    except (ValueError, ServiceValidationError) as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], {"result": result})
 

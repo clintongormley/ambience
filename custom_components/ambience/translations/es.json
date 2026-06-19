@@ -1,0 +1,173 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar Ambience",
+        "description": "Esto creará la entrada de integración de Ambience."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Solo se permite una única instancia."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de Ambience",
+        "data": {
+          "show_sidebar_panel": "Mostrar Ambience en la barra lateral"
+        },
+        "data_description": {
+          "show_sidebar_panel": "Cuando está desactivado, Ambience se elimina de la barra lateral. Aún puedes añadir la tarjeta de Ambience a cualquier panel."
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "ambience": {
+        "name": "Ambience"
+      }
+    }
+  },
+  "issues": {
+    "missing_entity": {
+      "title": "Ambience: una escena hace referencia a una entidad inexistente",
+      "description": "La entidad `{entity_id}` no existe en Home Assistant, pero está referenciada por estas escenas de Ambience en el {scope}:\n{scenes}\n\nUna condición que la referencie nunca coincidirá; una acción dirigida a ella fallará silenciosamente. Corrige el id de la entidad en el editor de Ambience o elimina la referencia. Este mensaje se borra automáticamente una vez que la entidad exista."
+    },
+    "action_overlap": {
+      "title": "Ambience: una entidad está controlada por varios grupos",
+      "description": "La entidad `{entity_id}` está controlada por más de un grupo de categoría/ámbito de Ambience:\n{groups}\n\nCada grupo es un bucle de control independiente con su propio estado, por lo que pueden entrar en conflicto sobre esta entidad y producir aplicaciones obsoletas o sin efecto. Considera moverla a un único grupo. Este mensaje se borra automáticamente una vez que el conflicto se resuelva."
+    },
+    "missing_workday_sensor": {
+      "title": "Ambience: las escenas usan un elemento de día laborable pero no hay sensor de día laborable configurado",
+      "description": "Estas escenas de Ambience usan un elemento de día `workday` o `holiday`, pero no hay ningún **sensor de día laborable** configurado (Ajustes → Ambience → Condiciones → Día), por lo que nunca coincidirán:\n{scenes}\n\nConfigura un sensor de día laborable o elimina los elementos workday/holiday. Este mensaje se borra automáticamente una vez que se resuelva."
+    },
+    "missing_workday_calendar": {
+      "title": "Ambience: las escenas usan un elemento de calendario de días laborables pero no hay calendario configurado",
+      "description": "Estas escenas de Ambience usan un elemento de día `first_workday`/`last_workday`, pero no hay ningún **calendario de días laborables** configurado (Ajustes → Ambience → Condiciones → Día), por lo que nunca coincidirán:\n{scenes}\n\nConfigura un calendario de días laborables o elimina esos elementos. Este mensaje se borra automáticamente una vez que se resuelva."
+    },
+    "missing_weather_entity": {
+      "title": "Ambience: las escenas usan una condición meteorológica pero no hay entidad meteorológica configurada",
+      "description": "Estas escenas de Ambience usan una condición meteorológica, pero no hay ninguna **entidad meteorológica** configurada (Ajustes → Ambience → Condiciones → Tiempo), por lo que nunca coincidirán:\n{scenes}\n\nConfigura una entidad meteorológica o elimina las condiciones meteorológicas. Este mensaje se borra automáticamente una vez que se resuelva."
+    },
+    "missing_weather_group": {
+      "title": "Ambience: las escenas hacen referencia a un grupo meteorológico eliminado",
+      "description": "El grupo meteorológico `{ref}` ya no existe, pero está referenciado por estas escenas de Ambience:\n{scenes}\n\nUna condición que lo referencie nunca coincidirá. Vuelve a crear el grupo o elimina la referencia. Este mensaje se borra automáticamente una vez que se resuelva."
+    },
+    "missing_period": {
+      "title": "Ambience: las escenas hacen referencia a un período del día eliminado",
+      "description": "El período del día `{ref}` ya no existe, pero está referenciado por estas escenas de Ambience:\n{scenes}\n\nUna condición que lo referencie nunca coincidirá. Vuelve a crear el período o elimina la referencia. Este mensaje se borra automáticamente una vez que se resuelva."
+    },
+    "missing_lux_range": {
+      "title": "Ambience: las escenas hacen referencia a un rango de lux eliminado",
+      "description": "El rango de lux `{ref}` ya no existe, pero está referenciado por estas escenas de Ambience:\n{scenes}\n\nUna condición que lo referencie nunca coincidirá. Vuelve a crear el rango o elimina la referencia. Este mensaje se borra automáticamente una vez que se resuelva."
+    },
+    "unexposed_action": {
+      "title": "Ambience: las escenas usan una acción que ya no está expuesta",
+      "description": "La acción `{ref}` ya no está expuesta (Ajustes → Ambience → Acciones), pero la utilizan estas escenas de Ambience:\n{scenes}\n\nLa acción se omitirá cuando se aplique la escena. Vuelve a exponer la acción o elimínala de las escenas. Este mensaje se borra automáticamente una vez que se resuelva."
+    }
+  },
+  "exceptions": {
+    "unexpected_error": { "message": "Se produjo un error inesperado. Consulta los registros de Home Assistant para más detalles." },
+    "period_clamp_not_object": { "message": "Clamp debe ser un objeto." },
+    "period_invalid_clamp_dir": { "message": "Dirección de clamp no válida: {value}" },
+    "period_invalid_clamp_hh": { "message": "Hora de clamp no válida: {value}" },
+    "period_invalid_clamp_mm": { "message": "Minuto de clamp no válido: {value}" },
+    "period_endpoint_not_object": { "message": "El punto extremo debe ser un objeto con un 'kind'." },
+    "period_invalid_hh": { "message": "Hora no válida: {value}" },
+    "period_invalid_mm": { "message": "Minuto no válido: {value}" },
+    "period_invalid_anchor": { "message": "Ancla no válida: {value}" },
+    "period_offset_not_int": { "message": "offset_min debe ser un entero: {value}" },
+    "period_invalid_endpoint_kind": { "message": "Tipo de punto extremo no válido: {value}" },
+    "period_def_not_object": { "message": "La definición del período debe ser un objeto." },
+    "period_def_missing_from_to": { "message": "La definición del período necesita 'from' y 'to'." },
+    "lux_not_integer": { "message": "{which} debe ser un entero: {value}" },
+    "lux_negative": { "message": "{which} debe ser >= 0: {value}" },
+    "lux_def_not_object": { "message": "La definición del rango de lux debe ser un objeto." },
+    "lux_def_needs_min_or_max": { "message": "El rango de lux necesita al menos uno de 'min'/'max'." },
+    "lux_min_not_below_max": { "message": "El 'min' del rango de lux debe ser < 'max': {min} >= {max}" },
+    "named_def_custom_not_object": { "message": "custom debe ser un objeto." },
+    "named_def_hidden_not_list": { "message": "hidden debe ser una lista." },
+    "named_def_invalid_id": { "message": "Id de {kind} no válido: {id}" },
+    "named_def_only_builtin_hideable": { "message": "Solo los ids integrados pueden ocultarse: {id}" },
+    "unknown_scope_kind": { "message": "Tipo de ámbito desconocido: {scope_kind}" },
+    "store_switch_name_empty": { "message": "El `name` predeterminado del interruptor debe ser una cadena no vacía: {name}" },
+    "store_switch_auto_on_delay_invalid": { "message": "`auto_on_delay_seconds` del interruptor debe ser un entero no negativo: {delay}" },
+    "store_switch_create_switches_invalid": { "message": "`create_switches` del interruptor debe ser un booleano: {create}" },
+    "store_reapply_enabled_invalid": { "message": "El `enabled` de reaplicar debe ser un booleano: {enabled}" },
+    "store_reapply_interval_invalid": { "message": "El `interval_seconds` de reaplicar debe ser un entero >= {min}: {interval}" },
+    "store_exposure_invalid": { "message": "La exposición de {assistant} debe ser un booleano: {value}" },
+    "store_unknown_assistants": { "message": "Asistente(s) desconocido(s): {assistants}" },
+    "last_category_required": { "message": "Se requiere al menos una categoría." },
+    "categories_still_have_scenes": { "message": "Estas categorías aún tienen escenas: {categories}" },
+    "cannot_delete_last_category": { "message": "No se puede eliminar la última categoría." },
+    "category_still_has_scenes": { "message": "La categoría {category_id} aún tiene escenas." },
+    "exposed_actions_not_list": { "message": "Las acciones expuestas deben ser una lista." },
+    "exposed_entry_not_object": { "message": "La entrada debe ser un objeto: {entry}" },
+    "exposed_invalid_service_id": { "message": "Id de servicio no válido: {sid}" },
+    "exposed_duplicate_service_id": { "message": "Id de servicio duplicado: {sid}" },
+    "exposed_label_not_string": { "message": "{sid}: la etiqueta debe ser una cadena." },
+    "exposed_visible_fields_not_list": { "message": "{sid}: visible_fields debe ser una lista de cadenas." },
+    "exposed_defaults_not_object": { "message": "{sid}: defaults debe ser un objeto con claves de cadena." },
+    "exposed_unknown_service": { "message": "Servicio desconocido: {sid}" },
+    "exposed_unknown_visible_field": { "message": "{sid}: campo desconocido {field} en visible_fields." },
+    "exposed_unknown_default_field": { "message": "{sid}: campo desconocido {field} en defaults." },
+    "scene_config_not_object": { "message": "La configuración debe ser un objeto." },
+    "scene_scenes_not_list": { "message": "`scenes` debe ser una lista." },
+    "scene_not_object": { "message": "Escena {scene_idx}: debe ser un objeto." },
+    "scene_category_not_string": { "message": "Escena {scene_idx}: la categoría debe ser una cadena." },
+    "scene_dup_name": { "message": "Escena {scene_idx}: ya existe una escena llamada {name} en esta categoría." },
+    "scene_when_not_object": { "message": "Escena {scene_idx}: `when` debe ser un objeto." },
+    "scene_unknown_condition": { "message": "Escena {scene_idx}: condición desconocida {key}" },
+    "scene_actions_not_list": { "message": "Escena {scene_idx}: `actions` debe ser una lista." },
+    "scene_action_not_object": { "message": "Escena {scene_idx} acción {action_idx}: debe ser un objeto." },
+    "scene_action_service_invalid": { "message": "Escena {scene_idx} acción {action_idx}: `service` faltante o malformado." },
+    "scene_action_entity_ids_not_list": { "message": "Escena {scene_idx} acción {action_idx}: entity_ids debe ser una lista." },
+    "scene_action_entity_ids_not_strings": { "message": "Escena {scene_idx} acción {action_idx}: entity_ids deben ser cadenas no vacías." },
+    "scene_action_params_not_object": { "message": "Escena {scene_idx} acción {action_idx}: params debe ser un objeto." },
+    "weather_groups_not_list": { "message": "Los grupos deben ser una lista." },
+    "weather_group_not_object": { "message": "Cada grupo debe ser un objeto." },
+    "weather_group_id_empty": { "message": "El id del grupo debe ser una cadena no vacía: {gid}" },
+    "weather_group_id_duplicate": { "message": "Id de grupo duplicado: {gid}" },
+    "weather_group_label_empty": { "message": "La etiqueta del grupo {gid} debe ser una cadena no vacía." },
+    "weather_group_invalid_conditions": { "message": "El grupo {gid} tiene condición(es) no válida(s)." },
+    "unknown_area": { "message": "Área desconocida: {scope_id}" },
+    "unknown_floor": { "message": "Planta desconocida: {scope_id}" },
+    "invalid_scope": { "message": "Ámbito no válido: {value}" },
+    "scope_disabled": { "message": "El ámbito {scope_kind}/{scope_id} está desactivado." },
+    "scene_index_out_of_range": { "message": "scene_index fuera de rango: {scene_index}" },
+    "scope_selector_invalid": { "message": "{command} requiere exactamente uno de area_id/floor_id/house, se obtuvo: {present}" },
+    "invalid_service_id_format": { "message": "El id del servicio debe ser domain.service: {service_id}" },
+    "no_verdict_snapshot": { "message": "No hay instantánea de veredicto para la condición opaca {condition_key}" },
+    "area_not_found": { "message": "Área no encontrada." },
+    "floor_not_found": { "message": "Planta no encontrada." },
+    "unknown_service": { "message": "Servicio desconocido: {service}" },
+    "category_id_empty": { "message": "El id de categoría debe ser una cadena no vacía." },
+    "duplicate_category_id": { "message": "Id de categoría duplicado: {cid}" },
+    "category_name_empty": { "message": "El nombre de la categoría {cid} debe ser una cadena no vacía." },
+    "duplicate_category_name": { "message": "Nombre de categoría duplicado: {name}" },
+    "unparseable_now": { "message": "No se puede analizar now: {now}" },
+    "now_not_timezone_aware": { "message": "`now` debe ser consciente de la zona horaria: {now}" }
+  },
+  "services": {
+    "apply_scene": {
+      "name": "Aplicar escena",
+      "description": "Aplica escenas de Ambience a uno o más ámbitos. Sin ámbito seleccionado, actúa sobre todos los ámbitos. Sin categoría, vuelve a ejecutar las reglas de todas las categorías. Con una o más categorías, se limita a esas.",
+      "fields": {
+        "scope": {
+          "name": "Ámbitos",
+          "description": "Ámbitos en los que aplicar (Casa, una planta o un área). Deja vacío para aplicar en todos los ámbitos. Los valores son \"house\", \"floor:FLOOR_ID\" o \"area:AREA_ID\"."
+        },
+        "category": {
+          "name": "Categorías",
+          "description": "Limita la aplicación a estas categorías de escena (por id de categoría)."
+        },
+        "force": {
+          "name": "Forzar",
+          "description": "Aplica incluso cuando un ámbito está en pausa (su interruptor está apagado). Un ámbito desactivado permanentemente siempre se omite."
+        }
+      }
+    }
+  }
+}

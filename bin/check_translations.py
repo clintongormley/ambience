@@ -2,8 +2,8 @@
 
 Usage: python -m bin.check_translations [--component PATH]
 Exits non-zero (and prints drift) if any translations/<locale>.json key set
-differs from strings.json. en.json must match exactly; other locales may omit
-keys (untranslated) but must not introduce unknown keys.
+differs from strings.json. Shipped locales (en, es) must match exactly; other
+locales may omit keys (untranslated) but must not introduce unknown keys.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
+SHIPPED_LOCALES = ("en", "es")
 
 
 def flatten_keys(obj: dict, prefix: str = "") -> set[str]:
@@ -47,8 +49,8 @@ def main(argv: list[str] | None = None) -> int:
         if extra:
             failed = True
             print(f"ERROR {path.name}: unknown keys not in strings.json: {sorted(extra)}")
-        # en.json is generated from strings.json and must be complete.
-        if path.stem == "en" and missing:
+        # Shipped locales (en, es) are generated/maintained and must be complete.
+        if path.stem in SHIPPED_LOCALES and missing:
             failed = True
             print(f"ERROR {path.name}: missing keys present in strings.json: {sorted(missing)}")
         elif missing:

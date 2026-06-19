@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.exposed_actions import ExposedActionsStore
 
 
@@ -77,13 +78,14 @@ async def test_get_returns_entry_by_id() -> None:
 async def test_save_rejects_duplicate_ids() -> None:
     storage = _FakeStorage()
     store = ExposedActionsStore(storage)
-    with pytest.raises(ValueError, match="duplicate"):
+    with pytest.raises(AmbienceError) as exc:
         await store.save(
             [
                 {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
                 {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
             ]
         )
+    assert exc.value.translation_key == "exposed_duplicate_service_id"
     assert storage.saved == []
 
 
@@ -120,12 +122,13 @@ async def test_save_accepts_field_in_both_visible_and_defaults() -> None:
 async def test_save_rejects_malformed_id() -> None:
     storage = _FakeStorage()
     store = ExposedActionsStore(storage)
-    with pytest.raises(ValueError, match="service id"):
+    with pytest.raises(AmbienceError) as exc:
         await store.save(
             [
                 {"id": "no_dot", "label": "", "visible_fields": [], "defaults": {}},
             ]
         )
+    assert exc.value.translation_key == "exposed_invalid_service_id"
     assert storage.saved == []
 
 
@@ -156,19 +159,20 @@ async def test_validate_against_catalog_passes_for_known_service_and_fields() ->
 async def test_validate_against_catalog_rejects_unknown_service() -> None:
     hass = _hass_with_services({"light": {"turn_on": {"fields": {}}}})
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="unknown service"):
+    with pytest.raises(AmbienceError) as exc:
         await store.validate_against_catalog(
             hass,
             [
                 {"id": "light.nope", "label": "", "visible_fields": [], "defaults": {}},
             ],
         )
+    assert exc.value.translation_key == "exposed_unknown_service"
 
 
 async def test_validate_against_catalog_rejects_unknown_field_in_visible() -> None:
     hass = _hass_with_services({"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="unknown field"):
+    with pytest.raises(AmbienceError) as exc:
         await store.validate_against_catalog(
             hass,
             [
@@ -180,12 +184,13 @@ async def test_validate_against_catalog_rejects_unknown_field_in_visible() -> No
                 },
             ],
         )
+    assert exc.value.translation_key == "exposed_unknown_visible_field"
 
 
 async def test_validate_against_catalog_rejects_unknown_field_in_defaults() -> None:
     hass = _hass_with_services({"light": {"turn_on": {"fields": {"brightness_pct": {}}}}})
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="unknown field"):
+    with pytest.raises(AmbienceError) as exc:
         await store.validate_against_catalog(
             hass,
             [
@@ -197,12 +202,13 @@ async def test_validate_against_catalog_rejects_unknown_field_in_defaults() -> N
                 },
             ],
         )
+    assert exc.value.translation_key == "exposed_unknown_default_field"
 
 
 async def test_validate_against_catalog_stops_at_first_bad_entry() -> None:
     hass = _hass_with_services({"light": {"turn_on": {"fields": {}}}})
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="light.nope"):
+    with pytest.raises(AmbienceError) as exc:
         await store.validate_against_catalog(
             hass,
             [
@@ -210,6 +216,8 @@ async def test_validate_against_catalog_stops_at_first_bad_entry() -> None:
                 {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
             ],
         )
+    assert exc.value.translation_key == "exposed_unknown_service"
+    assert exc.value.translation_placeholders["sid"] == "light.nope"
 
 
 async def test_validate_against_catalog_accepts_service_with_no_fields() -> None:
@@ -230,46 +238,51 @@ def _entry(**over):
 def test_validate_shape_rejects_non_list_input() -> None:
     """validate_shape raises when actions is not a list (line 54)."""
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="exposed actions must be a list"):
+    with pytest.raises(AmbienceError) as exc:
         store.validate_shape({"id": "light.turn_on"})  # type: ignore[arg-type]
+    assert exc.value.translation_key == "exposed_actions_not_list"
 
 
 def test_validate_shape_rejects_non_dict_entry() -> None:
     """validate_shape raises when an entry is not a dict (line 58)."""
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="entry must be an object"):
+    with pytest.raises(AmbienceError) as exc:
         store.validate_shape(["light.turn_on"])  # type: ignore[list-item]
+    assert exc.value.translation_key == "exposed_entry_not_object"
 
 
 def test_validate_shape_rejects_service_id_with_empty_domain() -> None:
     """validate_shape raises when a service id has an empty domain segment (line 64)."""
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="invalid service id"):
+    with pytest.raises(AmbienceError) as exc:
         store.validate_shape(
             [{"id": ".turn_on", "label": "", "visible_fields": [], "defaults": {}}]
         )
+    assert exc.value.translation_key == "exposed_invalid_service_id"
 
 
 def test_validate_shape_rejects_service_id_with_empty_name() -> None:
     """validate_shape raises when a service id has an empty name segment (line 64)."""
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="invalid service id"):
+    with pytest.raises(AmbienceError) as exc:
         store.validate_shape([{"id": "light.", "label": "", "visible_fields": [], "defaults": {}}])
+    assert exc.value.translation_key == "exposed_invalid_service_id"
 
 
 def test_validate_shape_rejects_non_string_label() -> None:
     """validate_shape raises when label is not a string (line 70)."""
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="label must be a string"):
+    with pytest.raises(AmbienceError) as exc:
         store.validate_shape(
             [{"id": "light.turn_on", "label": 42, "visible_fields": [], "defaults": {}}]
         )
+    assert exc.value.translation_key == "exposed_label_not_string"
 
 
 def test_validate_shape_rejects_non_list_visible_fields() -> None:
     """validate_shape raises when visible_fields is not a list of strings (line 74)."""
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="visible_fields must be a list of strings"):
+    with pytest.raises(AmbienceError) as exc:
         store.validate_shape(
             [
                 {
@@ -280,21 +293,23 @@ def test_validate_shape_rejects_non_list_visible_fields() -> None:
                 }
             ]
         )
+    assert exc.value.translation_key == "exposed_visible_fields_not_list"
 
 
 def test_validate_shape_rejects_visible_fields_with_non_string_elements() -> None:
     """validate_shape raises when visible_fields contains a non-string (line 74)."""
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="visible_fields must be a list of strings"):
+    with pytest.raises(AmbienceError) as exc:
         store.validate_shape(
             [{"id": "light.turn_on", "label": "", "visible_fields": [123], "defaults": {}}]
         )
+    assert exc.value.translation_key == "exposed_visible_fields_not_list"
 
 
 def test_validate_shape_rejects_non_dict_defaults() -> None:
     """validate_shape raises when defaults is not a dict (line 76)."""
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="defaults must be an object keyed by string"):
+    with pytest.raises(AmbienceError) as exc:
         store.validate_shape(
             [
                 {
@@ -305,15 +320,17 @@ def test_validate_shape_rejects_non_dict_defaults() -> None:
                 }
             ]
         )
+    assert exc.value.translation_key == "exposed_defaults_not_object"
 
 
 def test_validate_shape_rejects_defaults_with_non_string_key() -> None:
     """validate_shape raises when defaults has a non-string key (line 76)."""
     store = ExposedActionsStore(_FakeStorage())
-    with pytest.raises(ValueError, match="defaults must be an object keyed by string"):
+    with pytest.raises(AmbienceError) as exc:
         store.validate_shape(
             [{"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {1: "val"}}]  # type: ignore[dict-item]
         )
+    assert exc.value.translation_key == "exposed_defaults_not_object"
 
 
 async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
@@ -361,7 +378,7 @@ async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
 
         # An entry for an unknown service must still fail (service-existence check
         # uses the fallback dict which has the correct domain/service keys).
-        with pytest.raises(ValueError, match="unknown service"):
+        with pytest.raises(AmbienceError) as exc:
             await store.validate_against_catalog(
                 hass,
                 [
@@ -373,6 +390,7 @@ async def test_validate_against_catalog_degraded_skips_field_checks() -> None:
                     },
                 ],
             )
+        assert exc.value.translation_key == "exposed_unknown_service"
 
 
 def test_annotate_unexposed_marks_actions_whose_service_is_not_exposed() -> None:

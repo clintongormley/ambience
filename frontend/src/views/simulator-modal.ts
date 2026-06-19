@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, simulate, simulateInputs } from "../api.js";
-import { humanizeId, localize } from "../i18n.js";
+import { humanizeId, localize, localizeWsError } from "../i18n.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import type {
   BufferedUnit,
@@ -175,7 +175,7 @@ export class AmbienceSimulatorModal extends LitElement {
       this._verdicts = verdicts;
       this._loading = false;
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
       this._loading = false;
     }
   }
@@ -283,7 +283,7 @@ export class AmbienceSimulatorModal extends LitElement {
       );
       this._expanded = false;
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 
@@ -395,7 +395,7 @@ export class AmbienceSimulatorModal extends LitElement {
       data-for=${`${k.entity_id}:${part}`} .value=${String(dur[part])}
       @change=${(e: Event) =>
         this._setFor(k.entity_id, part, Number((e.target as HTMLInputElement).value))} />`;
-    return html`<span class="for-ctrl" title="How long it has held this state (h:m:s)">
+    return html`<span class="for-ctrl" title=${localize(this.hass, "ui.duration_held_hint", "How long it has held this state (h:m:s)")}>
       <span class="for-label">${localize(this.hass, "ui.for_label", "For")}</span>${cell("h")}<span>:</span>${cell("m")}<span>:</span>${cell("s")}
     </span>`;
   }

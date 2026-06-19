@@ -13,7 +13,6 @@ from dataclasses import replace
 from typing import Any
 
 from homeassistant.core import Context, HomeAssistant, ServiceCall
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -30,6 +29,7 @@ from .const import (
     SIGNAL_UNIT_APPLIED,
 )
 from .engine import evaluate_explained, resolve
+from .errors import service_validation_error
 from .scope_triggers import referenced_entities
 from .service_logbook import log_apply, log_run_actions
 from .trace import (
@@ -54,16 +54,16 @@ def _scope_config(store, scope_kind: str, scope_id: str | None) -> dict[str, Any
     if scope_kind == "area":
         cfg = store.get_area(scope_id)
         if cfg is None:
-            raise ServiceValidationError(f"unknown_area: {scope_id!r}")
+            raise service_validation_error("unknown_area", scope_id=scope_id)
         return cfg
     if scope_kind == "floor":
         cfg = store.get_floor(scope_id)
         if cfg is None:
-            raise ServiceValidationError(f"unknown_floor: {scope_id!r}")
+            raise service_validation_error("unknown_floor", scope_id=scope_id)
         return cfg
     if scope_kind == "house":
         return store.get_house()
-    raise ServiceValidationError(f"unknown_scope_kind: {scope_kind!r}")
+    raise service_validation_error("unknown_scope_kind", scope_kind=scope_kind)
 
 
 def category_ids(cfg: dict[str, Any]) -> list[str]:
@@ -98,7 +98,7 @@ def parse_scope_option(value: str) -> tuple[str, str | None]:
     kind, sep, scope_id = value.partition(":")
     if sep and kind in ("floor", "area") and scope_id:
         return (kind, scope_id)
-    raise ServiceValidationError(f"invalid scope: {value!r}")
+    raise service_validation_error("invalid_scope", value=value)
 
 
 def build_apply_scene_schema(hass: HomeAssistant) -> dict[str, Any]:
@@ -196,9 +196,9 @@ def _resolve_target_scopes(
             continue
         kind, scope_id = parse_scope_option(value)
         if kind == "area" and area_reg.async_get_area(scope_id) is None:
-            raise ServiceValidationError(f"unknown_area: {scope_id!r}")
+            raise service_validation_error("unknown_area", scope_id=scope_id)
         if kind == "floor" and floor_reg.async_get_floor(scope_id) is None:
-            raise ServiceValidationError(f"unknown_floor: {scope_id!r}")
+            raise service_validation_error("unknown_floor", scope_id=scope_id)
         scopes.append((kind, scope_id))
     if not scopes:
         scopes.append(("house", None))
@@ -674,12 +674,12 @@ async def async_run_scene_actions(
     raises ServiceValidationError.
     """
     if not _scope_enabled(hass, scope_kind, scope_id):
-        raise ServiceValidationError(f"scope {scope_kind}/{scope_id} is disabled")
+        raise service_validation_error("scope_disabled", scope_kind=scope_kind, scope_id=scope_id)
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = _scope_config(store, scope_kind, scope_id)
     scenes = cfg.get("scenes", [])
     if not 0 <= scene_index < len(scenes):
-        raise ServiceValidationError(f"scene_index out of range: {scene_index}")
+        raise service_validation_error("scene_index_out_of_range", scene_index=scene_index)
     scene = scenes[scene_index]
     actions = scene.get("actions", [])
     scene_name = scene.get("name")

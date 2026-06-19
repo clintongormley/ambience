@@ -1,6 +1,8 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
+import { type HassLike, localize } from "../i18n.js";
+
 /** A "(?)" trigger that opens a small white popover with help text. Click the
  *  trigger to toggle; click outside or press Escape to dismiss. Dependency-free
  *  (no ha-* components) so it works in every panel context and under jsdom. */
@@ -52,6 +54,7 @@ export class AmbienceHelp extends LitElement {
     }
   `;
 
+  @property({ attribute: false }) hass: HassLike | undefined;
   @property() text = "";
   @state() private _open = false;
 
@@ -97,7 +100,7 @@ export class AmbienceHelp extends LitElement {
       <button
         class="trigger"
         data-test="help-trigger"
-        aria-label="Help"
+        aria-label=${localize(this.hass, "ui.help", "Help")}
         aria-expanded=${this._open}
         @click=${(e: Event) => this._toggle(e)}
       >

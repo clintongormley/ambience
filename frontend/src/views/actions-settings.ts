@@ -1,7 +1,7 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { deriveActionLabel, humanizeId, localize } from "../i18n.js";
+import { deriveActionLabel, humanizeId, localize, localizeWsError } from "../i18n.js";
 import "./ambience-help.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
@@ -489,7 +489,7 @@ export class AmbienceActionsSettings extends LitElement {
       this._actions = actions;
       this._services = services;
     } catch (e: unknown) {
-      this._loadError = e instanceof Error ? e.message : String(e);
+      this._loadError = localizeWsError(this.hass, e);
       return; // do NOT mark as loaded
     }
     // Fetch schemas for already-exposed services in parallel so the UI is
@@ -594,7 +594,7 @@ export class AmbienceActionsSettings extends LitElement {
       await saveExposedActions(this.hass, this._actions);
       window.dispatchEvent(new CustomEvent("ambience-exposed-actions-changed"));
     } catch (e: unknown) {
-      this._saveError = e instanceof Error ? e.message : String(e);
+      this._saveError = localizeWsError(this.hass, e);
     }
   }
 
@@ -612,7 +612,7 @@ export class AmbienceActionsSettings extends LitElement {
       <section>
         <div class="section-heading">
           <span>${localize(this.hass, "ui.settings_tab_actions", "Actions")}</span>
-          <ambience-help .text=${localize(this.hass, "ui.help_actions_tab", "Actions are the service calls a scene runs. Define them here so scenes can reuse them.")}></ambience-help>
+          <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_actions_tab", "Actions are the service calls a scene runs. Define them here so scenes can reuse them.")}></ambience-help>
         </div>
         ${this._saveError ? html`<div class="error">${this._saveError}</div>` : ""}
         ${this._actions.map((a, i) => this._renderCard(a, i))}
@@ -719,9 +719,9 @@ export class AmbienceActionsSettings extends LitElement {
     return html`
       <p class="body-help">
         ${localize(this.hass, "ui.actions_field_help_show", "Tick a checkbox to make a field editable per scene.")}
-        <ambience-help .text=${localize(this.hass, "ui.help_show_in_scene_editor", "Show this field in the scene editor so each scene can set it. Leave off to send a fixed default instead.")}></ambience-help>
+        <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_show_in_scene_editor", "Show this field in the scene editor so each scene can set it. Leave off to send a fixed default instead.")}></ambience-help>
         ${localize(this.hass, "ui.actions_field_help_default", "Set a default to pre-fill it.")}
-        <ambience-help .text=${localize(this.hass, "ui.help_set_default", "A value sent automatically when the action runs. Scenes can override it if the field is also shown in the editor.")}></ambience-help>
+        <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_set_default", "A value sent automatically when the action runs. Scenes can override it if the field is also shown in the editor.")}></ambience-help>
       </p>
       ${fields.map(([name, field]) => this._renderFieldRow(action, name, field))}
     `;

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.periods import BUILTIN_PERIODS, PeriodStore
 
 
@@ -191,7 +192,7 @@ def test_validate_definition_accepts_sun_endpoints() -> None:
     ],
 )
 def test_validate_definition_rejects_invalid(bad: dict) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         PeriodStore(_FakeStorage()).validate_definition(bad)
 
 
@@ -215,7 +216,7 @@ async def test_save_persists_full_payload() -> None:
 async def test_save_rejects_malformed_custom_entry() -> None:
     storage = _FakeStorage()
     store = PeriodStore(storage)
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         await store.save({"bad": {"from": {"kind": "time", "hh": 25, "mm": 0}}}, [])
     assert storage.saved == []  # nothing persisted on failure
 
@@ -228,10 +229,12 @@ async def test_save_rejects_invalid_period_id() -> None:
         "to": {"kind": "time", "hh": 10, "mm": 0},
         "label": None,
     }
-    with pytest.raises(ValueError, match="invalid period id"):
+    with pytest.raises(AmbienceError) as exc:
         await store.save({"Has Space": valid_def}, [])
-    with pytest.raises(ValueError, match="invalid period id"):
+    assert exc.value.translation_key == "named_def_invalid_id"
+    with pytest.raises(AmbienceError) as exc:
         await store.save({"1starts_with_digit": valid_def}, [])
+    assert exc.value.translation_key == "named_def_invalid_id"
 
 
 async def test_reset_clears_custom_and_hidden() -> None:
@@ -258,19 +261,21 @@ async def test_reset_clears_custom_and_hidden() -> None:
 
 
 def test_validate_definition_rejects_endpoint_not_a_dict() -> None:
-    """_validate_endpoint raises when an endpoint is not a dict (line 46)."""
-    with pytest.raises(ValueError, match="endpoint must be an object"):
+    """_validate_endpoint raises when an endpoint is not a dict."""
+    with pytest.raises(AmbienceError) as exc:
         PeriodStore(_FakeStorage()).validate_definition(
             {"from": "08:00", "to": {"kind": "time", "hh": 10, "mm": 0}}
         )
+    assert exc.value.translation_key == "period_endpoint_not_object"
 
 
 def test_validate_definition_rejects_endpoint_without_kind() -> None:
-    """_validate_endpoint raises when an endpoint dict has no 'kind' key (line 46)."""
-    with pytest.raises(ValueError, match="endpoint must be an object"):
+    """_validate_endpoint raises when an endpoint dict has no 'kind' key."""
+    with pytest.raises(AmbienceError) as exc:
         PeriodStore(_FakeStorage()).validate_definition(
             {"from": {"hh": 8, "mm": 0}, "to": {"kind": "time", "hh": 10, "mm": 0}}
         )
+    assert exc.value.translation_key == "period_endpoint_not_object"
 
 
 # ---------------------------------------------------------------------------
@@ -279,9 +284,10 @@ def test_validate_definition_rejects_endpoint_without_kind() -> None:
 
 
 def test_validate_definition_rejects_non_dict() -> None:
-    """validate_definition raises when defn is not a dict (line 106)."""
-    with pytest.raises(ValueError, match="period definition must be an object"):
+    """validate_definition raises when defn is not a dict."""
+    with pytest.raises(AmbienceError) as exc:
         PeriodStore(_FakeStorage()).validate_definition("not-a-dict")
+    assert exc.value.translation_key == "period_def_not_object"
 
 
 # ---------------------------------------------------------------------------
@@ -290,17 +296,19 @@ def test_validate_definition_rejects_non_dict() -> None:
 
 
 async def test_save_rejects_custom_not_a_dict() -> None:
-    """save() raises when custom is not a dict (line 117)."""
+    """save() raises when custom is not a dict."""
     store = PeriodStore(_FakeStorage())
-    with pytest.raises(ValueError, match="custom must be an object"):
+    with pytest.raises(AmbienceError) as exc:
         await store.save(["not", "a", "dict"], [])  # type: ignore[arg-type]
+    assert exc.value.translation_key == "named_def_custom_not_object"
 
 
 async def test_save_rejects_hidden_not_a_list() -> None:
-    """save() raises when hidden is not a list (line 119)."""
+    """save() raises when hidden is not a list."""
     store = PeriodStore(_FakeStorage())
-    with pytest.raises(ValueError, match="hidden must be a list"):
+    with pytest.raises(AmbienceError) as exc:
         await store.save({}, "daytime")  # type: ignore[arg-type]
+    assert exc.value.translation_key == "named_def_hidden_not_list"
 
 
 # ---------------------------------------------------------------------------
@@ -309,10 +317,11 @@ async def test_save_rejects_hidden_not_a_list() -> None:
 
 
 async def test_save_rejects_hiding_non_builtin_id() -> None:
-    """save() raises when hidden contains an id that is not a built-in (line 126)."""
+    """save() raises when hidden contains an id that is not a built-in."""
     store = PeriodStore(_FakeStorage())
-    with pytest.raises(ValueError, match="only built-in ids can be hidden"):
+    with pytest.raises(AmbienceError) as exc:
         await store.save({}, ["wind_down"])  # custom id, not a built-in
+    assert exc.value.translation_key == "named_def_only_builtin_hideable"
 
 
 # ---------------------------------------------------------------------------
@@ -336,17 +345,18 @@ def test_validate_definition_accepts_clamped_sun() -> None:
 
 def test_validate_definition_rejects_bool_offset() -> None:
     # bool is an int subclass — reject it so `True` can't become a 1-min offset.
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         PeriodStore(_FakeStorage()).validate_definition(
             {
                 "from": {"kind": "sun", "anchor": "sunrise", "offset_min": True},
                 "to": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
             }
         )
+    assert exc.value.translation_key == "period_offset_not_int"
 
 
 def test_validate_definition_rejects_bad_clamp_dir() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         PeriodStore(_FakeStorage()).validate_definition(
             {
                 "from": {
@@ -358,10 +368,12 @@ def test_validate_definition_rejects_bad_clamp_dir() -> None:
                 "to": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
             }
         )
+    assert exc.value.translation_key == "period_invalid_clamp_dir"
+    assert exc.value.translation_placeholders["value"] == "nope"
 
 
 def test_validate_definition_rejects_bad_clamp_time() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         PeriodStore(_FakeStorage()).validate_definition(
             {
                 "from": {
@@ -373,6 +385,7 @@ def test_validate_definition_rejects_bad_clamp_time() -> None:
                 "to": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
             }
         )
+    assert exc.value.translation_key == "period_invalid_clamp_mm"
 
 
 def test_view_for_ui_returns_builtins_custom_hidden() -> None:
@@ -398,13 +411,14 @@ def test_view_for_ui_returns_builtins_custom_hidden() -> None:
 def test_validate_definition_rejects_bool_clock() -> None:
     """bool is an int subclass; `hh: true` must not validate as hour 1 (the
     trigger scheduler rejects bools, so the boundary would never fire)."""
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         PeriodStore(_FakeStorage()).validate_definition(
             {
                 "from": {"kind": "time", "hh": True, "mm": 0},
                 "to": {"kind": "time", "hh": 10, "mm": 0},
             }
         )
+    assert exc.value.translation_key == "period_invalid_hh"
 
 
 def test_validate_definition_accepts_identical_endpoints() -> None:
@@ -416,3 +430,35 @@ def test_validate_definition_accepts_identical_endpoints() -> None:
             "to": {"kind": "time", "hh": 10, "mm": 0},
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# Representative AmbienceError key + placeholder assertions (A4 TDD)
+# ---------------------------------------------------------------------------
+
+
+def test_period_invalid_clamp_dir_key_and_placeholder() -> None:
+    """period_invalid_clamp_dir carries the bad dir value as a placeholder."""
+    with pytest.raises(AmbienceError) as exc:
+        PeriodStore(_FakeStorage()).validate_definition(
+            {
+                "from": {
+                    "kind": "sun",
+                    "anchor": "sunrise",
+                    "offset_min": 0,
+                    "clamp": {"dir": "wrong", "hh": 8, "mm": 0},
+                },
+                "to": {"kind": "sun", "anchor": "dusk", "offset_min": 0},
+            }
+        )
+    assert exc.value.translation_key == "period_invalid_clamp_dir"
+    assert exc.value.translation_placeholders["value"] == "wrong"
+
+
+def test_period_def_missing_from_to_key() -> None:
+    """period_def_missing_from_to fires when a period dict lacks 'from' or 'to'."""
+    with pytest.raises(AmbienceError) as exc:
+        PeriodStore(_FakeStorage()).validate_definition(
+            {"from": {"kind": "time", "hh": 8, "mm": 0}}
+        )
+    assert exc.value.translation_key == "period_def_missing_from_to"

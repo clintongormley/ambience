@@ -35,6 +35,12 @@ def _is_str_const(node: ast.AST) -> bool:
     return isinstance(node, ast.Constant) and isinstance(node.value, str)
 
 
+def _is_str_literal_or_fstring(node: ast.AST) -> bool:
+    # A plain string literal OR an f-string (ast.JoinedStr) — both are hardcoded
+    # English prose; an f-string just interpolates runtime values into it.
+    return _is_str_const(node) or isinstance(node, ast.JoinedStr)
+
+
 def violations(source: str, filename: str = "<src>") -> list[str]:
     try:
         tree = ast.parse(source)
@@ -63,7 +69,7 @@ def violations(source: str, filename: str = "<src>") -> list[str]:
                 and isinstance(node.func, ast.Attribute)
                 and not ignored(node)
                 and len(node.args) >= 3
-                and _is_str_const(node.args[2])
+                and _is_str_literal_or_fstring(node.args[2])
             ):
                 out.append(
                     f"{filename}:{node.lineno}: hardcoded message in send_error;"
@@ -74,7 +80,7 @@ def violations(source: str, filename: str = "<src>") -> list[str]:
             and isinstance(node.exc, ast.Call)
             and _func_name(node.exc) in _RAW_EXC
             and not ignored(node)
-            and any(_is_str_const(a) for a in node.exc.args)
+            and any(_is_str_literal_or_fstring(a) for a in node.exc.args)
         ):
             out.append(
                 f"{filename}:{node.lineno}: hardcoded message in {_func_name(node.exc)};"

@@ -17,8 +17,16 @@ def test_flags_carrier_with_dynamic_key():
     assert violations("raise AmbienceError(some_var)")
 
 
+def test_flags_fstring_message_on_raw_exception():
+    assert violations('raise HomeAssistantError(f"boom {x}")')
+
+
 def test_flags_send_error_with_literal_message():
     assert violations('connection.send_error(msg["id"], "code", "boom")')
+
+
+def test_flags_send_error_with_fstring_message():
+    assert violations('connection.send_error(i, c, f"unknown {x}")')
 
 
 def test_allows_send_error_with_dynamic_message():

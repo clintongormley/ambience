@@ -68,6 +68,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_reapply_enable_label: "Reapply scenes after inactivity",
       settings_reapply_interval_label: "Reapply after",
       unit_minutes: "minutes",
+      help: "Help",
       help_pause_switch:
         "Create a switch entity per area/floor/house that pauses Ambience for that scope when turned off.",
       help_switch_name: "The name used for the per-scope pause switch entities.",
@@ -296,6 +297,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       for_at_least: "at least",
       for_less_than: "less than",
       for_label: "For",
+      duration_held_hint: "How long it has held this state (h:m:s)",
       away: "Away",
       home: "Home",
       refresh: "Refresh",

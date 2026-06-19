@@ -246,6 +246,7 @@ export class AmbienceAmbienceSettings extends LitElement {
           <label>
             ${localize(this.hass, "ui.settings_ambience_pause_card", "Scope-level pause switch")}
             <ambience-help
+              .hass=${this.hass}
               .text=${localize(
                 this.hass,
                 "ui.help_pause_switch",
@@ -261,6 +262,7 @@ export class AmbienceAmbienceSettings extends LitElement {
           <label>
             ${localize(this.hass, "ui.settings_ambience_field_name", "Switch name")}
             <ambience-help
+              .hass=${this.hass}
               .text=${localize(
                 this.hass,
                 "ui.help_switch_name",
@@ -280,6 +282,7 @@ export class AmbienceAmbienceSettings extends LitElement {
           <label>
             ${localize(this.hass, "ui.settings_ambience_field_pause", "Pause for")}
             <ambience-help
+              .hass=${this.hass}
               .text=${localize(
                 this.hass,
                 "ui.help_pause_for",
@@ -303,6 +306,7 @@ export class AmbienceAmbienceSettings extends LitElement {
           <label style="flex:1 1 auto">
             ${localize(this.hass, "ui.settings_expose_group", "Expose to voice assistants")}
             <ambience-help
+              .hass=${this.hass}
               .text=${localize(
                 this.hass,
                 "ui.help_expose",
@@ -335,6 +339,7 @@ export class AmbienceAmbienceSettings extends LitElement {
               "Reapply scenes after inactivity",
             )}
             <ambience-help
+              .hass=${this.hass}
               .text=${localize(
                 this.hass,
                 "ui.help_reapply_toggle",
@@ -350,6 +355,7 @@ export class AmbienceAmbienceSettings extends LitElement {
           <label>
             ${localize(this.hass, "ui.settings_reapply_interval_label", "Reapply after")}
             <ambience-help
+              .hass=${this.hass}
               .text=${localize(
                 this.hass,
                 "ui.help_reapply_after",

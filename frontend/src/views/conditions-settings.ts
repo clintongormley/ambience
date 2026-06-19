@@ -58,7 +58,7 @@ export class AmbienceConditionsSettings extends LitElement {
     return html`
       <div class="tab-heading">
         <span>${localize(this.hass, "ui.settings_tab_conditions", "Conditions")}</span>
-        <ambience-help .text=${localize(this.hass, "ui.help_conditions_tab", "Conditions are the inputs scenes match on (time of day, presence, weather, …). A scene wins when all its conditions pass.")}></ambience-help>
+        <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_conditions_tab", "Conditions are the inputs scenes match on (time of day, presence, weather, …). A scene wins when all its conditions pass.")}></ambience-help>
       </div>
       ${this._error ? html`<p class="error">${this._error}</p>` : ""}
       ${configurable.map(

@@ -395,7 +395,7 @@ export class AmbienceSimulatorModal extends LitElement {
       data-for=${`${k.entity_id}:${part}`} .value=${String(dur[part])}
       @change=${(e: Event) =>
         this._setFor(k.entity_id, part, Number((e.target as HTMLInputElement).value))} />`;
-    return html`<span class="for-ctrl" title="How long it has held this state (h:m:s)">
+    return html`<span class="for-ctrl" title=${localize(this.hass, "ui.duration_held_hint", "How long it has held this state (h:m:s)")}>
       <span class="for-label">${localize(this.hass, "ui.for_label", "For")}</span>${cell("h")}<span>:</span>${cell("m")}<span>:</span>${cell("s")}
     </span>`;
   }

@@ -222,9 +222,10 @@ export function formatCause(hass: HassLike | undefined, c: TraceCause): string {
   // multi-entity gate (entity_id null) carries its label in `new`
   // ("nobody home for 30m").
   if (c.kind === "duration") {
+    const forWord = localize(hass, "ui.cause_duration_for", "for");
     return c.entity_id
-      ? `${c.entity_id} ${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`
-      : `${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`;
+      ? `${c.entity_id} ${rawOrUnknown(c.new)} ${forWord} ${rawOrUnknown(c.detail)}`
+      : `${rawOrUnknown(c.new)} ${forWord} ${rawOrUnknown(c.detail)}`;
   }
   const fixed = CAUSE_LABELS_FIXED[c.kind];
   if (fixed) return localize(hass, fixed[0], fixed[1]);
@@ -240,7 +241,7 @@ export function renderCause(hass: HassLike | undefined, c: TraceCause): Template
   if (!causeHasRawValues(c) || !c.entity_id) return html`${formatCause(hass, c)}`;
   const name = entityLink(hass, c.entity_id, c.entity_id);
   if (c.kind === "duration")
-    return html`${name} ${rawOrUnknown(c.new)} for ${rawOrUnknown(c.detail)}`;
+    return html`${name} ${rawOrUnknown(c.new)} ${localize(hass, "ui.cause_duration_for", "for")} ${rawOrUnknown(c.detail)}`;
   return html`${name} ${rawOrUnknown(c.old)} → ${rawOrUnknown(c.new)}`;
 }
 
@@ -266,7 +267,8 @@ export function formatCauseFriendly(c: TraceCause, hass?: HassLike): string {
   if (!causeHasRawValues(c)) return formatCause(hass, c);
   const name = c.entity_id ? entityDisplayName(hass, c.entity_id) : "?";
   const v = causeStateValues(c, hass);
-  if (c.kind === "duration") return `${name}: ${v.new} for ${c.detail ?? "?"}`;
+  if (c.kind === "duration")
+    return `${name}: ${v.new} ${localize(hass, "ui.cause_duration_for", "for")} ${c.detail ?? "?"}`;
   return `${name}: ${v.old} → ${v.new}`;
 }
 
@@ -277,7 +279,8 @@ export function renderCauseFriendly(c: TraceCause, hass?: HassLike): TemplateRes
   if (!causeHasRawValues(c) || !c.entity_id) return html`${formatCauseFriendly(c, hass)}`;
   const name = clickableEntity(hass, c.entity_id);
   const v = causeStateValues(c, hass);
-  if (c.kind === "duration") return html`${name}: ${v.new} for ${c.detail ?? "?"}`;
+  if (c.kind === "duration")
+    return html`${name}: ${v.new} ${localize(hass, "ui.cause_duration_for", "for")} ${c.detail ?? "?"}`;
   return html`${name}: ${v.old} → ${v.new}`;
 }
 

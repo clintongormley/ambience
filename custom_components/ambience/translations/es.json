@@ -157,7 +157,7 @@
       "fields": {
         "scope": {
           "name": "Ámbitos",
-          "description": "Ámbitos en los que aplicar (Casa, una planta o un área). Deja vacío para aplicar en todos los ámbitos. Los valores son \"house\", \"floor:<floor_id>\" o \"area:<area_id>\"."
+          "description": "Ámbitos en los que aplicar (Casa, una planta o un área). Deja vacío para aplicar en todos los ámbitos. Los valores son \"house\", \"floor:FLOOR_ID\" o \"area:AREA_ID\"."
         },
         "category": {
           "name": "Categorías",

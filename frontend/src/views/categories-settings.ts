@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import { deleteCategory, type HassConnection, listCategories, saveCategories } from "../api.js";
 import { CATEGORY_COLORS, colorHex } from "../category-colors.js";
-import { localize } from "../i18n.js";
+import { localize, localizeWsError } from "../i18n.js";
 import { randomId } from "../random-id.js";
 import type { SceneCategory } from "../types.js";
 import "./ambience-help.js";
@@ -135,7 +135,7 @@ export class AmbienceCategoriesSettings extends LitElement {
     try {
       this._categories = await listCategories(this.hass);
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 
@@ -226,7 +226,7 @@ export class AmbienceCategoriesSettings extends LitElement {
         window.dispatchEvent(new CustomEvent("ambience-categories-changed"));
       })
       .catch((e) => {
-        this._error = (e as Error).message || String(e);
+        this._error = localizeWsError(this.hass, e);
       });
   }
 
@@ -271,7 +271,7 @@ export class AmbienceCategoriesSettings extends LitElement {
             "You can't delete the last category.",
           );
         } else {
-          this._modalError = (e as Error).message || String(e);
+          this._modalError = localizeWsError(this.hass, e);
         }
       });
   }

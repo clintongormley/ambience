@@ -1,7 +1,7 @@
 import { AMBIENCE_STRINGS } from "./i18n-data.js";
 import type { ExposedAction, PeriodDef } from "./types.js";
 
-type Localizer = (key: string) => string | undefined;
+type Localizer = (key: string, ...args: string[]) => string | undefined;
 
 export interface HassLike {
   localize?: Localizer;
@@ -283,6 +283,29 @@ type EntityStateLike = { attributes?: Record<string, unknown> };
  *    4. Metric defaults (`°C`, `m/s`, `hPa`) when nothing else is known.
  *
  *  Returns `""` for unknown attributes. */
+/** Localize a websocket error. The backend's send_ambience_error attaches a
+ *  `translation_key` (+ `translation_placeholders`) and an English `message`.
+ *  Prefer the user's-language translation via hass.localize of the exceptions
+ *  key; fall back to the English message, then to any raw error text. */
+export function localizeWsError(hass: HassLike | undefined, err: unknown): string {
+  const e = err as
+    | {
+        message?: string;
+        translation_key?: string;
+        translation_placeholders?: Record<string, string>;
+      }
+    | undefined;
+  const key = e?.translation_key;
+  if (key) {
+    const ph = e?.translation_placeholders ?? {};
+    const fullKey = `component.ambience.exceptions.${key}`;
+    const out = hass?.localize?.(fullKey, ...(Object.entries(ph).flat() as string[]));
+    if (out && out !== fullKey) return out;
+  }
+  if (e?.message) return e.message;
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function weatherAttrUnit(
   hass: HassLike | undefined,
   attr: string,

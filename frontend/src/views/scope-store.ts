@@ -25,6 +25,7 @@ import {
   saveHouse,
 } from "../api.js";
 import { scopeKey } from "../entities-for-scope.js";
+import { localizeWsError } from "../i18n.js";
 import type {
   AreaListItem,
   ConditionInfo,
@@ -270,7 +271,7 @@ export class ScopeStore implements ReactiveController {
       this.staticLoaded = true;
       await this._refreshSchemas(actions);
     } catch (e) {
-      this.error = (e as Error).message || String(e);
+      this.error = localizeWsError(this._hass, e);
     }
   }
 
@@ -318,7 +319,7 @@ export class ScopeStore implements ReactiveController {
       this.areas = areas;
       this.areaConfigs = configs;
     } catch (e) {
-      this.error = (e as Error).message || String(e);
+      this.error = localizeWsError(this._hass, e);
     } finally {
       // The fetch has settled (success or failure) — replace the loading spinner
       // with the areas, the empty state, or (on error) the error banner. Skip
@@ -349,7 +350,7 @@ export class ScopeStore implements ReactiveController {
       this.floors = floors;
       this.floorConfigs = configs;
     } catch (e) {
-      this.error = (e as Error).message || String(e);
+      this.error = localizeWsError(this._hass, e);
     }
   }
 
@@ -359,7 +360,7 @@ export class ScopeStore implements ReactiveController {
       if (!this._host.isConnected) return;
       this.house = house;
     } catch (e) {
-      this.error = (e as Error).message || String(e);
+      this.error = localizeWsError(this._hass, e);
     }
   }
 
@@ -404,7 +405,7 @@ export class ScopeStore implements ReactiveController {
         }),
       );
     } catch (e) {
-      this.error = (e as Error).message || String(e);
+      this.error = localizeWsError(this._hass, e);
     }
   }
 
@@ -450,7 +451,7 @@ export class ScopeStore implements ReactiveController {
       return true;
     } catch (e) {
       if (prev) this.setConfig(scope, prev);
-      this.error = (e as Error).message || String(e);
+      this.error = localizeWsError(this._hass, e);
       return false;
     }
   }
@@ -466,7 +467,7 @@ export class ScopeStore implements ReactiveController {
       if (!this._host.isConnected) return;
       this.setConfig(scope, cfg);
     } catch (e) {
-      this.error = (e as Error).message || String(e);
+      this.error = localizeWsError(this._hass, e);
     }
   }
 }

@@ -11,7 +11,7 @@ import {
   saveSwitchDefaults,
 } from "../api.js";
 import { renderHaSwitch } from "../ha-switch.js";
-import { localize } from "../i18n.js";
+import { localize, localizeWsError } from "../i18n.js";
 import type { ExposedAssistants, ReapplySettings, SwitchDefaults } from "../types.js";
 import "./ambience-help.js";
 
@@ -131,7 +131,7 @@ export class AmbienceAmbienceSettings extends LitElement {
       this._reapply = await getReapplySettings(this.hass);
       this._exposed = await getExposedAssistants(this.hass);
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 
@@ -140,7 +140,7 @@ export class AmbienceAmbienceSettings extends LitElement {
       await fn();
       this._error = "";
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 

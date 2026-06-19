@@ -2,7 +2,7 @@ import { css, html, LitElement, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, listConditions } from "../api.js";
-import { localize } from "../i18n.js";
+import { localize, localizeWsError } from "../i18n.js";
 import type { ConditionInfo } from "../types.js";
 import "./ambience-help.js";
 import "./condition-card.js";
@@ -46,7 +46,7 @@ export class AmbienceConditionsSettings extends LitElement {
     try {
       this._conditions = await listConditions(this.hass);
     } catch (e) {
-      this._error = (e as Error).message || String(e);
+      this._error = localizeWsError(this.hass, e);
     }
   }
 

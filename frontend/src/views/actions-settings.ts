@@ -1,7 +1,7 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
-import { deriveActionLabel, humanizeId, localize } from "../i18n.js";
+import { deriveActionLabel, humanizeId, localize, localizeWsError } from "../i18n.js";
 import "./ambience-help.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
@@ -489,7 +489,7 @@ export class AmbienceActionsSettings extends LitElement {
       this._actions = actions;
       this._services = services;
     } catch (e: unknown) {
-      this._loadError = e instanceof Error ? e.message : String(e);
+      this._loadError = localizeWsError(this.hass, e);
       return; // do NOT mark as loaded
     }
     // Fetch schemas for already-exposed services in parallel so the UI is
@@ -594,7 +594,7 @@ export class AmbienceActionsSettings extends LitElement {
       await saveExposedActions(this.hass, this._actions);
       window.dispatchEvent(new CustomEvent("ambience-exposed-actions-changed"));
     } catch (e: unknown) {
-      this._saveError = e instanceof Error ? e.message : String(e);
+      this._saveError = localizeWsError(this.hass, e);
     }
   }
 

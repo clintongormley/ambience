@@ -52,7 +52,10 @@ export function forComparatorSymbol(mode: ForMode | null | undefined): "≥" | "
 @customElement("ambience-for-duration")
 export class AmbienceForDuration extends LitElement {
   static override styles = css`
-    :host { display: inline-flex; align-items: center; gap: 0.25rem; }
+    /* flex-wrap lets the mode dropdown + the h:m:s duration widget stack
+       onto a second line on a narrow (mobile) column instead of spilling
+       past the form's right edge; on a wide column they stay side-by-side. */
+    :host { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
     .for-row { display: flex; gap: 0.25rem; align-items: center; }
     .for-row input[type='number'] { width: 3.5rem; }
     select.for-mode {

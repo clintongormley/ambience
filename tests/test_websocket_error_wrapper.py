@@ -61,6 +61,8 @@ def test_homeassistant_error_without_key_uses_its_message():
 def test_unexpected_exception_is_generic_and_logged(caplog):
     conn = _Conn()
     send_ambience_error(conn, 3, RuntimeError("internal detail"))
-    msg_id, code, message = conn.error
-    assert code == "unexpected_error"
-    assert "internal detail" not in message  # internal detail not leaked to the user
+    err = conn.message["error"]
+    assert conn.message["id"] == 3
+    assert err["translation_key"] == "unexpected_error"  # localizable for non-English users
+    assert err["translation_placeholders"] == {}
+    assert "internal detail" not in err["message"]  # internal detail not leaked to the user

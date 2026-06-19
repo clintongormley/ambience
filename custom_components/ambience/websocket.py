@@ -8,7 +8,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import floor_registry as fr
@@ -96,7 +96,14 @@ def send_ambience_error(
         connection.send_error(msg_id, code, str(err))
         return
     _LOGGER.exception("ambience websocket handler error", exc_info=err)
-    connection.send_error(msg_id, "unexpected_error", render_en("unexpected_error", {}))
+    # Carry the translation_key so a non-English user sees their localized
+    # "unexpected error" (es.json has it); the internal detail is never leaked.
+    message = websocket_api.error_message(
+        msg_id, "unexpected_error", render_en("unexpected_error", {})
+    )
+    message["error"]["translation_key"] = "unexpected_error"
+    message["error"]["translation_placeholders"] = {}
+    connection.send_message(message)
 
 
 def async_register_commands(hass: HomeAssistant) -> None:
@@ -508,7 +515,7 @@ async def _ws_dry_run(
         result["categories"] = await async_resolve_categories_only(
             hass, scope_kind, scope_id, snapshots=snapshots
         )
-    except ServiceValidationError as exc:
+    except (HomeAssistantError, ValueError) as exc:
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
@@ -535,7 +542,7 @@ async def _ws_apply(
         await async_apply_scene(
             hass, scope_kind, scope_id, category=msg.get("category_id"), force=True
         )
-    except ServiceValidationError as exc:
+    except (HomeAssistantError, ValueError) as exc:
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], {"ok": True})
@@ -560,7 +567,7 @@ async def _ws_run_scene_actions(
     try:
         scope_kind, scope_id = _parse_scope(msg, "run_actions")
         result = await async_run_scene_actions(hass, scope_kind, scope_id, msg["scene_index"])
-    except ServiceValidationError as exc:
+    except (HomeAssistantError, ValueError) as exc:
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
@@ -934,7 +941,7 @@ async def _ws_set_scope_enabled(
 ) -> None:
     try:
         scope_kind, scope_id = _parse_scope(msg, "set_scope_enabled")
-    except ServiceValidationError as exc:
+    except (HomeAssistantError, ValueError) as exc:
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     # Validate the id against the registry (like the save handlers): the store

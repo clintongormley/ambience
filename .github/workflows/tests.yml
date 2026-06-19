@@ -127,8 +127,6 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-      # Both checks are stdlib-only — no dependencies to install.
-      - name: Translation key parity
-        run: python -m bin.check_translations
-      - name: Frontend ui.* key parity
-        run: python -m bin.check_ui_strings
+      # All i18n checks are stdlib-only — no dependencies to install.
+      - name: i18n gates (parity, completeness, no-hardcoded)
+        run: make i18n

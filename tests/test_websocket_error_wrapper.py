@@ -33,6 +33,7 @@ def test_ambience_error_forwards_translation_key_and_placeholders():
     err = conn.message["error"]
     assert conn.message["id"] == 7
     assert conn.message["success"] is False
+    assert err["code"] == "validation_error"  # default code rides on the payload
     assert err["translation_key"] == "unexpected_error"
     assert err["translation_placeholders"] == {}
     assert isinstance(err["message"], str) and err["message"]  # English rendered
@@ -66,3 +67,7 @@ def test_unexpected_exception_is_generic_and_logged(caplog):
     assert err["translation_key"] == "unexpected_error"  # localizable for non-English users
     assert err["translation_placeholders"] == {}
     assert "internal detail" not in err["message"]  # internal detail not leaked to the user
+    # The handler logged the failure with its traceback, so the internal detail
+    # IS available to operators even though it never reaches the user payload.
+    assert "ambience websocket handler error" in caplog.text
+    assert "internal detail" in caplog.text

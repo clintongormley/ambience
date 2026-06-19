@@ -367,6 +367,7 @@ describe("ambience-state-expr-node — group", () => {
       { path: [0] },
     );
     const header = el.shadowRoot.querySelector(".group-header") as HTMLElement;
+    expect(header).toBeTruthy();
     const not = header.querySelector("button.not-toggle") as HTMLElement;
     const sel = header.querySelector("select.group-op") as HTMLElement;
     expect(not).toBeTruthy();

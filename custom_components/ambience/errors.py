@@ -3,7 +3,8 @@
 `AmbienceError` is the single carrier for every user-facing error. Its
 ``translation_key`` indexes the ``exceptions`` section of strings.json; HA core
 localises it for service calls, and the websocket layer forwards the key +
-placeholders to the frontend (see websocket.py)."""
+placeholders to the frontend (see websocket.py).
+"""
 
 from __future__ import annotations
 

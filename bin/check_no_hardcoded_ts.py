@@ -37,6 +37,9 @@ _ATTR_RE = re.compile(r'\b(title|aria-label|placeholder|alt)="([^"]*)"')
 # A tag-close `>` not preceded by `=`/`!`/`<`/`>` (excludes =>, >=, <=, >>) nor by
 # whitespace (excludes `a > b` comparisons and `> div` CSS combinators), then
 # optional spaces, then a run starting with a letter, up to < or ${ or newline.
+# Known latent: a prose text node placed immediately after a multi-line opening
+# tag whose closing `>` is on its own line (whitespace before `>`) is not flagged
+# — the `\s` lookbehind skips it. Acceptable trade-off for zero false positives.
 _TEXT_RE = re.compile(r"(?<![=!<>\s])>[ \t]*([A-Za-z][^<>\n$]*)")
 # The inner content of a `<...>` run, captured to classify it as a TS generic.
 _BRACKET_RE = re.compile(r"<([^<>]*)>$")

@@ -8,13 +8,15 @@ def test_used_keys_extracts_carrier_literals():
         'raise AmbienceError("scope_disabled", x=1)\n'
         'raise LastCategoryError("last_category_required")\n'
         'return service_validation_error("unknown_area", scope_id=s)\n'
-        'render_en("unexpected_error", {})'
+        'render_en("unexpected_error", {})\n'
+        'raise CategoryInUseError("some_key")'
     )
     assert used_keys(src) == {
         "scope_disabled",
         "last_category_required",
         "unknown_area",
         "unexpected_error",
+        "some_key",
     }
 
 

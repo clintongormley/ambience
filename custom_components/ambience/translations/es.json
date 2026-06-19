@@ -161,7 +161,7 @@
         },
         "category": {
           "name": "Categorías",
-          "description": "Limita la aplicación a estas categorías de escena (por category id)."
+          "description": "Limita la aplicación a estas categorías de escena (por id de categoría)."
         },
         "force": {
           "name": "Forzar",

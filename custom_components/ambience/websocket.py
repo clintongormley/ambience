@@ -193,7 +193,12 @@ async def _ws_services_get_schema(
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     if schema is None:
-        connection.send_error(msg["id"], "unknown_service", f"unknown service: {msg['service']!r}")
+        send_ambience_error(
+            connection,
+            msg["id"],
+            AmbienceError("unknown_service", service=msg["service"]),
+            code="unknown_service",
+        )
         return
     connection.send_result(msg["id"], schema)
 
@@ -304,10 +309,11 @@ async def _ws_area_save(
 ) -> None:
     area_id = msg["area_id"]
     if ar.async_get(hass).async_get_area(area_id) is None:
-        connection.send_error(
+        send_ambience_error(
+            connection,
             msg["id"],
-            "validation_error",
-            f"unknown area: {area_id}",
+            AmbienceError("unknown_area", scope_id=area_id),
+            code="validation_error",
         )
         return
     await _save_scope(hass, connection, msg, lambda store, cfg: store.async_save_area(area_id, cfg))
@@ -353,10 +359,11 @@ async def _ws_floor_save(
 ) -> None:
     floor_id = msg["floor_id"]
     if fr.async_get(hass).async_get_floor(floor_id) is None:
-        connection.send_error(
+        send_ambience_error(
+            connection,
             msg["id"],
-            "validation_error",
-            f"unknown floor: {floor_id}",
+            AmbienceError("unknown_floor", scope_id=floor_id),
+            code="validation_error",
         )
         return
     await _save_scope(
@@ -466,7 +473,9 @@ def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     """
     present = [k for k in ("area_id", "floor_id", "house") if k in msg]
     if len(present) != 1:
-        raise service_validation_error("scope_selector_invalid", command=command, present=present)
+        raise service_validation_error(
+            "scope_selector_invalid", command=command, present=", ".join(present)
+        )
     if "area_id" in msg:
         return "area", msg["area_id"]
     if "floor_id" in msg:
@@ -931,10 +940,20 @@ async def _ws_set_scope_enabled(
     # Validate the id against the registry (like the save handlers): the store
     # setdefaults a scope bucket, so a typo'd/stale id would persist junk.
     if scope_kind == "area" and ar.async_get(hass).async_get_area(scope_id) is None:
-        connection.send_error(msg["id"], "validation_error", f"unknown area: {scope_id}")
+        send_ambience_error(
+            connection,
+            msg["id"],
+            AmbienceError("unknown_area", scope_id=scope_id),
+            code="validation_error",
+        )
         return
     if scope_kind == "floor" and fr.async_get(hass).async_get_floor(scope_id) is None:
-        connection.send_error(msg["id"], "validation_error", f"unknown floor: {scope_id}")
+        send_ambience_error(
+            connection,
+            msg["id"],
+            AmbienceError("unknown_floor", scope_id=scope_id),
+            code="validation_error",
+        )
         return
     enabled = msg["enabled"]
     store = hass.data[DOMAIN][DATA_STORE]
@@ -997,25 +1016,34 @@ async def _ws_categories_save(
         cid = category.get("id")
         name = category.get("name")
         if not isinstance(cid, str) or not cid.strip():
-            connection.send_error(
-                msg["id"], "invalid_categories", "category id must be a non-empty string"
+            send_ambience_error(
+                connection, msg["id"], AmbienceError("category_id_empty"), code="invalid_categories"
             )
             return
         if cid in seen_ids:
-            connection.send_error(
-                msg["id"], "invalid_categories", f"duplicate category id: {cid!r}"
+            send_ambience_error(
+                connection,
+                msg["id"],
+                AmbienceError("duplicate_category_id", cid=cid),
+                code="invalid_categories",
             )
             return
         seen_ids.add(cid)
         if not isinstance(name, str) or not name.strip():
-            connection.send_error(
-                msg["id"], "invalid_categories", f"category {cid!r} name must be a non-empty string"
+            send_ambience_error(
+                connection,
+                msg["id"],
+                AmbienceError("category_name_empty", cid=cid),
+                code="invalid_categories",
             )
             return
         key = name.strip().casefold()
         if key in seen_names:
-            connection.send_error(
-                msg["id"], "invalid_categories", f"duplicate category name: {name.strip()!r}"
+            send_ambience_error(
+                connection,
+                msg["id"],
+                AmbienceError("duplicate_category_name", name=name.strip()),
+                code="invalid_categories",
             )
             return
         seen_names.add(key)
@@ -1181,13 +1209,21 @@ async def _ws_simulate(
     """Resolve a category against a hypothetical world (read-only)."""
     now = dt_util.parse_datetime(msg["now"])
     if now is None:
-        connection.send_error(msg["id"], "validation_error", f"unparseable now: {msg['now']!r}")
+        send_ambience_error(
+            connection,
+            msg["id"],
+            AmbienceError("unparseable_now", now=msg["now"]),
+            code="validation_error",
+        )
         return
     if now.tzinfo is None:
         # A naive now produces naive-vs-aware TypeErrors inside condition
         # snapshots, which silently distort results (per-condition None).
-        connection.send_error(
-            msg["id"], "validation_error", f"`now` must be timezone-aware: {msg['now']!r}"
+        send_ambience_error(
+            connection,
+            msg["id"],
+            AmbienceError("now_not_timezone_aware", now=msg["now"]),
+            code="validation_error",
         )
         return
     world = SimulatedWorld(

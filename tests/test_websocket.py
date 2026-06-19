@@ -1750,7 +1750,7 @@ async def test_ws_run_scene_actions(
     assert len(calls) == 1
 
 
-async def test_ws_run_scene_actions_out_of_range(
+async def test_ws_run_scene_actions_unknown_area_routes_translation_key(
     hass: HomeAssistant, installed_with_actions, hass_ws_client, area_id
 ) -> None:
     resp = await _ws_send(

@@ -141,6 +141,13 @@
     "invalid_service_id_format": { "message": "Service id must be domain.service: {service_id}" },
     "no_verdict_snapshot": { "message": "No verdict snapshot for opaque condition {condition_key}" },
     "area_not_found": { "message": "Area not found." },
-    "floor_not_found": { "message": "Floor not found." }
+    "floor_not_found": { "message": "Floor not found." },
+    "unknown_service": { "message": "Unknown service: {service}" },
+    "category_id_empty": { "message": "Category id must be a non-empty string." },
+    "duplicate_category_id": { "message": "Duplicate category id: {cid}" },
+    "category_name_empty": { "message": "Category {cid} name must be a non-empty string." },
+    "duplicate_category_name": { "message": "Duplicate category name: {name}" },
+    "unparseable_now": { "message": "Unparseable now: {now}" },
+    "now_not_timezone_aware": { "message": "`now` must be timezone-aware: {now}" }
   }
 }

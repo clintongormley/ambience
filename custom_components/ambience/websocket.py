@@ -1020,10 +1020,10 @@ async def _ws_categories_save(
     try:
         await store.async_save_categories(categories)
     except LastCategoryError as exc:
-        connection.send_error(msg["id"], "category_last", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="category_last")
         return
     except CategoryInUseError as exc:
-        connection.send_error(msg["id"], "category_in_use", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="category_in_use")
         return
     connection.send_result(msg["id"])
 
@@ -1045,10 +1045,10 @@ async def _ws_categories_delete(
     try:
         await store.async_delete_category(msg["category_id"])
     except LastCategoryError as exc:
-        connection.send_error(msg["id"], "category_last", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="category_last")
         return
     except CategoryInUseError as exc:
-        connection.send_error(msg["id"], "category_in_use", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="category_in_use")
         return
     except (HomeAssistantError, ValueError) as exc:
         send_ambience_error(connection, msg["id"], exc, code="validation_error")
@@ -1134,8 +1134,8 @@ async def _ws_simulate_inputs(
         result = await simulate_inputs(
             hass, msg["scope_kind"], msg.get("scope_id"), msg["category"]
         )
-    except (ValueError, ServiceValidationError) as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
 
@@ -1195,8 +1195,8 @@ async def _ws_simulate(
         result = await run_simulation(
             hass, msg["scope_kind"], msg.get("scope_id"), msg["category"], world
         )
-    except (ValueError, ServiceValidationError) as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], {"result": result})
 

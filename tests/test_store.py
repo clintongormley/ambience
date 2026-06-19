@@ -12,7 +12,13 @@ from custom_components.ambience.const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
-from custom_components.ambience.store import AmbienceStore, reassign_orphan_scenes
+from custom_components.ambience.errors import AmbienceError
+from custom_components.ambience.store import (
+    AmbienceStore,
+    CategoryInUseError,
+    LastCategoryError,
+    reassign_orphan_scenes,
+)
 
 
 async def test_load_empty_returns_empty_areas(hass: HomeAssistant) -> None:
@@ -414,8 +420,9 @@ async def test_delete_category_blocked_when_it_has_members(
     }
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError, match="still has scenes"):
+    with pytest.raises(CategoryInUseError) as exc:
         await store.async_delete_category("blinds")
+    assert exc.value.translation_key == "category_still_has_scenes"
     assert any(g["id"] == "blinds" for g in store.categories())
 
 
@@ -432,8 +439,9 @@ async def test_delete_category_blocked_when_last(hass: HomeAssistant, hass_stora
     }
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError, match="last category"):
+    with pytest.raises(LastCategoryError) as exc:
         await store.async_delete_category("only")
+    assert exc.value.translation_key == "cannot_delete_last_category"
 
 
 async def test_delete_empty_non_last_category_succeeds(hass: HomeAssistant, hass_storage) -> None:
@@ -599,15 +607,17 @@ async def test_save_and_get_reapply_settings(hass: HomeAssistant) -> None:
 async def test_save_reapply_settings_rejects_non_bool_enabled(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_reapply_settings({"enabled": 1, "interval_seconds": 3600})
+    assert exc.value.translation_key == "store_reapply_enabled_invalid"
 
 
 async def test_save_reapply_settings_rejects_interval_below_floor(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_reapply_settings({"enabled": True, "interval_seconds": 30})
+    assert exc.value.translation_key == "store_reapply_interval_invalid"
 
 
 async def test_ensure_reapply_settings_backfills_legacy_store(hass: HomeAssistant) -> None:
@@ -648,10 +658,11 @@ async def test_save_switch_defaults_persists_create_switches(hass: HomeAssistant
 async def test_save_switch_defaults_rejects_non_bool_create_switches(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_switch_defaults(
             {"name": "Ambience", "auto_on_delay_seconds": 0, "create_switches": 1}
         )
+    assert exc.value.translation_key == "store_switch_create_switches_invalid"
 
 
 async def test_exposed_assistants_default_assist_only(hass: HomeAssistant) -> None:
@@ -721,8 +732,9 @@ async def test_get_exposed_assistants_falls_back_on_non_bool(hass: HomeAssistant
 async def test_save_exposed_assistants_rejects_non_bool(hass: HomeAssistant) -> None:
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_exposed_assistants({"conversation": 1})
+    assert exc.value.translation_key == "store_exposure_invalid"
 
 
 async def test_save_exposed_assistants_rejects_unknown_assistant(hass: HomeAssistant) -> None:
@@ -731,7 +743,7 @@ async def test_save_exposed_assistants_rejects_unknown_assistant(hass: HomeAssis
     # A complete, valid map plus an extra unknown key — exercises the unknown
     # rejection specifically (a bare {"cloud.bixby": True} would be rejected for
     # missing the known keys instead).
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_exposed_assistants(
             {
                 "conversation": True,
@@ -740,6 +752,7 @@ async def test_save_exposed_assistants_rejects_unknown_assistant(hass: HomeAssis
                 "cloud.bixby": True,
             }
         )
+    assert exc.value.translation_key == "store_unknown_assistants"
 
 
 async def test_save_exposed_assistants_rejects_partial_map(hass: HomeAssistant) -> None:
@@ -747,8 +760,9 @@ async def test_save_exposed_assistants_rejects_partial_map(hass: HomeAssistant) 
     # (which would reset the omitted assistants).
     store = AmbienceStore(hass)
     await store.async_load()
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError) as exc:
         await store.async_save_exposed_assistants({"conversation": False})
+    assert exc.value.translation_key == "store_exposure_invalid"
 
 
 def test_known_assistants_match_default_map_and_fields() -> None:

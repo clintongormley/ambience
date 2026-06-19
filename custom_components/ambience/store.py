@@ -18,6 +18,7 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
+from .errors import AmbienceError
 
 # Switch / idle re-apply defaults. Defined here (store is their only consumer)
 # rather than in const.py, to avoid a CodeQL py/unsafe-cyclic-import false
@@ -46,11 +47,11 @@ DEFAULT_EXPOSED_ASSISTANTS = {
 _LOGGER = logging.getLogger(__name__)
 
 
-class LastCategoryError(ValueError):
+class LastCategoryError(AmbienceError):
     """Raised when deleting the only remaining category."""
 
 
-class CategoryInUseError(ValueError):
+class CategoryInUseError(AmbienceError):
     """Raised when deleting a category that still has scenes in some scope."""
 
 
@@ -235,7 +236,7 @@ class AmbienceStore:
         one category must always exist, and a category with scenes can't be
         dropped (a stale-tab save would silently orphan them)."""
         if not categories:
-            raise LastCategoryError("at least one category is required")
+            raise LastCategoryError("last_category_required")
         new_ids = {c.get("id") for c in categories}
         in_use = {
             scene.get("category")
@@ -244,7 +245,9 @@ class AmbienceStore:
         }
         removed_in_use = sorted(cid for cid in in_use - new_ids if isinstance(cid, str))
         if removed_in_use:
-            raise CategoryInUseError(f"categories still have scenes: {', '.join(removed_in_use)}")
+            raise CategoryInUseError(
+                "categories_still_have_scenes", categories=", ".join(removed_in_use)
+            )
         self._data["categories"] = [dict(c) for c in categories]
         await self._store.async_save(self._data)
         self._notify_config_changed()
@@ -255,14 +258,14 @@ class AmbienceStore:
         a category and at least one category must always exist)."""
         categories = self._data.get("categories", [])
         if len(categories) <= 1:
-            raise LastCategoryError("cannot delete the last category")
+            raise LastCategoryError("cannot_delete_last_category")
         in_use = any(
             scene.get("category") == category_id
             for _kind, _id, cfg in self.all_scope_configs()
             for scene in cfg.get("scenes", [])
         )
         if in_use:
-            raise CategoryInUseError(f"category {category_id!r} still has scenes")
+            raise CategoryInUseError("category_still_has_scenes", category_id=category_id)
         self._data["categories"] = [c for c in categories if c.get("id") != category_id]
         await self._store.async_save(self._data)
         self._notify_config_changed()
@@ -328,21 +331,19 @@ class AmbienceStore:
             return self._data["floors"].setdefault(scope_id, {"scenes": []})
         if scope_kind == "area":
             return self._data["areas"].setdefault(scope_id, {"scenes": []})
-        raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+        raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
 
     @staticmethod
     def _validate_switch_defaults(payload: dict[str, Any]) -> None:
         name = payload.get("name")
         if not isinstance(name, str) or not name.strip():
-            raise ValueError(f"switch defaults `name` must be a non-empty string: {name!r}")
+            raise AmbienceError("store_switch_name_empty", name=name)
         delay = payload.get("auto_on_delay_seconds")
         if not isinstance(delay, int) or isinstance(delay, bool) or delay < 0:
-            raise ValueError(
-                f"switch defaults `auto_on_delay_seconds` must be a non-negative int: {delay!r}"
-            )
+            raise AmbienceError("store_switch_auto_on_delay_invalid", delay=delay)
         create = payload.get("create_switches")
         if not isinstance(create, bool):
-            raise ValueError(f"switch defaults `create_switches` must be a bool: {create!r}")
+            raise AmbienceError("store_switch_create_switches_invalid", create=create)
 
     def get_switch_defaults(self) -> dict[str, Any]:
         sd = self._data.get("switch_defaults", {})
@@ -367,16 +368,17 @@ class AmbienceStore:
     def _validate_reapply_settings(payload: dict[str, Any]) -> None:
         enabled = payload.get("enabled")
         if not isinstance(enabled, bool):
-            raise ValueError(f"reapply `enabled` must be a bool: {enabled!r}")
+            raise AmbienceError("store_reapply_enabled_invalid", enabled=enabled)
         interval = payload.get("interval_seconds")
         if (
             not isinstance(interval, int)
             or isinstance(interval, bool)
             or interval < MIN_REAPPLY_INTERVAL_SECONDS
         ):
-            raise ValueError(
-                f"reapply `interval_seconds` must be an int >= "
-                f"{MIN_REAPPLY_INTERVAL_SECONDS}: {interval!r}"
+            raise AmbienceError(
+                "store_reapply_interval_invalid",
+                min=MIN_REAPPLY_INTERVAL_SECONDS,
+                interval=interval,
             )
 
     def get_reapply_settings(self) -> dict[str, Any]:
@@ -412,10 +414,10 @@ class AmbienceStore:
         for assistant in DEFAULT_EXPOSED_ASSISTANTS:
             value = payload.get(assistant)
             if not isinstance(value, bool):
-                raise ValueError(f"exposure for {assistant!r} must be a bool: {value!r}")
+                raise AmbienceError("store_exposure_invalid", assistant=assistant, value=value)
         unknown = set(payload) - set(DEFAULT_EXPOSED_ASSISTANTS)
         if unknown:
-            raise ValueError(f"unknown assistant(s): {sorted(unknown)}")
+            raise AmbienceError("store_unknown_assistants", assistants=sorted(unknown))
 
     async def async_save_exposed_assistants(self, payload: dict[str, Any]) -> None:
         self._validate_exposed_assistants(payload)
@@ -430,7 +432,7 @@ class AmbienceStore:
         user configuration — switch name and auto-on delay always come from the
         global defaults (:meth:`get_switch_defaults`)."""
         if scope_kind not in self._SCOPE_KINDS:
-            raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         sw = self.scope_config(scope_kind, scope_id).get("switch", {})
         return sw.get("off_at") if isinstance(sw, dict) else None
 
@@ -438,7 +440,7 @@ class AmbienceStore:
         self, scope_kind: str, scope_id: str | None, off_at: str | None
     ) -> None:
         if scope_kind not in self._SCOPE_KINDS:
-            raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         container = self._scope_container(scope_kind, scope_id)
         sw = container.setdefault("switch", {})
         sw["off_at"] = off_at
@@ -454,14 +456,14 @@ class AmbienceStore:
         applies scenes only when it is enabled AND its switch is not paused.
         """
         if scope_kind not in self._SCOPE_KINDS:
-            raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         return bool(self.scope_config(scope_kind, scope_id).get("enabled", True))
 
     async def async_set_scope_enabled(
         self, scope_kind: str, scope_id: str | None, enabled: bool
     ) -> None:
         if scope_kind not in self._SCOPE_KINDS:
-            raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+            raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
         container = self._scope_container(scope_kind, scope_id)
         container["enabled"] = bool(enabled)
         await self._store.async_save(self._data)
@@ -475,7 +477,7 @@ class AmbienceStore:
             return self._data.get("floors", {}).get(scope_id, {})
         if scope_kind == "area":
             return self._data.get("areas", {}).get(scope_id, {})
-        raise ValueError(f"unknown scope_kind: {scope_kind!r}")
+        raise AmbienceError("unknown_scope_kind", scope_kind=scope_kind)
 
     def get_exposed_actions(self) -> list[dict[str, Any]]:
         """Persisted list of ExposedAction entries (may be empty)."""

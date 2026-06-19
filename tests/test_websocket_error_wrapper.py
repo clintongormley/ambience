@@ -9,6 +9,8 @@ routes its caught exceptions through. It must:
 - and reduce any other exception to a generic, logged `unexpected_error`.
 """
 
+from homeassistant.exceptions import HomeAssistantError
+
 from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.websocket import send_ambience_error
 
@@ -47,6 +49,13 @@ def test_legacy_value_error_preserves_str_message():
     send_ambience_error(conn, 9, ValueError("boom"), code="validation_error")
     assert conn.error == (9, "validation_error", "boom")
     assert conn.message is None  # legacy path uses send_error, not send_message
+
+
+def test_homeassistant_error_without_key_uses_its_message():
+    conn = _Conn()
+    send_ambience_error(conn, 5, HomeAssistantError("plain message"), code="validation_error")
+    assert conn.error == (5, "validation_error", "plain message")
+    assert conn.message is None  # uses send_error, not the translated send_message path
 
 
 def test_unexpected_exception_is_generic_and_logged(caplog):

@@ -77,9 +77,10 @@ def send_ambience_error(
       ``translation_placeholders`` (plus the English message via ``render_en``
       for fallback/logging). Built with ``send_message`` so the extra fields ride
       on the error object — ``connection.send_error`` cannot carry them.
-    - ``ValueError`` / ``vol.Invalid`` (legacy, pre-i18n) ->
-      ``connection.send_error(code, str(err))`` — EXACTLY the prior behavior, so
-      existing handler tests stay green.
+    - ``ValueError`` or a ``HomeAssistantError`` without a ``translation_key`` ->
+      ``connection.send_error(code, str(err))`` — its real message; the generic
+      ``unexpected_error`` is reserved for non-HomeAssistantError/non-ValueError
+      exceptions (real bugs).
     - Anything else -> log with traceback + a generic ``unexpected_error`` (the
       internal detail is never leaked to the user).
     """
@@ -91,7 +92,7 @@ def send_ambience_error(
         message["error"]["translation_placeholders"] = ph
         connection.send_message(message)
         return
-    if isinstance(err, ValueError):
+    if isinstance(err, (HomeAssistantError, ValueError)):
         connection.send_error(msg_id, code, str(err))
         return
     _LOGGER.exception("ambience websocket handler error", exc_info=err)

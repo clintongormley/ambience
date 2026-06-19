@@ -8,7 +8,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import floor_registry as fr
@@ -31,6 +31,7 @@ from .const import (
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from .diagnostics import scope_diagnostics
+from .errors import render_en
 from .exposed_actions import ExposedActionsStore
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
@@ -60,6 +61,41 @@ _LOGGER = logging.getLogger(__name__)
 # tweaks a handful of inputs; this cap stops a malformed/abusive admin request
 # from materialising an unbounded number of State objects on the event loop.
 MAX_SIMULATE_ENTRIES = 1000
+
+
+def send_ambience_error(
+    connection: websocket_api.ActiveConnection,
+    msg_id: int,
+    err: Exception,
+    *,
+    code: str = "validation_error",
+) -> None:
+    """Send a websocket error for a handler exception (the single chokepoint).
+
+    - ``HomeAssistantError`` with a ``translation_key`` (e.g. ``AmbienceError``)
+      -> a localizable error payload carrying ``translation_key`` +
+      ``translation_placeholders`` (plus the English message via ``render_en``
+      for fallback/logging). Built with ``send_message`` so the extra fields ride
+      on the error object — ``connection.send_error`` cannot carry them.
+    - ``ValueError`` / ``vol.Invalid`` (legacy, pre-i18n) ->
+      ``connection.send_error(code, str(err))`` — EXACTLY the prior behavior, so
+      existing handler tests stay green.
+    - Anything else -> log with traceback + a generic ``unexpected_error`` (the
+      internal detail is never leaked to the user).
+    """
+    if isinstance(err, HomeAssistantError) and getattr(err, "translation_key", None):
+        key = err.translation_key
+        ph = getattr(err, "translation_placeholders", {}) or {}
+        message = websocket_api.error_message(msg_id, code, render_en(key, ph))
+        message["error"]["translation_key"] = key
+        message["error"]["translation_placeholders"] = ph
+        connection.send_message(message)
+        return
+    if isinstance(err, ValueError):
+        connection.send_error(msg_id, code, str(err))
+        return
+    _LOGGER.exception("ambience websocket handler error", exc_info=err)
+    connection.send_error(msg_id, "unexpected_error", render_en("unexpected_error", {}))
 
 
 def async_register_commands(hass: HomeAssistant) -> None:
@@ -152,8 +188,8 @@ async def _ws_services_get_schema(
 
     try:
         schema = await get_service_schema(hass, msg["service"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     if schema is None:
         connection.send_error(msg["id"], "unknown_service", f"unknown service: {msg['service']!r}")
@@ -191,8 +227,8 @@ async def _ws_exposed_actions_save(
     try:
         exposed_store.validate_shape(actions)
         await exposed_store.validate_against_catalog(hass, actions)
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
 
     await exposed_store.save(actions)
@@ -233,8 +269,8 @@ async def _save_scope(
     scope exists in the relevant registry). `save_fn(store, config)` persists."""
     try:
         validate_scope_config(hass, msg["config"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     # Coerce categories BEFORE canonicalising so each scene is ordered in its final
     # (post-coercion) category bucket, not a transient unknown/empty one.
@@ -378,8 +414,8 @@ async def _ws_auto_triggers_list(
     conditions = hass.data[DOMAIN][DATA_CONDITIONS]
     try:
         cfg = store.scope_config(msg["scope_kind"], msg.get("scope_id"))
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     category = msg.get("category")
     if category is not None:
@@ -404,8 +440,8 @@ async def _ws_validate(
 ) -> None:
     try:
         validate_scope_config(hass, msg["config"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], {"ok": True})
 
@@ -546,8 +582,8 @@ async def _ws_periods_save(
     period_store = hass.data[DOMAIN][DATA_PERIODS]
     try:
         await period_store.save(msg["custom"], msg["hidden"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
 
     connection.send_result(msg["id"], {"ok": True})
@@ -595,8 +631,8 @@ async def _ws_lux_ranges_save(
     lux_store = hass.data[DOMAIN][DATA_LUX_RANGES]
     try:
         await lux_store.save(msg["custom"], msg["hidden"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
 
     connection.send_result(msg["id"], {"ok": True})
@@ -678,8 +714,8 @@ async def _ws_weather_config_save(
 ) -> None:
     try:
         groups = validate_weather_groups(msg.get("groups"))
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     new_cfg = {"entity": msg.get("entity"), "groups": groups}
     store = hass.data[DOMAIN][DATA_STORE]
@@ -757,8 +793,8 @@ async def _ws_switch_defaults_save(
                 "create_switches": msg["create_switches"],
             }
         )
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     async_dispatcher_send(hass, SIGNAL_SWITCH_CONFIG_UPDATED, None)
     connection.send_result(msg["id"], {"ok": True})
@@ -794,8 +830,8 @@ async def _ws_reapply_save(
         await store.async_save_reapply_settings(
             {"enabled": msg["enabled"], "interval_seconds": msg["interval_seconds"]}
         )
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     async_dispatcher_send(hass, SIGNAL_REAPPLY_CONFIG_UPDATED, None)
     connection.send_result(msg["id"], {"ok": True})
@@ -1014,8 +1050,8 @@ async def _ws_categories_delete(
     except CategoryInUseError as exc:
         connection.send_error(msg["id"], "category_in_use", str(exc))
         return
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"])
 
@@ -1072,8 +1108,8 @@ async def _ws_scope_diagnostics(
 ) -> None:
     try:
         result = scope_diagnostics(hass, msg["scope_kind"], msg.get("scope_id"), msg["category"])
-    except ValueError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+    except (HomeAssistantError, ValueError) as exc:
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
 

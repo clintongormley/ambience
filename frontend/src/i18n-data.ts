@@ -403,6 +403,17 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       outcome_summary_skipped_scope_disabled: "Skipped — the scope is disabled.",
       outcome_summary_skipped_unavailable:
         "Skipped — the triggering entity went unavailable; devices left as they are.",
+      // trace-detail: section titles, trigger/won prefixes, per-scene marks
+      section_scene_evaluation: "Scene evaluation",
+      section_actions_taken: "Actions taken",
+      trigger_prefix: "Trigger: ",
+      trace_won_prefix: "Won: ",
+      skipped_not_exposed: " — skipped (not exposed)",
+      trace_scene_prefix: "Scene #",
+      trace_scene_disabled: "disabled",
+      trace_scene_not_reached: "not reached",
+      trace_scene_matched: "✓ matched",
+      trace_scene_no_match: "✗ no match",
     },
     blocker_summary: {
       block: "Block",
@@ -880,6 +891,16 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       outcome_summary_skipped_scope_disabled: "Omitido — el ámbito está desactivado.",
       outcome_summary_skipped_unavailable:
         "Omitido — la entidad que disparó quedó no disponible; los dispositivos se dejaron como estaban.",
+      section_scene_evaluation: "Evaluación de escenas",
+      section_actions_taken: "Acciones realizadas",
+      trigger_prefix: "Disparador: ",
+      trace_won_prefix: "Ganó: ",
+      skipped_not_exposed: " — omitido (no expuesto)",
+      trace_scene_prefix: "Escena n.º ",
+      trace_scene_disabled: "desactivada",
+      trace_scene_not_reached: "no alcanzada",
+      trace_scene_matched: "✓ coincide",
+      trace_scene_no_match: "✗ sin coincidencia",
     },
     blocker_summary: {
       block: "Bloquear",

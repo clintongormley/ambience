@@ -467,14 +467,15 @@ function renderScene(
 ): TemplateResult {
   // `index` is the 0-based position in the scene list; scene numbers are shown 1-based.
   const num = r.index + 1;
+  const scenePrefix = localize(hass, "ui.trace_scene_prefix", "Scene #");
   if (r.disabled) {
-    return html`<div class="scene disabled">Scene #${num} ${r.name ?? "—"}: disabled</div>`;
+    return html`<div class="scene disabled">${scenePrefix}${num} ${r.name ?? "—"}: ${localize(hass, "ui.trace_scene_disabled", "disabled")}</div>`;
   }
   if (!r.evaluated) {
-    return html`<div class="scene skipped">Scene #${num} ${r.name ?? "—"}: not reached</div>`;
+    return html`<div class="scene skipped">${scenePrefix}${num} ${r.name ?? "—"}: ${localize(hass, "ui.trace_scene_not_reached", "not reached")}</div>`;
   }
   return html`
-    <div class="scene ${r.matched ? "won" : ""}">Scene #${num} ${r.name ?? "—"}: ${r.matched ? "✓ matched" : "✗ no match"}</div>
+    <div class="scene ${r.matched ? "won" : ""}">${scenePrefix}${num} ${r.name ?? "—"}: ${r.matched ? localize(hass, "ui.trace_scene_matched", "✓ matched") : localize(hass, "ui.trace_scene_no_match", "✗ no match")}</div>
     ${r.predicates.map(
       (p) => html`
         <div class="pred ${p.passed ? "pass" : "fail"}" style="padding-left:1rem">
@@ -532,8 +533,8 @@ export function renderEvaluation(
         <span class="ts">${u.timestamp ? new Date(u.timestamp).toLocaleTimeString() : ""}</span>
       </div>
       <div class="eval-body">
-        <div class="cause-line">Trigger: ${renderCauseFriendly(u.cause, hass)}</div>
-        ${u.winner_name ? html`<div class="won">Won: <span class="name">${u.winner_name}</span></div>` : nothing}
+        <div class="cause-line">${localize(hass, "ui.trigger_prefix", "Trigger: ")}${renderCauseFriendly(u.cause, hass)}</div>
+        ${u.winner_name ? html`<div class="won">${localize(hass, "ui.trace_won_prefix", "Won: ")}<span class="name">${u.winner_name}</span></div>` : nothing}
         ${
           ran.length
             ? html`<div class="action-summary">→ ${services}
@@ -569,12 +570,12 @@ function renderExpansion(
   const showRawTrigger = causeHasRawValues(u.cause);
   return html`
     <div class="why">
-      ${showRawTrigger ? html`<div class="raw-trigger">Trigger: ${renderCause(hass, u.cause)}</div>` : nothing}
+      ${showRawTrigger ? html`<div class="raw-trigger">${localize(hass, "ui.trigger_prefix", "Trigger: ")}${renderCause(hass, u.cause)}</div>` : nothing}
       ${summary ? html`<div class="outcome-summary">${summary}</div>` : nothing}
       ${
         u.explanation
           ? html`<div class="section">
-            <div class="section-title">Scene evaluation</div>
+            <div class="section-title">${localize(hass, "ui.section_scene_evaluation", "Scene evaluation")}</div>
             <div class="scenes">${u.explanation.scenes.map((r) => renderScene(r, hass, periods))}</div>
           </div>`
           : nothing
@@ -582,13 +583,13 @@ function renderExpansion(
       ${
         u.actions.length
           ? html`<div class="section">
-            <div class="section-title">Actions taken</div>
+            <div class="section-title">${localize(hass, "ui.section_actions_taken", "Actions taken")}</div>
             ${u.actions.map(
               (a) => html`<div class="action-block ${a.unexposed ? "unexposed" : ""}">
                 <div class="action-head">
                   ${formatActionHeader(a, hass, schemas, exposedActions)}${
                     a.unexposed
-                      ? html`<span class="skipped-tag"> — skipped (not exposed)</span>`
+                      ? html`<span class="skipped-tag">${localize(hass, "ui.skipped_not_exposed", " — skipped (not exposed)")}</span>`
                       : nothing
                   }
                 </div>

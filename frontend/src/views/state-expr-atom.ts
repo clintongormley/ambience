@@ -562,8 +562,8 @@ export class AmbienceStateExprAtom extends LitElement {
     return html`<select
       data-field="op"
       @change=${(e: Event) => this._setOp((e.target as HTMLSelectElement).value as StateAtom["kind"])}>
-      <option value="is" ?selected=${this.value.kind === "is"}>is</option>
-      <option value="is_not" ?selected=${this.value.kind === "is_not"}>is not</option>
+      <option value="is" ?selected=${this.value.kind === "is"}>${stateOpLabel(this.hass, "is")}</option>
+      <option value="is_not" ?selected=${this.value.kind === "is_not"}>${stateOpLabel(this.hass, "is_not")}</option>
     </select>`;
   }
 

@@ -13,6 +13,7 @@ import {
   weatherConditionLabel,
   weekdayLabel,
 } from "../frontend/src/i18n";
+import { AMBIENCE_STRINGS_BY_LOCALE } from "../frontend/src/i18n-data";
 import type { ExposedAction, PeriodDef } from "../frontend/src/types";
 
 const exposed = (id: string, label: string): ExposedAction => ({
@@ -162,12 +163,11 @@ describe("localize", () => {
     expect(localize({ language: "es-ES" } as any, "ui.close", "Close")).toBe("Cerrar");
   });
   test("falls back to en for a key missing in es", () => {
-    // ui.include exists in en but was NOT seeded in es
-    expect(localize({ language: "es" } as any, "ui.include", "X")).toBe("Include");
+    // es is now a full mirror of en, so test with a key absent from both bundles
+    expect(localize({ language: "es" } as any, "ui.nonexistent_key_xyz", "X")).toBe("X");
   });
   test("falls back to en for an unknown language", () => {
-    // de is not in the bundle; should use en fallback, which doesn't have this key either
-    expect(localize({ language: "de" } as any, "ui.close", "Close")).toBe("Close");
+    expect(localize({ language: "de" } as any, "ui.cancel", "FALLBACK")).toBe("Cancel");
   });
   test("interpolates placeholders in the fallback string", () => {
     expect(
@@ -305,5 +305,18 @@ describe("weatherAttrUnit", () => {
       "Pa",
     );
     expect(weatherAttrUnit(hass, "pressure", undefined)).toBe("Pa");
+  });
+});
+
+describe("AMBIENCE_STRINGS_BY_LOCALE parity", () => {
+  test("es bundle mirrors en bundle key-for-key", () => {
+    const flat = (o: any, p = ""): string[] =>
+      Object.entries(o).flatMap(([k, v]) =>
+        v && typeof v === "object" ? flat(v, `${p}${k}.`) : [`${p}${k}`],
+      );
+    const en = new Set(flat(AMBIENCE_STRINGS_BY_LOCALE.en));
+    const es = new Set(flat(AMBIENCE_STRINGS_BY_LOCALE.es));
+    expect([...en].filter((k) => !es.has(k))).toEqual([]); // none missing in es
+    expect([...es].filter((k) => !en.has(k))).toEqual([]); // none extra in es
   });
 });

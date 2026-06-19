@@ -24,28 +24,6 @@ function _samePath(a: number[] | null, b: number[] | null): boolean {
 export class AmbienceStateExprNode extends LitElement {
   static override styles = css`
     :host { display: block; }
-    .group-wrap {
-      display: flex; align-items: flex-start; gap: 0.4rem;
-      margin: 0.25rem 0;
-    }
-    .group-wrap > .group { flex: 1; min-width: 0; margin: 0; }
-    /* External NOT on a group sits next to the card, scoping visually to
-       the whole group. Tone-down when off (same treatment as the in-atom
-       NOT toggle); loud when on. */
-    .group-wrap > .not-toggle.external {
-      background: transparent; border: 1px solid transparent;
-      border-radius: 4px; padding: 0.1rem 0.35rem; margin-top: 0.4rem;
-      cursor: pointer; font-size: 0.85em;
-      color: var(--secondary-text-color, #888); opacity: 0.6;
-    }
-    .group-wrap > .not-toggle.external:hover {
-      opacity: 1; border-color: var(--divider-color, #ccc);
-    }
-    .group-wrap > .not-toggle.external.on {
-      background: var(--warning-color, #ffd);
-      border-color: var(--warning-color, #cc9);
-      color: inherit; opacity: 1; font-weight: 600;
-    }
     .group {
       border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 4px;
@@ -276,6 +254,20 @@ export class AmbienceStateExprNode extends LitElement {
     >`;
   }
 
+  /** The NOT toggle shared by atoms and groups — both own it in their card
+   *  header (an atom before its summary, a group before its AND/OR select).
+   *  `e.stopPropagation()` matters on the atom (its header click opens the
+   *  atom) and is harmless on the group (its header isn't clickable), so a
+   *  single button serves both and the two can't drift apart. */
+  private _notToggle(isNot: boolean) {
+    return html`<button class="not-toggle ${isNot ? "on" : ""}"
+      title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
+      @click=${(e: Event) => {
+        e.stopPropagation();
+        this._emit("node-toggle-not");
+      }}>${stateOpLabel(this.hass, "not")}</button>`;
+  }
+
   private _renderAtomCard(atom: StateAtom, isNot: boolean) {
     const isComplete = this._atomIsComplete(atom);
     const expanded = _samePath(this.path, this.openPath);
@@ -287,12 +279,7 @@ export class AmbienceStateExprNode extends LitElement {
         <div class="atom-header"
           @click=${() => this._emit("node-open")}>
           ${this._dragHandle()}
-          <button class="not-toggle ${isNot ? "on" : ""}"
-            title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
-            @click=${(e: Event) => {
-              e.stopPropagation();
-              this._emit("node-toggle-not");
-            }}>${stateOpLabel(this.hass, "not")}</button>
+          ${this._notToggle(isNot)}
           <span class="summary ${isComplete ? "" : "placeholder"}">${summary}</span>
           <button class="wrap"
             title=${localize(this.hass, "ui.state_wrap", "Wrap in group")}
@@ -356,18 +343,22 @@ export class AmbienceStateExprNode extends LitElement {
     `;
   }
 
-  /** Group header: AND/OR dropdown + ✕ (unwrap). Behaviour of X:
+  /** Group header: NOT toggle + AND/OR dropdown + ✕ (unwrap). The NOT
+   *  toggle sits just before the AND/OR select (no left-hand gutter), so
+   *  the header reads "NOT AND…" — the negation scopes to the whole group,
+   *  mirroring the atom's in-header NOT. It's shown for every group,
+   *  including the root: the data model allows a top-level `not`, and
+   *  without it the only way to negate a whole expression was to nest a
+   *  redundant inner group just to wrap it. Behaviour of X (unwrap):
    *  - Nested: promote children to parent's items list.
    *  - Root with 1 child: become that child (undoes a wrap).
-   *  - Root with 2+ children: clear the predicate (set to null).
-   *  Group-level NOT lives OUTSIDE the card in
-   *  `_renderGroupWithExternalNot`, reading naturally as "NOT applies to
-   *  the whole group". */
-  private _renderGroup(group: StateGroup) {
+   *  - Root with 2+ children: clear the predicate (set to null). */
+  private _renderGroup(group: StateGroup, isNot: boolean) {
     return html`
       <div class="group ${this._dropPos() === "into" ? "drag-over" : ""} ${this._isDragging() ? "dragging" : ""}">
         <div class="group-header">
           ${this._dragHandle()}
+          ${this._notToggle(isNot)}
           <select class="group-op"
             @change=${(e: Event) =>
               this._emit("node-set-op", {
@@ -393,15 +384,16 @@ export class AmbienceStateExprNode extends LitElement {
   }
 
   override render() {
-    // Atoms own their NOT toggle in the card header. Groups put NOT
-    // outside the card (to the left), where it visually scopes to the
-    // whole group. Both unwrap the {kind:'not'} envelope before rendering
-    // the inner content; the isNot flag drives the toggle's 'on' class.
+    // Both atoms and groups own their NOT toggle in the card header (an
+    // atom before its summary, a group before its AND/OR select), so a
+    // negation reads "NOT …" inline with no left-hand gutter. Both unwrap
+    // the {kind:'not'} envelope before rendering the inner content; the
+    // isNot flag drives the toggle's 'on' class.
     const isNot = this.value.kind === "not";
     const inner = isNot ? (this.value as StateNot).item : this.value;
     const content =
       inner.kind === "and" || inner.kind === "or"
-        ? this._renderGroupWithExternalNot(inner as StateGroup, isNot)
+        ? this._renderGroup(inner as StateGroup, isNot)
         : this._renderAtomCard(inner as StateAtom, isNot);
     // A `before`/`after` drop draws an insertion line above/below this node;
     // an `into` drop highlights the card outline (handled inside the card).
@@ -410,20 +402,6 @@ export class AmbienceStateExprNode extends LitElement {
       ${pos === "before" ? html`<div class="drop-line before"></div>` : ""}
       ${content}
       ${pos === "after" ? html`<div class="drop-line after"></div>` : ""}
-    `;
-  }
-
-  private _renderGroupWithExternalNot(group: StateGroup, isNot: boolean) {
-    // The external NOT toggle is shown for every group, including the root: the
-    // data model allows a top-level `not`, and without it the only way to negate
-    // a whole expression was to nest a redundant inner group just to wrap it.
-    return html`
-      <div class="group-wrap">
-        <button class="not-toggle external ${isNot ? "on" : ""}"
-          title=${localize(this.hass, "ui.state_not_toggle", "Negate (NOT)")}
-          @click=${() => this._emit("node-toggle-not")}>${stateOpLabel(this.hass, "not")}</button>
-        ${this._renderGroup(group)}
-      </div>
     `;
   }
 }

@@ -72,19 +72,25 @@ def send_ambience_error(
 ) -> None:
     """Send a websocket error for a handler exception (the single chokepoint).
 
-    - ``HomeAssistantError`` with a ``translation_key`` (e.g. ``AmbienceError``)
+    - An Ambience ``HomeAssistantError`` (``AmbienceError`` / a
+      ``translation_domain == DOMAIN`` error) with a ``translation_key``
       -> a localizable error payload carrying ``translation_key`` +
       ``translation_placeholders`` (plus the English message via ``render_en``
       for fallback/logging). Built with ``send_message`` so the extra fields ride
       on the error object — ``connection.send_error`` cannot carry them.
-    - ``ValueError`` or a ``HomeAssistantError`` without a ``translation_key`` ->
+    - ``ValueError``, or a ``HomeAssistantError`` without a ``translation_key`` or
+      from a different ``translation_domain`` (e.g. an HA-core error) ->
       ``connection.send_error(code, str(err))`` — its real message; the generic
       ``unexpected_error`` is reserved for non-HomeAssistantError/non-ValueError
       exceptions (real bugs).
     - Anything else -> log with traceback + a generic ``unexpected_error`` (the
       internal detail is never leaked to the user).
     """
-    if isinstance(err, HomeAssistantError) and getattr(err, "translation_key", None):
+    if (
+        isinstance(err, HomeAssistantError)
+        and getattr(err, "translation_key", None)
+        and getattr(err, "translation_domain", None) == DOMAIN
+    ):
         key = err.translation_key
         ph = getattr(err, "translation_placeholders", {}) or {}
         connection.send_message(
@@ -491,7 +497,7 @@ def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     present = [k for k in ("area_id", "floor_id", "house") if k in msg]
     if len(present) != 1:
         raise service_validation_error(
-            "scope_selector_invalid", command=command, present=", ".join(present)
+            "scope_selector_invalid", command=command, present=", ".join(present) or "(none)"
         )
     if "area_id" in msg:
         return "area", msg["area_id"]

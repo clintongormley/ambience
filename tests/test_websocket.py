@@ -1771,6 +1771,9 @@ async def test_ws_run_scene_actions_requires_exactly_one_scope(
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
     assert resp["error"]["translation_key"] == "scope_selector_invalid"
+    # No scope fields -> the `present` placeholder uses the "(none)" sentinel
+    # rather than an empty string (which would read "got: ").
+    assert resp["error"]["translation_placeholders"]["present"] == "(none)"
 
 
 # ---------------------------------------------------------------------------

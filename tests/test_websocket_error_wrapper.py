@@ -59,6 +59,19 @@ def test_homeassistant_error_without_key_uses_its_message():
     assert conn.message is None  # uses send_error, not the translated send_message path
 
 
+def test_foreign_domain_hae_uses_its_message():
+    # An HA-core (or other-integration) HomeAssistantError that carries a
+    # translation_key but a DIFFERENT translation_domain must not be relabeled as
+    # Ambience — it shows its own message via send_error, not the keyed payload.
+    conn = _Conn()
+    err = HomeAssistantError("core failure")
+    err.translation_key = "some_core_key"
+    err.translation_domain = "homeassistant"
+    send_ambience_error(conn, 8, err, code="validation_error")
+    assert conn.error == (8, "validation_error", "core failure")
+    assert conn.message is None  # not the keyed Ambience payload
+
+
 def test_unexpected_exception_is_generic_and_logged(caplog):
     conn = _Conn()
     send_ambience_error(conn, 3, RuntimeError("internal detail"))

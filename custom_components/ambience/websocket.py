@@ -87,10 +87,16 @@ def send_ambience_error(
     if isinstance(err, HomeAssistantError) and getattr(err, "translation_key", None):
         key = err.translation_key
         ph = getattr(err, "translation_placeholders", {}) or {}
-        message = websocket_api.error_message(msg_id, code, render_en(key, ph))
-        message["error"]["translation_key"] = key
-        message["error"]["translation_placeholders"] = ph
-        connection.send_message(message)
+        connection.send_message(
+            websocket_api.error_message(
+                msg_id,
+                code,
+                render_en(key, ph),
+                translation_key=key,
+                translation_domain=DOMAIN,
+                translation_placeholders=ph,
+            )
+        )
         return
     if isinstance(err, (HomeAssistantError, ValueError)):
         connection.send_error(msg_id, code, str(err))
@@ -98,12 +104,16 @@ def send_ambience_error(
     _LOGGER.exception("ambience websocket handler error", exc_info=err)
     # Carry the translation_key so a non-English user sees their localized
     # "unexpected error" (es.json has it); the internal detail is never leaked.
-    message = websocket_api.error_message(
-        msg_id, "unexpected_error", render_en("unexpected_error", {})
+    connection.send_message(
+        websocket_api.error_message(
+            msg_id,
+            "unexpected_error",
+            render_en("unexpected_error", {}),
+            translation_key="unexpected_error",
+            translation_domain=DOMAIN,
+            translation_placeholders={},
+        )
     )
-    message["error"]["translation_key"] = "unexpected_error"
-    message["error"]["translation_placeholders"] = {}
-    connection.send_message(message)
 
 
 def async_register_commands(hass: HomeAssistant) -> None:

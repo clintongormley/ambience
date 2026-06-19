@@ -32,7 +32,7 @@ def render_en(translation_key: str, placeholders: dict[str, str]) -> str:
         return translation_key
     try:
         return template.format(**placeholders)
-    except (KeyError, IndexError):
+    except KeyError:
         return template
 
 
@@ -56,14 +56,8 @@ class AmbienceError(HomeAssistantError):
     """A user-facing error keyed to strings.json `exceptions.<translation_key>`."""
 
     def __init__(self, translation_key: str, **placeholders: object) -> None:
-        coerced = {k: str(v) for k, v in placeholders.items()}
         super().__init__(
             translation_domain=DOMAIN,
             translation_key=translation_key,
-            translation_placeholders=coerced,
+            translation_placeholders={k: str(v) for k, v in placeholders.items()},
         )
-        # Re-store explicitly: HomeAssistantError sets these, but keep direct
-        # attributes so the websocket wrapper can read them without relying on
-        # HA internals.
-        self.translation_key = translation_key
-        self.translation_placeholders = coerced

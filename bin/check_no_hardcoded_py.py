@@ -18,7 +18,11 @@ import ast
 import sys
 from pathlib import Path
 
-_CARRIERS = {"AmbienceError", "service_validation_error", "LastCategoryError", "CategoryInUseError"}
+from bin._i18n_carriers import CARRIERS as _ALL_CARRIERS
+
+# render_en is a helper, not an error-raising carrier; exclude it from the
+# "must have a string-literal key" check.
+_CARRIERS = {c for c in _ALL_CARRIERS if c != "render_en"}
 _RAW_EXC = {"HomeAssistantError", "ServiceValidationError"}
 
 

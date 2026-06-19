@@ -18,13 +18,8 @@ import re
 import sys
 from pathlib import Path
 
-_CARRIERS = (
-    "AmbienceError",
-    "service_validation_error",
-    "LastCategoryError",
-    "CategoryInUseError",
-    "render_en",
-)
+from bin._i18n_carriers import CARRIERS as _CARRIERS
+
 # A carrier call with a string-literal first arg: Carrier("the_key" ...
 _USED_RE = re.compile(r"\b(?:" + "|".join(_CARRIERS) + r')\(\s*"([a-z0-9_]+)"')
 

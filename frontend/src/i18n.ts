@@ -23,30 +23,30 @@ function _interp(s: string, ph?: Record<string, string>): string {
  * Checks the resolved locale first, then falls back to `en`. Returns the string
  * value if found, or undefined otherwise.
  */
+function _lookupIn(catalogue: Record<string, unknown>, parts: string[]): string | undefined {
+  let node: unknown = catalogue;
+  for (const part of parts) {
+    if (node === null || typeof node !== "object") return undefined;
+    node = (node as Record<string, unknown>)[part];
+  }
+  return typeof node === "string" ? node : undefined;
+}
+
 function _bundleLookup(hass: HassLike | undefined, key: string): string | undefined {
   const PREFIX = "component.ambience.";
   if (!key.startsWith(PREFIX)) return undefined;
   const parts = key.slice(PREFIX.length).split(".");
 
-  const _lookupIn = (catalogue: Record<string, unknown>): string | undefined => {
-    let node: unknown = catalogue;
-    for (const part of parts) {
-      if (node === null || typeof node !== "object") return undefined;
-      node = (node as Record<string, unknown>)[part];
-    }
-    return typeof node === "string" ? node : undefined;
-  };
-
   const locale = _localeOf(hass);
   const localeBundle = AMBIENCE_STRINGS_BY_LOCALE[locale];
   if (localeBundle) {
-    const result = _lookupIn(localeBundle);
+    const result = _lookupIn(localeBundle, parts);
     if (result !== undefined) return result;
   }
   // Fall back to en
   if (locale !== "en") {
     const enBundle = AMBIENCE_STRINGS_BY_LOCALE.en;
-    if (enBundle) return _lookupIn(enBundle);
+    if (enBundle) return _lookupIn(enBundle, parts);
   }
   return undefined;
 }
@@ -355,9 +355,8 @@ export function localizeWsError(hass: HassLike | undefined, err: unknown): strin
   const key = e?.translation_key;
   if (key) {
     const ph = e?.translation_placeholders ?? {};
-    const fullKey = `component.ambience.exceptions.${key}`;
-    const out = hass?.localize?.(fullKey, ...(Object.entries(ph).flat() as string[]));
-    if (out && out !== fullKey) return out;
+    const out = _resolve(hass, `component.ambience.exceptions.${key}`, "", ph);
+    if (out) return out;
   }
   if (e?.message) return e.message;
   return err instanceof Error ? err.message : String(err);

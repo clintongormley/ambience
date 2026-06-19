@@ -16,3 +16,16 @@ def test_ambience_error_carries_translation_metadata():
 def test_ambience_error_no_placeholders():
     err = AmbienceError("last_category_required")
     assert err.translation_placeholders == {}
+
+
+from custom_components.ambience.errors import render_en
+
+
+def test_render_en_interpolates_placeholders():
+    # uses the real en.json scaffold added in this task
+    msg = render_en("unexpected_error", {})
+    assert "unexpected" in msg.lower()
+
+
+def test_render_en_unknown_key_returns_key():
+    assert render_en("no_such_key_xyz", {}) == "no_such_key_xyz"

@@ -7,9 +7,32 @@ placeholders to the frontend (see websocket.py)."""
 
 from __future__ import annotations
 
+import json
+from functools import cache
+from pathlib import Path
+
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN
+
+_EN_PATH = Path(__file__).parent / "translations" / "en.json"
+
+
+@cache
+def _en_exceptions() -> dict[str, str]:
+    data = json.loads(_EN_PATH.read_text(encoding="utf-8"))
+    return {k: v["message"] for k, v in data.get("exceptions", {}).items()}
+
+
+def render_en(translation_key: str, placeholders: dict[str, str]) -> str:
+    """English text for an exceptions key, interpolated. Falls back to the key."""
+    template = _en_exceptions().get(translation_key)
+    if template is None:
+        return translation_key
+    try:
+        return template.format(**placeholders)
+    except (KeyError, IndexError):
+        return template
 
 
 class AmbienceError(HomeAssistantError):

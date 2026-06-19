@@ -69,6 +69,27 @@
     }
   },
   "exceptions": {
-    "unexpected_error": { "message": "An unexpected error occurred. See the Home Assistant logs for details." }
+    "unexpected_error": { "message": "An unexpected error occurred. See the Home Assistant logs for details." },
+    "period_clamp_not_object": { "message": "Clamp must be an object." },
+    "period_invalid_clamp_dir": { "message": "Invalid clamp direction: {value}" },
+    "period_invalid_clamp_hh": { "message": "Invalid clamp hour: {value}" },
+    "period_invalid_clamp_mm": { "message": "Invalid clamp minute: {value}" },
+    "period_endpoint_not_object": { "message": "Endpoint must be an object with a 'kind'." },
+    "period_invalid_hh": { "message": "Invalid hour: {value}" },
+    "period_invalid_mm": { "message": "Invalid minute: {value}" },
+    "period_invalid_anchor": { "message": "Invalid anchor: {value}" },
+    "period_offset_not_int": { "message": "offset_min must be an integer: {value}" },
+    "period_invalid_endpoint_kind": { "message": "Invalid endpoint kind: {value}" },
+    "period_def_not_object": { "message": "Period definition must be an object." },
+    "period_def_missing_from_to": { "message": "Period definition needs 'from' and 'to'." },
+    "lux_not_integer": { "message": "{which} must be an integer: {value}" },
+    "lux_negative": { "message": "{which} must be >= 0: {value}" },
+    "lux_def_not_object": { "message": "Lux range definition must be an object." },
+    "lux_def_needs_min_or_max": { "message": "Lux range needs at least one of 'min'/'max'." },
+    "lux_min_not_below_max": { "message": "Lux range 'min' must be < 'max': {min} >= {max}" },
+    "named_def_custom_not_object": { "message": "custom must be an object." },
+    "named_def_hidden_not_list": { "message": "hidden must be a list." },
+    "named_def_invalid_id": { "message": "Invalid {kind} id: {id}" },
+    "named_def_only_builtin_hideable": { "message": "Only built-in ids can be hidden: {id}" }
   }
 }

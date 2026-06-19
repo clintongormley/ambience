@@ -16,6 +16,8 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any
 
+from .errors import AmbienceError
+
 # Shared id grammar for custom entries: lowercase, must start with a letter.
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -81,16 +83,16 @@ class NamedDefStore(ABC):
 
         Rejects the whole save on any malformed entry; no partial writes."""
         if not isinstance(custom, dict):
-            raise ValueError("custom must be an object")
+            raise AmbienceError("named_def_custom_not_object")
         if not isinstance(hidden, list):
-            raise ValueError("hidden must be a list")
+            raise AmbienceError("named_def_hidden_not_list")
         for id_ in custom:
             if not isinstance(id_, str) or not ID_RE.match(id_):
-                raise ValueError(f"invalid {self.kind} id: {id_!r}")
+                raise AmbienceError("named_def_invalid_id", kind=self.kind, id=id_)
             self.validate_definition(custom[id_])
         for id_ in hidden:
             if id_ not in self.builtins:
-                raise ValueError(f"only built-in ids can be hidden: {id_!r}")
+                raise AmbienceError("named_def_only_builtin_hideable", id=id_)
         await self._write({"custom": custom, "hidden": hidden})
 
     async def reset(self) -> None:

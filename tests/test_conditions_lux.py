@@ -6,6 +6,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.ambience.conditions.lux import LuxCondition, LuxSnapshot
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.lux_ranges import BUILTIN_LUX_RANGES
 
 
@@ -243,7 +244,7 @@ def test_validate_accepts_valid_and_none() -> None:
     ],
 )
 def test_validate_rejects(bad) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, AmbienceError)):
         _cond().validate_predicate(bad)
 
 

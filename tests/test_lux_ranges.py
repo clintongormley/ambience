@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.lux_ranges import BUILTIN_LUX_RANGES, LuxRangeStore
 
 
@@ -91,13 +92,14 @@ def test_validate_definition_accepts_open_bounds() -> None:
     ],
 )
 def test_validate_definition_rejects_invalid(bad: dict) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         LuxRangeStore(_FakeStorage()).validate_definition(bad)
 
 
 def test_validate_definition_rejects_non_dict() -> None:
-    with pytest.raises(ValueError, match="lux range definition must be an object"):
+    with pytest.raises(AmbienceError) as exc:
         LuxRangeStore(_FakeStorage()).validate_definition("nope")
+    assert exc.value.translation_key == "lux_def_not_object"
 
 
 async def test_save_persists_full_payload() -> None:
@@ -111,7 +113,7 @@ async def test_save_persists_full_payload() -> None:
 async def test_save_rejects_malformed_custom_entry() -> None:
     storage = _FakeStorage()
     store = LuxRangeStore(storage)
-    with pytest.raises(ValueError):
+    with pytest.raises(AmbienceError):
         await store.save({"bad": {"min": 50, "max": 10}}, [])
     assert storage.saved == []
 
@@ -119,25 +121,30 @@ async def test_save_rejects_malformed_custom_entry() -> None:
 async def test_save_rejects_invalid_range_id() -> None:
     store = LuxRangeStore(_FakeStorage())
     valid = {"min": 5, "max": 30, "label": None}
-    with pytest.raises(ValueError, match="invalid lux range id"):
+    with pytest.raises(AmbienceError) as exc:
         await store.save({"Has Space": valid}, [])
-    with pytest.raises(ValueError, match="invalid lux range id"):
+    assert exc.value.translation_key == "named_def_invalid_id"
+    with pytest.raises(AmbienceError) as exc:
         await store.save({"1starts_with_digit": valid}, [])
+    assert exc.value.translation_key == "named_def_invalid_id"
 
 
 async def test_save_rejects_custom_not_a_dict() -> None:
-    with pytest.raises(ValueError, match="custom must be an object"):
+    with pytest.raises(AmbienceError) as exc:
         await LuxRangeStore(_FakeStorage()).save(["nope"], [])  # type: ignore[arg-type]
+    assert exc.value.translation_key == "named_def_custom_not_object"
 
 
 async def test_save_rejects_hidden_not_a_list() -> None:
-    with pytest.raises(ValueError, match="hidden must be a list"):
+    with pytest.raises(AmbienceError) as exc:
         await LuxRangeStore(_FakeStorage()).save({}, "dark")  # type: ignore[arg-type]
+    assert exc.value.translation_key == "named_def_hidden_not_list"
 
 
 async def test_save_rejects_hiding_non_builtin_id() -> None:
-    with pytest.raises(ValueError, match="only built-in ids can be hidden"):
+    with pytest.raises(AmbienceError) as exc:
         await LuxRangeStore(_FakeStorage()).save({}, ["gloomy"])
+    assert exc.value.translation_key == "named_def_only_builtin_hideable"
 
 
 async def test_reset_clears_custom_and_hidden() -> None:
@@ -153,3 +160,28 @@ def test_view_for_ui_returns_builtins_custom_hidden() -> None:
     assert view["builtins"] == BUILTIN_LUX_RANGES
     assert view["custom"] == storage.get_lux_ranges()["custom"]
     assert view["hidden"] == ["dark"]
+
+
+# ---------------------------------------------------------------------------
+# Representative AmbienceError key + placeholder assertions (A4 TDD)
+# ---------------------------------------------------------------------------
+
+
+def test_lux_not_integer_key_and_placeholders() -> None:
+    """lux_not_integer carries which/value placeholders."""
+    from custom_components.ambience.lux_ranges import validate_int_bound
+
+    with pytest.raises(AmbienceError) as exc:
+        validate_int_bound(1.5, "min")
+    assert exc.value.translation_key == "lux_not_integer"
+    assert exc.value.translation_placeholders["which"] == "min"
+    assert exc.value.translation_placeholders["value"] == "1.5"
+
+
+def test_lux_min_not_below_max_key_and_placeholders() -> None:
+    """lux_min_not_below_max carries min/max placeholders."""
+    with pytest.raises(AmbienceError) as exc:
+        LuxRangeStore(_FakeStorage()).validate_definition({"min": 100, "max": 50})
+    assert exc.value.translation_key == "lux_min_not_below_max"
+    assert exc.value.translation_placeholders["min"] == "100"
+    assert exc.value.translation_placeholders["max"] == "50"

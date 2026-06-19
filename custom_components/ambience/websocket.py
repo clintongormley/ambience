@@ -31,7 +31,7 @@ from .const import (
     SIGNAL_SWITCH_CONFIG_UPDATED,
 )
 from .diagnostics import scope_diagnostics
-from .errors import render_en
+from .errors import AmbienceError, render_en, service_validation_error
 from .exposed_actions import ExposedActionsStore
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
@@ -252,7 +252,9 @@ async def _ws_area_get(
 ) -> None:
     area_id = msg["area_id"]
     if ar.async_get(hass).async_get_area(area_id) is None:
-        connection.send_error(msg["id"], "unknown_area", "area not found")
+        send_ambience_error(
+            connection, msg["id"], AmbienceError("area_not_found"), code="unknown_area"
+        )
         return
     store = hass.data[DOMAIN][DATA_STORE]
     area = store.get_area(area_id) or {"scenes": []}
@@ -326,7 +328,9 @@ async def _ws_floor_get(
 ) -> None:
     floor_id = msg["floor_id"]
     if fr.async_get(hass).async_get_floor(floor_id) is None:
-        connection.send_error(msg["id"], "unknown_floor", "floor not found")
+        send_ambience_error(
+            connection, msg["id"], AmbienceError("floor_not_found"), code="unknown_floor"
+        )
         return
     store = hass.data[DOMAIN][DATA_STORE]
     cfg = store.get_floor(floor_id) or {"scenes": []}
@@ -449,6 +453,7 @@ async def _ws_validate(
 
 def _house_must_be_true(v: Any) -> bool:
     if v is not True:
+        # i18n: voluptuous schema validator — English-only (framework layer)
         raise vol.Invalid("house must be true")
     return v
 
@@ -461,9 +466,7 @@ def _parse_scope(msg: dict[str, Any], command: str) -> tuple[str, str | None]:
     """
     present = [k for k in ("area_id", "floor_id", "house") if k in msg]
     if len(present) != 1:
-        raise ServiceValidationError(
-            f"{command} requires exactly one of area_id/floor_id/house, got: {present!r}"
-        )
+        raise service_validation_error("scope_selector_invalid", command=command, present=present)
     if "area_id" in msg:
         return "area", msg["area_id"]
     if "floor_id" in msg:
@@ -497,7 +500,7 @@ async def _ws_dry_run(
             hass, scope_kind, scope_id, snapshots=snapshots
         )
     except ServiceValidationError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
 
@@ -524,7 +527,7 @@ async def _ws_apply(
             hass, scope_kind, scope_id, category=msg.get("category_id"), force=True
         )
     except ServiceValidationError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], {"ok": True})
 
@@ -549,7 +552,7 @@ async def _ws_run_scene_actions(
         scope_kind, scope_id = _parse_scope(msg, "run_actions")
         result = await async_run_scene_actions(hass, scope_kind, scope_id, msg["scene_index"])
     except ServiceValidationError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     connection.send_result(msg["id"], result)
 
@@ -923,7 +926,7 @@ async def _ws_set_scope_enabled(
     try:
         scope_kind, scope_id = _parse_scope(msg, "set_scope_enabled")
     except ServiceValidationError as exc:
-        connection.send_error(msg["id"], "validation_error", str(exc))
+        send_ambience_error(connection, msg["id"], exc, code="validation_error")
         return
     # Validate the id against the registry (like the save handlers): the store
     # setdefaults a scope bucket, so a typo'd/stale id would persist junk.

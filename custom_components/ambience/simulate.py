@@ -23,6 +23,7 @@ from .conditions.template import TemplateSnapshot
 from .conditions.weather import WEATHER_CONDITIONS
 from .const import DATA_CONDITIONS, DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
 from .engine import evaluate_explained
+from .errors import AmbienceError
 from .naming import category_names, scope_display_name
 from .scope_triggers import iter_predicate_specs, referenced_entities, scope_trigger_spec
 from .service import _switch_state, category_config
@@ -147,7 +148,7 @@ def _verdict_snapshot(condition_key: str, verdicts: dict[str, bool]) -> Any:
         return ScriptSnapshot(results=dict(verdicts))
     if condition_key == "template":
         return TemplateSnapshot(results=dict(verdicts))
-    raise ValueError(f"no verdict snapshot for opaque condition {condition_key!r}")
+    raise AmbienceError("no_verdict_snapshot", condition_key=condition_key)
 
 
 async def build_simulated_snapshots(

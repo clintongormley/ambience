@@ -131,6 +131,16 @@
     "weather_group_id_empty": { "message": "Group id must be a non-empty string: {gid}" },
     "weather_group_id_duplicate": { "message": "Duplicate group id: {gid}" },
     "weather_group_label_empty": { "message": "Group {gid} label must be a non-empty string." },
-    "weather_group_invalid_conditions": { "message": "Group {gid} has invalid condition(s)." }
+    "weather_group_invalid_conditions": { "message": "Group {gid} has invalid condition(s)." },
+    "unknown_area": { "message": "Unknown area: {scope_id}" },
+    "unknown_floor": { "message": "Unknown floor: {scope_id}" },
+    "invalid_scope": { "message": "Invalid scope: {value}" },
+    "scope_disabled": { "message": "Scope {scope_kind}/{scope_id} is disabled." },
+    "scene_index_out_of_range": { "message": "scene_index out of range: {scene_index}" },
+    "scope_selector_invalid": { "message": "{command} requires exactly one of area_id/floor_id/house, got: {present}" },
+    "invalid_service_id_format": { "message": "Service id must be domain.service: {service_id}" },
+    "no_verdict_snapshot": { "message": "No verdict snapshot for opaque condition {condition_key}" },
+    "area_not_found": { "message": "Area not found." },
+    "floor_not_found": { "message": "Floor not found." }
   }
 }

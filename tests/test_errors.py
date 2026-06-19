@@ -1,7 +1,11 @@
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from custom_components.ambience.const import DOMAIN
-from custom_components.ambience.errors import AmbienceError, render_en
+from custom_components.ambience.errors import (
+    AmbienceError,
+    render_en,
+    service_validation_error,
+)
 
 
 def test_ambience_error_carries_translation_metadata():
@@ -15,6 +19,20 @@ def test_ambience_error_carries_translation_metadata():
 
 def test_ambience_error_no_placeholders():
     err = AmbienceError("last_category_required")
+    assert err.translation_placeholders == {}
+
+
+def test_service_validation_error_carries_translation_metadata():
+    err = service_validation_error("unknown_area", scope_id="kitchen")
+    assert isinstance(err, ServiceValidationError)
+    assert err.translation_domain == DOMAIN
+    assert err.translation_key == "unknown_area"
+    # placeholders coerced to str
+    assert err.translation_placeholders == {"scope_id": "kitchen"}
+
+
+def test_service_validation_error_no_placeholders():
+    err = service_validation_error("scene_index_out_of_range")
     assert err.translation_placeholders == {}
 
 

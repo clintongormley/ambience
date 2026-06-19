@@ -140,8 +140,10 @@ def _exposed(sid: str, *, visible: list[str] | None = None, defaults: dict | Non
 
 async def test_unknown_area_raises(hass: HomeAssistant) -> None:
     _install(hass)
-    with pytest.raises(ServiceValidationError, match="unknown_area"):
+    with pytest.raises(ServiceValidationError) as exc_info:
         await async_apply_scene(hass, "area", "missing")
+    assert exc_info.value.translation_key == "unknown_area"
+    assert exc_info.value.translation_placeholders == {"scope_id": "missing"}
 
 
 async def test_happy_path_calls_service_for_matching_scene(hass: HomeAssistant) -> None:
@@ -721,8 +723,10 @@ async def test_async_resolve_only_house_routes_to_house_store(hass: HomeAssistan
 async def test_async_resolve_only_unknown_floor_raises(hass: HomeAssistant) -> None:
     _install(hass, store=FakeScopeStore())
 
-    with pytest.raises(ServiceValidationError, match="unknown_floor"):
+    with pytest.raises(ServiceValidationError) as exc_info:
         await async_resolve_only(hass, "floor", "nonexistent")
+    assert exc_info.value.translation_key == "unknown_floor"
+    assert exc_info.value.translation_placeholders == {"scope_id": "nonexistent"}
 
 
 async def test_async_apply_scene_floor_runs_floor_actions(hass: HomeAssistant) -> None:
@@ -1327,8 +1331,10 @@ async def test_execute_actions_dispatches_and_leaves_last_applied_untouched(hass
 async def test_unknown_scope_kind_raises(hass: HomeAssistant) -> None:
     """A scope_kind that is neither 'area', 'floor', nor 'house' raises ServiceValidationError."""
     _install(hass)
-    with pytest.raises(ServiceValidationError, match="unknown_scope_kind"):
+    with pytest.raises(ServiceValidationError) as exc_info:
         await async_resolve_only(hass, "room", "x")
+    assert exc_info.value.translation_key == "unknown_scope_kind"
+    assert exc_info.value.translation_placeholders == {"scope_kind": "room"}
 
 
 # ---------------------------------------------------------------------------
@@ -1529,8 +1535,10 @@ async def test_run_scene_actions_out_of_range_raises(hass: HomeAssistant) -> Non
     }
     _install(hass, areas=areas)
 
-    with pytest.raises(ServiceValidationError, match="scene_index out of range"):
+    with pytest.raises(ServiceValidationError) as exc_info:
         await async_run_scene_actions(hass, "area", "lr", 5)
+    assert exc_info.value.translation_key == "scene_index_out_of_range"
+    assert exc_info.value.translation_placeholders == {"scene_index": "5"}
 
 
 async def test_run_scene_actions_negative_index_raises(hass: HomeAssistant) -> None:
@@ -1544,8 +1552,10 @@ async def test_run_scene_actions_negative_index_raises(hass: HomeAssistant) -> N
     }
     _install(hass, areas=areas)
 
-    with pytest.raises(ServiceValidationError, match="scene_index out of range"):
+    with pytest.raises(ServiceValidationError) as exc_info:
         await async_run_scene_actions(hass, "area", "lr", -1)
+    assert exc_info.value.translation_key == "scene_index_out_of_range"
+    assert exc_info.value.translation_placeholders == {"scene_index": "-1"}
 
 
 async def test_run_scene_actions_no_actions_returns_zero_ran(hass: HomeAssistant) -> None:

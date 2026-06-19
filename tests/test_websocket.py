@@ -528,6 +528,7 @@ async def test_area_get_unknown(hass: HomeAssistant, installed, hass_ws_client) 
     resp = await _ws_send(hass_ws_client, type="ambience/area/get", area_id="nope")
     assert resp["success"] is False
     assert resp["error"]["code"] == "unknown_area"
+    assert resp["error"]["translation_key"] == "area_not_found"
 
 
 async def test_area_get_unconfigured_returns_empty_config(
@@ -1384,6 +1385,7 @@ async def test_floor_get_unknown_returns_error(
     resp = await _ws_send(hass_ws_client, type="ambience/floor/get", floor_id="nope")
     assert resp["success"] is False
     assert resp["error"]["code"] == "unknown_floor"
+    assert resp["error"]["translation_key"] == "floor_not_found"
 
 
 async def test_floor_save_round_trip(
@@ -1756,6 +1758,10 @@ async def test_ws_run_scene_actions_out_of_range(
     )
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
+    # The area is in HA's registry but has no stored Ambience config, so
+    # _scope_config raises unknown_area before the out-of-range check; either
+    # way the routed translation_key is forwarded to the frontend.
+    assert resp["error"]["translation_key"] == "unknown_area"
 
 
 async def test_ws_run_scene_actions_requires_exactly_one_scope(
@@ -1764,6 +1770,7 @@ async def test_ws_run_scene_actions_requires_exactly_one_scope(
     resp = await _ws_send(hass_ws_client, type="ambience/scene/run_actions", scene_index=0)
     assert resp["success"] is False
     assert resp["error"]["code"] == "validation_error"
+    assert resp["error"]["translation_key"] == "scope_selector_invalid"
 
 
 # ---------------------------------------------------------------------------

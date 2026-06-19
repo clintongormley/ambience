@@ -11,7 +11,7 @@ import json
 from functools import cache
 from pathlib import Path
 
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .const import DOMAIN
 
@@ -33,6 +33,22 @@ def render_en(translation_key: str, placeholders: dict[str, str]) -> str:
         return template.format(**placeholders)
     except (KeyError, IndexError):
         return template
+
+
+def service_validation_error(
+    translation_key: str, **placeholders: object
+) -> ServiceValidationError:
+    """A translatable ServiceValidationError for the service-call path.
+
+    HA core localizes it via strings.json ``exceptions.<translation_key>``. Used
+    where the error should stay a ``ServiceValidationError`` (HA logs these as
+    user errors, not bugs); the websocket layer routes the same key + placeholders
+    to the frontend via ``send_ambience_error``."""
+    return ServiceValidationError(
+        translation_domain=DOMAIN,
+        translation_key=translation_key,
+        translation_placeholders={k: str(v) for k, v in placeholders.items()},
+    )
 
 
 class AmbienceError(HomeAssistantError):

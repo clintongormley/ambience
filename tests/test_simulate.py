@@ -11,6 +11,7 @@ from custom_components.ambience.const import (
     DATA_STORE,
     DOMAIN,
 )
+from custom_components.ambience.errors import AmbienceError
 from custom_components.ambience.exposed_actions import ExposedActionsStore
 from custom_components.ambience.simulate import (
     SimulatedWorld,
@@ -667,9 +668,11 @@ def test_verdict_snapshot_template_returns_template_snapshot():
 
 
 def test_verdict_snapshot_unknown_key_raises():
-    """_verdict_snapshot raises ValueError for an unrecognised condition key."""
-    with pytest.raises(ValueError, match="no verdict snapshot"):
+    """_verdict_snapshot raises AmbienceError for an unrecognised condition key."""
+    with pytest.raises(AmbienceError) as exc_info:
         _verdict_snapshot("unknown_opaque", {})
+    assert exc_info.value.translation_key == "no_verdict_snapshot"
+    assert exc_info.value.translation_placeholders == {"condition_key": "unknown_opaque"}
 
 
 # --- build_simulated_snapshots: snapshot exception degrades to None (lines 148-149) ---

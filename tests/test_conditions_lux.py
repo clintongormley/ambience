@@ -240,12 +240,17 @@ def test_validate_accepts_valid_and_none() -> None:
         {"sensors": ["sensor.a"], "range": "dark", "min": 5},  # range AND inline band
         {"sensors": ["sensor.a"], "range": 5},  # range not a string
         {"sensors": ["sensor.a"], "min": 50, "max": 10},  # min >= max
-        {"sensors": ["sensor.a"], "min": -1},  # negative
     ],
 )
-def test_validate_rejects(bad) -> None:
-    with pytest.raises((ValueError, AmbienceError)):
+def test_validate_rejects_value_error(bad) -> None:
+    with pytest.raises(ValueError):
         _cond().validate_predicate(bad)
+
+
+def test_validate_rejects_negative_min() -> None:
+    with pytest.raises(AmbienceError) as exc:
+        _cond().validate_predicate({"sensors": ["sensor.a"], "min": -1})
+    assert exc.value.translation_key == "lux_negative"
 
 
 def test_lux_validate_predicate_allows_unknown_range() -> None:

@@ -1,7 +1,7 @@
 from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.ambience.const import DOMAIN
-from custom_components.ambience.errors import AmbienceError
+from custom_components.ambience.errors import AmbienceError, render_en
 
 
 def test_ambience_error_carries_translation_metadata():
@@ -18,9 +18,6 @@ def test_ambience_error_no_placeholders():
     assert err.translation_placeholders == {}
 
 
-from custom_components.ambience.errors import render_en
-
-
 def test_render_en_interpolates_placeholders():
     # uses the real en.json scaffold added in this task
     msg = render_en("unexpected_error", {})
@@ -29,3 +26,11 @@ def test_render_en_interpolates_placeholders():
 
 def test_render_en_unknown_key_returns_key():
     assert render_en("no_such_key_xyz", {}) == "no_such_key_xyz"
+
+
+def test_render_en_missing_placeholder_returns_raw_template(monkeypatch):
+    from custom_components.ambience import errors
+
+    monkeypatch.setattr(errors, "_en_exceptions", lambda: {"needs_detail": "Error: {detail}"})
+    # placeholders omit {detail} -> str.format raises KeyError -> raw template returned
+    assert errors.render_en("needs_detail", {}) == "Error: {detail}"

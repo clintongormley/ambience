@@ -1432,4 +1432,41 @@ describe("ambience-actions-settings", () => {
     el = await mount();
     expect(el.shadowRoot.querySelector("ambience-help")).not.toBeNull();
   });
+
+  test("pressing Enter in the label field collapses the action card", async () => {
+    el = await mount();
+    // Expand the card so the label ha-input is visible.
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const labelInput = el.shadowRoot.querySelector("[data-card] [data-label-input]") as HTMLElement;
+    expect(labelInput).not.toBeNull();
+    // Card is expanded — body should be present.
+    expect(el.shadowRoot.querySelector("[data-card] .body")).not.toBeNull();
+
+    // Dispatch a keydown with key "Enter" on the label input.
+    labelInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await el.updateComplete;
+
+    // Card should now be collapsed — body and label input gone.
+    expect(el.shadowRoot.querySelector("[data-card] .body")).toBeNull();
+    expect(el.shadowRoot.querySelector("[data-card] [data-label-input]")).toBeNull();
+  });
+
+  test("pressing a non-Enter key in the label field does NOT collapse the card", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const labelInput = el.shadowRoot.querySelector("[data-card] [data-label-input]") as HTMLElement;
+    expect(labelInput).not.toBeNull();
+
+    // Dispatch a keydown with key "a" — should not collapse.
+    labelInput.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+    await el.updateComplete;
+
+    // Card remains expanded.
+    expect(el.shadowRoot.querySelector("[data-card] .body")).not.toBeNull();
+    expect(el.shadowRoot.querySelector("[data-card] [data-label-input]")).not.toBeNull();
+  });
 });

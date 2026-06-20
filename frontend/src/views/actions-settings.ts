@@ -663,6 +663,13 @@ export class AmbienceActionsSettings extends LitElement {
                     e.stopPropagation();
                     this._setLabel(action.id, (e.target as HTMLInputElement).value);
                   }}
+                  @keydown=${(e: KeyboardEvent) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    (e.target as HTMLElement).blur();
+                    this._expanded = new Set();
+                  }}
                   @blur=${() => void this._autoSave()}
                   @click=${(e: Event) => e.stopPropagation()}
                 ></ha-input>

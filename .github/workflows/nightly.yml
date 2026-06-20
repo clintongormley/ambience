@@ -1,0 +1,101 @@
+name: Nightly (latest deps)
+
+# Runs the repo's existing checks against the LATEST upstream dependencies on a
+# daily schedule (plus manual dispatch). Kept SEPARATE from the PR/push CI in
+# tests.yml so its expected noise — a fresh HA release or a bumped npm dep can
+# break us before we've pinned to it — never blocks a PR. Failures here are an
+# early-warning signal of HA-side / dependency drift, not a merge gate.
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Mirrors tests.yml's `test` job, but installs HA + the test harness UNPINNED
+  # so pip resolves the newest releases. Two flavours: the latest published HA,
+  # and HA `dev` straight from git (continue-on-error, matching how tests.yml
+  # treats its dev channel — a broken upstream warns without failing the run).
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ha-version: ["latest", "dev"]
+    continue-on-error: ${{ matrix.ha-version == 'dev' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies (latest upstream)
+        run: |
+          python -m pip install --upgrade pip
+          # Unpinned test harness so pip picks the newest releases each night.
+          python -m pip install --upgrade pytest pytest-asyncio pytest-cov
+          python -m pip install --upgrade homeassistant pytest-homeassistant-custom-component
+          if [ "${{ matrix.ha-version }}" = "dev" ]; then
+            # Bleeding-edge HA core from git, on top of the harness above.
+            python -m pip install --upgrade "git+https://github.com/home-assistant/core.git"
+          fi
+
+      - name: Run tests with coverage
+        # Same command as tests.yml. Coverage floor (fail_under) and branch=true
+        # come from [tool.coverage.*] in pyproject.toml.
+        run: |
+          pytest tests/ \
+            --cov=custom_components.ambience \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            -v
+
+  # Mirrors tests.yml's `frontend` job, but resolves npm deps fresh (ignoring
+  # the committed lockfile) so build + tests run against the latest allowed
+  # versions of every dependency.
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install dependencies (latest, no lockfile)
+        run: npm install --no-package-lock
+
+      - name: Type check
+        run: npm run check
+
+      - name: Test with coverage
+        run: npm run coverage
+
+      - name: Build bundle
+        run: npm run build
+
+  # Lightweight HA-tooling validation. hassfest and the HACS action always pull
+  # the latest HA tooling, so they catch HA-side drift even where unit tests are
+  # thin. Mirrors hassfest.yml and validate.yml.
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Hassfest
+        uses: home-assistant/actions/hassfest@master
+
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: "integration"

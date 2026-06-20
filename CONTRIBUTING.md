@@ -57,3 +57,10 @@ command (see `Makefile`). Useful ones:
 
 GitHub Actions runs the same gates plus CodeQL security/quality scanning for
 Python and TypeScript. If the pre-push hook passed, CI should too.
+
+A separate **nightly** workflow (`.github/workflows/nightly.yml`, daily +
+`workflow_dispatch`) re-runs the backend tests, frontend build/tests, and
+hassfest/HACS validation against the **latest** upstream dependencies (newest
+published Home Assistant plus HA `dev` from git, and npm deps resolved without
+the lockfile). It is intentionally kept out of PR/push CI so an upstream release
+breaking us is an early-warning signal rather than a blocked PR.

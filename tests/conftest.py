@@ -13,7 +13,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.ambience.builtin_services import async_register_builtin_services
 from custom_components.ambience.const import DOMAIN
+
+
+@pytest.fixture
+def builtin(hass: HomeAssistant) -> None:
+    """Register Ambience built-in services (shared across builtin test modules)."""
+    async_register_builtin_services(hass)
 
 
 @pytest.fixture(autouse=True)

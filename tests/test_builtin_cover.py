@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import async_mock_service
 
@@ -11,14 +10,8 @@ from custom_components.ambience.builtin_services import (
     SERVICE_COVER_SAFE_OPEN,
     SERVICE_COVER_SAFE_SET_POSITION,
     SERVICE_COVER_SAFE_SET_TILT_POSITION,
-    async_register_builtin_services,
 )
 from custom_components.ambience.const import DOMAIN
-
-
-@pytest.fixture
-def builtin(hass: HomeAssistant) -> None:
-    async_register_builtin_services(hass)
 
 
 def _set(hass: HomeAssistant, entity_id: str, state: str, **attrs: object) -> None:

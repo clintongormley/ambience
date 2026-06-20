@@ -2,21 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import async_mock_service
 
 from custom_components.ambience.builtin_services import (
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
-    async_register_builtin_services,
 )
 from custom_components.ambience.const import DOMAIN
-
-
-@pytest.fixture
-def builtin(hass: HomeAssistant) -> None:
-    async_register_builtin_services(hass)
 
 
 async def _call(hass: HomeAssistant, service: str, entity_ids: list[str]) -> None:

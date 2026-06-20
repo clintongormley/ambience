@@ -37,12 +37,16 @@ SERVICE_COVER_SAFE_SET_POSITION = "cover_safe_set_position"
 SERVICE_COVER_SAFE_SET_TILT_POSITION = "cover_safe_set_tilt_position"
 
 _NO_FIELDS_SCHEMA = cv.make_entity_service_schema({})
-_POSITION_SCHEMA = cv.make_entity_service_schema(
-    {vol.Required("position"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100))}
-)
-_TILT_SCHEMA = cv.make_entity_service_schema(
-    {vol.Required("tilt_position"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100))}
-)
+
+
+def _int_0_100_schema(field: str):
+    return cv.make_entity_service_schema(
+        {vol.Required(field): vol.All(vol.Coerce(int), vol.Range(min=0, max=100))}
+    )
+
+
+_POSITION_SCHEMA = _int_0_100_schema("position")
+_TILT_SCHEMA = _int_0_100_schema("tilt_position")
 
 
 async def _async_turn_on(hass: HomeAssistant, call: ServiceCall) -> None:

@@ -91,3 +91,21 @@ async def test_seed_skips_id_already_present(hass: HomeAssistant) -> None:
     assert "ambience.turn_off" in ids  # the other one still seeded
     # existing entry preserved, not overwritten by the blank seed template
     assert next(e for e in entries if e["id"] == "ambience.turn_on")["label"] == "mine"
+
+
+async def test_malformed_payload_not_overwritten_on_load(hass: HomeAssistant) -> None:
+    """Regression: a malformed-but-valid-JSON payload must NOT be overwritten.
+
+    Before the fix, async_load() unconditionally called _ensure_builtin_actions()
+    which called async_save() even on the malformed branch — destroying the
+    on-disk payload and eliminating any chance of manual recovery.
+    """
+    bad = {"version": 1, "areas": "not-a-dict"}  # valid JSON, wrong shape → malformed branch
+    await Store(hass, 1, "ambience").async_save(bad)
+    store = AmbienceStore(hass)
+    await store.async_load()
+    # In-memory: degraded empty state, NOT seeded (seeding/saving is skipped)
+    assert store.get_exposed_actions() == []
+    # On-disk: the original malformed payload must still be there (not overwritten)
+    reread = await Store(hass, 1, "ambience").async_load()
+    assert reread == bad

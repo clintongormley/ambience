@@ -177,6 +177,10 @@ class AmbienceStore:
         elif not isinstance(raw, dict) or "areas" not in raw or not isinstance(raw["areas"], dict):
             _LOGGER.warning("ambience storage payload is malformed; starting empty")
             self._data = self._empty()
+            # Do NOT seed-and-save here: _ensure_builtin_actions persists, which
+            # would overwrite the unreadable on-disk payload and destroy any
+            # chance of manual recovery / restore-from-backup.
+            return
         else:
             self._data = raw
             self._ensure_conditions_namespace()

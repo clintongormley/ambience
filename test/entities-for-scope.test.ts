@@ -12,6 +12,11 @@ const hass = {
     "light.down_lamp": { entity_id: "light.down_lamp", area_id: "kitchen" },
     "switch.fan": { entity_id: "switch.fan", area_id: "bedroom" },
     "light.orphan": { entity_id: "light.orphan", area_id: null, device_id: null },
+    "switch.scope_bedroom": {
+      entity_id: "switch.scope_bedroom",
+      area_id: "bedroom",
+      platform: "ambience",
+    },
   },
   devices: {
     dev_up: { id: "dev_up", area_id: "bedroom" },
@@ -149,6 +154,14 @@ describe("filterEntities", () => {
     expect(filterEntities(["broken", "light.a"], { entity: { domain: "light" } })).toEqual([
       "light.a",
     ]);
+  });
+});
+
+describe("entitiesForScope — excludes Ambience's own entities", () => {
+  test("drops entities whose platform is 'ambience'", () => {
+    const r = entitiesForScope(hass, { kind: "area", id: "bedroom" }, ["switch"]);
+    expect(r).not.toContain("switch.scope_bedroom");
+    expect(r).toContain("switch.fan"); // a normal switch in the same area survives
   });
 });
 

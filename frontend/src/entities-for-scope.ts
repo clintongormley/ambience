@@ -112,7 +112,12 @@ export function filterEntities(entityIds: readonly string[], target: HaTarget): 
 type RegistryHass = {
   entities?: Record<
     string,
-    { entity_id: string; area_id?: string | null; device_id?: string | null }
+    {
+      entity_id: string;
+      area_id?: string | null;
+      device_id?: string | null;
+      platform?: string;
+    }
   >;
   devices?: Record<string, { id: string; area_id?: string | null }>;
   areas?: Record<string, { area_id: string; floor_id?: string | null }>;
@@ -151,6 +156,7 @@ export function entitiesForScope(
 
   return Object.values(entities)
     .filter(inScope)
+    .filter((e) => e.platform !== "ambience")
     .filter((e) => domains.length === 0 || domains.includes(e.entity_id.split(".")[0]!))
     .map((e) => e.entity_id)
     .sort();

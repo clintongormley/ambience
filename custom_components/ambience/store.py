@@ -163,6 +163,10 @@ class AmbienceStore:
         if self._data.get("builtins_seeded"):
             return
         existing = self._data.setdefault("exposed_actions", [])
+        if not isinstance(existing, list):
+            # Readable store but exposed_actions is the wrong shape — don't seed
+            # or persist over it (mirrors get_exposed_actions' isinstance guard).
+            return
         have = {e.get("id") for e in existing if isinstance(e, dict)}
         for entry in DEFAULT_SEEDED_BUILTINS:
             if entry["id"] not in have:

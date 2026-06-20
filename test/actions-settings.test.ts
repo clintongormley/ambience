@@ -1437,8 +1437,11 @@ describe("ambience-actions-settings", () => {
     expect(el.shadowRoot.querySelector("ambience-help")).not.toBeNull();
   });
 
-  test("pressing Enter in the label field collapses the action card", async () => {
+  test("pressing Enter in the label field collapses the action card and triggers autosave", async () => {
     el = await mount();
+    // Spy on _autoSave to verify it is called explicitly on Enter (not just via blur).
+    const autoSaveSpy = vi.spyOn(el, "_autoSave");
+
     // Expand the card so the label ha-input is visible.
     clickToggle(el.shadowRoot);
     await el.updateComplete;
@@ -1455,6 +1458,9 @@ describe("ambience-actions-settings", () => {
     // Card should now be collapsed — body and label input gone.
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeNull();
     expect(el.shadowRoot.querySelector("[data-card] [data-label-input]")).toBeNull();
+
+    // _autoSave must have been called explicitly by the handler (not relying on blur alone).
+    expect(autoSaveSpy).toHaveBeenCalledOnce();
   });
 
   test("pressing a non-Enter key in the label field does NOT collapse the card", async () => {

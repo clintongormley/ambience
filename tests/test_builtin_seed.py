@@ -93,6 +93,34 @@ async def test_seed_skips_id_already_present(hass: HomeAssistant) -> None:
     assert next(e for e in entries if e["id"] == "ambience.turn_on")["label"] == "mine"
 
 
+async def test_non_list_exposed_actions_does_not_raise(hass: HomeAssistant) -> None:
+    """Regression: exposed_actions set to a non-list must not crash async_load().
+
+    Before the fix, _ensure_builtin_actions() called setdefault() (which returns the
+    existing non-list value) and then called .append() on it — raising AttributeError.
+    The fix mirrors get_exposed_actions()'s isinstance guard: if the value is not a
+    list, bail out without seeding or persisting.
+    """
+    payload = {
+        "version": 1,
+        "areas": {},
+        "floors": {},
+        "house": {"scenes": []},
+        "exposed_actions": "oops",  # non-list corruption
+    }
+    await Store(hass, 1, "ambience").async_save(payload)
+    store = AmbienceStore(hass)
+    # 1. Must not raise
+    await store.async_load()
+    # 2. In-memory get_exposed_actions() returns []
+    assert store.get_exposed_actions() == []
+    # 3. Seeded IDs are NOT added
+    assert _ids(store) == set()
+    # 4. On-disk payload is NOT overwritten
+    reread = await Store(hass, 1, "ambience").async_load()
+    assert reread == payload
+
+
 async def test_malformed_payload_not_overwritten_on_load(hass: HomeAssistant) -> None:
     """Regression: a malformed-but-valid-JSON payload must NOT be overwritten.
 

@@ -4169,7 +4169,7 @@ var Qa=Object.defineProperty;var Ja=Object.getOwnPropertyDescriptor;var u=(t,r,e
                   placeholder=${l(this.hass,"ui.action_label_placeholder","Label (optional)")}
                   .value=${e.label}
                   @input=${a=>{a.stopPropagation(),this._setLabel(e.id,a.target.value)}}
-                  @keydown=${a=>{a.key==="Enter"&&(a.preventDefault(),a.stopPropagation(),a.target.blur(),this._expanded=new Set)}}
+                  @keydown=${a=>{a.key==="Enter"&&(a.preventDefault(),a.stopPropagation(),a.currentTarget.blur(),this._autoSave(),this._expanded=new Set)}}
                   @blur=${()=>void this._autoSave()}
                   @click=${a=>a.stopPropagation()}
                 ></ha-input>

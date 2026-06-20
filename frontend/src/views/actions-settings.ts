@@ -659,7 +659,8 @@ export class AmbienceActionsSettings extends LitElement {
                     if (e.key !== "Enter") return;
                     e.preventDefault();
                     e.stopPropagation();
-                    (e.target as HTMLElement).blur();
+                    (e.currentTarget as HTMLElement).blur();
+                    void this._autoSave();
                     this._expanded = new Set();
                   }}
                   @blur=${() => void this._autoSave()}

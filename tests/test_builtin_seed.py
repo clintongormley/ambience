@@ -66,3 +66,28 @@ async def test_seed_is_idempotent_across_reloads(hass: HomeAssistant) -> None:
     ids = [e["id"] for e in store2.get_exposed_actions()]
     assert ids.count("ambience.turn_on") == 1
     assert ids.count("ambience.turn_off") == 1
+
+
+async def test_seed_skips_id_already_present(hass: HomeAssistant) -> None:
+    # A seeded id already in exposed_actions (with no builtins_seeded flag yet)
+    # must not be duplicated, and its existing entry must be preserved.
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {},
+            "floors": {},
+            "house": {"scenes": []},
+            "exposed_actions": [
+                {"id": "ambience.turn_on", "label": "mine", "visible_fields": [], "defaults": {}}
+            ],
+        }
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    entries = store.get_exposed_actions()
+    ids = [e["id"] for e in entries]
+    assert ids.count("ambience.turn_on") == 1  # not duplicated
+    assert "ambience.turn_off" in ids  # the other one still seeded
+    # existing entry preserved, not overwritten by the blank seed template
+    assert next(e for e in entries if e["id"] == "ambience.turn_on")["label"] == "mine"

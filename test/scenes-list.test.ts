@@ -718,6 +718,29 @@ describe("ambience-scenes-list", () => {
     expect(item.textContent).toContain("Brightness: 80");
   });
 
+  test("empty-label exposed action uses catalog schema name in expanded detail", async () => {
+    // An action seeded with label="" should fall back to schemas[id].name ("Turn on"),
+    // not the humanized service id ("Ambience Turn On").
+    const scene: Scene = {
+      name: "r",
+      when: {},
+      actions: [{ service: "ambience.turn_on", entity_ids: ["light.a"], params: {} }],
+    };
+    const availableActions: ExposedAction[] = [
+      { id: "ambience.turn_on", label: "", visible_fields: [], defaults: {} },
+    ];
+    const schemas = {
+      "ambience.turn_on": { name: "Turn on", fields: {}, target: null },
+    };
+    el = await mount([scene], availableActions, schemas);
+    (el.shadowRoot.querySelector(".summary") as HTMLElement).click();
+    await el.updateComplete;
+    const item = el.shadowRoot.querySelector(".actions-detail-item");
+    expect(item).toBeTruthy();
+    expect(item.textContent).toContain("Turn on");
+    expect(item.textContent).not.toContain("Ambience");
+  });
+
   test("action count is rendered as a clickable element", async () => {
     el = await mount([movieScene]);
     const actionCount = el.shadowRoot.querySelector(".action-count");

@@ -425,8 +425,16 @@ export function outcomeSummary(hass: HassLike | undefined, u: BufferedUnit): str
 // its domain appended (`fado.fade_lights` → "Fade lights fado"). The trace
 // renderer is a separate path from the scene editor, so it must resolve the
 // configured label itself rather than deriving solely from the service id.
-function actionLabelFor(service: string, exposedActions?: ExposedAction[]): string {
-  return exposedActionLabel(service, exposedActions, () => deriveActionLabel(service));
+function actionLabelFor(
+  service: string,
+  exposedActions?: ExposedAction[],
+  schemas?: Record<string, ServiceSchema>,
+): string {
+  return exposedActionLabel(
+    service,
+    exposedActions,
+    () => schemas?.[service]?.name?.trim() || deriveActionLabel(service),
+  );
 }
 
 // The action's display label plus its params (key: value) — NOT its entities
@@ -445,7 +453,7 @@ export function formatActionHeader(
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
     .map(([k, v]) => `${paramLabel(k, a.service, schemas)}: ${formatArgValue(hass, v)}`)
     .join(", ");
-  const label = actionLabelFor(a.service, exposedActions);
+  const label = actionLabelFor(a.service, exposedActions, schemas);
   return params ? `${label} · ${params}` : label;
 }
 
@@ -509,7 +517,7 @@ export function renderEvaluation(
   // ones that did; when every action was skipped, fall through to the outcome
   // summary (which notes the skip) rather than presenting them as taken.
   const ran = u.actions.filter((a) => !a.unexposed);
-  const services = ran.map((a) => actionLabelFor(a.service, exposedActions)).join(", ");
+  const services = ran.map((a) => actionLabelFor(a.service, exposedActions, schemas)).join(", ");
   const n = entityCount(ran);
   // Skipped units have no explanation or actions, but still expand to reveal the
   // one-line reason (switch off / scope disabled).

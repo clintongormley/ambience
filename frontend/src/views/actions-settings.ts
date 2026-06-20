@@ -672,7 +672,7 @@ export class AmbienceActionsSettings extends LitElement {
                   <span class="header-label-display">${action.label}</span>
                   <span class="header-service-id">(${action.id})</span>
                 `
-                : html`<strong class="standalone">${action.id}</strong>`
+                : html`<strong class="standalone">${this._labelForService(action.id)}</strong>`
           }
           <button
             class="remove"

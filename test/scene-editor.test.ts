@@ -956,6 +956,35 @@ describe("ambience-scene-editor — action picker from exposed-actions list", ()
     el2.remove();
   });
 
+  test("Add-action picker uses schema catalog name when label is empty", async () => {
+    // When an exposed action has an empty label, the picker option should show
+    // the catalog name from schemas[id].name instead of falling back to the raw id.
+    const el2: any = document.createElement("ambience-scene-editor");
+    el2.conditions = conditions;
+    el2.availableActions = [
+      { id: "ambience.turn_on", label: "", visible_fields: [], defaults: {} },
+    ];
+    el2.schemas = {
+      "ambience.turn_on": { name: "Turn on", fields: {}, target: null },
+    };
+    el2.periods = periods;
+    el2.hass = hass;
+    el2.scope = { kind: "area", id: "living_room" };
+    el2.scene = { name: "x", when: {}, actions: [] };
+    el2.open = true;
+    document.body.appendChild(el2);
+    await el2.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el2.updateComplete;
+    const select = el2.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;
+    const labels = Array.from(select.querySelectorAll("option")).map((o: any) =>
+      o.textContent.trim(),
+    );
+    expect(labels).toContain("Turn on");
+    expect(labels).not.toContain("ambience.turn_on");
+    el2.remove();
+  });
+
   test("selecting a service in the add-action picker creates a slot with ActionSpec.service set", async () => {
     el = await mount({ name: "test", when: {}, actions: [] });
     const select = el.shadowRoot.querySelector(".add-action select") as HTMLSelectElement;

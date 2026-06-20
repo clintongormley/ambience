@@ -21,6 +21,7 @@ import type {
   PeoplePredicate,
   PeriodStoreView,
   Scene,
+  ServiceSchema,
   StatePredicate,
   SunPredicate,
 } from "../frontend/src/types";
@@ -540,6 +541,43 @@ describe("summariseAction", () => {
     expect(summariseAction(action, { hass: noLocalize, exposedActions, schemas })).toBe(
       "Set light: 1 light, Brightness: 31, Transition: 2",
     );
+  });
+
+  test("empty-label exposed action uses catalog schema name before humanized id", () => {
+    // An action seeded with label="" should fall back to schemas[id].name ("Turn on"),
+    // not the humanized service id ("Ambience Turn On").
+    const action: ActionSpec = {
+      service: "ambience.turn_on",
+      entity_ids: ["light.a"],
+      params: {},
+    };
+    const emptyLabelExposed: ExposedAction[] = [
+      { id: "ambience.turn_on", label: "", visible_fields: [], defaults: {} },
+    ];
+    const schemas: Record<string, ServiceSchema> = {
+      "ambience.turn_on": { name: "Turn on", fields: {}, target: null },
+    };
+    expect(
+      summariseAction(action, { hass: noLocalize, exposedActions: emptyLabelExposed, schemas }),
+    ).toBe("Turn on: 1 light");
+  });
+
+  test("empty-label exposed action without schema name falls back to humanized id", () => {
+    // When schemas[id].name is absent, fall back to humanized id (existing behaviour).
+    const action: ActionSpec = {
+      service: "ambience.turn_on",
+      entity_ids: ["light.a"],
+      params: {},
+    };
+    const emptyLabelExposed: ExposedAction[] = [
+      { id: "ambience.turn_on", label: "", visible_fields: [], defaults: {} },
+    ];
+    const schemas: Record<string, ServiceSchema> = {
+      "ambience.turn_on": { fields: {}, target: null },
+    };
+    expect(
+      summariseAction(action, { hass: noLocalize, exposedActions: emptyLabelExposed, schemas }),
+    ).toBe("Ambience.turn on: 1 light");
   });
 
   test("uses domain prefix as fallback target noun (no exposed entry)", () => {

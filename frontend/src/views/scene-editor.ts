@@ -908,7 +908,7 @@ export class AmbienceSceneEditor extends LitElement {
   /** Friendly label for an ExposedAction in the add-action dropdown. */
   private _actionOptionLabel(a: ExposedAction): string {
     if (a.label?.trim()) return a.label;
-    return a.id;
+    return this.schemas[a.id]?.name?.trim() || a.id;
   }
 
   private _renderAddAction() {

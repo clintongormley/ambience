@@ -80,7 +80,8 @@ describe("ambience-actions-settings", () => {
     el = await mount();
     const cards = el.shadowRoot.querySelectorAll("[data-card]");
     expect(cards.length).toBe(1);
-    expect(cards[0].textContent).toContain("light.turn_on");
+    // Empty-label action now shows the catalog friendly name, not the raw service id.
+    expect(cards[0].textContent).toContain("Turn on light");
     expect(listExposedActions).toHaveBeenCalled();
   });
 
@@ -123,15 +124,17 @@ describe("ambience-actions-settings", () => {
     expect(labelDisplay.textContent).toContain("Morning lights");
   });
 
-  test("collapsed card with no label shows only the service id", async () => {
+  test("collapsed card with no label shows catalog friendly name (not raw service id)", async () => {
     el = await mount();
-    // No label set: no .header-label-display is rendered; the service id
-    // shows in <strong> alone.
+    // No label set: no .header-label-display is rendered; the <strong> shows
+    // the catalog friendly name from _labelForService, not the raw service id.
     const labelDisplay = el.shadowRoot.querySelector("[data-card] .header-label-display");
     expect(labelDisplay).toBeNull();
     const strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
     expect(strong).not.toBeNull();
-    expect(strong.textContent).toContain("light.turn_on");
+    // _labelForService falls back to the catalog name ("Turn on light") from listServices mock.
+    expect(strong.textContent?.trim()).toBe("Turn on light");
+    expect(strong.textContent).not.toContain("light.turn_on");
   });
 
   test("collapsed card with label shows 'label (service.id)' format", async () => {

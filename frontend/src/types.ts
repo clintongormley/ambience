@@ -69,6 +69,7 @@ export type ServiceInfo = {
 
 // One service's field schema, as returned by ambience/services/get_schema.
 export type ServiceSchema = {
+  name?: string; // HA's localized friendly service name (services.yaml/translations); undefined/"" if none
   fields: Record<string, ServiceField>;
   target: unknown;
 };

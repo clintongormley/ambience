@@ -234,6 +234,41 @@ describe("trace-detail", () => {
     ).toBe("Fade lights fado");
   });
 
+  test("empty-label exposed action uses catalog schema name in formatActionHeader", () => {
+    // An action seeded with label="" should fall back to schemas[id].name ("Turn on"),
+    // not the humanized service id ("Ambience Turn On").
+    const schemas = {
+      "ambience.turn_on": { name: "Turn on", fields: {}, target: null },
+    };
+    expect(
+      formatActionHeader(
+        { service: "ambience.turn_on", entity_ids: [], params: {} },
+        undefined,
+        schemas as never,
+        [exposed("ambience.turn_on", "")],
+      ),
+    ).toBe("Turn on");
+  });
+
+  test("empty-label exposed action uses catalog schema name in collapsed summary", () => {
+    // The collapsed one-line summary (services list) should also show the catalog name.
+    const host = document.createElement("div");
+    render(
+      renderEvaluation(
+        unit({ actions: [{ service: "ambience.turn_on", entity_ids: ["light.k"] }] }),
+        false,
+        () => {},
+        undefined,
+        { "ambience.turn_on": { name: "Turn on", fields: {}, target: null } } as never,
+        {},
+        [exposed("ambience.turn_on", "")],
+      ),
+      host,
+    );
+    expect(host.textContent).toContain("Turn on");
+    expect(host.textContent).not.toContain("Ambience");
+  });
+
   test("collapsed action summary uses the configured exposed-action label", () => {
     const host = document.createElement("div");
     render(

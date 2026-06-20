@@ -517,8 +517,11 @@ export class AmbienceScenesList extends LitElement {
    *  set, otherwise the service id rendered via actionLabel (which is
    *  snake-case → title-case for unknown ids). */
   private _actionLabel(action: ActionSpec): string {
-    return exposedActionLabel(action.service, this.availableActions, () =>
-      actionLabel(this.hass as any, action.service),
+    return exposedActionLabel(
+      action.service,
+      this.availableActions,
+      () =>
+        this.schemas[action.service]?.name?.trim() || actionLabel(this.hass as any, action.service),
     );
   }
 

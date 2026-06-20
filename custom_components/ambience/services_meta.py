@@ -146,6 +146,7 @@ async def get_service_schema(hass: HomeAssistant, service_id: str) -> dict[str, 
     if spec is None:
         return None
     return {
+        "name": spec.get("name") if isinstance(spec, dict) else None,
         "fields": _flatten_field_groups(spec.get("fields")) if isinstance(spec, dict) else {},
         "target": spec.get("target") if isinstance(spec, dict) else None,
     }

@@ -236,12 +236,13 @@ async def test_services_get_schema_malformed_service_id_errors(
     assert resp["error"]["code"] == "validation_error"
 
 
-async def test_exposed_actions_list_empty_initially(
+async def test_exposed_actions_list_seeds_builtins_on_fresh_install(
     hass: HomeAssistant, installed, hass_ws_client
 ) -> None:
     resp = await _ws_send(hass_ws_client, type="ambience/exposed_actions/list")
     assert resp["success"] is True
-    assert resp["result"] == []
+    seeded_ids = {e["id"] for e in resp["result"]}
+    assert {"ambience.turn_on", "ambience.turn_off"} <= seeded_ids
 
 
 async def test_exposed_actions_save_and_list_round_trip(

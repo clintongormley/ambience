@@ -849,8 +849,10 @@ function _fmtEndpoint(ep: TimeEndpoint, ctx: ConditionContext): string {
  * back to the snake-case → title-case form of the service id).
  */
 function _actionDisplayName(action: ActionSpec, ctx: ActionContext): string {
-  return exposedActionLabel(action.service, ctx.exposedActions, () =>
-    actionLabel(ctx.hass, action.service),
+  return exposedActionLabel(
+    action.service,
+    ctx.exposedActions,
+    () => ctx.schemas?.[action.service]?.name?.trim() || actionLabel(ctx.hass, action.service),
   );
 }
 

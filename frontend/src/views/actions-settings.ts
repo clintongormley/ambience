@@ -77,14 +77,6 @@ export class AmbienceActionsSettings extends LitElement {
       font-family: var(--code-font-family, monospace);
       font-size: 0.9rem;
     }
-    /* Standalone service id (no label set): fill the row so the ✕ button
-       gets pushed to the far right, matching the labelled-card layout. */
-    .card-header strong.standalone {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
     /* Collapsed: label (primary) + "(service.id)" (secondary, monospace) */
     .header-label-display {
       flex: 0 0 auto;
@@ -663,16 +655,22 @@ export class AmbienceActionsSettings extends LitElement {
                     e.stopPropagation();
                     this._setLabel(action.id, (e.target as HTMLInputElement).value);
                   }}
+                  @keydown=${(e: KeyboardEvent) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    (e.currentTarget as HTMLElement).blur();
+                    void this._autoSave();
+                    this._expanded = new Set();
+                  }}
                   @blur=${() => void this._autoSave()}
                   @click=${(e: Event) => e.stopPropagation()}
                 ></ha-input>
               `
-              : action.label
-                ? html`
-                  <span class="header-label-display">${action.label}</span>
-                  <span class="header-service-id">(${action.id})</span>
-                `
-                : html`<strong class="standalone">${action.id}</strong>`
+              : html`
+                <span class="header-label-display">${action.label?.trim() || this._labelForService(action.id)}</span>
+                <span class="header-service-id">(${action.id})</span>
+              `
           }
           <button
             class="remove"

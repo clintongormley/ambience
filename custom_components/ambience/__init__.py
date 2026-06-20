@@ -29,6 +29,10 @@ from homeassistant.helpers.service import (
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
+from .builtin_services import (
+    async_register_builtin_services,
+    async_unregister_builtin_services,
+)
 from .card_resources import (
     async_register_card_resource,
     async_unregister_card_resource,
@@ -175,6 +179,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         partial(async_apply_scene_service, hass),
         schema=_APPLY_SCENE_SCHEMA,
     )
+    async_register_builtin_services(hass)
 
     # Called directly at setup, by the SIGNAL_CONFIG_CHANGED dispatcher, and by the
     # area/floor registry-event listeners — *_args absorbs each source's differing arguments.
@@ -390,6 +395,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     card_url = hass.data.get(DOMAIN, {}).get(DATA_CARD_RESOURCE_URL, "")
     await async_unregister_card_resource(hass, card_url)
     hass.services.async_remove(DOMAIN, "apply_scene")
+    async_unregister_builtin_services(hass)
     async_unregister_commands(hass)
     hass.data.pop(DOMAIN, None)
     return True

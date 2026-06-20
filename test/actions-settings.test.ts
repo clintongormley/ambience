@@ -80,7 +80,8 @@ describe("ambience-actions-settings", () => {
     el = await mount();
     const cards = el.shadowRoot.querySelectorAll("[data-card]");
     expect(cards.length).toBe(1);
-    expect(cards[0].textContent).toContain("light.turn_on");
+    // Empty-label action now shows the catalog friendly name, not the raw service id.
+    expect(cards[0].textContent).toContain("Turn on light");
     expect(listExposedActions).toHaveBeenCalled();
   });
 
@@ -97,14 +98,16 @@ describe("ambience-actions-settings", () => {
 
   test("clicking anywhere on the card header (not remove) toggles expand", async () => {
     el = await mount();
-    // Click on the service id <strong> inside the header.
-    let strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
-    expect(strong).not.toBeNull();
-    strong.click();
+    // Click on the label-display span inside the collapsed header.
+    const labelDisplay = el.shadowRoot.querySelector(
+      "[data-card] .header-label-display",
+    ) as HTMLElement;
+    expect(labelDisplay).not.toBeNull();
+    labelDisplay.click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeTruthy();
-    // Re-query — the expanded branch renders a different <strong>.
-    strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
+    // Re-query — the expanded branch renders a <strong> with the service id.
+    const strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
     strong.click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeNull();
@@ -123,15 +126,19 @@ describe("ambience-actions-settings", () => {
     expect(labelDisplay.textContent).toContain("Morning lights");
   });
 
-  test("collapsed card with no label shows only the service id", async () => {
+  test("collapsed card with no label shows catalog friendly name AND service id", async () => {
     el = await mount();
-    // No label set: no .header-label-display is rendered; the service id
-    // shows in <strong> alone.
-    const labelDisplay = el.shadowRoot.querySelector("[data-card] .header-label-display");
-    expect(labelDisplay).toBeNull();
-    const strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
-    expect(strong).not.toBeNull();
-    expect(strong.textContent).toContain("light.turn_on");
+    // No label set: .header-label-display shows the catalog friendly name and
+    // .header-service-id shows the raw service id — same format as the labeled case.
+    const labelDisplay = el.shadowRoot.querySelector(
+      "[data-card] .header-label-display",
+    ) as HTMLElement;
+    expect(labelDisplay).not.toBeNull();
+    // _labelForService falls back to the catalog name ("Turn on light") from listServices mock.
+    expect(labelDisplay.textContent?.trim()).toBe("Turn on light");
+    const serviceId = el.shadowRoot.querySelector("[data-card] .header-service-id") as HTMLElement;
+    expect(serviceId).not.toBeNull();
+    expect(serviceId.textContent).toBe("(light.turn_on)");
   });
 
   test("collapsed card with label shows 'label (service.id)' format", async () => {
@@ -1428,5 +1435,48 @@ describe("ambience-actions-settings", () => {
   test("renders a help tooltip trigger", async () => {
     el = await mount();
     expect(el.shadowRoot.querySelector("ambience-help")).not.toBeNull();
+  });
+
+  test("pressing Enter in the label field collapses the action card and triggers autosave", async () => {
+    el = await mount();
+    // Spy on _autoSave to verify it is called explicitly on Enter (not just via blur).
+    const autoSaveSpy = vi.spyOn(el, "_autoSave");
+
+    // Expand the card so the label ha-input is visible.
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const labelInput = el.shadowRoot.querySelector("[data-card] [data-label-input]") as HTMLElement;
+    expect(labelInput).not.toBeNull();
+    // Card is expanded — body should be present.
+    expect(el.shadowRoot.querySelector("[data-card] .body")).not.toBeNull();
+
+    // Dispatch a keydown with key "Enter" on the label input.
+    labelInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await el.updateComplete;
+
+    // Card should now be collapsed — body and label input gone.
+    expect(el.shadowRoot.querySelector("[data-card] .body")).toBeNull();
+    expect(el.shadowRoot.querySelector("[data-card] [data-label-input]")).toBeNull();
+
+    // _autoSave must have been called explicitly by the handler (not relying on blur alone).
+    expect(autoSaveSpy).toHaveBeenCalledOnce();
+  });
+
+  test("pressing a non-Enter key in the label field does NOT collapse the card", async () => {
+    el = await mount();
+    clickToggle(el.shadowRoot);
+    await el.updateComplete;
+
+    const labelInput = el.shadowRoot.querySelector("[data-card] [data-label-input]") as HTMLElement;
+    expect(labelInput).not.toBeNull();
+
+    // Dispatch a keydown with key "a" — should not collapse.
+    labelInput.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true }));
+    await el.updateComplete;
+
+    // Card remains expanded.
+    expect(el.shadowRoot.querySelector("[data-card] .body")).not.toBeNull();
+    expect(el.shadowRoot.querySelector("[data-card] [data-label-input]")).not.toBeNull();
   });
 });

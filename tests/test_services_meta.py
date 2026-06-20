@@ -159,6 +159,45 @@ async def test_descriptions_falls_back_to_runtime_registry_when_loader_raises() 
     assert items[0]["target"] is None
 
 
+async def test_get_service_schema_includes_name_when_present() -> None:
+    """get_service_schema returns the catalog name so the UI can display it."""
+    hass = _make_hass(
+        {
+            "ambience": {
+                "turn_on": {
+                    "name": "Turn on",
+                    "fields": {},
+                    "target": None,
+                },
+            },
+        }
+    )
+
+    schema = await get_service_schema(hass, "ambience.turn_on")
+
+    assert schema is not None
+    assert schema["name"] == "Turn on"
+
+
+async def test_get_service_schema_returns_none_name_when_absent() -> None:
+    """When the spec has no `name` key, the returned dict carries name=None."""
+    hass = _make_hass(
+        {
+            "light": {
+                "turn_on": {
+                    "fields": {},
+                    "target": {"entity": [{"domain": "light"}]},
+                },
+            },
+        }
+    )
+
+    schema = await get_service_schema(hass, "light.turn_on")
+
+    assert schema is not None
+    assert schema["name"] is None
+
+
 async def test_get_service_schema_flattens_nested_field_groups() -> None:
     """HA's `advanced_fields`-style nested groups are flattened into the
     top-level fields dict — the group entry itself disappears."""

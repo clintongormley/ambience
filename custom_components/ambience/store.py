@@ -44,6 +44,13 @@ DEFAULT_EXPOSED_ASSISTANTS = {
     "cloud.alexa": False,
 }
 
+# Built-in exposed actions seeded on first load. Defined here (not const.py)
+# to avoid the const<->store cyclic-import CodeQL false positive.
+DEFAULT_SEEDED_BUILTINS: list[dict[str, Any]] = [
+    {"id": "ambience.turn_on", "label": "", "visible_fields": [], "defaults": {}},
+    {"id": "ambience.turn_off", "label": "", "visible_fields": [], "defaults": {}},
+]
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -146,22 +153,47 @@ class AmbienceStore:
         for assistant, default in DEFAULT_EXPOSED_ASSISTANTS.items():
             ea.setdefault(assistant, default)
 
+    async def _ensure_builtin_actions(self) -> None:
+        """Seed the built-in on/off exposed actions exactly once.
+
+        Guarded by `builtins_seeded` so a user who later deletes a seeded
+        action does not get it re-added. Persists immediately so the flag and
+        seed survive restarts even without a later save.
+        """
+        if self._data.get("builtins_seeded"):
+            return
+        existing = self._data.setdefault("exposed_actions", [])
+        if not isinstance(existing, list):
+            # Readable store but exposed_actions is the wrong shape — don't seed
+            # or persist over it (mirrors get_exposed_actions' isinstance guard).
+            return
+        have = {e.get("id") for e in existing if isinstance(e, dict)}
+        for entry in DEFAULT_SEEDED_BUILTINS:
+            if entry["id"] not in have:
+                existing.append(dict(entry))
+        self._data["builtins_seeded"] = True
+        await self._store.async_save(self._data)
+
     async def async_load(self) -> None:
         raw = await self._store.async_load()
         if raw is None:
             self._data = self._empty()
-            return
-        if not isinstance(raw, dict) or "areas" not in raw or not isinstance(raw["areas"], dict):
+        elif not isinstance(raw, dict) or "areas" not in raw or not isinstance(raw["areas"], dict):
             _LOGGER.warning("ambience storage payload is malformed; starting empty")
             self._data = self._empty()
+            # Do NOT seed-and-save here: _ensure_builtin_actions persists, which
+            # would overwrite the unreadable on-disk payload and destroy any
+            # chance of manual recovery / restore-from-backup.
             return
-        self._data = raw
-        self._ensure_conditions_namespace()
-        self._ensure_scope_buckets()
-        self._ensure_categories()
-        self._ensure_switch_defaults()
-        self._ensure_reapply_settings()
-        self._ensure_exposed_assistants()
+        else:
+            self._data = raw
+            self._ensure_conditions_namespace()
+            self._ensure_scope_buckets()
+            self._ensure_categories()
+            self._ensure_switch_defaults()
+            self._ensure_reapply_settings()
+            self._ensure_exposed_assistants()
+        await self._ensure_builtin_actions()
 
     def as_dict(self) -> dict[str, Any]:
         """A deep copy of the full persisted payload, for diagnostics dumps."""

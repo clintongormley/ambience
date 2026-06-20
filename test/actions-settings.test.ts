@@ -98,14 +98,16 @@ describe("ambience-actions-settings", () => {
 
   test("clicking anywhere on the card header (not remove) toggles expand", async () => {
     el = await mount();
-    // Click on the service id <strong> inside the header.
-    let strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
-    expect(strong).not.toBeNull();
-    strong.click();
+    // Click on the label-display span inside the collapsed header.
+    const labelDisplay = el.shadowRoot.querySelector(
+      "[data-card] .header-label-display",
+    ) as HTMLElement;
+    expect(labelDisplay).not.toBeNull();
+    labelDisplay.click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeTruthy();
-    // Re-query — the expanded branch renders a different <strong>.
-    strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
+    // Re-query — the expanded branch renders a <strong> with the service id.
+    const strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
     strong.click();
     await el.updateComplete;
     expect(el.shadowRoot.querySelector("[data-card] .body")).toBeNull();
@@ -124,17 +126,19 @@ describe("ambience-actions-settings", () => {
     expect(labelDisplay.textContent).toContain("Morning lights");
   });
 
-  test("collapsed card with no label shows catalog friendly name (not raw service id)", async () => {
+  test("collapsed card with no label shows catalog friendly name AND service id", async () => {
     el = await mount();
-    // No label set: no .header-label-display is rendered; the <strong> shows
-    // the catalog friendly name from _labelForService, not the raw service id.
-    const labelDisplay = el.shadowRoot.querySelector("[data-card] .header-label-display");
-    expect(labelDisplay).toBeNull();
-    const strong = el.shadowRoot.querySelector("[data-card] .card-header strong") as HTMLElement;
-    expect(strong).not.toBeNull();
+    // No label set: .header-label-display shows the catalog friendly name and
+    // .header-service-id shows the raw service id — same format as the labeled case.
+    const labelDisplay = el.shadowRoot.querySelector(
+      "[data-card] .header-label-display",
+    ) as HTMLElement;
+    expect(labelDisplay).not.toBeNull();
     // _labelForService falls back to the catalog name ("Turn on light") from listServices mock.
-    expect(strong.textContent?.trim()).toBe("Turn on light");
-    expect(strong.textContent).not.toContain("light.turn_on");
+    expect(labelDisplay.textContent?.trim()).toBe("Turn on light");
+    const serviceId = el.shadowRoot.querySelector("[data-card] .header-service-id") as HTMLElement;
+    expect(serviceId).not.toBeNull();
+    expect(serviceId.textContent).toBe("(light.turn_on)");
   });
 
   test("collapsed card with label shows 'label (service.id)' format", async () => {

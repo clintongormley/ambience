@@ -29,3 +29,91 @@ apply_scene:
       required: false
       selector:
         boolean: {}
+turn_on:
+  name: Turn on
+  description: >-
+    Turn on the targeted entities, skipping any that are already on. Works
+    across all on/off-capable domains.
+  target:
+    entity:
+      domain:
+        - light
+        - switch
+        - fan
+        - input_boolean
+        - humidifier
+        - siren
+        - media_player
+        - remote
+        - climate
+        - water_heater
+turn_off:
+  name: Turn off
+  description: >-
+    Turn off the targeted entities, skipping any that are already off. Works
+    across all on/off-capable domains.
+  target:
+    entity:
+      domain:
+        - light
+        - switch
+        - fan
+        - input_boolean
+        - humidifier
+        - siren
+        - media_player
+        - remote
+        - climate
+        - water_heater
+cover_safe_open:
+  name: Open cover (safe)
+  description: >-
+    Open the targeted covers, skipping any already fully open (no redundant
+    relay click).
+  target:
+    entity:
+      domain: cover
+cover_safe_close:
+  name: Close cover (safe)
+  description: >-
+    Close the targeted covers, skipping any already fully closed (no redundant
+    relay click).
+  target:
+    entity:
+      domain: cover
+cover_safe_set_position:
+  name: Set cover position (safe)
+  description: >-
+    Set the targeted covers to a position, skipping any already at that
+    position.
+  target:
+    entity:
+      domain: cover
+  fields:
+    position:
+      name: Position
+      description: Target position, 0 (closed) to 100 (open).
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"
+cover_safe_set_tilt_position:
+  name: Set cover tilt (safe)
+  description: >-
+    Set the targeted covers to a tilt position, skipping any already at that
+    tilt.
+  target:
+    entity:
+      domain: cover
+  fields:
+    tilt_position:
+      name: Tilt position
+      description: Target tilt position, 0 to 100.
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          unit_of_measurement: "%"

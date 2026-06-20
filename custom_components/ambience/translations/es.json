@@ -168,6 +168,42 @@
           "description": "Aplica incluso cuando un ámbito está en pausa (su interruptor está apagado). Un ámbito desactivado permanentemente siempre se omite."
         }
       }
+    },
+    "turn_on": {
+      "name": "Encender",
+      "description": "Enciende las entidades seleccionadas, omitiendo las que ya están encendidas. Funciona en todos los dominios que admiten encendido/apagado."
+    },
+    "turn_off": {
+      "name": "Apagar",
+      "description": "Apaga las entidades seleccionadas, omitiendo las que ya están apagadas. Funciona en todos los dominios que admiten encendido/apagado."
+    },
+    "cover_safe_open": {
+      "name": "Abrir persiana (seguro)",
+      "description": "Abre las persianas seleccionadas, omitiendo las que ya están totalmente abiertas (sin clic de relé redundante)."
+    },
+    "cover_safe_close": {
+      "name": "Cerrar persiana (seguro)",
+      "description": "Cierra las persianas seleccionadas, omitiendo las que ya están totalmente cerradas (sin clic de relé redundante)."
+    },
+    "cover_safe_set_position": {
+      "name": "Fijar posición de persiana (seguro)",
+      "description": "Fija las persianas seleccionadas en una posición, omitiendo las que ya están en esa posición.",
+      "fields": {
+        "position": {
+          "name": "Posición",
+          "description": "Posición objetivo, de 0 (cerrada) a 100 (abierta)."
+        }
+      }
+    },
+    "cover_safe_set_tilt_position": {
+      "name": "Fijar inclinación de persiana (seguro)",
+      "description": "Fija las persianas seleccionadas en una posición de inclinación, omitiendo las que ya están en esa inclinación.",
+      "fields": {
+        "tilt_position": {
+          "name": "Posición de inclinación",
+          "description": "Posición de inclinación objetivo, de 0 a 100."
+        }
+      }
     }
   }
 }

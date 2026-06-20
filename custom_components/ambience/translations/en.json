@@ -168,6 +168,42 @@
           "description": "Apply even when a scope is paused (its switch is off). A permanently disabled scope is always skipped."
         }
       }
+    },
+    "turn_on": {
+      "name": "Turn on",
+      "description": "Turn on the targeted entities, skipping any that are already on. Works across all on/off-capable domains."
+    },
+    "turn_off": {
+      "name": "Turn off",
+      "description": "Turn off the targeted entities, skipping any that are already off. Works across all on/off-capable domains."
+    },
+    "cover_safe_open": {
+      "name": "Open cover (safe)",
+      "description": "Open the targeted covers, skipping any already fully open (no redundant relay click)."
+    },
+    "cover_safe_close": {
+      "name": "Close cover (safe)",
+      "description": "Close the targeted covers, skipping any already fully closed (no redundant relay click)."
+    },
+    "cover_safe_set_position": {
+      "name": "Set cover position (safe)",
+      "description": "Set the targeted covers to a position, skipping any already at that position.",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Target position, 0 (closed) to 100 (open)."
+        }
+      }
+    },
+    "cover_safe_set_tilt_position": {
+      "name": "Set cover tilt (safe)",
+      "description": "Set the targeted covers to a tilt position, skipping any already at that tilt.",
+      "fields": {
+        "tilt_position": {
+          "name": "Tilt position",
+          "description": "Target tilt position, 0 to 100."
+        }
+      }
     }
   }
 }

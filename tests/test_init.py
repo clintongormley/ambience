@@ -62,9 +62,10 @@ async def test_setup_seeds_registries_and_store(
     assert DATA_STORE in data
     assert "time_of_day" in data[DATA_CONDITIONS]
     assert "scene" not in data[DATA_CONDITIONS]
-    # ExposedActionsStore is wired up; fresh setup starts empty.
+    # ExposedActionsStore is wired up; fresh setup seeds the built-in on/off actions.
     assert DATA_EXPOSED_ACTIONS in data
-    assert data[DATA_EXPOSED_ACTIONS].list() == []
+    seeded_ids = {e["id"] for e in data[DATA_EXPOSED_ACTIONS].list()}
+    assert {"ambience.turn_on", "ambience.turn_off"} <= seeded_ids
 
 
 async def test_script_condition_is_registered(

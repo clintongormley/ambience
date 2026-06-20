@@ -21,7 +21,7 @@ jobs:
         language: ["python", "javascript-typescript"]
     steps:
       - uses: actions/checkout@v6
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
@@ -35,6 +35,6 @@ jobs:
               - custom_components/ambience/frontend/ambience-frontend.js
               - custom_components/ambience/frontend/ambience-panel.js
               - custom_components/ambience/frontend/ambience-card.js
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"

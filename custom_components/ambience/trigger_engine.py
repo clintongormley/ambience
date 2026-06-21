@@ -424,11 +424,15 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                         winner_name=plan["scene_name"],
                     )
                 return None
-            if not force and index == get_last_applied(
-                self._hass, scope_kind, scope_id, category_id
+            always = plan.get("apply") == "always"
+            if (
+                not force
+                and not always
+                and index == get_last_applied(self._hass, scope_kind, scope_id, category_id)
             ):
                 # Same winner as last applied, with identical actions → suppress the
-                # redundant re-fire.
+                # redundant re-fire. A scene whose `apply` mode is "always" opts out
+                # of this debounce, re-asserting its actions on every re-evaluation.
                 if active:
                     return UnitTrace(
                         scope_kind,

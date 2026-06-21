@@ -550,6 +550,69 @@ async def test_last_applied_recorded_before_actions_run(hass) -> None:
     assert seen == [0]  # already recorded by the time the action fired
 
 
+async def _apply_engine_with_mode(hass, mode, handler) -> AutoTriggerEngine:
+    """One area 'a', a single scene 'evening'->idx0 (category 'g') carrying
+    apply=`mode` (omitted when None), `handler` registered as light.turn_on,
+    switch on, snapshot pre-populated — ready for a direct _resolve_and_apply."""
+    hass.services.async_register("light", "turn_on", handler)
+    act = [{"service": "light.turn_on", "entity_ids": ["light.a"], "params": {}}]
+    scene = {"when": {"tod": "evening"}, "category": "g", "actions": act}
+    if mode is not None:
+        scene["apply"] = mode
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "a", {"scenes": [scene]})]),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: _exposed_store_with("light.turn_on"),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    await engine._refresh_snapshots({"tod"})
+    return engine
+
+
+async def test_resolve_and_apply_always_reapplies_unchanged_winner(hass) -> None:
+    calls = 0
+
+    async def _turn_on(call) -> None:
+        nonlocal calls
+        calls += 1
+
+    engine = await _apply_engine_with_mode(hass, "always", _turn_on)
+    await engine._resolve_and_apply("area", "a", "g")  # first apply
+    await engine._resolve_and_apply("area", "a", "g")  # same winner — always re-fires
+    assert calls == 2
+    assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 0
+
+
+async def test_resolve_and_apply_once_debounces_unchanged_winner(hass) -> None:
+    calls = 0
+
+    async def _turn_on(call) -> None:
+        nonlocal calls
+        calls += 1
+
+    engine = await _apply_engine_with_mode(hass, None, _turn_on)  # absent = once
+    await engine._resolve_and_apply("area", "a", "g")
+    await engine._resolve_and_apply("area", "a", "g")  # same winner — debounced
+    assert calls == 1
+
+
+async def test_global_force_still_reapplies_once_winner(hass) -> None:
+    """Model 2: the global re-run (force=True) re-applies even a 'once' winner."""
+    calls = 0
+
+    async def _turn_on(call) -> None:
+        nonlocal calls
+        calls += 1
+
+    engine = await _apply_engine_with_mode(hass, None, _turn_on)  # once
+    await engine._resolve_and_apply("area", "a", "g")  # calls == 1
+    await engine._resolve_and_apply("area", "a", "g", force=True)  # force re-run
+    assert calls == 2
+
+
 async def test_lock_serializes_ordering_when_winner_changes_mid_apply(hass) -> None:
     """The lock holds a second trigger off until the first apply's actions finish.
     When the winner flips mid-apply, the two scenes' actions run in order rather
@@ -1421,6 +1484,36 @@ async def test_resolve_and_apply_no_action_winner_is_no_op_transparent_to_last_a
         logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
     # The blocker did not overwrite or clear the prior real winner.
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 5
+
+
+async def test_resolve_and_apply_always_no_action_winner_is_still_no_op(
+    hass,
+) -> None:
+    """A winner with apply='always' but no actions is still NO_OP — 'always' overrides
+    the same-winner debounce but NOT the no-action/blocker early-return."""
+    from custom_components.ambience.trace import Outcome
+
+    blocker = {"when": {"tod": "evening"}, "category": "g", "actions": [], "apply": "always"}
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "a", {"scenes": [blocker]})]),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine._snapshots = {"tod": "evening"}
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g")
+        assert result is not None
+        assert result.outcome == Outcome.NO_OP
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    # 'always' does not bypass the no-action branch — last_applied must remain absent.
+    assert ("area", "a", "g") not in hass.data[DOMAIN][DATA_LAST_APPLIED]
 
 
 async def test_resolve_and_apply_returns_none_when_winner_unchanged_and_tracing_inactive(

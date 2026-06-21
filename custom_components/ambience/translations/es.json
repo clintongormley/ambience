@@ -126,6 +126,7 @@
     "scene_action_entity_ids_not_list": { "message": "Escena {scene_idx} acción {action_idx}: entity_ids debe ser una lista." },
     "scene_action_entity_ids_not_strings": { "message": "Escena {scene_idx} acción {action_idx}: entity_ids deben ser cadenas no vacías." },
     "scene_action_params_not_object": { "message": "Escena {scene_idx} acción {action_idx}: params debe ser un objeto." },
+    "scene_apply_invalid": { "message": "Escena {scene_idx}: `apply` debe ser \"once\" o \"always\": {value}" },
     "weather_groups_not_list": { "message": "Los grupos deben ser una lista." },
     "weather_group_not_object": { "message": "Cada grupo debe ser un objeto." },
     "weather_group_id_empty": { "message": "El id del grupo debe ser una cadena no vacía: {gid}" },

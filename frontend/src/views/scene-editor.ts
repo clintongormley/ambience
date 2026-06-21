@@ -4,6 +4,7 @@ import type { HassConnection } from "../api.js";
 import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
 import { entitiesForScope, sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
+import { renderHaSwitch } from "../ha-switch.js";
 import { conditionLabel, localize } from "../i18n.js";
 import { entitiesUsedByOtherActions, stripPositionMetadata } from "../scene.js";
 import { scopeIcon } from "../scope-icon.js";
@@ -20,6 +21,7 @@ import type {
   ScopeOption,
 } from "../types.js";
 import "./action-slot.js";
+import "./ambience-help.js";
 import "./condition-input.js";
 import { dayPredicateError } from "./day-predicate-input.js";
 import { luxPredicateError } from "./lux-input.js";
@@ -177,6 +179,12 @@ export class AmbienceSceneEditor extends LitElement {
       margin: 0.5rem 0;
       padding: 0.5rem 0;
     }
+    /* Label on the left, switch on the right — mirrors the settings toggle rows. */
+    .apply-control {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .apply-control label { margin: 0; }
     .error {
       color: var(--error-color, #c62828);
       font-size: 0.9em;
@@ -971,6 +979,40 @@ export class AmbienceSceneEditor extends LitElement {
   }
   /* v8 ignore stop */
 
+  // The per-scene "Apply on every match" toggle. Off (default) = the winning
+  // scene applies once and then debounces while it stays the winner; on stores
+  // `apply: "always"` so the engine re-asserts its actions on every match.
+  private _onApplyToggle = (e: Event) => {
+    if (!this._draft) return;
+    const draft = { ...this._draft };
+    if ((e.target as HTMLInputElement).checked) draft.apply = "always";
+    else delete draft.apply; // off = "once" (the default) → store nothing
+    this._draft = draft;
+  };
+
+  private _renderApply() {
+    return html`
+      <div class="apply-control">
+        <label>
+          ${localize(this.hass, "ui.apply_on_every_match", "Apply on every match")}
+          <ambience-help
+            .hass=${this.hass}
+            .text=${localize(
+              this.hass,
+              "ui.help_apply_on_every_match",
+              "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene.",
+            )}
+          ></ambience-help>
+        </label>
+        ${renderHaSwitch({
+          checked: this._draft!.apply === "always",
+          dataTest: "apply-on-every-match",
+          onChange: this._onApplyToggle,
+        })}
+      </div>
+    `;
+  }
+
   private _updateActionAt(idx: number, mutate: (a: ActionSpec) => ActionSpec) {
     if (!this._draft) return;
     const actions = this._draft.actions.map((a, i) => (i === idx ? mutate(a) : a));
@@ -1117,6 +1159,7 @@ export class AmbienceSceneEditor extends LitElement {
           <h3>${localize(this.hass, "ui.actions_heading", "Actions")}</h3>
           ${this._draft.actions.map((a, i) => this._renderActionRow(a, i))}
           ${this._renderAddAction()}
+          ${this._renderApply()}
         </div>
 
         <div class="actions-bar">

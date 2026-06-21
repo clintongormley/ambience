@@ -336,14 +336,14 @@ export class AmbienceAmbienceSettings extends LitElement {
             ${localize(
               this.hass,
               "ui.settings_reapply_enable_label",
-              "Reapply scenes after inactivity",
+              "Re-run all scenes after inactivity",
             )}
             <ambience-help
               .hass=${this.hass}
               .text=${localize(
                 this.hass,
                 "ui.help_reapply_toggle",
-                "Check the scenes for a scope/category after inactivity and reapply the winning scene, in case any action had previously failed, such as a light not turning off.",
+                "Re-run the scenes for a scope/category after inactivity and re-apply the winning scene, in case any action had previously failed, such as a light not turning off.",
               )}
             ></ambience-help>
           </label>
@@ -353,13 +353,13 @@ export class AmbienceAmbienceSettings extends LitElement {
         </div>
         <div class="row">
           <label>
-            ${localize(this.hass, "ui.settings_reapply_interval_label", "Reapply after")}
+            ${localize(this.hass, "ui.settings_reapply_interval_label", "Re-run after")}
             <ambience-help
               .hass=${this.hass}
               .text=${localize(
                 this.hass,
                 "ui.help_reapply_after",
-                "Reapply scenes that haven't been updated for this many minutes.",
+                "Re-run scenes that haven't been updated for this many minutes.",
               )}
             ></ambience-help>
           </label>

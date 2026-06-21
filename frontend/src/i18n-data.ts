@@ -87,8 +87,11 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_ambience_pause_card: "Scope-level pause switch",
       settings_ambience_field_name: "Switch name",
       settings_ambience_field_pause: "Pause for",
-      settings_reapply_enable_label: "Reapply scenes after inactivity",
-      settings_reapply_interval_label: "Reapply after",
+      settings_reapply_enable_label: "Re-run all scenes after inactivity",
+      settings_reapply_interval_label: "Re-run after",
+      apply_on_every_match: "Apply on every match",
+      help_apply_on_every_match:
+        "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene.",
       unit_minutes: "minutes",
       help: "Help",
       help_pause_switch:
@@ -97,8 +100,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       help_pause_for:
         "When a scope's switch is turned off, auto-resume after this many minutes. 0 = stays paused until turned back on.",
       help_reapply_toggle:
-        "Check the scenes for a scope/category after inactivity and reapply the winning scene, in case any action had previously failed, such as a light not turning off.",
-      help_reapply_after: "Reapply scenes that haven't been updated for this many minutes.",
+        "Re-run the scenes for a scope/category after inactivity and re-apply the winning scene, in case any action had previously failed, such as a light not turning off.",
+      help_reapply_after: "Re-run scenes that haven't been updated for this many minutes.",
       settings_expose_group: "Expose to voice assistants",
       settings_expose_assist: "Assist",
       settings_expose_google: "Google Assistant",
@@ -401,7 +404,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       cause_simulated: "Simulation",
       cause_clock: "Time of day",
       cause_sun: "Sun position",
-      cause_reapply: "Reapply",
+      cause_reapply: "Re-run",
       cause_duration_for: "for",
       outcome_label_acted: "applied",
       outcome_label_no_op: "blocked",
@@ -598,8 +601,11 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_ambience_pause_card: "Interruptor de pausa por ámbito",
       settings_ambience_field_name: "Nombre del interruptor",
       settings_ambience_field_pause: "Pausar durante",
-      settings_reapply_enable_label: "Reaplicar escenas tras inactividad",
-      settings_reapply_interval_label: "Reaplicar después de",
+      settings_reapply_enable_label: "Volver a ejecutar todas las escenas tras inactividad",
+      settings_reapply_interval_label: "Volver a ejecutar después de",
+      apply_on_every_match: "Aplicar en cada coincidencia",
+      help_apply_on_every_match:
+        "Cuando está activado, Ambience vuelve a aplicar las acciones de esta escena cada vez que gana su ámbito/categoría, no solo la primera vez que se activa.",
       unit_minutes: "minutos",
       help: "Ayuda",
       help_pause_switch:
@@ -609,9 +615,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       help_pause_for:
         "Cuando se apaga el interruptor de un ámbito, se reanuda automáticamente tras este número de minutos. 0 = permanece pausado hasta que se vuelva a encender.",
       help_reapply_toggle:
-        "Comprueba las escenas de un ámbito/categoría tras la inactividad y reaplica la escena ganadora, por si alguna acción había fallado anteriormente, como una luz que no se apagó.",
+        "Vuelve a ejecutar las escenas de un ámbito/categoría tras la inactividad y vuelve a aplicar la escena ganadora, por si alguna acción había fallado anteriormente, como una luz que no se apagó.",
       help_reapply_after:
-        "Reaplicar escenas que no se han actualizado durante este número de minutos.",
+        "Volver a ejecutar escenas que no se han actualizado durante este número de minutos.",
       settings_expose_group: "Exponer a asistentes de voz",
       settings_expose_assist: "Assist",
       settings_expose_google: "Google Assistant",
@@ -915,7 +921,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       cause_simulated: "Simulación",
       cause_clock: "Hora del día",
       cause_sun: "Posición del sol",
-      cause_reapply: "Reaplicar",
+      cause_reapply: "Volver a ejecutar",
       cause_duration_for: "durante",
       outcome_label_acted: "aplicado",
       outcome_label_no_op: "bloqueado",

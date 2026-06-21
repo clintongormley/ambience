@@ -2345,3 +2345,56 @@ describe("save gate structural validators (review fixes)", () => {
     el.remove();
   });
 });
+
+describe("ambience-scene-editor — apply-on-every-match toggle", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  const toggle = (e: any) =>
+    e.shadowRoot.querySelector('[data-test="apply-on-every-match"]') as HTMLInputElement;
+
+  test("defaults to off when scene has no apply", async () => {
+    el = await mount({ name: "t", when: {}, actions: [] } as any);
+    expect(toggle(el).checked).toBe(false);
+  });
+
+  test("shows on for a scene stored with apply=always", async () => {
+    el = await mount({ name: "t", when: {}, actions: [], apply: "always" } as any);
+    expect(toggle(el).checked).toBe(true);
+  });
+
+  test("turning it on stores apply=always on save", async () => {
+    el = await mount({ name: "t", when: {}, actions: [] } as any);
+    const cb = toggle(el);
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    let saved: Scene | undefined;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
+    });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    expect(saved?.apply).toBe("always");
+  });
+
+  test("turning it off removes apply on save", async () => {
+    el = await mount({ name: "t", when: {}, actions: [], apply: "always" } as any);
+    const cb = toggle(el);
+    cb.checked = false;
+    cb.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    let saved: Scene | undefined;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
+    });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    expect(saved?.apply).toBeUndefined();
+  });
+
+  test("has a help tooltip explaining what it does", async () => {
+    el = await mount({ name: "t", when: {}, actions: [] } as any);
+    const help: any = el.shadowRoot.querySelector(".apply-control ambience-help");
+    expect(help).toBeTruthy();
+    expect(help.text.length).toBeGreaterThan(0);
+  });
+});

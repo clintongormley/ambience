@@ -267,6 +267,32 @@ class TestValidateScopeConfig:
             validate_scope_config(hass, config)
         assert exc.value.translation_key == "scene_category_not_string"
 
+    def test_accepts_scene_apply_once(self) -> None:
+        hass = _make_hass()
+        validate_scope_config(hass, {"scenes": [{"when": {}, "actions": [], "apply": "once"}]})
+
+    def test_accepts_scene_apply_always(self) -> None:
+        hass = _make_hass()
+        validate_scope_config(hass, {"scenes": [{"when": {}, "actions": [], "apply": "always"}]})
+
+    def test_accepts_scene_without_apply(self) -> None:
+        hass = _make_hass()
+        validate_scope_config(hass, {"scenes": [{"when": {}, "actions": []}]})
+
+    def test_rejects_invalid_apply_value(self) -> None:
+        hass = _make_hass()
+        config = {"scenes": [{"when": {}, "actions": [], "apply": "sometimes"}]}
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_apply_invalid"
+
+    def test_rejects_non_string_apply(self) -> None:
+        hass = _make_hass()
+        config = {"scenes": [{"when": {}, "actions": [], "apply": {"mode": "once"}}]}
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_apply_invalid"
+
 
 # ---------------------------------------------------------------------------
 # validate_weather_groups

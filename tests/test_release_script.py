@@ -24,14 +24,25 @@ RELEASE_BRANCH = "chore/release"
 
 
 def _clean_env(extra: dict | None = None) -> dict:
-    """Return os.environ with all GIT_* vars stripped, plus any extras.
+    """Return os.environ with GIT_* and COVERAGE_*/COV_CORE_* vars stripped, plus extras.
 
-    Without this, subprocess git calls in tests inherit GIT_DIR / GIT_WORK_TREE /
-    GIT_INDEX_FILE from a parent context (e.g. a pre-push hook) and operate on the
-    wrong repo. BUILD_CMD defaults to a no-op so the frontend build guard passes
-    without a real toolchain; individual tests override it.
+    GIT_*: without this, subprocess git calls in tests inherit GIT_DIR /
+    GIT_WORK_TREE / GIT_INDEX_FILE from a parent context (e.g. a pre-push hook)
+    and operate on the wrong repo.
+
+    COVERAGE_*/COV_CORE_*: release.sh now spawns `python3 changelog.py promote`.
+    Under `pytest --cov`, COVERAGE_PROCESS_START is set, so a coverage-bootstrap
+    .pth would make that grandchild auto-start coverage and write a
+    *statement-only* data file that can't be combined with the parent run's
+    *branch* data ("Can't combine statement coverage data with branch data").
+    We don't measure changelog.py here, so scrub the bootstrap entirely.
+
+    BUILD_CMD defaults to a no-op so the frontend build guard passes without a
+    real toolchain; individual tests override it.
     """
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env = {
+        k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "COVERAGE_", "COV_CORE_"))
+    }
     env.setdefault("BUILD_CMD", "true")
     if extra:
         env.update(extra)
@@ -122,6 +133,10 @@ def _init_repo(tmp_path: Path, *, branch: str = "main", dirty: bool = False) -> 
         "    }\n"
         "  }\n"
         "}\n"
+    )
+
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Fixed\n\n- A user-facing fix.\n"
     )
 
     _git("add", ".", cwd=tmp_path)
@@ -403,6 +418,22 @@ def test_pushes_and_opens_pr(tmp_path: Path):
     assert "git push" in call_log
     assert "gh pr create" in call_log
     assert RELEASE_BRANCH in call_log
+
+
+def test_promotes_changelog_unreleased_to_version(tmp_path: Path):
+    """release.sh moves CHANGELOG.md's [Unreleased] into a dated version section
+    on the release branch."""
+    _init_repo(tmp_path)
+    result = _run(tmp_path, "0.2.0", "--no-push")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    _git("checkout", "-q", RELEASE_BRANCH, cwd=tmp_path)
+    changelog = (tmp_path / "CHANGELOG.md").read_text()
+    assert "## [0.2.0] - " in changelog
+    assert "- A user-facing fix." in changelog
+    # [Unreleased] is emptied: the bullet now lives under the dated heading only.
+    unreleased = changelog.split("## [0.2.0]")[0]
+    assert "- A user-facing fix." not in unreleased
 
 
 def test_does_not_leak_to_parent_git_dir_via_env(tmp_path: Path, monkeypatch):

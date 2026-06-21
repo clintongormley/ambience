@@ -92,7 +92,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       apply_on_every_match: "Apply on every match",
       applies_every_match: "every match",
       help_apply_on_every_match:
-        "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene — useful to keep re-asserting state against other integrations.",
+        "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene.",
       unit_minutes: "minutes",
       help: "Help",
       help_pause_switch:
@@ -607,7 +607,7 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       apply_on_every_match: "Aplicar en cada coincidencia",
       applies_every_match: "cada coincidencia",
       help_apply_on_every_match:
-        "Cuando está activado, Ambience vuelve a aplicar las acciones de esta escena cada vez que gana su ámbito/categoría, no solo la primera vez que se activa — útil para seguir reafirmando el estado frente a otras integraciones.",
+        "Cuando está activado, Ambience vuelve a aplicar las acciones de esta escena cada vez que gana su ámbito/categoría, no solo la primera vez que se activa.",
       unit_minutes: "minutos",
       help: "Ayuda",
       help_pause_switch:

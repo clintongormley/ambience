@@ -1000,7 +1000,7 @@ export class AmbienceSceneEditor extends LitElement {
             .text=${localize(
               this.hass,
               "ui.help_apply_on_every_match",
-              "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene — useful to keep re-asserting state against other integrations.",
+              "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene.",
             )}
           ></ambience-help>
         </label>

@@ -221,3 +221,16 @@ def test_main_check_exempt_title_passes_without_entry(tmp_path, monkeypatch):
     head = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "noop")
     monkeypatch.chdir(repo)
     assert main(["check", "--title", "chore: bump", "--base", base, "--head", head]) == 0
+
+
+def test_main_check_ignores_inherited_git_dir(tmp_path, monkeypatch):
+    """_git_show must scrub GIT_* and resolve the cwd repo, not an inherited
+    GIT_DIR — otherwise the gate breaks when pytest runs inside a git hook."""
+    repo = _git_repo(tmp_path)
+    base = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "base")
+    head = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n\n- New.\n", "entry")
+    monkeypatch.chdir(repo)
+    # A bogus inherited GIT_DIR would send `git show` to the wrong repo without
+    # the scrub; the gate must still see the new entry and pass.
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "nonexistent.git"))
+    assert main(["check", "--title", "feat: x", "--base", base, "--head", head]) == 0

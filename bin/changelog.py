@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -122,8 +123,16 @@ def promote_text(text: str, version: str, day: str) -> str:
 
 
 def _git_show(ref: str, path: str) -> str | None:
-    """Return file contents at a git ref, or None if absent there."""
-    result = subprocess.run(["git", "show", f"{ref}:{path}"], capture_output=True, text=True)
+    """Return file contents at a git ref, or None if absent there.
+
+    Scrubs GIT_* from the environment so the lookup resolves against the current
+    working directory's repo, not an inherited GIT_DIR/GIT_WORK_TREE — which a
+    git hook (e.g. pre-push running pytest) sets to a different repo.
+    """
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    result = subprocess.run(
+        ["git", "show", f"{ref}:{path}"], capture_output=True, text=True, env=env
+    )
     return result.stdout if result.returncode == 0 else None
 
 

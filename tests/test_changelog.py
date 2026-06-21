@@ -4,6 +4,9 @@ from bin.changelog import (
     _split_sections,
     commit_type,
     entry_required,
+    gate_ok,
+    list_items,
+    unreleased_body,
 )
 
 
@@ -51,9 +54,6 @@ def test_entry_required_by_type():
 def test_exempt_types_membership():
     assert "chore" in EXEMPT_TYPES
     assert "feat" not in EXEMPT_TYPES
-
-
-from bin.changelog import gate_ok, list_items, unreleased_body
 
 
 def test_unreleased_body_returns_section_only():

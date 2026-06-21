@@ -34,6 +34,21 @@ the commits you are about to push and runs only what is relevant:
 
 Bypass in a genuine emergency with `git push --no-verify`.
 
+## Changelog
+
+User-facing PRs — those titled `feat:`, `fix:`, or `perf:` — must add an entry
+under `## [Unreleased]` in `CHANGELOG.md`. Use the Keep a Changelog categories
+(`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`).
+
+Non-user-facing PRs (`chore:`, `ci:`, `test:`, `build:`, `refactor:`, `docs:`,
+`style:`) are exempt. This is enforced by the `changelog` CI job, which is
+keyed off the PR title — so it runs in CI only, not in the local pre-push hook.
+
+At release time, `bin/release.sh` promotes `[Unreleased]` into a dated version
+section, and the release workflow publishes that section as the GitHub Release
+notes (falling back to auto-generated notes when there are no user-facing
+entries).
+
 ## Make targets
 
 Every gate is a `make` target so humans, the hook, and CI all run the exact same

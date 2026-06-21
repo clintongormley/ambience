@@ -110,8 +110,11 @@ def promote_text(text: str, version: str, day: str) -> str:
             out.append(heading)                       # "## [Unreleased]\n"
             out.append("\n")                          # empty Unreleased body
             out.append(f"## [{version}] - {day}\n")
-            out.append(f"\n{moved}\n" if moved else "\n")
+            # Trailing blank line so a following section heading stays separated
+            # (valid Markdown / Keep a Changelog). EOF newline normalised below.
+            out.append(f"\n{moved}\n\n" if moved else "\n")
         else:
             out.append(heading)
             out.append(body)
-    return "".join(out)
+    # Exactly one trailing newline at EOF, regardless of branch.
+    return "".join(out).rstrip("\n") + "\n"

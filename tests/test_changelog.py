@@ -127,3 +127,17 @@ def test_promote_requires_unreleased_section():
 
 def test_extract_returns_none_for_missing_section():
     assert extract_text("# Changelog\n\n## [Unreleased]\n", "9.9.9") is None
+
+
+def test_promote_preserves_trailing_released_section_with_blank_line():
+    text = (
+        "# Changelog\n\n## [Unreleased]\n\n### Fixed\n\n- A new fix.\n\n"
+        "## [0.23.0] - 2026-06-21\n\n### Added\n\n- Old feature.\n"
+    )
+    out = promote_text(text, "0.24.0", "2026-06-21")
+    # A blank line must separate the promoted section's content from the next heading.
+    assert "- A new fix.\n\n## [0.23.0]" in out
+    assert "- A new fix.\n## [0.23.0]" not in out
+    assert extract_text(out, "0.24.0") == "### Fixed\n\n- A new fix."
+    assert extract_text(out, "0.23.0") == "### Added\n\n- Old feature."
+    assert "\n\n\n" not in out  # no triple-blank anywhere

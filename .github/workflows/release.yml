@@ -71,7 +71,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           REPO: ${{ github.repository }}
         run: |
-          BODY=$(python -m bin.changelog extract "$VERSION")
+          BODY=$(python -m bin.changelog extract "$VERSION" || true)
           if [ -n "$(printf '%s' "$BODY" | tr -d '[:space:]')" ]; then
             {
               printf '%s\n' "$BODY"

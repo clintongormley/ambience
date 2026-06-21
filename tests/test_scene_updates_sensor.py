@@ -1,9 +1,13 @@
 """The Ambience "Scene updates" activity sensor + hub device.
 
 The sensor is the always-present logbook anchor: it lives on a dedicated
-"Ambience" hub device so the activity log can be filtered by that device, and
-its state is a logbook-suppressed running count (the rich logbook line stays the
-single activity entry — see test_logbook_attribution.py for the line itself).
+"Ambience" hub device so the activity log can be filtered by that device (and by
+the entity itself), and its *state is the human-readable activity line* — so the
+state change IS the logbook entry. It is deliberately NON-continuous (no
+state_class / unit / numeric device_class): a continuous sensor is dropped by
+HA's logbook filter (is_sensor_continuous / async_filter_entities), which is the
+bug this design fixes. See test_logbook_attribution.py for the shared-context
+(activity → device changes) grouping.
 """
 
 from __future__ import annotations
@@ -11,15 +15,13 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from homeassistant.components.sensor import SensorStateClass
-from homeassistant.const import EVENT_LOGBOOK_ENTRY
-from homeassistant.core import HomeAssistant, State
+from homeassistant.const import EVENT_STATE_CHANGED, STATE_UNKNOWN
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
-    async_capture_events,
     async_mock_service,
     mock_restore_cache,
 )
@@ -54,10 +56,13 @@ async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> 
     return mock_config_entry
 
 
-async def test_sensor_is_created(hass: HomeAssistant, installed: MockConfigEntry) -> None:
+async def test_sensor_is_created_unknown_until_first_activity(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """The state is the last activity line; with no activity yet it is unknown."""
     state = hass.states.get(SENSOR_ID)
     assert state is not None
-    assert state.state == "0"
+    assert state.state == STATE_UNKNOWN
 
 
 async def test_sensor_on_ambience_hub_device(
@@ -83,25 +88,29 @@ async def test_friendly_name_is_ambience_scene_updates(
     assert state.attributes["friendly_name"] == "Ambience Scene updates"
 
 
-async def test_state_class_is_total_increasing(
-    hass: HomeAssistant, installed: MockConfigEntry
-) -> None:
-    """A continuous (state_class-bearing) sensor is the lever that keeps the
-    sensor's own state changes OUT of the logbook (HA's is_sensor_continuous), so
-    the rich apply line stays the single activity entry. Guard the contract."""
-    state = hass.states.get(SENSOR_ID)
-    assert state.attributes["state_class"] == SensorStateClass.TOTAL_INCREASING
-
-
-async def test_state_changes_suppressed_from_logbook(
-    hass: HomeAssistant, installed: MockConfigEntry
-) -> None:
-    """The load-bearing contract: HA's logbook treats this sensor as continuous,
-    so its own count state-changes are filtered out and only the rich apply/run
-    line survives. Assert via HA's real is_sensor_continuous, not just the attr."""
+async def test_sensor_is_not_continuous(hass: HomeAssistant, installed: MockConfigEntry) -> None:
+    """The load-bearing contract: the sensor must NOT be continuous, or HA's
+    logbook treats it as a numeric trend and refuses to filter on it. No
+    state_class / unit_of_measurement / numeric device_class."""
     from homeassistant.components.logbook.helpers import is_sensor_continuous
 
-    assert is_sensor_continuous(hass, er.async_get(hass), SENSOR_ID) is True
+    state = hass.states.get(SENSOR_ID)
+    assert "state_class" not in state.attributes
+    assert "unit_of_measurement" not in state.attributes
+    assert is_sensor_continuous(hass, er.async_get(hass), SENSOR_ID) is False
+
+
+async def test_sensor_survives_logbook_entity_filter(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """Regression for the PR #121 bug: the Logbook websocket runs requested
+    entity_ids through async_filter_entities, which DROPS continuous sensors.
+    Our sensor must pass through so the activity log can be filtered by it (and,
+    since the Logbook panel resolves a device filter to its entity_ids, by the
+    Ambience device)."""
+    from homeassistant.components.logbook.helpers import async_filter_entities
+
+    assert async_filter_entities(hass, [SENSOR_ID]) == [SENSOR_ID]
 
 
 async def test_present_when_create_switches_off(hass: HomeAssistant) -> None:
@@ -149,7 +158,7 @@ async def _save_area_scene(hass: HomeAssistant, area_name: str, scene_name: str)
     return area.id
 
 
-async def test_apply_increments_count_and_sets_attributes(
+async def test_apply_sets_state_message_and_attributes(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
     async_mock_service(hass, "cover", "open_cover")
@@ -161,22 +170,42 @@ async def test_apply_increments_count_and_sets_attributes(
     await hass.async_block_till_done()
 
     state = hass.states.get(SENSOR_ID)
-    assert state.state == "1"
+    # The state IS the rich activity line (the logbook entry). Single configured
+    # category ⇒ no "(category)" suffix.
+    assert state.state == "'Evening' in Lounge"
     attrs = state.attributes
     assert attrs["last_scene"] == "Evening"
     assert attrs["last_scope"] == "Lounge"
     assert attrs["last_scope_kind"] == "area"
     assert attrs["last_action"] == "applied"
-    # Single configured category ⇒ no "(category)" suffix in the summary.
-    assert attrs["summary"] == "applied 'Evening' in Lounge"
     assert attrs["applied_at"]
 
 
-async def test_count_tallies_per_category_winner(
+async def test_state_is_truncated_to_ha_limit(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """A single apply across N winning categories bumps the count by N — the count
-    tallies logbook entries (one per category winner), not service calls."""
+    """A very long scene+scope name must not blow past HA's 255-char state limit
+    (which would make HA drop the state to 'unknown' and lose the activity)."""
+    from homeassistant.const import MAX_LENGTH_STATE_STATE
+
+    async_mock_service(hass, "cover", "open_cover")
+    area_id = await _save_area_scene(hass, "L" * 200, "E" * 200)
+
+    await hass.services.async_call(
+        DOMAIN, "apply_scene", {"scope": [f"area:{area_id}"]}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+    state = hass.states.get(SENSOR_ID)
+    assert state.state != STATE_UNKNOWN
+    assert len(state.state) <= MAX_LENGTH_STATE_STATE
+
+
+async def test_apply_logs_one_state_change_per_category_winner(
+    hass: HomeAssistant, installed: MockConfigEntry
+) -> None:
+    """A single apply across N winning categories produces N activity lines — one
+    state change per category winner (each its own logbook entry)."""
     from custom_components.ambience.service import async_apply_scene
 
     async_mock_service(hass, "light", "turn_on")
@@ -216,74 +245,32 @@ async def test_count_tallies_per_category_winner(
         },
     )
 
+    messages: list[str] = []
+
+    @callback
+    def _track(event) -> None:
+        if event.data["entity_id"] == SENSOR_ID and event.data["new_state"] is not None:
+            messages.append(event.data["new_state"].state)
+
+    hass.bus.async_listen(EVENT_STATE_CHANGED, _track)
+
     await async_apply_scene(hass, "area", "lr")
     await hass.async_block_till_done()
 
-    assert hass.states.get(SENSOR_ID).state == "2"
+    assert "'Evening' in lr (Lights)" in messages
+    assert "'Open' in lr (Blinds)" in messages
 
 
-async def test_apply_logbook_entry_attached_to_sensor(
-    hass: HomeAssistant, installed: MockConfigEntry
-) -> None:
-    """The apply's logbook entry carries the sensor's entity_id, so it is
-    filterable by the hub device."""
-    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
-    async_mock_service(hass, "cover", "open_cover")
-    area_id = await _save_area_scene(hass, "Lounge", "Evening")
-
-    await hass.services.async_call(
-        DOMAIN, "apply_scene", {"scope": [f"area:{area_id}"]}, blocking=True
-    )
-    await hass.async_block_till_done()
-
-    amb = [e for e in entries if e.data.get("name") == "Ambience"]
-    assert len(amb) == 1
-    assert amb[0].data["entity_id"] == SENSOR_ID
-
-
-async def test_run_logbook_entry_attached_to_sensor(
-    hass: HomeAssistant, installed: MockConfigEntry
-) -> None:
-    from custom_components.ambience.service import async_run_scene_actions
-
-    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
-    async_mock_service(hass, "cover", "open_cover")
-    area_id = await _save_area_scene(hass, "Lounge", "Movie")
-
-    await async_run_scene_actions(hass, "area", area_id, 0)
-    await hass.async_block_till_done()
-
-    amb = [e for e in entries if e.data.get("name") == "Ambience"]
-    assert len(amb) == 1
-    assert amb[0].data["entity_id"] == SENSOR_ID
-
-
-async def test_log_entry_omits_entity_id_when_no_sensor(hass: HomeAssistant) -> None:
-    """Fallback: without a registered sensor the entry is domain-only (pre-sensor
-    behaviour) — the activity log never regresses if the sensor is disabled."""
-    from custom_components.ambience.service_logbook import _log_entry
-
-    hass.data.setdefault(DOMAIN, {})  # no DATA_ACTIVITY_SENSOR published
-    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
-
-    _log_entry(hass, "hello")
-    await hass.async_block_till_done()
-
-    assert len(entries) == 1
-    assert "entity_id" not in entries[0].data
-
-
-async def test_restores_count_and_attributes(hass: HomeAssistant) -> None:
-    """Count + last-apply detail survive a restart, so the at-a-glance summary
-    and running total are not reset to zero on every HA restart."""
+async def test_restores_state_and_attributes(hass: HomeAssistant) -> None:
+    """The last activity line + structured detail survive a restart, so the
+    entity shows the last activity rather than resetting to unknown."""
     mock_restore_cache(
         hass,
         [
             State(
                 SENSOR_ID,
-                "7",
+                "'Evening' in Lounge",
                 {
-                    "summary": "applied 'Evening' in Lounge",
                     "last_scene": "Evening",
                     "last_scope": "Lounge",
                     "last_scope_kind": "area",
@@ -303,16 +290,15 @@ async def test_restores_count_and_attributes(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     state = hass.states.get(SENSOR_ID)
-    assert state.state == "7"
+    assert state.state == "'Evening' in Lounge"
     assert state.attributes["last_scene"] == "Evening"
     assert state.attributes["last_action"] == "applied"
-    assert state.attributes["summary"] == "applied 'Evening' in Lounge"
 
 
-async def test_restore_ignores_non_numeric_prior_state(hass: HomeAssistant) -> None:
-    """A non-numeric restored state (e.g. unknown/unavailable) leaves the count at
-    0 rather than crashing; attributes still restore."""
-    mock_restore_cache(hass, [State(SENSOR_ID, "unknown", {"last_scene": "Evening"})])
+async def test_restore_ignores_unknown_prior_state(hass: HomeAssistant) -> None:
+    """A non-meaningful restored state (unknown/unavailable after a crash) leaves
+    the entity unknown rather than restoring the literal word as the activity."""
+    mock_restore_cache(hass, [State(SENSOR_ID, "unavailable", {"last_scene": "Evening"})])
     await _setup_with_sun(hass)
     entry = MockConfigEntry(
         domain=DOMAIN, title="Ambience", data={}, options={}, unique_id="amb_restore_bad"
@@ -322,5 +308,5 @@ async def test_restore_ignores_non_numeric_prior_state(hass: HomeAssistant) -> N
     await hass.async_block_till_done()
 
     state = hass.states.get(SENSOR_ID)
-    assert state.state == "0"
+    assert state.state == STATE_UNKNOWN
     assert state.attributes["last_scene"] == "Evening"

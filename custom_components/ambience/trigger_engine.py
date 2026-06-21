@@ -440,8 +440,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                     )
                 return None
             always = self._apply_config_for(scope_kind, scope_id, index) == "always"
-            if not force and not always and index == get_last_applied(
-                self._hass, scope_kind, scope_id, category_id
+            if (
+                not force
+                and not always
+                and index == get_last_applied(self._hass, scope_kind, scope_id, category_id)
             ):
                 # Same winner as last applied, with identical actions → suppress the
                 # redundant re-fire. A scene whose `apply` mode is "always" opts out

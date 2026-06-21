@@ -618,7 +618,7 @@ async def test_global_force_still_reapplies_once_winner(hass) -> None:
         calls += 1
 
     engine = await _apply_engine_with_mode(hass, None, _turn_on)  # once
-    await engine._resolve_and_apply("area", "a", "g")             # calls == 1
+    await engine._resolve_and_apply("area", "a", "g")  # calls == 1
     await engine._resolve_and_apply("area", "a", "g", force=True)  # force re-run
     assert calls == 2
 

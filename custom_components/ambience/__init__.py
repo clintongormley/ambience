@@ -80,7 +80,8 @@ from .service import (
     build_apply_scene_schema,
     clear_last_applied,
 )
-from .store import AmbienceStore
+from .services_meta import get_service_schema
+from .store import SEEDED_BUILTIN_IDS, AmbienceStore
 from .switch import _remove_scope_device
 from .trace import BufferSink, LogSink
 from .trigger_engine import AutoTriggerEngine
@@ -180,6 +181,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         schema=_APPLY_SCENE_SCHEMA,
     )
     async_register_builtin_services(hass)
+
+    # Seeding (in store.async_load) runs before the services above are
+    # registered, so it can't resolve their localized names. Now that they're
+    # registered, backfill the seeded built-ins' labels from HA's service
+    # catalog (uses the instance language, English fallback) — once, so a user
+    # who later clears a label isn't fought. Skip the catalog lookups entirely
+    # once labelled, so later starts don't pull catalog-building into setup.
+    if not store.builtins_labeled():
+        builtin_labels: dict[str, str] = {}
+        for service_id in SEEDED_BUILTIN_IDS:
+            schema = await get_service_schema(hass, service_id)
+            name = schema.get("name") if schema else None
+            if isinstance(name, str) and (label := name.strip()):
+                builtin_labels[service_id] = label
+        await store.async_apply_builtin_labels(builtin_labels)
 
     # Called directly at setup, by the SIGNAL_CONFIG_CHANGED dispatcher, and by the
     # area/floor registry-event listeners — *_args absorbs each source's differing arguments.

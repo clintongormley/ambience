@@ -5,7 +5,7 @@ import { getServiceSchema, type HassConnection } from "../api.js";
 import { entitiesForScope, type HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { humanizeId, localize, localizeWsError } from "../i18n.js";
-import { formatArgValue, selectorUnit } from "../summary.js";
+import { formatArgValue, formatParamValue, selectorUnit } from "../summary.js";
 import type { ExposedAction, Scope, ServiceSchema } from "../types.js";
 import "./target-picker.js";
 import type { HaFormSchemaEntry } from "../ha-form.js";
@@ -46,6 +46,29 @@ export class AmbienceActionSlot extends LitElement {
       color: var(--error-color, #c62828);
       font-size: 0.9em;
       padding: 0.3rem 0;
+    }
+    .raw-config {
+      margin: 0.25rem 0 0.5rem 0;
+      padding: 0.5rem;
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 4px;
+      background: var(--secondary-background-color, #f5f5f5);
+      font-size: 0.85rem;
+    }
+    .raw-config .raw-row {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.1rem 0;
+    }
+    .raw-config dt {
+      flex: 0 0 auto;
+      font-weight: 600;
+      color: var(--secondary-text-color, #888);
+    }
+    .raw-config dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+      font-family: var(--code-font-family, monospace);
     }
     input {
       width: 100%; box-sizing: border-box; padding: 0.5rem;
@@ -111,6 +134,10 @@ export class AmbienceActionSlot extends LitElement {
   @property({ attribute: false }) hass?: HassConnection;
   @property({ attribute: false }) scope?: Scope;
   @property({ attribute: false }) exposed?: ExposedAction;
+  /** The action's service id, carried separately from `exposed` so it survives
+   *  when the service is no longer exposed (`exposed` undefined) and we still
+   *  want to show the stored config. */
+  @property({ attribute: false }) service?: string;
   @property({ attribute: false }) entityIds: string[] = [];
   @property({ attribute: false }) params: Record<string, unknown> = {};
   /** Entities already targeted by other actions in the scene; hidden from this
@@ -491,30 +518,61 @@ export class AmbienceActionSlot extends LitElement {
     this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
   }
 
+  /**
+   * Read-only dump of the action's stored config (service id, target entity
+   * ids, params), shown beneath the error when the service is deleted or
+   * unavailable — so the user can see what to recreate. Raw stored values
+   * only; no friendly-name lookups.
+   */
+  private _renderRawConfig() {
+    // Prefer the `service` prop (survives the action being un-exposed); fall
+    // back to exposed.id (service registered but its schema is unavailable).
+    const serviceId = this.service ?? this.exposed?.id;
+    if (!serviceId) return "";
+    const params = Object.entries(this.params ?? {});
+    return html`
+      <dl class="raw-config" data-raw-config>
+        <div class="raw-row">
+          <dt>${localize(this.hass, "ui.raw_config_action", "Action")}:</dt>
+          <dd>${serviceId}</dd>
+        </div>
+        ${
+          this.entityIds.length
+            ? html`<div class="raw-row">
+                <dt>${localize(this.hass, "ui.raw_config_targets", "Targets")}:</dt>
+                <dd>${this.entityIds.join(", ")}</dd>
+              </div>`
+            : ""
+        }
+        ${
+          params.length
+            ? html`<div class="raw-row">
+                <dt>${localize(this.hass, "ui.raw_config_params", "Parameters")}:</dt>
+                <dd>${params.map(([k, v]) => `${k}: ${v == null ? "" : formatParamValue(v)}`).join(", ")}</dd>
+              </div>`
+            : ""
+        }
+      </dl>
+    `;
+  }
+
   override render() {
     if (this._schema === null) {
-      if (this._exposedMissing) {
-        return html`
-          <div class="schema-error">
-            ${localize(
-              this.hass,
-              "ui.service_not_exposed",
-              "Service no longer exposed; configure it in Settings → Actions or remove this action.",
-            )}
-          </div>
-        `;
-      }
+      const errorMessage = this._exposedMissing
+        ? localize(
+            this.hass,
+            "ui.action_unavailable",
+            "Action no longer available; configure it in Settings → Actions or remove this action.",
+          )
+        : (this._schemaError ??
+          localize(
+            this.hass,
+            "ui.service_unavailable",
+            "Service not available in this HA instance.",
+          ));
       return html`
-        <div class="schema-error">
-          ${
-            this._schemaError ??
-            localize(
-              this.hass,
-              "ui.service_unavailable",
-              "Service not available in this HA instance.",
-            )
-          }
-        </div>
+        <div class="schema-error">${errorMessage}</div>
+        ${this._renderRawConfig()}
       `;
     }
     if (this._schema === undefined) {

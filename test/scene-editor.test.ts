@@ -197,6 +197,68 @@ describe("ambience-scene-editor — collapse + friendly labels", () => {
     expect(action.textContent).toContain("Set light");
   });
 
+  test("a deleted action shows an error problem-flag on its collapsed summary row", async () => {
+    el = await mount({
+      name: "test",
+      when: {},
+      actions: [
+        {
+          service: "input_boolean.turn_on",
+          entity_ids: ["input_boolean.power_shower"],
+          params: {},
+        },
+      ],
+    });
+    const row = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    // Still collapsed — the warning must be visible without expanding.
+    expect(row.classList.contains("collapsed")).toBe(true);
+    const flag = row.querySelector("ambience-problem-flag") as any;
+    expect(flag).toBeTruthy();
+    expect(flag.severity).toBe("error");
+  });
+
+  test("a valid action shows no problem-flag", async () => {
+    el = await mount({
+      name: "test",
+      when: {},
+      actions: [{ service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {} }],
+    });
+    const row = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    expect(row.querySelector("ambience-problem-flag")).toBeNull();
+  });
+
+  test("a deleted action (service not in availableActions) shows the raw stored config when expanded", async () => {
+    el = await mount({
+      name: "test",
+      when: {},
+      actions: [
+        {
+          service: "input_boolean.turn_on",
+          entity_ids: ["input_boolean.power_shower"],
+          params: {},
+        },
+      ],
+    });
+    // Expand the action row so its body (the action-slot) renders.
+    const summary = el.shadowRoot.querySelector(
+      '.slot[data-slot-id="action-0"] .summary',
+    ) as HTMLElement;
+    summary.click();
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const slot = el.shadowRoot.querySelector("ambience-action-slot") as any;
+    expect(slot).toBeTruthy();
+    // The editor must hand the slot the service id so it survives the service
+    // no longer being exposed.
+    expect(slot.service).toBe("input_boolean.turn_on");
+    const raw = slot.shadowRoot.querySelector("[data-raw-config]");
+    expect(raw).toBeTruthy();
+    expect(raw.textContent).toContain("input_boolean.turn_on");
+    expect(raw.textContent).toContain("input_boolean.power_shower");
+  });
+
   // Helper: read the DOM order of the currently-visible condition slots.
   function visibleConditionOrder(el: any): string[] {
     const names = new Set(conditions.map((c) => c.name));

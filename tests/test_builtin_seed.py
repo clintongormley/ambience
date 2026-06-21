@@ -93,6 +93,155 @@ async def test_seed_skips_id_already_present(hass: HomeAssistant) -> None:
     assert next(e for e in entries if e["id"] == "ambience.turn_on")["label"] == "mine"
 
 
+def _labels(store: AmbienceStore) -> dict[str, str]:
+    return {e["id"]: e.get("label", "") for e in store.get_exposed_actions() if isinstance(e, dict)}
+
+
+async def test_builtins_labeled_reflects_the_flag(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    assert store.builtins_labeled() is False
+    await store.async_apply_builtin_labels(
+        {"ambience.turn_on": "Turn on", "ambience.turn_off": "Turn off"}
+    )
+    assert store.builtins_labeled() is True
+
+
+async def test_apply_builtin_labels_backfills_existing_empty_labels(hass: HomeAssistant) -> None:
+    # An existing install: seeded built-ins with empty labels, no labeled flag.
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {},
+            "floors": {},
+            "house": {"scenes": []},
+            "exposed_actions": [
+                {"id": "ambience.turn_on", "label": "", "visible_fields": [], "defaults": {}},
+                {"id": "ambience.turn_off", "label": "", "visible_fields": [], "defaults": {}},
+            ],
+            "builtins_seeded": True,
+        }
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_apply_builtin_labels(
+        {"ambience.turn_on": "Turn on", "ambience.turn_off": "Turn off"}
+    )
+    assert _labels(store) == {"ambience.turn_on": "Turn on", "ambience.turn_off": "Turn off"}
+
+
+async def test_apply_builtin_labels_does_not_overwrite_user_label(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    # User had set a custom label on a seeded built-in.
+    actions = store.get_exposed_actions()
+    for entry in actions:
+        if entry["id"] == "ambience.turn_on":
+            entry["label"] = "My on"
+    await store.async_save_exposed_actions(actions)
+
+    await store.async_apply_builtin_labels(
+        {"ambience.turn_on": "Turn on", "ambience.turn_off": "Turn off"}
+    )
+    labels = _labels(store)
+    assert labels["ambience.turn_on"] == "My on"  # user label preserved
+    assert labels["ambience.turn_off"] == "Turn off"  # empty one filled
+
+
+async def test_apply_builtin_labels_is_one_time(hass: HomeAssistant) -> None:
+    # Flag already set (a prior labeling ran) → a later call must not refill,
+    # so a user who deliberately cleared a built-in's label isn't fought.
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {},
+            "floors": {},
+            "house": {"scenes": []},
+            "exposed_actions": [
+                {"id": "ambience.turn_on", "label": "", "visible_fields": [], "defaults": {}},
+            ],
+            "builtins_seeded": True,
+            "builtins_labeled": True,
+        }
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_apply_builtin_labels({"ambience.turn_on": "Turn on"})
+    assert _labels(store) == {"ambience.turn_on": ""}  # flag set → left empty
+
+
+async def test_apply_builtin_labels_noops_and_retries_when_unavailable(hass: HomeAssistant) -> None:
+    # Descriptions unavailable (degraded) → no labels resolved → no-op, and the
+    # flag must NOT be set so a later load retries.
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_apply_builtin_labels({})
+    assert _labels(store)["ambience.turn_on"] == ""
+    # Descriptions available on a later call → now it fills.
+    await store.async_apply_builtin_labels(
+        {"ambience.turn_on": "Turn on", "ambience.turn_off": "Turn off"}
+    )
+    assert _labels(store)["ambience.turn_on"] == "Turn on"
+
+
+async def test_apply_builtin_labels_ignores_non_list_exposed_actions(hass: HomeAssistant) -> None:
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {},
+            "floors": {},
+            "house": {"scenes": []},
+            "exposed_actions": "oops",  # corrupt shape
+            "builtins_seeded": True,
+        }
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    # Must not raise and must not seed-label over the corrupt value.
+    await store.async_apply_builtin_labels({"ambience.turn_on": "Turn on"})
+    assert store.get_exposed_actions() == []
+
+
+async def test_apply_builtin_labels_skips_junk_entries_and_unrelated_ids(
+    hass: HomeAssistant,
+) -> None:
+    raw = Store(hass, 1, "ambience")
+    await raw.async_save(
+        {
+            "version": 1,
+            "areas": {},
+            "floors": {},
+            "house": {"scenes": []},
+            "exposed_actions": [
+                "junk",  # non-dict entry → skipped
+                {"id": "light.turn_on", "label": "", "visible_fields": [], "defaults": {}},
+                {"id": "ambience.turn_on", "label": "", "visible_fields": [], "defaults": {}},
+            ],
+            "builtins_seeded": True,
+        }
+    )
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_apply_builtin_labels({"ambience.turn_on": "Turn on"})
+    labels = _labels(store)
+    assert labels["ambience.turn_on"] == "Turn on"  # matched id filled
+    assert labels["light.turn_on"] == ""  # id not in labels → untouched
+
+
+async def test_apply_builtin_labels_persists_across_reload(hass: HomeAssistant) -> None:
+    store = AmbienceStore(hass)
+    await store.async_load()
+    await store.async_apply_builtin_labels(
+        {"ambience.turn_on": "Turn on", "ambience.turn_off": "Turn off"}
+    )
+    store2 = AmbienceStore(hass)
+    await store2.async_load()
+    assert _labels(store2)["ambience.turn_on"] == "Turn on"
+
+
 async def test_non_list_exposed_actions_does_not_raise(hass: HomeAssistant) -> None:
     """Regression: exposed_actions set to a non-list must not crash async_load().
 

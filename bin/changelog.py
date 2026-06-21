@@ -64,3 +64,26 @@ def entry_required(title: str) -> bool:
     and it surfaces malformed titles.
     """
     return commit_type(title) not in EXEMPT_TYPES
+
+
+def unreleased_body(text: str) -> str:
+    _, sections = _split_sections(text)
+    for heading, body in sections:
+        if _heading_name(heading) == "Unreleased":
+            return body
+    return ""
+
+
+def list_items(body: str) -> set[str]:
+    return {
+        line.strip()
+        for line in body.splitlines()
+        if line.strip().startswith(("-", "*"))
+    }
+
+
+def gate_ok(base_text: str | None, head_text: str) -> bool:
+    """True when head's [Unreleased] has at least one list item base's lacks."""
+    base_items = list_items(unreleased_body(base_text)) if base_text is not None else set()
+    head_items = list_items(unreleased_body(head_text))
+    return bool(head_items - base_items)

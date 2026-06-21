@@ -51,3 +51,44 @@ def test_entry_required_by_type():
 def test_exempt_types_membership():
     assert "chore" in EXEMPT_TYPES
     assert "feat" not in EXEMPT_TYPES
+
+
+from bin.changelog import gate_ok, list_items, unreleased_body
+
+
+def test_unreleased_body_returns_section_only():
+    text = "# Changelog\n\n## [Unreleased]\n\n- A.\n\n## [0.1.0] - 2026-01-01\n\n- B.\n"
+    assert unreleased_body(text).strip() == "- A."
+    assert "B." not in unreleased_body(text)
+
+
+def test_unreleased_body_empty_when_absent():
+    assert unreleased_body("# Changelog\n\n## [0.1.0] - 2026-01-01\n\n- B.\n") == ""
+
+
+def test_list_items_collects_bullets_only():
+    body = "### Fixed\n\n- one\n* two\n\nnot a bullet\n"
+    assert list_items(body) == {"- one", "* two"}
+
+
+def test_gate_ok_true_when_new_unreleased_bullet_added():
+    base = "# Changelog\n\n## [Unreleased]\n"
+    head = "# Changelog\n\n## [Unreleased]\n\n- New thing.\n"
+    assert gate_ok(base, head) is True
+
+
+def test_gate_ok_true_when_base_has_no_file():
+    head = "# Changelog\n\n## [Unreleased]\n\n- First entry.\n"
+    assert gate_ok(None, head) is True
+
+
+def test_gate_ok_false_when_no_new_bullet():
+    base = "# Changelog\n\n## [Unreleased]\n\n- Existing.\n"
+    head = "# Changelog\n\n## [Unreleased]\n\n- Existing.\n"
+    assert gate_ok(base, head) is False
+
+
+def test_gate_ok_false_when_bullet_only_in_released_section():
+    base = "# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-01-01\n\n- Old.\n"
+    head = "# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-01-01\n\n- Old.\n- Edited.\n"
+    assert gate_ok(base, head) is False

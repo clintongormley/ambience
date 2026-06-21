@@ -131,6 +131,11 @@ export class AmbienceScenesList extends LitElement {
     .actions-detail-item {
       padding: 0.15rem 0;
     }
+    .apply-every-detail {
+      margin-top: 0.35rem;
+      color: var(--secondary-text-color, #888);
+      font-style: italic;
+    }
     .actions-detail-item .action-header {
       color: var(--primary-text-color, #212121);
     }
@@ -642,7 +647,7 @@ export class AmbienceScenesList extends LitElement {
                       scene.apply === "always"
                         ? html` ·
                           <span class="apply-every" data-test="apply-every"
-                            >${localize(this.hass, "ui.applies_every_match", "every match")}</span
+                            >${localize(this.hass, "ui.apply_on_every_match", "Apply on every match")}</span
                           >`
                         : ""
                     }`
@@ -680,7 +685,14 @@ export class AmbienceScenesList extends LitElement {
                             </div>
                           `;
                         })}
-                      </div>`
+                      </div>
+                      ${
+                        scene.apply === "always"
+                          ? html`<div class="apply-every-detail" data-test="apply-every-detail">
+                            ${localize(this.hass, "ui.apply_on_every_match", "Apply on every match")}
+                          </div>`
+                          : ""
+                      }`
                   }
                 </div>
               `

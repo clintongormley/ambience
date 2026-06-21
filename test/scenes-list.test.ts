@@ -79,31 +79,41 @@ describe("ambience-scenes-list — apply on every match", () => {
   let el: any;
   afterEach(() => el?.remove());
 
-  test("shows an 'every match' indicator in the summary when apply=always", async () => {
-    el = await mount([
-      {
-        name: "Always scene",
-        when: { mode: "movie" },
-        actions: [{ service: "light.turn_on", entity_ids: ["light.lamp"], params: {} }],
-        apply: "always",
-      } as Scene,
-    ]);
+  const alwaysScene: Scene = {
+    name: "Always scene",
+    when: { mode: "movie" },
+    actions: [{ service: "light.turn_on", entity_ids: ["light.lamp"], params: {} }],
+    apply: "always",
+  };
+
+  test("shows 'Apply on every match' in the collapsed summary when apply=always", async () => {
+    el = await mount([alwaysScene]);
     const summary = el.shadowRoot.querySelector(".summary") as HTMLElement;
-    expect(summary.textContent).toContain("every match");
+    expect(summary.textContent).toContain("Apply on every match");
+  });
+
+  test("shows 'Apply on every match' in the expanded detail when apply=always", async () => {
+    el = await mount([alwaysScene]);
+    (el.shadowRoot.querySelector(".name") as HTMLElement).click();
+    await el.updateComplete;
+    const detail = el.shadowRoot.querySelector(".scene-detail") as HTMLElement;
+    expect(detail.textContent).toContain("Apply on every match");
   });
 
   test("no indicator when apply is absent", async () => {
     el = await mount([movieScene]);
-    const summary = el.shadowRoot.querySelector(".summary") as HTMLElement;
-    expect(summary.textContent).not.toContain("every match");
+    expect((el.shadowRoot.querySelector(".summary") as HTMLElement).textContent).not.toContain(
+      "Apply on every match",
+    );
   });
 
   test("no indicator for a no-action blocker even when apply=always", async () => {
     el = await mount([
       { name: "Blocker", when: { mode: "movie" }, actions: [], apply: "always" } as Scene,
     ]);
-    const summary = el.shadowRoot.querySelector(".summary") as HTMLElement;
-    expect(summary.textContent).not.toContain("every match");
+    (el.shadowRoot.querySelector(".name") as HTMLElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.textContent).not.toContain("Apply on every match");
   });
 });
 

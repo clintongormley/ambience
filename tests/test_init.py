@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
@@ -66,6 +67,56 @@ async def test_setup_seeds_registries_and_store(
     assert DATA_EXPOSED_ACTIONS in data
     seeded_ids = {e["id"] for e in data[DATA_EXPOSED_ACTIONS].list()}
     assert {"ambience.turn_on", "ambience.turn_off"} <= seeded_ids
+
+
+async def test_setup_labels_builtin_actions_from_service_catalog(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Seeded built-ins get their service-catalog name as the label — the same
+    source (and thus the same localized name / English fallback) a manual add
+    uses — so they're no longer stored with an empty label."""
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    labels = {e["id"]: e["label"] for e in hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].list()}
+    assert labels["ambience.turn_on"] == "Turn on"
+    assert labels["ambience.turn_off"] == "Turn off"
+
+
+async def test_setup_leaves_label_empty_when_catalog_has_no_name(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Degraded catalog (no name resolved) → label left empty (the frontend
+    falls back to a derived name), and the one-time flag is not set so a later
+    start retries."""
+    mock_config_entry.add_to_hass(hass)
+    with patch("custom_components.ambience.get_service_schema", return_value={"name": None}):
+        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+    labels = {e["id"]: e["label"] for e in hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].list()}
+    assert labels["ambience.turn_on"] == ""
+    assert labels["ambience.turn_off"] == ""
+
+
+async def test_setup_skips_catalog_lookups_once_labelled(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Once the built-ins are labelled, a later setup must not resolve service
+    names from the catalog again (no catalog-build work pulled into setup)."""
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with patch("custom_components.ambience.get_service_schema") as mock_schema:
+        assert await hass.config_entries.async_reload(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+    mock_schema.assert_not_called()
+
+    labels = {e["id"]: e["label"] for e in hass.data[DOMAIN][DATA_EXPOSED_ACTIONS].list()}
+    assert labels["ambience.turn_on"] == "Turn on"  # label survived the reload
 
 
 async def test_script_condition_is_registered(

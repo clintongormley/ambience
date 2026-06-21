@@ -51,6 +51,10 @@ DEFAULT_SEEDED_BUILTINS: list[dict[str, Any]] = [
     {"id": "ambience.turn_off", "label": "", "visible_fields": [], "defaults": {}},
 ]
 
+# Service ids of the seeded built-ins, in seed order. Used by setup to resolve
+# their localized labels once the built-in services are registered.
+SEEDED_BUILTIN_IDS: list[str] = [entry["id"] for entry in DEFAULT_SEEDED_BUILTINS]
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -172,6 +176,43 @@ class AmbienceStore:
             if entry["id"] not in have:
                 existing.append(dict(entry))
         self._data["builtins_seeded"] = True
+        await self._store.async_save(self._data)
+
+    def builtins_labeled(self) -> bool:
+        """True once the seeded built-ins' labels have been backfilled — lets
+        setup skip resolving service names from the catalog on later starts."""
+        return bool(self._data.get("builtins_labeled"))
+
+    async def async_apply_builtin_labels(self, labels: dict[str, str]) -> None:
+        """Backfill localized labels onto the seeded built-in actions, once.
+
+        Seeding (above) runs during `async_load`, before the built-in services
+        are registered, so it can't resolve their localized names. This is
+        called from setup *after* registration with `labels` mapping service id
+        -> localized name (HA default language, English fallback). It fills the
+        label of any matching action whose label is still blank.
+
+        Gated by `builtins_labeled` so a user who later clears a built-in's
+        label isn't fought on the next restart. If `labels` is empty (service
+        descriptions unavailable this load), it no-ops *without* setting the
+        flag, so a later load retries.
+        """
+        if self._data.get("builtins_labeled"):
+            return
+        if not labels:
+            return
+        actions = self._data.get("exposed_actions")
+        if not isinstance(actions, list):
+            # Wrong shape — don't seed-label or persist over it (mirrors the
+            # isinstance guards in _ensure_builtin_actions / get_exposed_actions).
+            return
+        for entry in actions:
+            if not isinstance(entry, dict):
+                continue
+            name = labels.get(entry.get("id"))
+            if name and not str(entry.get("label") or "").strip():
+                entry["label"] = name
+        self._data["builtins_labeled"] = True
         await self._store.async_save(self._data)
 
     async def async_load(self) -> None:

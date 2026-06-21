@@ -127,6 +127,11 @@ git checkout -q -b "$BRANCH"
 # (shared with the release workflow's next-minor bump so they can't drift).
 "$(dirname "$0")/bump-version.sh" "$VERSION"
 
+# Promote the changelog's [Unreleased] section into a dated version section so
+# the chore/release commit — and the published Release notes — carry it. Invoked
+# by path (not `python -m bin.changelog`) so it resolves regardless of cwd.
+python3 "$(dirname "$0")/changelog.py" promote "$VERSION"
+
 git add -A
 # --allow-empty supports the "version already bumped in an earlier feature commit"
 # workflow: the release branch still gets a clear `chore: release` marker commit.

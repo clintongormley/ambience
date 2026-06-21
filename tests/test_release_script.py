@@ -124,6 +124,10 @@ def _init_repo(tmp_path: Path, *, branch: str = "main", dirty: bool = False) -> 
         "}\n"
     )
 
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Fixed\n\n- A user-facing fix.\n"
+    )
+
     _git("add", ".", cwd=tmp_path)
     _git("commit", "-qm", "init", cwd=tmp_path)
 
@@ -403,6 +407,22 @@ def test_pushes_and_opens_pr(tmp_path: Path):
     assert "git push" in call_log
     assert "gh pr create" in call_log
     assert RELEASE_BRANCH in call_log
+
+
+def test_promotes_changelog_unreleased_to_version(tmp_path: Path):
+    """release.sh moves CHANGELOG.md's [Unreleased] into a dated version section
+    on the release branch."""
+    _init_repo(tmp_path)
+    result = _run(tmp_path, "0.2.0", "--no-push")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    _git("checkout", "-q", RELEASE_BRANCH, cwd=tmp_path)
+    changelog = (tmp_path / "CHANGELOG.md").read_text()
+    assert "## [0.2.0] - " in changelog
+    assert "- A user-facing fix." in changelog
+    # [Unreleased] is emptied: the bullet now lives under the dated heading only.
+    unreleased = changelog.split("## [0.2.0]")[0]
+    assert "- A user-facing fix." not in unreleased
 
 
 def test_does_not_leak_to_parent_git_dir_via_env(tmp_path: Path, monkeypatch):

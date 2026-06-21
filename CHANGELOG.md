@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-06-21
+
 ### Fixed
 
 - Scene updates sensor is now filterable in the Home Assistant logbook.

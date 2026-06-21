@@ -572,16 +572,6 @@ async def _apply_engine_with_mode(hass, mode, handler) -> AutoTriggerEngine:
     return engine
 
 
-async def test_apply_config_for_returns_scene_apply_mode(hass) -> None:
-    engine = await _apply_engine_with_mode(hass, "always", lambda call: None)
-    assert engine._apply_config_for("area", "a", 0) == "always"
-
-
-async def test_apply_config_for_absent_is_none(hass) -> None:
-    engine = await _apply_engine_with_mode(hass, None, lambda call: None)
-    assert engine._apply_config_for("area", "a", 0) is None
-
-
 async def test_resolve_and_apply_always_reapplies_unchanged_winner(hass) -> None:
     calls = 0
 

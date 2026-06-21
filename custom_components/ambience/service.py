@@ -343,6 +343,10 @@ async def async_resolve_with_snapshots(
         "matched_scene_index": idx,
         "scene_name": scene.get("name"),
         "actions": scene.get("actions", []),
+        # Per-scene re-apply policy ("once"/"always"; absent = once). Carried on the
+        # plan so the engine's debounce check reads it here rather than re-walking
+        # the scope config for the winning scene.
+        "apply": scene.get("apply"),
         "snapshots_described": described,
         "switch_state": switch_state,
         "explanation": explanation,

@@ -102,6 +102,9 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
             # A scene may carry extra params for fields that have since been
             # hidden in settings (or were never exposed); they're still sent
             # at execution. The engine treats them as overrides.
+        apply = scene.get("apply")
+        if apply is not None and apply not in ("once", "always"):
+            raise AmbienceError("scene_apply_invalid", scene_idx=scene_idx, value=apply)
 
 
 # Transient per-scene hints injected for the frontend by annotate_scenes; stripped

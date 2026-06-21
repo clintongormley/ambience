@@ -23,12 +23,6 @@ DATA_STORE = "store"
 DATA_SWITCHES = "switches"
 DATA_SWITCH_ADD_ENTITIES = "switch_add_entities"
 
-# Scene-updates sensor: the entity_id of the always-present activity-anchor
-# sensor (sensor.py publishes it on add). The logbook attribution reads it to
-# attach each apply/run entry to the sensor's hub device; None ⇒ domain-only
-# fallback (pre-sensor behaviour).
-DATA_ACTIVITY_SENSOR = "activity_sensor"
-
 # Last-applied scene index: {(scope_kind, scope_id, category_id): scene_index}.
 # Written by apply_scene; read by the auto-trigger engine's unchanged-scene guard.
 DATA_LAST_APPLIED = "last_applied"
@@ -65,9 +59,9 @@ SIGNAL_UNIT_APPLIED = "ambience_unit_applied"
 # Dispatcher signal — fired when the global re-apply settings change. Payload: None.
 SIGNAL_REAPPLY_CONFIG_UPDATED = "ambience_reapply_config_updated"
 
-# Dispatcher signal — fired on each apply/run alongside the logbook entry, so the
-# Scene-updates sensor can bump its count and refresh its attributes. Payload: an
-# ActivityRecord (see service_logbook.py).
+# Dispatcher signal — fired on each apply/run so the Scene-updates sensor sets its
+# state to the activity line (that state change IS the logbook entry) and refreshes
+# its detail attributes. Payload: (ActivityRecord, Context) — see service_logbook.py.
 SIGNAL_ACTIVITY_RECORDED = "ambience_activity_recorded"
 
 # Dispatcher signal — fired when the voice-assistant exposure map changes (saved

@@ -1,16 +1,21 @@
-"""Logbook attribution: message composition + context propagation."""
+"""Logbook attribution: message composition + activity-line state + context propagation.
+
+Each apply/run sets the Scene-updates sensor's state to the rich activity line
+(that state change IS the logbook entry), and shares one Context between that
+state change and the dispatched device service calls so the logbook groups the
+device changes under the activity.
+"""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from homeassistant.const import EVENT_LOGBOOK_ENTRY
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_STATE_CHANGED, STATE_UNKNOWN
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import area_registry as ar
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
-    async_capture_events,
     async_mock_service,
 )
 
@@ -22,12 +27,31 @@ from custom_components.ambience.const import (
 )
 from custom_components.ambience.service_logbook import compose_apply_message
 
+SENSOR_ID = "sensor.ambience_scene_updates"
+
 
 async def _make_area_scope(hass: HomeAssistant, name: str) -> tuple[str, str]:
     """Create a real HA area (spawning its scope switch) → (area_id, switch entity_id)."""
     area = ar.async_get(hass).async_create(name)
     await hass.async_block_till_done()
     return area.id, hass.data[DOMAIN][DATA_SWITCHES][("area", area.id)].entity_id
+
+
+def _capture_activity(hass: HomeAssistant) -> dict[str, str]:
+    """Track Scene-updates state changes → {activity line: state-change context id}.
+
+    Each apply/run sets the sensor state to its activity line; we record the
+    context so tests can assert the device service calls share it.
+    """
+    by_message: dict[str, str] = {}
+
+    @callback
+    def _track(event: Event) -> None:
+        if event.data["entity_id"] == SENSOR_ID and (new := event.data["new_state"]) is not None:
+            by_message[new.state] = new.context.id
+
+    hass.bus.async_listen(EVENT_STATE_CHANGED, _track)
+    return by_message
 
 
 class _FakeExposedStorage:
@@ -54,7 +78,7 @@ def test_message_named_scene_single_category() -> None:
         category_label="Lights",
         category_count=1,
     )
-    assert msg == "applied 'Evening' in Master Bedroom"
+    assert msg == "'Evening' in Master Bedroom"
 
 
 def test_message_multiple_categories_includes_category() -> None:
@@ -65,7 +89,7 @@ def test_message_multiple_categories_includes_category() -> None:
         category_label="Lights",
         category_count=2,
     )
-    assert msg == "applied 'Evening' in Master Bedroom (Lights)"
+    assert msg == "'Evening' in Master Bedroom (Lights)"
 
 
 def test_message_unnamed_scene_falls_back_to_index() -> None:
@@ -76,7 +100,7 @@ def test_message_unnamed_scene_falls_back_to_index() -> None:
         category_label=None,
         category_count=1,
     )
-    assert msg == "applied 'scene 3' in Kitchen"
+    assert msg == "'scene 3' in Kitchen"
 
 
 def test_message_multiple_categories_but_no_label_omits_category() -> None:
@@ -88,7 +112,7 @@ def test_message_multiple_categories_but_no_label_omits_category() -> None:
         category_label=None,
         category_count=2,
     )
-    assert msg == "applied 'Evening' in Master Bedroom"
+    assert msg == "'Evening' in Master Bedroom"
 
 
 # --- Context propagation through async_execute_actions ------------------------
@@ -153,10 +177,9 @@ async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> 
     return mock_config_entry
 
 
-async def test_apply_fires_ambience_entry_and_shares_context(
+async def test_apply_sets_activity_state_and_shares_context(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
     cover_calls = async_mock_service(hass, "cover", "open_cover")
     store = hass.data[DOMAIN][DATA_STORE]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
@@ -189,21 +212,19 @@ async def test_apply_fires_ambience_entry_and_shares_context(
     )
     await hass.async_block_till_done()
 
-    ambience_entries = [e for e in entries if e.data.get("name") == "Ambience"]
-    assert len(ambience_entries) == 1
-    entry = ambience_entries[0]
-    assert entry.data["domain"] == "ambience"
-    # Single configured category ⇒ no "(category)" suffix; scope label is the
-    # real area's friendly name.
-    assert entry.data["message"] == "applied 'Evening' in Lounge"
+    # The sensor's state is the activity line (single category ⇒ no "(category)"
+    # suffix; scope label is the real area's friendly name).
+    sensor = hass.states.get(SENSOR_ID)
+    assert sensor.state == "'Evening' in Lounge"
+    # The dispatched device call shares the activity's context, so the logbook
+    # groups the cover change under the Scene-updates entry.
     assert len(cover_calls) == 1
-    assert cover_calls[0].context.id == entry.context.id
+    assert cover_calls[0].context.id == sensor.context.id
 
 
-async def test_apply_with_empty_actions_logs_nothing(
+async def test_apply_with_empty_actions_records_nothing(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
     store = hass.data[DOMAIN][DATA_STORE]
     area_id, _ = await _make_area_scope(hass, "Lounge")
     await store.async_save_area(
@@ -216,15 +237,16 @@ async def test_apply_with_empty_actions_logs_nothing(
     )
     await hass.async_block_till_done()
 
-    assert [e for e in entries if e.data.get("name") == "Ambience"] == []
+    # Nothing applied ⇒ no activity ⇒ the sensor stays unknown.
+    assert hass.states.get(SENSOR_ID).state == STATE_UNKNOWN
 
 
-async def test_multiple_categories_include_category_name_and_own_context(
+async def test_multiple_categories_own_activity_line_and_context(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
     from custom_components.ambience.service import async_apply_scene
 
-    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
+    activity = _capture_activity(hass)
     light_calls = async_mock_service(hass, "light", "turn_on")
     cover_calls = async_mock_service(hass, "cover", "open_cover")
     store = hass.data[DOMAIN][DATA_STORE]
@@ -268,17 +290,17 @@ async def test_multiple_categories_include_category_name_and_own_context(
     await async_apply_scene(hass, "area", "lr")
     await hass.async_block_till_done()
 
-    by_msg = {e.data["message"]: e for e in entries if e.data.get("name") == "Ambience"}
-    assert "applied 'Evening' in lr (Lights)" in by_msg
-    assert "applied 'Open' in lr (Blinds)" in by_msg
-    assert light_calls[0].context.id == by_msg["applied 'Evening' in lr (Lights)"].context.id
-    assert cover_calls[0].context.id == by_msg["applied 'Open' in lr (Blinds)"].context.id
+    # One activity line per category winner, each its own logbook entry.
+    assert "'Evening' in lr (Lights)" in activity
+    assert "'Open' in lr (Blinds)" in activity
+    assert light_calls[0].context.id == activity["'Evening' in lr (Lights)"]
+    assert cover_calls[0].context.id == activity["'Open' in lr (Blinds)"]
     # Independent contexts per category.
     assert light_calls[0].context.id != cover_calls[0].context.id
 
 
 async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockConfigEntry) -> None:
-    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
+    activity = _capture_activity(hass)
     async_mock_service(hass, "light", "turn_on")
     store = hass.data[DOMAIN][DATA_STORE]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
@@ -303,19 +325,17 @@ async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockC
     await hass.services.async_call(DOMAIN, "apply_scene", {"scope": ["house"]}, blocking=True)
     await hass.async_block_till_done()
 
-    msgs = [e.data["message"] for e in entries if e.data.get("name") == "Ambience"]
-    assert "applied 'Movie' in House" in msgs
+    assert "'Movie' in House" in activity
 
 
 # --- run_scene_actions: own "ran ..." wording + shared context -----------------
 
 
-async def test_run_scene_actions_fires_ambience_entry_and_shares_context(
+async def test_run_scene_actions_sets_activity_state_and_shares_context(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
     from custom_components.ambience.service import async_run_scene_actions
 
-    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
     light_calls = async_mock_service(hass, "light", "turn_on")
     store = hass.data[DOMAIN][DATA_STORE]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
@@ -341,22 +361,18 @@ async def test_run_scene_actions_fires_ambience_entry_and_shares_context(
     await async_run_scene_actions(hass, "area", "lr", 0)
     await hass.async_block_till_done()
 
-    ambience_entries = [e for e in entries if e.data.get("name") == "Ambience"]
-    assert len(ambience_entries) == 1
-    entry = ambience_entries[0]
-    assert entry.data["domain"] == "ambience"
-    # run-actions uses the "ran" verb; "lr" is not a real area ⇒ raw-id fallback.
-    assert entry.data["message"] == "ran 'Movie' in lr"
+    # "lr" is not a real area ⇒ raw-id fallback (verb lives in the last_action attr).
+    sensor = hass.states.get(SENSOR_ID)
+    assert sensor.state == "'Movie' in lr"
     assert len(light_calls) == 1
-    assert light_calls[0].context.id == entry.context.id
+    assert light_calls[0].context.id == sensor.context.id
 
 
-async def test_run_scene_actions_with_empty_actions_logs_nothing(
+async def test_run_scene_actions_with_empty_actions_records_nothing(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
     from custom_components.ambience.service import async_run_scene_actions
 
-    entries = async_capture_events(hass, EVENT_LOGBOOK_ENTRY)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save_area(
         "lr",
@@ -366,4 +382,4 @@ async def test_run_scene_actions_with_empty_actions_logs_nothing(
     await async_run_scene_actions(hass, "area", "lr", 0)
     await hass.async_block_till_done()
 
-    assert [e for e in entries if e.data.get("name") == "Ambience"] == []
+    assert hass.states.get(SENSOR_ID).state == STATE_UNKNOWN

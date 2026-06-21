@@ -2346,27 +2346,28 @@ describe("save gate structural validators (review fixes)", () => {
   });
 });
 
-describe("ambience-scene-editor — apply mode", () => {
+describe("ambience-scene-editor — apply-on-every-match toggle", () => {
   let el: any;
   afterEach(() => el?.remove());
 
-  test("defaults to once when scene has no apply", async () => {
+  const toggle = (e: any) =>
+    e.shadowRoot.querySelector('[data-test="apply-on-every-match"]') as HTMLInputElement;
+
+  test("defaults to off when scene has no apply", async () => {
     el = await mount({ name: "t", when: {}, actions: [] } as any);
-    const sel = el.shadowRoot.querySelector('[data-test="apply-mode"]') as HTMLSelectElement;
-    expect(sel.value).toBe("once");
+    expect(toggle(el).checked).toBe(false);
   });
 
-  test("shows always for a scene stored with apply=always", async () => {
+  test("shows on for a scene stored with apply=always", async () => {
     el = await mount({ name: "t", when: {}, actions: [], apply: "always" } as any);
-    const sel = el.shadowRoot.querySelector('[data-test="apply-mode"]') as HTMLSelectElement;
-    expect(sel.value).toBe("always");
+    expect(toggle(el).checked).toBe(true);
   });
 
-  test("selecting always stores apply=always on save", async () => {
+  test("turning it on stores apply=always on save", async () => {
     el = await mount({ name: "t", when: {}, actions: [] } as any);
-    const sel = el.shadowRoot.querySelector('[data-test="apply-mode"]') as HTMLSelectElement;
-    sel.value = "always";
-    sel.dispatchEvent(new Event("change"));
+    const cb = toggle(el);
+    cb.checked = true;
+    cb.dispatchEvent(new Event("change"));
     await el.updateComplete;
     let saved: Scene | undefined;
     el.addEventListener("save-scene", (e: CustomEvent) => {
@@ -2376,11 +2377,11 @@ describe("ambience-scene-editor — apply mode", () => {
     expect(saved?.apply).toBe("always");
   });
 
-  test("selecting once removes apply on save", async () => {
+  test("turning it off removes apply on save", async () => {
     el = await mount({ name: "t", when: {}, actions: [], apply: "always" } as any);
-    const sel = el.shadowRoot.querySelector('[data-test="apply-mode"]') as HTMLSelectElement;
-    sel.value = "once";
-    sel.dispatchEvent(new Event("change"));
+    const cb = toggle(el);
+    cb.checked = false;
+    cb.dispatchEvent(new Event("change"));
     await el.updateComplete;
     let saved: Scene | undefined;
     el.addEventListener("save-scene", (e: CustomEvent) => {

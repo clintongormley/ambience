@@ -80,14 +80,14 @@ When the scene applies, Ambience sends the service call with the values you fill
 !!! info "📷 Screenshot"
     *The scene editor's action section, showing a "Main lights on" action with Brightness and Colour temperature fields filled in, and a target set to the living-room lights.*
 
-### Apply: once or always
+### Apply on every match
 
-At the bottom of a scene's **Actions** section is an **Apply** control with two options:
+At the bottom of a scene's **Actions** section is an **Apply on every match** toggle.
 
-- **Once** (default) — when the scene becomes the winner for its scope/category, Ambience runs its actions once. While it stays the winner, repeated re-evaluations are suppressed (debounced), so the actions are not re-sent.
-- **Always** — Ambience re-runs the scene's actions every time the scope/category is re-evaluated while this scene is still the winner. Use this when you want the scene to keep re-asserting its state — for example, to counteract another integration that keeps changing a light.
+- **Off** (default) — when the scene becomes the winner for its scope/category, Ambience runs its actions once. While it stays the winner, repeated re-evaluations are suppressed (debounced), so the actions are not re-sent.
+- **On** — Ambience re-runs the scene's actions every time the scope/category is re-evaluated while this scene is still the winner. Turn it on when you want the scene to keep re-asserting its state — for example, to counteract another integration that keeps changing a light.
 
-This is independent of the global **Re-run all scenes after inactivity** setting (Settings → Advanced), which periodically re-applies every unit's winning scene regardless of its Apply mode.
+This is independent of the global **Re-run all scenes after inactivity** setting (Settings → Advanced), which periodically re-applies every unit's winning scene regardless of this toggle.
 
 ---
 

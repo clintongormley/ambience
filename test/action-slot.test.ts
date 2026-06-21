@@ -371,9 +371,139 @@ describe("ambience-action-slot", () => {
     expect(el.shadowRoot.textContent.toLowerCase()).not.toContain("loading");
     // Must show the "not exposed" error message
     expect(el.shadowRoot.querySelector(".schema-error")).toBeTruthy();
-    expect(el.shadowRoot.textContent.toLowerCase()).toMatch(/no longer exposed|settings.*actions/i);
+    expect(el.shadowRoot.textContent.toLowerCase()).toMatch(
+      /no longer available|settings.*actions/i,
+    );
     // getServiceSchema should never have been called
     expect(vi.mocked(api.getServiceSchema)).not.toHaveBeenCalled();
+  });
+
+  // Deleted/unexposed action: show the error AND the raw stored config so the
+  // user can see what to recreate.
+  test("deleted action (exposed undefined) shows the error AND the raw stored config", async () => {
+    el = document.createElement("ambience-action-slot");
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    // exposed stays undefined → service no longer in the exposed-action list.
+    // The service id still travels with the action spec.
+    el.service = "input_boolean.turn_on";
+    el.entityIds = ["input_boolean.power_shower"];
+    el.params = { brightness: 50 };
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    // The error must still be shown — we know there's a problem.
+    expect(el.shadowRoot.querySelector(".schema-error")).toBeTruthy();
+    expect(el.shadowRoot.textContent.toLowerCase()).toMatch(
+      /no longer available|settings.*actions/i,
+    );
+
+    // The raw stored config must also be shown — we know what to replace.
+    const raw = el.shadowRoot.querySelector("[data-raw-config]");
+    expect(raw).toBeTruthy();
+    const txt = raw!.textContent ?? "";
+    expect(txt).toContain("input_boolean.turn_on"); // service id
+    expect(txt).toContain("input_boolean.power_shower"); // target entity id
+    expect(txt).toContain("brightness"); // param key
+    expect(txt).toContain("50"); // param value
+  });
+
+  test("raw config labels are suffixed with a colon", async () => {
+    el = document.createElement("ambience-action-slot");
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    el.service = "input_boolean.turn_on";
+    el.entityIds = ["input_boolean.power_shower"];
+    el.params = { brightness: 50 };
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const labels = Array.from(el.shadowRoot.querySelectorAll("[data-raw-config] dt")).map(
+      (d: any) => d.textContent,
+    );
+    expect(labels).toContain("Action:");
+    expect(labels).toContain("Targets:");
+    expect(labels).toContain("Parameters:");
+  });
+
+  test("raw config omits the targets/params rows when the action has neither", async () => {
+    el = document.createElement("ambience-action-slot");
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    el.service = "ambience.turn_on";
+    el.entityIds = [];
+    el.params = {};
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const raw = el.shadowRoot.querySelector("[data-raw-config]");
+    expect(raw).toBeTruthy();
+    // Service row is always present.
+    expect(raw!.textContent).toContain("ambience.turn_on");
+    // Only one row (service) — no targets/params rows.
+    expect(raw!.querySelectorAll(".raw-row").length).toBe(1);
+  });
+
+  test("unavailable service (schema resolves null) also shows the raw config from exposed.id", async () => {
+    vi.mocked(api.getServiceSchema).mockResolvedValueOnce(null);
+    el = document.createElement("ambience-action-slot");
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    // Service IS still exposed, but unavailable in this HA instance.
+    el.exposed = { id: "light.turn_on", label: "", visible_fields: [], defaults: {} };
+    el.entityIds = ["light.lamp_a"];
+    el.params = {};
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    expect(el.shadowRoot.querySelector(".schema-error")).toBeTruthy();
+    const raw = el.shadowRoot.querySelector("[data-raw-config]");
+    expect(raw).toBeTruthy();
+    // Falls back to exposed.id when `service` prop isn't set.
+    expect(raw!.textContent).toContain("light.turn_on");
+    expect(raw!.textContent).toContain("light.lamp_a");
+  });
+
+  test("raw config hides null param values rather than printing 'null'", async () => {
+    el = document.createElement("ambience-action-slot");
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    el.service = "light.turn_on";
+    el.entityIds = [];
+    el.params = { brightness: null };
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const raw = el.shadowRoot.querySelector("[data-raw-config]");
+    expect(raw!.textContent).toContain("brightness");
+    expect(raw!.textContent).not.toContain("null");
+  });
+
+  test("raw config renders object-valued params as compact JSON", async () => {
+    el = document.createElement("ambience-action-slot");
+    el.hass = makeHass();
+    el.scope = { kind: "area", id: "living_room" };
+    el.service = "light.turn_on";
+    el.entityIds = [];
+    el.params = { rgb_color: [255, 0, 0] };
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const raw = el.shadowRoot.querySelector("[data-raw-config]");
+    expect(raw!.textContent).toContain("rgb_color");
+    expect(raw!.textContent).toContain("[255,0,0]");
   });
 
   // Fix 1: no-target service emits target-mode-changed with hasTarget=false

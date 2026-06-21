@@ -23,6 +23,7 @@ import type {
 import "./action-slot.js";
 import "./ambience-help.js";
 import "./condition-input.js";
+import "./problem-flag.js";
 import { dayPredicateError } from "./day-predicate-input.js";
 import { luxPredicateError } from "./lux-input.js";
 import { statePredicateError } from "./state-predicate-input.js";
@@ -1046,9 +1047,28 @@ export class AmbienceSceneEditor extends LitElement {
       exposedActions: this.availableActions,
       schemas: this.schemas,
     });
+    // The action's service is no longer in the exposed-action list — flag it so
+    // the problem is visible even while the row is collapsed.
+    const problem =
+      exposed === undefined
+        ? localize(
+            this.hass,
+            "ui.action_unavailable",
+            "Action no longer available; configure it in Settings → Actions or remove this action.",
+          )
+        : null;
     return html`
       <div class="slot ${open ? "expanded" : "collapsed"}" data-slot-id="action-${idx}">
         <div class="summary" @click=${() => this._toggleSlot({ kind: "action", idx })}>
+          ${
+            problem
+              ? html`<ambience-problem-flag
+                  .severity=${"error"}
+                  .summary=${problem}
+                  .details=${[problem]}
+                ></ambience-problem-flag>`
+              : ""
+          }
           <span class="summary-label">${summary}</span>
           <button class="remove" @click=${(e: Event) => {
             e.stopPropagation();
@@ -1062,6 +1082,7 @@ export class AmbienceSceneEditor extends LitElement {
             <ambience-action-slot
               .hass=${this.hass}
               .scope=${this._scope}
+              .service=${action.service}
               .exposed=${exposed}
               .entityIds=${action.entity_ids}
               .excludeEntities=${entitiesUsedByOtherActions(this._draft?.actions ?? [], idx)}

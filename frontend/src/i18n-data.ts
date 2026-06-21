@@ -302,8 +302,11 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       extra_fields_hint: "These fields aren't currently exposed but will still be sent.",
       service_has_no_fields: "This service has no fields.",
       service_unavailable: "Service not available in this HA instance.",
-      service_not_exposed:
-        "Service no longer exposed; configure it in Settings → Actions or remove this action.",
+      action_unavailable:
+        "Action no longer available; configure it in Settings → Actions or remove this action.",
+      raw_config_action: "Action",
+      raw_config_targets: "Targets",
+      raw_config_params: "Parameters",
       occupancy_any: "Any of",
       occupancy_all: "All of",
       occupancy_detected: "Detected",
@@ -819,8 +822,11 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       extra_fields_hint: "Estos campos no están expuestos actualmente pero se enviarán igualmente.",
       service_has_no_fields: "Este servicio no tiene campos.",
       service_unavailable: "Servicio no disponible en esta instancia de HA.",
-      service_not_exposed:
-        "El servicio ya no está expuesto; configúralo en Ajustes → Acciones o elimina esta acción.",
+      action_unavailable:
+        "La acción ya no está disponible; configúrala en Ajustes → Acciones o elimina esta acción.",
+      raw_config_action: "Acción",
+      raw_config_targets: "Objetivos",
+      raw_config_params: "Parámetros",
       occupancy_any: "Cualquiera de",
       occupancy_all: "Todos de",
       occupancy_detected: "Detectado",

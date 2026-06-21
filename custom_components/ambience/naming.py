@@ -1,6 +1,6 @@
 """Canonical human-readable names for scopes and categories.
 
-Shared by the logbook attribution (`service._log_apply`) and the evaluation
+Shared by the logbook attribution (`service_logbook.log_apply`) and the evaluation
 trace (`trace`), so both render the same friendly area/floor/category names from a
 single source of truth instead of duplicating the lookups.
 """

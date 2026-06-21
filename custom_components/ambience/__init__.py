@@ -200,7 +200,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async_register_commands(hass)
 
-    await hass.config_entries.async_forward_entry_setups(entry, [Platform.SWITCH])
+    await hass.config_entries.async_forward_entry_setups(entry, [Platform.SENSOR, Platform.SWITCH])
 
     async def _handle_area_registry_update(event: Event) -> None:
         action = event.data["action"]
@@ -386,7 +386,9 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, [Platform.SWITCH])
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        entry, [Platform.SENSOR, Platform.SWITCH]
+    )
     if not unload_ok:
         # Entities are still live and reference hass.data[DOMAIN] — tearing the
         # rest down anyway would leave them pointing at a missing store.

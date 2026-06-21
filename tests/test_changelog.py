@@ -1,11 +1,15 @@
+import pytest
+
 from bin.changelog import (
     EXEMPT_TYPES,
     _heading_name,
     _split_sections,
     commit_type,
     entry_required,
+    extract_text,
     gate_ok,
     list_items,
+    promote_text,
     unreleased_body,
 )
 
@@ -92,3 +96,34 @@ def test_gate_ok_false_when_bullet_only_in_released_section():
     base = "# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-01-01\n\n- Old.\n"
     head = "# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-01-01\n\n- Old.\n- Edited.\n"
     assert gate_ok(base, head) is False
+
+
+def test_promote_moves_unreleased_into_dated_section():
+    text = "# Changelog\n\n## [Unreleased]\n\n### Fixed\n\n- A fix.\n"
+    out = promote_text(text, "0.24.0", "2026-06-21")
+    assert "## [0.24.0] - 2026-06-21" in out
+    assert extract_text(out, "0.24.0") == "### Fixed\n\n- A fix."
+    assert unreleased_body(out).strip() == ""  # Unreleased emptied
+
+
+def test_promote_empty_unreleased_creates_empty_dated_section():
+    text = "# Changelog\n\n## [Unreleased]\n"
+    out = promote_text(text, "0.24.0", "2026-06-21")
+    assert "## [0.24.0] - 2026-06-21" in out
+    assert extract_text(out, "0.24.0") == ""  # present but empty
+
+
+def test_promote_rejects_existing_version_section():
+    text = "# Changelog\n\n## [Unreleased]\n\n- x\n\n## [0.24.0] - 2026-06-20\n\n- old\n"
+    with pytest.raises(ValueError, match="0.24.0"):
+        promote_text(text, "0.24.0", "2026-06-21")
+
+
+def test_promote_requires_unreleased_section():
+    text = "# Changelog\n\n## [0.1.0] - 2026-01-01\n\n- x\n"
+    with pytest.raises(ValueError, match="Unreleased"):
+        promote_text(text, "0.2.0", "2026-06-21")
+
+
+def test_extract_returns_none_for_missing_section():
+    assert extract_text("# Changelog\n\n## [Unreleased]\n", "9.9.9") is None

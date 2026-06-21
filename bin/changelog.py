@@ -82,3 +82,36 @@ def gate_ok(base_text: str | None, head_text: str) -> bool:
     base_items = list_items(unreleased_body(base_text)) if base_text is not None else set()
     head_items = list_items(unreleased_body(head_text))
     return bool(head_items - base_items)
+
+
+def extract_text(text: str, version: str) -> str | None:
+    _, sections = _split_sections(text)
+    for heading, body in sections:
+        if _heading_name(heading) == version:
+            return body.strip()
+    return None
+
+
+def promote_text(text: str, version: str, day: str) -> str:
+    """Move [Unreleased]'s body into a new '## [version] - day' section below it,
+    leaving [Unreleased] empty. Raises ValueError on a duplicate version section
+    or a missing [Unreleased] section."""
+    preamble, sections = _split_sections(text)
+    names = [_heading_name(h) for h, _ in sections]
+    if version in names:
+        raise ValueError(f"CHANGELOG.md already has a [{version}] section")
+    if "Unreleased" not in names:
+        raise ValueError("CHANGELOG.md has no [Unreleased] section")
+
+    out = [preamble]
+    for heading, body in sections:
+        if _heading_name(heading) == "Unreleased":
+            moved = body.strip("\n")
+            out.append(heading)                       # "## [Unreleased]\n"
+            out.append("\n")                          # empty Unreleased body
+            out.append(f"## [{version}] - {day}\n")
+            out.append(f"\n{moved}\n" if moved else "\n")
+        else:
+            out.append(heading)
+            out.append(body)
+    return "".join(out)

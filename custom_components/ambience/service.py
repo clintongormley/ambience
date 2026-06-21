@@ -281,7 +281,9 @@ async def async_resolve_with_snapshots(
 
     Does NOT call any condition's `snapshot()` — the caller supplies them (the
     engine passes its own cache). Returns {matched_scene_index, scene_name,
-    actions, snapshots_described, switch_state, explanation}.
+    actions, apply, snapshots_described, switch_state, explanation} (`apply` is
+    the winner's per-scene re-apply mode, "once"/"always"/None; present only on a
+    match).
 
     `explanation` is an `Explanation` (scene list relative to the resolved
     category) when `explain=True`, else None.
@@ -459,8 +461,9 @@ async def async_resolve_only(
     """Like apply_scene, but does not execute actions.
 
     Snapshots every condition fresh (unless the caller supplies `snapshots`),
-    then delegates. Return shape:
-    {matched_scene_index, scene_name, actions, snapshots_described, switch_state}.
+    then delegates. Return shape (on a match): {matched_scene_index, scene_name,
+    actions, apply, snapshots_described, switch_state} (no `explanation` — this
+    path does not request one).
     """
     if snapshots is None:
         snapshots = await async_snapshot_all(hass)

@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 import pytest
 
 from bin.changelog import (
@@ -9,6 +12,7 @@ from bin.changelog import (
     extract_text,
     gate_ok,
     list_items,
+    main,
     promote_text,
     unreleased_body,
 )
@@ -141,3 +145,79 @@ def test_promote_preserves_trailing_released_section_with_blank_line():
     assert extract_text(out, "0.24.0") == "### Fixed\n\n- A new fix."
     assert extract_text(out, "0.23.0") == "### Added\n\n- Old feature."
     assert "\n\n\n" not in out  # no triple-blank anywhere
+
+
+def _git(*args, cwd):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    return subprocess.run(
+        ["git", *args], cwd=cwd, env=env, check=True, capture_output=True, text=True
+    )
+
+
+def _git_repo(tmp_path):
+    _git("init", "-q", "-b", "main", cwd=tmp_path)
+    _git("config", "user.email", "t@test", cwd=tmp_path)
+    _git("config", "user.name", "t", cwd=tmp_path)
+    return tmp_path
+
+
+def _commit_changelog(repo, content, msg):
+    (repo / "CHANGELOG.md").write_text(content)
+    _git("add", "CHANGELOG.md", cwd=repo)
+    _git("commit", "--allow-empty", "-qm", msg, cwd=repo)
+    return _git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+
+
+# --- promote / extract via main() on a tmp file ---
+
+
+def test_main_promote_then_extract(tmp_path, monkeypatch, capsys):
+    cl = tmp_path / "CHANGELOG.md"
+    cl.write_text("# Changelog\n\n## [Unreleased]\n\n- A change.\n")
+    monkeypatch.chdir(tmp_path)
+    assert main(["promote", "0.3.0", "--date", "2026-06-21"]) == 0
+    assert "## [0.3.0] - 2026-06-21" in cl.read_text()
+    capsys.readouterr()
+    assert main(["extract", "0.3.0"]) == 0
+    assert capsys.readouterr().out.strip() == "- A change."
+
+
+def test_main_extract_missing_section_exits_1(tmp_path, monkeypatch):
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## [Unreleased]\n")
+    monkeypatch.chdir(tmp_path)
+    assert main(["extract", "9.9.9"]) == 1
+
+
+def test_main_promote_duplicate_exits_1(tmp_path, monkeypatch):
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n\n## [0.3.0] - 2026-06-20\n\n- old\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    assert main(["promote", "0.3.0"]) == 1
+
+
+# --- check via main() against a real git repo ---
+
+
+def test_main_check_passes_on_new_entry(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    base = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "base")
+    head = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n\n- New.\n", "entry")
+    monkeypatch.chdir(repo)
+    assert main(["check", "--title", "feat: thing", "--base", base, "--head", head]) == 0
+
+
+def test_main_check_fails_when_required_and_no_entry(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    base = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "base")
+    head = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "noop")
+    monkeypatch.chdir(repo)
+    assert main(["check", "--title", "fix: thing", "--base", base, "--head", head]) == 1
+
+
+def test_main_check_exempt_title_passes_without_entry(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    base = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "base")
+    head = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "noop")
+    monkeypatch.chdir(repo)
+    assert main(["check", "--title", "chore: bump", "--base", base, "--head", head]) == 0

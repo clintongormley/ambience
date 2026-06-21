@@ -13,7 +13,12 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import re
+import subprocess
+import sys
+from datetime import date
+from pathlib import Path
 
 EXEMPT_TYPES = frozenset({"chore", "ci", "test", "build", "refactor", "docs", "style"})
 
@@ -70,11 +75,7 @@ def unreleased_body(text: str) -> str:
 
 
 def list_items(body: str) -> set[str]:
-    return {
-        line.strip()
-        for line in body.splitlines()
-        if line.strip().startswith(("-", "*"))
-    }
+    return {line.strip() for line in body.splitlines() if line.strip().startswith(("-", "*"))}
 
 
 def gate_ok(base_text: str | None, head_text: str) -> bool:
@@ -107,8 +108,8 @@ def promote_text(text: str, version: str, day: str) -> str:
     for heading, body in sections:
         if _heading_name(heading) == "Unreleased":
             moved = body.strip("\n")
-            out.append(heading)                       # "## [Unreleased]\n"
-            out.append("\n")                          # empty Unreleased body
+            out.append(heading)  # "## [Unreleased]\n"
+            out.append("\n")  # empty Unreleased body
             out.append(f"## [{version}] - {day}\n")
             # Trailing blank line so a following section heading stays separated
             # (valid Markdown / Keep a Changelog). EOF newline normalised below.
@@ -118,3 +119,75 @@ def promote_text(text: str, version: str, day: str) -> str:
             out.append(body)
     # Exactly one trailing newline at EOF, regardless of branch.
     return "".join(out).rstrip("\n") + "\n"
+
+
+def _git_show(ref: str, path: str) -> str | None:
+    """Return file contents at a git ref, or None if absent there."""
+    result = subprocess.run(["git", "show", f"{ref}:{path}"], capture_output=True, text=True)
+    return result.stdout if result.returncode == 0 else None
+
+
+def _cmd_check(args: argparse.Namespace) -> int:
+    if not entry_required(args.title):
+        print(f"changelog: '{commit_type(args.title)}' PR is exempt; no entry required.")
+        return 0
+    head_text = _git_show(args.head, args.path) or ""
+    base_text = _git_show(args.base, args.path)
+    if gate_ok(base_text, head_text):
+        print("changelog: found a new entry under [Unreleased].")
+        return 0
+    print(
+        "changelog: a user-facing PR must add an entry under '## [Unreleased]' in "
+        f"{args.path}. Add one, or retitle the PR with a non-user-facing type "
+        f"({', '.join(sorted(EXEMPT_TYPES))}).",
+        file=sys.stderr,
+    )
+    return 1
+
+
+def _cmd_promote(args: argparse.Namespace) -> int:
+    path = Path(args.path)
+    day = args.date or date.today().isoformat()
+    try:
+        new_text = promote_text(path.read_text(), args.version, day)
+    except ValueError as exc:
+        print(f"changelog: {exc}", file=sys.stderr)
+        return 1
+    path.write_text(new_text)
+    print(f"changelog: promoted [Unreleased] -> [{args.version}] - {day}")
+    return 0
+
+
+def _cmd_extract(args: argparse.Namespace) -> int:
+    body = extract_text(Path(args.path).read_text(), args.version)
+    if body is None:
+        print(f"changelog: no [{args.version}] section in {args.path}", file=sys.stderr)
+        return 1
+    if body:
+        print(body)
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="changelog")
+    parser.add_argument("--path", default="CHANGELOG.md")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_check = sub.add_parser("check")
+    p_check.add_argument("--title", required=True)
+    p_check.add_argument("--base", required=True)
+    p_check.add_argument("--head", required=True)
+
+    p_promote = sub.add_parser("promote")
+    p_promote.add_argument("version")
+    p_promote.add_argument("--date", default=None)
+
+    p_extract = sub.add_parser("extract")
+    p_extract.add_argument("version")
+
+    args = parser.parse_args(argv)
+    return {"check": _cmd_check, "promote": _cmd_promote, "extract": _cmd_extract}[args.cmd](args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

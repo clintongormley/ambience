@@ -21,6 +21,7 @@ import type {
   ScopeOption,
 } from "../types.js";
 import "./action-slot.js";
+import "./ambience-help.js";
 import "./condition-input.js";
 import { dayPredicateError } from "./day-predicate-input.js";
 import { luxPredicateError } from "./lux-input.js";
@@ -992,7 +993,17 @@ export class AmbienceSceneEditor extends LitElement {
   private _renderApply() {
     return html`
       <div class="apply-control">
-        <label>${localize(this.hass, "ui.apply_on_every_match", "Apply on every match")}</label>
+        <label>
+          ${localize(this.hass, "ui.apply_on_every_match", "Apply on every match")}
+          <ambience-help
+            .hass=${this.hass}
+            .text=${localize(
+              this.hass,
+              "ui.help_apply_on_every_match",
+              "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene — useful to keep re-asserting state against other integrations.",
+            )}
+          ></ambience-help>
+        </label>
         ${renderHaSwitch({
           checked: this._draft!.apply === "always",
           dataTest: "apply-on-every-match",

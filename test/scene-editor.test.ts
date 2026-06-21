@@ -2390,4 +2390,11 @@ describe("ambience-scene-editor — apply-on-every-match toggle", () => {
     el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
     expect(saved?.apply).toBeUndefined();
   });
+
+  test("has a help tooltip explaining what it does", async () => {
+    el = await mount({ name: "t", when: {}, actions: [] } as any);
+    const help: any = el.shadowRoot.querySelector(".apply-control ambience-help");
+    expect(help).toBeTruthy();
+    expect(help.text.length).toBeGreaterThan(0);
+  });
 });

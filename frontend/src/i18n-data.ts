@@ -90,6 +90,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_reapply_enable_label: "Re-run all scenes after inactivity",
       settings_reapply_interval_label: "Re-run after",
       apply_on_every_match: "Apply on every match",
+      applies_every_match: "every match",
+      help_apply_on_every_match:
+        "When on, Ambience re-applies this scene's actions every time it wins its scope/category, not just the first time it becomes the active scene — useful to keep re-asserting state against other integrations.",
       unit_minutes: "minutes",
       help: "Help",
       help_pause_switch:
@@ -602,6 +605,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_reapply_enable_label: "Volver a ejecutar todas las escenas tras inactividad",
       settings_reapply_interval_label: "Volver a ejecutar después de",
       apply_on_every_match: "Aplicar en cada coincidencia",
+      applies_every_match: "cada coincidencia",
+      help_apply_on_every_match:
+        "Cuando está activado, Ambience vuelve a aplicar las acciones de esta escena cada vez que gana su ámbito/categoría, no solo la primera vez que se activa — útil para seguir reafirmando el estado frente a otras integraciones.",
       unit_minutes: "minutos",
       help: "Ayuda",
       help_pause_switch:

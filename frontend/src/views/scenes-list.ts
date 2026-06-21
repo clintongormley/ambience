@@ -638,7 +638,14 @@ export class AmbienceScenesList extends LitElement {
                   : html`${this._whenSummary(scene)} ·
                     <span class="action-count"
                       >${this._actionCountLabel(scene)}</span
-                    >`
+                    >${
+                      scene.apply === "always"
+                        ? html` ·
+                          <span class="apply-every" data-test="apply-every"
+                            >${localize(this.hass, "ui.applies_every_match", "every match")}</span
+                          >`
+                        : ""
+                    }`
             }
           </div>
           ${

@@ -75,6 +75,38 @@ async function mount(
   return el;
 }
 
+describe("ambience-scenes-list — apply on every match", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("shows an 'every match' indicator in the summary when apply=always", async () => {
+    el = await mount([
+      {
+        name: "Always scene",
+        when: { mode: "movie" },
+        actions: [{ service: "light.turn_on", entity_ids: ["light.lamp"], params: {} }],
+        apply: "always",
+      } as Scene,
+    ]);
+    const summary = el.shadowRoot.querySelector(".summary") as HTMLElement;
+    expect(summary.textContent).toContain("every match");
+  });
+
+  test("no indicator when apply is absent", async () => {
+    el = await mount([movieScene]);
+    const summary = el.shadowRoot.querySelector(".summary") as HTMLElement;
+    expect(summary.textContent).not.toContain("every match");
+  });
+
+  test("no indicator for a no-action blocker even when apply=always", async () => {
+    el = await mount([
+      { name: "Blocker", when: { mode: "movie" }, actions: [], apply: "always" } as Scene,
+    ]);
+    const summary = el.shadowRoot.querySelector(".summary") as HTMLElement;
+    expect(summary.textContent).not.toContain("every match");
+  });
+});
+
 function captureEvent(el: HTMLElement, name: string) {
   let detail: any;
   el.addEventListener(name, (e: Event) => {

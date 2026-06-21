@@ -24,14 +24,25 @@ RELEASE_BRANCH = "chore/release"
 
 
 def _clean_env(extra: dict | None = None) -> dict:
-    """Return os.environ with all GIT_* vars stripped, plus any extras.
+    """Return os.environ with GIT_* and COVERAGE_*/COV_CORE_* vars stripped, plus extras.
 
-    Without this, subprocess git calls in tests inherit GIT_DIR / GIT_WORK_TREE /
-    GIT_INDEX_FILE from a parent context (e.g. a pre-push hook) and operate on the
-    wrong repo. BUILD_CMD defaults to a no-op so the frontend build guard passes
-    without a real toolchain; individual tests override it.
+    GIT_*: without this, subprocess git calls in tests inherit GIT_DIR /
+    GIT_WORK_TREE / GIT_INDEX_FILE from a parent context (e.g. a pre-push hook)
+    and operate on the wrong repo.
+
+    COVERAGE_*/COV_CORE_*: release.sh now spawns `python3 changelog.py promote`.
+    Under `pytest --cov`, COVERAGE_PROCESS_START is set, so a coverage-bootstrap
+    .pth would make that grandchild auto-start coverage and write a
+    *statement-only* data file that can't be combined with the parent run's
+    *branch* data ("Can't combine statement coverage data with branch data").
+    We don't measure changelog.py here, so scrub the bootstrap entirely.
+
+    BUILD_CMD defaults to a no-op so the frontend build guard passes without a
+    real toolchain; individual tests override it.
     """
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env = {
+        k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "COVERAGE_", "COV_CORE_"))
+    }
     env.setdefault("BUILD_CMD", "true")
     if extra:
         env.update(extra)

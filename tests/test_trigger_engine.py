@@ -1496,6 +1496,36 @@ async def test_resolve_and_apply_no_action_winner_is_no_op_transparent_to_last_a
     assert hass.data[DOMAIN][DATA_LAST_APPLIED][("area", "a", "g")] == 5
 
 
+async def test_resolve_and_apply_always_no_action_winner_is_still_no_op(
+    hass,
+) -> None:
+    """A winner with apply='always' but no actions is still NO_OP — 'always' overrides
+    the same-winner debounce but NOT the no-action/blocker early-return."""
+    from custom_components.ambience.trace import Outcome
+
+    blocker = {"when": {"tod": "evening"}, "category": "g", "actions": [], "apply": "always"}
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "a", {"scenes": [blocker]})]),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+        DATA_LAST_APPLIED: {},
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine._snapshots = {"tod": "evening"}
+    logging.getLogger("custom_components.ambience.trace").setLevel(logging.DEBUG)
+    try:
+        result = await engine._resolve_and_apply("area", "a", "g")
+        assert result is not None
+        assert result.outcome == Outcome.NO_OP
+    finally:
+        logging.getLogger("custom_components.ambience.trace").setLevel(logging.NOTSET)
+    # 'always' does not bypass the no-action branch — last_applied must remain absent.
+    assert ("area", "a", "g") not in hass.data[DOMAIN][DATA_LAST_APPLIED]
+
+
 async def test_resolve_and_apply_returns_none_when_winner_unchanged_and_tracing_inactive(
     hass,
 ) -> None:

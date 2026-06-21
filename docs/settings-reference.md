@@ -148,7 +148,7 @@ Click the ✖ on the right of any card header to stop exposing that service. Exi
 
 ## Advanced tab
 
-The Advanced tab is the last tab in the Settings modal. It has two sections: **Scope-level pause switch** and **Reapply**.
+The Advanced tab is the last tab in the Settings modal. It has two sections: **Scope-level pause switch** and **Re-run**.
 
 !!! info "📷 Screenshot"
 
@@ -169,14 +169,14 @@ Changes take effect immediately — Ambience creates or removes switch entities 
 
 ---
 
-### Reapply
+### Re-run
 
-The **Reapply** card lets Ambience automatically re-send a scope/category unit's scene commands after a period of inactivity. This is useful for recovering from dropped commands — for example, a light that did not actually turn off, or a cover that reverted to its previous position.
+The **Re-run** card lets Ambience automatically re-send a scope/category unit's scene commands after a period of inactivity. This is useful for recovering from dropped commands — for example, a light that did not actually turn off, or a cover that reverted to its previous position.
 
-**Reapply scenes after inactivity** (toggle)
+**Re-run all scenes after inactivity** (toggle)
 Enables or disables the feature globally. Off by default.
 
-**Reapply after (minutes)**
+**Re-run after (minutes)**
 How long Ambience waits without dispatching any commands to a given scope/category unit before it re-asserts that unit's winning scene. The default is `60` minutes. The minimum is `1` minute. Only editable when the toggle above is on.
 
 When the feature is enabled and the timeout elapses for a unit, Ambience re-evaluates and re-dispatches that unit's winning scene — even if the winner has not changed — to recover any commands that may have been dropped. The idle clock resets each time a unit's commands are actually dispatched. Units whose switch is off, or whose scope is disabled, are skipped.

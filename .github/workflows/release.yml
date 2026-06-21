@@ -33,6 +33,9 @@ jobs:
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Extract and validate version from tag
         id: version
@@ -62,10 +65,33 @@ jobs:
             exit 1
           fi
 
+      - name: Build release notes from changelog
+        id: notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          BODY=$(python -m bin.changelog extract "$VERSION")
+          if [ -n "$(printf '%s' "$BODY" | tr -d '[:space:]')" ]; then
+            {
+              printf '%s\n' "$BODY"
+              PREV=$(git describe --tags --abbrev=0 "v${VERSION}^" 2>/dev/null || true)
+              if [ -n "$PREV" ]; then
+                printf '\n**Full Changelog**: https://github.com/%s/compare/%s...v%s\n' "$REPO" "$PREV" "$VERSION"
+              fi
+            } > "$RUNNER_TEMP/relnotes.md"
+            echo "generate=false" >> "$GITHUB_OUTPUT"
+            echo "body_path=$RUNNER_TEMP/relnotes.md" >> "$GITHUB_OUTPUT"
+          else
+            echo "generate=true" >> "$GITHUB_OUTPUT"
+            echo "body_path=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          generate_release_notes: true
+          generate_release_notes: ${{ steps.notes.outputs.generate }}
+          body_path: ${{ steps.notes.outputs.body_path }}
           # Pre-releases (alpha/beta/rc) stay off "latest" until promoted via:
           #   gh release edit v<version> --prerelease=false --latest=true
           prerelease: ${{ steps.version.outputs.prerelease }}

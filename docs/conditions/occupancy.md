@@ -42,7 +42,7 @@ ranks scenes automatically by how specific their conditions are, and each
 condition type has a fixed priority:
 
 ```text
-Entity state > People > Occupancy > Day > Time of day > Sun > Weather
+Entity state > People > Occupancy > Day > Time of day > Lux > Sun > Weather
 ```
 
 Occupancy deliberately sits **below Entity state**. This means a deliberate
@@ -52,6 +52,6 @@ over your presence-based ambient lighting, even though you are also *present*
 while watching. You do not have to drag the "Watch TV" scene above your
 "someone's home" scenes by hand; the ordering falls out of the priorities.
 
-Occupancy still outranks the ambient conditions (Day, Time of day, Sun,
+Occupancy still outranks the ambient conditions (Day, Time of day, Lux, Sun,
 Weather), so a presence rule beats a rule that only looks at the time or the
 weather.

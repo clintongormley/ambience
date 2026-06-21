@@ -32,6 +32,30 @@ Click **▸ Why this scene won** (or **▸ Why nothing matched**) to expand the 
 
 ---
 
+## Scene updates in the Logbook
+
+Traces live inside the Ambience panel and only keep the last few evaluations per scope/category. For a longer, Home Assistant-native history of *when scenes actually changed*, Ambience also exposes a single sensor:
+
+- **Entity:** `sensor.ambience_scene_updates` (friendly name **Scene updates**), on the **Ambience** device.
+
+Every time a scene is applied — or you run a scene's actions manually — the sensor's state updates to a short activity line such as `'Evening' in Lounge` (a category name in brackets is appended when you have more than one category). Because each update is a state change, it shows up as an entry in the Home Assistant **Logbook**, giving you a scrollable, timestamped record of your home's scene activity.
+
+To see it, open **Settings → System → Logbook** and filter by the **Ambience** device (or the **Scene updates** entity). The sensor is built specifically to be filterable there — unlike a numeric sensor, which the Logbook hides.
+
+Each entry also carries attributes you can read in **Developer Tools → States** or surface on a dashboard:
+
+| Attribute | Meaning |
+|---|---|
+| `last_scene` | The name of the scene that was applied. |
+| `last_scope` / `last_scope_kind` | Which scope it applied to, and whether that scope is a house, floor, or area. |
+| `last_category` | The category whose winner changed. |
+| `last_action` | `applied` for an automatic apply, or `ran` when you used **Run actions** manually. |
+| `applied_at` | The UTC timestamp of the update. |
+
+The sensor restores its last value across a Home Assistant restart.
+
+---
+
 ## Simulator — what if
 
 The Simulator lets you ask "what would Ambience do if conditions were different?" without touching your home. It runs a full scene evaluation against invented inputs and shows you the result using the same trace-detail view as the Traces viewer.

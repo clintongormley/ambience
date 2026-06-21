@@ -53,7 +53,6 @@ nav:
       - Scopes & switches: concepts/scopes-and-switches.md
       - Scenes & resolution: concepts/scenes-and-resolution.md
       - Categories: concepts/categories.md
-      - Config health: concepts/config-health.md
   - Conditions:
       - Overview: conditions/index.md
       - Time of day: conditions/time-of-day.md
@@ -62,10 +61,13 @@ nav:
       - Weather: conditions/weather.md
       - People: conditions/people.md
       - Occupancy: conditions/occupancy.md
-      - Day: conditions/day.md
       - Lux: conditions/lux.md
+      - Day: conditions/day.md
       - Template: conditions/template.md
       - Script: conditions/script.md
+      - Unavailable: conditions/unavailable.md
   - Actions: actions.md
   - Settings reference: settings-reference.md
-  - Tips & testing: tips-and-testing.md
+  - Troubleshooting:
+      - Config health: concepts/config-health.md
+      - Tips & testing: tips-and-testing.md

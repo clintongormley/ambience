@@ -44,7 +44,7 @@ General is an ordinary category. You can rename it, change its icon and colour, 
 
 ## Managing categories
 
-Categories are created, renamed, and deleted in the Ambience panel under **Settings → Ambience**, in the **Scene categories** section. Each category has a name, an optional icon (any MDI icon name), and an optional colour swatch to make it easy to distinguish at a glance. Category names must be unique and cannot be left blank.
+Categories are created, renamed, and deleted in the Ambience panel's **Settings** modal (the cogwheel ⚙ icon), on the **Categories** tab. Each category has a name, an optional icon (any MDI icon name), and an optional colour swatch to make it easy to distinguish at a glance. Category names must be unique and cannot be left blank.
 
 You cannot delete the last remaining category, and you cannot delete a category that still has scenes assigned to it — move or delete those scenes first.
 

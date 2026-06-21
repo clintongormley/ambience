@@ -34,3 +34,4 @@ Leave the duration at zero (the default) to match immediately as soon as the tes
 | [Day](day.md) | The day of the week, day of the month, a specific annual date or date range, and workday or holiday status. |
 | [Template](template.md) | A Home Assistant Jinja2 template evaluated to a yes/no result — a flexible escape hatch for anything the other conditions do not cover. |
 | [Script](script.md) | A Home Assistant script that runs your own logic and reports back whether the condition is met. |
+| [Unavailable](unavailable.md) | Whether any of the listed entities is unavailable, unknown, or missing — a guard for falling back when a sensor you depend on goes down. |

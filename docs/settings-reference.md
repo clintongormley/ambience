@@ -165,6 +165,9 @@ The name used for the per-scope switch entities. The default is `Ambience`. Chan
 **Pause for (minutes)**
 How long Ambience waits after a scope's switch is turned off before automatically turning it back on. The default is `0` (never auto-resume) — the scope stays paused until you turn the switch back on manually. Set a positive number of minutes to resume automatically after that delay. Only editable when the toggle above is on.
 
+**Expose to voice assistants**
+Three toggles — **Assist**, **Google Assistant**, and **Alexa** — controlling which voice assistants the per-scope switches are exposed to, so you can pause or resume a scope by voice ("turn off Living Room Ambience"). Only editable when the pause-switch toggle is on. **Assist** (Home Assistant's built-in agent) is on by default; **Google Assistant** and **Alexa** are off and require Home Assistant Cloud (or a manual setup) to take effect. Changing a toggle re-applies the exposure to every Ambience switch, overwriting any per-switch exposure you set manually under **Settings → Voice assistants → Expose**. See [Voice assistants](installation.md#voice-assistants) for more.
+
 Changes take effect immediately — Ambience creates or removes switch entities live without requiring an integration reload.
 
 ---

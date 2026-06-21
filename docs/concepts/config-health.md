@@ -28,13 +28,34 @@ When two groups act on the same entity independently, they can fight each other:
 
 To resolve it, decide which group should own the entity and remove it from the actions of the other group.
 
-Both issue types are **warnings** — they do not stop Ambience from running. They clear automatically once the underlying problem is fixed.
+### Dangling references
+
+These appear when a scene still points at something you have since deleted or renamed. The condition or action can never do anything useful, so Ambience flags it.
+
+| Issue | What it means | How to fix it |
+|---|---|---|
+| **scenes reference a deleted time-of-day period** | A Time of day condition uses a named period that no longer exists. | Re-create the period, or remove the reference, in the scene editor. |
+| **scenes reference a deleted lux range** | A Lux condition uses a named lux range that no longer exists. | Re-create the range, or remove the reference. |
+| **scenes reference a deleted weather group** | A Weather condition uses a weather group that no longer exists. | Re-create the group, or remove the reference. |
+| **scenes use an action that is no longer exposed** | A scene action calls a service you have removed from **Settings → Actions**. The action is **skipped** when the scene applies. | Re-expose the action, or remove it from the scenes. |
+
+### Missing condition prerequisites
+
+Some conditions depend on something being configured globally. If it is missing, those conditions can never match, so the scenes that use them are effectively dead.
+
+| Issue | What it means | How to fix it |
+|---|---|---|
+| **scenes use a weather condition but no weather entity is configured** | A Weather condition has nothing to read from. | Configure a weather entity on the **Conditions → Weather** settings tab, or remove the weather conditions. |
+| **scenes use a workday item but no workday sensor is configured** | A Day condition uses a `workday` or `holiday` item with no workday sensor set. | Configure a workday sensor on the **Conditions → Day** settings tab, or remove those items. |
+| **scenes use a workday-calendar item but no calendar is configured** | A Day condition uses a `first_workday`/`last_workday` item with no workday calendar set. | Configure a workday calendar on the **Conditions → Day** settings tab, or remove those items. |
+
+All of these issues are **warnings** — they do not stop Ambience from running, and only **enabled** scenes are checked. Each one clears automatically once the underlying problem is fixed.
 
 ---
 
 ## Trace: "not found" vs "unavailable"
 
-In the [Traces viewer](../tips-and-testing.md#traces--why-a-scene-won), a condition that references an entity shows one of two states when the entity cannot be used:
+In the [Traces viewer](../tips-and-testing.md#traces-why-a-scene-won), a condition that references an entity shows one of two states when the entity cannot be used:
 
 - **not found** — the entity id does not resolve to any state. This means the entity does not exist at evaluation time: it was deleted, renamed, or not yet loaded.
 - **unavailable** — the entity exists but its current value cannot be used (the device is offline, the integration is starting up, and so on).

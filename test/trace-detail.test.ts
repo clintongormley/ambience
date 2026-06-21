@@ -90,7 +90,7 @@ describe("trace-detail", () => {
   test("formatCause labels the idle re-apply cause and keeps its interval detail", () => {
     expect(
       formatCause({}, { kind: "reapply", entity_id: null, old: null, new: null, detail: "1h30m" }),
-    ).toBe("Reapply 1h30m");
+    ).toBe("Re-run 1h30m");
   });
 
   test("formatCause normalizes null state values to '?' (not the string 'null')", () => {

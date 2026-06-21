@@ -200,6 +200,21 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
             return scenes[scene_index].get("category")
         return None
 
+    def _apply_config_for(
+        self, scope_kind: str, scope_id: str | None, scene_index: int
+    ) -> str | None:
+        """The winning scene's `apply` mode ("once"/"always"), or None when the
+        scene carries no explicit mode (defaults to "once"). `scene_index` is the
+        full-scene index (matched_scene_index), aligned with `self._scope_cfgs`."""
+        cfg = self._scope_cfgs.get((scope_kind, scope_id))
+        if cfg is None:
+            return None
+        scenes = cfg.get("scenes", [])
+        if 0 <= scene_index < len(scenes):
+            value = scenes[scene_index].get("apply")
+            return value if isinstance(value, str) else None
+        return None
+
     def _winner_has_unavailable(
         self, scope_kind: str, scope_id: str | None, scene_index: int | None
     ) -> bool:
@@ -424,11 +439,13 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                         winner_name=plan["scene_name"],
                     )
                 return None
-            if not force and index == get_last_applied(
+            always = self._apply_config_for(scope_kind, scope_id, index) == "always"
+            if not force and not always and index == get_last_applied(
                 self._hass, scope_kind, scope_id, category_id
             ):
                 # Same winner as last applied, with identical actions → suppress the
-                # redundant re-fire.
+                # redundant re-fire. A scene whose `apply` mode is "always" opts out
+                # of this debounce, re-asserting its actions on every re-evaluation.
                 if active:
                     return UnitTrace(
                         scope_kind,

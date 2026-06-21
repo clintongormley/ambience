@@ -177,6 +177,7 @@ export class AmbienceSceneEditor extends LitElement {
       margin: 0.5rem 0;
       padding: 0.5rem 0;
     }
+    .apply-control { margin-top: 1rem; }
     .error {
       color: var(--error-color, #c62828);
       font-size: 0.9em;
@@ -971,6 +972,75 @@ export class AmbienceSceneEditor extends LitElement {
   }
   /* v8 ignore stop */
 
+  private _setApply(mode: string) {
+    if (!this._draft) return;
+    const draft = { ...this._draft };
+    if (mode === "always") draft.apply = "always";
+    else delete draft.apply; // "once" is the default → store nothing
+    this._draft = draft;
+  }
+
+  private _onApplyChange = (e: Event) => {
+    this._setApply((e.target as HTMLSelectElement).value);
+  };
+
+  /* v8 ignore start -- ha-form not registered in jsdom */
+  private _onApplyHaForm = (e: CustomEvent<{ value: { apply: string } }>) => {
+    e.stopPropagation();
+    this._setApply(e.detail.value.apply);
+  };
+  /* v8 ignore stop */
+
+  private _renderApply() {
+    const value = this._draft!.apply ?? "once";
+    const onceLabel = localize(this.hass, "ui.apply_once", "Once");
+    const alwaysLabel = localize(this.hass, "ui.apply_always", "Always");
+    /* v8 ignore next 3 -- ha-form not registered in jsdom; jsdom hits the fallback below */
+    if (customElements.get("ha-form")) {
+      return this._renderApplyHaForm(value, onceLabel, alwaysLabel);
+    }
+    return html`
+      <div class="apply-control">
+        <label>${localize(this.hass, "ui.apply_label", "Apply")}</label>
+        <select data-test="apply-mode" @change=${this._onApplyChange}>
+          <option value="once" ?selected=${value === "once"}>${onceLabel}</option>
+          <option value="always" ?selected=${value === "always"}>${alwaysLabel}</option>
+        </select>
+      </div>
+    `;
+  }
+
+  /* v8 ignore start -- ha-form path (real HA only) */
+  private _renderApplyHaForm(value: string, onceLabel: string, alwaysLabel: string) {
+    const schema = [
+      {
+        name: "apply",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "once", label: onceLabel },
+              { value: "always", label: alwaysLabel },
+            ],
+          },
+        },
+      },
+    ];
+    return html`
+      <div class="apply-control">
+        <label>${localize(this.hass, "ui.apply_label", "Apply")}</label>
+        <ha-form
+          .hass=${this.hass}
+          .schema=${schema}
+          .data=${{ apply: value }}
+          .computeLabel=${() => ""}
+          @value-changed=${this._onApplyHaForm}
+        ></ha-form>
+      </div>
+    `;
+  }
+  /* v8 ignore stop */
+
   private _updateActionAt(idx: number, mutate: (a: ActionSpec) => ActionSpec) {
     if (!this._draft) return;
     const actions = this._draft.actions.map((a, i) => (i === idx ? mutate(a) : a));
@@ -1117,6 +1187,7 @@ export class AmbienceSceneEditor extends LitElement {
           <h3>${localize(this.hass, "ui.actions_heading", "Actions")}</h3>
           ${this._draft.actions.map((a, i) => this._renderActionRow(a, i))}
           ${this._renderAddAction()}
+          ${this._renderApply()}
         </div>
 
         <div class="actions-bar">

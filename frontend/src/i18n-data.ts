@@ -89,6 +89,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_ambience_field_pause: "Pause for",
       settings_reapply_enable_label: "Reapply scenes after inactivity",
       settings_reapply_interval_label: "Reapply after",
+      apply_label: "Apply",
+      apply_once: "Once",
+      apply_always: "Always",
       unit_minutes: "minutes",
       help: "Help",
       help_pause_switch:
@@ -600,6 +603,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       settings_ambience_field_pause: "Pausar durante",
       settings_reapply_enable_label: "Reaplicar escenas tras inactividad",
       settings_reapply_interval_label: "Reaplicar después de",
+      apply_label: "Aplicar",
+      apply_once: "Una vez",
+      apply_always: "Siempre",
       unit_minutes: "minutos",
       help: "Ayuda",
       help_pause_switch:

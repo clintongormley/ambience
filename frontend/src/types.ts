@@ -6,6 +6,11 @@
 // One dangling-config-reference problem on a scene (transient, response-only).
 export type ConfigIssue = { kind: string; ref: string };
 
+// How a winning scene re-applies its actions when its unit is re-evaluated:
+// "once" (default; apply on becoming the winner, then debounce) or "always"
+// (re-apply on every re-evaluation while it stays the winner). Absent = "once".
+export type SceneApplyMode = "once" | "always";
+
 export type Scene = {
   name?: string;
   // The category this scene belongs to (SceneCategory.id). Required — every scene is
@@ -22,6 +27,8 @@ export type Scene = {
   // Absent or true = enabled; false = disabled. A disabled scene is retained
   // and keeps its position but is ignored by automatic evaluation.
   enabled?: boolean;
+  // Re-apply policy for the event-driven path; absent = "once". See SceneApplyMode.
+  apply?: SceneApplyMode;
   // Transient (response-only): index of an earlier scene that shadows this one,
   // or null/absent. Never persisted.
   shadowed_by?: number | null;

@@ -2345,3 +2345,48 @@ describe("save gate structural validators (review fixes)", () => {
     el.remove();
   });
 });
+
+describe("ambience-scene-editor — apply mode", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  test("defaults to once when scene has no apply", async () => {
+    el = await mount({ name: "t", when: {}, actions: [] } as any);
+    const sel = el.shadowRoot.querySelector('[data-test="apply-mode"]') as HTMLSelectElement;
+    expect(sel.value).toBe("once");
+  });
+
+  test("shows always for a scene stored with apply=always", async () => {
+    el = await mount({ name: "t", when: {}, actions: [], apply: "always" } as any);
+    const sel = el.shadowRoot.querySelector('[data-test="apply-mode"]') as HTMLSelectElement;
+    expect(sel.value).toBe("always");
+  });
+
+  test("selecting always stores apply=always on save", async () => {
+    el = await mount({ name: "t", when: {}, actions: [] } as any);
+    const sel = el.shadowRoot.querySelector('[data-test="apply-mode"]') as HTMLSelectElement;
+    sel.value = "always";
+    sel.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    let saved: Scene | undefined;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
+    });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    expect(saved?.apply).toBe("always");
+  });
+
+  test("selecting once removes apply on save", async () => {
+    el = await mount({ name: "t", when: {}, actions: [], apply: "always" } as any);
+    const sel = el.shadowRoot.querySelector('[data-test="apply-mode"]') as HTMLSelectElement;
+    sel.value = "once";
+    sel.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    let saved: Scene | undefined;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
+    });
+    el.shadowRoot.querySelector("button.primary")!.dispatchEvent(new MouseEvent("click"));
+    expect(saved?.apply).toBeUndefined();
+  });
+});

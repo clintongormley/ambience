@@ -7,12 +7,12 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import floor_registry as fr
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -29,18 +29,21 @@ from .const import (
     SIGNAL_EXPOSED_ASSISTANTS_UPDATED,
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
+    SIGNAL_UNIT_LIVE,
 )
 from .diagnostics import scope_diagnostics
 from .errors import AmbienceError, render_en, service_validation_error
 from .exposed_actions import ExposedActionsStore
 from .scope_triggers import scope_trigger_spec, trigger_descriptors
 from .service import (
+    all_live_states,
     async_apply_scene,
     async_resolve_categories_only,
     async_resolve_only,
     async_run_scene_actions,
     async_snapshot_all,
     category_config,
+    live_state,
 )
 from .simulate import SimulatedWorld, run_simulation, simulate_inputs
 from .sorting import condition_priority
@@ -1112,6 +1115,45 @@ async def _ws_categories_delete(
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/live/subscribe"})
+@websocket_api.async_response
+async def _ws_live_subscribe(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Stream per-unit live state: a snapshot, then a delta on each change."""
+
+    @callback
+    def _forward(unit: tuple[str, str | None, str]) -> None:
+        kind, sid, cat = unit
+        matched, applied = live_state(hass, kind, sid, cat)
+        connection.send_message(
+            websocket_api.event_message(
+                msg["id"],
+                {
+                    "type": "update",
+                    "scope_kind": kind,
+                    "scope_id": sid,
+                    "category": cat,
+                    "matched": matched,
+                    "applied": applied,
+                },
+            )
+        )
+
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(
+        hass, SIGNAL_UNIT_LIVE, _forward
+    )
+    connection.send_result(msg["id"])
+    connection.send_message(
+        websocket_api.event_message(
+            msg["id"], {"type": "snapshot", "units": all_live_states(hass)}
+        )
+    )
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "ambience/traces/list",
@@ -1318,6 +1360,7 @@ _WS_HANDLERS = (
     _ws_auto_triggers_list,
     _ws_traces_list,
     _ws_traces_clear,
+    _ws_live_subscribe,
     _ws_scope_diagnostics,
     _ws_simulate_inputs,
     _ws_simulate,

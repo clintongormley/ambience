@@ -189,21 +189,17 @@ export class AmbienceScenesList extends LitElement {
       justify-content: center;
       flex: 0 0 1.5em;
     }
-    /* Fixed-width slot for the shadow warning so the title aligns whether or
-       not a row is shadowed. */
+    /* Fixed-width slot shared by the shadow/problem warning and the live dot, so
+       the scene title aligns whether or not a row has either. The warning flag
+       takes precedence; the dot shows only when there's no warning. min-height
+       keeps the dot (and flag) centred on the scene name rather than floating to
+       the top of a tall expanded row. */
     .warn-slot {
       display: inline-flex;
       align-items: center;
       justify-content: flex-start;
       flex: 0 0 1.4em;
-    }
-    /* Fixed-width slot for the live dot so the title aligns whether or not a
-       row has one. */
-    .live-slot {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex: 0 0 0.9em;
+      min-height: 1.5em;
     }
     .live-dot {
       width: 0.55em;
@@ -212,7 +208,7 @@ export class AmbienceScenesList extends LitElement {
       box-sizing: border-box;
     }
     .live-dot.matched {
-      background: var(--primary-color);
+      background: var(--success-color, #4caf50);
     }
     .live-dot.stale {
       background: transparent;
@@ -589,11 +585,19 @@ export class AmbienceScenesList extends LitElement {
     const w = this.live.get(scopeCategoryKey(this.scope, scene.category));
     if (!w) return "";
     if (w.matched === i) {
-      const label = localize(this.hass, "ui.scene_live", "Currently live");
+      const label = localize(
+        this.hass,
+        "ui.scene_live",
+        "Live now — this scene currently matches and is applied",
+      );
       return html`<span class="live-dot matched" title=${label} aria-label=${label}></span>`;
     }
     if (w.applied === i) {
-      const label = localize(this.hass, "ui.scene_applied_stale", "Applied — no longer matching");
+      const label = localize(
+        this.hass,
+        "ui.scene_applied_stale",
+        "Still applied — this scene's actions are in effect but it no longer matches",
+      );
       return html`<span class="live-dot stale" title=${label} aria-label=${label}></span>`;
     }
     return "";
@@ -680,9 +684,8 @@ export class AmbienceScenesList extends LitElement {
               >`
           }
         </span>
-        <span class="live-slot">${this._liveDot(i, scene)}</span>
         <span class="idx">${displayNum}</span>
-        <span class="warn-slot">${this._problemFlag(scene)}</span>
+        <span class="warn-slot">${this._problemFlag(scene) || this._liveDot(i, scene)}</span>
         <div class="body" @click=${() => this._toggleScene(i)}>
           <div class="name">
             ${sceneDisplayName(

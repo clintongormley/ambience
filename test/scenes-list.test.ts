@@ -1340,3 +1340,20 @@ test("shows no dots when suppressed (switch off)", async () => {
 
   expect(el.shadowRoot.querySelectorAll(".live-dot").length).toBe(0);
 });
+
+test("a scene's warning flag takes precedence over its live dot", async () => {
+  // The dot shares the warn slot with the problem flag; a scene that is both the
+  // live match AND has a problem shows the warning, not the dot.
+  const scenes = [
+    { name: "Evening", category: "g", when: {}, actions: [], missing_entities: ["light.ghost"] },
+  ] as any;
+  const el = await mount(scenes);
+  el.scope = { kind: "area", id: "a" };
+  el.live = new Map([
+    [scopeCategoryKey({ kind: "area", id: "a" }, "g"), { matched: 0, applied: 0 }],
+  ]);
+  await el.updateComplete;
+
+  expect(el.shadowRoot.querySelector("ambience-problem-flag")).not.toBeNull();
+  expect(el.shadowRoot.querySelectorAll(".live-dot").length).toBe(0);
+});

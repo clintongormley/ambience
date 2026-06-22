@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { subscribeLiveScenes } from "../frontend/src/api.js";
-import { scopeFromParts, scopeCategoryKey } from "../frontend/src/entities-for-scope.js";
+import { scopeCategoryKey, scopeFromParts } from "../frontend/src/entities-for-scope.js";
 
 describe("subscribeLiveScenes", () => {
   it("subscribes via subscribeMessage and returns its unsub", async () => {

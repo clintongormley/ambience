@@ -222,7 +222,10 @@ export class ScopeStore implements ReactiveController {
   }
 
   private _onLive(m: LiveMessage): void {
-    const apply = (target: Map<string, { matched: number | null; applied: number | null }>, u: LiveUnit) => {
+    const apply = (
+      target: Map<string, { matched: number | null; applied: number | null }>,
+      u: LiveUnit,
+    ) => {
       const key = scopeCategoryKey(scopeFromParts(u.scope_kind, u.scope_id), u.category);
       target.set(key, { matched: u.matched, applied: u.applied });
     };

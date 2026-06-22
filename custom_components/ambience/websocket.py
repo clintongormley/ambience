@@ -1142,14 +1142,10 @@ async def _ws_live_subscribe(
             )
         )
 
-    connection.subscriptions[msg["id"]] = async_dispatcher_connect(
-        hass, SIGNAL_UNIT_LIVE, _forward
-    )
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(hass, SIGNAL_UNIT_LIVE, _forward)
     connection.send_result(msg["id"])
     connection.send_message(
-        websocket_api.event_message(
-            msg["id"], {"type": "snapshot", "units": all_live_states(hass)}
-        )
+        websocket_api.event_message(msg["id"], {"type": "snapshot", "units": all_live_states(hass)})
     )
 
 

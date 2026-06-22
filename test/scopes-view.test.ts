@@ -17,29 +17,35 @@ import { AmbienceScopesView } from "../frontend/src/views/scopes-view";
 
 // Mock the api module — same shape as test/areas-list-view.test.ts but with
 // the floor + house additions.
-vi.mock("../frontend/src/api", () => ({
-  listAreas: vi.fn(),
-  getArea: vi.fn(),
-  saveArea: vi.fn(),
-  listFloors: vi.fn(),
-  getFloor: vi.fn(),
-  saveFloor: vi.fn(),
-  getHouse: vi.fn(),
-  saveHouse: vi.fn(),
-  setScopeEnabled: vi.fn(async () => ({ ok: true })),
-  listSwitches: vi.fn(async () => []),
-  listConditions: vi.fn(),
-  listExposedActions: vi.fn(),
-  listCategories: vi.fn(async () => []),
-  getServiceSchema: vi.fn(async () => ({})),
-  listPeriods: vi.fn(),
-  listLuxRanges: vi.fn(async () => ({ builtins: {}, custom: {}, hidden: [] })),
-  getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
-  getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
-  applyScenes: vi.fn(async () => ({ ok: true })),
-  runSceneActions: vi.fn(async () => ({ ran: 1, scene_name: "R" })),
-  listAutoTriggers: vi.fn(async () => ({ triggers: [], opaque: false })),
-}));
+vi.mock("../frontend/src/api", async (importActual) => {
+  const actual = await importActual<typeof import("../frontend/src/api")>();
+  return {
+    listAreas: vi.fn(),
+    getArea: vi.fn(),
+    saveArea: vi.fn(),
+    listFloors: vi.fn(),
+    getFloor: vi.fn(),
+    saveFloor: vi.fn(),
+    getHouse: vi.fn(),
+    saveHouse: vi.fn(),
+    setScopeEnabled: vi.fn(async () => ({ ok: true })),
+    listSwitches: vi.fn(async () => []),
+    listConditions: vi.fn(),
+    listExposedActions: vi.fn(),
+    listCategories: vi.fn(async () => []),
+    getServiceSchema: vi.fn(async () => ({})),
+    listPeriods: vi.fn(),
+    listLuxRanges: vi.fn(async () => ({ builtins: {}, custom: {}, hidden: [] })),
+    getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
+    getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
+    applyScenes: vi.fn(async () => ({ ok: true })),
+    runSceneActions: vi.fn(async () => ({ ran: 1, scene_name: "R" })),
+    listAutoTriggers: vi.fn(async () => ({ triggers: [], opaque: false })),
+    // Pass through the real subscribeLiveScenes so it delegates to
+    // connection.subscribeMessage, which tests can override per-case.
+    subscribeLiveScenes: actual.subscribeLiveScenes,
+  };
+});
 
 import * as api from "../frontend/src/api";
 

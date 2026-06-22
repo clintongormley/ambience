@@ -3346,6 +3346,9 @@ var Za=Object.defineProperty;var eo=Object.getOwnPropertyDescriptor;var u=(t,r,e
               <div class="scope-body">
                 <ambience-scenes-list
                   .scenes=${n.scenes}
+                  .scope=${e}
+                  .live=${this._store.live}
+                  .liveSuppressed=${this._isSwitchedOff(e)}
                   .periods=${this._store.periods}
                   .luxRanges=${this._store.luxRanges}
                   .weatherConfig=${this._store.weatherConfig}

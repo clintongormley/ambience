@@ -398,9 +398,7 @@ export type LiveUnit = {
   applied: number | null;
 };
 
-export type LiveMessage =
-  | { type: "snapshot"; units: LiveUnit[] }
-  | ({ type: "update" } & LiveUnit);
+export type LiveMessage = { type: "snapshot"; units: LiveUnit[] } | ({ type: "update" } & LiveUnit);
 
 /** Subscribe to live per-unit scene state (matched + applied). Resolves to an
  *  unsubscribe function. A no-op when the connection lacks subscribeMessage. */

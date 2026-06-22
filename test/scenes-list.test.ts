@@ -1306,8 +1306,8 @@ test("renders a solid live dot on the matched scene", async () => {
   ]);
   await el.updateComplete;
 
-  expect(el.shadowRoot.querySelectorAll(".live-dot.matched").length).toBe(1);
-  expect(el.shadowRoot.querySelectorAll(".live-dot.stale").length).toBe(0);
+  expect(el.shadowRoot.querySelectorAll('ambience-live-dot[kind="matched"]').length).toBe(1);
+  expect(el.shadowRoot.querySelectorAll('ambience-live-dot[kind="stale"]').length).toBe(0);
 });
 
 test("renders a stale dot on a diverged applied scene", async () => {
@@ -1324,8 +1324,8 @@ test("renders a stale dot on a diverged applied scene", async () => {
   await el.updateComplete;
 
   const rows = el.shadowRoot.querySelectorAll("li");
-  expect(rows[1].querySelector(".live-dot.matched")).not.toBeNull();
-  expect(rows[0].querySelector(".live-dot.stale")).not.toBeNull();
+  expect(rows[1].querySelector('ambience-live-dot[kind="matched"]')).not.toBeNull();
+  expect(rows[0].querySelector('ambience-live-dot[kind="stale"]')).not.toBeNull();
 });
 
 test("shows no dots when suppressed (switch off)", async () => {
@@ -1338,7 +1338,7 @@ test("shows no dots when suppressed (switch off)", async () => {
   el.liveSuppressed = true;
   await el.updateComplete;
 
-  expect(el.shadowRoot.querySelectorAll(".live-dot").length).toBe(0);
+  expect(el.shadowRoot.querySelectorAll("ambience-live-dot").length).toBe(0);
 });
 
 test("a scene's warning flag takes precedence over its live dot", async () => {
@@ -1355,5 +1355,5 @@ test("a scene's warning flag takes precedence over its live dot", async () => {
   await el.updateComplete;
 
   expect(el.shadowRoot.querySelector("ambience-problem-flag")).not.toBeNull();
-  expect(el.shadowRoot.querySelectorAll(".live-dot").length).toBe(0);
+  expect(el.shadowRoot.querySelectorAll("ambience-live-dot").length).toBe(0);
 });

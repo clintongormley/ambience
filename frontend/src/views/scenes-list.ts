@@ -2,6 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import "./kebab-menu";
+import "./live-dot.js";
 import type { LiveEntry } from "../api.js";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
@@ -199,20 +200,12 @@ export class AmbienceScenesList extends LitElement {
       align-items: center;
       justify-content: flex-start;
       flex: 0 0 1.4em;
-      min-height: 1.5em;
+      min-height: 1.25em;
     }
-    .live-dot {
-      width: 0.55em;
-      height: 0.55em;
-      border-radius: 50%;
-      box-sizing: border-box;
-    }
-    .live-dot.matched {
-      background: var(--success-color, #4caf50);
-    }
-    .live-dot.stale {
-      background: transparent;
-      border: 1.5px solid var(--secondary-text-color);
+    /* Nudge the live dot toward the scene name (the warning flag stays at the
+       slot's left edge). */
+    .warn-slot ambience-live-dot {
+      margin-left: 0.3em;
     }
     .pin {
       padding: 0;
@@ -590,7 +583,7 @@ export class AmbienceScenesList extends LitElement {
         "ui.scene_live",
         "Live now — this scene currently matches and is applied",
       );
-      return html`<span class="live-dot matched" title=${label} aria-label=${label}></span>`;
+      return html`<ambience-live-dot kind="matched" .label=${label}></ambience-live-dot>`;
     }
     if (w.applied === i) {
       const label = localize(
@@ -598,7 +591,7 @@ export class AmbienceScenesList extends LitElement {
         "ui.scene_applied_stale",
         "Still applied — this scene's actions are in effect but it no longer matches",
       );
-      return html`<span class="live-dot stale" title=${label} aria-label=${label}></span>`;
+      return html`<ambience-live-dot kind="stale" .label=${label}></ambience-live-dot>`;
     }
     return "";
   }

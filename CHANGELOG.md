@@ -14,6 +14,12 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   the "+ Add description" link below Scope. On the panel it appears as a "?"
   tooltip next to the scene name, and inline beneath the scene when you expand
   it.
+- Undo / redo for scene changes: the panel now keeps the last 30 scene edits in
+  memory. Use the Undo and Redo buttons at the top of the panel — or Ctrl/⌘+Z and
+  Ctrl/⌘+Shift+Z — to step back and forward through add, edit, delete, reorder,
+  unpin and enable/disable changes. Hovering a button shows which change is next.
+  The history is shared across browser tabs and clears when Home Assistant
+  restarts.
 
 ## [0.25.0] - 2026-06-22
 

@@ -616,7 +616,7 @@ export class AmbienceSceneEditor extends LitElement {
     if (open === null || open.kind !== slot.kind) return false;
     if (slot.kind === "condition" && open.kind === "condition") return slot.id === open.id;
     if (slot.kind === "action" && open.kind === "action") return slot.idx === open.idx;
-    // name / category / destination — a kind match is sufficient (single instance).
+    // name / category / destination / description — a kind match is sufficient (single instance).
     return true;
   }
 

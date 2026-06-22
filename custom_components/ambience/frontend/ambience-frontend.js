@@ -647,6 +647,10 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
     }
     .name {
       font-weight: 600;
+      /* The monospace index digit sits ~1px higher than this proportional bold
+         name in the top-aligned row; pull the name up so the name, number and
+         live dot share one line. */
+      margin-top: -1px;
     }
     .summary {
       font-size: 0.85em;

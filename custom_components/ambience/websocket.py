@@ -1175,6 +1175,96 @@ async def _ws_history_subscribe(
     connection.send_message(websocket_api.event_message(msg["id"], history.snapshot()))
 
 
+def _scope_exists(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> bool:
+    """True if an undo/redo target scope still exists. House always exists."""
+    if scope_kind == "house":
+        return True
+    if scope_kind == "area":
+        return ar.async_get(hass).async_get_area(scope_id) is not None
+    if scope_kind == "floor":
+        return fr.async_get(hass).async_get_floor(scope_id) is not None
+    return False
+
+
+async def _apply_scope_config(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None, config: dict[str, Any]
+) -> dict[str, Any]:
+    """Write a restored scenes-only snapshot straight to the store (no validation,
+    no recording). The store merges it over the existing config, so the scope's
+    `enabled` flag and switch state are preserved. Returns the full post-write
+    scope config (scenes + enabled + …) for the response."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    if scope_kind == "area":
+        await store.async_save_area(scope_id, config)
+    elif scope_kind == "floor":
+        await store.async_save_floor(scope_id, config)
+    else:
+        await store.async_save_house(config)
+    return copy.deepcopy(store.scope_config(scope_kind, scope_id))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/history/undo"})
+@websocket_api.async_response
+async def _ws_history_undo(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    history = hass.data[DOMAIN][DATA_HISTORY]
+    while history.snapshot()["can_undo"]:
+        nxt = history.snapshot()["undo"]
+        if not _scope_exists(hass, nxt["scope_kind"], nxt["scope_id"]):
+            history.discard_undo()
+            continue
+        kind, sid, config = history.undo()
+        full = await _apply_scope_config(hass, kind, sid, config)
+        history.notify_changed("undo", kind, sid)
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": True,
+                "scope_kind": kind,
+                "scope_id": sid,
+                "config": annotate_scenes(hass, full, fresh_overlap=True),
+            },
+        )
+        return
+    history.notify_changed("undo", "house", None)
+    connection.send_result(msg["id"], {"ok": False})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/history/redo"})
+@websocket_api.async_response
+async def _ws_history_redo(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    history = hass.data[DOMAIN][DATA_HISTORY]
+    while history.snapshot()["can_redo"]:
+        nxt = history.snapshot()["redo"]
+        if not _scope_exists(hass, nxt["scope_kind"], nxt["scope_id"]):
+            history.discard_redo()
+            continue
+        kind, sid, config = history.redo()
+        full = await _apply_scope_config(hass, kind, sid, config)
+        history.notify_changed("redo", kind, sid)
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": True,
+                "scope_kind": kind,
+                "scope_id": sid,
+                "config": annotate_scenes(hass, full, fresh_overlap=True),
+            },
+        )
+        return
+    history.notify_changed("redo", "house", None)
+    connection.send_result(msg["id"], {"ok": False})
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "ambience/live/subscribe"})
 @websocket_api.async_response
@@ -1418,6 +1508,8 @@ _WS_HANDLERS = (
     _ws_traces_list,
     _ws_traces_clear,
     _ws_history_subscribe,
+    _ws_history_undo,
+    _ws_history_redo,
     _ws_live_subscribe,
     _ws_scope_diagnostics,
     _ws_simulate_inputs,

@@ -13,6 +13,9 @@ export type SceneApplyMode = "once" | "always";
 
 export type Scene = {
   name?: string;
+  // Free-text, multi-line, display-only note shown in the editor and on the
+  // homepage scene list. Never affects matching/order/actions.
+  description?: string;
   // The category this scene belongs to (SceneCategory.id). Required — every scene is
   // categorised; a fresh install seeds a "General" category.
   category: string;

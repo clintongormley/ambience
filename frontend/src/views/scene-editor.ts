@@ -33,6 +33,7 @@ type OpenSlot =
   | { kind: "name" }
   | { kind: "category" }
   | { kind: "destination" }
+  | { kind: "description" }
   | { kind: "condition"; id: string }
   | { kind: "action"; idx: number }
   | null;
@@ -116,11 +117,28 @@ export class AmbienceSceneEditor extends LitElement {
     label {
       display: block; font-weight: 600; margin: 0.5rem 0 0.25rem 0;
     }
-    input, select {
+    input, select, textarea {
       width: 100%; box-sizing: border-box; padding: 0.5rem;
       border: 1px solid var(--divider-color, #ccc); border-radius: 4px;
       background: var(--card-background-color, #fff); color: inherit;
     }
+    textarea.description-input {
+      font: inherit; resize: vertical; min-height: 4rem;
+    }
+    /* Reset chrome so the description slot's expanded editor matches the
+       borderless name-slot variant. */
+    .slot.description-slot.expanded {
+      border: none; padding: 0; margin-bottom: 0.5rem;
+    }
+    /* "+ Add description" link affordance (no field chrome). */
+    .add-description-row { margin-bottom: 0.5rem; }
+    .add-description {
+      background: none; border: none; padding: 0.25rem 0;
+      color: var(--primary-color, #03a9f4);
+      cursor: pointer; font: inherit; font-size: 0.9rem; width: auto;
+    }
+    /* Read-only display preserves the description's line breaks. */
+    .summary-label.description-text { white-space: pre-wrap; }
     .slot {
       border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 4px;
@@ -451,6 +469,90 @@ export class AmbienceSceneEditor extends LitElement {
     return html`<input type="text" .value=${value} @input=${this._onNameInput} />`;
   }
 
+  // --- Description field ---
+
+  private _setDescription(v: string) {
+    if (!this._draft) return;
+    // Whitespace-only is treated as "no description" so it never persists and
+    // the UI reverts to the "+ Add description" link (mirrors the name field's
+    // `value || undefined`).
+    this._draft = { ...this._draft, description: v.trim() ? v : undefined };
+  }
+
+  private _onDescriptionInput = (e: Event) => {
+    this._setDescription((e.target as HTMLTextAreaElement).value);
+  };
+
+  /* v8 ignore start -- ha-form path (real HA only); jsdom hits the native fallback */
+  private _onDescriptionHaForm = (e: CustomEvent<{ value: { description: string } }>) => {
+    e.stopPropagation();
+    this._setDescription(e.detail.value.description ?? "");
+  };
+
+  private _renderDescriptionHaForm(value: string) {
+    const schema = [{ name: "description", selector: { text: { multiline: true } } }];
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .schema=${schema}
+        .data=${{ description: value }}
+        .computeLabel=${() => localize(this.hass, "ui.description", "Description")}
+        @value-changed=${this._onDescriptionHaForm}
+      ></ha-form>
+    `;
+  }
+  /* v8 ignore stop */
+
+  /** The multi-line editor: HA's real ha-textarea via ha-form when registered,
+   *  else a native themed textarea (the jsdom/older-HA fallback). */
+  private _renderDescriptionEditor(value: string) {
+    /* v8 ignore next 3 -- ha-form not registered in jsdom */
+    if (customElements.get("ha-form")) {
+      return this._renderDescriptionHaForm(value);
+    }
+    return html`<textarea
+      class="description-input"
+      .value=${value}
+      autofocus
+      rows="3"
+      placeholder=${localize(this.hass, "ui.description", "Description")}
+      @input=${this._onDescriptionInput}
+    ></textarea>`;
+  }
+
+  /**
+   * The description as a collapse/expand slot below Scope. Three states:
+   *  - open → the multi-line editor;
+   *  - has a value, closed → the full text shown read-only (click to edit);
+   *  - no value, closed → a small "+ Add description" link.
+   */
+  private _renderDescriptionSlot() {
+    const value = this._draft!.description ?? "";
+    if (this._isOpen({ kind: "description" })) {
+      return html`
+        <div class="slot description-slot expanded" data-slot-id="description">
+          ${this._renderDescriptionEditor(value)}
+        </div>
+      `;
+    }
+    if (value.trim()) {
+      return html`
+        <div class="slot collapsed" data-slot-id="description">
+          <div class="summary" @click=${() => this._toggleSlot({ kind: "description" })}>
+            <span class="summary-label description-text">${value}</span>
+          </div>
+        </div>
+      `;
+    }
+    return html`
+      <div class="add-description-row" data-slot-id="description">
+        <button class="add-description" @click=${() => this._toggleSlot({ kind: "description" })}>
+          ${localize(this.hass, "ui.add_description", "+ Add description")}
+        </button>
+      </div>
+    `;
+  }
+
   // --- Category field ---
 
   // A scene's category is required: the selector always has a value and there is
@@ -558,8 +660,9 @@ export class AmbienceSceneEditor extends LitElement {
    */
   private _validationError(slot: OpenSlot): string | null {
     if (slot === null) return null;
-    // Category and destination always carry a valid value.
-    if (slot.kind === "category" || slot.kind === "destination") return null;
+    // Category, destination, and description always carry a valid value.
+    if (slot.kind === "category" || slot.kind === "destination" || slot.kind === "description")
+      return null;
     if (slot.kind === "name") return this._nameError();
     if (slot.kind === "condition") {
       // People empty-selection case: an "X of:" mode (who key present) with
@@ -667,6 +770,10 @@ export class AmbienceSceneEditor extends LitElement {
       // Same reasoning for the +Add action dropdown: opening it to browse
       // options should not be treated as "leaving the current slot".
       if (node.classList.contains("add-action")) return;
+      // The "+ Add description" link is not inside a .slot; without this skip the
+      // same click that opens the description editor would immediately close it
+      // (the link's @click opens the slot, then this handler would close it).
+      if (node.classList.contains("add-description")) return;
     }
     this._tryCloseCurrent();
   }
@@ -1172,6 +1279,7 @@ export class AmbienceSceneEditor extends LitElement {
           ${this._renderNameSlot()}
           ${this._renderCategorySlot()}
           ${this._renderDestinationSlot()}
+          ${this._renderDescriptionSlot()}
 
           <h3>${localize(this.hass, "ui.when_heading", "When")}</h3>
           ${visibleConditions.map((m) => this._renderConditionRow(m))}

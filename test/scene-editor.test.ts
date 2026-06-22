@@ -2460,3 +2460,97 @@ describe("ambience-scene-editor — apply-on-every-match toggle", () => {
     expect(help.text.length).toBeGreaterThan(0);
   });
 });
+
+describe("ambience-scene-editor — description", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  const collapse = async (el: any) => {
+    // Click a non-slot element inside .modal → triggers _onModalClick close.
+    (el.shadowRoot.querySelector("h3") as HTMLElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+  };
+
+  const descSlot = (el: any) =>
+    el.shadowRoot.querySelector('[data-slot-id="description"]') as HTMLElement;
+
+  test("shows a '+ Add description' link below Scope when there is no description", async () => {
+    el = await mount({ name: "s", when: {}, actions: [] });
+    const link = el.shadowRoot.querySelector("button.add-description") as HTMLButtonElement;
+    expect(link).not.toBeNull();
+    expect(link.textContent).toContain("Add description");
+    // No editor yet.
+    expect(el.shadowRoot.querySelector("textarea.description-input")).toBeNull();
+  });
+
+  test("clicking the link opens a textarea editor", async () => {
+    el = await mount({ name: "s", when: {}, actions: [] });
+    (el.shadowRoot.querySelector("button.add-description") as HTMLButtonElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector("textarea.description-input")).not.toBeNull();
+  });
+
+  test("typing then collapsing shows the text as a read-only display", async () => {
+    el = await mount({ name: "s", when: {}, actions: [] });
+    (el.shadowRoot.querySelector("button.add-description") as HTMLButtonElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+    const ta = el.shadowRoot.querySelector("textarea.description-input") as HTMLTextAreaElement;
+    ta.value = "Line one\nLine two";
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+    await collapse(el);
+    const display = descSlot(el).querySelector(".description-text") as HTMLElement;
+    expect(display).not.toBeNull();
+    expect(display.textContent).toContain("Line one");
+    expect(display.textContent).toContain("Line two");
+    expect(el.shadowRoot.querySelector("textarea.description-input")).toBeNull();
+  });
+
+  test("clicking the read-only display re-opens the editor with the value", async () => {
+    el = await mount({ name: "s", when: {}, actions: [], description: "Hello" });
+    // Starts collapsed showing the text.
+    const display = descSlot(el).querySelector(".description-text") as HTMLElement;
+    expect(display.textContent).toContain("Hello");
+    (descSlot(el).querySelector(".summary") as HTMLElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+    const ta = el.shadowRoot.querySelector("textarea.description-input") as HTMLTextAreaElement;
+    expect(ta).not.toBeNull();
+    expect(ta.value).toBe("Hello");
+  });
+
+  test("clearing the text reverts to the '+ Add description' link", async () => {
+    el = await mount({ name: "s", when: {}, actions: [], description: "Hello" });
+    (descSlot(el).querySelector(".summary") as HTMLElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+    const ta = el.shadowRoot.querySelector("textarea.description-input") as HTMLTextAreaElement;
+    ta.value = "   ";
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+    await collapse(el);
+    expect(el.shadowRoot.querySelector("button.add-description")).not.toBeNull();
+    expect(descSlot(el).querySelector(".description-text")).toBeNull();
+  });
+
+  test("save includes a non-empty description and omits an empty one", async () => {
+    el = await mount({ name: "s", when: {}, actions: [], description: "Keep me" });
+    let saved: Scene | undefined;
+    el.addEventListener("save-scene", (e: CustomEvent) => {
+      saved = e.detail.scene;
+    });
+    const saveBtn = Array.from(el.shadowRoot.querySelectorAll("button.primary")).find(
+      (b: any) => b.textContent.trim() === "Save scene",
+    ) as HTMLButtonElement;
+    saveBtn.click();
+    expect(saved?.description).toBe("Keep me");
+  });
+});

@@ -750,11 +750,17 @@ def get_last_applied(
     return hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).get((scope_kind, scope_id, category_id))
 
 
+def _clear_scope_keys(
+    mapping: dict[tuple[str, str | None, str], Any], scope_kind: str, scope_id: str | None
+) -> None:
+    """Drop every (scope_kind, scope_id, *) entry from a per-unit mapping."""
+    for key in [k for k in mapping if k[0] == scope_kind and k[1] == scope_id]:
+        mapping.pop(key, None)
+
+
 def clear_last_applied(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> None:
     """Drop all last-applied entries for a scope (every category), e.g. on delete."""
-    la = hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
-    for key in [k for k in la if k[0] == scope_kind and k[1] == scope_id]:
-        la.pop(key, None)
+    _clear_scope_keys(hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}), scope_kind, scope_id)
 
 
 def forget_last_applied(
@@ -763,6 +769,29 @@ def forget_last_applied(
     """Drop one (scope, category)'s last-applied record, e.g. on a no-match, so the
     next match re-applies even when it resolves to the same scene as before."""
     hass.data[DOMAIN].get(DATA_LAST_APPLIED, {}).pop((scope_kind, scope_id, category_id), None)
+
+
+def _set_live_field(
+    hass: HomeAssistant,
+    data_key: str,
+    scope_kind: str,
+    scope_id: str | None,
+    category_id: str,
+    value: int | None,
+) -> None:
+    """Write a per-unit live-state field, firing SIGNAL_UNIT_LIVE only when the
+    stored value actually changes. Shared by set_last_matched /
+    set_last_applied_scene. Avoids `setdefault`'s throwaway `{}` on the hot path
+    (this runs on every unit evaluation)."""
+    domain_data = hass.data[DOMAIN]
+    store = domain_data.get(data_key)
+    if store is None:
+        store = domain_data[data_key] = {}
+    key = (scope_kind, scope_id, category_id)
+    if store.get(key, _UNSET) == value:
+        return
+    store[key] = value
+    async_dispatcher_send(hass, SIGNAL_UNIT_LIVE, key)
 
 
 def set_last_matched(
@@ -774,12 +803,7 @@ def set_last_matched(
 ) -> None:
     """Record this (scope, category)'s currently matched scene index (None = no
     match). Fires SIGNAL_UNIT_LIVE only when the stored value actually changes."""
-    store = hass.data[DOMAIN].setdefault(DATA_LAST_MATCHED, {})
-    key = (scope_kind, scope_id, category_id)
-    if store.get(key, _UNSET) == index:
-        return
-    store[key] = index
-    async_dispatcher_send(hass, SIGNAL_UNIT_LIVE, key)
+    _set_live_field(hass, DATA_LAST_MATCHED, scope_kind, scope_id, category_id, index)
 
 
 def get_last_matched(
@@ -799,12 +823,7 @@ def set_last_applied_scene(
     """Record the scene index whose actions were just executed for this (scope,
     category) — the sticky 'what's physically set' value. Fires SIGNAL_UNIT_LIVE
     only when it changes. Never cleared on a no-match."""
-    store = hass.data[DOMAIN].setdefault(DATA_LAST_APPLIED_SCENE, {})
-    key = (scope_kind, scope_id, category_id)
-    if store.get(key, _UNSET) == index:
-        return
-    store[key] = index
-    async_dispatcher_send(hass, SIGNAL_UNIT_LIVE, key)
+    _set_live_field(hass, DATA_LAST_APPLIED_SCENE, scope_kind, scope_id, category_id, index)
 
 
 def get_last_applied_scene(
@@ -849,6 +868,4 @@ def all_live_states(hass: HomeAssistant) -> list[dict[str, Any]]:
 def clear_live_state(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> None:
     """Drop a scope's live-state entries (every category), e.g. on scope delete."""
     for data_key in (DATA_LAST_MATCHED, DATA_LAST_APPLIED_SCENE):
-        store = hass.data[DOMAIN].get(data_key, {})
-        for key in [k for k in store if k[0] == scope_kind and k[1] == scope_id]:
-            store.pop(key, None)
+        _clear_scope_keys(hass.data[DOMAIN].get(data_key, {}), scope_kind, scope_id)

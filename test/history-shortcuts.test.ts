@@ -51,4 +51,18 @@ describe("AmbienceScopesView undo/redo shortcuts", () => {
     el._onKeyDown(key({ key: "z", ctrlKey: true }));
     expect(undo).not.toHaveBeenCalled();
   });
+  it("ignores a shadow-DOM input where the real target is only in composedPath", () => {
+    // A window keydown re-targets e.target to the shadow host; the real focused
+    // input is composedPath()[0]. Typing Ctrl+Z in a modal input must NOT undo.
+    const { el, undo } = makeView();
+    const e = {
+      key: "z",
+      ctrlKey: true,
+      preventDefault: vi.fn(),
+      target: { tagName: "AMBIENCE-SIMULATOR-MODAL" }, // re-targeted host
+      composedPath: () => [{ tagName: "INPUT" }],
+    } as unknown as KeyboardEvent;
+    el._onKeyDown(e);
+    expect(undo).not.toHaveBeenCalled();
+  });
 });

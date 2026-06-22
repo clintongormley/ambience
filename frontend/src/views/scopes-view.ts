@@ -312,7 +312,12 @@ export class AmbienceScopesView extends LitElement {
 
   private _onKeyDown = (e: KeyboardEvent): void => {
     if (this._editing !== null) return; // scene editor modal open
-    const t = e.target as HTMLElement | null;
+    // A window-level keydown re-targets `e.target` to the shadow host, so an
+    // input inside a shadow root (e.g. the simulator/traces modals on this page)
+    // would look like the host element. composedPath()[0] is the real focused
+    // element across shadow boundaries; fall back to e.target where unavailable.
+    const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+    const t = (path[0] ?? e.target) as HTMLElement | null;
     const tag = t?.tagName?.toLowerCase();
     if (tag === "input" || tag === "textarea" || t?.isContentEditable) return;
     if (e.key.toLowerCase() !== "z" || !(e.ctrlKey || e.metaKey)) return;

@@ -52,10 +52,16 @@ export class AmbienceHelp extends LitElement {
       white-space: normal;
       text-align: left;
     }
+    .popover.multiline {
+      white-space: pre-wrap;
+    }
   `;
 
   @property({ attribute: false }) hass: HassLike | undefined;
   @property() text = "";
+  /** When true, the popover preserves line breaks (white-space: pre-wrap) so a
+   *  multi-line value (e.g. a scene description) renders with its newlines. */
+  @property({ type: Boolean }) multiline = false;
   @state() private _open = false;
 
   private _onDocClick = (e: MouseEvent): void => {
@@ -108,7 +114,11 @@ export class AmbienceHelp extends LitElement {
       </button>
       ${
         this._open
-          ? html`<div class="popover" role="dialog" data-test="help-popover">
+          ? html`<div
+              class="popover${this.multiline ? " multiline" : ""}"
+              role="dialog"
+              data-test="help-popover"
+            >
             <slot>${this.text}</slot>
           </div>`
           : ""

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "../frontend/src/views/ambience-help";
 
-async function mount(text = "Helpful explanation") {
+async function mount(text = "Helpful explanation", multiline = false) {
   const el = document.createElement("ambience-help") as any;
   el.text = text;
+  el.multiline = multiline;
   document.body.appendChild(el);
   await el.updateComplete;
   return el;
@@ -63,5 +64,21 @@ describe("ambience-help", () => {
     elsewhere.click(); // bubble is stopped at `modal`, but capture still reaches document
     await el.updateComplete;
     expect(el.shadowRoot.querySelector('[data-test="help-popover"]')).toBeNull();
+  });
+
+  it("marks the popover multiline when the multiline property is set", async () => {
+    const el = await mount("Line one\nLine two", true);
+    el.shadowRoot.querySelector('[data-test="help-trigger"]').click();
+    await el.updateComplete;
+    const pop = el.shadowRoot.querySelector('[data-test="help-popover"]') as HTMLElement;
+    expect(pop.classList.contains("multiline")).toBe(true);
+  });
+
+  it("does not mark the popover multiline by default", async () => {
+    const el = await mount();
+    el.shadowRoot.querySelector('[data-test="help-trigger"]').click();
+    await el.updateComplete;
+    const pop = el.shadowRoot.querySelector('[data-test="help-popover"]') as HTMLElement;
+    expect(pop.classList.contains("multiline")).toBe(false);
   });
 });

@@ -7,6 +7,12 @@ export function scopeKey(scope: Scope): string {
   return scope.kind === "house" ? "house" : `${scope.kind}:${scope.id}`;
 }
 
+/** Rebuild a Scope from the backend's (scope_kind, scope_id) parts. A null id
+ *  means the house scope. Inverse of scopeKey for keying the live-state map. */
+export function scopeFromParts(kind: string, id: string | null): Scope {
+  return id == null ? { kind: "house" } : { kind: kind as "area" | "floor", id };
+}
+
 /** Join a scope's identity with a sub-key using a NUL separator. NUL can't
  *  appear in a scope id, category id, or scene category, so the parts never
  *  collide. Single-sources the separator for the composite keys below. */

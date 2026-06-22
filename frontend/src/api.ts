@@ -390,6 +390,30 @@ export async function clearTraces(hass: HassConnection): Promise<void> {
   await hass.callWS({ type: "ambience/traces/clear" });
 }
 
+export type LiveUnit = {
+  scope_kind: string;
+  scope_id: string | null;
+  category: string;
+  matched: number | null;
+  applied: number | null;
+};
+
+export type LiveMessage =
+  | { type: "snapshot"; units: LiveUnit[] }
+  | ({ type: "update" } & LiveUnit);
+
+/** Subscribe to live per-unit scene state (matched + applied). Resolves to an
+ *  unsubscribe function. A no-op when the connection lacks subscribeMessage. */
+export async function subscribeLiveScenes(
+  hass: HassConnection,
+  onMessage: (msg: LiveMessage) => void,
+): Promise<() => void> {
+  const conn = hass.connection;
+  if (!conn.subscribeMessage) return () => {};
+  // Call as a method on `conn` — HA's subscribeMessage relies on `this`.
+  return conn.subscribeMessage<LiveMessage>(onMessage, { type: "ambience/live/subscribe" });
+}
+
 export async function downloadScopeDiagnostics(
   hass: HassConnection,
   scope: { scope_kind: string; scope_id: string | null },

@@ -123,7 +123,7 @@ def test_discard_redo_drops(hass):
     assert h.snapshot()["can_redo"] is False
 
 
-def test_notify_changed_fires_signal_with_snapshot_payload(hass):
+def test_notify_changed_fires_signal_with_op_and_scope(hass):
     h = ChangeHistory(hass)
     h.record("area", "a", _cfg(), _cfg("A"), ADD)
     received: list = []

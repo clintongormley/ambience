@@ -9,6 +9,7 @@ interpret the change to reverse it.
 from __future__ import annotations
 
 import copy
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -45,8 +46,8 @@ class ChangeHistory:
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
-        self._undo: list[HistoryEntry] = []
-        self._redo: list[HistoryEntry] = []
+        self._undo: deque[HistoryEntry] = deque(maxlen=HISTORY_LIMIT)
+        self._redo: deque[HistoryEntry] = deque()
 
     def record(
         self,
@@ -64,8 +65,6 @@ class ChangeHistory:
             return False
         self._undo.append(HistoryEntry(scope_kind, scope_id, before_n, after_n, dict(change)))
         self._redo.clear()
-        if len(self._undo) > HISTORY_LIMIT:
-            self._undo.pop(0)
         return True
 
     def undo(self) -> tuple[str, str | None, dict[str, Any]] | None:

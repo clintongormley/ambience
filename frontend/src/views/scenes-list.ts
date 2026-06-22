@@ -1,6 +1,7 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
+import "./ambience-help.js";
 import "./kebab-menu";
 import "./live-dot.js";
 import type { LiveEntry } from "../api.js";
@@ -128,6 +129,11 @@ export class AmbienceScenesList extends LitElement {
       border-left: 2px solid var(--divider-color, #e0e0e0);
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
+    }
+    .scene-description {
+      white-space: pre-wrap;
+      color: var(--secondary-text-color, #888);
+      margin-bottom: 0.5rem;
     }
     .condition-line {
       padding: 0.05rem 0;
@@ -689,6 +695,15 @@ export class AmbienceScenesList extends LitElement {
               scene,
               localize(this.hass, "ui.scene_n", "Scene {n}").replace("{n}", String(displayNum)),
             )}
+            ${
+              scene.description?.trim()
+                ? html`<ambience-help
+                    .hass=${this.hass}
+                    multiline
+                    .text=${scene.description}
+                  ></ambience-help>`
+                : ""
+            }
           </div>
           <div class="summary">
             ${
@@ -713,6 +728,11 @@ export class AmbienceScenesList extends LitElement {
             this._expanded.has(i)
               ? html`
                 <div class="scene-detail">
+                  ${
+                    scene.description?.trim()
+                      ? html`<div class="scene-description">${scene.description}</div>`
+                      : ""
+                  }
                   ${this._whenStacked(scene)}
                   ${
                     scene.actions.length === 0

@@ -1357,3 +1357,51 @@ test("a scene's warning flag takes precedence over its live dot", async () => {
   expect(el.shadowRoot.querySelector("ambience-problem-flag")).not.toBeNull();
   expect(el.shadowRoot.querySelectorAll("ambience-live-dot").length).toBe(0);
 });
+
+describe("ambience-scenes-list — description", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  const describedScene: Scene = {
+    name: "Described",
+    description: "Evening lights.\nWarm + dim.",
+    when: { mode: "movie" },
+    actions: [{ service: "light.turn_on", entity_ids: ["light.lamp"], params: {} }],
+  };
+  const plainScene: Scene = {
+    name: "Plain",
+    when: { mode: "movie" },
+    actions: [{ service: "light.turn_on", entity_ids: ["light.lamp"], params: {} }],
+  };
+
+  test("renders a (?) help next to the name only when a description exists", async () => {
+    el = await mount([describedScene]);
+    const name = el.shadowRoot.querySelector(".name") as HTMLElement;
+    expect(name.querySelector("ambience-help")).not.toBeNull();
+
+    el.remove();
+    el = await mount([plainScene]);
+    const name2 = el.shadowRoot.querySelector(".name") as HTMLElement;
+    expect(name2.querySelector("ambience-help")).toBeNull();
+  });
+
+  test("clicking the (?) does not expand the row", async () => {
+    el = await mount([describedScene]);
+    const help: any = el.shadowRoot.querySelector(".name ambience-help");
+    (help.shadowRoot.querySelector('[data-test="help-trigger"]') as HTMLButtonElement).click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".scene-detail")).toBeFalsy();
+    expect(help.shadowRoot.querySelector('[data-test="help-popover"]')).not.toBeNull();
+  });
+
+  test("shows the description inline when the row is expanded", async () => {
+    el = await mount([describedScene]);
+    expect(el.shadowRoot.querySelector(".scene-description")).toBeFalsy();
+    (el.shadowRoot.querySelector(".name") as HTMLElement).click();
+    await el.updateComplete;
+    const inline = el.shadowRoot.querySelector(".scene-description") as HTMLElement;
+    expect(inline).not.toBeNull();
+    expect(inline.textContent).toContain("Evening lights.");
+    expect(inline.textContent).toContain("Warm + dim.");
+  });
+});

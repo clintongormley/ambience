@@ -55,4 +55,21 @@ describe("ScopeStore history state", () => {
     expect(store.canUndo).toBe(true);
     expect(store.undoAction?.action).toBe("delete");
   });
+
+  it("a record snapshot with a changed_scope does NOT call reloadScope", () => {
+    const { store } = makeStore();
+    const spy = vi.spyOn(store as any, "reloadScope").mockResolvedValue(undefined);
+    (store as any)._onHistory({
+      op: "record",
+      can_undo: true,
+      can_redo: false,
+      undo: { action: "delete", scene_name: "X", scope_kind: "area", scope_id: "a" },
+      redo: null,
+      undo_count: 1,
+      redo_count: 0,
+      changed_scope: { scope_kind: "area", scope_id: "a" },
+    });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
 });

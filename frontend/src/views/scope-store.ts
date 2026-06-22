@@ -538,6 +538,7 @@ export class ScopeStore implements ReactiveController {
   }
 
   async undo(): Promise<void> {
+    this.error = "";
     try {
       this._applyHistoryResult(await undoChange(this._hass));
     } catch (e) {
@@ -546,6 +547,7 @@ export class ScopeStore implements ReactiveController {
   }
 
   async redo(): Promise<void> {
+    this.error = "";
     try {
       this._applyHistoryResult(await redoChange(this._hass));
     } catch (e) {

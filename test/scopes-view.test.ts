@@ -45,6 +45,9 @@ vi.mock("../frontend/src/api", async (importActual) => {
     // Pass through the real subscribeLiveScenes so it delegates to
     // connection.subscribeMessage, which tests can override per-case.
     subscribeLiveScenes: actual.subscribeLiveScenes,
+    subscribeHistory: actual.subscribeHistory,
+    undoChange: actual.undoChange,
+    redoChange: actual.redoChange,
   };
 });
 
@@ -312,6 +315,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: [{ name: "New scene", when: {}, actions: [] }],
       }),
+      undefined,
     );
     expect(api.saveFloor).not.toHaveBeenCalled();
     expect(api.saveHouse).not.toHaveBeenCalled();
@@ -329,6 +333,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: [{ name: "New scene", when: {}, actions: [] }],
       }),
+      undefined,
     );
     expect(api.saveArea).not.toHaveBeenCalled();
     expect(api.saveHouse).not.toHaveBeenCalled();
@@ -342,6 +347,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: [{ name: "New scene", when: {}, actions: [] }],
       }),
+      undefined,
     );
     expect(api.saveArea).not.toHaveBeenCalled();
     expect(api.saveFloor).not.toHaveBeenCalled();
@@ -453,12 +459,14 @@ describe("ambience-scopes-view", () => {
       expect.anything(),
       "bedroom",
       expect.objectContaining({ scenes: [expect.objectContaining({ name: "R" })] }),
+      undefined,
     );
     // ...and removed from living_room.
     expect(api.saveArea).toHaveBeenCalledWith(
       expect.anything(),
       "living_room",
       expect.objectContaining({ scenes: [] }),
+      undefined,
     );
   });
 
@@ -637,6 +645,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: [{ name: "Scene B", when: {}, actions: [] }],
       }),
+      undefined,
     );
   });
 
@@ -1945,6 +1954,7 @@ describe("ambience-scopes-view", () => {
       expect.anything(),
       "living_room",
       expect.objectContaining({ scenes: [expect.objectContaining({ name: "R", enabled: false })] }),
+      undefined,
     );
   });
 
@@ -2009,6 +2019,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: [expect.objectContaining({ name: "Pinned", pinned: false })],
       }),
+      undefined,
     );
   });
 
@@ -2242,6 +2253,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: expect.arrayContaining([expect.objectContaining({ name: "Renamed" })]),
       }),
+      undefined,
     );
   });
 
@@ -2745,7 +2757,7 @@ describe("ambience-scopes-view", () => {
     );
     await new Promise((r) => setTimeout(r, 0));
     // bedroom was saved...
-    expect(api.saveArea).toHaveBeenCalledWith(expect.anything(), "bedroom", expect.anything());
+    expect(api.saveArea).toHaveBeenCalledWith(expect.anything(), "bedroom", expect.anything(), undefined);
     // ...but NOT living_room (no removal since isNew)
     const livingRoomCalls = vi
       .mocked(api.saveArea)

@@ -1,9 +1,12 @@
 import type { ReactiveController, ReactiveControllerHost } from "lit";
 import type {
   AreaRegistryEvent,
+  ChangeDescriptor,
   EntityRegistryEvent,
   FloorRegistryEvent,
   HassConnection,
+  HistoryAction,
+  HistorySnapshot,
   LiveEntry,
   LiveMessage,
   LiveUnit,
@@ -23,10 +26,13 @@ import {
   listLuxRanges,
   listPeriods,
   listSwitches,
+  redoChange,
   saveArea,
   saveFloor,
   saveHouse,
+  subscribeHistory,
   subscribeLiveScenes,
+  undoChange,
 } from "../api.js";
 import { scopeCategoryKey, scopeFromParts, scopeKey } from "../entities-for-scope.js";
 import { localizeWsError } from "../i18n.js";
@@ -124,11 +130,18 @@ export class ScopeStore implements ReactiveController {
   // banner. Assigning via the host (e.g. from its own api calls) re-renders too.
   @tracked() error = "";
 
+  // Undo/redo toolbar state, fed by ambience/history/subscribe.
+  @tracked() canUndo = false;
+  @tracked() canRedo = false;
+  @tracked() undoAction: HistoryAction | null = null;
+  @tracked() redoAction: HistoryAction | null = null;
+
   // Registry-event unsubscribers, set once subscribe() resolves.
   private _unsubArea?: () => void;
   private _unsubFloor?: () => void;
   private _unsubEntity?: () => void;
   private _unsubLive?: () => void;
+  private _unsubHistory?: () => void;
   // 1s tick that drives the live pause countdown while any scope switch is off.
   private _tick?: ReturnType<typeof setInterval>;
 
@@ -168,6 +181,8 @@ export class ScopeStore implements ReactiveController {
     this._unsubEntity = undefined;
     this._unsubLive?.();
     this._unsubLive = undefined;
+    this._unsubHistory?.();
+    this._unsubHistory = undefined;
   }
 
   /**
@@ -203,22 +218,26 @@ export class ScopeStore implements ReactiveController {
       }
     }, "entity_registry_updated");
     const subLive = subscribeLiveScenes(this._hass, (m) => this._onLive(m));
-    const [unsubArea, unsubFloor, unsubEntity, unsubLive] = await Promise.all([
+    const subHistory = subscribeHistory(this._hass, (s) => this._onHistory(s));
+    const [unsubArea, unsubFloor, unsubEntity, unsubLive, unsubHistory] = await Promise.all([
       subArea,
       subFloor,
       subEntity,
       subLive,
+      subHistory,
     ]);
     if (this._host.isConnected) {
       this._unsubArea = unsubArea;
       this._unsubFloor = unsubFloor;
       this._unsubEntity = unsubEntity;
       this._unsubLive = unsubLive;
+      this._unsubHistory = unsubHistory;
     } else {
       unsubArea();
       unsubFloor();
       unsubEntity();
       unsubLive();
+      unsubHistory();
     }
   }
 
@@ -473,15 +492,15 @@ export class ScopeStore implements ReactiveController {
    * @returns `true` if the save succeeded, `false` if it errored (in which case
    *   the optimistic update has been reverted and `error` set).
    */
-  async mutate(scope: Scope, next: ScopeConfig): Promise<boolean> {
+  async mutate(scope: Scope, next: ScopeConfig, change?: ChangeDescriptor): Promise<boolean> {
     const prev = this.getConfig(scope);
     this.setConfig(scope, next);
     this.error = "";
     try {
       let result: { ok: true; config: ScopeConfig };
-      if (scope.kind === "house") result = await saveHouse(this._hass, next);
-      else if (scope.kind === "area") result = await saveArea(this._hass, scope.id, next);
-      else result = await saveFloor(this._hass, scope.id, next);
+      if (scope.kind === "house") result = await saveHouse(this._hass, next, change);
+      else if (scope.kind === "area") result = await saveArea(this._hass, scope.id, next, change);
+      else result = await saveFloor(this._hass, scope.id, next, change);
       this.setConfig(scope, normalizeConfig(result.config));
       return true;
     } catch (e) {
@@ -503,6 +522,48 @@ export class ScopeStore implements ReactiveController {
       this.setConfig(scope, cfg);
     } catch (e) {
       this.error = localizeWsError(this._hass, e);
+    }
+  }
+
+  /** Apply an undo/redo result: write the restored config into the affected
+   *  scope's cache so the on-screen list reflects it immediately. */
+  private _applyHistoryResult(r: {
+    ok: boolean;
+    scope_kind?: string;
+    scope_id?: string | null;
+    config?: ScopeConfig;
+  }): void {
+    if (!r.ok || !r.config || r.scope_kind === undefined) return;
+    this.setConfig(scopeFromParts(r.scope_kind, r.scope_id ?? null), normalizeConfig(r.config));
+  }
+
+  async undo(): Promise<void> {
+    try {
+      this._applyHistoryResult(await undoChange(this._hass));
+    } catch (e) {
+      this.error = localizeWsError(this._hass, e);
+    }
+  }
+
+  async redo(): Promise<void> {
+    try {
+      this._applyHistoryResult(await redoChange(this._hass));
+    } catch (e) {
+      this.error = localizeWsError(this._hass, e);
+    }
+  }
+
+  /** Handle a pushed history snapshot: update toolbar flags, and on a remote
+   *  undo/redo reload the affected scope so other tabs' lists stay correct. */
+  private _onHistory(snap: HistorySnapshot): void {
+    this.canUndo = snap.can_undo;
+    this.canRedo = snap.can_redo;
+    this.undoAction = snap.undo;
+    this.redoAction = snap.redo;
+    if ((snap.op === "undo" || snap.op === "redo") && snap.changed_scope) {
+      void this.reloadScope(
+        scopeFromParts(snap.changed_scope.scope_kind, snap.changed_scope.scope_id),
+      );
     }
   }
 }

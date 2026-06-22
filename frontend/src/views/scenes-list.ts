@@ -96,6 +96,15 @@ export class AmbienceScenesList extends LitElement {
     }
     .body {
       flex: 1;
+      /* A flex item won't shrink below its content's intrinsic width unless
+         min-width is overridden — without this, a long unbreakable token in the
+         summary (e.g. an entity id like binary_sensor.bathroom_1_shower_presence)
+         forces the body wider than the card, pushing the toggle + kebab off the
+         right edge. overflow-wrap lets those tokens break so the text wraps
+         inside the card instead of overflowing (it inherits to .name, .summary
+         and the expanded detail below). */
+      min-width: 0;
+      overflow-wrap: anywhere;
       cursor: pointer;
     }
     .name {

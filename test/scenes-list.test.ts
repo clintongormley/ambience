@@ -1404,4 +1404,16 @@ describe("ambience-scenes-list — description", () => {
     expect(inline.textContent).toContain("Evening lights.");
     expect(inline.textContent).toContain("Warm + dim.");
   });
+
+  test("hides the (?) help when expanded (the description shows inline instead)", async () => {
+    el = await mount([describedScene]);
+    // Collapsed: the (?) is shown next to the name.
+    expect(el.shadowRoot.querySelector(".name ambience-help")).not.toBeNull();
+    // Expand the row.
+    (el.shadowRoot.querySelector(".name") as HTMLElement).click();
+    await el.updateComplete;
+    // Expanded: the (?) is gone; the inline description takes over.
+    expect(el.shadowRoot.querySelector(".name ambience-help")).toBeNull();
+    expect(el.shadowRoot.querySelector(".scene-description")).not.toBeNull();
+  });
 });

@@ -81,4 +81,15 @@ describe("ambience-help", () => {
     const pop = el.shadowRoot.querySelector('[data-test="help-popover"]') as HTMLElement;
     expect(pop.classList.contains("multiline")).toBe(false);
   });
+
+  it("renders the text with no surrounding structural whitespace", async () => {
+    // Under `multiline` the popover is pre-wrap, so any newline/indentation the
+    // Lit template puts around the slotted text would render as a visible
+    // leading offset. The popover's text content must be exactly the value.
+    const el = await mount("Line one\nLine two", true);
+    el.shadowRoot.querySelector('[data-test="help-trigger"]').click();
+    await el.updateComplete;
+    const pop = el.shadowRoot.querySelector('[data-test="help-popover"]') as HTMLElement;
+    expect(pop.textContent).toBe("Line one\nLine two");
+  });
 });

@@ -278,9 +278,7 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
               class="popover${this.multiline?" multiline":""}"
               role="dialog"
               data-test="help-popover"
-            >
-            <slot>${this.text}</slot>
-          </div>`:""}
+            ><slot>${this.text}</slot></div>`:""}
     `}};xe.styles=y`
     :host {
       position: relative;
@@ -296,8 +294,10 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
       width: 1.15em;
       height: 1.15em;
       border-radius: 50%;
-      border: 1px solid var(--secondary-text-color, #888);
-      color: var(--secondary-text-color, #888);
+      /* Colour is overridable via --ambience-help-trigger-color so a caller can
+         darken the "?" to match adjacent text; defaults to the muted grey. */
+      border: 1px solid var(--ambience-help-trigger-color, var(--secondary-text-color, #888));
+      color: var(--ambience-help-trigger-color, var(--secondary-text-color, #888));
       font-size: 0.8em;
       font-weight: 700;
       line-height: 1;
@@ -554,7 +554,8 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
         <div class="body" @click=${()=>this._toggleScene(e)}>
           <div class="name">
             ${Mi(i,o(this.hass,"ui.scene_n","Scene {n}").replace("{n}",String(n)))}
-            ${i.description?.trim()?d`<ambience-help
+            ${i.description?.trim()&&!this._expanded.has(e)?d`<ambience-help
+                    class="name-help"
                     .hass=${this.hass}
                     multiline
                     .text=${i.description}
@@ -721,6 +722,17 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
     }
     .name {
       font-weight: 600;
+    }
+    /* The description "?" next to the scene name. */
+    .name-help {
+      /* Darker "?" so it reads against the bold (near-black) name rather than
+         the muted grey the trigger defaults to. */
+      --ambience-help-trigger-color: var(--primary-text-color, #212121);
+      /* A space of breathing room from the name, and a small upward nudge so
+         the circle sits centred on the capitals instead of a touch low. */
+      margin-left: 0.35rem;
+      position: relative;
+      top: -0.08em;
     }
     .summary {
       font-size: 0.85em;

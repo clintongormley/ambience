@@ -23,8 +23,10 @@ export class AmbienceHelp extends LitElement {
       width: 1.15em;
       height: 1.15em;
       border-radius: 50%;
-      border: 1px solid var(--secondary-text-color, #888);
-      color: var(--secondary-text-color, #888);
+      /* Colour is overridable via --ambience-help-trigger-color so a caller can
+         darken the "?" to match adjacent text; defaults to the muted grey. */
+      border: 1px solid var(--ambience-help-trigger-color, var(--secondary-text-color, #888));
+      color: var(--ambience-help-trigger-color, var(--secondary-text-color, #888));
       font-size: 0.8em;
       font-weight: 700;
       line-height: 1;
@@ -114,13 +116,15 @@ export class AmbienceHelp extends LitElement {
       </button>
       ${
         this._open
-          ? html`<div
+          ? // The slot is kept tight against the popover's tags — no newline or
+            // indentation inside the element — so that under `multiline`
+            // (white-space: pre-wrap) the template's own whitespace isn't
+            // rendered as a leading offset before the text.
+            html`<div
               class="popover${this.multiline ? " multiline" : ""}"
               role="dialog"
               data-test="help-popover"
-            >
-            <slot>${this.text}</slot>
-          </div>`
+            ><slot>${this.text}</slot></div>`
           : ""
       }
     `;

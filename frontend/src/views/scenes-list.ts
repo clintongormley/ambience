@@ -119,6 +119,17 @@ export class AmbienceScenesList extends LitElement {
     .name {
       font-weight: 600;
     }
+    /* The description "?" next to the scene name. */
+    .name-help {
+      /* Darker "?" so it reads against the bold (near-black) name rather than
+         the muted grey the trigger defaults to. */
+      --ambience-help-trigger-color: var(--primary-text-color, #212121);
+      /* A space of breathing room from the name, and a small upward nudge so
+         the circle sits centred on the capitals instead of a touch low. */
+      margin-left: 0.35rem;
+      position: relative;
+      top: -0.08em;
+    }
     .summary {
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
@@ -696,8 +707,12 @@ export class AmbienceScenesList extends LitElement {
               localize(this.hass, "ui.scene_n", "Scene {n}").replace("{n}", String(displayNum)),
             )}
             ${
-              scene.description?.trim()
+              // The (?) is the collapsed-row affordance for the description;
+              // when the row is expanded the description is shown inline below,
+              // so the tooltip would be redundant — hide it.
+              scene.description?.trim() && !this._expanded.has(i)
                 ? html`<ambience-help
+                    class="name-help"
                     .hass=${this.hass}
                     multiline
                     .text=${scene.description}

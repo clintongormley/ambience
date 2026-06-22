@@ -253,6 +253,11 @@ export class AmbienceScopesView extends LitElement {
       }
       .scope-name {
         flex: 1;
+        /* Same flex idiom as scenes-list .body: let the name shrink below its
+           intrinsic width and break a long unbreakable scope name, so it can't
+           force the header wider than the card and push the switch/kebab out. */
+        min-width: 0;
+        overflow-wrap: anywhere;
         text-align: left;
         font-weight: 600;
       }

@@ -8,6 +8,12 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- Long scene conditions and scope names now wrap inside the card on narrow and
+  mobile screens, instead of overflowing and pushing the toggle and menu off the
+  right edge.
+
 ## [0.24.0] - 2026-06-21
 
 ### Fixed

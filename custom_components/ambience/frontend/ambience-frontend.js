@@ -579,6 +579,15 @@ var Ja=Object.defineProperty;var Xa=Object.getOwnPropertyDescriptor;var u=(t,r,e
     }
     .body {
       flex: 1;
+      /* A flex item won't shrink below its content's intrinsic width unless
+         min-width is overridden — without this, a long unbreakable token in the
+         summary (e.g. an entity id like binary_sensor.bathroom_1_shower_presence)
+         forces the body wider than the card, pushing the toggle + kebab off the
+         right edge. overflow-wrap lets those tokens break so the text wraps
+         inside the card instead of overflowing (it inherits to .name, .summary
+         and the expanded detail below). */
+      min-width: 0;
+      overflow-wrap: anywhere;
       cursor: pointer;
     }
     .name {
@@ -3536,6 +3545,11 @@ var Ja=Object.defineProperty;var Xa=Object.getOwnPropertyDescriptor;var u=(t,r,e
       }
       .scope-name {
         flex: 1;
+        /* Same flex idiom as scenes-list .body: let the name shrink below its
+           intrinsic width and break a long unbreakable scope name, so it can't
+           force the header wider than the card and push the switch/kebab out. */
+        min-width: 0;
+        overflow-wrap: anywhere;
         text-align: left;
         font-weight: 600;
       }

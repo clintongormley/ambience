@@ -522,7 +522,11 @@ export class AmbienceScopesView extends LitElement {
     const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const scenes = cfg.scenes.filter((_, i) => i !== e.detail.index);
-    void this._store.mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(
+      scope,
+      { ...cfg, scenes },
+      { action: "delete", scene_name: cfg.scenes[e.detail.index]?.name ?? null },
+    );
   }
 
   private _reorderScenes(scope: Scope, e: CustomEvent<{ from: number; to: number }>) {
@@ -553,14 +557,22 @@ export class AmbienceScopesView extends LitElement {
       cfg.scenes.filter((r) => r.category === moved.category),
     );
     scenes[to] = { ...moved, priority, pinned: true };
-    void this._store.mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(
+      scope,
+      { ...cfg, scenes },
+      { action: "reorder", scene_name: moved.name ?? null },
+    );
   }
 
   private _unpinScene(scope: Scope, e: CustomEvent<{ index: number }>) {
     const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const scenes = cfg.scenes.map((r, i) => (i === e.detail.index ? { ...r, pinned: false } : r));
-    void this._store.mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(
+      scope,
+      { ...cfg, scenes },
+      { action: "unpin", scene_name: cfg.scenes[e.detail.index]?.name ?? null },
+    );
   }
 
   private _toggleSceneEnabled(scope: Scope, e: CustomEvent<{ index: number; enabled: boolean }>) {
@@ -577,7 +589,11 @@ export class AmbienceScopesView extends LitElement {
       }
       return { ...r, enabled: false };
     });
-    void this._store.mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(
+      scope,
+      { ...cfg, scenes },
+      { action: "toggle", scene_name: cfg.scenes[e.detail.index]?.name ?? null },
+    );
   }
 
   private async _saveScene(e: CustomEvent<{ scene: Scene; scope: Scope }>) {
@@ -600,7 +616,17 @@ export class AmbienceScopesView extends LitElement {
         else scenes[editing.index] = scene;
         // Close the editor only on success; on failure keep it open with the
         // draft intact and show why the save was rejected.
-        if (await this._store.mutate(target, { ...cfg, scenes })) this._editing = null;
+        if (
+          await this._store.mutate(
+            target,
+            { ...cfg, scenes },
+            {
+              action: editing.isNew ? "add" : "edit",
+              scene_name: scene.name ?? null,
+            },
+          )
+        )
+          this._editing = null;
         else this._sceneEditorError = this._takeError();
         return;
       }
@@ -610,10 +636,11 @@ export class AmbienceScopesView extends LitElement {
       const fresh = stripPositionMetadata(scene);
       const targetCfg = this._store.getConfig(target);
       if (!targetCfg) return;
-      const added = await this._store.mutate(target, {
-        ...targetCfg,
-        scenes: [...targetCfg.scenes, fresh],
-      });
+      const added = await this._store.mutate(
+        target,
+        { ...targetCfg, scenes: [...targetCfg.scenes, fresh] },
+        { action: "add", scene_name: scene.name ?? null },
+      );
       if (!added) {
         this._sceneEditorError = this._takeError();
         return;
@@ -628,7 +655,14 @@ export class AmbienceScopesView extends LitElement {
         const srcCfg = this._store.getConfig(editing.scope);
         if (srcCfg) {
           const scenes = srcCfg.scenes.filter((_, i) => i !== editing.index);
-          await this._store.mutate(editing.scope, { ...srcCfg, scenes });
+          await this._store.mutate(
+            editing.scope,
+            { ...srcCfg, scenes },
+            {
+              action: "delete",
+              scene_name: scene.name ?? null,
+            },
+          );
         }
       }
     } finally {
@@ -1051,11 +1085,13 @@ export class AmbienceScopesView extends LitElement {
   private _historyLabel(action: HistoryAction | null): string {
     if (!action) return "";
     const scope = this._scopeName(action);
-    const scene =
-      action.scene_name && action.scene_name.trim()
-        ? action.scene_name
-        : localize(this.hass, "ui.history_untitled", "Untitled");
-    return localize(this.hass, `ui.history_action_${action.action}`, action.action, { scene, scope });
+    const scene = action.scene_name?.trim()
+      ? action.scene_name
+      : localize(this.hass, "ui.history_untitled", "Untitled");
+    return localize(this.hass, `ui.history_action_${action.action}`, action.action, {
+      scene,
+      scope,
+    });
   }
 
   override render() {

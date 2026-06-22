@@ -3271,4 +3271,40 @@ describe("ambience-scopes-view", () => {
     await el.updateComplete;
     expect(row.querySelector(".scope-body")).toBeTruthy();
   });
+
+  // --- live dot suppressed on disabled scope --------------------------------
+
+  test("a permanently disabled scope shows no live dot even when _store.live has a match", async () => {
+    // Set up living_room as permanently disabled (cfg.enabled === false), with
+    // one scene in category "cat1". Expand it so the scene list renders.
+    el = await mount({
+      areaConfigs: {
+        living_room: {
+          scenes: [{ name: "S1", category: "cat1", when: {}, actions: [] }],
+          enabled: false,
+        },
+      },
+    });
+    // Expand the disabled scope so the scenes-list is in the DOM.
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+
+    // Inject live data: matched=0 for this scope+category (would show a solid dot).
+    // Key format: scopeCategoryKey({kind:"area",id:"living_room"}, "cat1")
+    //           = "area:living_room cat1"
+    el._store.live = new Map([["area:living_room cat1", { matched: 0, applied: null }]]);
+    await el.updateComplete;
+
+    // The scenes-list element must be present (scope is expanded).
+    const scenesList = row.querySelector("ambience-scenes-list") as any;
+    expect(scenesList).toBeTruthy();
+    await scenesList.updateComplete;
+
+    // liveSuppressed must be true for a disabled scope → no .live-dot rendered.
+    expect(scenesList.liveSuppressed).toBe(true);
+    expect(scenesList.shadowRoot.querySelectorAll(".live-dot").length).toBe(0);
+  });
 });

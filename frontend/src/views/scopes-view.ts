@@ -1144,7 +1144,7 @@ export class AmbienceScopesView extends LitElement {
                   .scenes=${cfg.scenes}
                   .scope=${scope}
                   .live=${this._store.live}
-                  .liveSuppressed=${this._isSwitchedOff(scope)}
+                  .liveSuppressed=${disabled || this._isSwitchedOff(scope)}
                   .periods=${this._store.periods}
                   .luxRanges=${this._store.luxRanges}
                   .weatherConfig=${this._store.weatherConfig}

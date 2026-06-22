@@ -123,6 +123,19 @@ fi
 
 git checkout -q -b "$BRANCH"
 
+# From here until the release commit lands, a failure — a bad bump or an
+# unpromotable CHANGELOG (no [Unreleased], or a leftover duplicate version
+# section) — must not strand a half-prepared chore/release branch. Discard the
+# partial work, return to the original branch, and delete the branch so a retry
+# starts clean (instead of tripping the "branch already exists" pre-flight).
+# Disarmed right after the commit, so a later push/PR failure keeps the
+# committed work for a manual retry.
+_abort_release() {
+  git checkout -q -f "$CURRENT_BRANCH" 2>/dev/null || true
+  git branch -qD "$BRANCH" 2>/dev/null || true
+}
+trap _abort_release ERR
+
 # Bump the version across manifest.json, package.json, and package-lock.json
 # (shared with the release workflow's next-minor bump so they can't drift).
 "$(dirname "$0")/bump-version.sh" "$VERSION"
@@ -136,6 +149,7 @@ git add -A
 # --allow-empty supports the "version already bumped in an earlier feature commit"
 # workflow: the release branch still gets a clear `chore: release` marker commit.
 git commit --allow-empty -qm "chore: release $TAG"
+trap - ERR  # the branch now holds committed work — keep it on any later failure
 
 if [ "$NO_PUSH" = "true" ]; then
   echo "Branch $BRANCH prepared. --no-push given; skipping push and PR creation."

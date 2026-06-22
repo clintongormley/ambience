@@ -21,6 +21,18 @@ describe("subscribeLiveScenes", () => {
     expect(typeof unsub).toBe("function");
     expect(() => unsub()).not.toThrow();
   });
+
+  it("degrades to a no-op (never rejects) when subscribeMessage rejects", async () => {
+    // e.g. the ambience/live/subscribe command is missing on a backend older
+    // than this frontend — must not reject and tear down the registry subs.
+    const subscribeMessage = vi.fn().mockRejectedValue(new Error("unknown_command"));
+    const hass: any = { connection: { subscribeMessage } };
+
+    const unsub = await subscribeLiveScenes(hass, vi.fn());
+
+    expect(typeof unsub).toBe("function");
+    expect(() => unsub()).not.toThrow();
+  });
 });
 
 describe("scopeFromParts", () => {

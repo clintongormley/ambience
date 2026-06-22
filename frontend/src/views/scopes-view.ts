@@ -2,7 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
-import type { HassConnection } from "../api.js";
+import type { HassConnection, HistoryAction } from "../api.js";
 import { applyScenes, runSceneActions, setScopeEnabled } from "../api.js";
 import { sceneNameKey, scopeCategoryKey, scopeKey } from "../entities-for-scope.js";
 import { renderHaSwitch } from "../ha-switch.js";
@@ -294,6 +294,12 @@ export class AmbienceScopesView extends LitElement {
       .scope-body {
         padding: 0.5rem 1rem 1rem 1rem;
         border-top: 1px solid var(--divider-color, #e0e0e0);
+      }
+      .undo-toolbar {
+        display: flex;
+        gap: 4px;
+        justify-content: flex-end;
+        margin-bottom: 8px;
       }
     `,
   ];
@@ -1004,8 +1010,64 @@ export class AmbienceScopesView extends LitElement {
     return "";
   }
 
+  /** Resolve a scope's display name for a history label. */
+  private _scopeName(scopeKindId: { scope_kind: string; scope_id: string | null }): string {
+    if (scopeKindId.scope_kind === "house") return localize(this.hass, "ui.scope_house", "House");
+    if (scopeKindId.scope_kind === "area") {
+      return (
+        this._store.areas.find((a) => a.area_id === scopeKindId.scope_id)?.name ??
+        scopeKindId.scope_id ??
+        ""
+      );
+    }
+    return (
+      this._store.floors.find((f) => f.floor_id === scopeKindId.scope_id)?.name ??
+      scopeKindId.scope_id ??
+      ""
+    );
+  }
+
+  /** Build the human-readable label for the next undo/redo entry. */
+  private _historyLabel(action: HistoryAction | null): string {
+    if (!action) return "";
+    const scope = this._scopeName(action);
+    const scene =
+      action.scene_name && action.scene_name.trim()
+        ? action.scene_name
+        : localize(this.hass, "ui.history_untitled", "Untitled");
+    return localize(this.hass, `ui.history_action_${action.action}`, action.action, { scene, scope });
+  }
+
   override render() {
     return html`
+      <div class="undo-toolbar">
+        <ha-icon-button
+          .disabled=${!this._store.canUndo}
+          .label=${
+            this._store.canUndo
+              ? localize(this.hass, "ui.history_undo_tooltip", "Undo: {change}", {
+                  change: this._historyLabel(this._store.undoAction),
+                })
+              : localize(this.hass, "ui.history_nothing_to_undo", "Nothing to undo")
+          }
+          @click=${() => this._store.undo()}
+        >
+          <ha-icon icon="mdi:undo"></ha-icon>
+        </ha-icon-button>
+        <ha-icon-button
+          .disabled=${!this._store.canRedo}
+          .label=${
+            this._store.canRedo
+              ? localize(this.hass, "ui.history_redo_tooltip", "Redo: {change}", {
+                  change: this._historyLabel(this._store.redoAction),
+                })
+              : localize(this.hass, "ui.history_nothing_to_redo", "Nothing to redo")
+          }
+          @click=${() => this._store.redo()}
+        >
+          <ha-icon icon="mdi:redo"></ha-icon>
+        </ha-icon-button>
+      </div>
       ${this._store.error ? html`<p class="error">${this._store.error}</p>` : ""}
       ${this._renderBanners()}
       <ul>

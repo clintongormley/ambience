@@ -84,11 +84,13 @@ export async function saveArea(
   hass: HassConnection,
   areaId: string,
   config: AreaConfig,
+  change?: ChangeDescriptor,
 ): Promise<{ ok: true; config: AreaConfig }> {
   return hass.callWS({
     type: "ambience/area/save",
     area_id: areaId,
     config,
+    ...(change ? { change } : {}),
   });
 }
 
@@ -104,11 +106,13 @@ export async function saveFloor(
   hass: HassConnection,
   floorId: string,
   config: ScopeConfig,
+  change?: ChangeDescriptor,
 ): Promise<{ ok: true; config: ScopeConfig }> {
   return hass.callWS({
     type: "ambience/floor/save",
     floor_id: floorId,
     config,
+    ...(change ? { change } : {}),
   });
 }
 
@@ -119,8 +123,9 @@ export async function getHouse(hass: HassConnection): Promise<ScopeConfig> {
 export async function saveHouse(
   hass: HassConnection,
   config: ScopeConfig,
+  change?: ChangeDescriptor,
 ): Promise<{ ok: true; config: ScopeConfig }> {
-  return hass.callWS({ type: "ambience/house/save", config });
+  return hass.callWS({ type: "ambience/house/save", config, ...(change ? { change } : {}) });
 }
 
 export async function listConditions(hass: HassConnection): Promise<ConditionInfo[]> {
@@ -403,6 +408,31 @@ export type LiveUnit = {
 
 export type LiveMessage = { type: "snapshot"; units: LiveUnit[] } | ({ type: "update" } & LiveUnit);
 
+export type ChangeDescriptor = { action: string; scene_name: string | null };
+
+export type HistoryAction = ChangeDescriptor & {
+  scope_kind: "house" | "area" | "floor";
+  scope_id: string | null;
+};
+
+export type HistorySnapshot = {
+  op: "record" | "undo" | "redo" | null;
+  can_undo: boolean;
+  can_redo: boolean;
+  undo: HistoryAction | null;
+  redo: HistoryAction | null;
+  undo_count: number;
+  redo_count: number;
+  changed_scope: { scope_kind: string; scope_id: string | null } | null;
+};
+
+export type HistoryApplyResult = {
+  ok: boolean;
+  scope_kind?: string;
+  scope_id?: string | null;
+  config?: ScopeConfig;
+};
+
 /** Subscribe to live per-unit scene state (matched + applied). Resolves to an
  *  unsubscribe function — a no-op when the connection lacks subscribeMessage or
  *  the command is rejected (e.g. a backend older than this frontend). Never
@@ -422,6 +452,33 @@ export async function subscribeLiveScenes(
   } catch {
     return () => {};
   }
+}
+
+/** Subscribe to the undo/redo snapshot stream. Resolves to an unsubscribe
+ *  function — a no-op when the connection lacks subscribeMessage or the command
+ *  is rejected (a backend older than this frontend), so a missing command
+ *  degrades to "no undo toolbar" rather than throwing. */
+export async function subscribeHistory(
+  hass: HassConnection,
+  onMessage: (msg: HistorySnapshot) => void,
+): Promise<() => void> {
+  const conn = hass.connection;
+  if (!conn.subscribeMessage) return () => {};
+  try {
+    return await conn.subscribeMessage<HistorySnapshot>(onMessage, {
+      type: "ambience/history/subscribe",
+    });
+  } catch {
+    return () => {};
+  }
+}
+
+export async function undoChange(hass: HassConnection): Promise<HistoryApplyResult> {
+  return hass.callWS({ type: "ambience/history/undo" });
+}
+
+export async function redoChange(hass: HassConnection): Promise<HistoryApplyResult> {
+  return hass.callWS({ type: "ambience/history/redo" });
 }
 
 export async function downloadScopeDiagnostics(

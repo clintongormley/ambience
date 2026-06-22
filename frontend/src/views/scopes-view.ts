@@ -311,7 +311,15 @@ export class AmbienceScopesView extends LitElement {
   private _store = new ScopeStore(this);
 
   private _onKeyDown = (e: KeyboardEvent): void => {
-    if (this._editing !== null) return; // scene editor modal open
+    // Don't fire the shortcut behind any open modal — the user's context is the
+    // modal, not the scene list (covers focus on a non-input element too).
+    if (
+      this._editing !== null ||
+      this._viewingTraces !== null ||
+      this._viewingSimulator !== null ||
+      this._autoTriggers !== null
+    )
+      return;
     // A window-level keydown re-targets `e.target` to the shadow host, so an
     // input inside a shadow root (e.g. the simulator/traces modals on this page)
     // would look like the host element. composedPath()[0] is the real focused

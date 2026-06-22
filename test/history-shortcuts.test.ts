@@ -51,6 +51,12 @@ describe("AmbienceScopesView undo/redo shortcuts", () => {
     el._onKeyDown(key({ key: "z", ctrlKey: true }));
     expect(undo).not.toHaveBeenCalled();
   });
+  it("ignores the shortcut while a non-scene-editor modal is open", () => {
+    const { el, undo } = makeView();
+    el._viewingSimulator = { scope: { scope_kind: "house", scope_id: null }, category: "" };
+    el._onKeyDown(key({ key: "z", ctrlKey: true }));
+    expect(undo).not.toHaveBeenCalled();
+  });
   it("ignores a shadow-DOM input where the real target is only in composedPath", () => {
     // A window keydown re-targets e.target to the shadow host; the real focused
     // input is composedPath()[0]. Typing Ctrl+Z in a modal input must NOT undo.

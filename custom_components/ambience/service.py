@@ -736,6 +736,7 @@ async def async_execute_plan(
     if actions:
         domain_data = hass.data[DOMAIN]
         domain_data.setdefault(DATA_LAST_APPLIED, {})[(scope_kind, scope_id, category_id)] = index
+        set_last_applied_scene(hass, scope_kind, scope_id, category_id, index)
         async_dispatcher_send(hass, SIGNAL_UNIT_APPLIED, (scope_kind, scope_id, category_id))
     await async_execute_actions(
         hass, scope_kind, scope_id, actions, scene_index=index, context=context

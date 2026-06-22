@@ -2335,3 +2335,41 @@ async def test_less_than_activates_immediately_then_deactivates_at_maturity(hass
     assert last_applied_key not in hass.data[DOMAIN].get(DATA_LAST_APPLIED, {})
 
     engine._teardown()
+
+
+async def test_resolve_and_apply_records_last_matched_and_applied(hass) -> None:
+    from custom_components.ambience.service import (
+        get_last_applied_scene,
+        get_last_matched,
+    )
+
+    async def _noop(call) -> None:
+        return None
+
+    engine = await _apply_engine_with_service(hass, _noop)
+    await engine._resolve_and_apply("area", "a", "g")
+
+    assert get_last_matched(hass, "area", "a", "g") == 0
+    assert get_last_applied_scene(hass, "area", "a", "g") == 0
+
+
+async def test_no_match_clears_matched_but_keeps_applied_scene(hass) -> None:
+    from custom_components.ambience.service import (
+        get_last_applied_scene,
+        get_last_matched,
+    )
+
+    async def _noop(call) -> None:
+        return None
+
+    engine = await _apply_engine_with_service(hass, _noop)
+    # First pass: 'evening' matches → both record scene 0.
+    await engine._resolve_and_apply("area", "a", "g")
+    assert get_last_matched(hass, "area", "a", "g") == 0
+
+    # The world moves on: tod is no longer 'evening' → nothing matches.
+    engine._snapshots["tod"] = "morning"
+    await engine._resolve_and_apply("area", "a", "g")
+
+    assert get_last_matched(hass, "area", "a", "g") is None  # solid dot clears
+    assert get_last_applied_scene(hass, "area", "a", "g") == 0  # greyed dot persists

@@ -310,6 +310,20 @@ export class AmbienceScopesView extends LitElement {
   // the store; this element renders straight off its fields.
   private _store = new ScopeStore(this);
 
+  private _onKeyDown = (e: KeyboardEvent): void => {
+    if (this._editing !== null) return; // scene editor modal open
+    const t = e.target as HTMLElement | null;
+    const tag = t?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || t?.isContentEditable) return;
+    if (e.key.toLowerCase() !== "z" || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    if (e.shiftKey) {
+      if (this._store.canRedo) void this._store.redo();
+    } else if (this._store.canUndo) {
+      void this._store.undo();
+    }
+  };
+
   // _expanded keys: "area:<id>" | "floor:<id>" | "house". Seeded from
   // localStorage so a reload (or HA's panel rebuild on reconnect) restores which
   // rows were open; persisted on every change via _setExpanded.
@@ -362,6 +376,7 @@ export class AmbienceScopesView extends LitElement {
 
   override async connectedCallback() {
     super.connectedCallback();
+    window.addEventListener("keydown", this._onKeyDown);
     this._conditionsHintDismissed = getConditionsHintDismissed();
     await this._store.loadStatic();
     await Promise.all([
@@ -374,6 +389,11 @@ export class AmbienceScopesView extends LitElement {
     // hostDisconnected); it calls back here so the view can drop a removed
     // scope from its own expanded/editing state.
     await this._store.subscribe((scope) => this._onScopeRemoved(scope));
+  }
+
+  override disconnectedCallback() {
+    window.removeEventListener("keydown", this._onKeyDown);
+    super.disconnectedCallback();
   }
 
   /** Drop a just-removed scope from the view's own state: collapse its row

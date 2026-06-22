@@ -91,7 +91,11 @@ export class AmbienceScenesList extends LitElement {
       cursor: grabbing;
     }
     .idx {
-      font-family: monospace;
+      /* Tabular figures keep the number column aligned (the reason this was once
+         monospace) while sharing the scene name's font and metrics, so the
+         number, name and live dot sit on one line under the row's top
+         alignment — no per-element nudging. */
+      font-variant-numeric: tabular-nums;
       color: var(--secondary-text-color, #888);
       margin-right: 0.25rem;
       /* Wide enough for two digits — we don't expect >99 scenes. */
@@ -113,10 +117,6 @@ export class AmbienceScenesList extends LitElement {
     }
     .name {
       font-weight: 600;
-      /* The monospace index digit sits ~1px higher than this proportional bold
-         name in the top-aligned row; pull the name up so the name, number and
-         live dot share one line. */
-      margin-top: -1px;
     }
     .summary {
       font-size: 0.85em;
@@ -204,7 +204,7 @@ export class AmbienceScenesList extends LitElement {
       align-items: center;
       justify-content: flex-start;
       flex: 0 0 1.4em;
-      min-height: 1.25em;
+      min-height: 1.2em;
     }
     /* Nudge the live dot toward the scene name (the warning flag stays at the
        slot's left edge). */

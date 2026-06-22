@@ -1094,35 +1094,40 @@ export class AmbienceScopesView extends LitElement {
     });
   }
 
+  /** Render one undo or redo toolbar button. `op` drives the icon, enabled
+   *  flag, next-action label, and click target so the two buttons share one
+   *  shape. */
+  private _renderHistoryButton(op: "undo" | "redo") {
+    const isUndo = op === "undo";
+    const enabled = isUndo ? this._store.canUndo : this._store.canRedo;
+    const action = isUndo ? this._store.undoAction : this._store.redoAction;
+    const label = enabled
+      ? localize(
+          this.hass,
+          `ui.history_${op}_tooltip`,
+          isUndo ? "Undo: {change}" : "Redo: {change}",
+          { change: this._historyLabel(action) },
+        )
+      : localize(
+          this.hass,
+          `ui.history_nothing_to_${op}`,
+          isUndo ? "Nothing to undo" : "Nothing to redo",
+        );
+    return html`
+      <ha-icon-button
+        .disabled=${!enabled}
+        .label=${label}
+        @click=${() => (isUndo ? this._store.undo() : this._store.redo())}
+      >
+        <ha-icon icon=${isUndo ? "mdi:undo" : "mdi:redo"}></ha-icon>
+      </ha-icon-button>
+    `;
+  }
+
   override render() {
     return html`
       <div class="undo-toolbar">
-        <ha-icon-button
-          .disabled=${!this._store.canUndo}
-          .label=${
-            this._store.canUndo
-              ? localize(this.hass, "ui.history_undo_tooltip", "Undo: {change}", {
-                  change: this._historyLabel(this._store.undoAction),
-                })
-              : localize(this.hass, "ui.history_nothing_to_undo", "Nothing to undo")
-          }
-          @click=${() => this._store.undo()}
-        >
-          <ha-icon icon="mdi:undo"></ha-icon>
-        </ha-icon-button>
-        <ha-icon-button
-          .disabled=${!this._store.canRedo}
-          .label=${
-            this._store.canRedo
-              ? localize(this.hass, "ui.history_redo_tooltip", "Redo: {change}", {
-                  change: this._historyLabel(this._store.redoAction),
-                })
-              : localize(this.hass, "ui.history_nothing_to_redo", "Nothing to redo")
-          }
-          @click=${() => this._store.redo()}
-        >
-          <ha-icon icon="mdi:redo"></ha-icon>
-        </ha-icon-button>
+        ${this._renderHistoryButton("undo")}${this._renderHistoryButton("redo")}
       </div>
       ${this._store.error ? html`<p class="error">${this._store.error}</p>` : ""}
       ${this._renderBanners()}

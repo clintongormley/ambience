@@ -67,6 +67,14 @@ class ChangeHistory:
         self._redo.clear()
         return True
 
+    def peek_undo(self) -> HistoryEntry | None:
+        """The next entry that would be undone (or None) — does not mutate the stacks."""
+        return self._undo[-1] if self._undo else None
+
+    def peek_redo(self) -> HistoryEntry | None:
+        """The next entry that would be redone (or None) — does not mutate the stacks."""
+        return self._redo[-1] if self._redo else None
+
     def undo(self) -> tuple[str, str | None, dict[str, Any]] | None:
         """Pop the newest undo entry onto the redo stack; return its `before`."""
         if not self._undo:

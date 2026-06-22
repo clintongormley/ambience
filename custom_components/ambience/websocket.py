@@ -1211,9 +1211,8 @@ async def _ws_history_undo(
     msg: dict[str, Any],
 ) -> None:
     history = hass.data[DOMAIN][DATA_HISTORY]
-    while history.snapshot()["can_undo"]:
-        nxt = history.snapshot()["undo"]
-        if not _scope_exists(hass, nxt["scope_kind"], nxt["scope_id"]):
+    while (entry := history.peek_undo()) is not None:
+        if not _scope_exists(hass, entry.scope_kind, entry.scope_id):
             history.discard_undo()
             continue
         kind, sid, config = history.undo()
@@ -1242,9 +1241,8 @@ async def _ws_history_redo(
     msg: dict[str, Any],
 ) -> None:
     history = hass.data[DOMAIN][DATA_HISTORY]
-    while history.snapshot()["can_redo"]:
-        nxt = history.snapshot()["redo"]
-        if not _scope_exists(hass, nxt["scope_kind"], nxt["scope_id"]):
+    while (entry := history.peek_redo()) is not None:
+        if not _scope_exists(hass, entry.scope_kind, entry.scope_id):
             history.discard_redo()
             continue
         kind, sid, config = history.redo()

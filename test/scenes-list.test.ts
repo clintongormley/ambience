@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import "../frontend/src/views/scenes-list";
 import { colorHex } from "../frontend/src/category-colors";
+import { scopeCategoryKey } from "../frontend/src/entities-for-scope.js";
 import type {
   ConditionInfo,
   ExposedAction,
@@ -1289,4 +1290,53 @@ describe("expanded-state reconciliation (review fix)", () => {
     expect(el._expanded.size).toBe(0);
     el.remove();
   });
+});
+
+// --- live dots ---
+
+test("renders a solid live dot on the matched scene", async () => {
+  const scenes = [
+    { name: "Evening", category: "g", when: {}, actions: [] },
+    { name: "Movie", category: "g", when: {}, actions: [] },
+  ] as any;
+  const el = await mount(scenes);
+  el.scope = { kind: "area", id: "a" };
+  el.live = new Map([
+    [scopeCategoryKey({ kind: "area", id: "a" }, "g"), { matched: 0, applied: 0 }],
+  ]);
+  await el.updateComplete;
+
+  expect(el.shadowRoot.querySelectorAll(".live-dot.matched").length).toBe(1);
+  expect(el.shadowRoot.querySelectorAll(".live-dot.stale").length).toBe(0);
+});
+
+test("renders a stale dot on a diverged applied scene", async () => {
+  const scenes = [
+    { name: "Evening", category: "g", when: {}, actions: [] },
+    { name: "Blocker", category: "g", when: {}, actions: [] },
+  ] as any;
+  const el = await mount(scenes);
+  el.scope = { kind: "area", id: "a" };
+  // Blocker (idx 1) currently matches; Evening (idx 0) is still applied.
+  el.live = new Map([
+    [scopeCategoryKey({ kind: "area", id: "a" }, "g"), { matched: 1, applied: 0 }],
+  ]);
+  await el.updateComplete;
+
+  const rows = el.shadowRoot.querySelectorAll("li");
+  expect(rows[1].querySelector(".live-dot.matched")).not.toBeNull();
+  expect(rows[0].querySelector(".live-dot.stale")).not.toBeNull();
+});
+
+test("shows no dots when suppressed (switch off)", async () => {
+  const scenes = [{ name: "Evening", category: "g", when: {}, actions: [] }] as any;
+  const el = await mount(scenes);
+  el.scope = { kind: "area", id: "a" };
+  el.live = new Map([
+    [scopeCategoryKey({ kind: "area", id: "a" }, "g"), { matched: 0, applied: 0 }],
+  ]);
+  el.liveSuppressed = true;
+  await el.updateComplete;
+
+  expect(el.shadowRoot.querySelectorAll(".live-dot").length).toBe(0);
 });

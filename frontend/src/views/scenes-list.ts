@@ -4,6 +4,7 @@ import { customElement, property, state } from "lit/decorators.js";
 import "./kebab-menu";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
+import { scopeCategoryKey } from "../entities-for-scope.js";
 import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
 import { configIssueLabel, sceneProblems } from "../scene-problems.js";
 import {
@@ -20,6 +21,7 @@ import type {
   PeriodStoreView,
   Scene,
   SceneCategory,
+  Scope,
 } from "../types.js";
 import { entityName, type HassWithStates } from "./entity-row.js";
 import type { KebabItem } from "./kebab-menu";
@@ -194,6 +196,27 @@ export class AmbienceScenesList extends LitElement {
       justify-content: flex-start;
       flex: 0 0 1.4em;
     }
+    /* Fixed-width slot for the live dot so the title aligns whether or not a
+       row has one. */
+    .live-slot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 0.9em;
+    }
+    .live-dot {
+      width: 0.55em;
+      height: 0.55em;
+      border-radius: 50%;
+      box-sizing: border-box;
+    }
+    .live-dot.matched {
+      background: var(--primary-color);
+    }
+    .live-dot.stale {
+      background: transparent;
+      border: 1.5px solid var(--secondary-text-color);
+    }
     .pin {
       padding: 0;
       /* The pin doubles as the grab handle (tap = unpin, drag = reorder), so it
@@ -295,6 +318,16 @@ export class AmbienceScenesList extends LitElement {
   // section renders just its header bar. Clicking a header emits
   // "toggle-category-collapse" {categoryId} for the parent to flip.
   @property({ attribute: false }) collapsedCategories: string[] = [];
+
+  // The scope these scenes belong to — needed to key into `live`.
+  @property({ attribute: false }) scope?: Scope;
+  // Per-(scope, category) live state from ScopeStore, keyed by scopeCategoryKey.
+  @property({ attribute: false }) live?: Map<
+    string,
+    { matched: number | null; applied: number | null }
+  >;
+  // When true (scope switch off / unresolved-off), render no dots.
+  @property({ attribute: false }) liveSuppressed = false;
 
   // Drag-to-reorder controller. On drop it emits "reorder-scenes" {from,to};
   // the parent (scopes-view) performs the actual move.
@@ -553,6 +586,21 @@ export class AmbienceScenesList extends LitElement {
     else if (id === "delete") this._emit("delete-scene", { index: i });
   }
 
+  private _liveDot(i: number, scene: Scene) {
+    if (this.liveSuppressed || !this.scope || !this.live) return "";
+    const w = this.live.get(scopeCategoryKey(this.scope, scene.category));
+    if (!w) return "";
+    if (w.matched === i) {
+      const label = localize(this.hass, "ui.scene_live", "Currently live");
+      return html`<span class="live-dot matched" title=${label} aria-label=${label}></span>`;
+    }
+    if (w.applied === i) {
+      const label = localize(this.hass, "ui.scene_applied_stale", "Applied — no longer matching");
+      return html`<span class="live-dot stale" title=${label} aria-label=${label}></span>`;
+    }
+    return "";
+  }
+
   /** Severity-coloured problem indicator for a scene, or "" when the scene is
    *  clean/disabled. Folds shadowing, missing-entity and overlap hints into one
    *  icon with an aggregated multi-line tooltip. */
@@ -634,6 +682,7 @@ export class AmbienceScenesList extends LitElement {
               >`
           }
         </span>
+        <span class="live-slot">${this._liveDot(i, scene)}</span>
         <span class="idx">${displayNum}</span>
         <span class="warn-slot">${this._problemFlag(scene)}</span>
         <div class="body" @click=${() => this._toggleScene(i)}>

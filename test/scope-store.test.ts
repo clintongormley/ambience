@@ -858,7 +858,14 @@ describe("ScopeStore", () => {
       applied: 0,
     });
 
-    liveCb!({ type: "update", scope_kind: "area", scope_id: "a", category: "g", matched: null, applied: 0 });
+    liveCb!({
+      type: "update",
+      scope_kind: "area",
+      scope_id: "a",
+      category: "g",
+      matched: null,
+      applied: 0,
+    });
     expect(store.live.get(scopeCategoryKey({ kind: "area", id: "a" }, "g"))).toEqual({
       matched: null,
       applied: 0,

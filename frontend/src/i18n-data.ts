@@ -444,6 +444,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       trace_scene_not_reached: "not reached",
       trace_scene_matched: "✓ matched",
       trace_scene_no_match: "✗ no match",
+      scene_live: "Currently live",
+      scene_applied_stale: "Applied — no longer matching",
     },
     blocker_summary: {
       block: "Block",
@@ -962,6 +964,8 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       trace_scene_not_reached: "no alcanzada",
       trace_scene_matched: "✓ coincide",
       trace_scene_no_match: "✗ sin coincidencia",
+      scene_live: "Actualmente activa",
+      scene_applied_stale: "Aplicada — ya no coincide",
     },
     blocker_summary: {
       block: "Bloquear",

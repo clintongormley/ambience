@@ -390,13 +390,16 @@ export async function clearTraces(hass: HassConnection): Promise<void> {
   await hass.callWS({ type: "ambience/traces/clear" });
 }
 
+export type LiveEntry = {
+  matched: number | null;
+  applied: number | null;
+};
+
 export type LiveUnit = {
   scope_kind: string;
   scope_id: string | null;
   category: string;
-  matched: number | null;
-  applied: number | null;
-};
+} & LiveEntry;
 
 export type LiveMessage = { type: "snapshot"; units: LiveUnit[] } | ({ type: "update" } & LiveUnit);
 

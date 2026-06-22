@@ -49,7 +49,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Sentinel distinguishing "key absent" from a stored None in the live-state maps,
 # so the first set of a None value still dispatches.
-_UNSET: Any = object()
+_UNSET: object = object()
 
 
 def _scope_config(store, scope_kind: str, scope_id: str | None) -> dict[str, Any]:

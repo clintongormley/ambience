@@ -505,6 +505,10 @@ async def _apply_engine_with_service(hass, handler) -> AutoTriggerEngine:
     return engine
 
 
+async def _noop_handler(call) -> None:
+    return None
+
+
 async def test_concurrent_apply_of_same_unit_runs_winner_once(hass) -> None:
     """Two triggers re-evaluating the same (scope, category) concurrently must
     coalesce: the winning scene's actions run once, not once per trigger.
@@ -2343,10 +2347,7 @@ async def test_resolve_and_apply_records_last_matched_and_applied(hass) -> None:
         get_last_matched,
     )
 
-    async def _noop(call) -> None:
-        return None
-
-    engine = await _apply_engine_with_service(hass, _noop)
+    engine = await _apply_engine_with_service(hass, _noop_handler)
     await engine._resolve_and_apply("area", "a", "g")
 
     assert get_last_matched(hass, "area", "a", "g") == 0
@@ -2359,10 +2360,7 @@ async def test_no_match_clears_matched_but_keeps_applied_scene(hass) -> None:
         get_last_matched,
     )
 
-    async def _noop(call) -> None:
-        return None
-
-    engine = await _apply_engine_with_service(hass, _noop)
+    engine = await _apply_engine_with_service(hass, _noop_handler)
     # First pass: 'evening' matches → both record scene 0.
     await engine._resolve_and_apply("area", "a", "g")
     assert get_last_matched(hass, "area", "a", "g") == 0

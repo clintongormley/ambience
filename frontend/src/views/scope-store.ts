@@ -4,6 +4,7 @@ import type {
   EntityRegistryEvent,
   FloorRegistryEvent,
   HassConnection,
+  LiveEntry,
   LiveMessage,
   LiveUnit,
 } from "../api.js";
@@ -100,7 +101,7 @@ export class ScopeStore implements ReactiveController {
   // Per-(scope, category) live scene state, keyed by scopeCategoryKey. matched =
   // the current winner (solid dot); applied = the sticky last-applied scene
   // (greyed dot). Fed by the ambience/live/subscribe push.
-  @tracked() live = new Map<string, { matched: number | null; applied: number | null }>();
+  @tracked() live = new Map<string, LiveEntry>();
   // True once the first areas fetch settles, so the "No areas found" empty
   // state doesn't flash a false negative on a slow connection before areas
   // arrive.
@@ -222,15 +223,12 @@ export class ScopeStore implements ReactiveController {
   }
 
   private _onLive(m: LiveMessage): void {
-    const apply = (
-      target: Map<string, { matched: number | null; applied: number | null }>,
-      u: LiveUnit,
-    ) => {
+    const apply = (target: Map<string, LiveEntry>, u: LiveUnit) => {
       const key = scopeCategoryKey(scopeFromParts(u.scope_kind, u.scope_id), u.category);
       target.set(key, { matched: u.matched, applied: u.applied });
     };
     if (m.type === "snapshot") {
-      const next = new Map<string, { matched: number | null; applied: number | null }>();
+      const next = new Map<string, LiveEntry>();
       for (const u of m.units) apply(next, u);
       this.live = next;
     } else {

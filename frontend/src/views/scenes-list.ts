@@ -2,6 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import "./kebab-menu";
+import type { LiveEntry } from "../api.js";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
 import { scopeCategoryKey } from "../entities-for-scope.js";
@@ -322,10 +323,7 @@ export class AmbienceScenesList extends LitElement {
   // The scope these scenes belong to — needed to key into `live`.
   @property({ attribute: false }) scope?: Scope;
   // Per-(scope, category) live state from ScopeStore, keyed by scopeCategoryKey.
-  @property({ attribute: false }) live?: Map<
-    string,
-    { matched: number | null; applied: number | null }
-  >;
+  @property({ attribute: false }) live?: Map<string, LiveEntry>;
   // When true (scope switch off / unresolved-off), render no dots.
   @property({ attribute: false }) liveSuppressed = false;
 

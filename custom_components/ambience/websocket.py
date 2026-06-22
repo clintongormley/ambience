@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 from typing import Any
 
@@ -20,6 +21,7 @@ from .const import (
     DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
+    DATA_HISTORY,
     DATA_LUX_RANGES,
     DATA_PERIODS,
     DATA_STORE,
@@ -296,11 +298,14 @@ async def _save_scope(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
+    scope_kind: str,
+    scope_id: str | None,
     save_fn: Any,
 ) -> None:
     """The shared validate → coerce → canonicalise → save → respond pipeline
     behind the three scope-save commands (the caller has already verified the
-    scope exists in the relevant registry). `save_fn(store, config)` persists."""
+    scope exists in the relevant registry). `save_fn(store, config)` persists.
+    Records the change in the undo history (a snapshot before + after the save)."""
     try:
         validate_scope_config(hass, msg["config"])
     except (HomeAssistantError, ValueError) as exc:
@@ -311,7 +316,13 @@ async def _save_scope(
     store = hass.data[DOMAIN][DATA_STORE]
     coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
+    before = copy.deepcopy(store.scope_config(scope_kind, scope_id))
     await save_fn(store, config)
+    after = copy.deepcopy(store.scope_config(scope_kind, scope_id))
+    history = hass.data[DOMAIN][DATA_HISTORY]
+    change = msg.get("change") or {"action": "edit", "scene_name": None}
+    if history.record(scope_kind, scope_id, before, after, change):
+        history.notify_changed("record", scope_kind, scope_id)
     # Recompute the overlap set so the save response reflects the just-saved config
     # rather than a cached set; the get path reads the cache.
     connection.send_result(
@@ -325,6 +336,7 @@ async def _save_scope(
         vol.Required("type"): "ambience/area/save",
         vol.Required("area_id"): str,
         vol.Required("config"): dict,
+        vol.Optional("change"): dict,
     }
 )
 @websocket_api.async_response
@@ -342,7 +354,14 @@ async def _ws_area_save(
             code="validation_error",
         )
         return
-    await _save_scope(hass, connection, msg, lambda store, cfg: store.async_save_area(area_id, cfg))
+    await _save_scope(
+        hass,
+        connection,
+        msg,
+        "area",
+        area_id,
+        lambda store, cfg: store.async_save_area(area_id, cfg),
+    )
 
 
 @websocket_api.require_admin
@@ -375,6 +394,7 @@ async def _ws_floor_get(
         vol.Required("type"): "ambience/floor/save",
         vol.Required("floor_id"): str,
         vol.Required("config"): dict,
+        vol.Optional("change"): dict,
     }
 )
 @websocket_api.async_response
@@ -393,7 +413,12 @@ async def _ws_floor_save(
         )
         return
     await _save_scope(
-        hass, connection, msg, lambda store, cfg: store.async_save_floor(floor_id, cfg)
+        hass,
+        connection,
+        msg,
+        "floor",
+        floor_id,
+        lambda store, cfg: store.async_save_floor(floor_id, cfg),
     )
 
 
@@ -415,6 +440,7 @@ async def _ws_house_get(
     {
         vol.Required("type"): "ambience/house/save",
         vol.Required("config"): dict,
+        vol.Optional("change"): dict,
     }
 )
 @websocket_api.async_response
@@ -423,7 +449,14 @@ async def _ws_house_save(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    await _save_scope(hass, connection, msg, lambda store, cfg: store.async_save_house(cfg))
+    await _save_scope(
+        hass,
+        connection,
+        msg,
+        "house",
+        None,
+        lambda store, cfg: store.async_save_house(cfg),
+    )
 
 
 @websocket_api.require_admin

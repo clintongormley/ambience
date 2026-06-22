@@ -27,6 +27,16 @@ DATA_SWITCH_ADD_ENTITIES = "switch_add_entities"
 # Written by apply_scene; read by the auto-trigger engine's unchanged-scene guard.
 DATA_LAST_APPLIED = "last_applied"
 
+# Current matched scene index per (scope_kind, scope_id, category_id): the live
+# "winner" the panel shows as a solid dot. None = no scene currently matches.
+# Distinct from DATA_LAST_APPLIED (debounce-internal, wiped on a no-match).
+DATA_LAST_MATCHED = "last_matched"
+
+# Sticky "what's physically set" per unit: the scene index whose actions last
+# executed. Never cleared on a no-match, so the panel can show a greyed dot for
+# a scene that is still applied even though conditions have moved on.
+DATA_LAST_APPLIED_SCENE = "last_applied_scene"
+
 # Per-(scope_kind, scope_id, category_id) asyncio.Lock registry, shared by the
 # trigger engine and the manual apply path (see service.apply_lock).
 DATA_APPLY_LOCKS = "apply_locks"
@@ -68,6 +78,11 @@ SIGNAL_ACTIVITY_RECORDED = "ambience_activity_recorded"
 # from the panel's Advanced page). Payload: None. The listener re-applies exposure
 # to every live switch.
 SIGNAL_EXPOSED_ASSISTANTS_UPDATED = "ambience_exposed_assistants_updated"
+
+# Dispatcher signal — fired when a unit's live state (last_matched or
+# last_applied_scene) changes. Payload: the (scope_kind, scope_id, category_id)
+# unit. Drives the panel's live scene dots via ambience/live/subscribe.
+SIGNAL_UNIT_LIVE = "ambience_unit_live"
 
 # Note: the idle re-apply defaults (DEFAULT_REAPPLY_ENABLED / *_INTERVAL_SECONDS /
 # MIN_REAPPLY_INTERVAL_SECONDS) and DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS live in

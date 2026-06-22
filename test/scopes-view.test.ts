@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { scopeCategoryKey } from "../frontend/src/entities-for-scope.js";
 import type {
   AreaListItem,
   ConditionInfo,
@@ -3293,9 +3294,12 @@ describe("ambience-scopes-view", () => {
     await el.updateComplete;
 
     // Inject live data: matched=0 for this scope+category (would show a solid dot).
-    // Key format: scopeCategoryKey({kind:"area",id:"living_room"}, "cat1")
-    //           = "area:living_room cat1"
-    el._store.live = new Map([["area:living_room cat1", { matched: 0, applied: null }]]);
+    el._store.live = new Map([
+      [
+        scopeCategoryKey({ kind: "area", id: "living_room" }, "cat1"),
+        { matched: 0, applied: null },
+      ],
+    ]);
     await el.updateComplete;
 
     // The scenes-list element must be present (scope is expanded).

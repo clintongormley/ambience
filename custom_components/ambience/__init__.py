@@ -79,6 +79,7 @@ from .service import (
     async_apply_scene_service,
     build_apply_scene_schema,
     clear_last_applied,
+    clear_live_state,
 )
 from .services_meta import get_service_schema
 from .store import SEEDED_BUILTIN_IDS, AmbienceStore
@@ -244,6 +245,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await store.async_delete_area(area_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("area", area_id), None)
             clear_last_applied(hass, "area", area_id)
+            clear_live_state(hass, "area", area_id)
             ent_reg = er.async_get(hass)
             ent_id = ent_reg.async_get_entity_id(
                 "switch", DOMAIN, switch_unique_id("area", area_id)
@@ -282,6 +284,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await store.async_delete_floor(floor_id)
             domain_data.get(DATA_SWITCHES, {}).pop(("floor", floor_id), None)
             clear_last_applied(hass, "floor", floor_id)
+            clear_live_state(hass, "floor", floor_id)
             ent_reg = er.async_get(hass)
             ent_id = ent_reg.async_get_entity_id(
                 "switch", DOMAIN, switch_unique_id("floor", floor_id)

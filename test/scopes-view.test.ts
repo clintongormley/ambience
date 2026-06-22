@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { scopeCategoryKey } from "../frontend/src/entities-for-scope.js";
 import type {
   AreaListItem,
   ConditionInfo,
@@ -17,29 +18,35 @@ import { AmbienceScopesView } from "../frontend/src/views/scopes-view";
 
 // Mock the api module — same shape as test/areas-list-view.test.ts but with
 // the floor + house additions.
-vi.mock("../frontend/src/api", () => ({
-  listAreas: vi.fn(),
-  getArea: vi.fn(),
-  saveArea: vi.fn(),
-  listFloors: vi.fn(),
-  getFloor: vi.fn(),
-  saveFloor: vi.fn(),
-  getHouse: vi.fn(),
-  saveHouse: vi.fn(),
-  setScopeEnabled: vi.fn(async () => ({ ok: true })),
-  listSwitches: vi.fn(async () => []),
-  listConditions: vi.fn(),
-  listExposedActions: vi.fn(),
-  listCategories: vi.fn(async () => []),
-  getServiceSchema: vi.fn(async () => ({})),
-  listPeriods: vi.fn(),
-  listLuxRanges: vi.fn(async () => ({ builtins: {}, custom: {}, hidden: [] })),
-  getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
-  getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
-  applyScenes: vi.fn(async () => ({ ok: true })),
-  runSceneActions: vi.fn(async () => ({ ran: 1, scene_name: "R" })),
-  listAutoTriggers: vi.fn(async () => ({ triggers: [], opaque: false })),
-}));
+vi.mock("../frontend/src/api", async (importActual) => {
+  const actual = await importActual<typeof import("../frontend/src/api")>();
+  return {
+    listAreas: vi.fn(),
+    getArea: vi.fn(),
+    saveArea: vi.fn(),
+    listFloors: vi.fn(),
+    getFloor: vi.fn(),
+    saveFloor: vi.fn(),
+    getHouse: vi.fn(),
+    saveHouse: vi.fn(),
+    setScopeEnabled: vi.fn(async () => ({ ok: true })),
+    listSwitches: vi.fn(async () => []),
+    listConditions: vi.fn(),
+    listExposedActions: vi.fn(),
+    listCategories: vi.fn(async () => []),
+    getServiceSchema: vi.fn(async () => ({})),
+    listPeriods: vi.fn(),
+    listLuxRanges: vi.fn(async () => ({ builtins: {}, custom: {}, hidden: [] })),
+    getDayConfig: vi.fn(async () => ({ workday_sensor: null, workday_calendar: null })),
+    getWeatherConfig: vi.fn(async () => ({ entity: null, groups: [] })),
+    applyScenes: vi.fn(async () => ({ ok: true })),
+    runSceneActions: vi.fn(async () => ({ ran: 1, scene_name: "R" })),
+    listAutoTriggers: vi.fn(async () => ({ triggers: [], opaque: false })),
+    // Pass through the real subscribeLiveScenes so it delegates to
+    // connection.subscribeMessage, which tests can override per-case.
+    subscribeLiveScenes: actual.subscribeLiveScenes,
+  };
+});
 
 import * as api from "../frontend/src/api";
 
@@ -3264,5 +3271,44 @@ describe("ambience-scopes-view", () => {
     el.filterCategory = "";
     await el.updateComplete;
     expect(row.querySelector(".scope-body")).toBeTruthy();
+  });
+
+  // --- live dot suppressed on disabled scope --------------------------------
+
+  test("a permanently disabled scope shows no live dot even when _store.live has a match", async () => {
+    // Set up living_room as permanently disabled (cfg.enabled === false), with
+    // one scene in category "cat1". Expand it so the scene list renders.
+    el = await mount({
+      areaConfigs: {
+        living_room: {
+          scenes: [{ name: "S1", category: "cat1", when: {}, actions: [] }],
+          enabled: false,
+        },
+      },
+    });
+    // Expand the disabled scope so the scenes-list is in the DOM.
+    const row = el.shadowRoot.querySelector(
+      ".scope-row.area[data-id='living_room']",
+    ) as HTMLElement;
+    (row.querySelector(".scope-header") as HTMLElement).click();
+    await el.updateComplete;
+
+    // Inject live data: matched=0 for this scope+category (would show a solid dot).
+    el._store.live = new Map([
+      [
+        scopeCategoryKey({ kind: "area", id: "living_room" }, "cat1"),
+        { matched: 0, applied: null },
+      ],
+    ]);
+    await el.updateComplete;
+
+    // The scenes-list element must be present (scope is expanded).
+    const scenesList = row.querySelector("ambience-scenes-list") as any;
+    expect(scenesList).toBeTruthy();
+    await scenesList.updateComplete;
+
+    // liveSuppressed must be true for a disabled scope → no live dot rendered.
+    expect(scenesList.liveSuppressed).toBe(true);
+    expect(scenesList.shadowRoot.querySelectorAll("ambience-live-dot").length).toBe(0);
   });
 });

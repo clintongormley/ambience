@@ -2,8 +2,11 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import "./kebab-menu";
+import "./live-dot.js";
+import type { LiveEntry } from "../api.js";
 import { categorySwatchStyle } from "../category-colors.js";
 import { DragReorderController } from "../drag-reorder.js";
+import { scopeCategoryKey } from "../entities-for-scope.js";
 import { actionLabel, conditionLabel, exposedActionLabel, localize } from "../i18n.js";
 import { configIssueLabel, sceneProblems } from "../scene-problems.js";
 import {
@@ -20,6 +23,7 @@ import type {
   PeriodStoreView,
   Scene,
   SceneCategory,
+  Scope,
 } from "../types.js";
 import { entityName, type HassWithStates } from "./entity-row.js";
 import type { KebabItem } from "./kebab-menu";
@@ -87,7 +91,11 @@ export class AmbienceScenesList extends LitElement {
       cursor: grabbing;
     }
     .idx {
-      font-family: monospace;
+      /* Tabular figures keep the number column aligned (the reason this was once
+         monospace) while sharing the scene name's font and metrics, so the
+         number, name and live dot sit on one line under the row's top
+         alignment — no per-element nudging. */
+      font-variant-numeric: tabular-nums;
       color: var(--secondary-text-color, #888);
       margin-right: 0.25rem;
       /* Wide enough for two digits — we don't expect >99 scenes. */
@@ -186,13 +194,22 @@ export class AmbienceScenesList extends LitElement {
       justify-content: center;
       flex: 0 0 1.5em;
     }
-    /* Fixed-width slot for the shadow warning so the title aligns whether or
-       not a row is shadowed. */
+    /* Fixed-width slot shared by the shadow/problem warning and the live dot, so
+       the scene title aligns whether or not a row has either. The warning flag
+       takes precedence; the dot shows only when there's no warning. min-height
+       keeps the dot (and flag) centred on the scene name rather than floating to
+       the top of a tall expanded row. */
     .warn-slot {
       display: inline-flex;
       align-items: center;
       justify-content: flex-start;
       flex: 0 0 1.4em;
+      min-height: 1.2em;
+    }
+    /* Nudge the live dot toward the scene name (the warning flag stays at the
+       slot's left edge). */
+    .warn-slot ambience-live-dot {
+      margin-left: 0.3em;
     }
     .pin {
       padding: 0;
@@ -295,6 +312,13 @@ export class AmbienceScenesList extends LitElement {
   // section renders just its header bar. Clicking a header emits
   // "toggle-category-collapse" {categoryId} for the parent to flip.
   @property({ attribute: false }) collapsedCategories: string[] = [];
+
+  // The scope these scenes belong to — needed to key into `live`.
+  @property({ attribute: false }) scope?: Scope;
+  // Per-(scope, category) live state from ScopeStore, keyed by scopeCategoryKey.
+  @property({ attribute: false }) live?: Map<string, LiveEntry>;
+  // When true (scope switch off / unresolved-off), render no dots.
+  @property({ attribute: false }) liveSuppressed = false;
 
   // Drag-to-reorder controller. On drop it emits "reorder-scenes" {from,to};
   // the parent (scopes-view) performs the actual move.
@@ -553,6 +577,29 @@ export class AmbienceScenesList extends LitElement {
     else if (id === "delete") this._emit("delete-scene", { index: i });
   }
 
+  private _liveDot(i: number, scene: Scene) {
+    if (this.liveSuppressed || !this.scope || !this.live) return "";
+    const w = this.live.get(scopeCategoryKey(this.scope, scene.category));
+    if (!w) return "";
+    if (w.matched === i) {
+      const label = localize(
+        this.hass,
+        "ui.scene_live",
+        "Live now — this scene currently matches and is applied",
+      );
+      return html`<ambience-live-dot kind="matched" .label=${label}></ambience-live-dot>`;
+    }
+    if (w.applied === i) {
+      const label = localize(
+        this.hass,
+        "ui.scene_applied_stale",
+        "Still applied — this scene's actions are in effect but it no longer matches",
+      );
+      return html`<ambience-live-dot kind="stale" .label=${label}></ambience-live-dot>`;
+    }
+    return "";
+  }
+
   /** Severity-coloured problem indicator for a scene, or "" when the scene is
    *  clean/disabled. Folds shadowing, missing-entity and overlap hints into one
    *  icon with an aggregated multi-line tooltip. */
@@ -635,7 +682,7 @@ export class AmbienceScenesList extends LitElement {
           }
         </span>
         <span class="idx">${displayNum}</span>
-        <span class="warn-slot">${this._problemFlag(scene)}</span>
+        <span class="warn-slot">${this._problemFlag(scene) || this._liveDot(i, scene)}</span>
         <div class="body" @click=${() => this._toggleScene(i)}>
           <div class="name">
             ${sceneDisplayName(

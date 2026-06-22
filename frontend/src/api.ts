@@ -390,6 +390,40 @@ export async function clearTraces(hass: HassConnection): Promise<void> {
   await hass.callWS({ type: "ambience/traces/clear" });
 }
 
+export type LiveEntry = {
+  matched: number | null;
+  applied: number | null;
+};
+
+export type LiveUnit = {
+  scope_kind: string;
+  scope_id: string | null;
+  category: string;
+} & LiveEntry;
+
+export type LiveMessage = { type: "snapshot"; units: LiveUnit[] } | ({ type: "update" } & LiveUnit);
+
+/** Subscribe to live per-unit scene state (matched + applied). Resolves to an
+ *  unsubscribe function — a no-op when the connection lacks subscribeMessage or
+ *  the command is rejected (e.g. a backend older than this frontend). Never
+ *  rejects, so a missing command degrades to "no live dots" rather than tearing
+ *  down the registry subscriptions awaited alongside it. */
+export async function subscribeLiveScenes(
+  hass: HassConnection,
+  onMessage: (msg: LiveMessage) => void,
+): Promise<() => void> {
+  const conn = hass.connection;
+  if (!conn.subscribeMessage) return () => {};
+  try {
+    // Call as a method on `conn` — HA's subscribeMessage relies on `this`.
+    return await conn.subscribeMessage<LiveMessage>(onMessage, {
+      type: "ambience/live/subscribe",
+    });
+  } catch {
+    return () => {};
+  }
+}
+
 export async function downloadScopeDiagnostics(
   hass: HassConnection,
   scope: { scope_kind: string; scope_id: string | null },

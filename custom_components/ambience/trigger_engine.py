@@ -38,6 +38,7 @@ from .service import (
     forget_last_applied,
     gather_unit_traces,
     get_last_applied,
+    set_last_matched,
     snapshot_conditions,
 )
 from .trace import (
@@ -399,6 +400,7 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                 # A no-match is a transition away from the previous winner: drop
                 # the last-applied record so a later win of the same scene re-applies.
                 forget_last_applied(self._hass, scope_kind, scope_id, category_id)
+                set_last_matched(self._hass, scope_kind, scope_id, category_id, None)
                 if active:
                     return UnitTrace(
                         scope_kind,
@@ -409,6 +411,10 @@ class AutoTriggerEngine(TriggerSubscriptionsMixin):
                         explanation,
                     )
                 return None
+            # Record the current winner before any action runs (covers no-op /
+            # debounce / acted). The unavailable-drop-out above intentionally does
+            # not reach here, so a sensor blip leaves the dot untouched.
+            set_last_matched(self._hass, scope_kind, scope_id, category_id, index)
             if not plan["actions"]:
                 # A pure blocker (winner with no actions): nothing to run, and it
                 # stays transparent to last-applied so it neither records itself nor

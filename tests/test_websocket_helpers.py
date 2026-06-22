@@ -89,6 +89,23 @@ class TestValidateScopeConfig:
         hass = _make_hass()
         validate_scope_config(hass, {"scenes": []})  # no error
 
+    def test_accepts_string_description(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [
+                {"category": "general", "when": {}, "actions": [], "description": "Evening lights."}
+            ]
+        }
+        validate_scope_config(hass, config)  # must not raise
+
+    def test_rejects_non_string_description(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {"scenes": [{"category": "general", "when": {}, "actions": [], "description": 5}]}
+        with pytest.raises(AmbienceError) as exc:
+            validate_scope_config(hass, config)
+        assert exc.value.translation_key == "scene_description_not_string"
+        assert exc.value.translation_placeholders["scene_idx"] == "0"
+
     def test_rejects_malformed_service_missing_dot(self) -> None:
         exposed = _make_exposed(["light.turn_on"])
         hass = _make_hass(exposed_actions=exposed)
@@ -491,6 +508,21 @@ class TestCanonicalise:
         assert "missing_entities" not in result["scenes"][0]
         assert "overlap_entities" not in result["scenes"][0]
         assert "config_issues" not in result["scenes"][0]
+
+    def test_canonicalise_preserves_description(self) -> None:
+        hass = _make_hass(conditions={})
+        config = {
+            "scenes": [
+                {
+                    "category": "general",
+                    "when": {},
+                    "actions": [],
+                    "description": "Living room evening.",
+                }
+            ]
+        }
+        out = canonicalise(hass, config)
+        assert out["scenes"][0]["description"] == "Living room evening."
 
 
 # ---------------------------------------------------------------------------

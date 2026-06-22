@@ -122,6 +122,7 @@
     "scene_scenes_not_list": { "message": "`scenes` must be a list." },
     "scene_not_object": { "message": "Scene {scene_idx}: must be an object." },
     "scene_category_not_string": { "message": "Scene {scene_idx}: category must be a string." },
+    "scene_description_not_string": { "message": "Scene {scene_idx}: description must be text." },
     "scene_dup_name": { "message": "Scene {scene_idx}: a scene named {name} already exists in this category." },
     "scene_when_not_object": { "message": "Scene {scene_idx}: `when` must be an object." },
     "scene_unknown_condition": { "message": "Scene {scene_idx}: unknown condition {key}" },

@@ -60,6 +60,9 @@ def validate_scope_config(hass: HomeAssistant, config: dict[str, Any]) -> None:
             if name_key in seen_names:
                 raise AmbienceError("scene_dup_name", scene_idx=scene_idx, name=name.strip())
             seen_names[name_key] = scene_idx
+        description = scene.get("description")
+        if description is not None and not isinstance(description, str):
+            raise AmbienceError("scene_description_not_string", scene_idx=scene_idx)
         when = scene.get("when", {})
         if not isinstance(when, dict):
             raise AmbienceError("scene_when_not_object", scene_idx=scene_idx)

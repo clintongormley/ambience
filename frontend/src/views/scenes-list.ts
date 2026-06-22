@@ -1,6 +1,7 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
+import "./ambience-help.js";
 import "./kebab-menu";
 import "./live-dot.js";
 import type { LiveEntry } from "../api.js";
@@ -118,6 +119,17 @@ export class AmbienceScenesList extends LitElement {
     .name {
       font-weight: 600;
     }
+    /* The description "?" next to the scene name. */
+    .name-help {
+      /* Darker "?" so it reads against the bold (near-black) name rather than
+         the muted grey the trigger defaults to. */
+      --ambience-help-trigger-color: var(--primary-text-color, #212121);
+      /* A space of breathing room from the name, and a small upward nudge so
+         the circle sits centred on the capitals instead of a touch low. */
+      margin-left: 0.35rem;
+      position: relative;
+      top: -0.08em;
+    }
     .summary {
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
@@ -128,6 +140,11 @@ export class AmbienceScenesList extends LitElement {
       border-left: 2px solid var(--divider-color, #e0e0e0);
       font-size: 0.85em;
       color: var(--secondary-text-color, #888);
+    }
+    .scene-description {
+      white-space: pre-wrap;
+      color: var(--secondary-text-color, #888);
+      margin-bottom: 0.5rem;
     }
     .condition-line {
       padding: 0.05rem 0;
@@ -643,6 +660,9 @@ export class AmbienceScenesList extends LitElement {
     const toggleLabel = isDisabled
       ? localize(this.hass, "ui.enable_scene", "Enable scene")
       : localize(this.hass, "ui.disable_scene", "Disable scene");
+    // Has a description? Drives the collapsed (?) affordance and the inline
+    // detail — computed once so the pairing of the two is legible.
+    const hasDescription = !!scene.description?.trim();
     return html`
       <li
         data-drag-index=${i}
@@ -689,6 +709,19 @@ export class AmbienceScenesList extends LitElement {
               scene,
               localize(this.hass, "ui.scene_n", "Scene {n}").replace("{n}", String(displayNum)),
             )}
+            ${
+              // The (?) is the collapsed-row affordance for the description;
+              // when the row is expanded the description is shown inline below,
+              // so the tooltip would be redundant — hide it.
+              hasDescription && !this._expanded.has(i)
+                ? html`<ambience-help
+                    class="name-help"
+                    .hass=${this.hass}
+                    multiline
+                    .text=${scene.description}
+                  ></ambience-help>`
+                : ""
+            }
           </div>
           <div class="summary">
             ${
@@ -713,6 +746,11 @@ export class AmbienceScenesList extends LitElement {
             this._expanded.has(i)
               ? html`
                 <div class="scene-detail">
+                  ${
+                    hasDescription
+                      ? html`<div class="scene-description">${scene.description}</div>`
+                      : ""
+                  }
                   ${this._whenStacked(scene)}
                   ${
                     scene.actions.length === 0

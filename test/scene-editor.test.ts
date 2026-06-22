@@ -2541,8 +2541,7 @@ describe("ambience-scene-editor — description", () => {
     expect(descSlot(el).querySelector(".description-text")).toBeNull();
   });
 
-  test("save includes a non-empty description and omits an empty one", async () => {
-    el = await mount({ name: "s", when: {}, actions: [], description: "Keep me" });
+  const saveAndCapture = (el: any): Scene | undefined => {
     let saved: Scene | undefined;
     el.addEventListener("save-scene", (e: CustomEvent) => {
       saved = e.detail.scene;
@@ -2551,6 +2550,34 @@ describe("ambience-scene-editor — description", () => {
       (b: any) => b.textContent.trim() === "Save scene",
     ) as HTMLButtonElement;
     saveBtn.click();
-    expect(saved?.description).toBe("Keep me");
+    return saved;
+  };
+
+  test("save includes a non-empty description", async () => {
+    el = await mount({ name: "s", when: {}, actions: [], description: "Keep me" });
+    expect(saveAndCapture(el)?.description).toBe("Keep me");
+  });
+
+  test("save omits an empty description", async () => {
+    // A whitespace-only description never persists — the saved scene must not
+    // carry it (defends `_setDescription`'s `v.trim() ? v : undefined`).
+    el = await mount({ name: "s", when: {}, actions: [] });
+    (el.shadowRoot.querySelector("button.add-description") as HTMLButtonElement).dispatchEvent(
+      new MouseEvent("click", { bubbles: true, composed: true }),
+    );
+    await el.updateComplete;
+    const ta = el.shadowRoot.querySelector("textarea.description-input") as HTMLTextAreaElement;
+    ta.value = "   ";
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    await el.updateComplete;
+    expect(saveAndCapture(el)?.description).toBeUndefined();
+  });
+
+  test("a whitespace-only stored description shows the link, not a blank display", async () => {
+    // Hand-edited/legacy storage could carry a whitespace-only string; the slot
+    // must treat it as "no description" (the link), not render a blank summary.
+    el = await mount({ name: "s", when: {}, actions: [], description: "   " });
+    expect(el.shadowRoot.querySelector("button.add-description")).not.toBeNull();
+    expect(descSlot(el).querySelector(".description-text")).toBeNull();
   });
 });

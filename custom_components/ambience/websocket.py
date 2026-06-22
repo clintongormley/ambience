@@ -1160,12 +1160,11 @@ async def _ws_history_subscribe(
     history = hass.data[DOMAIN][DATA_HISTORY]
 
     @callback
-    def _forward(payload: tuple[str, str, str | None]) -> None:
+    def _forward(payload: tuple[str, str | None, str | None]) -> None:
         op, kind, sid = payload
+        changed = (kind, sid) if kind is not None else None
         connection.send_message(
-            websocket_api.event_message(
-                msg["id"], history.snapshot(op=op, changed_scope=(kind, sid))
-            )
+            websocket_api.event_message(msg["id"], history.snapshot(op=op, changed_scope=changed))
         )
 
     connection.subscriptions[msg["id"]] = async_dispatcher_connect(
@@ -1230,7 +1229,7 @@ async def _ws_history_undo(
             },
         )
         return
-    history.notify_changed("undo", "house", None)
+    history.notify_changed("undo")
     connection.send_result(msg["id"], {"ok": False})
 
 
@@ -1261,7 +1260,7 @@ async def _ws_history_redo(
             },
         )
         return
-    history.notify_changed("redo", "house", None)
+    history.notify_changed("redo")
     connection.send_result(msg["id"], {"ok": False})
 
 

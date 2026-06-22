@@ -6,6 +6,7 @@ import type {
   FloorRegistryEvent,
   HassConnection,
   HistoryAction,
+  HistoryApplyResult,
   HistorySnapshot,
   LiveEntry,
   LiveMessage,
@@ -527,12 +528,7 @@ export class ScopeStore implements ReactiveController {
 
   /** Apply an undo/redo result: write the restored config into the affected
    *  scope's cache so the on-screen list reflects it immediately. */
-  private _applyHistoryResult(r: {
-    ok: boolean;
-    scope_kind?: string;
-    scope_id?: string | null;
-    config?: ScopeConfig;
-  }): void {
+  private _applyHistoryResult(r: HistoryApplyResult): void {
     if (!r.ok || !r.config || r.scope_kind === undefined) return;
     this.setConfig(scopeFromParts(r.scope_kind, r.scope_id ?? null), normalizeConfig(r.config));
   }

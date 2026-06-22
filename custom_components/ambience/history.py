@@ -117,5 +117,7 @@ class ChangeHistory:
             ),
         }
 
-    def notify_changed(self, op: str, scope_kind: str, scope_id: str | None) -> None:
+    def notify_changed(
+        self, op: str, scope_kind: str | None = None, scope_id: str | None = None
+    ) -> None:
         async_dispatcher_send(self._hass, SIGNAL_HISTORY_CHANGED, (op, scope_kind, scope_id))

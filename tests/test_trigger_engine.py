@@ -2371,3 +2371,50 @@ async def test_no_match_clears_matched_but_keeps_applied_scene(hass) -> None:
 
     assert get_last_matched(hass, "area", "a", "g") is None  # solid dot clears
     assert get_last_applied_scene(hass, "area", "a", "g") == 0  # greyed dot persists
+
+
+async def test_winning_blocker_sets_last_matched_not_applied_scene(hass) -> None:
+    """A winning blocker (winner with no actions) records itself as last_matched
+    (the live ● winner) but does NOT set last_applied_scene — so the panel shows a
+    solid dot on the blocker while the prior real winner keeps its stale ◌ dot."""
+    from custom_components.ambience.service import (
+        get_last_applied_scene,
+        get_last_matched,
+        set_last_applied_scene,
+    )
+
+    blocker = {"when": {"tod": "evening"}, "category": "g", "actions": []}
+    tod = CacheCondition(TriggerSpec(entities=frozenset({"sensor.x"})), "evening")
+    hass.data[DOMAIN] = {
+        DATA_STORE: FakeStore([("area", "a", {"scenes": [blocker]})]),
+        DATA_CONDITIONS: {"tod": tod},
+        DATA_SWITCHES: {("area", "a"): SimpleNamespace(is_on=True)},
+        DATA_EXPOSED_ACTIONS: ExposedActionsStore(_FakeExposedStorage()),
+    }
+    engine = AutoTriggerEngine(hass)
+    engine.async_rebuild()
+    engine._snapshots = {"tod": "evening"}
+    set_last_applied_scene(hass, "area", "a", "g", 5)  # a prior real winner is still applied
+
+    await engine._resolve_and_apply("area", "a", "g")
+
+    assert get_last_matched(hass, "area", "a", "g") == 0  # the blocker is the live winner
+    assert get_last_applied_scene(hass, "area", "a", "g") == 5  # prior winner still 'applied'
+
+
+async def test_dropout_to_unavailable_leaves_last_matched_unchanged(hass) -> None:
+    """The unavailable drop-out (a blip on the triggering entity, non-guard winner)
+    must NOT touch last_matched, so the live dot doesn't flicker off and back."""
+    from custom_components.ambience.service import get_last_matched, set_last_matched
+    from custom_components.ambience.trace import CauseKind, TriggerCause
+
+    engine, _tod = _apply_engine(hass, switch_on=True)
+    engine._snapshots = {"tod": "evening"}  # a normal eval would resolve to scene 0
+    set_last_matched(hass, "area", "a", "g", 1)  # stale prior live value (NOT the winner)
+
+    cause = TriggerCause(kind=CauseKind.ENTITY, entity_id="binary_sensor.x", new="unavailable")
+    await engine._resolve_and_apply("area", "a", "g", cause=cause)
+
+    # The blip dropped out before resolving a winner, so last_matched is left as-is
+    # (it was NOT updated to the would-be winner 0).
+    assert get_last_matched(hass, "area", "a", "g") == 1

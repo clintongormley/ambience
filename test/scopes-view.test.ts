@@ -3303,8 +3303,8 @@ describe("ambience-scopes-view", () => {
     expect(scenesList).toBeTruthy();
     await scenesList.updateComplete;
 
-    // liveSuppressed must be true for a disabled scope → no .live-dot rendered.
+    // liveSuppressed must be true for a disabled scope → no live dot rendered.
     expect(scenesList.liveSuppressed).toBe(true);
-    expect(scenesList.shadowRoot.querySelectorAll(".live-dot").length).toBe(0);
+    expect(scenesList.shadowRoot.querySelectorAll("ambience-live-dot").length).toBe(0);
   });
 });

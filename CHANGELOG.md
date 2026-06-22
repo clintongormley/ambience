@@ -8,6 +8,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- Live scene indicator: each scene in the panel now shows a small dot for its
+  live state — a green dot on the scene that currently matches, and a hollow dot
+  on a scene whose actions are still applied but no longer match. It updates
+  automatically; tap a dot for an explanation.
+
 ### Fixed
 
 - Long scene conditions and scope names now wrap inside the card on narrow and

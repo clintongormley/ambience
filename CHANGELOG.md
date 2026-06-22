@@ -8,6 +8,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- Scenes can now have an optional description. Add one from the scene editor via
+  the "+ Add description" link below Scope. On the panel it appears as a "?"
+  tooltip next to the scene name, and inline beneath the scene when you expand
+  it.
+
 ## [0.25.0] - 2026-06-22
 
 ### Added

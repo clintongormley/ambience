@@ -454,3 +454,34 @@ def test_does_not_leak_to_parent_git_dir_via_env(tmp_path: Path, monkeypatch):
 
     config_after = (parent_git / "config").read_text()
     assert config_before == config_after
+
+
+def test_cleans_up_release_branch_when_promote_fails(tmp_path: Path):
+    """A failure between creating chore/release and the release commit (here: an
+    unpromotable CHANGELOG with no [Unreleased]) must not strand a half-prepared
+    branch. release.sh returns to the original branch, discards the partial bump,
+    and deletes chore/release so a retry starts clean."""
+    _init_repo(tmp_path)
+    # Remove the [Unreleased] section the fixture seeds so `changelog.py promote`
+    # fails — after the version bump, before the release commit.
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## [0.1.0] - 2026-01-01\n\n- old\n")
+    _git("commit", "-aqm", "changelog without Unreleased", cwd=tmp_path)
+
+    result = _run(tmp_path, "0.2.0", "--no-push")
+    assert result.returncode != 0
+
+    # Back on the original branch, not stranded on the release branch.
+    head = _git(
+        "rev-parse", "--abbrev-ref", "HEAD", cwd=tmp_path, capture_output=True, text=True
+    ).stdout.strip()
+    assert head == "main"
+
+    # The release branch was cleaned up (a retry won't trip the "branch exists" guard).
+    branches = _git(
+        "branch", "--list", RELEASE_BRANCH, cwd=tmp_path, capture_output=True, text=True
+    ).stdout
+    assert RELEASE_BRANCH not in branches
+
+    # No stranded uncommitted bump left in the working tree.
+    porcelain = _git("status", "--porcelain", cwd=tmp_path, capture_output=True, text=True).stdout
+    assert porcelain == "", f"stranded changes: {porcelain!r}"

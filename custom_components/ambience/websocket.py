@@ -29,6 +29,7 @@ from .const import (
     DATA_TRACE_BUFFER,
     DOMAIN,
     SIGNAL_EXPOSED_ASSISTANTS_UPDATED,
+    SIGNAL_HISTORY_CHANGED,
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
     SIGNAL_UNIT_LIVE,
@@ -1148,6 +1149,33 @@ async def _ws_categories_delete(
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/history/subscribe"})
+@websocket_api.async_response
+async def _ws_history_subscribe(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Stream the undo/redo snapshot: the current state, then on each change."""
+    history = hass.data[DOMAIN][DATA_HISTORY]
+
+    @callback
+    def _forward(payload: tuple[str, str, str | None]) -> None:
+        op, kind, sid = payload
+        connection.send_message(
+            websocket_api.event_message(
+                msg["id"], history.snapshot(op=op, changed_scope=(kind, sid))
+            )
+        )
+
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(
+        hass, SIGNAL_HISTORY_CHANGED, _forward
+    )
+    connection.send_result(msg["id"])
+    connection.send_message(websocket_api.event_message(msg["id"], history.snapshot()))
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "ambience/live/subscribe"})
 @websocket_api.async_response
 async def _ws_live_subscribe(
@@ -1389,6 +1417,7 @@ _WS_HANDLERS = (
     _ws_auto_triggers_list,
     _ws_traces_list,
     _ws_traces_clear,
+    _ws_history_subscribe,
     _ws_live_subscribe,
     _ws_scope_diagnostics,
     _ws_simulate_inputs,

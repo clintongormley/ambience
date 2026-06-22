@@ -528,7 +528,7 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
       .details=${n}
       .summary=${n.join(`
 `)}
-    ></ambience-problem-flag>`}_renderRow(e,i,n){let s=o(this.hass,"ui.unpin","Unpin (return to automatic order)"),a=i.enabled===!1,l=a?o(this.hass,"ui.enable_scene","Enable scene"):o(this.hass,"ui.disable_scene","Disable scene");return d`
+    ></ambience-problem-flag>`}_renderRow(e,i,n){let s=o(this.hass,"ui.unpin","Unpin (return to automatic order)"),a=i.enabled===!1,l=a?o(this.hass,"ui.enable_scene","Enable scene"):o(this.hass,"ui.disable_scene","Disable scene"),u=!!i.description?.trim();return d`
       <li
         data-drag-index=${e}
         class="${this._drag.over===e?"drag-over ":""}${this._drag.from===e?"dragging ":""}${a?"disabled":""}"
@@ -538,14 +538,14 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
                 class="pin"
                 title=${s}
                 aria-label=${s}
-                @pointerdown=${u=>this._drag.start(e,u)}
-                @click=${u=>{if(u.stopPropagation(),this._drag.moved){this._drag.moved=!1;return}this._emit("unpin-scene",{index:e})}}
+                @pointerdown=${h=>this._drag.start(e,h)}
+                @click=${h=>{if(h.stopPropagation(),this._drag.moved){this._drag.moved=!1;return}this._emit("unpin-scene",{index:e})}}
               >
                 📌
               </button>`:d`<span
                 class="handle"
                 title=${o(this.hass,"ui.drag_to_reorder","Drag to reorder")}
-                @pointerdown=${u=>this._drag.start(e,u)}
+                @pointerdown=${h=>this._drag.start(e,h)}
                 >⠿</span
               >`}
         </span>
@@ -554,7 +554,7 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
         <div class="body" @click=${()=>this._toggleScene(e)}>
           <div class="name">
             ${Mi(i,o(this.hass,"ui.scene_n","Scene {n}").replace("{n}",String(n)))}
-            ${i.description?.trim()&&!this._expanded.has(e)?d`<ambience-help
+            ${u&&!this._expanded.has(e)?d`<ambience-help
                     class="name-help"
                     .hass=${this.hass}
                     multiline
@@ -572,18 +572,18 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
           </div>
           ${this._expanded.has(e)?d`
                 <div class="scene-detail">
-                  ${i.description?.trim()?d`<div class="scene-description">${i.description}</div>`:""}
+                  ${u?d`<div class="scene-description">${i.description}</div>`:""}
                   ${this._whenStacked(i)}
                   ${i.actions.length===0?d`<div class="noop-detail">
                         ${this._blockerSummary(i)}
                       </div>`:d`<div class="actions-detail">
-                        ${i.actions.map(u=>{let h=this._actionParamsString(u),p=this._actionLabel(u),f=h?`${p} \xB7 ${h}`:p;return d`
+                        ${i.actions.map(h=>{let p=this._actionParamsString(h),f=this._actionLabel(h),_=p?`${f} \xB7 ${p}`:f;return d`
                             <div class="actions-detail-item">
-                              <div class="action-header">${f}</div>
-                              ${u.entity_ids.length===0?d`<div class="no-targets">
+                              <div class="action-header">${_}</div>
+                              ${h.entity_ids.length===0?d`<div class="no-targets">
                                     ${o(this.hass,"ui.no_targets","(no targets)")}
                                   </div>`:d`<ul class="entity-list">
-                                    ${u.entity_ids.map(_=>d`<li>${this._entityName(_)}</li>`)}
+                                    ${h.entity_ids.map(v=>d`<li>${this._entityName(v)}</li>`)}
                                   </ul>`}
                             </div>
                           `})}
@@ -596,7 +596,7 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
         </div>
         <button
           class="toggle"
-          @click=${u=>{u.stopPropagation(),this._emit("toggle-scene-enabled",{index:e,enabled:a})}}
+          @click=${h=>{h.stopPropagation(),this._emit("toggle-scene-enabled",{index:e,enabled:a})}}
           title=${l}
           aria-label=${l}
         >
@@ -609,7 +609,7 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
           .hass=${this.hass}
           .label=${o(this.hass,"ui.scene_actions","Scene actions")}
           .items=${[{id:"edit",label:o(this.hass,"ui.edit","Edit"),icon:"mdi:pencil"},{id:"duplicate",label:o(this.hass,"ui.duplicate","Duplicate"),icon:"mdi:content-duplicate"},{id:"run",label:o(this.hass,"ui.run_actions","Run actions"),icon:"mdi:play"},{id:"delete",label:o(this.hass,"ui.title_delete","Delete"),icon:"mdi:delete",danger:!0,dividerBefore:!0}]}
-          @menu-action=${u=>this._onSceneMenu(e,u.detail.id)}
+          @menu-action=${h=>this._onSceneMenu(e,h.detail.id)}
         ></ambience-kebab-menu>
       </li>
     `}render(){let e=this._sections().filter(n=>n.rows.length>0);if(e.length===0){let n=this.filterCategory?{category:this.filterCategory}:{};return d`
@@ -2538,7 +2538,7 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
       white-space: pre-wrap;
       margin-top: 0.25rem;
     }
-  `,c([m({attribute:!1})],ne.prototype,"condition",2),c([m({attribute:!1})],ne.prototype,"value",2),c([m({attribute:!1})],ne.prototype,"periods",2),c([m({attribute:!1})],ne.prototype,"luxRanges",2),c([m({attribute:!1})],ne.prototype,"dayConfig",2),c([m({attribute:!1})],ne.prototype,"weatherConfig",2),c([m({attribute:!1})],ne.prototype,"hass",2),ne=c([w("ambience-condition-input")],ne);function Rc(t){return t!=null&&typeof t=="object"&&Array.isArray(t.who)&&t.who.length===0}function Dc(t){return t==="people"?{quant:"everyone",where:"home"}:null}function Ma(t,r){return!!t&&!!r&&N(t)===N(r)}var Hc={state:Ha,day:La,lux:Ta,unavailable:Ia},S=class extends b{constructor(){super(...arguments);this.open=!1;this.scene=null;this.conditions=[];this.availableActions=[];this.categories=[];this.schemas={};this.scopes=[];this.takenNames=new Map;this.saveError="";this._draft=null;this._open=null;this._showError=!1;this._addOrder=[];this._serviceHasTarget=new Map;this._conditionError=new Map;this._onNameInput=e=>{this._setName(e.target.value)};this._onDescriptionInput=e=>{this._setDescription(e.target.value)};this._onDescriptionHaForm=e=>{e.stopPropagation(),this._setDescription(e.detail.value.description??"")};this._onAddCondition=e=>{let i=e.target,n=i.value;i.value="",this._addCondition(n)};this._onAddConditionHaForm=e=>{e.stopPropagation();let i=e.detail.value.add;i!==S._ADD_CONDITION_PLACEHOLDER&&this._addCondition(i)};this._onAddAction=e=>{let i=e.target,n=i.value;i.value="",this._addActionSlot(n)};this._onAddActionHaForm=e=>{e.stopPropagation();let i=e.detail.value.add;i!==S._ADD_ACTION_PLACEHOLDER&&this._addActionSlot(i)};this._onApplyToggle=e=>{if(!this._draft)return;let i={...this._draft};e.target.checked?i.apply="always":delete i.apply,this._draft=i}}_onConditionInvalid(e,i){i?this._conditionError.set(e,i):this._conditionError.delete(e)}connectedCallback(){super.connectedCallback(),ie(this)}willUpdate(e){e.has("open")&&this.open&&(this._draft=this.scene?JSON.parse(JSON.stringify(this.scene)):null,this._scope=this.scope,this._open=null,this._showError=!1,this._addOrder=[],this._conditionError=new Map)}_setName(e){this._draft&&(this._draft={...this._draft,name:e||void 0})}_setDestination(e){let i=this.scopes[e];if(!i||!this._draft||(this._scope=i.scope,!this.hass))return;let n=new Set(Ri(this.hass,this._scope,[]));this._draft={...this._draft,actions:this._draft.actions.map(s=>({...s,entity_ids:s.entity_ids.filter(a=>n.has(a))}))}}_renderDestination(){return d`
+  `,c([m({attribute:!1})],ne.prototype,"condition",2),c([m({attribute:!1})],ne.prototype,"value",2),c([m({attribute:!1})],ne.prototype,"periods",2),c([m({attribute:!1})],ne.prototype,"luxRanges",2),c([m({attribute:!1})],ne.prototype,"dayConfig",2),c([m({attribute:!1})],ne.prototype,"weatherConfig",2),c([m({attribute:!1})],ne.prototype,"hass",2),ne=c([w("ambience-condition-input")],ne);function Rc(t){return t!=null&&typeof t=="object"&&Array.isArray(t.who)&&t.who.length===0}function Dc(t){return t==="people"?{quant:"everyone",where:"home"}:null}function Ma(t,r){return!!t&&!!r&&N(t)===N(r)}var Hc={state:Ha,day:La,lux:Ta,unavailable:Ia},S=class extends b{constructor(){super(...arguments);this.open=!1;this.scene=null;this.conditions=[];this.availableActions=[];this.categories=[];this.schemas={};this.scopes=[];this.takenNames=new Map;this.saveError="";this._draft=null;this._open=null;this._showError=!1;this._addOrder=[];this._serviceHasTarget=new Map;this._conditionError=new Map;this._onNameInput=e=>{this._setName(e.target.value)};this._onDescriptionInput=e=>{this._setDescription(e.target.value)};this._onDescriptionHaForm=e=>{e.stopPropagation(),this._setDescription(e.detail.value.description??"")};this._descriptionLabel=()=>o(this.hass,"ui.description","Description");this._onAddCondition=e=>{let i=e.target,n=i.value;i.value="",this._addCondition(n)};this._onAddConditionHaForm=e=>{e.stopPropagation();let i=e.detail.value.add;i!==S._ADD_CONDITION_PLACEHOLDER&&this._addCondition(i)};this._onAddAction=e=>{let i=e.target,n=i.value;i.value="",this._addActionSlot(n)};this._onAddActionHaForm=e=>{e.stopPropagation();let i=e.detail.value.add;i!==S._ADD_ACTION_PLACEHOLDER&&this._addActionSlot(i)};this._onApplyToggle=e=>{if(!this._draft)return;let i={...this._draft};e.target.checked?i.apply="always":delete i.apply,this._draft=i}}_onConditionInvalid(e,i){i?this._conditionError.set(e,i):this._conditionError.delete(e)}connectedCallback(){super.connectedCallback(),ie(this)}willUpdate(e){e.has("open")&&this.open&&(this._draft=this.scene?JSON.parse(JSON.stringify(this.scene)):null,this._scope=this.scope,this._open=null,this._showError=!1,this._addOrder=[],this._conditionError=new Map)}_setName(e){this._draft&&(this._draft={...this._draft,name:e||void 0})}_setDestination(e){let i=this.scopes[e];if(!i||!this._draft||(this._scope=i.scope,!this.hass))return;let n=new Set(Ri(this.hass,this._scope,[]));this._draft={...this._draft,actions:this._draft.actions.map(s=>({...s,entity_ids:s.entity_ids.filter(a=>n.has(a))}))}}_renderDestination(){return d`
       <div class="scope-menu" role="listbox">
         ${this.scopes.map((e,i)=>d`<button
             class="scope-option"
@@ -2573,12 +2573,12 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
           <span class="summary-label"><strong>${n}</strong></span>
         </div>
       </div>
-    `}_renderNameInputControl(e){let i=bn();return i==="ha-input"?d`<ha-input label=${o(this.hass,"ui.name_optional","Name (optional)")} .value=${e} @input=${this._onNameInput}></ha-input>`:i==="ha-textfield"?d`<ha-textfield label=${o(this.hass,"ui.name_optional","Name (optional)")} .value=${e} @input=${this._onNameInput}></ha-textfield>`:d`<input type="text" .value=${e} @input=${this._onNameInput} />`}_setDescription(e){this._draft&&(this._draft={...this._draft,description:e.trim()?e:void 0})}_renderDescriptionHaForm(e){let i=[{name:"description",selector:{text:{multiline:!0}}}];return d`
+    `}_renderNameInputControl(e){let i=bn();return i==="ha-input"?d`<ha-input label=${o(this.hass,"ui.name_optional","Name (optional)")} .value=${e} @input=${this._onNameInput}></ha-input>`:i==="ha-textfield"?d`<ha-textfield label=${o(this.hass,"ui.name_optional","Name (optional)")} .value=${e} @input=${this._onNameInput}></ha-textfield>`:d`<input type="text" .value=${e} @input=${this._onNameInput} />`}_setDescription(e){this._draft&&(this._draft={...this._draft,description:e.trim()?e:void 0})}_renderDescriptionHaForm(e){return d`
       <ha-form
         .hass=${this.hass}
-        .schema=${i}
+        .schema=${S._DESCRIPTION_SCHEMA}
         .data=${{description:e}}
-        .computeLabel=${()=>o(this.hass,"ui.description","Description")}
+        .computeLabel=${this._descriptionLabel}
         @value-changed=${this._onDescriptionHaForm}
       ></ha-form>
     `}_renderDescriptionEditor(e){return customElements.get("ha-form")?this._renderDescriptionHaForm(e):d`<textarea
@@ -2925,7 +2925,7 @@ var eo=Object.defineProperty;var to=Object.getOwnPropertyDescriptor;var c=(t,r,e
     .category-option[aria-selected="true"] {
       background: var(--secondary-background-color, #eee); font-weight: 600;
     }
-  `],S._ADD_CONDITION_PLACEHOLDER="__add_condition__",S._ADD_ACTION_PLACEHOLDER="__add_action__",c([m({type:Boolean,reflect:!0})],S.prototype,"open",2),c([m({attribute:!1})],S.prototype,"scene",2),c([m({attribute:!1})],S.prototype,"conditions",2),c([m({attribute:!1})],S.prototype,"periods",2),c([m({attribute:!1})],S.prototype,"luxRanges",2),c([m({attribute:!1})],S.prototype,"dayConfig",2),c([m({attribute:!1})],S.prototype,"weatherConfig",2),c([m({attribute:!1})],S.prototype,"availableActions",2),c([m({attribute:!1})],S.prototype,"categories",2),c([m({attribute:!1})],S.prototype,"schemas",2),c([m({attribute:!1})],S.prototype,"hass",2),c([m({attribute:!1})],S.prototype,"scope",2),c([m({attribute:!1})],S.prototype,"scopes",2),c([m({attribute:!1})],S.prototype,"takenNames",2),c([m({attribute:!1})],S.prototype,"saveError",2),c([g()],S.prototype,"_draft",2),c([g()],S.prototype,"_scope",2),c([g()],S.prototype,"_open",2),c([g()],S.prototype,"_showError",2),c([g()],S.prototype,"_addOrder",2),c([g()],S.prototype,"_serviceHasTarget",2),S=c([w("ambience-scene-editor")],S);function Oc(t,r,e,i){return r==="time_of_day"?Se(t,e,i):r==="weather"?ht(t,e):e}var tr=y`
+  `],S._DESCRIPTION_SCHEMA=[{name:"description",selector:{text:{multiline:!0}}}],S._ADD_CONDITION_PLACEHOLDER="__add_condition__",S._ADD_ACTION_PLACEHOLDER="__add_action__",c([m({type:Boolean,reflect:!0})],S.prototype,"open",2),c([m({attribute:!1})],S.prototype,"scene",2),c([m({attribute:!1})],S.prototype,"conditions",2),c([m({attribute:!1})],S.prototype,"periods",2),c([m({attribute:!1})],S.prototype,"luxRanges",2),c([m({attribute:!1})],S.prototype,"dayConfig",2),c([m({attribute:!1})],S.prototype,"weatherConfig",2),c([m({attribute:!1})],S.prototype,"availableActions",2),c([m({attribute:!1})],S.prototype,"categories",2),c([m({attribute:!1})],S.prototype,"schemas",2),c([m({attribute:!1})],S.prototype,"hass",2),c([m({attribute:!1})],S.prototype,"scope",2),c([m({attribute:!1})],S.prototype,"scopes",2),c([m({attribute:!1})],S.prototype,"takenNames",2),c([m({attribute:!1})],S.prototype,"saveError",2),c([g()],S.prototype,"_draft",2),c([g()],S.prototype,"_scope",2),c([g()],S.prototype,"_open",2),c([g()],S.prototype,"_showError",2),c([g()],S.prototype,"_addOrder",2),c([g()],S.prototype,"_serviceHasTarget",2),S=c([w("ambience-scene-editor")],S);function Oc(t,r,e,i){return r==="time_of_day"?Se(t,e,i):r==="weather"?ht(t,e):e}var tr=y`
   .eval { border: 1px solid var(--divider-color, #444); border-radius: 8px; padding: 0.7rem 0.9rem; }
   .cause-line { font-family: monospace; font-size: 0.85rem; color: var(--secondary-text-color, #bbb); margin-top: 0.2rem; }
   .raw-trigger { font-family: monospace; font-size: 0.8rem; color: var(--secondary-text-color, #bbb); margin-bottom: 0.4rem; }

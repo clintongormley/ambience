@@ -483,20 +483,30 @@ export class AmbienceSceneEditor extends LitElement {
     this._setDescription((e.target as HTMLTextAreaElement).value);
   };
 
+  // The description editor's ha-form schema is fully static, so it lives as a
+  // single shared reference rather than being rebuilt each render — a changing
+  // `.schema` makes ha-form re-initialise its sub-component, which (since the
+  // editor re-renders on every keystroke) would churn the textarea mid-typing.
+  // `computeLabel` is likewise a stable reference that reads `hass` at call time.
+  private static readonly _DESCRIPTION_SCHEMA = [
+    { name: "description", selector: { text: { multiline: true } } },
+  ];
+
   /* v8 ignore start -- ha-form path (real HA only); jsdom hits the native fallback */
   private _onDescriptionHaForm = (e: CustomEvent<{ value: { description: string } }>) => {
     e.stopPropagation();
     this._setDescription(e.detail.value.description ?? "");
   };
 
+  private _descriptionLabel = () => localize(this.hass, "ui.description", "Description");
+
   private _renderDescriptionHaForm(value: string) {
-    const schema = [{ name: "description", selector: { text: { multiline: true } } }];
     return html`
       <ha-form
         .hass=${this.hass}
-        .schema=${schema}
+        .schema=${AmbienceSceneEditor._DESCRIPTION_SCHEMA}
         .data=${{ description: value }}
-        .computeLabel=${() => localize(this.hass, "ui.description", "Description")}
+        .computeLabel=${this._descriptionLabel}
         @value-changed=${this._onDescriptionHaForm}
       ></ha-form>
     `;

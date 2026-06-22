@@ -660,6 +660,9 @@ export class AmbienceScenesList extends LitElement {
     const toggleLabel = isDisabled
       ? localize(this.hass, "ui.enable_scene", "Enable scene")
       : localize(this.hass, "ui.disable_scene", "Disable scene");
+    // Has a description? Drives the collapsed (?) affordance and the inline
+    // detail — computed once so the pairing of the two is legible.
+    const hasDescription = !!scene.description?.trim();
     return html`
       <li
         data-drag-index=${i}
@@ -710,7 +713,7 @@ export class AmbienceScenesList extends LitElement {
               // The (?) is the collapsed-row affordance for the description;
               // when the row is expanded the description is shown inline below,
               // so the tooltip would be redundant — hide it.
-              scene.description?.trim() && !this._expanded.has(i)
+              hasDescription && !this._expanded.has(i)
                 ? html`<ambience-help
                     class="name-help"
                     .hass=${this.hass}
@@ -744,7 +747,7 @@ export class AmbienceScenesList extends LitElement {
               ? html`
                 <div class="scene-detail">
                   ${
-                    scene.description?.trim()
+                    hasDescription
                       ? html`<div class="scene-description">${scene.description}</div>`
                       : ""
                   }

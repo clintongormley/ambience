@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-06-22
+
 ### Added
 
 - Live scene indicator: each scene in the panel now shows a small dot for its

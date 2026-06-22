@@ -21,10 +21,14 @@ describe("ScopeStore history state", () => {
       .mockResolvedValue({ ok: true, config: { scenes: [] } } as any);
     const { store } = makeStore();
     await store.mutate({ kind: "house" }, { scenes: [] }, { action: "delete", scene_name: "X" });
-    expect(spy).toHaveBeenCalledWith(expect.anything(), { scenes: [] }, {
-      action: "delete",
-      scene_name: "X",
-    });
+    expect(spy).toHaveBeenCalledWith(
+      expect.anything(),
+      { scenes: [] },
+      {
+        action: "delete",
+        scene_name: "X",
+      },
+    );
     spy.mockRestore();
   });
 

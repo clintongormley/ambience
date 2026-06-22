@@ -10,8 +10,18 @@ function makeView(opts: { canUndo?: boolean; canRedo?: boolean; editing?: unknow
   return { el, undo, redo };
 }
 
-function key(init: { key: string; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; target?: unknown }) {
-  return { preventDefault: vi.fn(), target: { tagName: "DIV" }, ...init } as unknown as KeyboardEvent;
+function key(init: {
+  key: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+  target?: unknown;
+}) {
+  return {
+    preventDefault: vi.fn(),
+    target: { tagName: "DIV" },
+    ...init,
+  } as unknown as KeyboardEvent;
 }
 
 describe("AmbienceScopesView undo/redo shortcuts", () => {

@@ -169,3 +169,12 @@ async def test_redo_skips_deleted_scope(hass, hass_ws_client, installed) -> None
     res = (await client.receive_json())["result"]
     assert res == {"ok": False}  # the redo entry's scope is gone → dropped
     assert hass.data[DOMAIN][DATA_HISTORY].snapshot()["can_redo"] is False
+
+
+async def test_scope_exists_unknown_kind_returns_false(hass, installed) -> None:
+    """_scope_exists returns True for the known 'house' kind and False (safe default)
+    for any unrecognised scope_kind — documenting the defensive fall-through contract."""
+    from custom_components.ambience.websocket import _scope_exists
+
+    assert _scope_exists(hass, "house", None) is True
+    assert _scope_exists(hass, "nonsense", None) is False

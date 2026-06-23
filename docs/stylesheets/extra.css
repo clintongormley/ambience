@@ -61,3 +61,20 @@
   max-width: 28rem;
   height: auto;
 }
+
+/* Cap content images (screenshots) so a wide PNG doesn't stretch across the
+   full reading column. max-width only shrinks oversized images — smaller
+   images (and the inline "My Home Assistant" badge) keep their natural size. */
+.md-typeset img {
+  max-width: 800px;
+  height: auto;
+}
+
+/* Heading weights: lighter section headers (h2), heavier sub-headers (h3). */
+.md-typeset h2 {
+  font-weight: 400;
+}
+
+.md-typeset h3 {
+  font-weight: 600;
+}

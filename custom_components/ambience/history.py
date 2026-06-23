@@ -109,6 +109,7 @@ class ChangeHistory:
         self,
         op: str | None = None,
         changed_scope: tuple[str, str | None] | None = None,
+        is_self: bool = False,
     ) -> dict[str, Any]:
         return {
             "op": op,
@@ -123,9 +124,21 @@ class ChangeHistory:
                 if changed_scope is not None
                 else None
             ),
+            # True only on the push delivered back to the connection that caused
+            # the change, so that tab can skip a redundant self-reload.
+            "is_self": is_self,
         }
 
     def notify_changed(
-        self, op: str, scope_kind: str | None = None, scope_id: str | None = None
+        self,
+        op: str,
+        scope_kind: str | None = None,
+        scope_id: str | None = None,
+        origin: Any = None,
     ) -> None:
-        async_dispatcher_send(self._hass, SIGNAL_HISTORY_CHANGED, (op, scope_kind, scope_id))
+        """Fire SIGNAL_HISTORY_CHANGED. `origin` is the websocket connection that
+        caused the change; each subscriber compares it to its own connection to
+        set `is_self` on the pushed snapshot."""
+        async_dispatcher_send(
+            self._hass, SIGNAL_HISTORY_CHANGED, (op, scope_kind, scope_id, origin)
+        )

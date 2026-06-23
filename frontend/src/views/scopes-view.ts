@@ -297,9 +297,21 @@ export class AmbienceScopesView extends LitElement {
       }
       .undo-toolbar {
         display: flex;
+        align-items: center;
         gap: 4px;
-        justify-content: flex-end;
         margin-bottom: 8px;
+      }
+      /* Next-change caption: takes the free space and truncates, so the buttons
+       stay pinned right and a long label never wraps the toolbar. Full text is
+       on the span's title (desktop hover). */
+      .undo-caption {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.85rem;
+        color: var(--secondary-text-color, #888);
       }
     `,
   ];
@@ -400,9 +412,16 @@ export class AmbienceScopesView extends LitElement {
     ]);
     // The store owns the registry subscriptions (and tears them down in
     // hostDisconnected); it calls back here so the view can drop a removed
-    // scope from its own expanded/editing state.
-    await this._store.subscribe((scope) => this._onScopeRemoved(scope));
+    // scope from its own expanded/editing state, and asks _scopeIsEditing
+    // whether to defer a cross-tab reload (editor open → banner, not reload).
+    await this._store.subscribe((scope) => this._onScopeRemoved(scope), this._scopeIsEditing);
   }
+
+  /** True while this tab has the scene editor open on `scope` — the editor
+   *  saves by stored index, so a live cross-tab reload then could splice into a
+   *  list that changed underneath it. The store defers such scopes to a banner. */
+  private _scopeIsEditing = (scope: Scope): boolean =>
+    this._editing !== null && scopeKey(this._editing.scope) === scopeKey(scope);
 
   override disconnectedCallback() {
     window.removeEventListener("keydown", this._onKeyDown);
@@ -434,6 +453,17 @@ export class AmbienceScopesView extends LitElement {
     // skip that so mount honours the persisted expanded/collapsed state intact.
     if (changed.has("filterCategory") && changed.get("filterCategory") !== undefined) {
       this._onFilterCategoryChanged();
+    }
+    // When the editor closes (or moves to a different scope), pick up any
+    // cross-tab change that was deferred to a banner while it was open.
+    if (changed.has("_editing")) {
+      const prev = changed.get("_editing") as EditingState | null | undefined;
+      const movedAway =
+        prev != null &&
+        (this._editing === null || scopeKey(this._editing.scope) !== scopeKey(prev.scope));
+      if (movedAway && this._store.staleScopes.some((s) => scopeKey(s) === scopeKey(prev.scope))) {
+        void this._store.refreshStaleScope(prev.scope);
+      }
     }
   }
 
@@ -1137,11 +1167,60 @@ export class AmbienceScopesView extends LitElement {
     `;
   }
 
+  /** Visible toolbar caption naming the next undo (or next redo when nothing is
+   *  undoable). Always rendered so touch users — who can't hover for the button
+   *  tooltip — can still see which change is next. */
+  private _historyCaption(): string {
+    if (this._store.canUndo) {
+      return localize(this.hass, "ui.history_undo_tooltip", "Undo: {change}", {
+        change: this._historyLabel(this._store.undoAction),
+      });
+    }
+    if (this._store.canRedo) {
+      return localize(this.hass, "ui.history_redo_tooltip", "Redo: {change}", {
+        change: this._historyLabel(this._store.redoAction),
+      });
+    }
+    return "";
+  }
+
+  /** Banners for scopes a different tab changed while their editor was open
+   *  here, so the live reload was deferred (see ScopeStore.staleScopes). */
+  private _renderStaleBanners() {
+    return this._store.staleScopes.map((scope) => {
+      const name = this._scopeName({
+        scope_kind: scope.kind,
+        scope_id: scope.kind === "house" ? null : scope.id,
+      });
+      return html`
+        <div class="banner banner-hint stale-banner">
+          <ha-icon class="banner-icon" icon="mdi:refresh"></ha-icon>
+          <div class="banner-text">
+            <span>
+              ${localize(
+                this.hass,
+                "ui.history_stale_banner",
+                "Scenes for {scope} changed in another tab.",
+                { scope: name },
+              )}
+            </span>
+          </div>
+          <button class="banner-cta" @click=${() => this._store.refreshStaleScope(scope)}>
+            ${localize(this.hass, "ui.history_stale_refresh", "Refresh")}
+          </button>
+        </div>
+      `;
+    });
+  }
+
   override render() {
+    const caption = this._historyCaption();
     return html`
       <div class="undo-toolbar">
+        <span class="undo-caption" title=${caption}>${caption}</span>
         ${this._renderHistoryButton("undo")}${this._renderHistoryButton("redo")}
       </div>
+      ${this._renderStaleBanners()}
       ${this._store.error ? html`<p class="error">${this._store.error}</p>` : ""}
       ${this._renderBanners()}
       <ul>

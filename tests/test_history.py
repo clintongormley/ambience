@@ -123,11 +123,18 @@ def test_discard_redo_drops(hass):
     assert h.snapshot()["can_redo"] is False
 
 
-def test_notify_changed_fires_signal_with_op_and_scope(hass):
+def test_notify_changed_fires_signal_with_op_scope_and_origin(hass):
     h = ChangeHistory(hass)
     h.record("area", "a", _cfg(), _cfg("A"), ADD)
     received: list = []
     unsub = async_dispatcher_connect(hass, SIGNAL_HISTORY_CHANGED, lambda p: received.append(p))
-    h.notify_changed("record", "area", "a")
+    origin = object()  # stands in for the originating websocket connection
+    h.notify_changed("record", "area", "a", origin)
     unsub()
-    assert received == [("record", "area", "a")]
+    assert received == [("record", "area", "a", origin)]
+
+
+def test_snapshot_marks_is_self(hass):
+    h = ChangeHistory(hass)
+    assert h.snapshot()["is_self"] is False
+    assert h.snapshot(is_self=True)["is_self"] is True

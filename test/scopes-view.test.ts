@@ -3328,4 +3328,54 @@ describe("ambience-scopes-view", () => {
     expect(scenesList.liveSuppressed).toBe(true);
     expect(scenesList.shadowRoot.querySelectorAll("ambience-live-dot").length).toBe(0);
   });
+
+  // --- undo/redo toolbar caption + cross-tab staleness --------------------
+
+  test("toolbar shows the next-undo caption text (visible without hover, for mobile)", async () => {
+    el = await mount();
+    el._store.canUndo = true;
+    el._store.undoAction = {
+      action: "delete",
+      scene_name: "Movie night",
+      scope_kind: "house",
+      scope_id: null,
+    };
+    await el.updateComplete;
+    const caption = el.shadowRoot.querySelector(".undo-toolbar .undo-caption");
+    expect(caption).toBeTruthy();
+    expect(caption.textContent).toContain("Movie night");
+  });
+
+  test("a scope whose editor is open here is reported as locked for cross-tab refresh", async () => {
+    el = await mount();
+    expect(el._scopeIsEditing({ kind: "area", id: "living_room" })).toBe(false);
+    el._editing = { scope: { kind: "area", id: "living_room" }, index: 0, isNew: true };
+    expect(el._scopeIsEditing({ kind: "area", id: "living_room" })).toBe(true);
+    expect(el._scopeIsEditing({ kind: "house" })).toBe(false);
+  });
+
+  test("shows a 'changed elsewhere' banner for a stale scope; Refresh reloads it", async () => {
+    el = await mount();
+    const scope = { kind: "area", id: "living_room" };
+    const spy = vi.spyOn(el._store, "refreshStaleScope").mockResolvedValue(undefined);
+    el._store.staleScopes = [scope];
+    await el.updateComplete;
+    const banner = el.shadowRoot.querySelector(".stale-banner");
+    expect(banner).toBeTruthy();
+    expect(banner.textContent).toContain("Living Room");
+    banner.querySelector(".banner-cta").click();
+    expect(spy).toHaveBeenCalledWith(scope);
+  });
+
+  test("closing the editor on a scope changed elsewhere reloads it", async () => {
+    el = await mount();
+    const scope = { kind: "area", id: "living_room" };
+    el._editing = { scope, index: 0, isNew: true };
+    await el.updateComplete;
+    el._store.staleScopes = [scope];
+    const spy = vi.spyOn(el._store, "refreshStaleScope").mockResolvedValue(undefined);
+    el._editing = null;
+    await el.updateComplete;
+    expect(spy).toHaveBeenCalledWith(scope);
+  });
 });

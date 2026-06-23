@@ -323,7 +323,7 @@ async def _save_scope(
     history = hass.data[DOMAIN][DATA_HISTORY]
     change = msg.get("change") or {"action": "edit", "scene_name": None}
     if history.record(scope_kind, scope_id, before, after, change):
-        history.notify_changed("record", scope_kind, scope_id)
+        history.notify_changed("record", scope_kind, scope_id, connection)
     # Recompute the overlap set so the save response reflects the just-saved config
     # rather than a cached set; the get path reads the cache.
     connection.send_result(
@@ -1160,11 +1160,14 @@ async def _ws_history_subscribe(
     history = hass.data[DOMAIN][DATA_HISTORY]
 
     @callback
-    def _forward(payload: tuple[str, str | None, str | None]) -> None:
-        op, kind, sid = payload
+    def _forward(payload: tuple[str, str | None, str | None, Any]) -> None:
+        op, kind, sid, origin = payload
         changed = (kind, sid) if kind is not None else None
         connection.send_message(
-            websocket_api.event_message(msg["id"], history.snapshot(op=op, changed_scope=changed))
+            websocket_api.event_message(
+                msg["id"],
+                history.snapshot(op=op, changed_scope=changed, is_self=origin is connection),
+            )
         )
 
     connection.subscriptions[msg["id"]] = async_dispatcher_connect(
@@ -1217,7 +1220,7 @@ async def _ws_history_undo(
             continue
         kind, sid, config = history.undo()
         full = await _apply_scope_config(hass, kind, sid, config)
-        history.notify_changed("undo", kind, sid)
+        history.notify_changed("undo", kind, sid, connection)
         connection.send_result(
             msg["id"],
             {
@@ -1247,7 +1250,7 @@ async def _ws_history_redo(
             continue
         kind, sid, config = history.redo()
         full = await _apply_scope_config(hass, kind, sid, config)
-        history.notify_changed("redo", kind, sid)
+        history.notify_changed("redo", kind, sid, connection)
         connection.send_result(
             msg["id"],
             {

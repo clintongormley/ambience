@@ -136,6 +136,13 @@ export class ScopeStore implements ReactiveController {
   @tracked() canRedo = false;
   @tracked() undoAction: HistoryAction | null = null;
   @tracked() redoAction: HistoryAction | null = null;
+  // Scopes changed in another tab while their editor was open here, so we
+  // deferred the live reload to avoid disrupting the in-progress edit. Drives a
+  // "changed elsewhere — refresh" banner.
+  @tracked() staleScopes: Scope[] = [];
+  // Predicate (set by the host on subscribe) telling us a scope is mid-edit
+  // here, so an external change to it should be deferred, not auto-reloaded.
+  private _isScopeLocked?: (scope: Scope) => boolean;
 
   // Registry-event unsubscribers, set once subscribe() resolves.
   private _unsubArea?: () => void;
@@ -193,8 +200,17 @@ export class ScopeStore implements ReactiveController {
    * refetch lands. The switch set only changes on add/remove, so an `update`
    * skips the switch refetch. Idempotent on disconnect: if the host tears down
    * before the subscriptions resolve, they're unsubscribed immediately.
+   *
+   * `isScopeLocked(scope)` lets the host defer a cross-tab reload while that
+   * scope is being edited here (the editor saves by index, so a live reload
+   * mid-edit could hit the wrong scene); deferred scopes surface via
+   * {@link staleScopes}.
    */
-  async subscribe(onRemove: (scope: Scope) => void): Promise<void> {
+  async subscribe(
+    onRemove: (scope: Scope) => void,
+    isScopeLocked?: (scope: Scope) => boolean,
+  ): Promise<void> {
+    this._isScopeLocked = isScopeLocked;
     const subArea = this._hass.connection.subscribeEvents<AreaRegistryEvent>((event) => {
       if (event.data.action === "remove") {
         onRemove({ kind: "area", id: event.data.area_id });
@@ -551,17 +567,45 @@ export class ScopeStore implements ReactiveController {
     }
   }
 
-  /** Handle a pushed history snapshot: update toolbar flags, and on a remote
-   *  undo/redo reload the affected scope so other tabs' lists stay correct. */
+  /** Handle a pushed history snapshot: update toolbar flags, and keep other
+   *  tabs' scene lists live. `is_self` is true on the push echoed back to the
+   *  tab that caused the change — that tab already has the data (via mutate or
+   *  the undo/redo response), so it skips the reload. An external change to a
+   *  scope being edited here is deferred to {@link staleScopes} (a banner)
+   *  rather than yanking the list out from under the editor. */
   private _onHistory(snap: HistorySnapshot): void {
     this.canUndo = snap.can_undo;
     this.canRedo = snap.can_redo;
     this.undoAction = snap.undo;
     this.redoAction = snap.redo;
-    if ((snap.op === "undo" || snap.op === "redo") && snap.changed_scope) {
-      void this.reloadScope(
-        scopeFromParts(snap.changed_scope.scope_kind, snap.changed_scope.scope_id),
-      );
+    if (!snap.changed_scope) return;
+    const scope = scopeFromParts(snap.changed_scope.scope_kind, snap.changed_scope.scope_id);
+    if (snap.is_self) {
+      // Our own change supersedes any pending "changed elsewhere" warning for it.
+      this._clearStale(scope);
+      return;
     }
+    if (this._isScopeLocked?.(scope)) this._markStale(scope);
+    else void this.reloadScope(scope);
+  }
+
+  private _markStale(scope: Scope): void {
+    const key = scopeKey(scope);
+    if (this.staleScopes.some((s) => scopeKey(s) === key)) return;
+    this.staleScopes = [...this.staleScopes, scope];
+  }
+
+  private _clearStale(scope: Scope): void {
+    const key = scopeKey(scope);
+    if (!this.staleScopes.some((s) => scopeKey(s) === key)) return;
+    this.staleScopes = this.staleScopes.filter((s) => scopeKey(s) !== key);
+  }
+
+  /** Load the external version of a scope that was deferred while edited here,
+   *  and drop it from the stale set. Called by the banner's Refresh action and
+   *  when the host closes the editor on a stale scope. */
+  async refreshStaleScope(scope: Scope): Promise<void> {
+    this._clearStale(scope);
+    await this.reloadScope(scope);
   }
 }

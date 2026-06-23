@@ -424,6 +424,9 @@ export type HistorySnapshot = {
   undo_count: number;
   redo_count: number;
   changed_scope: { scope_kind: string; scope_id: string | null } | null;
+  // True only on the push echoed to the tab that caused the change, so it can
+  // skip a redundant self-reload.
+  is_self: boolean;
 };
 
 export type HistoryApplyResult = {

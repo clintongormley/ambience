@@ -387,8 +387,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       history_action_reorder: "Reordered scenes in {scope}",
       history_action_unpin: 'Unpinned scene "{scene}" in {scope}',
       history_action_toggle: 'Toggled scene "{scene}" in {scope}',
-      history_stale_editor:
-        "Scenes here changed in another tab. Saving overwrites them; cancel to discard your edits and load the latest.",
+      history_conflict_body: "Another tab changed the scenes in this scope while you were editing.",
+      history_conflict_overwrite: "Overwrite theirs",
+      history_conflict_load: "Load theirs",
       script_triggers: "Triggers",
       script_triggers_help:
         "Re-evaluate this scene when these entities change. A script is opaque, so templated references may be missed — add any it depends on.",
@@ -926,8 +927,9 @@ export const AMBIENCE_STRINGS_BY_LOCALE: Record<string, Record<string, unknown>>
       history_action_reorder: "Escenas reordenadas en {scope}",
       history_action_unpin: 'Escena "{scene}" desfijada en {scope}',
       history_action_toggle: 'Escena "{scene}" activada/desactivada en {scope}',
-      history_stale_editor:
-        "Las escenas aquí cambiaron en otra pestaña. Guardar las sobrescribe; cancela para descartar tus cambios y cargar la última versión.",
+      history_conflict_body: "Otra pestaña cambió las escenas de este ámbito mientras editabas.",
+      history_conflict_overwrite: "Sobrescribir las suyas",
+      history_conflict_load: "Cargar las suyas",
       script_triggers: "Disparadores",
       script_triggers_help:
         "Reevalúa esta escena cuando cambien estas entidades. Un script es opaco, por lo que pueden perderse referencias en plantillas — añade las que dependan de él.",

@@ -2582,12 +2582,50 @@ describe("ambience-scene-editor — description", () => {
   });
 });
 
-describe("ambience-scene-editor — cross-tab staleness notice", () => {
-  test("shows a notice when scopeChangedElsewhere is set, and not otherwise", async () => {
+describe("ambience-scene-editor — cross-tab conflict dialog", () => {
+  test("shows a blocking conflict dialog when scopeChangedElsewhere, hidden otherwise", async () => {
     const el = await mount({ name: "S", when: {}, actions: [] });
-    expect(el.shadowRoot.querySelector(".stale-notice")).toBeFalsy();
+    expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeFalsy();
     el.scopeChangedElsewhere = true;
     await el.updateComplete;
-    expect(el.shadowRoot.querySelector(".stale-notice")).toBeTruthy();
+    expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeTruthy();
+  });
+
+  test("'Overwrite theirs' dismisses the dialog and keeps editing (no cancel)", async () => {
+    const el = await mount({ name: "S", when: {}, actions: [] });
+    const cancelSpy = vi.fn();
+    el.addEventListener("cancel-scene", cancelSpy);
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".conflict-overwrite").click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeFalsy();
+    expect(cancelSpy).not.toHaveBeenCalled();
+    expect(el.scopeChangedElsewhere).toBe(true); // still stale, just acknowledged
+  });
+
+  test("'Load theirs' discards the edit (dispatches cancel-scene)", async () => {
+    const el = await mount({ name: "S", when: {}, actions: [] });
+    const cancelSpy = vi.fn();
+    el.addEventListener("cancel-scene", cancelSpy);
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".conflict-load").click();
+    expect(cancelSpy).toHaveBeenCalled();
+  });
+
+  test("a fresh cross-tab change re-arms the dialog after 'Overwrite theirs'", async () => {
+    const el = await mount({ name: "S", when: {}, actions: [] });
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".conflict-overwrite").click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeFalsy();
+    // Scope reloaded/saved → no longer stale → re-arm for the next conflict.
+    el.scopeChangedElsewhere = false;
+    await el.updateComplete;
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeTruthy();
   });
 });

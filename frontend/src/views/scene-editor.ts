@@ -103,6 +103,8 @@ export class AmbienceSceneEditor extends LitElement {
       width: 90%; max-width: 40rem;
       height: calc(100vh - 24px);
       display: flex; flex-direction: column;
+      /* Positioning context for the conflict dialog overlay. */
+      position: relative;
     }
     .content {
       flex: 1; min-height: 0;
@@ -210,17 +212,34 @@ export class AmbienceSceneEditor extends LitElement {
       margin-top: 0.5rem;
       padding: 0.3rem 0;
     }
-    /* "Changed in another tab" warning, shown at the top of the editor body so
-       it's visible while editing (the panel-level banner would sit behind the
-       modal). */
-    .stale-notice {
-      margin-bottom: 0.75rem;
-      padding: 0.5rem 0.75rem;
-      border-radius: 4px;
-      font-size: 0.9em;
-      color: var(--primary-text-color, inherit);
-      background: color-mix(in srgb, var(--warning-color, #ffa600) 15%, var(--card-background-color, #fff));
+    /* Blocking "changed in another tab" conflict dialog, overlaying the editor
+       so the user must choose to overwrite or load the latest. */
+    .conflict-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      z-index: 1;
+    }
+    .conflict-dialog {
+      background: var(--card-background-color, #fff);
+      color: inherit;
       border: 1px solid var(--warning-color, #ffa600);
+      border-radius: 8px;
+      max-width: 22rem;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    }
+    .conflict-dialog p {
+      margin: 0 0 1rem 0;
+    }
+    .conflict-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
     }
     /* Scope icon in the destination summary + option list — matches the
        scope-header icon (HA's area/floor icon, or a per-kind default). */
@@ -292,8 +311,12 @@ export class AmbienceSceneEditor extends LitElement {
    */
   @property({ attribute: false }) saveError = "";
   // True when another tab changed this scene's scope while the editor is open.
-  // Saving will overwrite that change; cancelling discards the edit and loads it.
+  // Drives a blocking conflict dialog (overwrite mine vs load theirs).
   @property({ attribute: false }) scopeChangedElsewhere = false;
+  // Set when the user chose "Overwrite theirs" — dismisses the conflict dialog
+  // for this stale episode so they can keep editing. Re-armed when the scope is
+  // no longer stale (save/reload), so a fresh cross-tab change prompts again.
+  @state() private _staleAcknowledged = false;
 
   @state() private _draft: Scene | null = null;
   @state() private _scope?: Scope;
@@ -353,6 +376,12 @@ export class AmbienceSceneEditor extends LitElement {
       // Stale errors from a previous (cancelled) session would block the
       // first Save on a different scene until its widgets re-validate.
       this._conditionError = new Map();
+      this._staleAcknowledged = false;
+    }
+    // Re-arm the conflict dialog once the scope is no longer stale (the user
+    // saved or loaded the latest), so the next cross-tab change prompts again.
+    if (changed.has("scopeChangedElsewhere") && !this.scopeChangedElsewhere) {
+      this._staleAcknowledged = false;
     }
   }
 
@@ -1295,23 +1324,47 @@ export class AmbienceSceneEditor extends LitElement {
     this.dispatchEvent(new CustomEvent("cancel-scene", { bubbles: true, composed: true }));
   }
 
+  // Conflict dialog: "Overwrite theirs" keeps editing (the save will win);
+  // "Load theirs" discards this edit and the parent reloads the latest on close.
+  private _overwriteTheirs() {
+    this._staleAcknowledged = true;
+  }
+
+  private _loadTheirs() {
+    this._cancel();
+  }
+
+  private _renderConflictDialog() {
+    if (!this.scopeChangedElsewhere || this._staleAcknowledged) return "";
+    return html`
+      <div class="conflict-backdrop">
+        <div class="conflict-dialog" role="alertdialog" aria-modal="true">
+          <p>
+            ${localize(
+              this.hass,
+              "ui.history_conflict_body",
+              "Another tab changed the scenes in this scope while you were editing.",
+            )}
+          </p>
+          <div class="conflict-actions">
+            <button class="secondary conflict-load" @click=${this._loadTheirs}>
+              ${localize(this.hass, "ui.history_conflict_load", "Load theirs")}
+            </button>
+            <button class="primary conflict-overwrite" @click=${this._overwriteTheirs}>
+              ${localize(this.hass, "ui.history_conflict_overwrite", "Overwrite theirs")}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   override render() {
     if (!this._draft) return html``;
     const visibleConditions = this._visibleConditions();
     return html`
       <div class="modal" @click=${this._onModalClick}>
         <div class="content">
-          ${
-            this.scopeChangedElsewhere
-              ? html`<div class="stale-notice">
-                  ${localize(
-                    this.hass,
-                    "ui.history_stale_editor",
-                    "Scenes here changed in another tab. Saving overwrites them; cancel to discard your edits and load the latest.",
-                  )}
-                </div>`
-              : ""
-          }
           ${this._renderNameSlot()}
           ${this._renderCategorySlot()}
           ${this._renderDestinationSlot()}
@@ -1332,6 +1385,7 @@ export class AmbienceSceneEditor extends LitElement {
           <button class="secondary" @click=${this._cancel}>${localize(this.hass, "ui.cancel", "Cancel")}</button>
           <button class="primary" @click=${this._save}>${localize(this.hass, "ui.save_scene", "Save scene")}</button>
         </div>
+        ${this._renderConflictDialog()}
       </div>
     `;
   }

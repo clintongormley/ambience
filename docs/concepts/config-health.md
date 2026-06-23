@@ -1,63 +1,89 @@
 # Config health
 
-Ambience validates your configuration automatically and surfaces problems as Home Assistant **Repairs** issues. The checks run on startup, whenever you change a scope, and whenever an entity is added or removed — so an issue appears as soon as a problem is introduced and clears as soon as it is fixed.
+Ambience validates your configuration automatically and surfaces problems as
+Home Assistant **Repairs** issues. The checks run on startup, whenever you
+change a scope, and whenever an entity is added or removed — so an issue appears
+as soon as a problem is introduced and clears as soon as it is fixed.
 
----
+______________________________________________________________________
 
 ## Repairs issues
 
-Open **Settings → Repairs** in Home Assistant to see any active issues. Ambience raises a Repairs issue for each of the following problems.
+Open **Settings → Repairs** in Home Assistant to see any active issues. Ambience
+raises a Repairs issue for each of the following problems.
 
 ### Missing entity
 
 > **Ambience: a scene references a missing entity**
 
-A scene refers to an entity that does not exist — either in a condition (an entity Ambience monitors to decide which scene wins) or in an action (an entity Ambience tries to control).
+A scene refers to an entity that does not exist — either in a condition (an
+entity Ambience monitors to decide which scene wins) or in an action (an entity
+Ambience tries to control).
 
-Common causes: a typo in the entity id, or an entity that was deleted or renamed after the scene was saved.
+Common causes: a typo in the entity id, or an entity that was deleted or renamed
+after the scene was saved.
 
-To resolve it, open the scene in the Ambience editor, correct or remove the reference, and save. The issue clears automatically once all references are valid.
+To resolve it, open the scene in the Ambience editor, correct or remove the
+reference, and save. The issue clears automatically once all references are
+valid.
 
 ### Action overlap
 
 > **Ambience: an entity is controlled by multiple groups**
 
-The same entity appears in the actions of scenes in more than one scope group. For example, two categories in the same area both control `light.living_room`, or an area scene and the House scene both target it.
+The same entity appears in the actions of scenes in more than one scope group.
+For example, two categories in the same area both control `light.living_room`,
+or an area scene and the House scene both target it.
 
-When two groups act on the same entity independently, they can fight each other: one group applies a state, the other applies a different state, and the entity ends up toggling or stuck in a no-op loop.
+When two groups act on the same entity independently, they can fight each other:
+one group applies a state, the other applies a different state, and the entity
+ends up toggling or stuck in a no-op loop.
 
-To resolve it, decide which group should own the entity and remove it from the actions of the other group.
+To resolve it, decide which group should own the entity and remove it from the
+actions of the other group.
 
 ### Dangling references
 
-These appear when a scene still points at something you have since deleted or renamed. The condition or action can never do anything useful, so Ambience flags it.
+These appear when a scene still points at something you have since deleted or
+renamed. The condition or action can never do anything useful, so Ambience flags
+it.
 
-| Issue | What it means | How to fix it |
-|---|---|---|
-| **scenes reference a deleted time-of-day period** | A Time of day condition uses a named period that no longer exists. | Re-create the period, or remove the reference, in the scene editor. |
-| **scenes reference a deleted lux range** | A Lux condition uses a named lux range that no longer exists. | Re-create the range, or remove the reference. |
-| **scenes reference a deleted weather group** | A Weather condition uses a weather group that no longer exists. | Re-create the group, or remove the reference. |
-| **scenes use an action that is no longer exposed** | A scene action calls a service you have removed from **Settings → Actions**. The action is **skipped** when the scene applies. | Re-expose the action, or remove it from the scenes. |
+| Issue                                              | What it means                                                                                                                  | How to fix it                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| **scenes reference a deleted time-of-day period**  | A Time of day condition uses a named period that no longer exists.                                                             | Re-create the period, or remove the reference, in the scene editor. |
+| **scenes reference a deleted lux range**           | A Lux condition uses a named lux range that no longer exists.                                                                  | Re-create the range, or remove the reference.                       |
+| **scenes reference a deleted weather group**       | A Weather condition uses a weather group that no longer exists.                                                                | Re-create the group, or remove the reference.                       |
+| **scenes use an action that is no longer exposed** | A scene action calls a service you have removed from **Settings → Actions**. The action is **skipped** when the scene applies. | Re-expose the action, or remove it from the scenes.                 |
 
 ### Missing condition prerequisites
 
-Some conditions depend on something being configured globally. If it is missing, those conditions can never match, so the scenes that use them are effectively dead.
+Some conditions depend on something being configured globally. If it is missing,
+those conditions can never match, so the scenes that use them are effectively
+dead.
 
-| Issue | What it means | How to fix it |
-|---|---|---|
-| **scenes use a weather condition but no weather entity is configured** | A Weather condition has nothing to read from. | Configure a weather entity on the **Conditions → Weather** settings tab, or remove the weather conditions. |
-| **scenes use a workday item but no workday sensor is configured** | A Day condition uses a `workday` or `holiday` item with no workday sensor set. | Configure a workday sensor on the **Conditions → Day** settings tab, or remove those items. |
-| **scenes use a workday-calendar item but no calendar is configured** | A Day condition uses a `first_workday`/`last_workday` item with no workday calendar set. | Configure a workday calendar on the **Conditions → Day** settings tab, or remove those items. |
+| Issue                                                                  | What it means                                                                            | How to fix it                                                                                              |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **scenes use a weather condition but no weather entity is configured** | A Weather condition has nothing to read from.                                            | Configure a weather entity on the **Conditions → Weather** settings tab, or remove the weather conditions. |
+| **scenes use a workday item but no workday sensor is configured**      | A Day condition uses a `workday` or `holiday` item with no workday sensor set.           | Configure a workday sensor on the **Conditions → Day** settings tab, or remove those items.                |
+| **scenes use a workday-calendar item but no calendar is configured**   | A Day condition uses a `first_workday`/`last_workday` item with no workday calendar set. | Configure a workday calendar on the **Conditions → Day** settings tab, or remove those items.              |
 
-All of these issues are **warnings** — they do not stop Ambience from running, and only **enabled** scenes are checked. Each one clears automatically once the underlying problem is fixed.
+All of these issues are **warnings** — they do not stop Ambience from running,
+and only **enabled** scenes are checked. Each one clears automatically once the
+underlying problem is fixed.
 
----
+______________________________________________________________________
 
 ## Trace: "not found" vs "unavailable"
 
-In the [Traces viewer](../tips-and-testing.md#traces-why-a-scene-won), a condition that references an entity shows one of two states when the entity cannot be used:
+In the [Traces viewer](../tips-and-testing.md#traces-why-a-scene-won), a
+condition that references an entity shows one of two states when the entity
+cannot be used:
 
-- **not found** — the entity id does not resolve to any state. This means the entity does not exist at evaluation time: it was deleted, renamed, or not yet loaded.
-- **unavailable** — the entity exists but its current value cannot be used (the device is offline, the integration is starting up, and so on).
+- **not found** — the entity id does not resolve to any state. This means the
+    entity does not exist at evaluation time: it was deleted, renamed, or not
+    yet loaded.
+- **unavailable** — the entity exists but its current value cannot be used (the
+    device is offline, the integration is starting up, and so on).
 
-The distinction helps you tell a configuration error (not found) from a transient device issue (unavailable).
+The distinction helps you tell a configuration error (not found) from a
+transient device issue (unavailable).

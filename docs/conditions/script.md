@@ -1,9 +1,10 @@
 # Script
 
 !!! warning "Advanced"
-    This condition requires you to write and maintain a Home Assistant script.
-    Most situations are covered by the built-in conditions; reach for this one
-    only when nothing else fits.
+
+    This condition requires you to write and maintain a Home Assistant script. Most
+    situations are covered by the built-in conditions; reach for this one only when
+    nothing else fits.
 
 Checks the result of a Home Assistant **script** that you write. The script
 runs, does whatever logic it needs, and reports back whether the condition is
@@ -37,10 +38,9 @@ for the full syntax.
 
 ### 2. Pass arguments (optional)
 
-If your script declares `fields`, the editor shows a form for those fields
-and pre-fills any defaults. Fill in the values you want Ambience to pass when
-it calls the script. If your script takes no inputs, this section does not
-appear.
+If your script declares `fields`, the editor shows a form for those fields and
+pre-fills any defaults. Fill in the values you want Ambience to pass when it
+calls the script. If your script takes no inputs, this section does not appear.
 
 ### 3. List triggers (optional but usually necessary)
 
@@ -63,8 +63,8 @@ the condition directly.
 Ambience calls the script with `blocking: true` so it waits for the script to
 finish before deciding which scene applies. Calls are cached for a few seconds
 so a single evaluation snapshot does not trigger the script multiple times. The
-call times out after five seconds; a timeout counts as no match and is logged
-as a warning.
+call times out after five seconds; a timeout counts as no match and is logged as
+a warning.
 
 ## Example
 
@@ -92,7 +92,8 @@ that sensor changes, calling the script each time and activating the scene only
 while the battery is above 80 %.
 
 !!! info "📷 Screenshot"
+
     The Script condition editor showing the script dropdown with
     "ambience_battery_high" selected, no arguments section (the script has no
-    fields), and a Triggers section with "sensor.solar_battery_level" listed as
-    a chip.
+    fields), and a Triggers section with "sensor.solar_battery_level" listed as a
+    chip.

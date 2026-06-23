@@ -16,10 +16,10 @@ your list. Each item has a kind, chosen from the options below.
 
 ### Day of the week
 
-Pick **Weekday** and tick the days you want to match: Monday through Sunday.
-You can select as many as you like. This is the simplest option — for example,
-tick Monday through Friday to cover all working weekdays (without reference to
-public holidays).
+Pick **Weekday** and tick the days you want to match: Monday through Sunday. You
+can select as many as you like. This is the simplest option — for example, tick
+Monday through Friday to cover all working weekdays (without reference to public
+holidays).
 
 ### Day of the month
 
@@ -50,20 +50,20 @@ matches from 20 Dec through to 5 Jan the following calendar year.
 ### The last day of the month
 
 Pick **Last day of month**. This matches the 28th, 29th, 30th, or 31st,
-depending on the month, so it works correctly in February and in months with
-30 days.
+depending on the month, so it works correctly in February and in months with 30
+days.
 
 ### Workday
 
-Pick **Workday**. This matches on days when the workday sensor reports "on" — 
+Pick **Workday**. This matches on days when the workday sensor reports "on" —
 typically weekdays excluding public holidays, according to whatever country and
 configuration you have set up in the
 [Workday integration](https://www.home-assistant.io/integrations/workday/).
 
-This kind requires a workday sensor to be configured in
-**Settings → Conditions**. See the [Settings reference](../settings-reference.md)
-for how to set one up. If no sensor is configured, the option is shown in the
-dropdown but is disabled.
+This kind requires a workday sensor to be configured in **Settings →
+Conditions**. See the [Settings reference](../settings-reference.md) for how to
+set one up. If no sensor is configured, the option is shown in the dropdown but
+is disabled.
 
 ### Holiday (non-workday)
 
@@ -71,8 +71,8 @@ Pick **Holiday**. This is the complement of Workday: it matches on days when the
 workday sensor reports "off". That includes weekends and any public holidays
 recognised by the Workday integration.
 
-This kind also requires a workday sensor to be configured in
-**Settings → Conditions** (see the [Settings reference](../settings-reference.md)).
+This kind also requires a workday sensor to be configured in **Settings →
+Conditions** (see the [Settings reference](../settings-reference.md)).
 
 ### First workday of the month
 
@@ -90,8 +90,8 @@ month so it can identify the first workday reliably. See the
 Pick **Last workday of month**. This matches on the last working day of the
 current month, again derived from the workday calendar.
 
-This kind also requires a workday calendar to be configured in
-**Settings → Conditions** (see the [Settings reference](../settings-reference.md)).
+This kind also requires a workday calendar to be configured in **Settings →
+Conditions** (see the [Settings reference](../settings-reference.md)).
 
 ## Example
 
@@ -100,7 +100,7 @@ morning, but not on public holidays when you are unlikely to be working. You
 could set it up as follows:
 
 - Add a **Weekday** include item and tick Monday, Tuesday, Wednesday, Thursday,
-  and Friday.
+    and Friday.
 - Add a **Holiday** exclude item.
 
 The scene then matches every weekday except on public holidays recognised by
@@ -108,5 +108,6 @@ your Workday integration. You might pair this with a Time of day condition to
 restrict it to, say, 09:00–17:00.
 
 !!! info "📷 Screenshot"
+
     The Day condition editor showing an Include section with one Weekday item
     (Monday through Friday ticked) and an Exclude section with one Holiday item.

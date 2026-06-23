@@ -25,31 +25,31 @@ the repository. Then continue from step 3 of the manual flow below.
 ### Manual add
 
 1. Open **HACS** in the Home Assistant sidebar.
-2. Click the **kebab menu** (⋮, top right) → **Custom repositories**. Paste
-   `https://github.com/clintongormley/ambience` into the **Repository** field,
-   set **Type** to **Integration**, and click **Add**. Close the dialog.
-3. Find **Ambience** in the HACS integrations list and click **Download**.
-4. Restart Home Assistant.
+1. Click the **kebab menu** (⋮, top right) → **Custom repositories**. Paste
+    `https://github.com/clintongormley/ambience` into the **Repository** field,
+    set **Type** to **Integration**, and click **Add**. Close the dialog.
+1. Find **Ambience** in the HACS integrations list and click **Download**.
+1. Restart Home Assistant.
 
 ## Install manually
 
 If you can't use HACS:
 
 1. Download the latest release archive from the
-   [Releases page](https://github.com/clintongormley/ambience/releases).
-2. Unpack it and copy `custom_components/ambience/` into your HA config's
-   `custom_components/` folder.
-3. Restart Home Assistant.
+    [Releases page](https://github.com/clintongormley/ambience/releases).
+1. Unpack it and copy `custom_components/ambience/` into your HA config's
+    `custom_components/` folder.
+1. Restart Home Assistant.
 
 ## After installing
 
 1. Go to **Settings → Devices & Services → Add Integration**, search for
-   **Ambience**, and add the entry. The setup prompts present the same options
-   described in [Configuration](#configuration) below.
-2. The **Ambience** panel appears in the HA sidebar for administrator users
-   only — Home Assistant hides it from non-admin users. If the panel doesn't
-   show up for you and you are an admin, hard-refresh the HA web UI
-   (Ctrl-F5 / Cmd-Shift-R).
+    **Ambience**, and add the entry. The setup prompts present the same options
+    described in [Configuration](#configuration) below.
+1. The **Ambience** panel appears in the HA sidebar for administrator users only
+    — Home Assistant hides it from non-admin users. If the panel doesn't show
+    up for you and you are an admin, hard-refresh the HA web UI (Ctrl-F5 /
+    Cmd-Shift-R).
 
 ## Configuration
 
@@ -58,6 +58,7 @@ Go to **Settings → Devices & Services**, find the Ambience integration, and op
 its **Configure** dialog.
 
 !!! info "📷 Screenshot"
+
     The Ambience **Configure** dialog, showing the **Show sidebar panel** option.
 
 **Show sidebar panel** controls the **Ambience** entry in the Home Assistant
@@ -81,12 +82,13 @@ When per-scope switches are enabled, you can choose which voice assistants they
 are exposed to. There is one toggle per assistant — **Assist**, **Google
 Assistant**, and **Alexa**. By default the switches are exposed to **Assist**
 (Home Assistant's built-in voice agent) only; the Google and Alexa toggles
-require Home Assistant Cloud (or a manual setup) to have any effect. Because each
-switch is named after its scope (for example "Living Room Ambience") and assigned
-to the matching area, you can say things like "turn off Living Room Ambience".
+require Home Assistant Cloud (or a manual setup) to have any effect. Because
+each switch is named after its scope (for example "Living Room Ambience") and
+assigned to the matching area, you can say things like "turn off Living Room
+Ambience".
 
-Changing these toggles re-applies the exposure to every Ambience switch in place,
-so any per-switch exposure you had set manually in **Settings → Voice assistants
-→ Expose** for these entities is overwritten.
+Changing these toggles re-applies the exposure to every Ambience switch in
+place, so any per-switch exposure you had set manually in **Settings → Voice
+assistants → Expose** for these entities is overwritten.
 
 Next, head to [Getting started](getting-started.md) to create your first scene.

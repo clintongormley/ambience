@@ -1184,33 +1184,16 @@ export class AmbienceScopesView extends LitElement {
     return "";
   }
 
-  /** Banners for scopes a different tab changed while their editor was open
-   *  here, so the live reload was deferred (see ScopeStore.staleScopes). */
-  private _renderStaleBanners() {
-    return this._store.staleScopes.map((scope) => {
-      const name = this._scopeName({
-        scope_kind: scope.kind,
-        scope_id: scope.kind === "house" ? null : scope.id,
-      });
-      return html`
-        <div class="banner banner-hint stale-banner">
-          <ha-icon class="banner-icon" icon="mdi:refresh"></ha-icon>
-          <div class="banner-text">
-            <span>
-              ${localize(
-                this.hass,
-                "ui.history_stale_banner",
-                "Scenes for {scope} changed in another tab.",
-                { scope: name },
-              )}
-            </span>
-          </div>
-          <button class="banner-cta" @click=${() => this._store.refreshStaleScope(scope)}>
-            ${localize(this.hass, "ui.history_stale_refresh", "Refresh")}
-          </button>
-        </div>
-      `;
-    });
+  /** True while the scene editor is open on a scope another tab has changed —
+   *  drives the in-editor "changed elsewhere" notice. (The staleness can only
+   *  arise while the editor is open, so it must be shown inside the editor; a
+   *  panel-body banner would sit behind the modal.) */
+  private _editingScopeIsStale(): boolean {
+    const editing = this._editing;
+    return (
+      editing !== null &&
+      this._store.staleScopes.some((s) => scopeKey(s) === scopeKey(editing.scope))
+    );
   }
 
   override render() {
@@ -1220,7 +1203,6 @@ export class AmbienceScopesView extends LitElement {
         <span class="undo-caption" title=${caption}>${caption}</span>
         ${this._renderHistoryButton("undo")}${this._renderHistoryButton("redo")}
       </div>
-      ${this._renderStaleBanners()}
       ${this._store.error ? html`<p class="error">${this._store.error}</p>` : ""}
       ${this._renderBanners()}
       <ul>
@@ -1243,6 +1225,7 @@ export class AmbienceScopesView extends LitElement {
         .scopes=${this._scopeOptions}
         .takenNames=${this._takenSceneNames}
         .saveError=${this._sceneEditorError}
+        .scopeChangedElsewhere=${this._editingScopeIsStale()}
         .scene=${this._editingScene}
         .conditions=${this._editorConditions}
         .periods=${this._store.periods}

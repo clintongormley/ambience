@@ -2581,3 +2581,13 @@ describe("ambience-scene-editor — description", () => {
     expect(descSlot(el).querySelector(".description-text")).toBeNull();
   });
 });
+
+describe("ambience-scene-editor — cross-tab staleness notice", () => {
+  test("shows a notice when scopeChangedElsewhere is set, and not otherwise", async () => {
+    const el = await mount({ name: "S", when: {}, actions: [] });
+    expect(el.shadowRoot.querySelector(".stale-notice")).toBeFalsy();
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".stale-notice")).toBeTruthy();
+  });
+});

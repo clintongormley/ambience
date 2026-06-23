@@ -210,6 +210,18 @@ export class AmbienceSceneEditor extends LitElement {
       margin-top: 0.5rem;
       padding: 0.3rem 0;
     }
+    /* "Changed in another tab" warning, shown at the top of the editor body so
+       it's visible while editing (the panel-level banner would sit behind the
+       modal). */
+    .stale-notice {
+      margin-bottom: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: var(--primary-text-color, inherit);
+      background: color-mix(in srgb, var(--warning-color, #ffa600) 15%, var(--card-background-color, #fff));
+      border: 1px solid var(--warning-color, #ffa600);
+    }
     /* Scope icon in the destination summary + option list — matches the
        scope-header icon (HA's area/floor icon, or a per-kind default). */
     .scope-icon {
@@ -279,6 +291,9 @@ export class AmbienceSceneEditor extends LitElement {
    * the page-level error banner is hidden behind this modal. Empty = no error.
    */
   @property({ attribute: false }) saveError = "";
+  // True when another tab changed this scene's scope while the editor is open.
+  // Saving will overwrite that change; cancelling discards the edit and loads it.
+  @property({ attribute: false }) scopeChangedElsewhere = false;
 
   @state() private _draft: Scene | null = null;
   @state() private _scope?: Scope;
@@ -1286,6 +1301,17 @@ export class AmbienceSceneEditor extends LitElement {
     return html`
       <div class="modal" @click=${this._onModalClick}>
         <div class="content">
+          ${
+            this.scopeChangedElsewhere
+              ? html`<div class="stale-notice">
+                  ${localize(
+                    this.hass,
+                    "ui.history_stale_editor",
+                    "Scenes here changed in another tab. Saving overwrites them; cancel to discard your edits and load the latest.",
+                  )}
+                </div>`
+              : ""
+          }
           ${this._renderNameSlot()}
           ${this._renderCategorySlot()}
           ${this._renderDestinationSlot()}

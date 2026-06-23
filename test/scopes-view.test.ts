@@ -3354,17 +3354,39 @@ describe("ambience-scopes-view", () => {
     expect(el._scopeIsEditing({ kind: "house" })).toBe(false);
   });
 
-  test("shows a 'changed elsewhere' banner for a stale scope; Refresh reloads it", async () => {
+  test("flags the open editor (not a body banner) when its scope changed in another tab", async () => {
     el = await mount();
     const scope = { kind: "area", id: "living_room" };
-    const spy = vi.spyOn(el._store, "refreshStaleScope").mockResolvedValue(undefined);
+    el._editing = { scope, index: 0, isNew: false };
     el._store.staleScopes = [scope];
     await el.updateComplete;
-    const banner = el.shadowRoot.querySelector(".stale-banner");
-    expect(banner).toBeTruthy();
-    expect(banner.textContent).toContain("Living Room");
-    banner.querySelector(".banner-cta").click();
-    expect(spy).toHaveBeenCalledWith(scope);
+    // The warning lives inside the editor (a body banner would sit behind the modal).
+    expect(el.shadowRoot.querySelector(".stale-banner")).toBeFalsy();
+    const editor = el.shadowRoot.querySelector("ambience-scene-editor");
+    expect(editor.scopeChangedElsewhere).toBe(true);
+  });
+
+  test("INTEGRATION: an external change to the open editor's scope defers to a banner, not a reload", async () => {
+    el = await mount();
+    const scope = { kind: "area", id: "living_room" };
+    el._editing = { scope, index: 0, isNew: false };
+    await el.updateComplete;
+    const spy = vi.spyOn(el._store, "reloadScope").mockResolvedValue(undefined);
+    // Drive the real wiring: the history subscription would call store._onHistory,
+    // which consults the predicate the view passed to subscribe (_scopeIsEditing).
+    el._store._onHistory({
+      op: "record",
+      can_undo: true,
+      can_redo: false,
+      undo: { action: "edit", scene_name: "X", scope_kind: "area", scope_id: "living_room" },
+      redo: null,
+      undo_count: 1,
+      redo_count: 0,
+      changed_scope: { scope_kind: "area", scope_id: "living_room" },
+      is_self: false,
+    });
+    expect(spy).not.toHaveBeenCalled();
+    expect(el._store.staleScopes).toHaveLength(1);
   });
 
   test("closing the editor on a scope changed elsewhere reloads it", async () => {

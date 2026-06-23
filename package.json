@@ -1,6 +1,6 @@
 {
   "name": "ambience-panel",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "description": "Frontend panel for the Ambience HA integration",
   "private": true,
   "type": "module",

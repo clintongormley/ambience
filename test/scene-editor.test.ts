@@ -2581,3 +2581,61 @@ describe("ambience-scene-editor — description", () => {
     expect(descSlot(el).querySelector(".description-text")).toBeNull();
   });
 });
+
+describe("ambience-scene-editor — cross-tab conflict dialog", () => {
+  test("shows a blocking conflict dialog when scopeChangedElsewhere, hidden otherwise", async () => {
+    const el = await mount({ name: "S", when: {}, actions: [] });
+    expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeFalsy();
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeTruthy();
+  });
+
+  test("'Overwrite theirs' dismisses the dialog and keeps editing (no cancel)", async () => {
+    const el = await mount({ name: "S", when: {}, actions: [] });
+    const cancelSpy = vi.fn();
+    el.addEventListener("cancel-scene", cancelSpy);
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".conflict-overwrite").click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeFalsy();
+    expect(cancelSpy).not.toHaveBeenCalled();
+    expect(el.scopeChangedElsewhere).toBe(true); // still stale, just acknowledged
+  });
+
+  test("'Load theirs' discards the edit (dispatches cancel-scene)", async () => {
+    const el = await mount({ name: "S", when: {}, actions: [] });
+    const cancelSpy = vi.fn();
+    el.addEventListener("cancel-scene", cancelSpy);
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".conflict-load").click();
+    expect(cancelSpy).toHaveBeenCalled();
+  });
+
+  test("clicking inside the conflict dialog does not reach the editor's modal-click (no slot collapse)", async () => {
+    const el = await mount({ name: "S", when: {}, actions: [] });
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    const spy = vi.spyOn(el as any, "_tryCloseCurrent");
+    el.shadowRoot.querySelector(".conflict-backdrop").click();
+    el.shadowRoot.querySelector(".conflict-overwrite").click();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  test("a fresh cross-tab change re-arms the dialog after 'Overwrite theirs'", async () => {
+    const el = await mount({ name: "S", when: {}, actions: [] });
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".conflict-overwrite").click();
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeFalsy();
+    // Scope reloaded/saved → no longer stale → re-arm for the next conflict.
+    el.scopeChangedElsewhere = false;
+    await el.updateComplete;
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeTruthy();
+  });
+});

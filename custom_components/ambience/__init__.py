@@ -55,6 +55,7 @@ from .const import (
     DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
+    DATA_HISTORY,
     DATA_LAST_APPLIED,
     DATA_LUX_RANGES,
     DATA_PERIODS,
@@ -73,6 +74,7 @@ from .const import (
 )
 from .exposed_actions import ExposedActionsStore
 from .exposure import async_reapply_all_switch_exposure
+from .history import ChangeHistory
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .service import (
@@ -145,6 +147,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await store.async_delete_floor(orphan)
 
     domain_data[DATA_STORE] = store
+    domain_data[DATA_HISTORY] = ChangeHistory(hass)
 
     exposed_store = ExposedActionsStore(store)
     domain_data[DATA_EXPOSED_ACTIONS] = exposed_store

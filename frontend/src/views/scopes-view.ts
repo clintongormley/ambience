@@ -2,7 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 
-import type { HassConnection } from "../api.js";
+import type { HassConnection, HistoryAction } from "../api.js";
 import { applyScenes, runSceneActions, setScopeEnabled } from "../api.js";
 import { sceneNameKey, scopeCategoryKey, scopeKey } from "../entities-for-scope.js";
 import { renderHaSwitch } from "../ha-switch.js";
@@ -295,6 +295,24 @@ export class AmbienceScopesView extends LitElement {
         padding: 0.5rem 1rem 1rem 1rem;
         border-top: 1px solid var(--divider-color, #e0e0e0);
       }
+      .undo-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 8px;
+      }
+      /* Next-change caption: takes the free space and truncates, so the buttons
+       stay pinned right and a long label never wraps the toolbar. Full text is
+       on the span's title (desktop hover). */
+      .undo-caption {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.85rem;
+        color: var(--secondary-text-color, #888);
+      }
     `,
   ];
 
@@ -303,6 +321,33 @@ export class AmbienceScopesView extends LitElement {
   // Data layer: static config, loaded scope configs, and their mutators live in
   // the store; this element renders straight off its fields.
   private _store = new ScopeStore(this);
+
+  private _onKeyDown = (e: KeyboardEvent): void => {
+    // Don't fire the shortcut behind any open modal — the user's context is the
+    // modal, not the scene list (covers focus on a non-input element too).
+    if (
+      this._editing !== null ||
+      this._viewingTraces !== null ||
+      this._viewingSimulator !== null ||
+      this._autoTriggers !== null
+    )
+      return;
+    // A window-level keydown re-targets `e.target` to the shadow host, so an
+    // input inside a shadow root (e.g. the simulator/traces modals on this page)
+    // would look like the host element. composedPath()[0] is the real focused
+    // element across shadow boundaries; fall back to e.target where unavailable.
+    const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+    const t = (path[0] ?? e.target) as HTMLElement | null;
+    const tag = t?.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || t?.isContentEditable) return;
+    if (e.key.toLowerCase() !== "z" || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    if (e.shiftKey) {
+      if (this._store.canRedo) void this._store.redo();
+    } else if (this._store.canUndo) {
+      void this._store.undo();
+    }
+  };
 
   // _expanded keys: "area:<id>" | "floor:<id>" | "house". Seeded from
   // localStorage so a reload (or HA's panel rebuild on reconnect) restores which
@@ -356,6 +401,7 @@ export class AmbienceScopesView extends LitElement {
 
   override async connectedCallback() {
     super.connectedCallback();
+    window.addEventListener("keydown", this._onKeyDown);
     this._conditionsHintDismissed = getConditionsHintDismissed();
     await this._store.loadStatic();
     await Promise.all([
@@ -366,8 +412,20 @@ export class AmbienceScopesView extends LitElement {
     ]);
     // The store owns the registry subscriptions (and tears them down in
     // hostDisconnected); it calls back here so the view can drop a removed
-    // scope from its own expanded/editing state.
-    await this._store.subscribe((scope) => this._onScopeRemoved(scope));
+    // scope from its own expanded/editing state, and asks _scopeIsEditing
+    // whether to defer a cross-tab reload (editor open → banner, not reload).
+    await this._store.subscribe((scope) => this._onScopeRemoved(scope), this._scopeIsEditing);
+  }
+
+  /** True while this tab has the scene editor open on `scope` — the editor
+   *  saves by stored index, so a live cross-tab reload then could splice into a
+   *  list that changed underneath it. The store defers such scopes to a banner. */
+  private _scopeIsEditing = (scope: Scope): boolean =>
+    this._editing !== null && scopeKey(this._editing.scope) === scopeKey(scope);
+
+  override disconnectedCallback() {
+    window.removeEventListener("keydown", this._onKeyDown);
+    super.disconnectedCallback();
   }
 
   /** Drop a just-removed scope from the view's own state: collapse its row
@@ -384,6 +442,9 @@ export class AmbienceScopesView extends LitElement {
     this._setCollapsedCategories(
       new Set([...this._collapsedCategories].filter((k) => !k.startsWith(prefix))),
     );
+    // Drop any "changed elsewhere" deferral for the gone scope so the editor
+    // close below doesn't try to reload a scope that no longer exists.
+    this._store.clearStale(scope);
     if (this._editing && scopeKey(this._editing.scope) === key) {
       this._editing = null;
     }
@@ -395,6 +456,17 @@ export class AmbienceScopesView extends LitElement {
     // skip that so mount honours the persisted expanded/collapsed state intact.
     if (changed.has("filterCategory") && changed.get("filterCategory") !== undefined) {
       this._onFilterCategoryChanged();
+    }
+    // When the editor closes (or moves to a different scope), pick up any
+    // cross-tab change that was deferred to a banner while it was open.
+    if (changed.has("_editing")) {
+      const prev = changed.get("_editing") as EditingState | null | undefined;
+      const movedAway =
+        prev != null &&
+        (this._editing === null || scopeKey(this._editing.scope) !== scopeKey(prev.scope));
+      if (movedAway && this._store.isScopeStale(prev.scope)) {
+        void this._store.refreshStaleScope(prev.scope);
+      }
     }
   }
 
@@ -496,7 +568,11 @@ export class AmbienceScopesView extends LitElement {
     const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const scenes = cfg.scenes.filter((_, i) => i !== e.detail.index);
-    void this._store.mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(
+      scope,
+      { ...cfg, scenes },
+      { action: "delete", scene_name: cfg.scenes[e.detail.index]?.name ?? null },
+    );
   }
 
   private _reorderScenes(scope: Scope, e: CustomEvent<{ from: number; to: number }>) {
@@ -527,14 +603,22 @@ export class AmbienceScopesView extends LitElement {
       cfg.scenes.filter((r) => r.category === moved.category),
     );
     scenes[to] = { ...moved, priority, pinned: true };
-    void this._store.mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(
+      scope,
+      { ...cfg, scenes },
+      { action: "reorder", scene_name: moved.name ?? null },
+    );
   }
 
   private _unpinScene(scope: Scope, e: CustomEvent<{ index: number }>) {
     const cfg = this._store.getConfig(scope);
     if (!cfg) return;
     const scenes = cfg.scenes.map((r, i) => (i === e.detail.index ? { ...r, pinned: false } : r));
-    void this._store.mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(
+      scope,
+      { ...cfg, scenes },
+      { action: "unpin", scene_name: cfg.scenes[e.detail.index]?.name ?? null },
+    );
   }
 
   private _toggleSceneEnabled(scope: Scope, e: CustomEvent<{ index: number; enabled: boolean }>) {
@@ -551,7 +635,11 @@ export class AmbienceScopesView extends LitElement {
       }
       return { ...r, enabled: false };
     });
-    void this._store.mutate(scope, { ...cfg, scenes });
+    void this._store.mutate(
+      scope,
+      { ...cfg, scenes },
+      { action: "toggle", scene_name: cfg.scenes[e.detail.index]?.name ?? null },
+    );
   }
 
   private async _saveScene(e: CustomEvent<{ scene: Scene; scope: Scope }>) {
@@ -574,7 +662,17 @@ export class AmbienceScopesView extends LitElement {
         else scenes[editing.index] = scene;
         // Close the editor only on success; on failure keep it open with the
         // draft intact and show why the save was rejected.
-        if (await this._store.mutate(target, { ...cfg, scenes })) this._editing = null;
+        if (
+          await this._store.mutate(
+            target,
+            { ...cfg, scenes },
+            {
+              action: editing.isNew ? "add" : "edit",
+              scene_name: scene.name ?? null,
+            },
+          )
+        )
+          this._editing = null;
         else this._sceneEditorError = this._takeError();
         return;
       }
@@ -584,10 +682,11 @@ export class AmbienceScopesView extends LitElement {
       const fresh = stripPositionMetadata(scene);
       const targetCfg = this._store.getConfig(target);
       if (!targetCfg) return;
-      const added = await this._store.mutate(target, {
-        ...targetCfg,
-        scenes: [...targetCfg.scenes, fresh],
-      });
+      const added = await this._store.mutate(
+        target,
+        { ...targetCfg, scenes: [...targetCfg.scenes, fresh] },
+        { action: "add", scene_name: scene.name ?? null },
+      );
       if (!added) {
         this._sceneEditorError = this._takeError();
         return;
@@ -602,7 +701,14 @@ export class AmbienceScopesView extends LitElement {
         const srcCfg = this._store.getConfig(editing.scope);
         if (srcCfg) {
           const scenes = srcCfg.scenes.filter((_, i) => i !== editing.index);
-          await this._store.mutate(editing.scope, { ...srcCfg, scenes });
+          await this._store.mutate(
+            editing.scope,
+            { ...srcCfg, scenes },
+            {
+              action: "delete",
+              scene_name: scene.name ?? null,
+            },
+          );
         }
       }
     } finally {
@@ -1004,8 +1110,99 @@ export class AmbienceScopesView extends LitElement {
     return "";
   }
 
-  override render() {
+  /** Resolve a scope's display name for a history label. */
+  private _scopeName(scopeKindId: { scope_kind: string; scope_id: string | null }): string {
+    if (scopeKindId.scope_kind === "house") return localize(this.hass, "ui.scope_house", "House");
+    if (scopeKindId.scope_kind === "area") {
+      return (
+        this._store.areas.find((a) => a.area_id === scopeKindId.scope_id)?.name ??
+        scopeKindId.scope_id ??
+        ""
+      );
+    }
+    return (
+      this._store.floors.find((f) => f.floor_id === scopeKindId.scope_id)?.name ??
+      scopeKindId.scope_id ??
+      ""
+    );
+  }
+
+  /** Build the human-readable label for the next undo/redo entry. */
+  private _historyLabel(action: HistoryAction | null): string {
+    if (!action) return "";
+    const scope = this._scopeName(action);
+    const scene = action.scene_name?.trim()
+      ? action.scene_name
+      : localize(this.hass, "ui.history_untitled", "Untitled");
+    return localize(this.hass, `ui.history_action_${action.action}`, action.action, {
+      scene,
+      scope,
+    });
+  }
+
+  /** The localized label for an undo/redo direction: the next-change tooltip
+   *  when that direction is available, else the "nothing to …" text. Shared by
+   *  the toolbar button (hover tooltip) and the visible caption. */
+  private _historyButtonLabel(op: "undo" | "redo"): string {
+    const isUndo = op === "undo";
+    const enabled = isUndo ? this._store.canUndo : this._store.canRedo;
+    const action = isUndo ? this._store.undoAction : this._store.redoAction;
+    return enabled
+      ? localize(
+          this.hass,
+          `ui.history_${op}_tooltip`,
+          isUndo ? "Undo: {change}" : "Redo: {change}",
+          { change: this._historyLabel(action) },
+        )
+      : localize(
+          this.hass,
+          `ui.history_nothing_to_${op}`,
+          isUndo ? "Nothing to undo" : "Nothing to redo",
+        );
+  }
+
+  /** Render one undo or redo toolbar button. `op` drives the icon, enabled
+   *  flag, next-action label, and click target so the two buttons share one
+   *  shape. */
+  private _renderHistoryButton(op: "undo" | "redo") {
+    const isUndo = op === "undo";
+    const enabled = isUndo ? this._store.canUndo : this._store.canRedo;
+    const label = this._historyButtonLabel(op);
     return html`
+      <ha-icon-button
+        .disabled=${!enabled}
+        .label=${label}
+        @click=${() => (isUndo ? this._store.undo() : this._store.redo())}
+      >
+        <ha-icon icon=${isUndo ? "mdi:undo" : "mdi:redo"}></ha-icon>
+      </ha-icon-button>
+    `;
+  }
+
+  /** Visible toolbar caption naming the next undo (or next redo when nothing is
+   *  undoable). Always rendered so touch users — who can't hover for the button
+   *  tooltip — can still see which change is next. */
+  private _historyCaption(): string {
+    if (this._store.canUndo) return this._historyButtonLabel("undo");
+    if (this._store.canRedo) return this._historyButtonLabel("redo");
+    return "";
+  }
+
+  /** True while the scene editor is open on a scope another tab has changed —
+   *  drives the in-editor "changed elsewhere" notice. (The staleness can only
+   *  arise while the editor is open, so it must be shown inside the editor; a
+   *  panel-body banner would sit behind the modal.) */
+  private _editingScopeIsStale(): boolean {
+    return this._editing !== null && this._store.isScopeStale(this._editing.scope);
+  }
+
+  override render() {
+    const caption = this._historyCaption();
+    return html`
+      <div class="undo-toolbar">
+        <span class="undo-caption" title=${caption}>${caption}</span>
+        ${this._renderHistoryButton("undo")}${this._renderHistoryButton("redo")}
+      </div>
       ${this._store.error ? html`<p class="error">${this._store.error}</p>` : ""}
       ${this._renderBanners()}
       <ul>
@@ -1028,6 +1225,7 @@ export class AmbienceScopesView extends LitElement {
         .scopes=${this._scopeOptions}
         .takenNames=${this._takenSceneNames}
         .saveError=${this._sceneEditorError}
+        .scopeChangedElsewhere=${this._editingScopeIsStale()}
         .scene=${this._editingScene}
         .conditions=${this._editorConditions}
         .periods=${this._store.periods}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 from typing import Any
 
@@ -20,6 +21,7 @@ from .const import (
     DATA_CONDITIONS,
     DATA_ENGINE,
     DATA_EXPOSED_ACTIONS,
+    DATA_HISTORY,
     DATA_LUX_RANGES,
     DATA_PERIODS,
     DATA_STORE,
@@ -27,6 +29,7 @@ from .const import (
     DATA_TRACE_BUFFER,
     DOMAIN,
     SIGNAL_EXPOSED_ASSISTANTS_UPDATED,
+    SIGNAL_HISTORY_CHANGED,
     SIGNAL_REAPPLY_CONFIG_UPDATED,
     SIGNAL_SWITCH_CONFIG_UPDATED,
     SIGNAL_UNIT_LIVE,
@@ -296,11 +299,14 @@ async def _save_scope(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
+    scope_kind: str,
+    scope_id: str | None,
     save_fn: Any,
 ) -> None:
     """The shared validate → coerce → canonicalise → save → respond pipeline
     behind the three scope-save commands (the caller has already verified the
-    scope exists in the relevant registry). `save_fn(store, config)` persists."""
+    scope exists in the relevant registry). `save_fn(store, config)` persists.
+    Records the change in the undo history (a snapshot before + after the save)."""
     try:
         validate_scope_config(hass, msg["config"])
     except (HomeAssistantError, ValueError) as exc:
@@ -311,7 +317,13 @@ async def _save_scope(
     store = hass.data[DOMAIN][DATA_STORE]
     coerce_scene_categories(store, msg["config"])
     config = canonicalise(hass, msg["config"])
+    before = copy.deepcopy(store.scope_config(scope_kind, scope_id))
     await save_fn(store, config)
+    after = copy.deepcopy(store.scope_config(scope_kind, scope_id))
+    history = hass.data[DOMAIN][DATA_HISTORY]
+    change = msg.get("change") or {"action": "edit", "scene_name": None}
+    if history.record(scope_kind, scope_id, before, after, change):
+        history.notify_changed("record", scope_kind, scope_id, connection)
     # Recompute the overlap set so the save response reflects the just-saved config
     # rather than a cached set; the get path reads the cache.
     connection.send_result(
@@ -325,6 +337,7 @@ async def _save_scope(
         vol.Required("type"): "ambience/area/save",
         vol.Required("area_id"): str,
         vol.Required("config"): dict,
+        vol.Optional("change"): dict,
     }
 )
 @websocket_api.async_response
@@ -342,7 +355,14 @@ async def _ws_area_save(
             code="validation_error",
         )
         return
-    await _save_scope(hass, connection, msg, lambda store, cfg: store.async_save_area(area_id, cfg))
+    await _save_scope(
+        hass,
+        connection,
+        msg,
+        "area",
+        area_id,
+        lambda store, cfg: store.async_save_area(area_id, cfg),
+    )
 
 
 @websocket_api.require_admin
@@ -375,6 +395,7 @@ async def _ws_floor_get(
         vol.Required("type"): "ambience/floor/save",
         vol.Required("floor_id"): str,
         vol.Required("config"): dict,
+        vol.Optional("change"): dict,
     }
 )
 @websocket_api.async_response
@@ -393,7 +414,12 @@ async def _ws_floor_save(
         )
         return
     await _save_scope(
-        hass, connection, msg, lambda store, cfg: store.async_save_floor(floor_id, cfg)
+        hass,
+        connection,
+        msg,
+        "floor",
+        floor_id,
+        lambda store, cfg: store.async_save_floor(floor_id, cfg),
     )
 
 
@@ -415,6 +441,7 @@ async def _ws_house_get(
     {
         vol.Required("type"): "ambience/house/save",
         vol.Required("config"): dict,
+        vol.Optional("change"): dict,
     }
 )
 @websocket_api.async_response
@@ -423,7 +450,14 @@ async def _ws_house_save(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    await _save_scope(hass, connection, msg, lambda store, cfg: store.async_save_house(cfg))
+    await _save_scope(
+        hass,
+        connection,
+        msg,
+        "house",
+        None,
+        lambda store, cfg: store.async_save_house(cfg),
+    )
 
 
 @websocket_api.require_admin
@@ -1115,6 +1149,123 @@ async def _ws_categories_delete(
 
 
 @websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/history/subscribe"})
+@websocket_api.async_response
+async def _ws_history_subscribe(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Stream the undo/redo snapshot: the current state, then on each change."""
+    history = hass.data[DOMAIN][DATA_HISTORY]
+
+    @callback
+    def _forward(payload: tuple[str, str | None, str | None, Any]) -> None:
+        op, kind, sid, origin = payload
+        changed = (kind, sid) if kind is not None else None
+        connection.send_message(
+            websocket_api.event_message(
+                msg["id"],
+                history.snapshot(op=op, changed_scope=changed, is_self=origin is connection),
+            )
+        )
+
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(
+        hass, SIGNAL_HISTORY_CHANGED, _forward
+    )
+    connection.send_result(msg["id"])
+    connection.send_message(websocket_api.event_message(msg["id"], history.snapshot()))
+
+
+def _scope_exists(hass: HomeAssistant, scope_kind: str, scope_id: str | None) -> bool:
+    """True if an undo/redo target scope still exists. House always exists."""
+    if scope_kind == "house":
+        return True
+    if scope_kind == "area":
+        return ar.async_get(hass).async_get_area(scope_id) is not None
+    if scope_kind == "floor":
+        return fr.async_get(hass).async_get_floor(scope_id) is not None
+    return False
+
+
+async def _apply_scope_config(
+    hass: HomeAssistant, scope_kind: str, scope_id: str | None, config: dict[str, Any]
+) -> dict[str, Any]:
+    """Write a restored scenes-only snapshot straight to the store (no validation,
+    no recording). The store merges it over the existing config, so the scope's
+    `enabled` flag and switch state are preserved. Returns the full post-write
+    scope config (scenes + enabled + …) for the response."""
+    store = hass.data[DOMAIN][DATA_STORE]
+    if scope_kind == "area":
+        await store.async_save_area(scope_id, config)
+    elif scope_kind == "floor":
+        await store.async_save_floor(scope_id, config)
+    else:
+        await store.async_save_house(config)
+    return copy.deepcopy(store.scope_config(scope_kind, scope_id))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/history/undo"})
+@websocket_api.async_response
+async def _ws_history_undo(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    history = hass.data[DOMAIN][DATA_HISTORY]
+    while (entry := history.peek_undo()) is not None:
+        if not _scope_exists(hass, entry.scope_kind, entry.scope_id):
+            history.discard_undo()
+            continue
+        kind, sid, config = history.undo()
+        full = await _apply_scope_config(hass, kind, sid, config)
+        history.notify_changed("undo", kind, sid, connection)
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": True,
+                "scope_kind": kind,
+                "scope_id": sid,
+                "config": annotate_scenes(hass, full, fresh_overlap=True),
+            },
+        )
+        return
+    history.notify_changed("undo")
+    connection.send_result(msg["id"], {"ok": False})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({vol.Required("type"): "ambience/history/redo"})
+@websocket_api.async_response
+async def _ws_history_redo(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    history = hass.data[DOMAIN][DATA_HISTORY]
+    while (entry := history.peek_redo()) is not None:
+        if not _scope_exists(hass, entry.scope_kind, entry.scope_id):
+            history.discard_redo()
+            continue
+        kind, sid, config = history.redo()
+        full = await _apply_scope_config(hass, kind, sid, config)
+        history.notify_changed("redo", kind, sid, connection)
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": True,
+                "scope_kind": kind,
+                "scope_id": sid,
+                "config": annotate_scenes(hass, full, fresh_overlap=True),
+            },
+        )
+        return
+    history.notify_changed("redo")
+    connection.send_result(msg["id"], {"ok": False})
+
+
+@websocket_api.require_admin
 @websocket_api.websocket_command({vol.Required("type"): "ambience/live/subscribe"})
 @websocket_api.async_response
 async def _ws_live_subscribe(
@@ -1356,6 +1507,9 @@ _WS_HANDLERS = (
     _ws_auto_triggers_list,
     _ws_traces_list,
     _ws_traces_clear,
+    _ws_history_subscribe,
+    _ws_history_undo,
+    _ws_history_redo,
     _ws_live_subscribe,
     _ws_scope_diagnostics,
     _ws_simulate_inputs,

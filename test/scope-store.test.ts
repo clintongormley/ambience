@@ -37,6 +37,9 @@ vi.mock("../frontend/src/api", async (importActual) => {
     // Pass through the real subscribeLiveScenes so it delegates to
     // connection.subscribeMessage, which tests can override per-case.
     subscribeLiveScenes: actual.subscribeLiveScenes,
+    subscribeHistory: actual.subscribeHistory,
+    undoChange: actual.undoChange,
+    redoChange: actual.redoChange,
   };
 });
 
@@ -541,7 +544,7 @@ describe("ScopeStore", () => {
       await store.refreshHouse();
       const ok = await store.mutate({ kind: "house" }, scene);
       expect(ok).toBe(true);
-      expect(api.saveHouse).toHaveBeenCalledWith(expect.anything(), scene);
+      expect(api.saveHouse).toHaveBeenCalledWith(expect.anything(), scene, undefined);
       expect(store.house).toEqual({ scenes: scene.scenes });
     });
 
@@ -551,7 +554,7 @@ describe("ScopeStore", () => {
       await store.refreshAreas();
       const ok = await store.mutate({ kind: "area", id: "living_room" }, scene);
       expect(ok).toBe(true);
-      expect(api.saveArea).toHaveBeenCalledWith(expect.anything(), "living_room", scene);
+      expect(api.saveArea).toHaveBeenCalledWith(expect.anything(), "living_room", scene, undefined);
       expect(store.areaConfigs.get("living_room")).toEqual({ scenes: scene.scenes });
     });
 
@@ -561,7 +564,7 @@ describe("ScopeStore", () => {
       await store.refreshFloors();
       const ok = await store.mutate({ kind: "floor", id: "ground" }, scene);
       expect(ok).toBe(true);
-      expect(api.saveFloor).toHaveBeenCalledWith(expect.anything(), "ground", scene);
+      expect(api.saveFloor).toHaveBeenCalledWith(expect.anything(), "ground", scene, undefined);
     });
 
     test("applies the new config optimistically before the save resolves", async () => {
@@ -841,8 +844,8 @@ describe("ScopeStore", () => {
   test("live subscription populates the live map from snapshot and deltas", async () => {
     let liveCb: ((m: any) => void) | undefined;
     const host = makeHost();
-    host.hass.connection.subscribeMessage = vi.fn((cb: any) => {
-      liveCb = cb;
+    host.hass.connection.subscribeMessage = vi.fn((cb: any, msg: any) => {
+      if (msg.type === "ambience/live/subscribe") liveCb = cb;
       return Promise.resolve(vi.fn());
     });
     const store = new ScopeStore(host as any);

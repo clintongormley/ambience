@@ -52,6 +52,8 @@ DATA_TRACE_SINKS = "trace_sinks"
 # In-memory trace ring buffer (BufferSink) + its per-(scope,category) cap.
 DATA_TRACE_BUFFER = "trace_buffer"
 TRACE_BUFFER_SIZE = 5
+# Key under hass.data[DOMAIN] holding the in-memory undo/redo ChangeHistory.
+DATA_HISTORY = "history"
 
 # Dispatcher signal — payload: tuple (scope_kind, scope_id) or None (global defaults changed)
 SIGNAL_SWITCH_CONFIG_UPDATED = "ambience_switch_config_updated"
@@ -83,6 +85,14 @@ SIGNAL_EXPOSED_ASSISTANTS_UPDATED = "ambience_exposed_assistants_updated"
 # last_applied_scene) changes. Payload: the (scope_kind, scope_id, category_id)
 # unit. Drives the panel's live scene dots via ambience/live/subscribe.
 SIGNAL_UNIT_LIVE = "ambience_unit_live"
+
+# Dispatcher signal — fired when the undo/redo history changes. Payload:
+# (op, scope_kind, scope_id) where op is "record" | "undo" | "redo". Drives the
+# panel's undo/redo toolbar via ambience/history/subscribe.
+SIGNAL_HISTORY_CHANGED = "ambience_history_changed"
+
+# How many scene-list changes the in-memory undo/redo stack retains.
+HISTORY_LIMIT = 30
 
 # Note: the idle re-apply defaults (DEFAULT_REAPPLY_ENABLED / *_INTERVAL_SECONDS /
 # MIN_REAPPLY_INTERVAL_SECONDS) and DEFAULT_SWITCH_AUTO_ON_DELAY_SECONDS live in

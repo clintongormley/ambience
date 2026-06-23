@@ -1,9 +1,13 @@
 import type { ReactiveController, ReactiveControllerHost } from "lit";
 import type {
   AreaRegistryEvent,
+  ChangeDescriptor,
   EntityRegistryEvent,
   FloorRegistryEvent,
   HassConnection,
+  HistoryAction,
+  HistoryApplyResult,
+  HistorySnapshot,
   LiveEntry,
   LiveMessage,
   LiveUnit,
@@ -23,10 +27,13 @@ import {
   listLuxRanges,
   listPeriods,
   listSwitches,
+  redoChange,
   saveArea,
   saveFloor,
   saveHouse,
+  subscribeHistory,
   subscribeLiveScenes,
+  undoChange,
 } from "../api.js";
 import { scopeCategoryKey, scopeFromParts, scopeKey } from "../entities-for-scope.js";
 import { localizeWsError } from "../i18n.js";
@@ -124,11 +131,25 @@ export class ScopeStore implements ReactiveController {
   // banner. Assigning via the host (e.g. from its own api calls) re-renders too.
   @tracked() error = "";
 
+  // Undo/redo toolbar state, fed by ambience/history/subscribe.
+  @tracked() canUndo = false;
+  @tracked() canRedo = false;
+  @tracked() undoAction: HistoryAction | null = null;
+  @tracked() redoAction: HistoryAction | null = null;
+  // Scopes changed in another tab while their editor was open here, so we
+  // deferred the live reload to avoid disrupting the in-progress edit. Drives a
+  // "changed elsewhere — refresh" banner.
+  @tracked() staleScopes: Scope[] = [];
+  // Predicate (set by the host on subscribe) telling us a scope is mid-edit
+  // here, so an external change to it should be deferred, not auto-reloaded.
+  private _isScopeLocked?: (scope: Scope) => boolean;
+
   // Registry-event unsubscribers, set once subscribe() resolves.
   private _unsubArea?: () => void;
   private _unsubFloor?: () => void;
   private _unsubEntity?: () => void;
   private _unsubLive?: () => void;
+  private _unsubHistory?: () => void;
   // 1s tick that drives the live pause countdown while any scope switch is off.
   private _tick?: ReturnType<typeof setInterval>;
 
@@ -168,6 +189,8 @@ export class ScopeStore implements ReactiveController {
     this._unsubEntity = undefined;
     this._unsubLive?.();
     this._unsubLive = undefined;
+    this._unsubHistory?.();
+    this._unsubHistory = undefined;
   }
 
   /**
@@ -177,8 +200,17 @@ export class ScopeStore implements ReactiveController {
    * refetch lands. The switch set only changes on add/remove, so an `update`
    * skips the switch refetch. Idempotent on disconnect: if the host tears down
    * before the subscriptions resolve, they're unsubscribed immediately.
+   *
+   * `isScopeLocked(scope)` lets the host defer a cross-tab reload while that
+   * scope is being edited here (the editor saves by index, so a live reload
+   * mid-edit could hit the wrong scene); deferred scopes surface via
+   * {@link staleScopes}.
    */
-  async subscribe(onRemove: (scope: Scope) => void): Promise<void> {
+  async subscribe(
+    onRemove: (scope: Scope) => void,
+    isScopeLocked?: (scope: Scope) => boolean,
+  ): Promise<void> {
+    this._isScopeLocked = isScopeLocked;
     const subArea = this._hass.connection.subscribeEvents<AreaRegistryEvent>((event) => {
       if (event.data.action === "remove") {
         onRemove({ kind: "area", id: event.data.area_id });
@@ -203,22 +235,26 @@ export class ScopeStore implements ReactiveController {
       }
     }, "entity_registry_updated");
     const subLive = subscribeLiveScenes(this._hass, (m) => this._onLive(m));
-    const [unsubArea, unsubFloor, unsubEntity, unsubLive] = await Promise.all([
+    const subHistory = subscribeHistory(this._hass, (s) => this._onHistory(s));
+    const [unsubArea, unsubFloor, unsubEntity, unsubLive, unsubHistory] = await Promise.all([
       subArea,
       subFloor,
       subEntity,
       subLive,
+      subHistory,
     ]);
     if (this._host.isConnected) {
       this._unsubArea = unsubArea;
       this._unsubFloor = unsubFloor;
       this._unsubEntity = unsubEntity;
       this._unsubLive = unsubLive;
+      this._unsubHistory = unsubHistory;
     } else {
       unsubArea();
       unsubFloor();
       unsubEntity();
       unsubLive();
+      unsubHistory();
     }
   }
 
@@ -473,15 +509,15 @@ export class ScopeStore implements ReactiveController {
    * @returns `true` if the save succeeded, `false` if it errored (in which case
    *   the optimistic update has been reverted and `error` set).
    */
-  async mutate(scope: Scope, next: ScopeConfig): Promise<boolean> {
+  async mutate(scope: Scope, next: ScopeConfig, change?: ChangeDescriptor): Promise<boolean> {
     const prev = this.getConfig(scope);
     this.setConfig(scope, next);
     this.error = "";
     try {
       let result: { ok: true; config: ScopeConfig };
-      if (scope.kind === "house") result = await saveHouse(this._hass, next);
-      else if (scope.kind === "area") result = await saveArea(this._hass, scope.id, next);
-      else result = await saveFloor(this._hass, scope.id, next);
+      if (scope.kind === "house") result = await saveHouse(this._hass, next, change);
+      else if (scope.kind === "area") result = await saveArea(this._hass, scope.id, next, change);
+      else result = await saveFloor(this._hass, scope.id, next, change);
       this.setConfig(scope, normalizeConfig(result.config));
       return true;
     } catch (e) {
@@ -504,5 +540,79 @@ export class ScopeStore implements ReactiveController {
     } catch (e) {
       this.error = localizeWsError(this._hass, e);
     }
+  }
+
+  /** Apply an undo/redo result: write the restored config into the affected
+   *  scope's cache so the on-screen list reflects it immediately. */
+  private _applyHistoryResult(r: HistoryApplyResult): void {
+    if (!r.ok || !r.config || r.scope_kind === undefined) return;
+    this.setConfig(scopeFromParts(r.scope_kind, r.scope_id ?? null), normalizeConfig(r.config));
+  }
+
+  async undo(): Promise<void> {
+    this.error = "";
+    try {
+      this._applyHistoryResult(await undoChange(this._hass));
+    } catch (e) {
+      this.error = localizeWsError(this._hass, e);
+    }
+  }
+
+  async redo(): Promise<void> {
+    this.error = "";
+    try {
+      this._applyHistoryResult(await redoChange(this._hass));
+    } catch (e) {
+      this.error = localizeWsError(this._hass, e);
+    }
+  }
+
+  /** Handle a pushed history snapshot: update toolbar flags, and keep other
+   *  tabs' scene lists live. `is_self` is true on the push echoed back to the
+   *  tab that caused the change — that tab already has the data (via mutate or
+   *  the undo/redo response), so it skips the reload. An external change to a
+   *  scope being edited here is deferred to {@link staleScopes} (a banner)
+   *  rather than yanking the list out from under the editor. */
+  private _onHistory(snap: HistorySnapshot): void {
+    this.canUndo = snap.can_undo;
+    this.canRedo = snap.can_redo;
+    this.undoAction = snap.undo;
+    this.redoAction = snap.redo;
+    if (!snap.changed_scope) return;
+    const scope = scopeFromParts(snap.changed_scope.scope_kind, snap.changed_scope.scope_id);
+    if (snap.is_self) {
+      // Our own change supersedes any pending "changed elsewhere" warning for it.
+      this.clearStale(scope);
+      return;
+    }
+    if (this._isScopeLocked?.(scope)) this._markStale(scope);
+    else void this.reloadScope(scope);
+  }
+
+  /** Whether a scope is currently deferred ("changed elsewhere while editing"). */
+  isScopeStale(scope: Scope): boolean {
+    const key = scopeKey(scope);
+    return this.staleScopes.some((s) => scopeKey(s) === key);
+  }
+
+  private _markStale(scope: Scope): void {
+    if (this.isScopeStale(scope)) return;
+    this.staleScopes = [...this.staleScopes, scope];
+  }
+
+  /** Drop a scope from the stale set without reloading — used when our own save
+   *  supersedes it, or when the scope is removed from the registry. */
+  clearStale(scope: Scope): void {
+    if (!this.isScopeStale(scope)) return;
+    const key = scopeKey(scope);
+    this.staleScopes = this.staleScopes.filter((s) => scopeKey(s) !== key);
+  }
+
+  /** Load the external version of a scope that was deferred while edited here,
+   *  and drop it from the stale set. Called when the host closes the editor on a
+   *  stale scope, or the user picks "Load theirs" in the conflict dialog. */
+  async refreshStaleScope(scope: Scope): Promise<void> {
+    this.clearStale(scope);
+    await this.reloadScope(scope);
   }
 }

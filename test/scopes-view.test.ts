@@ -45,6 +45,9 @@ vi.mock("../frontend/src/api", async (importActual) => {
     // Pass through the real subscribeLiveScenes so it delegates to
     // connection.subscribeMessage, which tests can override per-case.
     subscribeLiveScenes: actual.subscribeLiveScenes,
+    subscribeHistory: actual.subscribeHistory,
+    undoChange: actual.undoChange,
+    redoChange: actual.redoChange,
   };
 });
 
@@ -312,6 +315,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: [{ name: "New scene", when: {}, actions: [] }],
       }),
+      expect.anything(),
     );
     expect(api.saveFloor).not.toHaveBeenCalled();
     expect(api.saveHouse).not.toHaveBeenCalled();
@@ -329,6 +333,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: [{ name: "New scene", when: {}, actions: [] }],
       }),
+      expect.anything(),
     );
     expect(api.saveArea).not.toHaveBeenCalled();
     expect(api.saveHouse).not.toHaveBeenCalled();
@@ -342,6 +347,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: [{ name: "New scene", when: {}, actions: [] }],
       }),
+      expect.anything(),
     );
     expect(api.saveArea).not.toHaveBeenCalled();
     expect(api.saveFloor).not.toHaveBeenCalled();
@@ -453,12 +459,14 @@ describe("ambience-scopes-view", () => {
       expect.anything(),
       "bedroom",
       expect.objectContaining({ scenes: [expect.objectContaining({ name: "R" })] }),
+      expect.anything(),
     );
     // ...and removed from living_room.
     expect(api.saveArea).toHaveBeenCalledWith(
       expect.anything(),
       "living_room",
       expect.objectContaining({ scenes: [] }),
+      expect.anything(),
     );
   });
 
@@ -637,6 +645,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: [{ name: "Scene B", when: {}, actions: [] }],
       }),
+      expect.anything(),
     );
   });
 
@@ -1945,6 +1954,7 @@ describe("ambience-scopes-view", () => {
       expect.anything(),
       "living_room",
       expect.objectContaining({ scenes: [expect.objectContaining({ name: "R", enabled: false })] }),
+      expect.anything(),
     );
   });
 
@@ -2009,6 +2019,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: [expect.objectContaining({ name: "Pinned", pinned: false })],
       }),
+      expect.anything(),
     );
   });
 
@@ -2242,6 +2253,7 @@ describe("ambience-scopes-view", () => {
       expect.objectContaining({
         scenes: expect.arrayContaining([expect.objectContaining({ name: "Renamed" })]),
       }),
+      expect.anything(),
     );
   });
 
@@ -2745,7 +2757,12 @@ describe("ambience-scopes-view", () => {
     );
     await new Promise((r) => setTimeout(r, 0));
     // bedroom was saved...
-    expect(api.saveArea).toHaveBeenCalledWith(expect.anything(), "bedroom", expect.anything());
+    expect(api.saveArea).toHaveBeenCalledWith(
+      expect.anything(),
+      "bedroom",
+      expect.anything(),
+      expect.anything(),
+    );
     // ...but NOT living_room (no removal since isNew)
     const livingRoomCalls = vi
       .mocked(api.saveArea)
@@ -3310,5 +3327,89 @@ describe("ambience-scopes-view", () => {
     // liveSuppressed must be true for a disabled scope → no live dot rendered.
     expect(scenesList.liveSuppressed).toBe(true);
     expect(scenesList.shadowRoot.querySelectorAll("ambience-live-dot").length).toBe(0);
+  });
+
+  // --- undo/redo toolbar caption + cross-tab staleness --------------------
+
+  test("toolbar shows the next-undo caption text (visible without hover, for mobile)", async () => {
+    el = await mount();
+    el._store.canUndo = true;
+    el._store.undoAction = {
+      action: "delete",
+      scene_name: "Movie night",
+      scope_kind: "house",
+      scope_id: null,
+    };
+    await el.updateComplete;
+    const caption = el.shadowRoot.querySelector(".undo-toolbar .undo-caption");
+    expect(caption).toBeTruthy();
+    expect(caption.textContent).toContain("Movie night");
+  });
+
+  test("a scope whose editor is open here is reported as locked for cross-tab refresh", async () => {
+    el = await mount();
+    expect(el._scopeIsEditing({ kind: "area", id: "living_room" })).toBe(false);
+    el._editing = { scope: { kind: "area", id: "living_room" }, index: 0, isNew: true };
+    expect(el._scopeIsEditing({ kind: "area", id: "living_room" })).toBe(true);
+    expect(el._scopeIsEditing({ kind: "house" })).toBe(false);
+  });
+
+  test("flags the open editor (not a body banner) when its scope changed in another tab", async () => {
+    el = await mount();
+    const scope = { kind: "area", id: "living_room" };
+    el._editing = { scope, index: 0, isNew: false };
+    el._store.staleScopes = [scope];
+    await el.updateComplete;
+    // The warning lives inside the editor (a body banner would sit behind the modal).
+    expect(el.shadowRoot.querySelector(".stale-banner")).toBeFalsy();
+    const editor = el.shadowRoot.querySelector("ambience-scene-editor");
+    expect(editor.scopeChangedElsewhere).toBe(true);
+  });
+
+  test("INTEGRATION: an external change to the open editor's scope defers to a banner, not a reload", async () => {
+    el = await mount();
+    const scope = { kind: "area", id: "living_room" };
+    el._editing = { scope, index: 0, isNew: false };
+    await el.updateComplete;
+    const spy = vi.spyOn(el._store, "reloadScope").mockResolvedValue(undefined);
+    // Drive the real wiring: the history subscription would call store._onHistory,
+    // which consults the predicate the view passed to subscribe (_scopeIsEditing).
+    el._store._onHistory({
+      op: "record",
+      can_undo: true,
+      can_redo: false,
+      undo: { action: "edit", scene_name: "X", scope_kind: "area", scope_id: "living_room" },
+      redo: null,
+      undo_count: 1,
+      redo_count: 0,
+      changed_scope: { scope_kind: "area", scope_id: "living_room" },
+      is_self: false,
+    });
+    expect(spy).not.toHaveBeenCalled();
+    expect(el._store.staleScopes).toHaveLength(1);
+  });
+
+  test("removing the edited scope clears its stale flag (no reload of a deleted scope)", async () => {
+    el = await mount();
+    const scope = { kind: "area", id: "living_room" };
+    el._editing = { scope, index: 0, isNew: false };
+    el._store.staleScopes = [scope];
+    const spy = vi.spyOn(el._store, "refreshStaleScope").mockResolvedValue(undefined);
+    el._onScopeRemoved(scope);
+    await el.updateComplete;
+    expect(spy).not.toHaveBeenCalled();
+    expect(el._store.staleScopes).toHaveLength(0);
+  });
+
+  test("closing the editor on a scope changed elsewhere reloads it", async () => {
+    el = await mount();
+    const scope = { kind: "area", id: "living_room" };
+    el._editing = { scope, index: 0, isNew: true };
+    await el.updateComplete;
+    el._store.staleScopes = [scope];
+    const spy = vi.spyOn(el._store, "refreshStaleScope").mockResolvedValue(undefined);
+    el._editing = null;
+    await el.updateComplete;
+    expect(spy).toHaveBeenCalledWith(scope);
   });
 });

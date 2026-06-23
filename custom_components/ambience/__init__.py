@@ -21,6 +21,7 @@ from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.service import (
     async_register_admin_service,
@@ -421,5 +422,28 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_remove(DOMAIN, "apply_scene")
     async_unregister_builtin_services(hass)
     async_unregister_commands(hass)
+    # Flush any pending delayed store save before dropping our reference, so a
+    # subsequent removal can't be resurrected by a late write from this instance
+    # (see AmbienceStore.async_flush). Only runs on a clean unload.
+    store = hass.data.get(DOMAIN, {}).get(DATA_STORE)
+    if store is not None:
+        await store.async_flush()
     hass.data.pop(DOMAIN, None)
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, _entry: ConfigEntry) -> None:
+    """Delete persisted Ambience data when the integration is removed.
+
+    HA calls this only on a genuine delete — never on reload/restart/unload — so
+    wiping the single global store (`.storage/ambience`) here makes delete-and-
+    recreate behave like a fresh install instead of resurrecting the old config.
+    """
+    await AmbienceStore(hass).async_remove()
+    # HA's config-entry cleanup clears the device and entity registries but not
+    # the issue registry, so drop any Ambience repairs issues too — otherwise a
+    # deleted integration leaves stale warnings in Settings -> Repairs.
+    registry = ir.async_get(hass)
+    for domain, issue_id in list(registry.issues):
+        if domain == DOMAIN:
+            ir.async_delete_issue(hass, DOMAIN, issue_id)

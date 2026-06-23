@@ -2614,6 +2614,16 @@ describe("ambience-scene-editor — cross-tab conflict dialog", () => {
     expect(cancelSpy).toHaveBeenCalled();
   });
 
+  test("clicking inside the conflict dialog does not reach the editor's modal-click (no slot collapse)", async () => {
+    const el = await mount({ name: "S", when: {}, actions: [] });
+    el.scopeChangedElsewhere = true;
+    await el.updateComplete;
+    const spy = vi.spyOn(el as any, "_tryCloseCurrent");
+    el.shadowRoot.querySelector(".conflict-backdrop").click();
+    el.shadowRoot.querySelector(".conflict-overwrite").click();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   test("a fresh cross-tab change re-arms the dialog after 'Overwrite theirs'", async () => {
     const el = await mount({ name: "S", when: {}, actions: [] });
     el.scopeChangedElsewhere = true;

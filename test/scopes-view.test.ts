@@ -3389,6 +3389,18 @@ describe("ambience-scopes-view", () => {
     expect(el._store.staleScopes).toHaveLength(1);
   });
 
+  test("removing the edited scope clears its stale flag (no reload of a deleted scope)", async () => {
+    el = await mount();
+    const scope = { kind: "area", id: "living_room" };
+    el._editing = { scope, index: 0, isNew: false };
+    el._store.staleScopes = [scope];
+    const spy = vi.spyOn(el._store, "refreshStaleScope").mockResolvedValue(undefined);
+    el._onScopeRemoved(scope);
+    await el.updateComplete;
+    expect(spy).not.toHaveBeenCalled();
+    expect(el._store.staleScopes).toHaveLength(0);
+  });
+
   test("closing the editor on a scope changed elsewhere reloads it", async () => {
     el = await mount();
     const scope = { kind: "area", id: "living_room" };

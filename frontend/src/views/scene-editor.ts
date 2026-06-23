@@ -314,8 +314,10 @@ export class AmbienceSceneEditor extends LitElement {
   // Drives a blocking conflict dialog (overwrite mine vs load theirs).
   @property({ attribute: false }) scopeChangedElsewhere = false;
   // Set when the user chose "Overwrite theirs" — dismisses the conflict dialog
-  // for this stale episode so they can keep editing. Re-armed when the scope is
-  // no longer stale (save/reload), so a fresh cross-tab change prompts again.
+  // for this stale episode so they can keep editing. Only re-armed once the
+  // scope is no longer stale (their save or a reload cleared it); a *further*
+  // external change during the same episode is intentionally NOT re-prompted —
+  // they already opted to overwrite, and their save still wins (last-write-wins).
   @state() private _staleAcknowledged = false;
 
   @state() private _draft: Scene | null = null;
@@ -1337,7 +1339,7 @@ export class AmbienceSceneEditor extends LitElement {
   private _renderConflictDialog() {
     if (!this.scopeChangedElsewhere || this._staleAcknowledged) return "";
     return html`
-      <div class="conflict-backdrop">
+      <div class="conflict-backdrop" @click=${(e: Event) => e.stopPropagation()}>
         <div class="conflict-dialog" role="alertdialog" aria-modal="true">
           <p>
             ${localize(

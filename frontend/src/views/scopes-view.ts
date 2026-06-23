@@ -442,6 +442,9 @@ export class AmbienceScopesView extends LitElement {
     this._setCollapsedCategories(
       new Set([...this._collapsedCategories].filter((k) => !k.startsWith(prefix))),
     );
+    // Drop any "changed elsewhere" deferral for the gone scope so the editor
+    // close below doesn't try to reload a scope that no longer exists.
+    this._store.clearStale(scope);
     if (this._editing && scopeKey(this._editing.scope) === key) {
       this._editing = null;
     }
@@ -461,7 +464,7 @@ export class AmbienceScopesView extends LitElement {
       const movedAway =
         prev != null &&
         (this._editing === null || scopeKey(this._editing.scope) !== scopeKey(prev.scope));
-      if (movedAway && this._store.staleScopes.some((s) => scopeKey(s) === scopeKey(prev.scope))) {
+      if (movedAway && this._store.isScopeStale(prev.scope)) {
         void this._store.refreshStaleScope(prev.scope);
       }
     }
@@ -1137,14 +1140,14 @@ export class AmbienceScopesView extends LitElement {
     });
   }
 
-  /** Render one undo or redo toolbar button. `op` drives the icon, enabled
-   *  flag, next-action label, and click target so the two buttons share one
-   *  shape. */
-  private _renderHistoryButton(op: "undo" | "redo") {
+  /** The localized label for an undo/redo direction: the next-change tooltip
+   *  when that direction is available, else the "nothing to …" text. Shared by
+   *  the toolbar button (hover tooltip) and the visible caption. */
+  private _historyButtonLabel(op: "undo" | "redo"): string {
     const isUndo = op === "undo";
     const enabled = isUndo ? this._store.canUndo : this._store.canRedo;
     const action = isUndo ? this._store.undoAction : this._store.redoAction;
-    const label = enabled
+    return enabled
       ? localize(
           this.hass,
           `ui.history_${op}_tooltip`,
@@ -1156,6 +1159,15 @@ export class AmbienceScopesView extends LitElement {
           `ui.history_nothing_to_${op}`,
           isUndo ? "Nothing to undo" : "Nothing to redo",
         );
+  }
+
+  /** Render one undo or redo toolbar button. `op` drives the icon, enabled
+   *  flag, next-action label, and click target so the two buttons share one
+   *  shape. */
+  private _renderHistoryButton(op: "undo" | "redo") {
+    const isUndo = op === "undo";
+    const enabled = isUndo ? this._store.canUndo : this._store.canRedo;
+    const label = this._historyButtonLabel(op);
     return html`
       <ha-icon-button
         .disabled=${!enabled}
@@ -1171,16 +1183,8 @@ export class AmbienceScopesView extends LitElement {
    *  undoable). Always rendered so touch users — who can't hover for the button
    *  tooltip — can still see which change is next. */
   private _historyCaption(): string {
-    if (this._store.canUndo) {
-      return localize(this.hass, "ui.history_undo_tooltip", "Undo: {change}", {
-        change: this._historyLabel(this._store.undoAction),
-      });
-    }
-    if (this._store.canRedo) {
-      return localize(this.hass, "ui.history_redo_tooltip", "Redo: {change}", {
-        change: this._historyLabel(this._store.redoAction),
-      });
-    }
+    if (this._store.canUndo) return this._historyButtonLabel("undo");
+    if (this._store.canRedo) return this._historyButtonLabel("redo");
     return "";
   }
 
@@ -1189,11 +1193,7 @@ export class AmbienceScopesView extends LitElement {
    *  arise while the editor is open, so it must be shown inside the editor; a
    *  panel-body banner would sit behind the modal.) */
   private _editingScopeIsStale(): boolean {
-    const editing = this._editing;
-    return (
-      editing !== null &&
-      this._store.staleScopes.some((s) => scopeKey(s) === scopeKey(editing.scope))
-    );
+    return this._editing !== null && this._store.isScopeStale(this._editing.scope);
   }
 
   override render() {

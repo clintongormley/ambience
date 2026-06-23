@@ -582,30 +582,37 @@ export class ScopeStore implements ReactiveController {
     const scope = scopeFromParts(snap.changed_scope.scope_kind, snap.changed_scope.scope_id);
     if (snap.is_self) {
       // Our own change supersedes any pending "changed elsewhere" warning for it.
-      this._clearStale(scope);
+      this.clearStale(scope);
       return;
     }
     if (this._isScopeLocked?.(scope)) this._markStale(scope);
     else void this.reloadScope(scope);
   }
 
-  private _markStale(scope: Scope): void {
+  /** Whether a scope is currently deferred ("changed elsewhere while editing"). */
+  isScopeStale(scope: Scope): boolean {
     const key = scopeKey(scope);
-    if (this.staleScopes.some((s) => scopeKey(s) === key)) return;
+    return this.staleScopes.some((s) => scopeKey(s) === key);
+  }
+
+  private _markStale(scope: Scope): void {
+    if (this.isScopeStale(scope)) return;
     this.staleScopes = [...this.staleScopes, scope];
   }
 
-  private _clearStale(scope: Scope): void {
+  /** Drop a scope from the stale set without reloading — used when our own save
+   *  supersedes it, or when the scope is removed from the registry. */
+  clearStale(scope: Scope): void {
+    if (!this.isScopeStale(scope)) return;
     const key = scopeKey(scope);
-    if (!this.staleScopes.some((s) => scopeKey(s) === key)) return;
     this.staleScopes = this.staleScopes.filter((s) => scopeKey(s) !== key);
   }
 
   /** Load the external version of a scope that was deferred while edited here,
-   *  and drop it from the stale set. Called by the banner's Refresh action and
-   *  when the host closes the editor on a stale scope. */
+   *  and drop it from the stale set. Called when the host closes the editor on a
+   *  stale scope, or the user picks "Load theirs" in the conflict dialog. */
   async refreshStaleScope(scope: Scope): Promise<void> {
-    this._clearStale(scope);
+    this.clearStale(scope);
     await this.reloadScope(scope);
   }
 }

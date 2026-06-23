@@ -185,10 +185,14 @@ When the feature is enabled and the timeout elapses for a unit, Ambience re-eval
 
 The panel keeps the last 30 scene-list changes in memory. Undo and Redo buttons
 at the top of the panel step back and forward through those changes (or use
-Ctrl/⌘+Z and Ctrl/⌘+Shift+Z). Each button's tooltip names the change it will
-undo or redo, e.g. *Deleted scene "Movie night" in Living Room*.
+Ctrl/⌘+Z and Ctrl/⌘+Shift+Z). A caption beside the buttons always names the
+change that's next, e.g. *Undo: Deleted scene "Movie night" in Living Room* —
+so it's visible on touch devices too, not just on hover.
 
 The history is global (it spans the house and every area and floor), is shared
-across browser tabs, and is cleared when Home Assistant restarts. Changes to
+across browser tabs, and is cleared when Home Assistant restarts. When you
+change scenes in one tab, other open tabs refresh automatically; if a tab has
+the scene editor open on the scope that changed, it shows a "changed in another
+tab — Refresh" banner instead of reloading underneath your edit. Changes to
 categories, time periods, lux ranges, and the whole-scope on/off switch are not
 part of undo.

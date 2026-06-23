@@ -236,6 +236,30 @@ class AmbienceStore:
             self._ensure_exposed_assistants()
         await self._ensure_builtin_actions()
 
+    async def async_remove(self) -> None:
+        """Delete the persisted store file.
+
+        Called when the integration is removed (not on reload/restart) so a later
+        re-add starts from a clean slate. PeriodStore / LuxRangeStore /
+        ExposedActionsStore all persist through this same file, so one delete
+        clears every kind of Ambience config.
+        """
+        await self._store.async_remove()
+
+    async def async_flush(self) -> None:
+        """Write any pending delayed save to disk now and cancel its timer.
+
+        Called on unload. HA deletes the integration via a *fresh* store instance
+        in `async_remove_entry`, which cannot cancel a delayed save scheduled on
+        this (soon-orphaned) instance — `async_set_scope_switch_off_at` uses
+        `async_delay_save`. Without this flush that late write would fire ~1s
+        later and resurrect the file the removal just deleted. `async_save`
+        writes immediately and cancels the pending delay/final-write listeners,
+        so nothing survives the unload to recreate the file. On a reload it just
+        persists the latest in-memory state, which is harmless.
+        """
+        await self._store.async_save(self._data)
+
     def as_dict(self) -> dict[str, Any]:
         """A deep copy of the full persisted payload, for diagnostics dumps."""
         return copy.deepcopy(self._data)

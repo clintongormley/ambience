@@ -323,6 +323,127 @@ async def test_startup_reconciliation_drops_orphan_floor(
     assert "ghost_floor" in caplog.text
 
 
+async def test_remove_entry_deletes_persisted_store(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Removing the integration (delete, not just unload) deletes the persisted
+    store, so a later re-add starts clean instead of resurrecting old config.
+    Unlike async_unload_entry (reload/restart), async_remove_entry runs only on a
+    genuine delete, so wiping the single global store file is safe."""
+    from homeassistant.helpers.storage import Store
+
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_house(
+        {"scenes": [{"when": {}, "category": "g", "name": "Evening", "actions": []}]}
+    )
+    # Sanity: the config is actually on disk before removal.
+    assert await Store(hass, 1, "ambience").async_load() is not None
+
+    # async_remove returns {"require_restart": bool} (always truthy), so there's
+    # nothing meaningful to assert on it — the store check below is the real test.
+    await hass.config_entries.async_remove(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # The persisted file is gone — a fresh load sees nothing to resurrect.
+    assert await Store(hass, 1, "ambience").async_load() is None
+
+
+async def test_remove_not_resurrected_by_pending_delayed_save(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A delayed save pending at removal time must not fire afterwards and
+    recreate the store file. Switch pause/off writes use async_delay_save (1s),
+    scheduled on the setup-time Store instance; async_remove_entry deletes the
+    file via a *fresh* instance that can't cancel that pending write, so without
+    an unload-time flush the orphaned write resurrects .storage/ambience ~1s
+    after deletion and a re-add silently restores the old config."""
+    from datetime import timedelta
+
+    from homeassistant.helpers.storage import Store
+    from homeassistant.util import dt as dt_util
+    from pytest_homeassistant_custom_component.common import async_fire_time_changed
+
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    store = hass.data[DOMAIN][DATA_STORE]
+    await store.async_save_house(
+        {"scenes": [{"when": {}, "category": "g", "name": "Evening", "actions": []}]}
+    )
+    # Schedule a delayed write the way a switch pause does (async_delay_save, 1s).
+    await store.async_set_scope_switch_off_at("house", None, "2099-01-01T00:00:00+00:00")
+
+    # async_remove returns {"require_restart": bool} (always truthy), so there's
+    # nothing meaningful to assert on it — the store check below is the real test.
+    await hass.config_entries.async_remove(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Fire any delayed write that outlived the removal.
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=5))
+    await hass.async_block_till_done()
+
+    assert await Store(hass, 1, "ambience").async_load() is None
+
+
+async def test_remove_entry_clears_repairs_issues(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Repairs issues raised by Ambience must be cleared on removal. HA's config-
+    entry cleanup clears the device and entity registries but NOT the issue
+    registry, so without this a deleted integration leaves stale warnings in
+    Settings -> Repairs — contradicting the clean-slate intent of removal."""
+    from homeassistant.helpers import issue_registry as ir
+
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        "missing_entity_test",
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="missing_entity",
+    )
+    assert any(dom == DOMAIN for dom, _iid in ir.async_get(hass).issues)
+
+    await hass.config_entries.async_remove(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert not any(dom == DOMAIN for dom, _iid in ir.async_get(hass).issues)
+
+
+async def test_unload_keeps_persisted_store(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A plain unload (reload/restart) must NOT delete the store — only a genuine
+    remove does."""
+    from homeassistant.helpers.storage import Store
+
+    mock_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    await hass.data[DOMAIN][DATA_STORE].async_save_house(
+        {"scenes": [{"when": {}, "category": "g", "name": "Evening", "actions": []}]}
+    )
+
+    assert await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert await Store(hass, 1, "ambience").async_load() is not None
+
+
 async def test_panel_is_removed_on_unload(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,

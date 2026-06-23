@@ -8,6 +8,14 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Fixed
+
+- Deleting the Ambience integration now also removes its stored data (scenes,
+  scopes, switch and condition settings). Previously this data was kept on disk,
+  so removing and re-adding the integration silently restored all your old
+  settings instead of starting fresh. A reload or Home Assistant restart still
+  preserves your data as before — only an explicit delete clears it.
+
 ## [0.26.0] - 2026-06-23
 
 ### Added

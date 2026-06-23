@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-06-23
+
 ### Added
 
 - Scenes can now have an optional description. Add one from the scene editor via

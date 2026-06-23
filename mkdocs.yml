@@ -68,6 +68,7 @@ nav:
       - Unavailable: conditions/unavailable.md
   - Actions: actions.md
   - Settings reference: settings-reference.md
+  - Panel & card: panel-and-card.md
   - Troubleshooting:
       - Config health: concepts/config-health.md
       - Tips & testing: tips-and-testing.md

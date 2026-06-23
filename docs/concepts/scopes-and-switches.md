@@ -62,10 +62,6 @@ alone.
 If a scope is disabled (removed from Ambience's configuration) while per-scope
 switches are enabled, its switch entity is deleted automatically.
 
-You can choose which voice assistants the switches are exposed to in the
-Ambience panel's Settings modal (cogwheel ⚙), on the **Advanced** tab — see
-[Installation](../installation.md#voice-assistants).
-
 When per-scope switches exist, they appear in the Ambience panel as a toggle on
 each scope row. You can also control them from HA's developer tools,
 automations, or dashboards like any other switch entity. When per-scope switches
@@ -76,6 +72,26 @@ Ambience for that scope — but no HA entity is created.
 
     The main Ambience panel showing the House row at the top with its toggle, then a
     Floor row, then several Area rows each with their own toggle.
+
+______________________________________________________________________
+
+## Voice assistants
+
+Because each switch is named after its scope — and area switches are assigned to
+the matching HA area — you can pause or resume a scope by voice: *"Hey Google,
+turn off Living Room Ambience."*
+
+Choose which assistants the switches are exposed to on the **Advanced** tab of
+the Settings modal (cogwheel ⚙), under **Scope-level pause switch**. There is one
+toggle per assistant:
+
+- **Assist** — Home Assistant's built-in voice agent. On by default.
+- **Google Assistant** and **Alexa** — off by default; they require Home
+    Assistant Cloud (or a manual setup) to take effect.
+
+Changing a toggle re-applies the exposure to every Ambience switch, overwriting
+any per-switch exposure you set manually under **Settings → Voice assistants →
+Expose**.
 
 ______________________________________________________________________
 

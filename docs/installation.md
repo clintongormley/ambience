@@ -44,8 +44,8 @@ If you can't use HACS:
 
 1. Go to **Settings → Devices & Services → Add Integration**, search for
     **Ambience**, and add the entry.
-1. The **Ambience** panel appears in the HA sidebar (administrator users only).
-    See [The panel and the card](panel-and-card.md) for how to show or hide it,
-    and the dashboard-card alternative.
+1. A modal **Name and assign** dialog opens up asking for the device name and
+    area. Click **Skip and finish**.
+1. Click the new **Ambience** panel in the HA sidebar to open the Ambience UI.
 
 Next, head to [Getting started](getting-started.md) to create your first scene.

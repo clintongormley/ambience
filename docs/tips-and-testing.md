@@ -120,11 +120,13 @@ sun elevation, period of day, day of week, and workday status all update
 together.
 
 **Entity states and attributes.** Each entity that one of the category's
-conditions depends on appears as a row. Entities with a fixed set of states
-(such as a person's presence) show a dropdown; numeric entities show a number
-field; others show a text field. Where the entity has relevant attributes (for
-example a weather entity's condition description), those appear as indented rows
-beneath it. Every row has a reset button (↺) that restores the live value.
+conditions depends on appears as a row. Entities with a known set of states (such
+as a person's presence or a weather condition) show a dropdown listing those
+values; numeric entities show a number field; others show a text field. Where the
+entity has relevant attributes (for example a weather entity's condition
+description), those appear as indented rows beneath it — and an attribute whose
+possible values are known is offered as the same kind of dropdown rather than a
+free-text field. Every row has a reset button (↺) that restores the live value.
 
 **Opaque condition verdicts.** Some conditions cannot be broken down into
 individual entity controls — for example a template condition or a third-party

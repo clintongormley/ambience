@@ -4725,6 +4725,9 @@ var na=Object.defineProperty;var sa=Object.getOwnPropertyDescriptor;var c=(t,r,e
     .field-row-main .checkbox-cell {
       display: flex;
       align-items: center;
+      /* Align the checkbox with the field name's first line, not the
+         vertical centre of a multi-line label/description. */
+      align-self: flex-start;
     }
     .field-row-main .name {
       color: var(--primary-text-color, inherit);

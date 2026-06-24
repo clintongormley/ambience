@@ -15,6 +15,9 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   so removing and re-adding the integration silently restored all your old
   settings instead of starting fresh. A reload or Home Assistant restart still
   preserves your data as before — only an explicit delete clears it.
+- When configuring an action's fields, each field's checkbox now lines up with
+  the field name at the top of the row instead of floating in the vertical
+  centre of multi-line descriptions.
 
 ## [0.26.0] - 2026-06-23
 

@@ -2,12 +2,13 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { type HassConnection, simulate, simulateInputs } from "../api.js";
-import { humanizeId, localize, localizeWsError } from "../i18n.js";
+import { humanizeId, localize, localizeWsError, stateValueLabel } from "../i18n.js";
 import { renderEvaluation, traceDetailStyles } from "../trace-detail.js";
 import type {
   BufferedUnit,
   ExposedAction,
   PeriodStoreView,
+  SimulateAttribute,
   SimulateEntityKnob,
   SimulateKnob,
   SimulateOverrides,
@@ -16,6 +17,7 @@ import type {
   StateForDuration,
 } from "../types.js";
 import { entityName, entityRowStyles, renderEntityIcon } from "./entity-row.js";
+import { statesMap } from "./hass-states.js";
 import { ModalDismissController } from "./modal-shell.js";
 
 // Display label for a raw option value (the sent value stays raw).
@@ -106,6 +108,20 @@ export class AmbienceSimulatorModal extends LitElement {
       .run-row { display: flex; justify-content: flex-end; margin-top: 0.6rem; }
       .error { color: var(--error-color, #c00); font-size: 0.9rem; }
       .result { margin-top: 1rem; }
+      /* Narrow screens (HA mobile app): the state/For controls otherwise crush
+         the entity name into a one-character-wide column. Let the row wrap and
+         drop the controls onto their own full-width line, indented under the
+         name (past the icon) so each input keeps its natural size. Uses a px
+         breakpoint (not rem) so HA's 14px root doesn't shift where it fires. */
+      @media (max-width: 600px) {
+        .when { flex-wrap: wrap; }
+        .row { flex-wrap: wrap; }
+        /* border-box so the 34px indent lives INSIDE the 100% basis — with the
+           default content-box the row would be 100%+34px and overflow the body
+           horizontally (a phantom scrollbar the width of the icon column). */
+        .row-ctrl { flex: 1 0 100%; box-sizing: border-box; flex-wrap: wrap;
+          padding-left: 34px; margin-top: 0.35rem; }
+      }
     `,
   ];
 
@@ -357,17 +373,37 @@ export class AmbienceSimulatorModal extends LitElement {
         <div class="row attr ${i === k.attributes.length - 1 ? "last-attr" : ""}">
           <div class="row-text"><div class="row-title">${optionLabel(this.hass, a.name)}</div></div>
           <div class="row-ctrl">
-            <input class=${a.control === "number" ? "num" : ""}
-              type=${a.control === "number" ? "number" : "text"}
-              data-attr=${`${k.entity_id}:${a.name}`}
-              .value=${v?.attributes[a.name] ?? ""}
-              @input=${(e: Event) => this._setAttr(k.entity_id, a.name, (e.target as HTMLInputElement).value)} />
+            ${this._renderAttrControl(k, a, v?.attributes[a.name] ?? "")}
             <button class="reset" title=${localize(this.hass, "ui.reset_to_live", "Reset to live")}
               @click=${() => this._resetEntity(k)}>↺</button>
           </div>
         </div>`,
       )}
     `;
+  }
+
+  /** Editable control for an attribute sub-row. A `select` attribute (backed by
+   *  a companion option-list, e.g. a remote's `current_activity`) renders the
+   *  same dropdown of known values the scene editor offers — each value shown
+   *  via HA's own formatter so it reads identically. Otherwise a free-text /
+   *  number input. */
+  private _renderAttrControl(k: SimulateEntityKnob, a: SimulateAttribute, value: string) {
+    const setter = (e: Event) =>
+      this._setAttr(k.entity_id, a.name, (e.target as HTMLInputElement | HTMLSelectElement).value);
+    if (a.control === "select") {
+      const stateObj = statesMap(this.hass)[k.entity_id];
+      return html`<select data-attr=${`${k.entity_id}:${a.name}`} .value=${value} @change=${setter}>
+        ${(a.options ?? [value]).map(
+          (o) =>
+            html`<option value=${o} ?selected=${o === value}>${stateValueLabel(this.hass, stateObj, a.name, o)}</option>`,
+        )}
+      </select>`;
+    }
+    return html`<input class=${a.control === "number" ? "num" : ""}
+      type=${a.control === "number" ? "number" : "text"}
+      data-attr=${`${k.entity_id}:${a.name}`}
+      .value=${value}
+      @input=${setter} />`;
   }
 
   private _renderControl(k: SimulateEntityKnob, value: string) {

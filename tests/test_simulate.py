@@ -565,6 +565,91 @@ def test_simulate_inputs_surfaces_state_referenced_attributes():
     ]
 
 
+def test_simulate_inputs_attribute_with_known_values_becomes_a_select():
+    """A string attribute backed by a companion option-list (e.g. a remote's
+    `current_activity` reading `activity_list`) becomes a select knob seeded with
+    those values — the same lookup the scene editor's value dropdown uses — rather
+    than a free-text field."""
+    from custom_components.ambience.conditions.state import StateCondition
+
+    scenes = [
+        {
+            "category": "g1",
+            "when": {
+                "state": {
+                    "kind": "is",
+                    "entity_id": "remote.cine",
+                    "attribute": "current_activity",
+                    "states": ["Nvidia (Projector)"],
+                }
+            },
+        }
+    ]
+    hass = _Hass(
+        [
+            _State(
+                "remote.cine",
+                "on",
+                {
+                    "current_activity": "Nvidia (Projector)",
+                    "activity_list": ["PowerOff", "Nvidia (Projector)", "Watch Apple TV"],
+                },
+            )
+        ]
+    )
+
+    class _Store7:
+        def scope_config(self, sk, si):
+            return {"scenes": scenes}
+
+        def get_condition_config(self, name):
+            return {"entity": None, "groups": []} if name == "weather" else {}
+
+    hass.data[DOMAIN] = {DATA_CONDITIONS: {"state": StateCondition(hass)}, DATA_STORE: _Store7()}
+    knobs = {k["entity_id"]: k for k in simulate_inputs_entities(hass, "area", "lounge", "g1")}
+    assert {
+        "name": "current_activity",
+        "control": "select",
+        "live_value": "Nvidia (Projector)",
+        "options": ["PowerOff", "Nvidia (Projector)", "Watch Apple TV"],
+    } in knobs["remote.cine"]["attributes"]
+
+
+def test_simulate_inputs_attribute_without_an_option_list_stays_free_text():
+    """A string attribute with no companion list (only its current value is
+    knowable) stays a free-text field — a single-option native select would
+    trap the user on the live value with no way to type a different one."""
+    from custom_components.ambience.conditions.state import StateCondition
+
+    scenes = [
+        {
+            "category": "g1",
+            "when": {
+                "state": {
+                    "kind": "is",
+                    "entity_id": "calendar.work",
+                    "attribute": "message",
+                    "states": ["Standup"],
+                }
+            },
+        }
+    ]
+    hass = _Hass([_State("calendar.work", "on", {"message": "Standup"})])
+
+    class _Store8:
+        def scope_config(self, sk, si):
+            return {"scenes": scenes}
+
+        def get_condition_config(self, name):
+            return {"entity": None, "groups": []} if name == "weather" else {}
+
+    hass.data[DOMAIN] = {DATA_CONDITIONS: {"state": StateCondition(hass)}, DATA_STORE: _Store8()}
+    knobs = {k["entity_id"]: k for k in simulate_inputs_entities(hass, "area", "office", "g1")}
+    attr = next(a for a in knobs["calendar.work"]["attributes"] if a["name"] == "message")
+    assert attr["control"] == "text"
+    assert "options" not in attr
+
+
 # ---------------------------------------------------------------------------
 # New characterization tests for previously uncovered lines
 # ---------------------------------------------------------------------------

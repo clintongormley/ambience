@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-06-24
+
 ### Changed
 
 - In the Simulate panel, an entity attribute that has a known set of values

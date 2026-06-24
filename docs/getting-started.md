@@ -1,179 +1,116 @@
 # Getting started
 
-This walkthrough sets up lighting automation for one room and adds scenes one at
-a time. Each step introduces exactly one new idea. By the end you will
-understand how scenes work, why their order matters, and how Ambience picks
-which one to apply — without needing to read the Concepts pages first.
+A **Scene** is a combination of the **Conditions** which allow the scene to
+match, and the **Actions** which are applied when the scene matches. This guide
+takes you through setting up scenes to control the lights and blinds in a
+lounge.
 
-The room used throughout is a living room, but the approach is the same for any
-area.
+## Requirements
 
-______________________________________________________________________
+This example depends on the following entities being available in Home
+Assistant:
 
-## Opening the panel
+- lights, including a light group called **Lounge Lights**
+- blinds
+- an occupancy or presence sensor called **Lounge Presence**
+- a weather integration
+- a remote control to turn on the projector called **Cine**
+
+## Scenes for lights
+
+We want the lights in the lounge to support the following scenes:
+
+| Conditions                                             | Device state                                     |
+| ------------------------------------------------------ | ------------------------------------------------ |
+| The room is vacant for more than 1 minute.             | Fade lights off                                  |
+| The room is occupied during the evening or nighttime   | Fade lights to 25%                               |
+| The room is occupied during the day, when it is sunny  | Fade lights to 40%                               |
+| The room is occupied during the day, when it is cloudy | Fade lights to 60%                               |
+| The projector is on for movie time                     | Fade lights off, except side-table lights at 10% |
+
+## Scenes for blinds
+
+The blinds share some conditions with the lights but have their own lifecycle:
+
+| Conditions                                     | Device state  |
+| ---------------------------------------------- | ------------- |
+| Between dusk and sunrise (but not before 8:00) | Blinds closed |
+| Between sunrise (but not before 8:00) and dusk | Blinds open   |
+| The projector is on for movie time             | Blinds closed |
+
+## Step 1: Opening the panel
 
 Open the Ambience panel from the Home Assistant sidebar. The panel lists every
-scope in your home: a **House** row at the top, then one row per floor (prefixed
-"Floor: "), then one row per area (prefixed "Area: "). Each row shows a summary
-— "not configured" until you add scenes — and a toggle switch that lets you
-pause Ambience for that scope.
+**scope** in your home: a **House** row at the top, followed by any **floors**
+and then any **areas**.
 
-Find your living room in the list. Click its row header to expand it.
+![Empty panel.](images/getting-started/empty_panel.png "Empty panel.")
 
-!!! info "📷 Screenshot"
+!!! tip "Optional: set up Workday & Weather"
 
-    The main panel with the "Area: Living room" row expanded, showing an empty scene
-    list and the "+ Add scene" button.
+    The **Weather** and **Day** conditions depend on other services in Home
+    Assistant. You can dismiss the suggestion to set them up for now. Later you will
+    see how to configure them under **Settings**.
 
-______________________________________________________________________
+## Step 2: Add a category
 
-## Layer 1 — empty room: turn the lights off
+We want to set up scenes to control the lights in the lounge. To start we will
+add a new category called **Lights**, by clicking **+ Add category** at the top
+of the screen.
 
-The simplest possible scene: when nobody is in the room, switch the lights off.
+This takes you to the **Categories** tab under **Settings**. Click the **+ Add
+category** button and fill out the form as shown below:
 
-1. Click **+ Add scene** inside the living room row. The scene editor opens as a
-    side panel.
-1. Click the name field (it shows "New scene") and type a name — for example,
-    **Empty**.
-1. Under the **When** heading, click **+ Add condition…** and choose **People**.
-    A condition row appears, pre-set to "Everybody is at Home". Click the row
-    to open it and change the mode to **Nobody** (and set the location to the
-    living-room zone if you have one, or leave it as "Home" to cover the whole
-    house).
-1. Under the **Actions** heading, click **+ Add action…** and choose your
-    light-off service (for example "Turn off light"). Select the living-room
-    lights as the target.
-1. Click **Save scene**.
+![Add a category called Lights.](images/getting-started/lights_category.png "Add a category called Lights.")
 
-Ambience now monitors the People condition. Whenever nobody is in the configured
-location, this scene applies and the lights go off.
+Click **Save** and then close the settings page with the **X** in the top right
+corner. Then select the **Lights** category from the **Category filter** at the
+top of the page.
 
-!!! info "📷 Screenshot"
+![Lights category selected.](images/getting-started/category_selector.png "Lights category selected.")
 
-    The scene editor with the People condition open, the mode set to "Nobody" and
-    the location set to the living-room zone.
+## Step 3: Add the *Vacant* scene
 
-______________________________________________________________________
+The first scene we'll add is the **Vacant** scene — what the lights should do
+when the room has been vacant for at least 1 minute. Click the **Lounge** header
+to expand that scope, then:
 
-## Layer 2 — someone home in the evening: warm, low light
+- Press the **+ Add scene** button.
+- Click on **New scene** to change the name to **Vacant**.
+- The **Category** and **Scope** should already be set to **Lights** and
+    **Lounge** respectively.
 
-Add a second scene for occupied evenings.
+![Adding a new scene.](images/getting-started/add_vacant_1.png "Adding a new scene.")
 
-1. Click **+ Add scene** again and name it **Evening**.
-1. Add a **People** condition — this time leave it on **Everybody** or switch it
-    to **Anybody** (someone is present).
-1. Add a **Time of day** condition. Click the row and select the **Evening**
-    period. Evening runs from sunset to dusk; if you also want to cover late
-    nights, add **Nighttime** (sunset until sunrise) to the same condition —
-    you can select multiple periods.
-1. Add a light action set to a warm, dim brightness (for example 20 % at 2700
-    K).
-1. Click **Save scene**.
+!!! info "Scopes and Categories"
 
-### How scenes are tried
+    Scopes and Categories allow you to segment your devices down into small related
+    groups. All the scenes which control (for instance) the lights in the lounge
+    should be added to the **Lounge** scope, under the **Lights** category. That way
+    you can be sure that there are no competing automations trying to control the
+    same devices.
 
-Your living room now has two scenes. Ambience works through them from the top of
-the list to the bottom. The first scene whose conditions all pass is the one
-that applies — the remaining scenes are skipped.
+    The **actions** in a scene can only target devices that belong to that scope (or
+    to children of the scope if the scope is **House** or a floor). **Conditions**,
+    on the other hand, can target entities anywhere in the house.
 
-Order therefore matters. "Empty" should sit above "Evening" so that the
-lights-off instruction wins whenever the room is empty, regardless of the time.
+We want this scene to apply when the lounge has been vacant for at least one
+minute. So, under **When**:
 
-If Ambience put "Evening" first and found someone was home in the evening, it
-would apply "Evening" — and never even check "Empty". With "Empty" first, an
-empty room is caught immediately.
+- Click **Add condition** and choose **Occupancy**.
+- Click **Select an entity**.
+- Select the **Lounge Presence** entity.
+- Change **Detected** to **Clear**.
+- and set **For** to **00:01:00** (i.e. one minute).
 
-Drag the rows to reorder them if needed.
+![Setup occupancy condition.](images/getting-started/add_vacant_2.png "Setup occupancy condition.")
 
-!!! info "📷 Screenshot"
+As soon as you click away from the condition you've just added, the form gets
+replaced by a simple summary of the condition:
 
-    The living room scope showing two scenes: "Empty" at the top, "Evening" below
-    it. The scene list shows each scene's condition summary.
+![Occupancy condition summary.](images/getting-started/add_vacant_3.png "Occupancy condition summary.")
 
 ______________________________________________________________________
-
-## Layer 3 — daytime: brighter, and brighter still when it is overcast
-
-During the day you probably want more light. When the sky is dull you want even
-more. Two scenes handle this, sitting one above the other.
-
-**Scene: Sunny day**
-
-1. Click **+ Add scene** and name it **Sunny day**.
-1. Add a **People** condition — someone present.
-1. Add a **Time of day** condition and select **Daytime** (sunrise until
-    sunset).
-1. Add a **Weather** condition. Open the condition and pick a group that
-    represents good weather (for example **Sunny**), or add a numeric threshold
-    (such as humidity or temperature) if you prefer.
-1. Add a light action at a moderate daytime brightness (for example 70 %).
-1. Click **Save scene**.
-
-**Scene: Dull day**
-
-1. Click **+ Add scene** and name it **Dull day**.
-1. Add the same **People** and **Time of day** (Daytime) conditions.
-1. Add a **Weather** condition set to overcast or low-light conditions.
-1. Add a light action at a higher brightness (for example 90 %) to compensate.
-1. Click **Save scene**.
-
-Place both of these below "Empty" but above "Evening" in the list. Because the
-first match wins, only one of the two daytime scenes will apply at any moment —
-whichever one's weather condition passes first. If neither daytime scene matches
-(because it is not daytime), Ambience moves on to "Evening".
-
-!!! info "📷 Screenshot"
-
-    The scene editor with a Weather condition open, showing the condition groups
-    (Sunny, Dim, Dark, Wet, Windy).
-
-______________________________________________________________________
-
-## Layer 4 — projector on: film mode
-
-Sometimes you want a scene that overrides everything else. When the projector is
-running, close the blinds, dim the main lights, and leave the side lights on
-low.
-
-1. Click **+ Add scene** and name it **Film**.
-1. Add an **Entity state** condition. Select your projector or media player
-    entity and set the expected state (for example, `playing` or `on`).
-1. Add multiple actions:
-    - Close the blinds (a cover service).
-    - Dim the main lights (for example 5 % brightness).
-    - Set the side lights to a low warm level (for example 10 % at 2200 K).
-1. Click **Save scene**.
-1. Drag the **Film** scene to the very top of the list.
-
-Because Film sits first, Ambience checks it before anything else. The moment the
-projector turns on, Film wins and all three actions run together. When the
-projector stops, Film's condition no longer passes, and Ambience falls through
-to whichever other scene matches the current time and occupancy.
-
-!!! info "📷 Screenshot"
-
-    The scene editor for "Film" showing three action rows: one for the blind, one
-    for the main lights, one for the side lights.
-
-______________________________________________________________________
-
-## What you now have
-
-One room. Several scenes. Tried from the top of the list downward. The first one
-whose conditions all pass is applied automatically.
-
-```
-Film          ← projector on → dim lights, close blinds, low side light
-Empty         ← nobody home  → lights off
-Dull day      ← daytime, overcast, someone home → 90 % brightness
-Sunny day     ← daytime, sunny, someone home    → 70 % brightness
-Evening       ← evening or night, someone home  → warm, dim light
-```
-
-Ambience re-evaluates this list whenever any of the tracked inputs change —
-occupancy, time of day, weather, or entity state. You do not need automations,
-helpers, or `input_boolean` flags. Each scene is self-contained: name,
-conditions (the "when"), actions (the "then").
 
 To learn exactly how scenes, categories, and the resolution order fit together,
 see [Scenes & resolution](concepts/scenes-and-resolution.md). To understand why

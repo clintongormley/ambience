@@ -58,27 +58,3 @@ a phone wanders in and out of a geofence.
 
 Leave the duration at zero (the default) to match immediately on any location
 change.
-
-## Example
-
-**Empty room — lights off.** Suppose you want a scene that turns off the living
-room lights whenever nobody is home. You create a scene called "Away", add a
-People condition, set the scope to **Nobody**, leave the location as **Home**,
-and leave the duration at zero. Because Nobody hides the is-at/is-not-at toggle,
-the condition reads simply: nobody is at Home. Place this scene below any scene
-that should fire while people are present and it will catch the empty-house
-case.
-
-**Evening scene — someone home after dark.** For a "Cosy evening" scene you want
-at least one person in the house. You add a People condition set to **Anybody /
-Is at / Home**. Combined with a Time of day condition set to **Evening**, the
-scene fires when the sun is down and the house is not empty. If you want the
-scene to settle before triggering — to avoid it firing while someone is still on
-their way in — you could set the **for** duration to, say, five minutes.
-
-!!! info "📷 Screenshot"
-
-    The People condition editor in the scene editor, showing the scope dropdown open
-    with Everybody, Anybody, Nobody, Any of:, All of:, and None of: listed; below it
-    the "Is at" / "Is not at" dropdown set to "Is at"; and a zone dropdown set to
-    "Home". A for duration field shows 0 hours, 0 minutes, 0 seconds.

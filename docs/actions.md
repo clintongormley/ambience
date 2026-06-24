@@ -41,30 +41,13 @@ might:
     *The Settings → Actions list, showing several exposed actions with their service
     ids and configured fields.*
 
-### Setting up an exposed action
-
-1. Go to **Settings → Actions** in the Ambience panel.
-1. Click **+ Add action** and pick a Home Assistant service from the searchable
-    picker.
-1. Expand the new action card. A list of the service's fields appears, sorted
-    alphabetically.
-1. For each field, decide:
-    - **Tick the checkbox** next to it to make the field visible in the scene
-        editor. Scenes using this action will see this field and can set their
-        own value.
-    - **Set a default** by clicking the *+ Set default* button. Enter a value;
-        this will be sent every time the action runs. You can set a default with
-        or without ticking the checkbox — a hidden field with a default is always
-        sent but never shown in the scene editor.
-1. Optionally, give the action a **label** (the text field in the card header).
-    The label appears in the scene editor's action picker to make it easier to
-    tell similar actions apart — for example, "Main lights on" and "Accent
-    lights on" might both wrap `light.turn_on` but target different groups.
-
-Changes are saved automatically as you make them.
-
-You can reorder exposed actions by dragging the handle on the left of each card.
-The order controls how they appear in the scene editor's action picker.
+Exposed actions are created and configured on the **Actions** tab of the
+Settings modal: pick a service, tick the fields to make visible, set any
+defaults, and give it an optional label (handy for telling apart two actions
+that wrap the same service). See the
+[Settings reference](settings-reference.md#actions-tab) for the field-by-field
+detail, and [Step 3 of Getting started](getting-started/step-3-exposing-actions.md)
+for a worked example.
 
 ______________________________________________________________________
 
@@ -98,26 +81,47 @@ ______________________________________________________________________
 
 ## Using an exposed action in a scene
 
-When you edit a scene, the **Actions** section is where you add what Ambience
-should do (the "then" of the scene).
+In a scene's **Actions** section, click **+ Add action…** and pick one of your
+exposed actions. Fill in its **visible fields** (each shows the right input
+control, plus a *Default: …* hint where one is set) and choose a **target** — the
+entities to act on (see [Action targets](#action-targets)). When the scene
+applies, Ambience sends the service call with your values plus any defaults; a
+visible field left blank falls back to its default.
 
-1. Click **+ Add action…** in the scene editor.
-1. Choose an exposed action from the picker. Only actions you have set up in
-    Settings → Actions appear here.
-1. Fill in the **visible fields** — the ones you ticked as visible when you set
-    up the action. Each field shows its name, the appropriate input control
-    (colour picker, number slider, entity selector, and so on), and a hint
-    alongside the label if a default has been set (for example, *Default: 2
-    seconds*), so you can see what will be sent if you leave the field blank.
-1. Set a **target** — the entities this action should act on — if the service
-    requires one. See [Action targets](#action-targets) for the full details on
-    entity/device/area/label selection and how targets are resolved.
-1. Save the scene.
+______________________________________________________________________
 
-When the scene applies, Ambience sends the service call with the values you
-filled in plus any defaults from the exposed action configuration. If a visible
-field is left blank in the scene editor, the default (if one was set) is used;
-the service still receives it.
+## Action targets
+
+The **target** of an action tells Ambience which entities to act on when the scene applies. You can target by:
+
+- **Entity** — pick one or more specific entities directly.
+- **Device** — target all entities belonging to one or more devices.
+- **Area** — target all entities in one or more areas.
+- **Floor** — target all entities on one or more floors.
+- **Label** — target all entities that carry one or more HA labels.
+
+These work exactly like HA automation targets: you can mix and match selectors in a single target (for example, two areas plus one specific entity), and HA's native chip picker is used — so autocomplete and domain filtering work as you'd expect. The picker itself is not limited to the scene's scope; scope-constraining happens at apply time (see below), and the live count under the picker shows the effect.
+
+> **Home Assistant 2026.1+** is required for the device / area / floor / label picker (it relies on HA's `helpers.target` resolution). On older Home Assistant, the action editor falls back to entity-only targeting and the rest of the feature behaves as before.
+
+### Scope-constrained resolution
+
+Ambience resolves the target **live, at apply time**, using the entities currently registered in Home Assistant. The resolution is also **scope-constrained**: indirect selectors (device, area, floor, label) are intersected with the entities that belong to the scene's scope (House, Floor, or Area), so an area-targeted action in a living-room scene only acts on the living-room's entities even if the label spans the whole house. (A floor target picked in an area-scoped scene therefore clips to that area — the live count shows the real effect.)
+
+**Directly-named entity targets are forwarded unchanged.** If you name a specific entity by entity id, it is sent to the service as-is — Ambience does not clip it to the scene's scope. This is a deliberate choice: if you pick an entity directly, you mean exactly that entity.
+
+The scene editor shows a live count below the target picker — for example, **→ resolves to 3 entities in Living Room** — so you can see immediately how many entities a target will act on. A warning is shown when the count is zero.
+
+### Same entity in two actions (last-write-wins)
+
+Two actions in the same scene can target the same entity. When they do, both service calls are sent; whichever arrives last wins. The config-health overlap warning still flags entities that are controlled by more than one *(scope, category)* group, as contradictory commands across groups can still cause flickering.
+
+### Config-health warnings for targets
+
+The [Config health](concepts/scopes-and-switches.md) Repairs page flags two target-related problems:
+
+- **Action overlap** — an entity is acted on by more than one scene in different *(scope, category)* combinations. Last-write-wins applies, but the conflict is flagged so you can decide whether it is intentional.
+- **Target resolves to nothing** (`target_empty`) — an action has a non-empty target that resolves to zero entities in the scene's scope at check time. The action will be silently skipped when the scene applies. Common causes: the label is empty, the area has no entities of the right domain, or the target refers to a device that has been removed.
 
 !!! info "📷 Screenshot"
 

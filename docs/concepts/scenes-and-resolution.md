@@ -11,7 +11,7 @@ A **scene** is the core building block of Ambience. It has three parts:
     "then".
 
 Scenes are defined within a scope (House, Floor, or Area). Within each scope,
-scenes belong to a [category](categories.md) — one winner per category is chosen
+scenes belong to a [category](../getting-started/step-1-scopes-and-categories.md) — one winner per category is chosen
 each time Ambience re-evaluates.
 
 !!! info "📷 Screenshot"
@@ -34,20 +34,10 @@ win if Ambience reaches it.
 ### First match wins
 
 Because evaluation stops at the first match, order determines priority. Put more
-specific scenes above more general ones.
-
-**Example.** Suppose you want dim, warm light when a room is empty, and brighter
-light the rest of the time:
-
-| Position | Scene      | Conditions             | Actions                |
-| -------- | ---------- | ---------------------- | ---------------------- |
-| 1        | Empty room | Occupancy sensor = off | Lights at 10 %, 2700 K |
-| 2        | Default    | *(none)*               | Lights at 80 %, 3000 K |
-
-When nobody is home the first scene wins. As soon as the sensor flips to "on",
-the first scene no longer matches and the second (unconditional) scene wins
-instead. If those two scenes were swapped, the unconditional "Default" would
-always win first and the "Empty room" scene would never fire.
+specific scenes above more general ones; an unconditional scene (no conditions)
+acts as a catch-all and should sit last. Ambience also sorts scenes
+automatically by priority and specificity — see
+[Scene priority](../getting-started/step-6-scene-priority.md).
 
 ## Disabled scenes
 
@@ -86,7 +76,7 @@ change which scene would win in a normal evaluation.
 
 ## Resolution per category
 
-Resolution runs once per [category](categories.md) in a scope. Each category
+Resolution runs once per [category](../getting-started/step-1-scopes-and-categories.md) in a scope. Each category
 produces exactly one winner (or no winner, if no scene matches). See
-[Categories](categories.md) for how categories are defined and why separating
+[Categories](../getting-started/step-1-scopes-and-categories.md) for how categories are defined and why separating
 concerns this way is useful.

@@ -1,4 +1,4 @@
-# Step 5: Weather conditions
+# Step 4: Weather conditions
 
 Next up are the **Daytime** scenes, one for when the weather is sunny and one
 for when the weather is cloudy.
@@ -21,7 +21,7 @@ the built-in **Meteorologisk institutt**:
     Assistant, see the
     [Definitive guide to Weather integrations](https://community.home-assistant.io/t/definitive-guide-to-weather-integrations/736419).
 
-![Nighttime scene added.](../images/getting-started/step-4/nighttime_scene.png "Nighttime scene added.")
+![Nighttime scene added.](../images/getting-started/step-3/nighttime_scene.png "Nighttime scene added.")
 
 ## Configure the Weather condition
 
@@ -34,7 +34,7 @@ Now that we have a weather integration set up, we need to configure the
 - Click on the **Weather** condition to expand it.
 - Click **Select an entity** and select your newly created weather forecast.
 
-!["Configuring the Weather condition."](../images/getting-started/step-5/weather_condition.png "Configuring the Weather condition.")
+!["Configuring the Weather condition."](../images/getting-started/step-4/weather_condition.png "Configuring the Weather condition.")
 
 You can see that the Weather condition comes preconfigured with various groups.
 For instance the **Dim** group includes **Cloudy, Partly cloudy, and Rainy**.
@@ -54,7 +54,7 @@ Sunny** scene — set the lights to 40% when it is sunny:
     **Brightness pct** to **40%**.
 - Click **Save**.
 
-![Daytime Sunny scene.](../images/getting-started/step-5/daytime_sunny.png "Daytime Sunny scene.")
+![Daytime Sunny scene.](../images/getting-started/step-4/daytime_sunny.png "Daytime Sunny scene.")
 
 ## Adding the Daytime Cloudy scene
 
@@ -64,7 +64,7 @@ just duplicate that one and edit it:
 - Click the **⋮** icon to the right of the **Daytime Sunny** scene and select
     **Duplicate**.
 
-![Duplicate Daytime Sunny scene.](../images/getting-started/step-5/duplicate.png "Duplicate Daytime Sunny scene.")
+![Duplicate Daytime Sunny scene.](../images/getting-started/step-4/duplicate.png "Duplicate Daytime Sunny scene.")
 
 Then:
 
@@ -75,8 +75,8 @@ Then:
     **60%**.
 - Click **Save scene**.
 
-![Daytime Cloudy scene.](../images/getting-started/step-5/daytime_cloudy.png "Daytime Cloudy scene.")
+![Daytime Cloudy scene.](../images/getting-started/step-4/daytime_cloudy.png "Daytime Cloudy scene.")
 
 ______________________________________________________________________
 
-Next: [Step 6: Entity-state conditions](step-6-entity-state-conditions.md).
+Next: [Step 5: Entity-state conditions](step-5-entity-state-conditions.md).

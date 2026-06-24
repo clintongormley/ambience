@@ -69,23 +69,3 @@ if the current time falls within *any* of the listed windows, which lets you
 express things like "between 07:00–09:00 or 17:00–19:00" in a single condition.
 Each added entry collapses to a summary chip when you move to another; click a
 chip to expand and edit it.
-
-## Example
-
-Suppose you want an "Evening lights" scene that warms your living room lighting
-once the sun goes down. You create a scene, give it the name "Evening lights",
-and add a Time of day condition. From the dropdown you select **Evening**. That
-period runs from sunset to dusk — the brief civil twilight window — which is
-usually a natural moment for the transition. Because it is sun-relative, it
-shifts with the seasons automatically.
-
-If you prefer a fixed time regardless of the sun, you could instead choose
-**Custom range**, set the From kind to **Time** at `18:00`, and the To kind to
-**Time** at `23:00`.
-
-!!! info "📷 Screenshot"
-
-    The Time of day condition editor in the scene editor, showing the period
-    dropdown open with Daytime, Dawn, Morning, Afternoon, Evening, and Nighttime
-    listed, and a separate custom range entry expanded below with From set to "Sun /
-    Sunset / 0" and To set to "Time / 23:00".

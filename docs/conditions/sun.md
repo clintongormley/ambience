@@ -53,29 +53,6 @@ range in the same condition; the sun matches if it falls in any of them.
 
 ______________________________________________________________________
 
-## Example
-
-You have a south-west-facing sofa that gets direct afternoon sun. You want a
-scene that closes the blind automatically when the glare is worst.
-
-Add a **Sun** condition and configure it as follows:
-
-- **Elevation** → **Between** 10° and 40° (the glare band; below 10° the sun is
-    too low to reach the sofa, above 40° it clears the window frame).
-- **Azimuth** → tick **SW** (and optionally **S** and **W** if the glare starts
-    a little earlier or lingers a little later).
-
-The scene's condition now passes only during the hours when the sun is both in
-the right part of the sky and low enough to shine directly through the window.
-Outside those hours Ambience falls through to the next scene in the list.
-
-!!! info "📷 Screenshot"
-
-    The Sun condition editor with "Between 10° and 40°" set for elevation and the SW
-    sector ticked in the compass grid.
-
-______________________________________________________________________
-
 ## Notes
 
 - The sun's position is read from the `sun.sun` entity that Home Assistant

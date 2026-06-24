@@ -92,22 +92,3 @@ current month, again derived from the workday calendar.
 
 This kind also requires a workday calendar to be configured in **Settings →
 Conditions** (see the [Settings reference](../settings-reference.md)).
-
-## Example
-
-Suppose you want a scene that turns on a "Focus" lighting preset every weekday
-morning, but not on public holidays when you are unlikely to be working. You
-could set it up as follows:
-
-- Add a **Weekday** include item and tick Monday, Tuesday, Wednesday, Thursday,
-    and Friday.
-- Add a **Holiday** exclude item.
-
-The scene then matches every weekday except on public holidays recognised by
-your Workday integration. You might pair this with a Time of day condition to
-restrict it to, say, 09:00–17:00.
-
-!!! info "📷 Screenshot"
-
-    The Day condition editor showing an Include section with one Weekday item
-    (Monday through Friday ticked) and an Exclude section with one Holiday item.

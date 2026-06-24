@@ -16,8 +16,8 @@ about them separately. Every fresh install starts with a single "General"
 category. You need at least one category at all times — Ambience will not let
 you delete the last one.
 
-See [Categories](concepts/categories.md) for a full explanation of what
-categories do.
+See [Scopes and categories](getting-started/step-1-scopes-and-categories.md) in
+the Getting started guide for a hands-on introduction.
 
 !!! info "📷 Screenshot"
 

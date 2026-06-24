@@ -51,22 +51,5 @@ on its header — turning it on inverts the result of that condition or group.
     State expression builder showing two conditions combined in an AND group, with
     the For duration picker visible.
 
-## Example
-
-**The projector is on**
-
-Pick the projector's media player entity, leave "Where" set to *State*, set
-Comparison to *is*, and type `on` in the value field. The condition passes
-whenever the projector is on.
-
-**Temperature is below 18 °C**
-
-Pick a temperature sensor entity, leave "Where" set to *State*, set Comparison
-to *\<*, and enter `18` as the threshold. The condition passes whenever the
-sensor reads below 18.
-
-**Nobody home for at least five minutes**
-
-Pick each person entity in turn and set each one to *is not home*. Wrap them in
-an **AND** group so all must be away simultaneously. Set the **For** duration to
-5 minutes on each condition so brief GPS drift does not trigger the scene.
+For a worked example of the Entity-state condition, see
+[Step 5 of Getting started](../getting-started/step-5-entity-state-conditions.md).

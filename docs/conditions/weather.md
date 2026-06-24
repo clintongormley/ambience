@@ -68,33 +68,8 @@ threshold of "Temperature ≥ 5", the condition passes only when the weather is
 wet *and* the temperature is at least 5 degrees. Neither check alone is
 sufficient.
 
-______________________________________________________________________
-
-## Example
-
-You want a scene called **Dull day** that raises the living-room lights to 90 %
-brightness whenever it is daytime and the sky is dim or dark (overcast, foggy,
-or worse). Here is how to set it up:
-
-1. Open the Ambience panel and expand the **Area: Living room** row.
-1. Click **+ Add scene** and name it **Dull day**.
-1. Under **When**, click **+ Add condition…** and add a **Time of day**
-    condition. Select the **Daytime** period.
-1. Click **+ Add condition…** again and add a **Weather** condition. In the
-    **Groups** section, tick **Dim** and **Dark**.
-1. Under **Actions**, add a light action and set the brightness to 90 %.
-1. Click **Save scene**.
-
-Place this scene below any higher-priority scene (such as one that detects
-nobody home and turns the lights off), but above a general daytime scene that
-runs when the weather is fine. Ambience works down the list and applies the
-first scene whose conditions all pass, so the dull-day scene only wins when it
-really is overcast.
-
-!!! info "📷 Screenshot"
-
-    The scene editor with the Weather condition open, showing the Groups section
-    with "Dim" and "Dark" ticked and the Thresholds section empty.
+For a worked example that builds a weather-based scene, see
+[Step 4 of Getting started](../getting-started/step-4-weather-conditions.md).
 
 ______________________________________________________________________
 

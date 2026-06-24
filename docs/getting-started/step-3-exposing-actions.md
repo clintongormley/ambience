@@ -1,4 +1,4 @@
-# Step 4: Exposing actions
+# Step 3: Exposing actions
 
 Next we'll add the **Nighttime** scene — turn the lights to 25% as soon as
 anybody enters the room.
@@ -9,7 +9,7 @@ lights to a particular brightness:
 - Click the cogwheel (⚙) in the top right corner of the **Ambience** panel.
 - Select the **Actions** tab.
 
-![Default actions.](../images/getting-started/step-4/default_actions.png "Default actions.")
+![Default actions.](../images/getting-started/step-3/default_actions.png "Default actions.")
 
 You can see that Ambience ships with just the **Turn on** and **Turn off**
 actions built in. You need to add any other actions that you want to use, and
@@ -20,7 +20,7 @@ specify which fields are of interest to you:
 - The only field that we need is **Brightness pct**, so select just that one.
 - Close the settings by clicking the **X** in the top right corner.
 
-![Adding Turn On Lights action.](../images/getting-started/step-4/add_action.png "Adding Turn On Lights action.")
+![Adding Turn On Lights action.](../images/getting-started/step-3/add_action.png "Adding Turn On Lights action.")
 
 !!! tip "Fado Light Fader"
 
@@ -44,7 +44,7 @@ specify which fields are of interest to you:
     **Brightness pct** to 25%.
 - Click **Save**
 
-![Nighttime scene added.](../images/getting-started/step-4/nighttime_scene.png "Nighttime scene added.")
+![Nighttime scene added.](../images/getting-started/step-3/nighttime_scene.png "Nighttime scene added.")
 
 ## Why no occupancy condition?
 
@@ -64,4 +64,4 @@ the lights should be on.
 
 ______________________________________________________________________
 
-Next: [Step 5: Weather conditions](step-5-weather-conditions.md).
+Next: [Step 4: Weather conditions](step-4-weather-conditions.md).

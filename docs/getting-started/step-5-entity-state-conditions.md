@@ -1,4 +1,4 @@
-# Step 6: Entity-state conditions
+# Step 5: Entity-state conditions
 
 The last Lounge/Lights scene to add is the **Movie** scene — when the projector
 is on, turn all the lights off except the sidetable lights, which should be set
@@ -23,14 +23,14 @@ To add the scene:
 - Click **+ Add condition** and select the **Entity state** condition.
 - Click the **+ Add clause** button.
 
-![Adding a clause to the Entity State condition](../images/getting-started/step-6/add_clause.png "Adding a clause to the Entity State condition")
+![Adding a clause to the Entity State condition](../images/getting-started/step-5/add_clause.png "Adding a clause to the Entity State condition")
 
 - Click **Select an entity** and search for the **Cine** remote control.
 - Change the **Where** field from **State** to the attribute **Current
     activity**.
 - Set the **Value** to **Nvidia (Projector)**.
 
-![Checking Current Activity.](../images/getting-started/step-6/current_activity.png "Checking Current Activity.")
+![Checking Current Activity.](../images/getting-started/step-5/current_activity.png "Checking Current Activity.")
 
 Finally, configure the actions to take:
 
@@ -40,8 +40,8 @@ Finally, configure the actions to take:
 - Target the **Lounge Sidetable Lights** and set **Brightness pct** to **10%**.
 - Click **Save scene**.
 
-![Movie scene added.](../images/getting-started/step-6/movie_scene.png "Movie scene added.")
+![Movie scene added.](../images/getting-started/step-5/movie_scene.png "Movie scene added.")
 
 ______________________________________________________________________
 
-Next: [Step 7: Scene priority](step-7-scene-priority.md).
+Next: [Step 6: Scene priority](step-6-scene-priority.md).

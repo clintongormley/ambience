@@ -149,27 +149,6 @@ is currently off and waiting.
 
 ______________________________________________________________________
 
-## A worked example
-
-Suppose you are having a party. You want the lighting in the living room and
-dining room to stay exactly as you have set it, without Ambience adjusting
-things as occupancy or the time changes.
-
-Turn off the "Ground floor" switch. Ambience cascades the off down to every area
-on that floor, including Living room and Dining room. If you set a **Pause for**
-duration in the Advanced tab (for example, 120 minutes), Ambience will re-engage
-automatically after the party — you do not need to remember to turn it back on.
-
-If the party is likely to run longer, go into Settings → Advanced and raise the
-**Pause for** value. If guests are staying overnight and you want to leave
-things off until morning, leave **Pause for** at `0` (never auto-resume), then
-turn the floor switch back on manually the next day.
-
-You could equally turn off just the Living room switch if you only want to
-freeze that one area, leaving the kitchen and hallway running normally.
-
-______________________________________________________________________
-
 ## Summary
 
 - **House, Floor, Area** — three levels, mirroring your HA area/floor registry.

@@ -19,12 +19,13 @@
   }
 }
 
-/* Header wordmark: hide the single <img> and paint the palette-appropriate
-   variant as a background so it stays legible in both light and dark modes. */
+/* Header logo: hide the single <img> and paint the square brand icon as a
+   background, swapping the palette-appropriate variant per colour scheme so it
+   stays legible in both light and dark modes. */
 .md-header__button.md-logo {
-  width: 7rem;
-  height: 1.6rem;
-  background: url("../assets/logo-light.svg") left center / contain no-repeat;
+  width: 1.8rem;
+  height: 1.8rem;
+  background: url("../assets/icon-light.svg") center / contain no-repeat;
 }
 
 .md-header__button.md-logo img {
@@ -32,7 +33,7 @@
 }
 
 [data-md-color-scheme="slate"] .md-header__button.md-logo {
-  background-image: url("../assets/logo-dark.svg");
+  background-image: url("../assets/icon-dark.svg");
 }
 
 /* The hero logo is the home page's visible title, so the "Ambience" H1 below
@@ -76,8 +77,15 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* Narrow the reading column to a comfortable max width. */
+/* Cap the article body (not the whole grid) at 800px, so the reading column
+   stays comfortable while the nav sidebar keeps its normal width. The grid is
+   widened a little past the 61rem default to leave room for an 800px body
+   alongside the sidebar. */
 .md-grid {
+  max-width: 64rem;
+}
+
+.md-content {
   max-width: 800px;
 }
 

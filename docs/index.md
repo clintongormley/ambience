@@ -3,10 +3,10 @@
 ![Ambience](assets/logo-light.svg)
 
 Ambience is a **condition-based scene engine** for Home Assistant. You describe
-scenes for a room (_"Room is empty"_, _"Movie time"_), along with the conditions
-under which each scene should apply (_"Projector is turned on"_, _"Person in
-room"_, _"Daytime"_, _"Cloudy weather"_). Ambience watches your home and applies
-the best-matching scene automatically.
+scenes for a room — _"Room is empty"_, _"Movie time"_ — along with the
+conditions under which each scene should apply — _"Projector is turned on"_,
+_"Person in room"_, _"Daytime"_, _"Cloudy weather"_. Ambience watches your home
+and applies the best-matching scene automatically.
 
 ![Scene manager.](images/index/scene_manager.png "Scene manager.")
 

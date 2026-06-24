@@ -2,7 +2,7 @@
 
 A **Scene** is a combination of the **Conditions** which allow the scene to
 match, and the **Actions** which are applied when the scene matches. This guide
-takes you through setting up scenes to control the lights and blinds in a
+takes you through setting up scenes to control the lifecycle of the lights in a
 lounge.
 
 ## Requirements
@@ -16,27 +16,17 @@ Assistant:
 - a weather integration
 - a remote control to turn on the projector called **Cine**
 
-## Scenes for lights
+## Planned Scenes
 
 We want the lights in the lounge to support the following scenes:
 
-| Conditions                                             | Device state                                     |
-| ------------------------------------------------------ | ------------------------------------------------ |
-| The room is vacant for more than 1 minute.             | Fade lights off                                  |
-| The room is occupied during the nighttime              | Fade lights to 25%                               |
-| The room is occupied during the day, when it is sunny  | Fade lights to 40%                               |
-| The room is occupied during the day, when it is cloudy | Fade lights to 60%                               |
-| The projector is on for movie time                     | Fade lights off, except side-table lights at 10% |
-
-## Scenes for blinds
-
-The blinds share some conditions with the lights but have their own lifecycle:
-
-| Conditions                                     | Device state  |
-| ---------------------------------------------- | ------------- |
-| Between dusk and sunrise (but not before 8:00) | Blinds closed |
-| Between sunrise (but not before 8:00) and dusk | Blinds open   |
-| The projector is on for movie time             | Blinds closed |
+| Conditions                                             | Device state                                |
+| ------------------------------------------------------ | ------------------------------------------- |
+| The room is vacant for more than 1 minute.             | Lights off                                  |
+| The room is occupied during the nighttime              | Lights to 25%                               |
+| The room is occupied during the day, when it is sunny  | Lights to 40%                               |
+| The room is occupied during the day, when it is cloudy | Lights to 60%                               |
+| The projector is on for movie time                     | Lights off, except side-table lights at 10% |
 
 When you're ready, begin with
-[Step 1: The panel and scopes](step-1-the-panel-and-scopes.md).
+[Step 1: Scopes and categories](step-1-scopes-and-categories.md).

@@ -92,6 +92,13 @@ describe("ambience-state-predicate-input", () => {
     expect(txt).toContain("Add");
   });
 
+  test("empty-state Add button reads 'Add clause' (not 'Add condition')", async () => {
+    el = await mount(null);
+    const btn = el.shadowRoot.querySelector(".empty button") as HTMLButtonElement;
+    expect(btn.textContent).toContain("Add clause");
+    expect(btn.textContent).not.toContain("Add condition");
+  });
+
   test("clicking Add creates an empty atom and emits value-changed", async () => {
     el = await mount(null);
     let captured: any;
@@ -347,12 +354,19 @@ describe("ambience-state-predicate-input", () => {
     expect(el.shadowRoot.querySelector(".root-toolbar")).toBeNull();
   });
 
-  test("atom root shows a section-level '+ Add condition' (only way to add a sibling)", async () => {
+  test("atom root shows a section-level '+ Add clause' (only way to add a sibling)", async () => {
     el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
     expect(el.shadowRoot.querySelector(".root-add")).toBeTruthy();
   });
 
-  test("group root hides the section-level '+ Add condition' (the group already has one inside)", async () => {
+  test("section-level add button reads 'Add clause' (not 'Add condition')", async () => {
+    el = await mount({ kind: "is", entity_id: "x", states: ["on"] });
+    const btn = el.shadowRoot.querySelector(".root-add") as HTMLButtonElement;
+    expect(btn.textContent).toContain("Add clause");
+    expect(btn.textContent).not.toContain("Add condition");
+  });
+
+  test("group root hides the section-level '+ Add clause' (the group already has one inside)", async () => {
     el = await mount({
       kind: "and",
       items: [

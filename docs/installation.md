@@ -48,4 +48,4 @@ If you can't use HACS:
     area. Click **Skip and finish**.
 1. Click the new **Ambience** panel in the HA sidebar to open the Ambience UI.
 
-Next, head to [Getting started](getting-started.md) to create your first scene.
+Next, head to [Getting started](getting-started/index.md) to create your first scene.

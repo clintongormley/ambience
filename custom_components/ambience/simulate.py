@@ -27,7 +27,7 @@ from .errors import AmbienceError
 from .naming import category_names, scope_display_name
 from .scope_triggers import iter_predicate_specs, referenced_entities, scope_trigger_spec
 from .service import _switch_state, category_config
-from .state_options import known_states_for
+from .state_options import known_attribute_values_for, known_states_for
 from .sun_position import synthetic_sun_state
 from .trace import (
     BufferedUnit,
@@ -283,6 +283,30 @@ def _is_number(value: str | None) -> bool:
         return False
 
 
+def _attribute_knob(
+    hass: HomeAssistant, entity_id: str, live: State | None, spec: dict[str, str]
+) -> dict[str, Any]:
+    """One editable attribute sub-row. A string attribute backed by a companion
+    option-list (e.g. a remote's `current_activity` reads `activity_list`) becomes
+    a select seeded with those values — the same lookup the scene editor's value
+    dropdown uses — so the user picks rather than retypes. A bare current value
+    (no list to choose from) stays free text; a native select offers no escape
+    hatch, so trapping the user on the live value would be worse than free text.
+    Numeric attributes (compared via >/<) keep their number field."""
+    name = spec["name"]
+    control = spec["control"]
+    live_value = live.attributes.get(name) if live is not None else None
+    knob: dict[str, Any] = {"name": name, "control": control, "live_value": live_value}
+    if control == "text":
+        opts = known_attribute_values_for(hass, entity_id, name)
+        # ≥2 categorical values means a real list to pick from; a lone current
+        # value stays free text (see docstring) so a native select can't trap it.
+        if sum(1 for o in opts if not _is_number(o)) >= 2:
+            knob["control"] = "select"
+            knob["options"] = opts
+    return knob
+
+
 def _entity_knob(
     hass: HomeAssistant,
     entity_id: str,
@@ -312,14 +336,7 @@ def _entity_knob(
         "entity_id": entity_id,
         "control": control,
         "live_state": live_state,
-        "attributes": [
-            {
-                "name": spec["name"],
-                "control": spec["control"],
-                "live_value": (live.attributes.get(spec["name"]) if live is not None else None),
-            }
-            for spec in attr_specs
-        ],
+        "attributes": [_attribute_knob(hass, entity_id, live, spec) for spec in attr_specs],
     }
     if options is not None:
         knob["options"] = options

@@ -53,6 +53,17 @@ _DOMAIN_KNOWN_STATES: dict[str, list[str]] = {
     "light": _ON_OFF,
     "fan": _ON_OFF,
     "input_boolean": _ON_OFF,
+    # Plain on/off domains whose richer detail lives in attributes (e.g. a
+    # remote's `current_activity`, a humidifier's `mode`) — listed so the value
+    # dropdown offers both states like HA's own State trigger, not just the live
+    # one.
+    "remote": _ON_OFF,
+    "automation": _ON_OFF,
+    "script": _ON_OFF,
+    "siren": _ON_OFF,
+    "humidifier": _ON_OFF,
+    "update": _ON_OFF,
+    "calendar": _ON_OFF,
     "cover": _enum_state_values("cover", "CoverState", ["closed", "closing", "open", "opening"]),
     "lock": _enum_state_values(
         "lock",

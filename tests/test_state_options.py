@@ -1,5 +1,7 @@
 """Plausible-states helper, shared by the websocket API and the simulator."""
 
+import pytest
+
 from custom_components.ambience.state_options import (
     _enum_state_values,
     known_attribute_values_for,
@@ -40,6 +42,27 @@ class _Hass:
 def test_binary_sensor_gets_on_off():
     hass = _Hass({"binary_sensor.motion": _State("off")})
     assert known_states_for(hass, "binary_sensor.motion") == ["on", "off"]
+
+
+@pytest.mark.parametrize(
+    "entity_id",
+    [
+        "remote.cine",
+        "automation.wakeup",
+        "script.holiday",
+        "siren.alarm",
+        "humidifier.bedroom",
+        "update.firmware",
+        "calendar.work",
+    ],
+)
+def test_plain_on_off_domains_offer_both_states(entity_id):
+    """Domains whose entity state is a plain on/off — matching the list HA's own
+    State trigger shows — offer both states, not just the live value. (Regression:
+    a `remote` only offered its current state because the domain was absent from
+    the known-states table, so the value dropdown showed a lone `Off`.)"""
+    hass = _Hass({entity_id: _State("off")})
+    assert known_states_for(hass, entity_id) == ["on", "off"]
 
 
 def test_unknown_domain_with_no_state_is_empty():

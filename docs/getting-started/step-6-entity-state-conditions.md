@@ -1,4 +1,4 @@
-# Step 6: Add the *Movie* scene
+# Step 6: Entity-state conditions
 
 The last Lounge/Lights scene to add is the **Movie** scene — when the projector
 is on, turn all the lights off except the sidetable lights, which should be set

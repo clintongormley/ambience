@@ -1,4 +1,4 @@
-# Step 1: Opening the panel
+# Step 1: The panel and scopes
 
 Open the Ambience panel from the Home Assistant sidebar. The panel lists every
 **scope** in your home: a **House** row at the top, followed by any **floors**
@@ -14,4 +14,4 @@ and then any **areas**.
 
 ______________________________________________________________________
 
-Next: [Step 2: Add a category](step-2-add-a-category.md).
+Next: [Step 2: Categories](step-2-categories.md).

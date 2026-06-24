@@ -50,12 +50,12 @@ nav:
   - Installation: installation.md
   - Getting started:
       - Overview: getting-started/index.md
-      - "1. Opening the panel": getting-started/step-1-opening-the-panel.md
-      - "2. Add a category": getting-started/step-2-add-a-category.md
-      - "3. Add the Vacant scene": getting-started/step-3-add-the-vacant-scene.md
-      - "4. Add the Nighttime scene": getting-started/step-4-add-the-nighttime-scene.md
-      - "5. Add the Daytime scenes": getting-started/step-5-add-the-daytime-scenes.md
-      - "6. Add the Movie scene": getting-started/step-6-add-the-movie-scene.md
+      - "1. The panel and scopes": getting-started/step-1-the-panel-and-scopes.md
+      - "2. Categories": getting-started/step-2-categories.md
+      - "3. Your first scene": getting-started/step-3-your-first-scene.md
+      - "4. Exposing actions": getting-started/step-4-exposing-actions.md
+      - "5. Weather conditions": getting-started/step-5-weather-conditions.md
+      - "6. Entity-state conditions": getting-started/step-6-entity-state-conditions.md
       - "7. Scene priority": getting-started/step-7-scene-priority.md
       - "8. Blocking scenes": getting-started/step-8-blocking-scenes.md
       - "9. Debugging scenes": getting-started/step-9-debugging-scenes.md

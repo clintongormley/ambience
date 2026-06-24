@@ -1,4 +1,4 @@
-# Step 2: Add a category
+# Step 2: Categories
 
 We want to set up scenes to control the lights in the lounge. To start we will
 add a new category called **Lights**, by clicking **+ Add category** at the top
@@ -31,4 +31,4 @@ the page.
 
 ______________________________________________________________________
 
-Next: [Step 3: Add the Vacant scene](step-3-add-the-vacant-scene.md).
+Next: [Step 3: Your first scene](step-3-your-first-scene.md).

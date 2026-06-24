@@ -1,4 +1,4 @@
-# Step 3: Add the *Vacant* scene
+# Step 3: Your first scene
 
 The first scene we'll add is the **Vacant** scene — what the lights should do
 when the room has been vacant for at least 1 minute.
@@ -65,4 +65,4 @@ Click on the scene name to see the defailts:
 
 ______________________________________________________________________
 
-Next: [Step 4: Add the Nighttime scene](step-4-add-the-nighttime-scene.md).
+Next: [Step 4: Exposing actions](step-4-exposing-actions.md).

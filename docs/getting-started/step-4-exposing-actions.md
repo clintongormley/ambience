@@ -1,4 +1,4 @@
-# Step 4: Add the *Nighttime* scene
+# Step 4: Exposing actions
 
 Next we'll add the **Nighttime** scene — turn the lights to 25% as soon as
 anybody enters the room.
@@ -64,4 +64,4 @@ the lights should be on.
 
 ______________________________________________________________________
 
-Next: [Step 5: Add the Daytime scenes](step-5-add-the-daytime-scenes.md).
+Next: [Step 5: Weather conditions](step-5-weather-conditions.md).

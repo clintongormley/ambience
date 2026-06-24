@@ -1,4 +1,4 @@
-# Step 5: Add the *Daytime* scenes
+# Step 5: Weather conditions
 
 Next up are the **Daytime** scenes, one for when the weather is sunny and one
 for when the weather is cloudy.
@@ -79,4 +79,4 @@ Then:
 
 ______________________________________________________________________
 
-Next: [Step 6: Add the Movie scene](step-6-add-the-movie-scene.md).
+Next: [Step 6: Entity-state conditions](step-6-entity-state-conditions.md).

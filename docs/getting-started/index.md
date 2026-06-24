@@ -39,4 +39,4 @@ The blinds share some conditions with the lights but have their own lifecycle:
 | The projector is on for movie time             | Blinds closed |
 
 When you're ready, begin with
-[Step 1: Opening the panel](step-1-opening-the-panel.md).
+[Step 1: The panel and scopes](step-1-the-panel-and-scopes.md).

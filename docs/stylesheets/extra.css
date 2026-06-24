@@ -70,6 +70,17 @@
   height: auto;
 }
 
+/* Lift screenshots off the white page with a soft drop shadow. Scoped to raster
+   images so the SVG logo and the My Home Assistant badge stay flat. */
+.md-typeset img:not([src$=".svg"]) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Narrow the reading column to a comfortable max width. */
+.md-grid {
+  max-width: 800px;
+}
+
 /* Heading weights: lighter section headers (h2), heavier sub-headers (h3). */
 .md-typeset h2 {
   font-weight: 400;

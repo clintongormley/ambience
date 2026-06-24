@@ -16,7 +16,7 @@ function _samePath(a: number[] | null, b: number[] | null): boolean {
 /**
  * Recursive node renderer. Atoms render as <ambience-state-expr-atom>; groups
  * render a header (and/or switch) + each child wrapped in a child-row with
- * NOT/wrap/remove buttons + an "Add condition" button. Mutations bubble up
+ * NOT/wrap/remove buttons + an "Add clause" button. Mutations bubble up
  * as `node-*` events tagged with `path: number[]`; the root component
  * (state-predicate-input) applies them via a single `_patch` helper.
  */
@@ -376,7 +376,7 @@ export class AmbienceStateExprNode extends LitElement {
         </div>
         <div class="actions">
           <button @click=${() => this._emit("node-add-child")}>
-            + ${localize(this.hass, "ui.state_add_condition", "Add condition")}
+            + ${localize(this.hass, "ui.state_add_condition", "Add clause")}
           </button>
         </div>
       </div>

@@ -8,6 +8,12 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- In the Entity State condition, the buttons that add another comparison within
+  the same condition now read "Add clause" instead of "Add condition", to avoid
+  confusion with the main "Add condition" button that adds a new condition.
+
 ## [0.27.0] - 2026-06-24
 
 ### Changed

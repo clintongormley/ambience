@@ -799,7 +799,7 @@ export class AmbienceStatePredicateInput extends LitElement {
       return html`
         <div class="empty">
           <button @click=${() => this._addFirstAtom()}>
-            + ${localize(this.hass, "ui.state_add_first", "Add condition")}
+            + ${localize(this.hass, "ui.state_add_first", "Add clause")}
           </button>
         </div>
       `;
@@ -813,7 +813,7 @@ export class AmbienceStatePredicateInput extends LitElement {
             return atom ? this._atomError(atom) : null;
           })()
         : null;
-    // Section-level + Add condition is needed only when the root doesn't
+    // Section-level + Add clause is needed only when the root doesn't
     // already provide one. A group root has its own + Add inside the card.
     // An atom root (or NOT-wrapped atom) doesn't, so we show it here.
     const inner = _unwrapNot(this.value);
@@ -834,7 +834,7 @@ export class AmbienceStatePredicateInput extends LitElement {
         showSectionAdd
           ? html`
         <button class="root-add" @click=${() => this._addAtRoot()}>
-          + ${localize(this.hass, "ui.state_add_condition", "Add condition")}
+          + ${localize(this.hass, "ui.state_add_condition", "Add clause")}
         </button>
       `
           : ""

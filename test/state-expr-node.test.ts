@@ -313,7 +313,7 @@ describe("ambience-state-expr-node — group", () => {
     expect(captured.path).toEqual([0]);
   });
 
-  test("'+ Add condition' button emits node-add-child", async () => {
+  test("'+ Add clause' button emits node-add-child", async () => {
     el = await mount(
       { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
       { path: [0] },
@@ -325,6 +325,16 @@ describe("ambience-state-expr-node — group", () => {
     const addBtn = el.shadowRoot.querySelector(".actions button") as HTMLButtonElement;
     addBtn.click();
     expect(captured.path).toEqual([0]);
+  });
+
+  test("group add-child button reads 'Add clause' (not 'Add condition')", async () => {
+    el = await mount(
+      { kind: "and", items: [{ kind: "is", entity_id: "x", states: ["on"] }] },
+      { path: [0] },
+    );
+    const addBtn = el.shadowRoot.querySelector(".actions button") as HTMLButtonElement;
+    expect(addBtn.textContent).toContain("Add clause");
+    expect(addBtn.textContent).not.toContain("Add condition");
   });
 
   test("group renders child nodes as <ambience-state-expr-node>", async () => {

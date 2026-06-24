@@ -437,7 +437,14 @@ export type BufferedUnit = {
 
 export type SimulateControl = "select" | "number" | "text";
 
-export type SimulateAttribute = { name: string; control: "number" | "text"; live_value: unknown };
+export type SimulateAttribute = {
+  name: string;
+  control: SimulateControl;
+  // Present (with `control: "select"`) when the attribute is backed by a
+  // companion option-list, e.g. a remote's `current_activity` → `activity_list`.
+  options?: string[];
+  live_value: unknown;
+};
 
 export type SimulateEntityKnob = {
   kind: "entity";

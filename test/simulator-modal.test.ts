@@ -216,6 +216,56 @@ describe("ambience-simulator-modal", () => {
     expect(args[4]["calendar.work"].attributes.description).toBe("xxx");
   });
 
+  test("select attribute renders a dropdown of its known values and sends the pick", async () => {
+    const inputs = {
+      has_time: false,
+      knobs: [
+        {
+          kind: "entity",
+          entity_id: "remote.cine",
+          control: "select",
+          options: ["on", "off"],
+          live_state: "on",
+          attributes: [
+            {
+              name: "current_activity",
+              control: "select",
+              live_value: "Nvidia (Projector)",
+              options: ["PowerOff", "Nvidia (Projector)", "Watch Apple TV"],
+            },
+          ],
+        },
+      ],
+    };
+    vi.mocked(api.simulateInputs).mockResolvedValue(inputs as any);
+    vi.mocked(api.simulate).mockResolvedValue(RESULT as any);
+    el = document.createElement("ambience-simulator-modal") as any;
+    el.hass = { callWS: vi.fn(), states: {} };
+    el.scope = { scope_kind: "area", scope_id: "lounge" };
+    el.category = "g1";
+    el.open = true;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+    const sel = el.shadowRoot.querySelector(
+      "select[data-attr='remote.cine:current_activity']",
+    ) as HTMLSelectElement;
+    expect(sel).toBeTruthy();
+    const optionValues = Array.from(sel.querySelectorAll("option")).map((o: any) => o.value);
+    expect(optionValues).toEqual(["PowerOff", "Nvidia (Projector)", "Watch Apple TV"]);
+    // The live value is preselected (display matches what an untouched Simulate
+    // would send) — not the first option.
+    expect(sel.value).toBe("Nvidia (Projector)");
+    sel.value = "Watch Apple TV";
+    sel.dispatchEvent(new Event("change"));
+    await el.updateComplete;
+    el.shadowRoot.querySelector(".runbtn").click();
+    await new Promise((r) => setTimeout(r, 0));
+    const args = vi.mocked(api.simulate).mock.calls[0];
+    expect(args[4]["remote.cine"].attributes.current_activity).toBe("Watch Apple TV");
+  });
+
   test("attribute-only override on a stateless entity is still sent (no state)", async () => {
     el = await mount();
     const input = el.shadowRoot.querySelector("input[data-attr='event.boot:event_type']");

@@ -8,8 +8,19 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Changed
+
+- In the Simulate panel, an entity attribute that has a known set of values
+  (such as a remote's current activity) is now editable via a dropdown of those
+  values — matching the scene editor — instead of a free-text field.
+
 ### Fixed
 
+- The state value dropdown (in the scene editor and the simulator) now offers
+  both On and Off for remote, automation, script, siren, humidifier, update and
+  calendar entities, instead of only the entity's current state.
+- On phones the Simulate panel no longer squashes the entity name into a narrow
+  column or scrolls sideways — each row's controls now wrap onto their own line.
 - Deleting the Ambience integration now also removes its stored data (scenes,
   scopes, switch and condition settings). Previously this data was kept on disk,
   so removing and re-adding the integration silently restored all your old

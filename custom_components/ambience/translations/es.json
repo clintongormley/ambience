@@ -141,7 +141,6 @@
     "weather_group_invalid_conditions": { "message": "El grupo {gid} tiene condición(es) no válida(s)." },
     "unknown_area": { "message": "Área desconocida: {scope_id}" },
     "unknown_floor": { "message": "Planta desconocida: {scope_id}" },
-    "invalid_scope": { "message": "Ámbito no válido: {value}" },
     "scope_disabled": { "message": "El ámbito {scope_kind}/{scope_id} está desactivado." },
     "scene_index_out_of_range": { "message": "scene_index fuera de rango: {scene_index}" },
     "scope_selector_invalid": { "message": "{command} requiere exactamente uno de area_id/floor_id/house, se obtuvo: {present}" },
@@ -158,24 +157,6 @@
     "now_not_timezone_aware": { "message": "`now` debe ser consciente de la zona horaria: {now}" }
   },
   "services": {
-    "apply_scene": {
-      "name": "Aplicar escena",
-      "description": "Aplica escenas de Ambience a uno o más ámbitos. Sin ámbito seleccionado, actúa sobre todos los ámbitos. Sin categoría, vuelve a ejecutar las reglas de todas las categorías. Con una o más categorías, se limita a esas.",
-      "fields": {
-        "scope": {
-          "name": "Ámbitos",
-          "description": "Ámbitos en los que aplicar (Casa, una planta o un área). Deja vacío para aplicar en todos los ámbitos. Los valores son \"house\", \"floor:FLOOR_ID\" o \"area:AREA_ID\"."
-        },
-        "category": {
-          "name": "Categorías",
-          "description": "Limita la aplicación a estas categorías de escena (por id de categoría)."
-        },
-        "force": {
-          "name": "Forzar",
-          "description": "Aplica incluso cuando un ámbito está en pausa (su interruptor está apagado). Un ámbito desactivado permanentemente siempre se omite."
-        }
-      }
-    },
     "turn_on": {
       "name": "Encender",
       "description": "Enciende las entidades seleccionadas, omitiendo las que ya están encendidas. Funciona en todos los dominios que admiten encendido/apagado."

@@ -130,68 +130,6 @@ async def test_script_condition_is_registered(
     assert conditions["script"].priority == 975
 
 
-async def test_setup_registers_apply_scene_service(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    mock_config_entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    assert hass.services.has_service(DOMAIN, "apply_scene")
-
-
-async def test_apply_scene_schema_is_set_and_refreshes(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """The dynamic apply_scene UI schema is set at setup and re-set on config change."""
-    from unittest.mock import patch
-
-    from homeassistant.helpers.dispatcher import async_dispatcher_send
-
-    from custom_components.ambience.const import SIGNAL_CONFIG_CHANGED
-
-    mock_config_entry.add_to_hass(hass)
-    with patch("custom_components.ambience.async_set_service_schema") as set_schema:
-        assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
-        await hass.async_block_till_done()
-
-        assert set_schema.called  # set at setup
-
-        set_schema.reset_mock()
-        async_dispatcher_send(hass, SIGNAL_CONFIG_CHANGED, None)
-        await hass.async_block_till_done()
-
-        assert set_schema.called  # re-set on config change
-
-        set_schema.reset_mock()
-        hass.bus.async_fire(ar.EVENT_AREA_REGISTRY_UPDATED, {"action": "create", "area_id": "x"})
-        await hass.async_block_till_done()
-
-        assert set_schema.called  # re-set on area-registry change
-
-        set_schema.reset_mock()
-        hass.bus.async_fire(fr.EVENT_FLOOR_REGISTRY_UPDATED, {"action": "create", "floor_id": "x"})
-        await hass.async_block_till_done()
-
-        assert set_schema.called  # re-set on floor-registry change
-
-
-async def test_unload_clears_data(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    mock_config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    await hass.config_entries.async_unload(mock_config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    assert not hass.services.has_service(DOMAIN, "apply_scene")
-
-
 async def test_panel_is_registered(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
@@ -533,7 +471,7 @@ async def test_unload_aborts_when_platform_unload_fails(
     """If the switch platform fails to unload, async_unload_entry must return
     False (so it does NOT tear down hass.data[DOMAIN]) — that would leave live
     entities referencing a missing store. We assert what our code controls
-    (data + the service survive); the resulting ConfigEntryState is HA-internal
+    (data survives); the resulting ConfigEntryState is HA-internal
     bookkeeping that differs across versions (FAILED_UNLOAD on recent, LOADED on
     the min pin), so we only require the entry was NOT cleanly unloaded."""
     from unittest.mock import AsyncMock, patch
@@ -550,7 +488,6 @@ async def test_unload_aborts_when_platform_unload_fails(
 
     assert mock_config_entry.state is not ConfigEntryState.NOT_LOADED
     assert DOMAIN in hass.data
-    assert hass.services.has_service(DOMAIN, "apply_scene")
 
 
 async def test_setup_does_not_stash_create_switches_in_domain_data(hass):

@@ -6,7 +6,7 @@ Developer reference for contributors. For installation and usage, see the [user 
 
 ## Overview
 
-Ambience is a condition-based scene engine for Home Assistant. For each *(scope, category)* pair it maintains an ordered list of scenes; when `ambience.apply_scene` is called it walks the list, evaluates each scene's conditions against live snapshots, and applies the first matching scene's actions. Scopes are hierarchical (House → Floor → Area) and each carries an independent on/off switch that gates automatic scene application.
+Ambience is a condition-based scene engine for Home Assistant. For each *(scope, category)* pair it maintains an ordered list of scenes; whenever a scope is (re-)evaluated it walks the list, evaluates each scene's conditions against live snapshots, and applies the first matching scene's actions. Scopes are hierarchical (House → Floor → Area) and each carries an independent on/off switch that gates automatic scene application.
 
 ---
 
@@ -47,7 +47,7 @@ Implemented in `custom_components/ambience/switch.py`.
 
 Floors use a `_floor_ambience` suffix to avoid entity-ID collisions when a floor and an area share the same name.
 
-**What the switch does.** Each switch independently gates `ambience.apply_scene` for its own scope only. Calling `apply_scene` for an area is a no-op if *that area's* switch is off; same for floor and house. Each scope is checked independently — there is no inherited-off propagation during resolution.
+**What the switch does.** Each switch independently gates *automatic* scene application for its own scope only. While a scope's switch is off, the engine stops applying scenes there (an explicit apply from the panel forces past the switch); same for floor and house. Each scope is checked independently — there is no inherited-off propagation during resolution.
 
 **Cascade on turn-on/turn-off.** Turning a switch *off* (or *on*) via the UI or a service call does cascade to descendants: turning the house switch off also turns off all floor and area switches; turning it back on restores them. Turning a floor switch off brings down its areas. This cascade is one-directional — it fires only on explicit user action, not during scene resolution.
 
@@ -101,32 +101,6 @@ payload). The ~40 commands fall into these families:
 | Categories | `ambience/categories/list|save|delete` | Scene-category CRUD (guarded: can't drop the last or an in-use category) |
 | Switches | `ambience/switches/list`, `ambience/switch_defaults/*`, `ambience/set_scope_enabled` | Scope switch entity ids, global defaults, permanent enable/disable |
 | Observability | `ambience/traces/list|clear`, `ambience/auto_triggers/list`, `ambience/diagnostics/scope`, `ambience/simulate`, `ambience/simulate/inputs` | Trace buffer, derived watch-list, focused diagnostics, what-if simulator |
-
----
-
-## Service: `ambience.apply_scene`
-
-Defined in `custom_components/ambience/services.yaml`; schema in
-`custom_components/ambience/__init__.py` (`_APPLY_SCENE_SCHEMA`). Admin-only.
-
-Resolves the scenes for one or more scopes and applies each category's winning
-scene's actions.
-
-| Field | Required | Description |
-|---|---|---|
-| `scope` | No | List of scopes to target. Each value is `house`, `floor:<floor_id>`, or `area:<area_id>`. Blank targets every scope (house + all floors + all areas). |
-| `category` | No | List of category ids to limit the apply to (default: all categories in each scope). |
-| `force` | No | Boolean. Apply even when a scope is paused (its switch is off). Does **not** override a permanently disabled scope. |
-
-Without `force`, the call is a no-op for any scope whose switch is off; a
-permanently disabled scope never applies, even with `force`.
-
-In the HA action editor the `scope` and `category` fields are
-runtime-populated dropdowns. The schema is built by `build_apply_scene_schema`
-(in `service.py`) from the current configuration and pushed via
-`async_set_service_schema`, re-set whenever the config or the area/floor
-registries change. Values can still be typed manually (e.g. in YAML/templates) —
-the dropdowns are suggestions, not a fixed list.
 
 ---
 

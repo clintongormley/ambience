@@ -5,10 +5,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-from functools import partial
 from pathlib import Path
 
-import voluptuous as vol
 from homeassistant.components.frontend import (
     async_register_built_in_panel,
     async_remove_panel,
@@ -23,10 +21,6 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import floor_registry as fr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-from homeassistant.helpers.service import (
-    async_register_admin_service,
-    async_set_service_schema,
-)
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
@@ -79,8 +73,6 @@ from .history import ChangeHistory
 from .lux_ranges import LuxRangeStore
 from .periods import PeriodStore
 from .service import (
-    async_apply_scene_service,
-    build_apply_scene_schema,
     clear_last_applied,
     clear_live_state,
 )
@@ -99,15 +91,6 @@ _PANEL_URL = "ambience"
 _PANEL_STATIC_PATH = "/ambience-panel"
 _PANEL_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-panel.js"
 _CARD_JS_URL = f"{_PANEL_STATIC_PATH}/ambience-card.js"
-
-
-_APPLY_SCENE_SCHEMA = vol.Schema(
-    {
-        vol.Optional("scope"): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional("category"): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional("force"): cv.boolean,
-    }
-)
 
 
 def _hash_bundle(bundle_path: Path) -> str:
@@ -176,15 +159,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "template": TemplateCondition(hass=hass),
     }
 
-    # Admin-only: applying a scene dispatches real device service calls, so it must
-    # not be reachable by non-admin users (HA services are not admin-gated by default).
-    async_register_admin_service(
-        hass,
-        DOMAIN,
-        "apply_scene",
-        partial(async_apply_scene_service, hass),
-        schema=_APPLY_SCENE_SCHEMA,
-    )
     async_register_builtin_services(hass)
 
     # Seeding (in store.async_load) runs before the services above are
@@ -201,23 +175,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if isinstance(name, str) and (label := name.strip()):
                 builtin_labels[service_id] = label
         await store.async_apply_builtin_labels(builtin_labels)
-
-    # Called directly at setup, by the SIGNAL_CONFIG_CHANGED dispatcher, and by the
-    # area/floor registry-event listeners — *_args absorbs each source's differing arguments.
-    @callback
-    def _refresh_apply_scene_schema(*_args: object) -> None:
-        async_set_service_schema(hass, DOMAIN, "apply_scene", build_apply_scene_schema(hass))
-
-    _refresh_apply_scene_schema()
-    entry.async_on_unload(
-        async_dispatcher_connect(hass, SIGNAL_CONFIG_CHANGED, _refresh_apply_scene_schema)
-    )
-    entry.async_on_unload(
-        hass.bus.async_listen(ar.EVENT_AREA_REGISTRY_UPDATED, _refresh_apply_scene_schema)
-    )
-    entry.async_on_unload(
-        hass.bus.async_listen(fr.EVENT_FLOOR_REGISTRY_UPDATED, _refresh_apply_scene_schema)
-    )
 
     async_register_commands(hass)
 
@@ -419,7 +376,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async_remove_panel(hass, _PANEL_URL, warn_if_unknown=False)
     card_url = hass.data.get(DOMAIN, {}).get(DATA_CARD_RESOURCE_URL, "")
     await async_unregister_card_resource(hass, card_url)
-    hass.services.async_remove(DOMAIN, "apply_scene")
     async_unregister_builtin_services(hass)
     async_unregister_commands(hass)
     # Flush any pending delayed store save before dropping our reference, so a

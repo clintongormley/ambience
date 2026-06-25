@@ -1713,6 +1713,25 @@ async def test_ws_apply_requires_exactly_one_scope(
     assert resp["error"]["code"] == "validation_error"
 
 
+async def test_ws_apply_rejects_non_admin(
+    hass: HomeAssistant,
+    installed,
+    area_id: str,
+    hass_ws_client,
+    hass_read_only_access_token,
+) -> None:
+    """Applying scenes dispatches real device service calls, so the ambience/apply
+    command must reject non-admin users (the @require_admin gate on _ws_apply). This
+    re-homes the authorization coverage the removed admin-only apply_scene service
+    used to provide."""
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json({"id": 1, "type": "ambience/apply", "area_id": area_id})
+    resp = await client.receive_json()
+
+    assert resp["success"] is False
+    assert resp["error"]["code"] == "unauthorized"
+
+
 async def test_ws_run_scene_actions(
     hass: HomeAssistant, installed_with_actions, hass_ws_client, area_id
 ) -> None:

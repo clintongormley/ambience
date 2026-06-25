@@ -27,6 +27,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.ambience.const import DATA_EXPOSED_ACTIONS, DATA_STORE, DOMAIN
+from custom_components.ambience.service import async_apply_scene
 
 SENSOR_ID = "sensor.ambience_scene_updates"
 
@@ -164,9 +165,7 @@ async def test_apply_sets_state_message_and_attributes(
     async_mock_service(hass, "cover", "open_cover")
     area_id = await _save_area_scene(hass, "Lounge", "Evening")
 
-    await hass.services.async_call(
-        DOMAIN, "apply_scene", {"scope": [f"area:{area_id}"]}, blocking=True
-    )
+    await async_apply_scene(hass, "area", area_id)
     await hass.async_block_till_done()
 
     state = hass.states.get(SENSOR_ID)
@@ -191,9 +190,7 @@ async def test_state_is_truncated_to_ha_limit(
     async_mock_service(hass, "cover", "open_cover")
     area_id = await _save_area_scene(hass, "L" * 200, "E" * 200)
 
-    await hass.services.async_call(
-        DOMAIN, "apply_scene", {"scope": [f"area:{area_id}"]}, blocking=True
-    )
+    await async_apply_scene(hass, "area", area_id)
     await hass.async_block_till_done()
 
     state = hass.states.get(SENSOR_ID)
@@ -206,8 +203,6 @@ async def test_apply_logs_one_state_change_per_category_winner(
 ) -> None:
     """A single apply across N winning categories produces N activity lines — one
     state change per category winner (each its own logbook entry)."""
-    from custom_components.ambience.service import async_apply_scene
-
     async_mock_service(hass, "light", "turn_on")
     async_mock_service(hass, "cover", "open_cover")
     store = hass.data[DOMAIN][DATA_STORE]

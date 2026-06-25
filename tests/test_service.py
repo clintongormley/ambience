@@ -1,4 +1,4 @@
-"""ambience.apply_scene service handler — generic service dispatch."""
+"""async_apply_scene — resolve a scope's scenes and dispatch the winner's actions."""
 
 from __future__ import annotations
 

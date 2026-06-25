@@ -101,7 +101,7 @@ class TriggerCause:
         if self.kind == CauseKind.SWITCH:
             return f"switch {self.entity_id} on"
         if self.kind == CauseKind.MANUAL:
-            return "manual apply_scene"
+            return "manual apply"
         if self.kind == CauseKind.STARTUP:
             return "startup sync"
         if self.kind == CauseKind.RELOADED:

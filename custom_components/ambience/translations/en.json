@@ -141,7 +141,6 @@
     "weather_group_invalid_conditions": { "message": "Group {gid} has invalid condition(s)." },
     "unknown_area": { "message": "Unknown area: {scope_id}" },
     "unknown_floor": { "message": "Unknown floor: {scope_id}" },
-    "invalid_scope": { "message": "Invalid scope: {value}" },
     "scope_disabled": { "message": "Scope {scope_kind}/{scope_id} is disabled." },
     "scene_index_out_of_range": { "message": "scene_index out of range: {scene_index}" },
     "scope_selector_invalid": { "message": "{command} requires exactly one of area_id/floor_id/house, got: {present}" },
@@ -158,24 +157,6 @@
     "now_not_timezone_aware": { "message": "`now` must be timezone-aware: {now}" }
   },
   "services": {
-    "apply_scene": {
-      "name": "Apply scene",
-      "description": "Apply Ambience scenes to one or more scopes. With no scope selected, targets every scope. With no category, re-runs the rules for every category. With one or more categories, limits to those.",
-      "fields": {
-        "scope": {
-          "name": "Scopes",
-          "description": "Scopes to apply in (House, a floor, or an area). Leave empty to apply at every scope. Values are \"house\", \"floor:FLOOR_ID\", or \"area:AREA_ID\"."
-        },
-        "category": {
-          "name": "Categories",
-          "description": "Limit the apply to these scene categories (by category id)."
-        },
-        "force": {
-          "name": "Force",
-          "description": "Apply even when a scope is paused (its switch is off). A permanently disabled scope is always skipped."
-        }
-      }
-    },
     "turn_on": {
       "name": "Turn on",
       "description": "Turn on the targeted entities, skipping any that are already on. Works across all on/off-capable domains."

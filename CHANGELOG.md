@@ -25,6 +25,13 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
   sub-section of the scope-level pause switch (their switches still line up with
   the fields above).
 
+### Removed
+
+- The admin-only `ambience.apply_scene` action — for calling Ambience from your
+  own automations and scripts — has been removed. Automatic scene application
+  (as conditions change) and the panel's Run / apply controls are unaffected;
+  only the standalone service is gone.
+
 ## [0.28.0] - 2026-06-25
 
 ### Added

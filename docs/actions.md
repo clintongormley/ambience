@@ -90,7 +90,7 @@ The **target** of an action tells Ambience which entities to act on when the sce
 - **Area** — target all entities in one or more areas.
 - **Label** — target all entities that carry one or more HA labels.
 
-These work exactly like HA automation targets: you can mix and match selectors in a single target (for example, two areas plus one specific entity), and HA's native chip picker is used — so autocomplete and domain filtering work as you'd expect.
+These work exactly like HA automation targets: you can mix and match selectors in a single target (for example, two areas plus one specific entity), and HA's native chip picker is used — so autocomplete and domain filtering work as you'd expect. The picker itself is not limited to the scene's scope; scope-constraining happens at apply time (see below), and the live count under the picker shows the effect.
 
 ### Scope-constrained resolution
 

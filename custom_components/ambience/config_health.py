@@ -28,7 +28,7 @@ from .const import (
 )
 from .engine import scene_enabled
 from .scope_triggers import iter_predicate_specs
-from .target_resolve import action_target
+from .target_resolve import action_target, resolve_action_entities
 
 ScopeTriple = tuple[str, str | None, dict[str, Any]]
 
@@ -237,24 +237,39 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
                 note_missing(scope_kind, scope_id, eid, scene)
 
     # 2. Action overlap, per acted entity across distinct (scope, category) groups.
+    # Also detect target_empty: a non-empty target that resolves to zero in-scope entities.
     groups: dict[str, dict[tuple[str, str | None, str | None], Location]] = {}
+    target_empties: list[Problem] = []
     for scope_kind, scope_id, cfg in configs:
         for scene in cfg.get("scenes", []) or []:
             if not scene_enabled(scene):
                 continue
             category = scene.get("category")
             group_key = (scope_kind, scope_id, category)
-            for eid in _action_entities(scene):
-                # Overlap on a non-existent entity is moot — the missing_entity
-                # problem already covers it, and warning about a control conflict
-                # for an entity the user can't find is just confusing.
-                if not entity_exists(hass, eid):
-                    continue
-                per_entity = groups.setdefault(eid, {})
-                per_entity.setdefault(
-                    group_key,
-                    Location(scope_kind, scope_id, category, scene.get("name") or ""),
-                )
+            for action in scene.get("actions", []) or []:
+                tgt = action_target(action)
+                entity_ids = resolve_action_entities(hass, scope_kind, scope_id, tgt)
+                if tgt and not entity_ids:
+                    target_empties.append(
+                        Problem(
+                            kind="target_empty",
+                            ref=action.get("service", ""),
+                            locations=(
+                                Location(scope_kind, scope_id, category, scene.get("name") or ""),
+                            ),
+                        )
+                    )
+                for eid in entity_ids:
+                    # Overlap on a non-existent entity is moot — the missing_entity
+                    # problem already covers it, and warning about a control conflict
+                    # for an entity the user can't find is just confusing.
+                    if not entity_exists(hass, eid):
+                        continue
+                    per_entity = groups.setdefault(eid, {})
+                    per_entity.setdefault(
+                        group_key,
+                        Location(scope_kind, scope_id, category, scene.get("name") or ""),
+                    )
 
     problems: list[Problem] = []
     for (_scope_kind, _scope_id, eid), locs in missing.items():
@@ -262,6 +277,7 @@ def scan(hass: HomeAssistant, configs: Iterable[ScopeTriple]) -> list[Problem]:
     for eid, per_entity in groups.items():
         if len(per_entity) > 1:
             problems.append(Problem("action_overlap", eid, tuple(per_entity.values())))
+    problems.extend(target_empties)
 
     # 3. Dangling config references (per-scene), aggregated globally per (kind, ref).
     ctx = _build_ref_context(hass)

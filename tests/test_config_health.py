@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.ambience.config_health import (
     _build_ref_context,
@@ -843,3 +844,61 @@ async def test_scene_config_issues_tolerates_non_dict_day_slot(
     scene = {"when": {"day": {"include": ["garbage", {"kind": "workday"}]}}, "actions": []}
     # The non-dict slot is skipped; the workday slot still flags (no sensor configured).
     assert scene_config_issues(ctx, scene) == [("missing_workday_sensor", "workday_sensor")]
+
+
+# ---------------------------------------------------------------------------
+# Task 4: resolve action targets for overlap + flag empty targets
+# ---------------------------------------------------------------------------
+
+
+def _light_in_area(hass: HomeAssistant, suffix: str, area_id: str) -> str:
+    reg = er.async_get(hass)
+    e = reg.async_get_or_create("light", "demo", suffix)
+    reg.async_update_entity(e.entity_id, area_id=area_id)
+    return e.entity_id
+
+
+async def test_overlap_detected_via_resolved_area_targets(hass: HomeAssistant, installed) -> None:
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    shared = _light_in_area(hass, "shared", kitchen.id)
+    hass.states.async_set(shared, "on")
+    cfg = _cfg(
+        [
+            {
+                "name": "a",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "target": {"area_id": [kitchen.id]}}],
+            },
+            {
+                "name": "b",
+                "when": {},
+                "category": "c2",
+                "actions": [{"service": "light.turn_off", "target": {"entity_id": [shared]}}],
+            },
+        ]
+    )
+    problems = scan(hass, [("area", kitchen.id, cfg)])
+    overlap = [p for p in problems if p.kind == "action_overlap"]
+    assert len(overlap) == 1
+    assert overlap[0].ref == shared
+
+
+async def test_target_resolving_to_empty_is_flagged(hass: HomeAssistant, installed) -> None:
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    cfg = _cfg(
+        [
+            {
+                "name": "go",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "target": {"area_id": [office.id]}}],
+            },
+        ]
+    )
+    problems = scan(hass, [("area", kitchen.id, cfg)])
+    empties = [p for p in problems if p.kind == "target_empty"]
+    assert len(empties) == 1
+    assert empties[0].ref == "light.turn_on"
+    assert empties[0].locations[0].scene_name == "go"

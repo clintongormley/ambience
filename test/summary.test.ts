@@ -1838,6 +1838,25 @@ describe("summariseBlocker", () => {
   test("defaults to English fallbacks when ctx is omitted", () => {
     expect(summariseBlocker(blocker({}))).toBe("Block always");
   });
+
+  test("top-level mixed OR: 'Block while <positive> OR until <release>'", () => {
+    const a = {
+      kind: "is",
+      entity_id: "binary_sensor.zone_shower",
+      states: ["Clear"],
+      for: { h: 0, m: 0, s: 5 },
+      for_mode: "at_least",
+    };
+    const b = { kind: ">", entity_id: "sensor.flow", states: ["5"] };
+    // or( not(and(A, A)), B )  — A duplicated verbatim (no dedup).
+    const when = {
+      state: { kind: "or", items: [{ kind: "not", item: { kind: "and", items: [a, a] } }, b] } as StatePredicate,
+    };
+    const release = { kind: "and", items: [a, a] };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while ${summariseCondition("state", b, ctx)} OR until (${summariseCondition("state", release, ctx)})`,
+    );
+  });
 });
 
 describe("blocker_summary i18n bundle", () => {

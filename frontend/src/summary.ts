@@ -619,11 +619,14 @@ function _renderHoldTerm(expr: StateExpr, ctx: ConditionContext): string {
     return _renderDisjHold(expr, ctx, false);
   }
   // not(...)
-  const item = expr.item;
-  if (item.kind === "is") {
-    return _renderAtomClause(item, ctx, true);
+  if (expr.kind === "not") {
+    const item = expr.item;
+    if (item.kind === "is") {
+      return _renderAtomClause(item, ctx, true);
+    }
+    return `${stateOpLabel(ctx.hass, "not")} ${_wrapHoldIfGroup(item, ctx)}`;
   }
-  return `${stateOpLabel(ctx.hass, "not")} ${_wrapHoldIfGroup(item, ctx)}`;
+  return "";
 }
 
 /** Parenthesise a nested group for hold-prose: an `or` defers to `_renderDisjHold`

@@ -1927,6 +1927,27 @@ describe("summariseBlocker", () => {
       `Block while ${summariseCondition("state", b, ctx)} OR until (${summariseCondition("state", release, ctx)})`,
     );
   });
+
+  test("top-level mixed OR beside another condition: the OR term is parenthesised", () => {
+    const a = { kind: "is", entity_id: "binary_sensor.bed", states: ["Clear"] };
+    const b = { kind: "is", entity_id: "light.a", states: ["on"] };
+    // state = or(¬A, B): a mixed OR. Paired with a negated-occupancy release, so
+    // state is NOT the sole condition (sole=false) → the OR term gets outer parens.
+    const when = {
+      state: { kind: "or", items: [{ kind: "not", item: a }, b] } as StatePredicate,
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+    };
+    const bStr = summariseCondition("state", b, ctx);
+    const aStr = summariseCondition("state", a, ctx);
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `While (${bStr} OR until ${aStr}), block until Island is clear for ≥3m`,
+    );
+  });
 });
 
 describe("blocker_summary i18n bundle", () => {

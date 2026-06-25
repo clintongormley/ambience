@@ -97,3 +97,7 @@ while the battery is above 80 %.
     "ambience_battery_high" selected, no arguments section (the script has no
     fields), and a Triggers section with "sensor.solar_battery_level" listed as a
     chip.
+
+______________________________________________________________________
+
+Next: [Sun](sun.md).

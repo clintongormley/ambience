@@ -58,3 +58,7 @@ a phone wanders in and out of a geofence.
 
 Leave the duration at zero (the default) to match immediately on any location
 change.
+
+______________________________________________________________________
+
+Next: [Script](script.md).

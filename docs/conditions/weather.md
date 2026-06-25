@@ -83,3 +83,7 @@ ______________________________________________________________________
     can serve as a placeholder while you decide which groups to use.
 - If you rename or delete a custom group that is already referenced by a scene,
     Ambience will warn you via a banner in Settings listing the affected scenes.
+
+______________________________________________________________________
+
+Next: [Actions](../actions.md).

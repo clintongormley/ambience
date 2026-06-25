@@ -81,3 +81,7 @@ ______________________________________________________________________
 Ambience watches the sensors the condition names and re-evaluates the scope
 whenever one of them changes, so a cloud passing over flips your scenes without
 any polling on your part.
+
+______________________________________________________________________
+
+Next: [Occupancy](occupancy.md).

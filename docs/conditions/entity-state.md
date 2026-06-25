@@ -53,3 +53,7 @@ on its header — turning it on inverts the result of that condition or group.
 
 For a worked example of the Entity-state condition, see
 [Step 5 of Getting started](../getting-started/step-5-entity-state-conditions.md).
+
+______________________________________________________________________
+
+Next: [Lux](lux.md).

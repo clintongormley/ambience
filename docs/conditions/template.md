@@ -76,3 +76,7 @@ ______________________________________________________________________
     entity-by-entity and will fall back to a broader re-evaluation strategy.
 - Templates that use `now()` or `utcnow()` are re-evaluated periodically so that
     time-based checks stay accurate.
+
+______________________________________________________________________
+
+Next: [Time of day](time-of-day.md).

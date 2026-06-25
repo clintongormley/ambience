@@ -92,3 +92,7 @@ current month, again derived from the workday calendar.
 
 This kind also requires a workday calendar to be configured in **Settings →
 Conditions** (see the [Settings reference](../settings-reference.md)).
+
+______________________________________________________________________
+
+Next: [Entity state](entity-state.md).

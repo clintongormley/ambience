@@ -62,3 +62,7 @@ ______________________________________________________________________
     changes, not on every check.
 - If `sun.sun` is unavailable (for example, your latitude or longitude is not
     configured in Home Assistant), the condition does not match.
+
+______________________________________________________________________
+
+Next: [Template](template.md).

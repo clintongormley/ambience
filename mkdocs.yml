@@ -60,17 +60,17 @@ nav:
       - "8. Debugging scenes": getting-started/step-8-debugging-scenes.md
   - Conditions:
       - Overview: conditions/index.md
-      - Time of day: conditions/time-of-day.md
-      - Entity state: conditions/entity-state.md
-      - Sun: conditions/sun.md
-      - Weather: conditions/weather.md
-      - People: conditions/people.md
-      - Occupancy: conditions/occupancy.md
-      - Lux: conditions/lux.md
       - Day: conditions/day.md
-      - Template: conditions/template.md
+      - Entity state: conditions/entity-state.md
+      - Lux: conditions/lux.md
+      - Occupancy: conditions/occupancy.md
+      - People: conditions/people.md
       - Script: conditions/script.md
+      - Sun: conditions/sun.md
+      - Template: conditions/template.md
+      - Time of day: conditions/time-of-day.md
       - Unavailable: conditions/unavailable.md
+      - Weather: conditions/weather.md
   - Actions: actions.md
   - Settings reference: settings-reference.md
   - Panel & card: panel-and-card.md

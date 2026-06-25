@@ -60,3 +60,7 @@ condition. Whether an entity is observable at all is the most fundamental fact
 about it, so a "sensor down" guard naturally outranks the normal rules that
 depend on that sensor. You do not have to drag your fallback scene to the top by
 hand; the ordering falls out of the priorities.
+
+______________________________________________________________________
+
+Next: [Weather](weather.md).

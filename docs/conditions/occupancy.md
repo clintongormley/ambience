@@ -58,3 +58,7 @@ while watching. You do not have to drag the "Watch TV" scene above your
 Occupancy still outranks the ambient conditions (Day, Time of day, Lux, Sun,
 Weather), so a presence rule beats a rule that only looks at the time or the
 weather.
+
+______________________________________________________________________
+
+Next: [People](people.md).

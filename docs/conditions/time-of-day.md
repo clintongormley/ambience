@@ -69,3 +69,7 @@ if the current time falls within *any* of the listed windows, which lets you
 express things like "between 07:00–09:00 or 17:00–19:00" in a single condition.
 Each added entry collapses to a summary chip when you move to another; click a
 chip to expand and edit it.
+
+______________________________________________________________________
+
+Next: [Unavailable](unavailable.md).

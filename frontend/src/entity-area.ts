@@ -27,17 +27,22 @@ export function effectiveAreaId(
 }
 
 /** Lowercased alphanumeric word tokens. Unicode-aware (`\p{L}\p{N}` + `u`) so
- *  accented names — e.g. Spanish "Salón" — tokenise correctly, unlike `\b`. */
+ *  accented names — e.g. Spanish "Salón" — tokenise correctly, unlike `\b`.
+ *  NFC-normalised first so a decomposed accent (NFD: base + combining mark)
+ *  doesn't split into two tokens and defeat suppression when the area and name
+ *  arrive in different normal forms. */
 function tokens(s: string): string[] {
   return s
+    .normalize("NFC")
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
 }
 
 /** True when the area's word sequence appears as a contiguous run of whole words
- *  in the name (so prefixing the area would be redundant). An empty area name
- *  counts as contained (nothing meaningful to add). */
+ *  in the name (so prefixing the area would be redundant). An area that tokenises
+ *  to nothing (empty, or punctuation-only like "—") counts as contained — there's
+ *  no meaningful prefix to add. */
 export function nameContainsArea(name: string, area: string): boolean {
   const nt = tokens(name);
   const at = tokens(area);

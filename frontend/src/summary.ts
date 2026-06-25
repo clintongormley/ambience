@@ -193,7 +193,10 @@ export function scriptFieldLabel(
 
 /** Display name for an entity from a domain-prefixed id, falling back to a
  *  humanised local id (`person.alice` → "Alice", `zone.gym` → "Gym") when no
- *  friendly_name is set. */
+ *  friendly_name is set. Deliberately NOT area-prefixed (unlike
+ *  {@link _entityDisplayName}): its callers are people, zones, scripts and
+ *  action targets — presence/identity subjects, not the area-scoped sensor
+ *  clauses where disambiguation by area matters. */
 function _domainEntityName(ctx: ConditionContext, entity_id: string): string {
   const states = (
     ctx.hass as { states?: Record<string, { attributes?: Record<string, unknown> }> } | undefined

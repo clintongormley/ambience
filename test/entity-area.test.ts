@@ -65,6 +65,14 @@ describe("nameContainsArea", () => {
   test("empty area → treated as contained", () => {
     expect(nameContainsArea("Anything", "")).toBe(true);
   });
+  test("matches across Unicode normalization forms (NFD name vs NFC area)", () => {
+    // Same word in different normal forms, built from code points so the editor
+    // can't fold them to one form: NFD = "o" + U+0301 combining acute, NFC =
+    // precomposed U+00F3. Must still match so the redundant prefix is suppressed.
+    const nfd = `Sal${String.fromCharCode(0x6f, 0x301)}n Lampara`;
+    const nfc = `Sal${String.fromCharCode(0xf3)}n`;
+    expect(nameContainsArea(nfd, nfc)).toBe(true);
+  });
 });
 
 describe("entityNameWithArea", () => {

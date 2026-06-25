@@ -8,6 +8,15 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+### Added
+
+- The safe cover actions — Open cover, Close cover, Set cover position, and Set
+  cover tilt — are now seeded as default actions on new installs, so covers work
+  in scenes out of the box.
+- The Actions settings page now shows a dismissable recommendation to install
+  the Fado Light Fader integration (smooth light fading with automatic
+  brightness restoration) when it isn't already installed.
+
 ### Changed
 
 - The Advanced settings tab now has a clearer visual hierarchy. Section titles

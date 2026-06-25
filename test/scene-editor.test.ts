@@ -385,7 +385,7 @@ describe("ambience-scene-editor — collapse + friendly labels", () => {
     addSelect.dispatchEvent(new Event("change", { bubbles: true }));
     await el.updateComplete;
     expect(el._draft.actions[0].service).toBe("light.turn_on");
-    expect(el._draft.actions[0].entity_ids).toEqual([]);
+    expect(el._draft.actions[0].target).toEqual({});
     expect(el._draft.actions[0].params).toEqual({});
   });
 
@@ -405,13 +405,13 @@ describe("ambience-scene-editor — collapse + friendly labels", () => {
     expect(action.querySelector("ambience-action-slot")).toBeTruthy();
   });
 
-  test("an action's target picker hides entities already used by another action", async () => {
+  test("expanding an action slot renders the picker", async () => {
     el = await mount({
       name: "test",
       when: {},
       actions: [
-        { service: "light.turn_on", entity_ids: ["light.lamp_a"], params: {} },
-        { service: "light.turn_on", entity_ids: [], params: {} },
+        { service: "light.turn_on", target: { entity_id: ["light.lamp_a"] }, params: {} },
+        { service: "light.turn_on", params: {} },
       ],
     });
     const action1 = el.shadowRoot.querySelector('.slot[data-slot-id="action-1"]') as HTMLElement;
@@ -423,44 +423,8 @@ describe("ambience-scene-editor — collapse + friendly labels", () => {
     await el.updateComplete;
 
     const slot = action1.querySelector("ambience-action-slot") as any;
-    expect(slot.excludeEntities).toContain("light.lamp_a");
     const picker = slot.shadowRoot.querySelector("ambience-target-picker") as any;
-    // TODO(Task 7): restore picker entity filtering once bridge is replaced;
-    // for now verify the picker renders and excludeEntities is wired at the slot level.
     expect(picker).toBeTruthy();
-  });
-
-  test("updating one action's targets reactively updates what another action may pick", async () => {
-    el = await mount({
-      name: "test",
-      when: {},
-      actions: [
-        { service: "light.turn_on", entity_ids: [], params: {} },
-        { service: "light.turn_on", entity_ids: [], params: {} },
-      ],
-    });
-    const action1 = el.shadowRoot.querySelector('.slot[data-slot-id="action-1"]') as HTMLElement;
-    action1.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await el.updateComplete;
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-
-    let slot = action1.querySelector("ambience-action-slot") as any;
-    expect(slot.excludeEntities).not.toContain("light.lamp_a");
-
-    // Action 0 claims lamp_a — mirror the draft mutation the editor performs.
-    el._draft = {
-      ...el._draft,
-      actions: el._draft.actions.map((a: any, i: number) =>
-        i === 0 ? { ...a, entity_ids: ["light.lamp_a"] } : a,
-      ),
-    };
-    await el.updateComplete;
-    await new Promise((r) => setTimeout(r, 0));
-    await el.updateComplete;
-
-    slot = action1.querySelector("ambience-action-slot") as any;
-    expect(slot.excludeEntities).toContain("light.lamp_a");
   });
 
   test("expanded action body does not include an action type dropdown", async () => {
@@ -519,11 +483,11 @@ describe("ambience-scene-editor — collapse + friendly labels", () => {
     expect(el.shadowRoot.querySelectorAll(".slot[data-slot-id^='action-']").length).toBe(1);
   });
 
-  test("entity-ids-changed event from the action slot updates the draft", async () => {
+  test("target-changed event from the action slot updates the draft", async () => {
     el = await mount({
       name: "test",
       when: {},
-      actions: [{ service: "light.turn_on", entity_ids: [], params: {} }],
+      actions: [{ service: "light.turn_on", params: {} }],
     });
     const action = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
     action.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -532,14 +496,15 @@ describe("ambience-scene-editor — collapse + friendly labels", () => {
     await el.updateComplete;
     const slot = action.querySelector("ambience-action-slot")!;
     slot.dispatchEvent(
-      new CustomEvent("entity-ids-changed", {
-        detail: { entityIds: ["light.lamp_a", "light.lamp_b"] },
+      new CustomEvent("target-changed", {
+        detail: { target: { entity_id: ["light.lamp_a", "light.lamp_b"] } },
         bubbles: true,
         composed: true,
       }),
     );
     await el.updateComplete;
-    expect(el._draft.actions[0].entity_ids).toEqual(["light.lamp_a", "light.lamp_b"]);
+    expect(el._draft.actions[0].target).toEqual({ entity_id: ["light.lamp_a", "light.lamp_b"] });
+    expect(el._draft.actions[0].entity_ids).toBeUndefined();
   });
 
   test("params-changed event from the action slot updates the draft", async () => {
@@ -2638,5 +2603,57 @@ describe("ambience-scene-editor — cross-tab conflict dialog", () => {
     el.scopeChangedElsewhere = true;
     await el.updateComplete;
     expect(el.shadowRoot.querySelector(".conflict-dialog")).toBeTruthy();
+  });
+});
+
+describe("ambience-scene-editor — _setActionTarget (Task 7/8 wiring)", () => {
+  let el: any;
+  afterEach(() => el?.remove());
+
+  async function mountEditorWithOneAction(action: ActionSpec): Promise<any> {
+    const e: any = document.createElement("ambience-scene-editor");
+    e.conditions = conditions;
+    e.availableActions = availableActions;
+    e.periods = periods;
+    e.hass = hass;
+    e.scope = { kind: "area", id: "living_room" };
+    e.scene = { name: "t", when: {}, actions: [action] };
+    e.open = true;
+    document.body.appendChild(e);
+    await e.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await e.updateComplete;
+    return e;
+  }
+
+  test("writes action.target and never entity_ids on target-changed", async () => {
+    el = await mountEditorWithOneAction({
+      service: "light.turn_on",
+      entity_ids: ["light.legacy"],
+      params: {},
+    });
+    // Simulate the action slot emitting a new target.
+    el._setActionTarget(0, { area_id: ["kitchen"] });
+    const action = el._draft.actions[0];
+    expect(action.target).toEqual({ area_id: ["kitchen"] });
+    expect(action.entity_ids).toBeUndefined();
+  });
+
+  test("action slot receives the computed target from actionTarget()", async () => {
+    el = await mountEditorWithOneAction({
+      service: "light.turn_on",
+      entity_ids: ["light.lamp_a"],
+      params: {},
+    });
+    // Open the action slot so it mounts.
+    const actionRow = el.shadowRoot.querySelector('.slot[data-slot-id="action-0"]') as HTMLElement;
+    actionRow.querySelector(".summary")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await el.updateComplete;
+    await new Promise((r) => setTimeout(r, 0));
+    await el.updateComplete;
+
+    const slot = actionRow.querySelector("ambience-action-slot") as any;
+    // actionTarget({entity_ids: ["light.lamp_a"]}) returns {entity_id: ["light.lamp_a"]}
+    expect(slot.target).toEqual({ entity_id: ["light.lamp_a"] });
   });
 });

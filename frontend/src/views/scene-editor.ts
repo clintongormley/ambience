@@ -1,16 +1,18 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { actionTarget, targetIsEmpty } from "../action-target.js";
 import type { HassConnection } from "../api.js";
 import { categorySwatch, categorySwatchStyles } from "../category-swatch.js";
 import { entitiesForScope, sceneNameKey, scopeKey } from "../entities-for-scope.js";
 import { pickHaTextInput, watchHaComponents } from "../ha-components.js";
 import { renderHaSwitch } from "../ha-switch.js";
 import { conditionLabel, localize } from "../i18n.js";
-import { entitiesUsedByOtherActions, stripPositionMetadata } from "../scene.js";
+import { stripPositionMetadata } from "../scene.js";
 import { scopeIcon } from "../scope-icon.js";
 import { sceneDisplayName, summariseAction, summariseCondition } from "../summary.js";
 import type {
   ActionSpec,
+  ActionTargetValue,
   ConditionInfo,
   DayConfig,
   ExposedAction,
@@ -749,12 +751,12 @@ export class AmbienceSceneEditor extends LitElement {
     // slot.kind === "action"
     const action = this._draft?.actions[slot.idx];
     if (!action) return null;
-    // Only enforce the entity-ids check when we KNOW the service has a target
+    // Only enforce the target check when we KNOW the service has a target
     // (serviceHasTarget === true). If the schema is still loading (undefined)
     // or the service has no target stanza (false), skip the check — the slot's
     // hasTarget() uses the same conservative logic.
     const serviceHasTarget = this._serviceHasTarget.get(action.service);
-    if ((action.entity_ids ?? []).length === 0 && serviceHasTarget === true) {
+    if (targetIsEmpty(actionTarget(action)) && serviceHasTarget === true) {
       return localize(this.hass, "ui.at_least_one_target", "At least one target is required.");
     }
     return null;
@@ -1070,7 +1072,7 @@ export class AmbienceSceneEditor extends LitElement {
   private _addActionSlot(name: string) {
     if (!this._draft || !name) return;
     if (this._open !== null && !this._tryCloseCurrent()) return;
-    const spec: ActionSpec = { service: name, entity_ids: [], params: {} };
+    const spec: ActionSpec = { service: name, target: {}, params: {} };
     const newIdx = this._draft.actions.length;
     this._draft = { ...this._draft, actions: [...this._draft.actions, spec] };
     this._open = { kind: "action", idx: newIdx };
@@ -1189,8 +1191,11 @@ export class AmbienceSceneEditor extends LitElement {
     if (this._open?.kind === "action" && this._open.idx === idx) this._open = null;
   }
 
-  private _setActionTargets(idx: number, entity_ids: string[]) {
-    this._updateActionAt(idx, (a) => ({ ...a, entity_ids }));
+  private _setActionTarget(idx: number, target: ActionTargetValue) {
+    this._updateActionAt(idx, (a) => {
+      const { entity_ids: _drop, ...rest } = a; // drop legacy field on write
+      return { ...rest, target };
+    });
   }
 
   private _setActionParams(idx: number, params: Record<string, unknown>) {
@@ -1247,12 +1252,11 @@ export class AmbienceSceneEditor extends LitElement {
               .scope=${this._scope}
               .service=${action.service}
               .exposed=${exposed}
-              .entityIds=${action.entity_ids}
-              .excludeEntities=${entitiesUsedByOtherActions(this._draft?.actions ?? [], idx)}
+              .target=${actionTarget(action)}
               .params=${action.params}
-              @entity-ids-changed=${(e: CustomEvent<{ entityIds: string[] }>) => {
+              @target-changed=${(e: CustomEvent<{ target: ActionTargetValue }>) => {
                 e.stopPropagation();
-                this._setActionTargets(idx, e.detail.entityIds);
+                this._setActionTarget(idx, e.detail.target);
               }}
               @params-changed=${(e: CustomEvent<{ params: Record<string, unknown> }>) => {
                 e.stopPropagation();

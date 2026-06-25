@@ -1,4 +1,16 @@
-from custom_components.ambience.target_resolve import action_target
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import floor_registry as fr
+from homeassistant.helpers import label_registry as lr
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.ambience.const import DOMAIN
+from custom_components.ambience.target_resolve import (
+    action_target,
+    resolve_action_entities,
+)
 
 
 def test_action_target_prefers_explicit_target() -> None:
@@ -12,25 +24,17 @@ def test_action_target_falls_back_to_legacy_entity_ids() -> None:
 
 
 def test_action_target_drops_empty_lists_and_blank() -> None:
-    assert action_target({"service": "x.y", "target": {"area_id": [], "entity_id": ["light.a"]}}) == {
-        "entity_id": ["light.a"]
-    }
+    assert action_target(
+        {"service": "x.y", "target": {"area_id": [], "entity_id": ["light.a"]}}
+    ) == {"entity_id": ["light.a"]}
     assert action_target({"service": "x.y"}) == {}
     assert action_target({"service": "x.y", "entity_ids": []}) == {}
 
 
 def test_action_target_coerces_scalar_to_list() -> None:
-    assert action_target({"service": "x.y", "target": {"area_id": "kitchen"}}) == {"area_id": ["kitchen"]}
-
-
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import floor_registry as fr
-from homeassistant.helpers import label_registry as lr
-
-from custom_components.ambience.target_resolve import resolve_action_entities
+    assert action_target({"service": "x.y", "target": {"area_id": "kitchen"}}) == {
+        "area_id": ["kitchen"]
+    }
 
 
 def _entity_in_area(hass: HomeAssistant, suffix: str, area_id: str) -> str:
@@ -57,10 +61,6 @@ async def test_resolve_area_target_intersected_to_area_scope(hass: HomeAssistant
 
 
 async def test_resolve_device_indirection(hass: HomeAssistant) -> None:
-    from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-    from custom_components.ambience.const import DOMAIN
-
     kitchen = ar.async_get(hass).async_create("Kitchen")
     entry = MockConfigEntry(domain=DOMAIN)
     entry.add_to_hass(hass)

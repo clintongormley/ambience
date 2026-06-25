@@ -72,7 +72,7 @@ def test_cause_describe_entity():
 
 def test_cause_describe_clock_and_manual():
     assert TriggerCause(kind="clock", detail="20:00").describe() == "clock 20:00"
-    assert TriggerCause(kind="manual").describe() == "manual apply_scene"
+    assert TriggerCause(kind="manual").describe() == "manual apply"
 
 
 def test_format_acted_unit_lists_predicates():

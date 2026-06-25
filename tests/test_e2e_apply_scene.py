@@ -1,4 +1,5 @@
-"""End-to-end: install the integration, seed the store, call the service, observe service calls."""
+"""End-to-end: install the integration, seed the store, apply scenes (directly or
+via the auto-trigger engine), and observe the resulting service calls."""
 
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from custom_components.ambience.const import (
     DATA_SWITCHES,
     DOMAIN,
 )
-from custom_components.ambience.service import async_resolve_only
+from custom_components.ambience.service import async_apply_scene, async_resolve_only
 
 
 async def _make_area_scope(hass: HomeAssistant, name: str = "E2E Room") -> tuple[str, str]:
@@ -58,9 +59,7 @@ async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> 
     return mock_config_entry
 
 
-async def test_service_call_invokes_light_turn_on(
-    hass: HomeAssistant, installed: MockConfigEntry
-) -> None:
+async def test_apply_invokes_light_turn_on(hass: HomeAssistant, installed: MockConfigEntry) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
     # Pre-expose the service the scene will reference.
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
@@ -95,15 +94,10 @@ async def test_service_call_invokes_light_turn_on(
         },
     )
     # Register the mock after seeding so a debounced engine auto-apply (if any)
-    # isn't counted; only the explicit service call below should fire it.
+    # isn't counted; only the explicit apply below should fire it.
     on_calls = async_mock_service(hass, "light", "turn_on")
 
-    await hass.services.async_call(
-        DOMAIN,
-        "apply_scene",
-        {"scope": [f"area:{area_id}"]},
-        blocking=True,
-    )
+    await async_apply_scene(hass, "area", area_id)
 
     assert len(on_calls) == 1
     assert on_calls[0].data["entity_id"] == ["light.lamp"]
@@ -114,8 +108,8 @@ async def test_service_call_invokes_light_turn_on(
 async def test_apply_scene_applies_all_categories(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """apply_scene applies every category's winner concurrently and records each."""
-    from custom_components.ambience.service import async_apply_scene, get_last_applied
+    """async_apply_scene applies every category's winner concurrently and records each."""
+    from custom_components.ambience.service import get_last_applied
 
     light_calls = async_mock_service(hass, "light", "turn_on")
     cover_calls = async_mock_service(hass, "cover", "open_cover")
@@ -205,58 +199,8 @@ async def test_time_of_day_scene_matches_for_area_without_conditions_field(
 async def test_apply_scene_house_target_is_clean_noop(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
-    """Calling with scope=["house"] resolves and runs (no scenes configured ⇒ a clean no-op)."""
-    await hass.services.async_call(DOMAIN, "apply_scene", {"scope": ["house"]}, blocking=True)
-
-
-async def test_apply_scene_rejects_unknown_area(
-    hass: HomeAssistant, installed: MockConfigEntry
-) -> None:
-    from homeassistant.exceptions import ServiceValidationError
-
-    with pytest.raises(ServiceValidationError):
-        await hass.services.async_call(
-            DOMAIN, "apply_scene", {"scope": ["area:ghost_area"]}, blocking=True
-        )
-
-
-async def test_apply_scene_empty_targets_all_scopes_noop(
-    hass: HomeAssistant, installed: MockConfigEntry
-) -> None:
-    # No target and no configured scenes => clean no-op across every scope.
-    await hass.services.async_call(DOMAIN, "apply_scene", {}, blocking=True)
-
-
-async def test_apply_scene_rejects_non_admin_user(
-    hass: HomeAssistant, installed: MockConfigEntry, hass_read_only_user
-) -> None:
-    """A non-admin user must not be able to trigger scene application."""
-    from homeassistant.core import Context
-    from homeassistant.exceptions import Unauthorized
-
-    with pytest.raises(Unauthorized):
-        await hass.services.async_call(
-            DOMAIN,
-            "apply_scene",
-            {"scope": ["house"]},
-            blocking=True,
-            context=Context(user_id=hass_read_only_user.id),
-        )
-
-
-async def test_apply_scene_allows_admin_user(
-    hass: HomeAssistant, installed: MockConfigEntry, hass_admin_user
-) -> None:
-    """An admin user may trigger scene application."""
-    from homeassistant.core import Context
-
-    await hass.services.async_call(
-        DOMAIN,
-        "apply_scene",
-        {"scope": ["house"]},
-        blocking=True,
-        context=Context(user_id=hass_admin_user.id),
-    )
+    """Applying the house scope resolves and runs (no scenes configured ⇒ a clean no-op)."""
+    await async_apply_scene(hass, "house", None)
 
 
 async def test_engine_auto_applies_state_scene_on_config_change(
@@ -368,7 +312,7 @@ async def test_engine_torn_down_on_unload(hass: HomeAssistant, installed: MockCo
     assert engine._unsubs == []  # async_shutdown ran on unload
 
 
-async def test_service_call_category_limits_to_one_category(
+async def test_apply_category_limits_to_one_category(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
     store = hass.data[DOMAIN][DATA_STORE]
@@ -404,12 +348,7 @@ async def test_service_call_category_limits_to_one_category(
     light_calls = async_mock_service(hass, "light", "turn_on")
     cover_calls = async_mock_service(hass, "cover", "open_cover")
 
-    await hass.services.async_call(
-        DOMAIN,
-        "apply_scene",
-        {"scope": [f"area:{area_id}"], "category": ["lighting"]},
-        blocking=True,
-    )
+    await async_apply_scene(hass, "area", area_id, category="lighting")
 
     assert len(light_calls) == 1
     assert len(cover_calls) == 0

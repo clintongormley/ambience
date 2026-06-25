@@ -196,7 +196,10 @@ async def async_setup_entry(
 
 
 class AmbienceScopeSwitch(SwitchEntity, RestoreEntity):
-    """Switch that gates ambience.apply_scene for one scope (area/floor/house)."""
+    """Switch that gates automatic scene application for one scope (area/floor/house).
+
+    Gates the engine's automatic applies (and non-forced manual applies); an
+    explicit apply from the panel forces past the switch."""
 
     _attr_should_poll = False
     _attr_has_entity_name = True

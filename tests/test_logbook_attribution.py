@@ -180,6 +180,8 @@ async def installed(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> 
 async def test_apply_sets_activity_state_and_shares_context(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
+    from custom_components.ambience.service import async_apply_scene
+
     cover_calls = async_mock_service(hass, "cover", "open_cover")
     store = hass.data[DOMAIN][DATA_STORE]
     exposed_store = hass.data[DOMAIN][DATA_EXPOSED_ACTIONS]
@@ -207,9 +209,7 @@ async def test_apply_sets_activity_state_and_shares_context(
         },
     )
 
-    await hass.services.async_call(
-        DOMAIN, "apply_scene", {"scope": [f"area:{area_id}"]}, blocking=True
-    )
+    await async_apply_scene(hass, "area", area_id)
     await hass.async_block_till_done()
 
     # The sensor's state is the activity line (single category ⇒ no "(category)"
@@ -225,6 +225,8 @@ async def test_apply_sets_activity_state_and_shares_context(
 async def test_apply_with_empty_actions_records_nothing(
     hass: HomeAssistant, installed: MockConfigEntry
 ) -> None:
+    from custom_components.ambience.service import async_apply_scene
+
     store = hass.data[DOMAIN][DATA_STORE]
     area_id, _ = await _make_area_scope(hass, "Lounge")
     await store.async_save_area(
@@ -232,9 +234,7 @@ async def test_apply_with_empty_actions_records_nothing(
         {"scenes": [{"name": "Empty", "category": "general", "when": {}, "actions": []}]},
     )
 
-    await hass.services.async_call(
-        DOMAIN, "apply_scene", {"scope": [f"area:{area_id}"]}, blocking=True
-    )
+    await async_apply_scene(hass, "area", area_id)
     await hass.async_block_till_done()
 
     # Nothing applied ⇒ no activity ⇒ the sensor stays unknown.
@@ -300,6 +300,8 @@ async def test_multiple_categories_own_activity_line_and_context(
 
 
 async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockConfigEntry) -> None:
+    from custom_components.ambience.service import async_apply_scene
+
     activity = _capture_activity(hass)
     async_mock_service(hass, "light", "turn_on")
     store = hass.data[DOMAIN][DATA_STORE]
@@ -322,7 +324,7 @@ async def test_house_scope_label_is_global(hass: HomeAssistant, installed: MockC
         }
     )
 
-    await hass.services.async_call(DOMAIN, "apply_scene", {"scope": ["house"]}, blocking=True)
+    await async_apply_scene(hass, "house", None)
     await hass.async_block_till_done()
 
     assert "'Movie' in House" in activity

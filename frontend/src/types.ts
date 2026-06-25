@@ -48,9 +48,18 @@ export type Scene = {
 // `icon` is an mdi name (e.g. "mdi:lightbulb"); `color` is a CATEGORY_COLORS id.
 export type SceneCategory = { id: string; name: string; icon?: string; color?: string };
 
+export type ActionTargetValue = {
+  entity_id?: string[];
+  device_id?: string[];
+  area_id?: string[];
+  label_id?: string[];
+};
+
 export type ActionSpec = {
   service: string; // "domain.service"
-  entity_ids: string[];
+  /** Legacy flat entity list. Read-only fallback; new code writes `target`. */
+  entity_ids?: string[];
+  target?: ActionTargetValue;
   params: Record<string, unknown>;
 };
 

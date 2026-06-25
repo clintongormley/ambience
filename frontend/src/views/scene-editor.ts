@@ -411,7 +411,7 @@ export class AmbienceSceneEditor extends LitElement {
       ...this._draft,
       actions: this._draft.actions.map((a) => ({
         ...a,
-        entity_ids: a.entity_ids.filter((id) => inScope.has(id)),
+        entity_ids: (a.entity_ids ?? []).filter((id) => inScope.has(id)),
       })),
     };
   }
@@ -754,7 +754,7 @@ export class AmbienceSceneEditor extends LitElement {
     // or the service has no target stanza (false), skip the check — the slot's
     // hasTarget() uses the same conservative logic.
     const serviceHasTarget = this._serviceHasTarget.get(action.service);
-    if (action.entity_ids.length === 0 && serviceHasTarget === true) {
+    if ((action.entity_ids ?? []).length === 0 && serviceHasTarget === true) {
       return localize(this.hass, "ui.at_least_one_target", "At least one target is required.");
     }
     return null;

@@ -766,12 +766,12 @@ export class AmbienceScenesList extends LitElement {
                             <div class="actions-detail-item">
                               <div class="action-header">${header}</div>
                               ${
-                                a.entity_ids.length === 0
+                                (a.entity_ids ?? []).length === 0
                                   ? html`<div class="no-targets">
                                     ${localize(this.hass, "ui.no_targets", "(no targets)")}
                                   </div>`
                                   : html`<ul class="entity-list">
-                                    ${a.entity_ids.map(
+                                    ${(a.entity_ids ?? []).map(
                                       (eid) => html`<li>${this._entityName(eid)}</li>`,
                                     )}
                                   </ul>`

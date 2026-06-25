@@ -989,7 +989,7 @@ function _actionDisplayName(action: ActionSpec, ctx: ActionContext): string {
  */
 function _targetNoun(action: ActionSpec, ctx: ActionContext): string {
   const domains = new Set<string>();
-  for (const id of action.entity_ids) {
+  for (const id of action.entity_ids ?? []) {
     const dot = id.indexOf(".");
     if (dot > 0) domains.add(id.slice(0, dot));
   }
@@ -1000,7 +1000,7 @@ function _targetNoun(action: ActionSpec, ctx: ActionContext): string {
 export function summariseAction(action: ActionSpec, ctx: ActionContext): string {
   const name = _actionDisplayName(action, ctx);
   const noun = _targetNoun(action, ctx);
-  const n = action.entity_ids.length;
+  const n = (action.entity_ids ?? []).length;
   let targets: string;
   if (n === 0) targets = localize(ctx.hass, "ui.no_targets", "(no targets)");
   else if (n === 1) targets = `1 ${noun}`;

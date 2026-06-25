@@ -162,14 +162,17 @@ def missing_lux_refs(predicate: Any, effective_ids: frozenset[str] | set[str]) -
 
 
 def entity_exists(hass: HomeAssistant, entity_id: str) -> bool:
-    """True if the entity has a state OR is in the entity registry.
+    """True if the entity has a state OR is enabled in the entity registry.
 
     A currently-"unavailable" entity has a state object -> exists -> not a
-    problem. Only entities absent from BOTH (typos / deleted) are "missing".
+    problem. An entity that is absent from both (typos / deleted), OR present in
+    the registry but disabled (e.g. its device was disabled) -> it has no state
+    and can never satisfy a condition, so it counts as "missing".
     """
     if hass.states.get(entity_id) is not None:
         return True
-    return er.async_get(hass).async_get(entity_id) is not None
+    entry = er.async_get(hass).async_get(entity_id)
+    return entry is not None and entry.disabled_by is None
 
 
 def _action_entities(scene: dict[str, Any]) -> Iterator[str]:

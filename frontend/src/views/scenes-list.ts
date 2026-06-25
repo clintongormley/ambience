@@ -629,7 +629,7 @@ export class AmbienceScenesList extends LitElement {
     }
     if (p.missing.length) {
       lines.push(
-        `${localize(this.hass, "ui.problem_missing", "Missing in Home Assistant:")} ${p.missing.join(", ")}`,
+        `${localize(this.hass, "ui.problem_missing", "Missing or disabled in Home Assistant:")} ${p.missing.join(", ")}`,
       );
     }
     if (p.overlap.length) {

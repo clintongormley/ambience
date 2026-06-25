@@ -87,6 +87,33 @@ async def test_scan_flags_missing_condition_entity(hass: HomeAssistant, installe
     assert ("missing_entity", "binary_sensor.ghost") in kinds
 
 
+async def test_scan_flags_disabled_condition_entity(hass: HomeAssistant, installed) -> None:
+    from homeassistant.helpers import entity_registry as er
+
+    # The reported bug: a scene's occupancy condition targets an entity that is
+    # in the registry but disabled (its device was disabled), so it has no state.
+    # The scan must report it as missing — end-to-end, not just entity_exists.
+    registry = er.async_get(hass)
+    entry = registry.async_get_or_create(
+        "binary_sensor",
+        "demo",
+        "bathroom_presence",
+        disabled_by=er.RegistryEntryDisabler.DEVICE,
+    )
+    cfg = _cfg(
+        [
+            {
+                "name": "Bathroom vacant",
+                "when": {"occupancy": {"sensors": [entry.entity_id]}},
+                "category": "c1",
+                "actions": [],
+            }
+        ]
+    )
+    kinds = {(p.kind, p.ref) for p in scan(hass, [("area", "a", cfg)])}
+    assert ("missing_entity", entry.entity_id) in kinds
+
+
 async def test_scan_does_not_flag_existing_entity(hass: HomeAssistant, installed) -> None:
     hass.states.async_set("light.real", "on")
     cfg = _cfg(
@@ -227,6 +254,24 @@ async def test_entity_exists_true_for_registry_only(hass: HomeAssistant, install
     assert entity_exists(hass, entry.entity_id) is True
 
 
+async def test_disabled_entity_does_not_exist(hass: HomeAssistant, installed) -> None:
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    # A disabled device's entity stays in the registry (disabled_by set) but is
+    # removed from the state machine. It can never satisfy a scene condition, so
+    # it must be flagged as missing — not silently treated as existing.
+    entry = registry.async_get_or_create(
+        "binary_sensor",
+        "demo",
+        "disabled_uid",
+        disabled_by=er.RegistryEntryDisabler.DEVICE,
+    )
+    assert hass.states.get(entry.entity_id) is None
+    assert entry.disabled_by is not None
+    assert entity_exists(hass, entry.entity_id) is False
+
+
 async def test_scan_aggregates_one_entity_across_scenes(hass: HomeAssistant, installed) -> None:
     cfg = _cfg(
         [
@@ -332,6 +377,33 @@ async def test_scene_annotations_flags_missing(hass: HomeAssistant, installed) -
     annos = scene_annotations(hass, cfg)
     assert annos[0]["missing_entities"] == ["light.ghost"]
     assert annos[0]["overlap_entities"] == []
+
+
+async def test_scene_annotations_flags_disabled_entity(hass: HomeAssistant, installed) -> None:
+    from homeassistant.helpers import entity_registry as er
+
+    # The frontend scene problem flag (driven by scene_annotations) must also list
+    # a disabled-device entity as missing, matching the Repairs issue.
+    entry = er.async_get(hass).async_get_or_create(
+        "binary_sensor",
+        "demo",
+        "bathroom_presence",
+        disabled_by=er.RegistryEntryDisabler.DEVICE,
+    )
+    store = hass.data[DOMAIN][DATA_STORE]
+    cfg = {
+        "scenes": [
+            {
+                "name": "Bathroom vacant",
+                "when": {"occupancy": {"sensors": [entry.entity_id]}},
+                "category": "c1",
+                "actions": [],
+            }
+        ]
+    }
+    await store.async_save_area(ar.async_get(hass).async_create("Bath").id, cfg)
+    annos = scene_annotations(hass, cfg)
+    assert annos[0]["missing_entities"] == [entry.entity_id]
 
 
 async def test_scene_annotations_flags_overlap(hass: HomeAssistant, installed) -> None:

@@ -37,8 +37,8 @@
   },
   "issues": {
     "missing_entity": {
-      "title": "Ambience: a scene references a missing entity",
-      "description": "The entity `{entity_id}` does not exist in Home Assistant, but is referenced by these Ambience scenes in the {scope}:\n{scenes}\n\nA condition referencing it will never match; an action targeting it will fail silently. Fix the entity id in the Ambience editor or remove the reference. This message clears automatically once the entity exists."
+      "title": "Ambience: a scene references a missing or disabled entity",
+      "description": "The entity `{entity_id}` does not exist or is disabled in Home Assistant, but is referenced by these Ambience scenes in the {scope}:\n{scenes}\n\nA condition referencing it will never match; an action targeting it will fail silently. Fix the entity id in the Ambience editor, enable the entity (or its device), or remove the reference. This message clears automatically once the entity exists and is enabled."
     },
     "action_overlap": {
       "title": "Ambience: an entity is controlled by multiple groups",

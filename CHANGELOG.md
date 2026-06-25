@@ -26,6 +26,11 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - In the Entity State condition, "Add clause" now works on a negated (NOT)
   group. Previously, clicking it while NOT was enabled did nothing until you
   turned NOT off.
+- Config health now flags an entity referenced by a scene when that entity is
+  disabled (e.g. its device was disabled) rather than deleted. A disabled entity
+  stays in the entity registry but has no state, so it can never satisfy a
+  condition; it is now reported as missing in both the scene problem flag and
+  the Repairs issue, instead of being silently treated as present.
 
 ## [0.27.0] - 2026-06-24
 

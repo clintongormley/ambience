@@ -37,8 +37,8 @@
   },
   "issues": {
     "missing_entity": {
-      "title": "Ambience: una escena hace referencia a una entidad inexistente",
-      "description": "La entidad `{entity_id}` no existe en Home Assistant, pero está referenciada por estas escenas de Ambience en el {scope}:\n{scenes}\n\nUna condición que la referencie nunca coincidirá; una acción dirigida a ella fallará silenciosamente. Corrige el id de la entidad en el editor de Ambience o elimina la referencia. Este mensaje se borra automáticamente una vez que la entidad exista."
+      "title": "Ambience: una escena hace referencia a una entidad inexistente o deshabilitada",
+      "description": "La entidad `{entity_id}` no existe o está deshabilitada en Home Assistant, pero está referenciada por estas escenas de Ambience en el {scope}:\n{scenes}\n\nUna condición que la referencie nunca coincidirá; una acción dirigida a ella fallará silenciosamente. Corrige el id de la entidad en el editor de Ambience, habilita la entidad (o su dispositivo), o elimina la referencia. Este mensaje se borra automáticamente una vez que la entidad exista y esté habilitada."
     },
     "action_overlap": {
       "title": "Ambience: una entidad está controlada por varios grupos",

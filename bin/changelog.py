@@ -7,6 +7,7 @@ Stdlib-only (runs in dependency-free CI jobs). Runnable two ways:
 
 Usage:
   python -m bin.changelog check --title "<pr title>" --base <ref> --head <ref>
+  python -m bin.changelog check-range --base <ref> --head <ref>
   python -m bin.changelog promote <version> [--date YYYY-MM-DD]
   python -m bin.changelog extract <version>
 """
@@ -67,6 +68,16 @@ def entry_required(title: str) -> bool:
     return commit_type(title) not in EXEMPT_TYPES
 
 
+def range_entry_required(subjects: list[str]) -> bool:
+    """True if ANY commit subject is user-facing (mirrors entry_required's fail-safe).
+
+    Used by the pre-push hook, which has no PR title: the branch's own commits are
+    the local proxy for "is this push user-facing?". One feat/fix/perf (or a
+    non-conventional subject) anywhere in the range demands an [Unreleased] entry.
+    """
+    return any(entry_required(s) for s in subjects)
+
+
 def unreleased_body(text: str) -> str:
     _, sections = _split_sections(text)
     for heading, body in sections:
@@ -122,36 +133,69 @@ def promote_text(text: str, version: str, day: str) -> str:
     return "".join(out).rstrip("\n") + "\n"
 
 
-def _git_show(ref: str, path: str) -> str | None:
-    """Return file contents at a git ref, or None if absent there.
+def _scrubbed_git_env() -> dict[str, str]:
+    """os.environ without GIT_*, so git resolves the cwd repo rather than an
+    inherited GIT_DIR/GIT_WORK_TREE — which a git hook (e.g. pre-push running
+    pytest) points at a different repo."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
-    Scrubs GIT_* from the environment so the lookup resolves against the current
-    working directory's repo, not an inherited GIT_DIR/GIT_WORK_TREE — which a
-    git hook (e.g. pre-push running pytest) sets to a different repo.
-    """
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+def _git_show(ref: str, path: str) -> str | None:
+    """Return file contents at a git ref, or None if absent there."""
     result = subprocess.run(
-        ["git", "show", f"{ref}:{path}"], capture_output=True, text=True, env=env
+        ["git", "show", f"{ref}:{path}"],
+        capture_output=True,
+        text=True,
+        env=_scrubbed_git_env(),
     )
     return result.stdout if result.returncode == 0 else None
+
+
+def _git_log_subjects(base: str, head: str) -> list[str]:
+    """Subject lines of the non-merge commits in base..head ([] on git error).
+
+    Merge commits are excluded: their 'Merge …' subjects are non-conventional and
+    would otherwise force an entry for every merge.
+    """
+    result = subprocess.run(
+        ["git", "log", "--no-merges", "--format=%s", f"{base}..{head}"],
+        capture_output=True,
+        text=True,
+        env=_scrubbed_git_env(),
+    )
+    if result.returncode != 0:
+        return []
+    return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def _run_gate(base: str, head: str, path: str) -> int:
+    """Pass (0) when head's [Unreleased] adds a list item base's lacks, else fail (1)."""
+    head_text = _git_show(head, path) or ""
+    base_text = _git_show(base, path)
+    if gate_ok(base_text, head_text):
+        print("changelog: found a new entry under [Unreleased].")
+        return 0
+    print(
+        "changelog: a user-facing change must add an entry under '## [Unreleased]' "
+        f"in {path}. Add one, or use a non-user-facing type "
+        f"({', '.join(sorted(EXEMPT_TYPES))}).",
+        file=sys.stderr,
+    )
+    return 1
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
     if not entry_required(args.title):
         print(f"changelog: '{commit_type(args.title)}' PR is exempt; no entry required.")
         return 0
-    head_text = _git_show(args.head, args.path) or ""
-    base_text = _git_show(args.base, args.path)
-    if gate_ok(base_text, head_text):
-        print("changelog: found a new entry under [Unreleased].")
+    return _run_gate(args.base, args.head, args.path)
+
+
+def _cmd_check_range(args: argparse.Namespace) -> int:
+    if not range_entry_required(_git_log_subjects(args.base, args.head)):
+        print("changelog: no user-facing commits in range; no entry required.")
         return 0
-    print(
-        "changelog: a user-facing PR must add an entry under '## [Unreleased]' in "
-        f"{args.path}. Add one, or retitle the PR with a non-user-facing type "
-        f"({', '.join(sorted(EXEMPT_TYPES))}).",
-        file=sys.stderr,
-    )
-    return 1
+    return _run_gate(args.base, args.head, args.path)
 
 
 def _cmd_promote(args: argparse.Namespace) -> int:
@@ -187,6 +231,10 @@ def main(argv: list[str] | None = None) -> int:
     p_check.add_argument("--base", required=True)
     p_check.add_argument("--head", required=True)
 
+    p_check_range = sub.add_parser("check-range")
+    p_check_range.add_argument("--base", required=True)
+    p_check_range.add_argument("--head", required=True)
+
     p_promote = sub.add_parser("promote")
     p_promote.add_argument("version")
     p_promote.add_argument("--date", default=None)
@@ -195,7 +243,12 @@ def main(argv: list[str] | None = None) -> int:
     p_extract.add_argument("version")
 
     args = parser.parse_args(argv)
-    return {"check": _cmd_check, "promote": _cmd_promote, "extract": _cmd_extract}[args.cmd](args)
+    return {
+        "check": _cmd_check,
+        "check-range": _cmd_check_range,
+        "promote": _cmd_promote,
+        "extract": _cmd_extract,
+    }[args.cmd](args)
 
 
 if __name__ == "__main__":

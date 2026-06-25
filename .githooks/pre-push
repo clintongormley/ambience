@@ -27,11 +27,27 @@ diff_names() {
   git diff --name-only "$1" 2>/dev/null || git diff --name-only HEAD~1..HEAD
 }
 
+# Append "<branch-point> <tip>" to cl_checks for the changelog gate. Branch point
+# = merge-base with main (mirrors CI's base=main / head=branch-tip), NOT
+# remote_sha — so an entry added in an earlier push still counts and a no-op
+# re-push isn't falsely blocked.
+add_cl_check() {
+  cl_base="$(git merge-base "$(default_base)" "$1" 2>/dev/null || true)"
+  # if/fi (not `[ … ] && …`): as the function's last command a failed test would
+  # propagate non-zero and, under set -e, abort the hook on an empty merge-base
+  # (orphan/unrelated history). Fail open instead — CI is the authoritative gate.
+  if [ -n "$cl_base" ]; then
+    cl_checks="${cl_checks}${cl_base} $1
+"
+  fi
+}
+
 # Read the ref updates git feeds us on stdin and accumulate the changed files
 # across EVERY pushed ref (a `git push origin a b` must gate both, not just
 # the last one read).
 changed=""
 ranges=""
+cl_checks=""
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$ZERO" ] && continue          # branch deletion: nothing to test
   if [ "$remote_sha" = "$ZERO" ]; then            # new branch on the remote
@@ -43,12 +59,14 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   ranges="${ranges}${ranges:+ }${range}"
   changed="${changed}
 $(diff_names "$range")"
+  add_cl_check "$local_sha"
 done
 
 # Fallback when stdin gave us nothing (e.g. a manual invocation).
 if [ -z "$ranges" ]; then
   ranges="$(default_base)...HEAD"
   changed="$(diff_names "$ranges")"
+  add_cl_check HEAD
 fi
 
 echo "pre-push: inspecting $(printf '%s\n' "$changed" | grep -c . || true) changed file(s) in range(s) $ranges"
@@ -69,5 +87,16 @@ if [ -n "$py_changed$trans_changed$bundle_src_changed" ]; then echo "› i18n"; 
 if [ -n "$py_changed" ];          then echo "› backend tests+coverage";  make coverage-py; fi
 if [ -n "$js_changed" ];          then echo "› frontend tests+coverage"; make coverage-js; fi
 if [ -n "$bundle_src_changed" ];  then echo "› bundle freshness";        make build-check; fi
+
+# --- Step 4: changelog entry for user-facing branches (stdlib-only, cheap) ---
+# Mirrors CI's changelog job. File-agnostic: required-ness comes from the
+# branch's commit types (feat/fix/perf), not which files changed.
+if [ -n "$cl_checks" ]; then
+  echo "› changelog"
+  printf '%s' "$cl_checks" | while read -r cl_base cl_head; do
+    [ -n "$cl_head" ] || continue
+    python3 -m bin.changelog check-range --base "$cl_base" --head "$cl_head" || exit 1
+  done
+fi
 
 echo "pre-push: all gates passed ✓"

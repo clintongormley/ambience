@@ -5,6 +5,7 @@ import pytest
 
 from bin.changelog import (
     EXEMPT_TYPES,
+    _git_log_subjects,
     _heading_name,
     _split_sections,
     commit_type,
@@ -14,6 +15,7 @@ from bin.changelog import (
     list_items,
     main,
     promote_text,
+    range_entry_required,
     unreleased_body,
 )
 
@@ -234,3 +236,84 @@ def test_main_check_ignores_inherited_git_dir(tmp_path, monkeypatch):
     # the scrub; the gate must still see the new entry and pass.
     monkeypatch.setenv("GIT_DIR", str(tmp_path / "nonexistent.git"))
     assert main(["check", "--title", "feat: x", "--base", base, "--head", head]) == 0
+
+
+# --- range_entry_required: is ANY commit in a range user-facing? ---
+
+
+def test_range_entry_required_true_when_any_commit_user_facing():
+    assert range_entry_required(["chore: bump", "fix: a bug", "test: x"]) is True
+
+
+def test_range_entry_required_false_when_all_commits_exempt():
+    assert range_entry_required(["chore: bump", "docs: tweak", "test: cover"]) is False
+
+
+def test_range_entry_required_false_for_empty_range():
+    assert range_entry_required([]) is False
+
+
+def test_range_entry_required_true_for_unrecognised_subject():
+    # Fail-safe, mirroring entry_required: a non-conventional subject counts.
+    assert range_entry_required(["WIP messy commit"]) is True
+
+
+def test_git_log_subjects_returns_empty_on_git_error(tmp_path, monkeypatch):
+    # Bad refs make `git log` exit non-zero → [] (fail-open: no commits → no
+    # entry required), so a hook bug never wedges a push.
+    repo = _git_repo(tmp_path)
+    monkeypatch.chdir(repo)
+    assert _git_log_subjects("nope-base", "nope-head") == []
+
+
+# --- check-range via main() against a real git repo (used by the pre-push hook) ---
+
+
+def test_main_check_range_passes_when_user_facing_with_entry(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    base = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "chore: base")
+    head = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n\n- New.\n", "fix: a bug")
+    monkeypatch.chdir(repo)
+    assert main(["check-range", "--base", base, "--head", head]) == 0
+
+
+def test_main_check_range_fails_when_user_facing_without_entry(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    base = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "chore: base")
+    head = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "feat: a feature")
+    monkeypatch.chdir(repo)
+    assert main(["check-range", "--base", base, "--head", head]) == 1
+
+
+def test_main_check_range_passes_when_only_exempt_commits(tmp_path, monkeypatch):
+    repo = _git_repo(tmp_path)
+    base = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "chore: base")
+    head = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "docs: tidy")
+    monkeypatch.chdir(repo)
+    assert main(["check-range", "--base", base, "--head", head]) == 0
+
+
+def test_main_check_range_ignores_merge_commits(tmp_path, monkeypatch):
+    """A merge commit's subject ('Merge ...') is non-conventional and would
+    otherwise force an entry; --no-merges must exclude it."""
+    repo = _git_repo(tmp_path)
+    base = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "chore: base")
+    # A side branch merged back with a merge commit, no user-facing work.
+    _git("checkout", "-q", "-b", "side", cwd=repo)
+    _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "docs: side note")
+    _git("checkout", "-q", "main", cwd=repo)
+    _git("merge", "--no-ff", "-q", "-m", "Merge branch 'side'", "side", cwd=repo)
+    head = _git("rev-parse", "HEAD", cwd=repo).stdout.strip()
+    monkeypatch.chdir(repo)
+    assert main(["check-range", "--base", base, "--head", head]) == 0
+
+
+def test_main_check_range_ignores_inherited_git_dir(tmp_path, monkeypatch):
+    """Both the git-log type scan and the gate must scrub GIT_*, so the hook
+    (which runs with an inherited GIT_DIR) resolves the cwd repo."""
+    repo = _git_repo(tmp_path)
+    base = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n", "chore: base")
+    head = _commit_changelog(repo, "# Changelog\n\n## [Unreleased]\n\n- New.\n", "fix: a bug")
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "nonexistent.git"))
+    assert main(["check-range", "--base", base, "--head", head]) == 0

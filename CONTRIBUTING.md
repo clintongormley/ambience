@@ -41,8 +41,13 @@ under `## [Unreleased]` in `CHANGELOG.md`. Use the Keep a Changelog categories
 (`Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`).
 
 Non-user-facing PRs (`chore:`, `ci:`, `test:`, `build:`, `refactor:`, `docs:`,
-`style:`) are exempt. This is enforced by the `changelog` CI job, which is
-keyed off the PR title — so it runs in CI only, not in the local pre-push hook.
+`style:`) are exempt. The `changelog` CI job enforces this from the PR title.
+The pre-push hook enforces the same gate locally, but — having no PR title — it
+keys off the branch's own commit subjects instead: any commit whose type is not
+one of those exempt types (so `feat:`/`fix:`/`perf:`, but also any other
+non-exempt or non-conventional subject) requires an entry. The two gates can
+diverge in edge cases (e.g. a `feat:`-titled PR whose commits are all `chore:`);
+CI's PR-title check is authoritative.
 
 At release time, `bin/release.sh` promotes `[Unreleased]` into a dated version
 section, and the release workflow publishes that section as the GitHub Release

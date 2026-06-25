@@ -30,6 +30,7 @@ import type {
   ServiceSchema,
   StateAtom,
   StateExpr,
+  StateGroup,
   StatePredicate,
   SunPredicate,
   TemplatePredicate,
@@ -468,7 +469,7 @@ export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionConte
  *  drop. So only a SINGLE-person negated people predicate is a release (the
  *  quantifier is moot with one person); multi-person / all-persons stay guards,
  *  where `summarisePeople` renders the negated form truthfully. `state` is not
- *  handled here — its richer boolean shape is split by `_splitStateBlocker`. */
+ *  handled here — its richer boolean shape is split by `_holdStateParts`. */
 function isReleaseCondition(name: string, predicate: unknown): boolean {
   if (predicate == null || typeof predicate !== "object") return false;
   if (name === "occupancy") {
@@ -504,15 +505,16 @@ function _collapseSingleChild(expr: StateExpr): StateExpr {
   return expr;
 }
 
-/** If this expression reads as a single NEGATED atom, return its positive
- *  ("until" release) form; otherwise null. This is the only `state` shape that
- *  decomposes cleanly into a positive release: a non-durational `is_not` atom
- *  (flipped back to `is`) or a `not` wrapping one non-group atom (`is`/numeric,
- *  unwrapped). A `not` wrapping a GROUP, an `or`, or a nested group returns null
- *  — its complement is not a single positive atom (de Morgan). Returning null
- *  only means "not a single-atom release"; `_splitStateBlocker` decides the rest
- *  — a top-level `not(group)` is unwrapped to a whole-predicate release, while
- *  the same node sitting inside an AND-group stays a guard.
+/** If this expression has a clean positive complement, return that complement
+ *  (its "until" release form); otherwise null. The shapes that decompose to a
+ *  positive release are: a non-durational `is_not` atom (flipped back to `is`);
+ *  a `not` wrapping an atom or a group (the inner expression is the release —
+ *  ¬(A∧B) releases when A∧B, ¬(A∨B) when A∨B); and an all-negated `or` (de
+ *  Morgan: ¬A ∨ ¬B = ¬(A∧B), returning a synthetic `and` of the de-negated
+ *  disjuncts). A double negation (a `not`/`is_not` directly inside the `not`),
+ *  a mixed or all-positive `or`, and a durational `is_not` all return null and
+ *  stay guards. Returning null only means "not a clean release"; the caller
+ *  (`_holdStateParts`) then renders the node as a guard.
  *
  *  Duration asymmetry: a `not` wrapping an `is X for D` carries `D` through
  *  correctly — the engine gates `for` on the positive `is`, so the release is
@@ -529,46 +531,160 @@ function _asStateRelease(expr: StateExpr): StateExpr | null {
     return { ...(expr as StateAtom), kind: "is" };
   }
   if (expr.kind === "not") {
+    // not(atom) → the atom; not(group) → the inner group. The complement of a
+    // negated group is a single positive release: ¬(A∧B) ⇒ until (A∧B),
+    // ¬(A∨B) ⇒ until (A∨B).
     const k = expr.item.kind;
     if (k === "is" || k === ">" || k === ">=" || k === "<" || k === "<=") return expr.item;
+    if (k === "and" || k === "or") return expr.item;
+    return null;
+  }
+  if (expr.kind === "or") {
+    // All-negated OR ⇒ a single AND release (de Morgan): ¬A ∨ ¬B = ¬(A ∧ B), so
+    // the block releases when A AND B both hold. Only when EVERY disjunct is a
+    // clean release — a durational `is_not` disjunct fails this, keeping the OR a
+    // guard (its dwell would not transfer to a positive "until").
+    const inner: StateExpr[] = [];
+    for (const it of expr.items) {
+      const rel = _asStateRelease(it);
+      if (!rel) return null;
+      inner.push(rel);
+    }
+    return inner.length === 1 ? inner[0] : { kind: "and" as const, items: inner };
   }
   return null;
 }
 
-/** Split a blocker's `state` predicate into its guard (rendered as-is, "while
- *  …") and release (de-negated, "until …") parts. Only a flat top-level `AND`
- *  group is decomposed atom-by-atom; a bare negated atom or a top-level `not`
- *  is a whole-predicate release; everything else stays a single guard. */
-function _splitStateBlocker(pred: StateExpr): { guard: StateExpr | null; releases: StateExpr[] } {
+/** A release expression rendered for embedding after "until": a compound
+ *  (multi-item) `and`/`or` group is parenthesised so the "OR until …" boundary is
+ *  unambiguous; a single atom (or 1-item group) renders bare. */
+function _renderReleaseGroup(expr: StateExpr, ctx: ConditionContext): string {
+  const body = _blockerConditionText("state", expr, ctx);
+  if ((expr.kind === "and" || expr.kind === "or") && expr.items.length > 1) {
+    return `(${body})`;
+  }
+  return body;
+}
+
+/** Render an `or` group as blocker hold-prose:
+ *  "<positives joined OR> OR until <releases joined AND>". Negated disjuncts are
+ *  de-negated (via `_asStateRelease`) and collapsed under one "until" (de Morgan);
+ *  positive disjuncts render as-is. `paren` wraps the whole term when it is
+ *  embedded beside sibling terms and has more than one part.
+ *
+ *  Precondition: `expr` is an OR group. Every caller guards `kind === "or"`
+ *  first; the param can't be tightened to `{ kind: "or" }` because narrowing
+ *  `StateExpr` by `kind === "or"` yields `StateGroup` (whose `kind` stays
+ *  "and" | "or"), so passing an `and` group would render its items joined by
+ *  OR — don't. */
+function _renderDisjHold(expr: StateGroup, ctx: ConditionContext, paren: boolean): string {
+  const positives: StateExpr[] = [];
+  const releaseExprs: StateExpr[] = [];
+  for (const it of expr.items) {
+    const rel = _asStateRelease(it);
+    if (rel) releaseExprs.push(rel);
+    else positives.push(it);
+  }
+  const orSep = ` ${stateOpLabel(ctx.hass, "or")} `;
+  const posStr = positives.map((p) => _wrapHoldIfGroup(p, ctx)).join(orSep);
+  let untilStr = "";
+  if (releaseExprs.length) {
+    const relExpr: StateExpr =
+      releaseExprs.length === 1 ? releaseExprs[0] : { kind: "and" as const, items: releaseExprs };
+    untilStr = `${localize(ctx.hass, "blocker_summary.until", "until")} ${_renderReleaseGroup(relExpr, ctx)}`;
+  }
+  const joined = [posStr, untilStr].filter((s) => s !== "").join(orSep);
+  const termCount = positives.length + (releaseExprs.length ? 1 : 0);
+  return paren && termCount > 1 ? `(${joined})` : joined;
+}
+
+/** Blocker-mode mirror of `_renderStateExpr`: identical to the raw renderer
+ *  except an `or` group is rendered with while/until prose via `_renderDisjHold`
+ *  (a negated disjunct reads "until <positive>"). Used to render blocker guards so
+ *  a nested OR inside a guard reads naturally. */
+function _renderHoldTerm(expr: StateExpr, ctx: ConditionContext): string {
+  if (
+    expr.kind === "is" ||
+    expr.kind === "is_not" ||
+    expr.kind === ">" ||
+    expr.kind === ">=" ||
+    expr.kind === "<" ||
+    expr.kind === "<="
+  ) {
+    return _renderAtomClause(expr, ctx, false);
+  }
+  if (expr.kind === "and") {
+    const sep = ` ${stateOpLabel(ctx.hass, "and")} `;
+    return expr.items.map((it) => _wrapHoldIfGroup(it, ctx)).join(sep);
+  }
+  if (expr.kind === "or") {
+    return _renderDisjHold(expr, ctx, false);
+  }
+  // not(...)
+  if (expr.kind === "not") {
+    const item = expr.item;
+    if (item.kind === "is") {
+      return _renderAtomClause(item, ctx, true);
+    }
+    return `${stateOpLabel(ctx.hass, "not")} ${_wrapHoldIfGroup(item, ctx)}`;
+  }
+  return "";
+}
+
+/** Parenthesise a nested group for hold-prose: an `or` defers to `_renderDisjHold`
+ *  (which decides its own parens), an `and` is wrapped, atoms render bare. */
+function _wrapHoldIfGroup(expr: StateExpr, ctx: ConditionContext): string {
+  if (expr.kind === "or") return _renderDisjHold(expr, ctx, true);
+  if (expr.kind === "and") return `(${_renderHoldTerm(expr, ctx)})`;
+  return _renderHoldTerm(expr, ctx);
+}
+
+/** Split a blocker's `state` predicate into rendered guard strings (held "while
+ *  …") and release strings (de-negated, "until …"), recursing into OR groups so a
+ *  disjunction reads "while <positives> OR until <releases>". A flat top-level AND
+ *  is decomposed atom-by-atom; a mixed/all-positive OR renders as one
+ *  self-contained guard string; a bare negation or
+ *  all-negated OR is a whole-predicate release. */
+function _holdStateParts(
+  pred: StateExpr,
+  ctx: ConditionContext,
+  sole: boolean,
+): { guards: string[]; releases: string[] } {
   const expr = _collapseSingleChild(pred);
   if (expr.kind === "and") {
     const guardItems: StateExpr[] = [];
-    const releases: StateExpr[] = [];
+    const releaseExprs: StateExpr[] = [];
     for (const it of expr.items) {
       const rel = _asStateRelease(it);
-      if (rel) releases.push(rel);
+      if (rel) releaseExprs.push(rel);
       else guardItems.push(it);
     }
-    const guard =
-      guardItems.length === 0
-        ? null
-        : guardItems.length === 1
-          ? guardItems[0]
-          : { kind: "and" as const, items: guardItems };
-    return { guard, releases };
+    let guards: string[] = [];
+    if (guardItems.length > 0) {
+      const guardItem: StateExpr =
+        guardItems.length === 1 ? guardItems[0] : { kind: "and", items: guardItems };
+      // A lone OR guard must be parenthesised when it sits beside other
+      // conditions (sole=false), so "While (A OR B) and Daytime, …" can't be
+      // misread — the same !sole rule the top-level OR branch uses. A re-grouped
+      // multi-item AND guard renders its OR children parenthesised already (via
+      // _wrapHoldIfGroup), so only the single-OR case needs this.
+      guards = [
+        guardItem.kind === "or"
+          ? _renderDisjHold(guardItem, ctx, !sole)
+          : _renderHoldTerm(guardItem, ctx),
+      ];
+    }
+    const releases = releaseExprs.map((r) => _blockerConditionText("state", r, ctx));
+    return { guards, releases };
   }
-  // A single negated atom (is_not, or a not-wrapped atom) is a whole release.
+  if (expr.kind === "or") {
+    const rel = _asStateRelease(expr);
+    if (rel) return { guards: [], releases: [_blockerConditionText("state", rel, ctx)] };
+    return { guards: [_renderDisjHold(expr, ctx, !sole)], releases: [] };
+  }
   const rel = _asStateRelease(expr);
-  if (rel) {
-    return { guard: null, releases: [rel] };
-  }
-  // A top-level `not` wrapping a group de-negates to that group as the release
-  // ("block until <inner becomes true>" is the correct complement).
-  if (expr.kind === "not") {
-    return { guard: null, releases: [expr.item] };
-  }
-  // Positive atom, comparison, OR-group, nested group: a single guard.
-  return { guard: expr, releases: [] };
+  if (rel) return { guards: [], releases: [_blockerConditionText("state", rel, ctx)] };
+  return { guards: [_renderHoldTerm(expr, ctx)], releases: [] };
 }
 
 // Condition types whose summary already names a concrete entity (occupancy,
@@ -629,10 +745,11 @@ export function summariseBlocker(scene: Scene, ctx: ConditionContext = {}): stri
     // pred is already non-null — filtered above
     if (k === "state") {
       // `state` carries a boolean expression, so it can contribute BOTH guards
-      // and releases (e.g. an AND-group where one atom is a negated dwell).
-      const { guard, releases: stateReleases } = _splitStateBlocker(pred as StateExpr);
-      if (guard) guards.push(_blockerConditionText("state", guard, ctx));
-      for (const r of stateReleases) releases.push(_blockerConditionText("state", r, ctx));
+      // and releases. An OR predicate renders as one self-contained guard string;
+      // `sole` (state is the only condition) drops its outer parens.
+      const parts = _holdStateParts(pred as StateExpr, ctx, keys.length === 1);
+      guards.push(...parts.guards);
+      releases.push(...parts.releases);
       continue;
     }
     if (isReleaseCondition(k, pred)) {
@@ -758,6 +875,10 @@ function _renderAtomClause(expr: StateAtom, ctx: ConditionContext, negate: boole
   return head;
 }
 
+// Raw state-expression renderer (used by `summariseState`, the non-blocker path).
+// `_renderHoldTerm` is the blocker-mode twin: it must stay in sync with this for
+// every non-`or` node, so changes to the atom/`and`/`not` arms below belong in
+// both functions.
 function _renderStateExpr(expr: StateExpr, ctx: ConditionContext): string {
   if (
     expr.kind === "is" ||

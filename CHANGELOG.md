@@ -25,6 +25,11 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 - In the Entity State condition, the buttons that add another comparison within
   the same condition now read "Add clause" instead of "Add condition", to avoid
   confusion with the main "Add condition" button that adds a new condition.
+- A blocking scene whose condition is an OR now reads as "Block while … OR
+  until …" instead of a hard-to-parse double negative. For example, a block that
+  read "Block while NOT (Zone Shower is Clear for ≥5s) OR Water pump Flow > 5"
+  now reads "Block while Water pump Flow > 5 OR until Zone Shower is Clear for
+  ≥5s".
 
 ### Fixed
 

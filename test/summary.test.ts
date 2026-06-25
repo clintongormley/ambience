@@ -1622,7 +1622,7 @@ describe("summariseBlocker", () => {
     expect(summariseBlocker(blocker(when), ctx)).toBe(expected);
   });
 
-  test("state OR-group of negated atoms stays a guard (de Morgan / duration boundary)", () => {
+  test("state OR-group of all-negated atoms becomes a single de Morgan release", () => {
     const group = {
       kind: "or",
       items: [
@@ -1643,10 +1643,40 @@ describe("summariseBlocker", () => {
       ],
     };
     const when = { state: group as StatePredicate };
-    // Untouched — an OR of negated atoms does not factor into a single positive
-    // release, so it renders verbatim as one guard.
+    // ¬A ∨ ¬B = ¬(A ∧ B): the block releases when BOTH de-negated atoms hold.
+    const release = {
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "binary_sensor.entrances", states: ["Detected"] },
+        {
+          kind: "is",
+          entity_id: "binary_sensor.presence",
+          states: ["Detected"],
+          for: { h: 0, m: 0, s: 10 },
+          for_mode: "less_than",
+        },
+      ],
+    };
     expect(summariseBlocker(blocker(when), ctx)).toBe(
-      `Block while ${summariseCondition("state", group, ctx)}`,
+      `Block until ${summariseCondition("state", release, ctx)}`,
+    );
+  });
+
+  test("a not(group) sibling inside an AND-group is a whole-group release", () => {
+    const inner = {
+      kind: "and",
+      items: [
+        { kind: "is", entity_id: "light.a", states: ["on"] },
+        { kind: "is", entity_id: "light.b", states: ["on"] },
+      ],
+    };
+    const cOff = { kind: "is", entity_id: "light.c", states: ["off"] };
+    const when = {
+      state: { kind: "and", items: [{ kind: "not", item: inner }, cOff] } as StatePredicate,
+    };
+    // block = c_off ∧ ¬(a ∧ b): c_off is the guard, (a ∧ b) the release.
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `While ${summariseCondition("state", cOff, ctx)}, block until ${summariseCondition("state", inner, ctx)}`,
     );
   });
 
@@ -1756,6 +1786,116 @@ describe("summariseBlocker", () => {
     expect(summariseBlocker(blocker(when), ctx)).toBe(expected);
   });
 
+  test("all-negated OR with no positives renders as a sole release (no parens)", () => {
+    const a = { kind: "is", entity_id: "binary_sensor.bed", states: ["Clear"] };
+    const b = { kind: "is", entity_id: "binary_sensor.door", states: ["Closed"] };
+    const when = {
+      state: {
+        kind: "or",
+        items: [
+          { kind: "not", item: a },
+          { kind: "not", item: b },
+        ],
+      } as StatePredicate,
+    };
+    const release = { kind: "and", items: [a, b] };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block until ${summariseCondition("state", release, ctx)}`,
+    );
+  });
+
+  test("mixed OR nested inside an AND guard renders '(… OR until …) AND …'", () => {
+    const a = { kind: "is", entity_id: "binary_sensor.tank", states: ["Empty"] };
+    const d = { kind: "is", entity_id: "binary_sensor.flow", states: ["High"] };
+    const c = { kind: "is", entity_id: "switch.pump", states: ["on"] };
+    // and( or(¬A, D), C )  — the OR stays a guard (mixed), the AND wraps it.
+    const when = {
+      state: {
+        kind: "and",
+        items: [{ kind: "or", items: [{ kind: "not", item: a }, d] }, c],
+      } as StatePredicate,
+    };
+    const dStr = summariseCondition("state", d, ctx);
+    const aStr = summariseCondition("state", a, ctx);
+    const cStr = summariseCondition("state", c, ctx);
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while (${dStr} OR until ${aStr}) AND ${cStr}`,
+    );
+  });
+
+  test("durational is_not disjunct stays a guard inside an OR (no false 'until')", () => {
+    const dwell = {
+      kind: "is_not",
+      entity_id: "binary_sensor.bed",
+      states: ["Clear"],
+      for: { h: 0, m: 2, s: 0 },
+      for_mode: "at_least",
+    };
+    const b = { kind: "is", entity_id: "light.a", states: ["on"] };
+    // or( is_not Clear for ≥2m, B ): the durational is_not can't become "until",
+    // so the whole OR renders raw (both disjuncts as while-terms).
+    const group = { kind: "or", items: [dwell, b] };
+    const when = { state: group as StatePredicate };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while ${summariseCondition("state", group, ctx)}`,
+    );
+  });
+
+  test("all-positive OR is unchanged (no 'until')", () => {
+    const a = { kind: "is", entity_id: "light.a", states: ["on"] };
+    const b = { kind: "is", entity_id: "light.b", states: ["on"] };
+    const group = { kind: "or", items: [a, b] };
+    const when = { state: group as StatePredicate };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while ${summariseCondition("state", group, ctx)}`,
+    );
+  });
+
+  test("OR nested inside an OR recurses: '(B OR until A) OR C'", () => {
+    const a = { kind: "is", entity_id: "binary_sensor.bed", states: ["Clear"] };
+    const b = { kind: "is", entity_id: "light.a", states: ["on"] };
+    const c = { kind: "is", entity_id: "light.b", states: ["on"] };
+    // or( or(¬A, B), C ): the inner mixed OR recurses to "(B OR until A)" and
+    // joins the outer positive C by OR; no outer parens (state is the sole key).
+    const when = {
+      state: {
+        kind: "or",
+        items: [{ kind: "or", items: [{ kind: "not", item: a }, b] }, c],
+      } as StatePredicate,
+    };
+    const bStr = summariseCondition("state", b, ctx);
+    const aStr = summariseCondition("state", a, ctx);
+    const cStr = summariseCondition("state", c, ctx);
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while (${bStr} OR until ${aStr}) OR ${cStr}`,
+    );
+  });
+
+  test("lone OR guard beside another condition is parenthesised: '(A OR B) and Daytime'", () => {
+    const a = { kind: "is", entity_id: "light.a", states: ["on"] };
+    const b = { kind: "is", entity_id: "light.b", states: ["on"] };
+    const xPos = { kind: "is", entity_id: "binary_sensor.x", states: ["on"] };
+    // and( or(A, B), is_not X ): the OR is the lone guard after the release is
+    // pulled out. With another condition present (not sole), the guard OR must be
+    // parenthesised so "While (A OR B) and Daytime, …" can't be misread.
+    const when = {
+      state: {
+        kind: "and",
+        items: [
+          { kind: "or", items: [a, b] },
+          { kind: "is_not", entity_id: "binary_sensor.x", states: ["on"] },
+        ],
+      } as StatePredicate,
+      time_of_day: { period: "daytime" },
+    };
+    const aStr = summariseCondition("state", a, ctx);
+    const bStr = summariseCondition("state", b, ctx);
+    const xStr = summariseCondition("state", xPos, ctx);
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `While (${aStr} OR ${bStr}) and Daytime, block until ${xStr}`,
+    );
+  });
+
   test("zero-condition blocker reads 'Block always'", () => {
     expect(summariseBlocker(blocker({}), ctx)).toBe("Block always");
   });
@@ -1809,6 +1949,49 @@ describe("summariseBlocker", () => {
 
   test("defaults to English fallbacks when ctx is omitted", () => {
     expect(summariseBlocker(blocker({}))).toBe("Block always");
+  });
+
+  test("top-level mixed OR: 'Block while <positive> OR until <release>'", () => {
+    const a = {
+      kind: "is",
+      entity_id: "binary_sensor.zone_shower",
+      states: ["Clear"],
+      for: { h: 0, m: 0, s: 5 },
+      for_mode: "at_least",
+    };
+    const b = { kind: ">", entity_id: "sensor.flow", states: ["5"] };
+    // or( not(and(A, A)), B )  — A duplicated verbatim (no dedup).
+    const when = {
+      state: {
+        kind: "or",
+        items: [{ kind: "not", item: { kind: "and", items: [a, a] } }, b],
+      } as StatePredicate,
+    };
+    const release = { kind: "and", items: [a, a] };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while ${summariseCondition("state", b, ctx)} OR until (${summariseCondition("state", release, ctx)})`,
+    );
+  });
+
+  test("top-level mixed OR beside another condition: the OR term is parenthesised", () => {
+    const a = { kind: "is", entity_id: "binary_sensor.bed", states: ["Clear"] };
+    const b = { kind: "is", entity_id: "light.a", states: ["on"] };
+    // state = or(¬A, B): a mixed OR. Paired with a negated-occupancy release, so
+    // state is NOT the sole condition (sole=false) → the OR term gets outer parens.
+    const when = {
+      state: { kind: "or", items: [{ kind: "not", item: a }, b] } as StatePredicate,
+      occupancy: {
+        sensors: ["binary_sensor.island"],
+        occupied: false,
+        for: { h: 0, m: 3, s: 0 },
+        negate: true,
+      } as OccupancyPredicate,
+    };
+    const bStr = summariseCondition("state", b, ctx);
+    const aStr = summariseCondition("state", a, ctx);
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `While (${bStr} OR until ${aStr}), block until Island is clear for ≥3m`,
+    );
   });
 });
 

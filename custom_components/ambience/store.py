@@ -188,7 +188,10 @@ class AmbienceStore:
         have = {e.get("id") for e in existing if isinstance(e, dict)}
         for entry in DEFAULT_SEEDED_BUILTINS:
             if entry["id"] not in have:
-                existing.append(dict(entry))
+                # deepcopy, not dict(): some seed templates carry non-empty
+                # nested values (e.g. visible_fields=["position"]); a shallow
+                # copy would alias those lists back to the module constant.
+                existing.append(copy.deepcopy(entry))
         self._data["builtins_seeded"] = True
         await self._store.async_save(self._data)
 

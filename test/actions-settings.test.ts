@@ -87,6 +87,7 @@ describe("ambience-actions-settings", () => {
         "https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ha-fado",
       );
       expect(cta.getAttribute("target")).toBe("_blank");
+      expect(cta.getAttribute("rel")).toBe("noopener noreferrer");
     });
 
     test("hidden when fado is loaded", async () => {

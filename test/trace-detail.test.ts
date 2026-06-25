@@ -1338,4 +1338,113 @@ describe("review fixes", () => {
     expect(summary).not.toContain("0 actions");
     expect(summary).not.toMatch(/^Applied/);
   });
+
+  // -------------------------------------------------------------------------
+  // New-format target rendering (area/label/device selectors)
+  // -------------------------------------------------------------------------
+
+  test("expanded action with target.area_id shows area name with '(area)' suffix", () => {
+    const hass = {
+      areas: { living_room: { name: "Living Room" } },
+    };
+    const host = renderToHost(
+      {
+        actions: [
+          {
+            service: "light.turn_on",
+            target: { area_id: ["living_room"] },
+            params: {},
+          },
+        ],
+      },
+      true,
+      hass,
+    );
+    const entities = [...host.querySelectorAll(".entity")].map((e) => e.textContent?.trim());
+    expect(entities).toContain("Living Room (area)");
+    // No entity_ids fallback — must not show raw ids or blanks.
+    expect(host.textContent).not.toContain("light.");
+  });
+
+  test("expanded action with target.label_id shows label name with '(label)' suffix", () => {
+    const hass = {
+      labels: { bright_mode: { name: "Bright Mode" } },
+    };
+    const host = renderToHost(
+      {
+        actions: [
+          {
+            service: "light.turn_on",
+            target: { label_id: ["bright_mode"] },
+            params: {},
+          },
+        ],
+      },
+      true,
+      hass,
+    );
+    const entities = [...host.querySelectorAll(".entity")].map((e) => e.textContent?.trim());
+    expect(entities).toContain("Bright Mode (label)");
+  });
+
+  test("expanded action with target.device_id shows device name with '(device)' suffix", () => {
+    const hass = {
+      devices: { dev_abc: { name: "Hue Bridge" } },
+    };
+    const host = renderToHost(
+      {
+        actions: [
+          {
+            service: "light.turn_on",
+            target: { device_id: ["dev_abc"] },
+            params: {},
+          },
+        ],
+      },
+      true,
+      hass,
+    );
+    const entities = [...host.querySelectorAll(".entity")].map((e) => e.textContent?.trim());
+    expect(entities).toContain("Hue Bridge (device)");
+  });
+
+  test("collapsed summary entity count uses selector entries for indirect targets", () => {
+    // An action with 2 area selectors should count as 2 in the badge.
+    const host = renderToHost(
+      {
+        actions: [
+          {
+            service: "light.turn_on",
+            target: { area_id: ["kitchen", "living_room"] },
+            params: {},
+          },
+        ],
+      },
+      false,
+    );
+    expect(host.textContent).toContain("2 entities");
+  });
+
+  test("expanded action with mixed entity_id + area_id shows both", () => {
+    const hass = {
+      states: { "light.lamp": { attributes: { friendly_name: "Lamp" } } },
+      areas: { hall: { name: "Hall" } },
+    };
+    const host = renderToHost(
+      {
+        actions: [
+          {
+            service: "light.turn_on",
+            target: { entity_id: ["light.lamp"], area_id: ["hall"] },
+            params: {},
+          },
+        ],
+      },
+      true,
+      hass,
+    );
+    const texts = [...host.querySelectorAll(".entity")].map((e) => e.textContent?.trim());
+    expect(texts).toContain("Lamp");
+    expect(texts).toContain("Hall (area)");
+  });
 });

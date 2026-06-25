@@ -395,6 +395,9 @@ export type TraceCause = {
 export type TraceAction = {
   service: string;
   entity_ids?: string[];
+  // New-format target object (area_id/device_id/label_id/entity_id). Preferred
+  // over entity_ids for actions created/edited with the target picker.
+  target?: ActionTargetValue;
   params?: Record<string, unknown>;
   // Transient (response-only): true when the action's service was not exposed at
   // apply time, so the engine skipped it. The trace renders it as skipped.

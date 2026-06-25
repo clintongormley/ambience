@@ -331,6 +331,9 @@ def scene_annotations(
     for idx, scene in enumerate(cfg.get("scenes", []) or []):
         refs = referenced.get(idx, set())
         missing = sorted(eid for eid in refs if not entity_exists(hass, eid))
+        # Overlap badge reflects direct-entity targets only by design — the global
+        # action_overlap Repairs issue already resolves indirect targets, so nothing
+        # is silently lost here.
         acted = set(_action_entities(scene)) if scene_enabled(scene) else set()
         overlaps = sorted(eid for eid in acted if eid in overlap_set)
         config_issues = [{"kind": k, "ref": r} for k, r in scene_config_issues(ctx, scene)]

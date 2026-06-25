@@ -46,7 +46,9 @@ export function resolveTargetInScope(
   const label = new Set(target.label_id ?? []);
   const result = new Set<string>(direct);
   if (dev.size || area.size || label.size) {
-    // Indirect selectors: intersect with the scene's scope.
+    // Indirect selectors: intersect with the scene's scope. Note: at house scope
+    // entitiesForScope excludes area-less / ambience-platform entities, so the
+    // advisory count may differ slightly from the backend for those orphan entities.
     for (const eid of entitiesForScope(hass, scope, [])) {
       const e = hass.entities?.[eid];
       const effArea = effectiveAreaId(hass as any, eid);

@@ -1,4 +1,5 @@
 import { css, html, nothing, type TemplateResult } from "lit";
+import { actionTarget, targetIsEmpty } from "./action-target.js";
 import {
   conditionLabel,
   deriveActionLabel,
@@ -11,6 +12,7 @@ import {
 } from "./i18n.js";
 import { formatArgValue, paramLabel } from "./summary.js";
 import type {
+  ActionSpec,
   BufferedUnit,
   ExposedAction,
   PeriodDef,
@@ -124,6 +126,46 @@ function entityLink(hass: HassLike | undefined, entityId: string, label: string)
 // consistent with the names the backend bakes into detail strings.
 function clickableEntity(hass: HassLike | undefined, entityId: string): TemplateResult {
   return entityLink(hass, entityId, entityName(hass as HassWithStates | undefined, entityId));
+}
+
+// Render one line per target entry for an action in the expanded "Actions taken"
+// section. Handles entity_id (clickable more-info links), plus area/device/label
+// selectors with friendly-name lookup and type suffixes — mirroring scenes-list.ts.
+function renderActionTargetLines(a: TraceAction, hass: HassLike | undefined): TemplateResult[] {
+  const target = traceActionTarget(a);
+  if (targetIsEmpty(target)) return [];
+  const areas = (hass as Record<string, unknown> | undefined)?.areas as
+    | Record<string, { name?: string | null }>
+    | undefined;
+  const labels = (hass as Record<string, unknown> | undefined)?.labels as
+    | Record<string, { name?: string | null }>
+    | undefined;
+  const devices = (hass as Record<string, unknown> | undefined)?.devices as
+    | Record<string, { name?: string | null }>
+    | undefined;
+  const lines: TemplateResult[] = [];
+  for (const eid of target.entity_id ?? []) {
+    lines.push(html`<div class="entity">${clickableEntity(hass, eid)}</div>`);
+  }
+  for (const id of target.area_id ?? []) {
+    const name = areas?.[id]?.name ?? id;
+    lines.push(
+      html`<div class="entity">${name} ${localize(hass, "ui.target_type_area", "(area)")}</div>`,
+    );
+  }
+  for (const id of target.label_id ?? []) {
+    const name = labels?.[id]?.name ?? id;
+    lines.push(
+      html`<div class="entity">${name} ${localize(hass, "ui.target_type_label", "(label)")}</div>`,
+    );
+  }
+  for (const id of target.device_id ?? []) {
+    const name = devices?.[id]?.name ?? id;
+    lines.push(
+      html`<div class="entity">${name} ${localize(hass, "ui.target_type_device", "(device)")}</div>`,
+    );
+  }
+  return lines;
 }
 
 // Conditions whose `describe()` renders each referenced entity's friendly name
@@ -460,8 +502,25 @@ export function formatActionHeader(
   return params ? `${label} · ${params}` : label;
 }
 
+function traceActionTarget(a: TraceAction): ReturnType<typeof actionTarget> {
+  // TraceAction and ActionSpec share the same target/entity_ids fields; cast is safe.
+  return actionTarget(a as unknown as ActionSpec);
+}
+
 function entityCount(actions: TraceAction[]): number {
-  return actions.reduce((n, a) => n + (a.entity_ids?.length ?? 0), 0);
+  return actions.reduce((n, a) => {
+    const t = traceActionTarget(a);
+    if (targetIsEmpty(t)) return n;
+    // entity_id: direct count; indirect selectors (area/device/label): count by
+    // selector entry (since we don't have the resolved list in the frontend).
+    return (
+      n +
+      (t.entity_id?.length ?? 0) +
+      (t.area_id?.length ?? 0) +
+      (t.device_id?.length ?? 0) +
+      (t.label_id?.length ?? 0)
+    );
+  }, 0);
 }
 
 // Outcomes where the whole unit's evaluation was skipped (switch off / scope
@@ -607,9 +666,7 @@ function renderExpansion(
                       : nothing
                   }
                 </div>
-                ${(a.entity_ids ?? []).map(
-                  (e) => html`<div class="entity">${clickableEntity(hass, e)}</div>`,
-                )}
+                ${renderActionTargetLines(a, hass)}
               </div>`,
             )}
           </div>`

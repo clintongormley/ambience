@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import { effectiveAreaId, entityNameWithArea, nameContainsArea } from "../frontend/src/entity-area";
+import { entityNameWithArea, nameContainsArea } from "../frontend/src/entity-area";
+import { effectiveAreaId } from "../frontend/src/entity-registry";
 
 const hass: any = {
   states: {

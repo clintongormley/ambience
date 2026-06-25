@@ -1,5 +1,5 @@
 import type { HassConnection } from "./api.js";
-import { effectiveAreaId } from "./entity-area.js";
+import { effectiveAreaId } from "./entity-registry.js";
 import type { Scope } from "./types.js";
 
 /** Stable identity string for a scope: "house", or "<kind>:<id>". The single

@@ -1,30 +1,8 @@
+import { type AreaRegistry, effectiveAreaId } from "./entity-registry.js";
 import { entityName, type HassWithStates } from "./views/entity-row.js";
-
-/** Structural view of the registry maps we read to resolve an entity's area —
- *  avoids depending on the full HomeAssistant interface (mirrors the pattern in
- *  entities-for-scope.ts / scope-icon.ts). */
-export type AreaRegistry = {
-  entities?: Record<string, { area_id?: string | null; device_id?: string | null }>;
-  devices?: Record<string, { area_id?: string | null }>;
-  areas?: Record<string, { name?: string | null }>;
-};
 
 /** hass with both state attributes (for the friendly name) and registry maps. */
 export type EntityAreaHass = HassWithStates & AreaRegistry;
-
-/** An entity's effective area: its own `area_id`, else its device's `area_id`,
- *  else null. Single source of truth, shared with entities-for-scope.ts. Reads
- *  only the entity/device maps — the `areas` map isn't needed to resolve the id. */
-export function effectiveAreaId(
-  reg: Pick<AreaRegistry, "entities" | "devices">,
-  entity_id: string,
-): string | null {
-  const e = reg.entities?.[entity_id];
-  if (!e) return null;
-  if (e.area_id != null) return e.area_id;
-  if (e.device_id) return reg.devices?.[e.device_id]?.area_id ?? null;
-  return null;
-}
 
 /** Lowercased alphanumeric word tokens. Unicode-aware (`\p{L}\p{N}` + `u`) so
  *  accented names — e.g. Spanish "Salón" — tokenise correctly, unlike `\b`.

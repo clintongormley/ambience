@@ -10,7 +10,7 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ### Added
 
-- In the Entity State condition, each AND/OR group now has a "( )" button that
+- In the Entity State condition, each AND/OR group now has a "(…)" button that
   wraps all of that group's clauses in parentheses, so you can combine them with
   another clause under a different operator — for example turning "a AND b" into
   "(a AND b) OR c".

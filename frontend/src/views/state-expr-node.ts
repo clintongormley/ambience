@@ -106,8 +106,11 @@ export class AmbienceStateExprNode extends LitElement {
       opacity: 1;
       font-weight: 600;
     }
+    /* Push the wrap + unwrap pair to the right edge of the header — the
+       "(…)" wrap and "✕" unwrap sit together on the right, mirroring the
+       atom card where the summary's flex:1 leaves wrap/remove on the right. */
+    .group-header .wrap { margin-left: auto; }
     .group-header .unwrap {
-      margin-left: auto;
       border: none; background: none; padding: 0 0.25rem;
       color: var(--secondary-text-color, #888); font-size: 1em;
     }
@@ -372,7 +375,7 @@ export class AmbienceStateExprNode extends LitElement {
             @click=${(e: Event) => {
               e.stopPropagation();
               this._emit("node-wrap");
-            }}>()</button>
+            }}>(…)</button>
           <button class="unwrap"
             title=${localize(this.hass, "ui.state_unwrap_group", "Remove these parens (promote children to parent)")}
             @click=${() => this._emit("node-unwrap")}>✕</button>

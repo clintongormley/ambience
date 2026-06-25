@@ -2022,7 +2022,7 @@ var na=Object.defineProperty;var sa=Object.getOwnPropertyDescriptor;var c=(t,r,e
           </select>
           <button class="wrap"
             title=${a(this.hass,"ui.state_wrap_group","Wrap these clauses in parentheses")}
-            @click=${n=>{n.stopPropagation(),this._emit("node-wrap")}}>()</button>
+            @click=${n=>{n.stopPropagation(),this._emit("node-wrap")}}>(…)</button>
           <button class="unwrap"
             title=${a(this.hass,"ui.state_unwrap_group","Remove these parens (promote children to parent)")}
             @click=${()=>this._emit("node-unwrap")}>✕</button>
@@ -2124,8 +2124,11 @@ var na=Object.defineProperty;var sa=Object.getOwnPropertyDescriptor;var c=(t,r,e
       opacity: 1;
       font-weight: 600;
     }
+    /* Push the wrap + unwrap pair to the right edge of the header — the
+       "(…)" wrap and "✕" unwrap sit together on the right, mirroring the
+       atom card where the summary's flex:1 leaves wrap/remove on the right. */
+    .group-header .wrap { margin-left: auto; }
     .group-header .unwrap {
-      margin-left: auto;
       border: none; background: none; padding: 0 0.25rem;
       color: var(--secondary-text-color, #888); font-size: 1em;
     }

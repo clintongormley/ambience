@@ -276,7 +276,7 @@ describe("ambience-state-predicate-input", () => {
     expect(captured.items[0].item.kind).toBe("and");
   });
 
-  test("group header has a '()' wrap button that wraps the group in flipped-op parens", async () => {
+  test("group header has a '(…)' wrap button on the right, next to the ✕", async () => {
     el = await mount({
       kind: "and",
       items: [
@@ -288,7 +288,12 @@ describe("ambience-state-predicate-input", () => {
     const node = el.shadowRoot.querySelector("ambience-state-expr-node") as any;
     const wrapBtn = node.shadowRoot.querySelector(".group-header button.wrap") as HTMLButtonElement;
     expect(wrapBtn).toBeTruthy();
-    expect(wrapBtn.textContent).toContain("()");
+    // Matches the atom clause buttons' glyph, not "()".
+    expect(wrapBtn.textContent).toContain("(…)");
+    // Sits immediately before the ✕ (unwrap) on the right of the header.
+    expect(wrapBtn.nextElementSibling).toBe(
+      node.shadowRoot.querySelector(".group-header button.unwrap"),
+    );
     let captured: any;
     el.addEventListener("value-changed", (e: Event) => {
       captured = (e as CustomEvent).detail.value;

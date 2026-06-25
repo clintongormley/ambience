@@ -1671,7 +1671,9 @@ describe("summariseBlocker", () => {
       ],
     };
     const cOff = { kind: "is", entity_id: "light.c", states: ["off"] };
-    const when = { state: { kind: "and", items: [{ kind: "not", item: inner }, cOff] } as StatePredicate };
+    const when = {
+      state: { kind: "and", items: [{ kind: "not", item: inner }, cOff] } as StatePredicate,
+    };
     // block = c_off ∧ ¬(a ∧ b): c_off is the guard, (a ∧ b) the release.
     expect(summariseBlocker(blocker(when), ctx)).toBe(
       `While ${summariseCondition("state", cOff, ctx)}, block until ${summariseCondition("state", inner, ctx)}`,
@@ -1784,6 +1786,71 @@ describe("summariseBlocker", () => {
     expect(summariseBlocker(blocker(when), ctx)).toBe(expected);
   });
 
+  test("all-negated OR with no positives renders as a sole release (no parens)", () => {
+    const a = { kind: "is", entity_id: "binary_sensor.bed", states: ["Clear"] };
+    const b = { kind: "is", entity_id: "binary_sensor.door", states: ["Closed"] };
+    const when = {
+      state: {
+        kind: "or",
+        items: [
+          { kind: "not", item: a },
+          { kind: "not", item: b },
+        ],
+      } as StatePredicate,
+    };
+    const release = { kind: "and", items: [a, b] };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block until ${summariseCondition("state", release, ctx)}`,
+    );
+  });
+
+  test("mixed OR nested inside an AND guard renders '(… OR until …) AND …'", () => {
+    const a = { kind: "is", entity_id: "binary_sensor.tank", states: ["Empty"] };
+    const d = { kind: "is", entity_id: "binary_sensor.flow", states: ["High"] };
+    const c = { kind: "is", entity_id: "switch.pump", states: ["on"] };
+    // and( or(¬A, D), C )  — the OR stays a guard (mixed), the AND wraps it.
+    const when = {
+      state: {
+        kind: "and",
+        items: [{ kind: "or", items: [{ kind: "not", item: a }, d] }, c],
+      } as StatePredicate,
+    };
+    const dStr = summariseCondition("state", d, ctx);
+    const aStr = summariseCondition("state", a, ctx);
+    const cStr = summariseCondition("state", c, ctx);
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while (${dStr} OR until ${aStr}) AND ${cStr}`,
+    );
+  });
+
+  test("durational is_not disjunct stays a guard inside an OR (no false 'until')", () => {
+    const dwell = {
+      kind: "is_not",
+      entity_id: "binary_sensor.bed",
+      states: ["Clear"],
+      for: { h: 0, m: 2, s: 0 },
+      for_mode: "at_least",
+    };
+    const b = { kind: "is", entity_id: "light.a", states: ["on"] };
+    // or( is_not Clear for ≥2m, B ): the durational is_not can't become "until",
+    // so the whole OR renders raw (both disjuncts as while-terms).
+    const group = { kind: "or", items: [dwell, b] };
+    const when = { state: group as StatePredicate };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while ${summariseCondition("state", group, ctx)}`,
+    );
+  });
+
+  test("all-positive OR is unchanged (no 'until')", () => {
+    const a = { kind: "is", entity_id: "light.a", states: ["on"] };
+    const b = { kind: "is", entity_id: "light.b", states: ["on"] };
+    const group = { kind: "or", items: [a, b] };
+    const when = { state: group as StatePredicate };
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while ${summariseCondition("state", group, ctx)}`,
+    );
+  });
+
   test("zero-condition blocker reads 'Block always'", () => {
     expect(summariseBlocker(blocker({}), ctx)).toBe("Block always");
   });
@@ -1850,7 +1917,10 @@ describe("summariseBlocker", () => {
     const b = { kind: ">", entity_id: "sensor.flow", states: ["5"] };
     // or( not(and(A, A)), B )  — A duplicated verbatim (no dedup).
     const when = {
-      state: { kind: "or", items: [{ kind: "not", item: { kind: "and", items: [a, a] } }, b] } as StatePredicate,
+      state: {
+        kind: "or",
+        items: [{ kind: "not", item: { kind: "and", items: [a, a] } }, b],
+      } as StatePredicate,
     };
     const release = { kind: "and", items: [a, a] };
     expect(summariseBlocker(blocker(when), ctx)).toBe(

@@ -2079,8 +2079,9 @@ describe("ambience-scene-editor — destination selector", () => {
     (options[2] as HTMLElement).click(); // Area: Bedroom
     await el.updateComplete;
 
-    // light.lamp_a is in living_room, not bedroom → action target cleared.
-    expect(el._draft.actions[0].entity_ids).toEqual([]);
+    // light.lamp_a is in living_room, not bedroom → direct entity pruned from target.
+    expect(el._draft.actions[0].target).toEqual({});
+    expect(el._draft.actions[0].entity_ids).toBeUndefined();
     // Condition entity reference is left untouched.
     expect(el._draft.when.state.atom.entity_id).toBe("light.lamp_a");
   });

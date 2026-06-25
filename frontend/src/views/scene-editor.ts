@@ -411,10 +411,21 @@ export class AmbienceSceneEditor extends LitElement {
     const inScope = new Set(entitiesForScope(this.hass, this._scope, []));
     this._draft = {
       ...this._draft,
-      actions: this._draft.actions.map((a) => ({
-        ...a,
-        entity_ids: (a.entity_ids ?? []).filter((id) => inScope.has(id)),
-      })),
+      actions: this._draft.actions.map((a) => {
+        const { entity_ids: _drop, ...rest } = a; // drop legacy field on write
+        const t = actionTarget(a);
+        // Prune the direct entity_id list to in-scope entities only.
+        // Indirect selectors (area_id/device_id/label_id) resolve dynamically
+        // and are scope-clipped at apply time, so leave them untouched.
+        const pruned = t.entity_id?.filter((id) => inScope.has(id));
+        const nextTarget: ActionTargetValue = {
+          ...(pruned?.length ? { entity_id: pruned } : {}),
+          ...(t.area_id ? { area_id: t.area_id } : {}),
+          ...(t.device_id ? { device_id: t.device_id } : {}),
+          ...(t.label_id ? { label_id: t.label_id } : {}),
+        };
+        return { ...rest, target: nextTarget };
+      }),
     };
   }
 

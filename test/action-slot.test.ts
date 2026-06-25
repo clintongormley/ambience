@@ -252,7 +252,8 @@ describe("ambience-action-slot", () => {
     const picker = el.shadowRoot.querySelector("ambience-target-picker") as any;
     // target is passed through verbatim so the native selector can filter by domain
     expect(picker.target).toEqual({ entity: { domain: "light" } });
-    // TODO(Task 7): check scope-filtered entity list once the bridge is replaced
+    // The HA target stanza (domain filter) is passed through verbatim; scope-based
+    // entity filtering happens inside ambience-target-picker, not here.
   });
 
   test("picker receives target value directly", async () => {
@@ -1596,5 +1597,35 @@ describe("ambience-action-slot", () => {
       target: {},
     });
     expect(el.shadowRoot.querySelector("[data-count-preview]")).toBeNull();
+  });
+
+  test("count preview shows warn class when non-empty target resolves to 0 in-scope entities", async () => {
+    const schema: ServiceSchema = {
+      target: { entity: { domain: "light" } },
+      fields: {},
+    };
+    // bedroom has no entities registered → resolveTargetInScope returns []
+    const hass = {
+      ...makeHass(),
+      states: {},
+      entities: { "light.k": { entity_id: "light.k", area_id: "kitchen" } },
+      devices: {},
+      areas: {
+        kitchen: { area_id: "kitchen" },
+        bedroom: { area_id: "bedroom" },
+      },
+    };
+    el = await mount({
+      hass,
+      scope: { kind: "area", id: "bedroom" },
+      exposed: { id: "light.turn_on", label: "", visible_fields: [], defaults: {} },
+      schema,
+      // area_id target is non-empty, but bedroom has no entities in the registry
+      target: { area_id: ["bedroom"] },
+    });
+    const preview = el.shadowRoot.querySelector("[data-count-preview]");
+    expect(preview).toBeTruthy();
+    expect(preview!.classList.contains("warn")).toBe(true);
+    expect(el._resolvedCount()).toBe(0);
   });
 });

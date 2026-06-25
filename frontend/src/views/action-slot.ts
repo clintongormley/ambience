@@ -1,5 +1,6 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { classMap } from "lit/directives/class-map.js";
 import { actionTarget, resolveTargetInScope, targetIsEmpty } from "../action-target.js";
 import { getServiceSchema, type HassConnection } from "../api.js";
 import type { HaTarget } from "../entities-for-scope.js";
@@ -309,7 +310,7 @@ export class AmbienceActionSlot extends LitElement {
       "→ resolves to {n} entities in {scope}",
       { n: String(n), scope: scopeName },
     );
-    return html`<div class="count-preview ${n === 0 ? "warn" : ""}" data-count-preview>${text}</div>`;
+    return html`<div class=${classMap({ "count-preview": true, warn: n === 0 })} data-count-preview>${text}</div>`;
   }
 
   private _renderTargetPicker() {

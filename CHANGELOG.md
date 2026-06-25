@@ -8,6 +8,8 @@ adheres to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-06-25
+
 ### Added
 
 - In the Entity State condition, each AND/OR group now has a "(…)" button that

@@ -1851,6 +1851,26 @@ describe("summariseBlocker", () => {
     );
   });
 
+  test("OR nested inside an OR recurses: '(B OR until A) OR C'", () => {
+    const a = { kind: "is", entity_id: "binary_sensor.bed", states: ["Clear"] };
+    const b = { kind: "is", entity_id: "light.a", states: ["on"] };
+    const c = { kind: "is", entity_id: "light.b", states: ["on"] };
+    // or( or(¬A, B), C ): the inner mixed OR recurses to "(B OR until A)" and
+    // joins the outer positive C by OR; no outer parens (state is the sole key).
+    const when = {
+      state: {
+        kind: "or",
+        items: [{ kind: "or", items: [{ kind: "not", item: a }, b] }, c],
+      } as StatePredicate,
+    };
+    const bStr = summariseCondition("state", b, ctx);
+    const aStr = summariseCondition("state", a, ctx);
+    const cStr = summariseCondition("state", c, ctx);
+    expect(summariseBlocker(blocker(when), ctx)).toBe(
+      `Block while (${bStr} OR until ${aStr}) OR ${cStr}`,
+    );
+  });
+
   test("zero-condition blocker reads 'Block always'", () => {
     expect(summariseBlocker(blocker({}), ctx)).toBe("Block always");
   });

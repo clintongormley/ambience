@@ -415,15 +415,11 @@ export function summariseSun(pred: SunPredicate, ctx: ConditionContext = {}): st
 /** Display name for an entity in summary prose: its area-prefixed friendly name
  *  ("Area · Name"), with the prefix suppressed when the name already contains
  *  the area, and falling back to the raw entity_id. Ctx-first adapter over
- *  {@link entityNameWithArea}. */
+ *  {@link entityNameWithArea}. Summary prose only — surfaces that must match a
+ *  backend-baked name (e.g. trace-detail link matching) use the bare
+ *  {@link entityName} instead. */
 function _entityDisplayName(ctx: ConditionContext, entity_id: string): string {
   return entityNameWithArea(ctx.hass as unknown as EntityAreaHass | undefined, entity_id);
-}
-
-/** Public, hass-first wrapper around {@link _entityDisplayName}: an entity's
- *  area-prefixed friendly name, else the raw entity_id. */
-export function entityDisplayName(hass: HassLike | undefined, entity_id: string): string {
-  return _entityDisplayName({ hass }, entity_id);
 }
 
 /**

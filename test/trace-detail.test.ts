@@ -586,6 +586,35 @@ describe("trace-detail", () => {
     expect(host.querySelector(".pred")?.textContent).toContain("on ✓ (for ≥10s, held 13s)");
   });
 
+  test("an entity in an area still links by its backend (un-prefixed) name", () => {
+    // Regression: condition summaries area-prefix names ("Kitchen · Zone Shower"),
+    // but the backend bakes the BARE friendly name into the trace detail. The
+    // link matcher must use the un-prefixed name or area-scoped entities silently
+    // lose their more-info link.
+    const host = sceneEvalHost(
+      [
+        {
+          condition_key: "occupancy",
+          passed: true,
+          detail: "Zone Shower: on ✓",
+          entity_ids: ["binary_sensor.zone_1"],
+        },
+      ],
+      {
+        states: { "binary_sensor.zone_1": { attributes: { friendly_name: "Zone Shower" } } },
+        entities: {
+          "binary_sensor.zone_1": { entity_id: "binary_sensor.zone_1", area_id: "kitchen" },
+        },
+        devices: {},
+        areas: { kitchen: { area_id: "kitchen", name: "Kitchen" } },
+      },
+    );
+    const links = [...host.querySelectorAll(".pred .entity-link")].map((e) =>
+      e.textContent?.trim(),
+    );
+    expect(links).toEqual(["Zone Shower"]);
+  });
+
   test("multiple entities each link; a shorter name does not double-wrap a longer one", () => {
     // "Hall Light" appears first, so the shorter "Hall" must skip the "Hall"
     // *inside* it and claim the standalone occurrence further along.
@@ -622,7 +651,7 @@ describe("trace-detail", () => {
           entity_ids: ["binary_sensor.zone_1"],
         },
       ],
-      // No friendly_name → entityDisplayName falls back to the id, which the
+      // No friendly_name → entityName falls back to the id, which the
       // backend also baked into the detail, so the id itself becomes the link.
       { states: { "binary_sensor.zone_1": { attributes: {} } } },
     );

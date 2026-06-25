@@ -1,3 +1,4 @@
+import { type EntityAreaHass, entityNameWithArea } from "./entity-area.js";
 import {
   actionLabel,
   anchorLabel,
@@ -38,7 +39,7 @@ import type {
   WeatherGroup,
   WeatherPredicate,
 } from "./types.js";
-import { entityName, type HassWithStates } from "./views/entity-row.js";
+import type { HassWithStates } from "./views/entity-row.js";
 import { forComparatorSymbol } from "./views/for-duration.js";
 
 interface HassLike {
@@ -411,14 +412,16 @@ export function summariseSun(pred: SunPredicate, ctx: ConditionContext = {}): st
   return parts.length === 0 ? localize(ctx.hass, "ui.summary_any", "any") : parts.join(", ");
 }
 
-/** Best-effort display name for an entity: friendly_name attribute when set,
- *  otherwise the raw entity_id. Thin ctx-first adapter over {@link entityName}. */
+/** Display name for an entity in summary prose: its area-prefixed friendly name
+ *  ("Area · Name"), with the prefix suppressed when the name already contains
+ *  the area, and falling back to the raw entity_id. Ctx-first adapter over
+ *  {@link entityNameWithArea}. */
 function _entityDisplayName(ctx: ConditionContext, entity_id: string): string {
-  return entityName(ctx.hass as HassWithStates | undefined, entity_id);
+  return entityNameWithArea(ctx.hass as unknown as EntityAreaHass | undefined, entity_id);
 }
 
 /** Public, hass-first wrapper around {@link _entityDisplayName}: an entity's
- *  friendly_name when set, else the raw entity_id. */
+ *  area-prefixed friendly name, else the raw entity_id. */
 export function entityDisplayName(hass: HassLike | undefined, entity_id: string): string {
   return _entityDisplayName({ hass }, entity_id);
 }
@@ -431,7 +434,7 @@ export function entityDisplayName(hass: HassLike | undefined, entity_id: string)
  */
 export function summariseOccupancy(pred: OccupancyPredicate, ctx: ConditionContext = {}): string {
   if (pred == null || !pred.sensors?.length) return localize(ctx.hass, "ui.summary_any", "any");
-  const names = pred.sensors.map((id) => entityName(ctx.hass as HassWithStates | undefined, id));
+  const names = pred.sensors.map((id) => _entityDisplayName(ctx, id));
   const verb =
     pred.occupied === false
       ? localize(ctx.hass, "occupancy_summary.clear", "clear")
@@ -677,7 +680,7 @@ export function summariseUnavailable(
   ctx: ConditionContext = {},
 ): string {
   if (pred == null || !pred.entities?.length) return localize(ctx.hass, "ui.summary_any", "any");
-  const names = pred.entities.map((id) => entityName(ctx.hass as HassWithStates | undefined, id));
+  const names = pred.entities.map((id) => _entityDisplayName(ctx, id));
   const word = localize(ctx.hass, "unavailable_summary.unavailable", "unavailable");
   if (names.length === 1) {
     return `${names[0]} ${word}`;
@@ -705,7 +708,7 @@ export function fmtLuxBand(
  */
 export function summariseLux(pred: LuxPredicate, ctx: ConditionContext = {}): string {
   if (pred == null || !pred.sensors?.length) return localize(ctx.hass, "ui.summary_any", "any");
-  const names = pred.sensors.map((id) => entityName(ctx.hass as HassWithStates | undefined, id));
+  const names = pred.sensors.map((id) => _entityDisplayName(ctx, id));
   const band =
     pred.range != null
       ? luxLabel(ctx.hass, pred.range, ctx.luxRanges?.custom ?? {})

@@ -6,11 +6,13 @@ import {
   summariseBlocker,
   summariseCondition,
   summariseDay,
+  summariseOccupancy,
   summarisePeople,
   summariseScript,
   summariseState,
   summariseSun,
   summariseTimeOfDay,
+  summariseUnavailable,
   summariseWeather,
 } from "../frontend/src/summary";
 import type {
@@ -1829,5 +1831,38 @@ describe("blocker_summary i18n bundle", () => {
     ]) {
       expect(typeof ns?.[key]).toBe("string");
     }
+  });
+});
+
+describe("summary prose — area-prefixed entity names", () => {
+  const hassArea: any = {
+    states: {
+      "sensor.flow": { attributes: { friendly_name: "Water pump Flow" } },
+      "binary_sensor.shower": { attributes: { friendly_name: "Zone Shower" } },
+    },
+    entities: {
+      "sensor.flow": { entity_id: "sensor.flow", area_id: "kitchen" },
+      "binary_sensor.shower": { entity_id: "binary_sensor.shower", area_id: "shower" },
+    },
+    devices: {},
+    areas: {
+      kitchen: { area_id: "kitchen", name: "Kitchen" },
+      shower: { area_id: "shower", name: "Shower" },
+    },
+  };
+
+  test("unavailable clause prefixes the area", () => {
+    expect(summariseUnavailable({ entities: ["sensor.flow"] }, { hass: hassArea })).toBe(
+      "Kitchen · Water pump Flow unavailable",
+    );
+  });
+
+  test("occupancy clause suppresses a redundant area", () => {
+    expect(
+      summariseOccupancy(
+        { sensors: ["binary_sensor.shower"], occupied: false },
+        { hass: hassArea },
+      ),
+    ).toBe("Zone Shower is clear");
   });
 });

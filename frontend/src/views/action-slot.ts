@@ -2,7 +2,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import { getServiceSchema, type HassConnection } from "../api.js";
-import { entitiesForScope, type HaTarget } from "../entities-for-scope.js";
+import type { HaTarget } from "../entities-for-scope.js";
 import { watchHaComponents } from "../ha-components.js";
 import { humanizeId, localize, localizeWsError } from "../i18n.js";
 import { formatArgValue, formatParamValue, selectorUnit } from "../summary.js";
@@ -281,22 +281,16 @@ export class AmbienceActionSlot extends LitElement {
     return this._hasTarget();
   }
 
-  private _scopeEntities(): string[] {
-    if (!this.scope || !this.hass) return [];
-    // No domain filter at this layer — the target picker intersects with
-    // the HA service `target` metadata via filterEntities.
-    return entitiesForScope(this.hass, this.scope, []);
-  }
-
-  private _onTargetChanged = (e: CustomEvent<{ value: string[] }>) => {
+  // TODO(Task 7): carry full target — replace bridge with ActionTargetValue propagation;
+  // restore _scopeEntities() + entitiesForScope import for the scope-filtered entity list
+  private _onTargetChanged = (e: CustomEvent<{ value: { entity_id?: string[] } }>) => {
     e.stopPropagation();
-    this._emit("entity-ids-changed", { entityIds: e.detail.value });
+    this._emit("entity-ids-changed", { entityIds: e.detail.value.entity_id ?? [] });
   };
 
   private _renderTargetPicker() {
     if (!this._hasTarget()) return "";
-    const excluded = new Set(this.excludeEntities);
-    const entities = this._scopeEntities().filter((e) => !excluded.has(e));
+    // TODO(Task 7): pass excludeEntities and scope-filtered entity list to the new target picker
     const target = (this._schema?.target ?? null) as HaTarget;
     const label = localize(this.hass, "ui.target", "Target");
     return html`
@@ -306,9 +300,8 @@ export class AmbienceActionSlot extends LitElement {
         </div>
         <ambience-target-picker
           .hass=${this.hass}
-          .entities=${entities}
           .target=${target}
-          .value=${this.entityIds}
+          .value=${{ entity_id: this.entityIds }}
           .label=${" "}
           @value-changed=${this._onTargetChanged}
         ></ambience-target-picker>

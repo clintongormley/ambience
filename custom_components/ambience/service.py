@@ -51,11 +51,6 @@ _LOGGER = logging.getLogger(__name__)
 # so the first set of a None value still dispatches.
 _UNSET: object = object()
 
-# Target keys that identify entities indirectly (via area/device/label/floor).
-# These are scope-constrained at apply time; direct entity_id keys bypass clipping
-# because the scene author has already chosen the specific entities.
-_INDIRECT_TARGET_KEYS: frozenset[str] = frozenset({"area_id", "device_id", "label_id", "floor_id"})
-
 
 def _scope_config(store, scope_kind: str, scope_id: str | None) -> dict[str, Any]:
     """Resolve a (scope_kind, scope_id) pair to its persisted config dict.
@@ -521,7 +516,7 @@ async def async_execute_actions(
         domain, name = service_id.split(".", 1)
         params = {**exposed.get("defaults", {}), **action_spec.get("params", {})}
         tgt = action_target(action_spec)
-        if tgt and tgt.keys() & _INDIRECT_TARGET_KEYS:
+        if tgt:
             resolved = resolve_action_entities(hass, scope_kind, scope_id, tgt)
             if not resolved:
                 _LOGGER.warning(
@@ -534,9 +529,6 @@ async def async_execute_actions(
                 )
                 continue
             call_target: dict[str, Any] | None = {"entity_id": resolved}
-        elif tgt:
-            # Direct entity_id target: forward unchanged (no scope clip).
-            call_target = tgt
         else:
             call_target = None
         coros.append(

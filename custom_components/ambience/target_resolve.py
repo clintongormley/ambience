@@ -68,12 +68,19 @@ def resolve_action_entities(
 ) -> list[str]:
     """Expand ``target`` to the sorted in-scope entity_ids it should act on.
 
+    A directly-named ``entity_id`` is the scene author's deliberate choice and
+    is forwarded unchanged (never scope-clipped). Indirect selectors
+    (``area_id``, ``device_id``, ``label_id``, ``floor_id``) ARE scope-clipped.
     Empty ``target`` (or one that resolves to nothing in scope) yields ``[]``.
     """
     if not target:
         return []
-    entities = _expand(hass, target)
+    # Direct entity_id is the scene author's deliberate choice → never clipped.
+    direct = set(target.get("entity_id") or [])
+    # Indirect selectors (area/device/label/floor) ARE scope-clipped.
+    indirect = {k: v for k, v in target.items() if k != "entity_id"}
+    expanded = _expand(hass, indirect) if indirect else set()
     scoped = _scope_entity_set(hass, scope_kind, scope_id)
-    if scoped is not None:
-        entities &= scoped
-    return sorted(entities)
+    if scoped is not None:  # house → scoped is None → no clip
+        expanded &= scoped
+    return sorted(direct | expanded)

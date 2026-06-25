@@ -98,3 +98,47 @@ async def test_resolve_empty_and_out_of_scope_return_empty(hass: HomeAssistant) 
     assert resolve_action_entities(hass, "area", kitchen.id, {}) == []
     # office area targeted from a kitchen-scoped scene → nothing in scope.
     assert resolve_action_entities(hass, "area", kitchen.id, {"area_id": [office.id]}) == []
+
+
+async def test_direct_entity_id_not_clipped_even_when_out_of_scope(hass: HomeAssistant) -> None:
+    """A directly-named entity_id that lives outside the scene's scope must survive.
+
+    The office light is registered in the office area; the scene is kitchen-scoped.
+    Because entity_id is a direct (deliberate) choice by the scene author, it must
+    not be clipped by the scope intersection.
+    """
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    o_light = _entity_in_area(hass, "o", office.id)
+    # Kitchen-scoped scene, but directly naming the office light → must NOT be clipped.
+    got = resolve_action_entities(hass, "area", kitchen.id, {"entity_id": [o_light]})
+    assert got == [o_light]
+
+
+async def test_mixed_target_direct_survives_indirect_clipped(hass: HomeAssistant) -> None:
+    """A MIXED target with entity_id + area_id in a kitchen-scoped scene:
+    the directly-named (office) entity survives; the office-area indirect
+    entities do NOT (they are scope-clipped to the kitchen scope → empty).
+    """
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    o_named = _entity_in_area(hass, "o_named", office.id)
+    o_area = _entity_in_area(hass, "o_area", office.id)
+    got = resolve_action_entities(
+        hass,
+        "area",
+        kitchen.id,
+        {"entity_id": [o_named], "area_id": [office.id]},
+    )
+    # Only the directly-named entity survives; o_area is clipped (wrong scope).
+    assert got == [o_named]
+    assert o_area not in got
+
+
+async def test_indirect_only_out_of_scope_returns_empty(hass: HomeAssistant) -> None:
+    """An indirect-only target (area_id) pointing outside the scene's scope → []."""
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    _entity_in_area(hass, "o", office.id)
+    got = resolve_action_entities(hass, "area", kitchen.id, {"area_id": [office.id]})
+    assert got == []

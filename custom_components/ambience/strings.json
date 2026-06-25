@@ -71,6 +71,10 @@
     "unexposed_action": {
       "title": "Ambience: scenes use an action that is no longer exposed",
       "description": "The action `{ref}` is no longer exposed (Settings → Ambience → Actions), but is used by these Ambience scenes:\n{scenes}\n\nThe action will be skipped when the scene applies. Re-expose the action or remove it from the scenes. This message clears automatically once it's resolved."
+    },
+    "target_empty": {
+      "title": "Ambience: an action targets nothing within its scope",
+      "description": "The action `{ref}` is used by these Ambience scenes, but its area/label/device target resolves to no entities within the scene's scope:\n{scenes}\n\nThe action is skipped when the scene applies. Check the target, or that the area/label/device still has matching entities. This message clears automatically once it's resolved."
     }
   },
   "exceptions": {

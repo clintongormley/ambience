@@ -71,6 +71,10 @@
     "unexposed_action": {
       "title": "Ambience: las escenas usan una acción que ya no está expuesta",
       "description": "La acción `{ref}` ya no está expuesta (Ajustes → Ambience → Acciones), pero la utilizan estas escenas de Ambience:\n{scenes}\n\nLa acción se omitirá cuando se aplique la escena. Vuelve a exponer la acción o elimínala de las escenas. Este mensaje se borra automáticamente una vez que se resuelva."
+    },
+    "target_empty": {
+      "title": "Ambience: una acción no apunta a ninguna entidad dentro de su ámbito",
+      "description": "La acción `{ref}` es utilizada por estas escenas de Ambience, pero su objetivo de área/etiqueta/dispositivo no resuelve ninguna entidad dentro del ámbito de la escena:\n{scenes}\n\nLa acción se omite cuando se aplica la escena. Comprueba el objetivo, o que el área/etiqueta/dispositivo siga teniendo entidades coincidentes. Este mensaje se borra automáticamente una vez que se resuelva."
     }
   },
   "exceptions": {

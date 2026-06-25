@@ -902,3 +902,35 @@ async def test_target_resolving_to_empty_is_flagged(hass: HomeAssistant, install
     assert len(empties) == 1
     assert empties[0].ref == "light.turn_on"
     assert empties[0].locations[0].scene_name == "go"
+
+
+async def test_target_empty_aggregated_by_service_across_scenes(
+    hass: HomeAssistant, installed
+) -> None:
+    """Two scenes in different categories using the same service with an out-of-scope
+    target produce exactly ONE target_empty problem with TWO locations."""
+    kitchen = ar.async_get(hass).async_create("Kitchen")
+    office = ar.async_get(hass).async_create("Office")
+    # Both scenes target 'office' area but config is scoped to 'kitchen' → empty resolve.
+    cfg = _cfg(
+        [
+            {
+                "name": "morning",
+                "when": {},
+                "category": "c1",
+                "actions": [{"service": "light.turn_on", "target": {"area_id": [office.id]}}],
+            },
+            {
+                "name": "evening",
+                "when": {},
+                "category": "c2",
+                "actions": [{"service": "light.turn_on", "target": {"area_id": [office.id]}}],
+            },
+        ]
+    )
+    problems = scan(hass, [("area", kitchen.id, cfg)])
+    empties = [p for p in problems if p.kind == "target_empty"]
+    assert len(empties) == 1, f"expected 1 problem, got {len(empties)}"
+    assert empties[0].ref == "light.turn_on"
+    scene_names = {loc.scene_name for loc in empties[0].locations}
+    assert scene_names == {"morning", "evening"}

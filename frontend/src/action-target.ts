@@ -39,22 +39,23 @@ export function resolveTargetInScope(
   target: ActionTarget,
 ): string[] {
   if (targetIsEmpty(target)) return [];
-  const scopeSet = new Set(entitiesForScope(hass, scope, []));
-  const ent = new Set(target.entity_id ?? []);
+  // Direct entity_id: never scope-clipped (mirrors backend semantics).
+  const direct = new Set(target.entity_id ?? []);
   const dev = new Set(target.device_id ?? []);
   const area = new Set(target.area_id ?? []);
   const label = new Set(target.label_id ?? []);
-  const out: string[] = [];
-  for (const eid of scopeSet) {
-    const e = hass.entities?.[eid];
-    const matches =
-      ent.has(eid) ||
-      (e?.device_id ? dev.has(e.device_id) : false) ||
-      (effectiveAreaId(hass as any, eid)
-        ? area.has(effectiveAreaId(hass as any, eid) as string)
-        : false) ||
-      (e?.labels?.some((l) => label.has(l)) ?? false);
-    if (matches) out.push(eid);
+  const result = new Set<string>(direct);
+  if (dev.size || area.size || label.size) {
+    // Indirect selectors: intersect with the scene's scope.
+    for (const eid of entitiesForScope(hass, scope, [])) {
+      const e = hass.entities?.[eid];
+      const effArea = effectiveAreaId(hass as any, eid);
+      const matches =
+        (e?.device_id ? dev.has(e.device_id) : false) ||
+        (effArea ? area.has(effArea) : false) ||
+        (e?.labels?.some((l) => label.has(l)) ?? false);
+      if (matches) result.add(eid);
+    }
   }
-  return out.sort();
+  return [...result].sort();
 }

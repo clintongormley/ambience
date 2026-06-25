@@ -52,4 +52,10 @@ describe("resolveTargetInScope", () => {
   test("empty target → empty", () => {
     expect(resolveTargetInScope(hass, { kind: "area", id: "kitchen" } as any, {})).toEqual([]);
   });
+  test("direct entity_id out of scope is NOT clipped", () => {
+    const got = resolveTargetInScope(hass, { kind: "area", id: "kitchen" } as any, {
+      entity_id: ["light.o"],
+    });
+    expect(got).toEqual(["light.o"]);
+  });
 });

@@ -392,6 +392,25 @@ describe("ambience-ambience-settings", () => {
     }
   });
 
+  test("voice toggles are grouped in a dedicated sub-section, separate from the pause-switch fields", async () => {
+    mocks.getSwitchDefaults.mockResolvedValue({
+      name: "Ambience",
+      auto_on_delay_seconds: 0,
+      create_switches: true,
+    });
+    el = await mount();
+    const group = el.shadowRoot.querySelector('[data-test="expose-group"]');
+    expect(group).not.toBeNull();
+    // All three voice toggles live inside the sub-section…
+    for (const t of ["expose-assist", "expose-google", "expose-alexa"]) {
+      expect(group.querySelector(`[data-test="${t}"]`), t).not.toBeNull();
+    }
+    // …and the pause-switch fields are NOT inside it (they're its siblings,
+    // not its children — the sub-section hangs off the pause switch).
+    expect(group.querySelector('[data-test="defaults-name"]')).toBeNull();
+    expect(group.querySelector('[data-test="pause-for-minutes"]')).toBeNull();
+  });
+
   test("toggling a voice switch saves all three values", async () => {
     mocks.getSwitchDefaults.mockResolvedValue({
       name: "Ambience",

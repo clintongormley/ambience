@@ -13,8 +13,12 @@ export type AreaRegistry = {
 export type EntityAreaHass = HassWithStates & AreaRegistry;
 
 /** An entity's effective area: its own `area_id`, else its device's `area_id`,
- *  else null. Single source of truth, shared with entities-for-scope.ts. */
-export function effectiveAreaId(reg: AreaRegistry, entity_id: string): string | null {
+ *  else null. Single source of truth, shared with entities-for-scope.ts. Reads
+ *  only the entity/device maps — the `areas` map isn't needed to resolve the id. */
+export function effectiveAreaId(
+  reg: Pick<AreaRegistry, "entities" | "devices">,
+  entity_id: string,
+): string | null {
   const e = reg.entities?.[entity_id];
   if (!e) return null;
   if (e.area_id != null) return e.area_id;

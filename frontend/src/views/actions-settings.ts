@@ -1,7 +1,8 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-
+import { isComponentLoaded } from "../ha-config.js";
 import { deriveActionLabel, humanizeId, localize, localizeWsError } from "../i18n.js";
+import { getFadoNoticeDismissed, setFadoNoticeDismissed } from "../ui-state.js";
 import "./ambience-help.js";
 
 // Re-exported from i18n.js (its home is the side-effect-free label module) so
@@ -291,6 +292,46 @@ export class AmbienceActionsSettings extends LitElement {
       font-weight: 600;
       margin-bottom: 0.6rem;
     }
+    .banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.85rem 1rem;
+      margin: 0 0 1rem 0;
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 8px;
+      background: var(--card-background-color, #fff);
+    }
+    .banner-icon { flex: 0 0 auto; margin-top: 0.1rem; --mdc-icon-size: 22px; color: var(--primary-color, #03a9f4); }
+    .banner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+    .banner-text strong { font-weight: 600; }
+    .banner-text span { font-size: 0.9rem; color: var(--secondary-text-color, #888); }
+    .banner-cta {
+      flex: 0 0 auto;
+      align-self: center;
+      background: var(--primary-color, #03a9f4);
+      border: 1px solid var(--primary-color, #03a9f4);
+      color: var(--text-primary-color, #fff);
+      border-radius: 4px;
+      padding: 0.45rem 0.9rem;
+      font: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+    .banner-dismiss {
+      flex: 0 0 auto;
+      align-self: flex-start;
+      background: transparent;
+      border: none;
+      color: var(--secondary-text-color, #888);
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0.15rem 0.3rem;
+    }
+    .banner-dismiss:hover { color: var(--primary-text-color, inherit); }
   `;
 
   @property({ attribute: false }) hass!: HassConnection;
@@ -309,6 +350,7 @@ export class AmbienceActionsSettings extends LitElement {
   @state() private _loadError: string | null = null;
   @state() private _saveError: string | null = null;
   @state() private _loaded = false;
+  @state() private _fadoNoticeDismissed = false;
   /** Key: "${actionId}:${fieldName}" of the field currently being edited. */
   @state() private _editingDefault: string | null = null;
   /** Value the field had before entering edit mode (for Cancel). */
@@ -370,6 +412,7 @@ export class AmbienceActionsSettings extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
+    this._fadoNoticeDismissed = getFadoNoticeDismissed();
     document.addEventListener("pointerdown", this._onDocPointerDown);
     // If HA registers its rich service picker lazily, re-render to pick it up.
     /* v8 ignore next 3 -- real-HA registry timing, not jsdom */
@@ -609,11 +652,44 @@ export class AmbienceActionsSettings extends LitElement {
           <span>${localize(this.hass, "ui.settings_tab_actions", "Actions")}</span>
           <ambience-help .hass=${this.hass} .text=${localize(this.hass, "ui.help_actions_tab", "Actions are the service calls a scene runs. Define them here so scenes can reuse them.")}></ambience-help>
         </div>
+        ${this._renderFadoNotice()}
         ${this._saveError ? html`<div class="error">${this._saveError}</div>` : ""}
         ${this._actions.map((a, i) => this._renderCard(a, i))}
         ${this._renderAdd()}
       </section>
     `;
+  }
+
+  private _renderFadoNotice() {
+    if (this._fadoNoticeDismissed || isComponentLoaded(this.hass, "fado")) return "";
+    return html`
+      <div class="banner" data-test="fado-notice">
+        <ha-icon class="banner-icon" icon="mdi:lightbulb-on-outline"></ha-icon>
+        <div class="banner-text">
+          <strong>${localize(this.hass, "ui.fado_notice_title", "Recommended: install Fado Light Fader")}</strong>
+          <span>${localize(this.hass, "ui.fado_notice_body", "Fado adds smooth light fading for brightness, color, and color temperature — with automatic brightness restoration, UI autoconfiguration, and native transitions. It's a Home Assistant default HACS integration.")}</span>
+        </div>
+        <a
+          class="banner-cta"
+          data-test="fado-notice-cta"
+          href="https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ha-fado"
+          target="_blank"
+          rel="noopener noreferrer"
+        >${localize(this.hass, "ui.fado_notice_cta", "Install via HACS")}</a>
+        <button
+          class="banner-dismiss"
+          data-test="dismiss-fado-notice"
+          title=${localize(this.hass, "ui.dismiss", "Dismiss")}
+          aria-label=${localize(this.hass, "ui.dismiss", "Dismiss")}
+          @click=${() => this._dismissFadoNotice()}
+        >✕</button>
+      </div>
+    `;
+  }
+
+  private _dismissFadoNotice() {
+    this._fadoNoticeDismissed = true;
+    setFadoNoticeDismissed();
   }
 
   private _renderCard(action: ExposedAction, index: number) {

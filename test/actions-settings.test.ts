@@ -76,6 +76,54 @@ describe("ambience-actions-settings", () => {
     return el;
   }
 
+  async function mountWithHass(hass: any) {
+    el = document.createElement("ambience-actions-settings");
+    el.hass = hass;
+    document.body.appendChild(el);
+    for (let i = 0; i < 3; i++) {
+      await el.updateComplete;
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return el;
+  }
+
+  describe("fado notice", () => {
+    beforeEach(() => window.localStorage.clear());
+
+    test("shows when fado is not loaded and not dismissed", async () => {
+      el = await mountWithHass({ localize: () => "", config: { components: ["cover", "light"] } });
+      const notice = el.shadowRoot.querySelector('[data-test="fado-notice"]');
+      expect(notice).not.toBeNull();
+      const cta = el.shadowRoot.querySelector('[data-test="fado-notice-cta"]') as HTMLAnchorElement;
+      expect(cta.getAttribute("href")).toBe(
+        "https://my.home-assistant.io/redirect/hacs_repository/?owner=clintongormley&repository=ha-fado",
+      );
+      expect(cta.getAttribute("target")).toBe("_blank");
+    });
+
+    test("hidden when fado is loaded", async () => {
+      el = await mountWithHass({ localize: () => "", config: { components: ["fado", "light"] } });
+      expect(el.shadowRoot.querySelector('[data-test="fado-notice"]')).toBeNull();
+    });
+
+    test("dismiss hides it and persists", async () => {
+      el = await mountWithHass({ localize: () => "", config: { components: ["light"] } });
+      const dismiss = el.shadowRoot.querySelector(
+        '[data-test="dismiss-fado-notice"]',
+      ) as HTMLButtonElement;
+      dismiss.click();
+      await el.updateComplete;
+      expect(el.shadowRoot.querySelector('[data-test="fado-notice"]')).toBeNull();
+      expect(window.localStorage.getItem("ambience-fado-notice-dismissed")).toBe("1");
+    });
+
+    test("hidden when already dismissed", async () => {
+      window.localStorage.setItem("ambience-fado-notice-dismissed", "1");
+      el = await mountWithHass({ localize: () => "", config: { components: ["light"] } });
+      expect(el.shadowRoot.querySelector('[data-test="fado-notice"]')).toBeNull();
+    });
+  });
+
   test("loads exposed actions and renders one card per entry", async () => {
     el = await mount();
     const cards = el.shadowRoot.querySelectorAll("[data-card]");
